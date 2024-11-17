@@ -4,17 +4,11 @@ import logging
 
 import matplotlib.pyplot as plt
 import pandas as pd
-from dotenv import load_dotenv
 from webex_bot.models.command import Command
 from webex_bot.models.response import response_from_adaptive_card
 from webexteamssdk.models.cards import AdaptiveCard, Image, TextBlock
 
-from config import load_config
 from incident_fetcher import IncidentFetcher
-
-# Load environment variables and configuration
-load_dotenv()
-config = load_config()
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -56,8 +50,8 @@ def generate_plot(df: pd.DataFrame) -> str | None:
             return base64.b64encode(buffer.read()).decode('utf-8')
 
     except Exception as e:
-        logger.exception(f"Failed to generate plot: {e}") # Log the full exception traceback
-        raise
+        logger.exception(f"Failed to generate plot: {e}")
+        return None
 
 
 def get_aging_tickets_card(tickets) -> AdaptiveCard:
@@ -70,6 +64,7 @@ def get_aging_tickets_card(tickets) -> AdaptiveCard:
     try:
         df = pd.DataFrame(tickets['data'])
         image_base64 = generate_plot(df)
+        print(image_base64)
         return AdaptiveCard(body=[Image(url=f"data:image/png;base64,{image_base64}")])
 
     except Exception as e:
