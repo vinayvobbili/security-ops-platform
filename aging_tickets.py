@@ -22,9 +22,10 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 webex_headers = {
-            'Content-Type': 'application/json',
-            'Authorization': f"Bearer {config.bot_api_token}"
+    'Content-Type': 'application/json',
+    'Authorization': f"Bearer {config.bot_api_token}"
 }
+
 
 def get_df(tickets: List[Dict[Any, Any]]) -> pd.DataFrame:
     df = pd.DataFrame(tickets)
@@ -32,6 +33,7 @@ def get_df(tickets: List[Dict[Any, Any]]) -> pd.DataFrame:
     # Clean up type names by removing 'METCIRT ' prefix
     df['type'] = df['type'].str.replace('METCIRT ', '', regex=False)
     return df
+
 
 def generate_plot(tickets: list) -> str | None:
     """Generate a bar plot of open ticket types older than 30 days, returned as a base64 string."""
@@ -43,8 +45,8 @@ def generate_plot(tickets: list) -> str | None:
         plt.bar(categories, type_counts)
 
         # Bold the title, x-label, and y-label
-        plt.title('Aging ticket counts by Type', fontweight='bold')
-        plt.xlabel('Ticket Types', fontweight='bold')
+        plt.title('Counts of Tickets created 30+ days ago by Type', fontweight='bold')
+        plt.xlabel('METCIRT Ticket Types', fontweight='bold')
         plt.ylabel('Counts', fontweight='bold')
 
         plt.xticks(rotation=45, ha='right')
@@ -101,6 +103,8 @@ class AgingTickets(Command):
     def __init__(self):
         super().__init__(command_keyword="aging_tickets", help_message="Aging Tickets")
 
+    def pre_execute(self, message, attachment_actions, activity):
+        return f"{activity['actor']['displayName']}, here are the current aging-ticket metrics..."
 
     def execute(self, message, attachment_actions, activity):
         incident_fetcher = IncidentFetcher()

@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+
 def load_config():
     return Config(
         bot_api_token=os.environ["BOT_API_TOKEN"],
@@ -24,4 +25,3 @@ class Config:
     xsoar_auth_token: str
     xsoar_auth_id: str
     webex_api_url: str = "https://webexapis.com/v1/messages"
-
