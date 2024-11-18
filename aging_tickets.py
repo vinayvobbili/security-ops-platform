@@ -1,6 +1,8 @@
 import base64
 import io
+import json
 import logging
+import random
 from typing import List, Dict, Any
 
 import matplotlib.pyplot as plt
@@ -14,6 +16,9 @@ from webexpythonsdk.models.cards import AdaptiveCard, Image, TextBlock
 from config import load_config
 from incident_fetcher import IncidentFetcher
 
+import datetime
+import pytz
+
 config = load_config()
 api = WebexAPI(access_token=config.bot_api_token)
 
@@ -25,6 +30,12 @@ webex_headers = {
     'Content-Type': 'application/json',
     'Authorization': f"Bearer {config.bot_api_token}"
 }
+eastern = pytz.timezone('US/Eastern')  # Define the Eastern time zone
+
+fun_messages = []
+with open('fun_messages.json', 'r') as f:
+    messages_data = json.load(f)
+    fun_messages = messages_data.get("messages", [])  # Extract the "messages" list
 
 
 def get_df(tickets: List[Dict[Any, Any]]) -> pd.DataFrame:
@@ -57,7 +68,11 @@ def generate_plot(tickets: list) -> str | None:
             label_y = v + (max_count * 0.05) if v < max_count * 0.1 else v / 2
             plt.text(i, label_y, str(v), ha='center', va='center', fontsize=12, fontweight='bold')
 
-        plt.text(len(categories) * 2 / 3, max_count * 0.9,
+        now_eastern = datetime.datetime.now(eastern)  # Get the current time in Eastern
+        plt.text(len(categories) * 0.85, max_count * 0.95,
+                 f"Date: {now_eastern.strftime('%m/%d/%Y %I:%M %p %Z')}",
+                 ha='right', va='bottom', fontsize=10)
+        plt.text(len(categories) * 0.85, max_count * 0.85,
                  f"Total: {sum(type_counts)}",
                  ha='right', va='bottom', fontsize=12, fontweight='bold')
 
@@ -104,7 +119,7 @@ class AgingTickets(Command):
         super().__init__(command_keyword="aging_tickets", help_message="Aging Tickets")
 
     def pre_execute(self, message, attachment_actions, activity):
-        return f"{activity['actor']['displayName']}, here are the current aging-ticket metrics..."
+        return f"{activity['actor']['displayName']}, {random.choice(fun_messages)}"
 
     def execute(self, message, attachment_actions, activity):
         incident_fetcher = IncidentFetcher()
