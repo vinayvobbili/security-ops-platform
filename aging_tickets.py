@@ -5,7 +5,7 @@ from typing import List, Dict, Any
 
 import matplotlib.pyplot as plt
 import pandas as pd
-import requests
+
 from webex_bot.models.command import Command
 from webex_bot.models.response import response_from_adaptive_card
 from webexpythonsdk import WebexAPI
@@ -95,17 +95,16 @@ def get_aging_tickets_card(tickets):
 
 class AgingTickets(Command):
     """Webex Bot command to display a graph of aging tickets."""
+    QUERY = "-status:closed -category:job type:METCIRT"
+    PERIOD = {"byTo": "months", "toValue": 1, "byFrom": "months", "fromValue": None}
 
     def __init__(self):
         super().__init__(command_keyword="aging_tickets", help_message="Aging Tickets")
 
+
     def execute(self, message, attachment_actions, activity):
-
-        query = "-status:closed -category:job type:METCIRT"
-        period = {"byTo": "months", "toValue": 1, "byFrom": "months", "fromValue": None}
-
         incident_fetcher = IncidentFetcher()
-        tickets = incident_fetcher.get_tickets(query=query, period=period)
+        tickets = incident_fetcher.get_tickets(query=self.QUERY, period=self.PERIOD)
         card = get_aging_tickets_card(tickets)
 
         return response_from_adaptive_card(card)
