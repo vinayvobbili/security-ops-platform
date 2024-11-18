@@ -32,10 +32,10 @@ class IncidentFetcher:
         }
 
         try:
-            response = requests.post(self.api_url, headers=self.headers, json=payload, timeout=10) # Added timeout
+            response = requests.post(self.api_url, headers=self.headers, json=payload, timeout=10)  # Added timeout
             response.raise_for_status()  # Raise HTTPError for bad responses (4xx or 5xx)
             tickets = response.json()
-            log.info(f'Retrieved {tickets.get("total", 0)} incidents') #  Handles missing "total"
+            log.info(f'Retrieved {tickets.get("total", 0)} incidents')  # Handles missing "total"
             return tickets.get('data', {})  # Return the JSON response
         except requests.exceptions.RequestException as e:
             log.error(f"Error fetching incidents: {e}")
