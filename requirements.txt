@@ -1,5 +1,6 @@
 python-dotenv~=1.0.1
 matplotlib~=3.9.2
 pandas~=2.2.3
-webexteamssdk~=1.6.1
+webexpythonsdk~=2.0.1
 requests~=2.32.3
+webex_bot~=0.5.2

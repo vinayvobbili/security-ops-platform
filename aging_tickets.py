@@ -1,76 +1,96 @@
 import base64
 import io
 import logging
+from typing import List, Dict, Any
 
 import matplotlib.pyplot as plt
 import pandas as pd
+import requests
 from webex_bot.models.command import Command
 from webex_bot.models.response import response_from_adaptive_card
-from webexteamssdk.models.cards import AdaptiveCard, Image, TextBlock
+from webexpythonsdk import WebexAPI
+from webexpythonsdk.models.cards import AdaptiveCard, Image, TextBlock
 
+from config import load_config
 from incident_fetcher import IncidentFetcher
+
+config = load_config()
+api = WebexAPI(access_token=config.bot_api_token)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+webex_headers = {
+            'Content-Type': 'application/json',
+            'Authorization': f"Bearer {config.bot_api_token}"
+}
 
-def generate_plot(df: pd.DataFrame) -> str | None:
+def get_df(tickets: List[Dict[Any, Any]]) -> pd.DataFrame:
+    df = pd.DataFrame(tickets)
+    df['created'] = pd.to_datetime(df['created'])
+    # Clean up type names by removing 'METCIRT ' prefix
+    df['type'] = df['type'].str.replace('METCIRT ', '', regex=False)
+    return df
+
+def generate_plot(tickets: list) -> str | None:
     """Generate a bar plot of open ticket types older than 30 days, returned as a base64 string."""
-
-    if df.empty:
-        return "No data available for plotting."
+    df = get_df(tickets)
 
     try:
-        with plt.style.context('default'):
-            fig, ax = plt.subplots(figsize=(10, 6))  # Use fig, ax for better control
+        type_counts = df['type'].value_counts()
+        categories = df['type'].unique()
+        plt.bar(categories, type_counts)
 
-            tickets_by_type = df.groupby('type')['id'].count()
-            tickets_by_type.plot(kind='bar', color='skyblue', width=0.7, ax=ax)
+        # Bold the title, x-label, and y-label
+        plt.title('Aging ticket counts by Type', fontweight='bold')
+        plt.xlabel('Ticket Types', fontweight='bold')
+        plt.ylabel('Counts', fontweight='bold')
 
-            ax.set_title(
-                'Currently Open Tickets Created 30+ Days Ago',
-                fontsize=14, fontweight='bold', pad=20
-            )
-            ax.set_xlabel('Ticket Type', fontsize=12, fontweight='bold')
-            ax.set_ylabel('Count of Tickets', fontsize=12, fontweight='bold')
-            ax.grid(axis='y', linestyle='--', alpha=0.7)
+        plt.xticks(rotation=45, ha='right')
 
-            ax.tick_params(axis='x', rotation=45, labelsize=10) # Rotate and size x-axis labels
+        # Add value labels and total
+        max_count = max(type_counts)
+        for i, v in enumerate(type_counts):
+            label_y = v + (max_count * 0.05) if v < max_count * 0.1 else v / 2
+            plt.text(i, label_y, str(v), ha='center', va='center', fontsize=12, fontweight='bold')
 
+        plt.text(len(categories) * 2 / 3, max(type_counts) * 0.9,
+                 f"Total: {sum(type_counts)}",
+                 ha='right', va='bottom', fontsize=12, fontweight='bold')
 
-            for i, v in enumerate(tickets_by_type):
-                ax.text(i, v, str(v), ha='center', va='bottom', fontsize=10, fontweight='bold')
+        # Save to buffer
+        buf = io.BytesIO()
+        plt.savefig(buf, format='png', bbox_inches='tight', dpi=300)
+        buf.seek(0)
+        image_base64 = base64.b64encode(buf.read()).decode('utf-8')
+        plt.close()
+        buf.close()
 
-            fig.tight_layout()  # Improve spacing
-
-            buffer = io.BytesIO()
-            fig.savefig(buffer, format='png', dpi=300)  # Save figure directly to buffer
-            plt.close(fig) # Close the figure after saving
-            return base64.b64encode(buffer.read()).decode('utf-8')
+        return image_base64
 
     except Exception as e:
         logger.exception(f"Failed to generate plot: {e}")
         return None
 
 
-def get_aging_tickets_card(tickets) -> AdaptiveCard:
+def get_aging_tickets_card(tickets):
     """Generate an Adaptive Card containing the aging tickets graph or an error message."""
 
     if not tickets:
         logger.warning("No tickets found.")
-        return AdaptiveCard(body=[TextBlock(text="No aging tickets found.")]) # Simplified message
+        return AdaptiveCard(body=[TextBlock(text="No aging tickets found.")])
 
     try:
-        df = pd.DataFrame(tickets['data'])
-        image_base64 = generate_plot(df)
-        print(image_base64)
-        return AdaptiveCard(body=[Image(url=f"data:image/png;base64,{image_base64}")])
+        image_base64 = generate_plot(tickets)
+
+        return AdaptiveCard(
+            body=[Image(url=f"data:image/png;base64,{image_base64}")]
+        )
 
     except Exception as e:
         logger.exception(f"Failed to generate aging tickets graph: {e}")
         return AdaptiveCard(body=[TextBlock(text=str(e))])
-
 
 
 class AgingTickets(Command):
@@ -80,10 +100,12 @@ class AgingTickets(Command):
         super().__init__(command_keyword="aging_tickets", help_message="Aging Tickets")
 
     def execute(self, message, attachment_actions, activity):
+
         query = "-status:closed -category:job type:METCIRT"
         period = {"byTo": "months", "toValue": 1, "byFrom": "months", "fromValue": None}
 
         incident_fetcher = IncidentFetcher()
         tickets = incident_fetcher.get_tickets(query=query, period=period)
         card = get_aging_tickets_card(tickets)
+
         return response_from_adaptive_card(card)

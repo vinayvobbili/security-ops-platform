@@ -36,7 +36,7 @@ class IncidentFetcher:
             response.raise_for_status()  # Raise HTTPError for bad responses (4xx or 5xx)
             tickets = response.json()
             log.info(f'Retrieved {tickets.get("total", 0)} incidents') #  Handles missing "total"
-            return tickets  # Return the JSON response
+            return tickets.get('data', {})  # Return the JSON response
         except requests.exceptions.RequestException as e:
             log.error(f"Error fetching incidents: {e}")
             return None  # Return None on error
