@@ -55,7 +55,7 @@ def generate_plot(tickets: list) -> str | None:
             label_y = v + (max_count * 0.05) if v < max_count * 0.1 else v / 2
             plt.text(i, label_y, str(v), ha='center', va='center', fontsize=12, fontweight='bold')
 
-        plt.text(len(categories) * 2 / 3, max(type_counts) * 0.9,
+        plt.text(len(categories) * 2 / 3, max_count * 0.9,
                  f"Total: {sum(type_counts)}",
                  ha='right', va='bottom', fontsize=12, fontweight='bold')
 
