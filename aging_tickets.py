@@ -35,7 +35,7 @@ eastern = pytz.timezone('US/Eastern')  # Define the Eastern time zone
 fun_messages = []
 with open('fun_messages.json', 'r') as f:
     messages_data = json.load(f)
-    fun_messages = messages_data.get("messages", [])  # Extract the "messages" list
+    fun_messages.extend(messages_data.get("messages", []))  # Modify the global list
 
 
 def get_df(tickets: List[Dict[Any, Any]]) -> pd.DataFrame:

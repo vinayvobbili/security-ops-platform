@@ -3,7 +3,7 @@ from webex_bot.webex_bot import WebexBot
 
 from all import All
 from config import load_config
-
+from mttc_mttr import MttcMttr
 config = load_config()
 
 
@@ -20,6 +20,7 @@ def main():
         bot_name="The Metrics Bot!"
     )
     bot.add_command(AgingTickets())
+    bot.add_command(MttcMttr())
     bot.add_command(All())
     bot.run()
 

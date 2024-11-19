@@ -26,7 +26,7 @@ class IncidentFetcher:
                 "query": query,
                 "period": period,
                 "page": 0,
-                "size": 1000,  # Good to have a large size
+                "size": 10000,  # Good to have a large size
                 "sort": [{"field": "created", "asc": False}]
             }
         }

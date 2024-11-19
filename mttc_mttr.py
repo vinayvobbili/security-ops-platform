@@ -1,0 +1,212 @@
+import base64
+import io
+import json
+import random
+from dataclasses import dataclass
+from datetime import datetime, timedelta
+
+import numpy as np
+from matplotlib import pyplot as plt
+from webex_bot.models.command import Command
+from webex_bot.models.response import response_from_adaptive_card
+from webexpythonsdk.models.cards import AdaptiveCard, Image
+
+from incident_fetcher import IncidentFetcher
+
+fun_messages = []
+with open('fun_messages.json', 'r') as f:
+    messages_data = json.load(f)
+    fun_messages.extend(messages_data.get("messages", []))  # Modify the global list
+
+
+@dataclass
+class TicketSLAs:
+    time_to_contain_secs: int = 0
+    time_to_respond_secs: int = 0
+    total_ticket_count: int = 0
+    response_sla_breach_count: int = 0
+    containment_sla_breach_count: int = 0
+
+
+def get_tickets_by_periods(tickets):
+    """
+        Analyze tickets and group them by time
+
+        Parameters:
+        tickets (List[dict]): List of ticket dictionaries
+
+        Returns:
+        Dict[str, IncidentMetrics]: Incident metrics grouped by time ticket_slas_by_periods
+        """
+    # Get current date and time
+    current_date = datetime.now()
+
+    # Calculate reference dates
+    yesterday = (current_date - timedelta(days=1)).date()
+    seven_days_ago = (current_date - timedelta(days=7)).date()
+    thirty_days_ago = (current_date - timedelta(days=30)).date()
+
+    # Initialize data structure for ticket_slas_by_periods
+    ticket_slas_by_periods = {
+        'Yesterday': TicketSLAs(),
+        'Past 7 days': TicketSLAs(),
+        'Past 30 days': TicketSLAs()
+    }
+
+    # Process each ticket
+    for ticket in tickets:
+        custom_fields = ticket['CustomFields']
+        response_sla_status = custom_fields['responsesla']['slaStatus']
+        containment_sla_status = custom_fields['containmentsla']['slaStatus']
+
+        incident_date = datetime.strptime(
+            ticket['created'],
+            '%Y-%m-%dT%H:%M:%S.%fZ'
+        ).date()
+
+        containment_duration = custom_fields['containmentsla']['totalDuration']
+        response_duration = custom_fields['responsesla']['totalDuration']
+
+        # Update metrics for each time period
+        if incident_date == yesterday:
+            ticket_slas_by_periods['Yesterday'].time_to_contain_secs += containment_duration
+            ticket_slas_by_periods['Yesterday'].time_to_respond_secs += response_duration
+            ticket_slas_by_periods['Yesterday'].total_ticket_count += 1
+
+            if response_sla_status == 2:
+                ticket_slas_by_periods['Yesterday'].response_sla_breach_count += 1
+            if containment_sla_status == 2:
+                ticket_slas_by_periods['Yesterday'].containment_sla_breach_count += 1
+
+        if seven_days_ago <= incident_date <= current_date.date():
+            ticket_slas_by_periods['Past 7 days'].time_to_contain_secs += containment_duration
+            ticket_slas_by_periods['Past 7 days'].time_to_respond_secs += response_duration
+            ticket_slas_by_periods['Past 7 days'].total_ticket_count += 1
+
+            if response_sla_status == 2:
+                ticket_slas_by_periods['Past 7 days'].response_sla_breach_count += 1
+            if containment_sla_status == 2:
+                ticket_slas_by_periods['Past 7 days'].containment_sla_breach_count += 1
+
+        if thirty_days_ago <= incident_date <= current_date.date():
+            ticket_slas_by_periods['Past 30 days'].time_to_contain_secs += containment_duration
+            ticket_slas_by_periods['Past 30 days'].time_to_respond_secs += response_duration
+            ticket_slas_by_periods['Past 30 days'].total_ticket_count += 1
+
+            if response_sla_status == 2:
+                ticket_slas_by_periods['Past 30 days'].response_sla_breach_count += 1
+            if containment_sla_status == 2:
+                ticket_slas_by_periods['Past 30 days'].containment_sla_breach_count += 1
+
+    return ticket_slas_by_periods
+
+
+# ... (other imports and functions remain the same)
+
+def get_slas_card(ticket_slas_by_periods):
+    # Calculate metrics in minutes for each period
+    metrics = {
+        'MTTR': {
+            'Yesterday': (ticket_slas_by_periods['Yesterday'].time_to_respond_secs / 60 /
+                          ticket_slas_by_periods['Yesterday'].total_ticket_count
+                          if ticket_slas_by_periods['Yesterday'].total_ticket_count > 0 else 0),
+            'Past 7 days': (ticket_slas_by_periods['Past 7 days'].time_to_respond_secs / 60 /
+                            ticket_slas_by_periods['Past 7 days'].total_ticket_count
+                            if ticket_slas_by_periods['Past 7 days'].total_ticket_count > 0 else 0),
+            'Past 30 days': (ticket_slas_by_periods['Past 30 days'].time_to_respond_secs / 60 /
+                             ticket_slas_by_periods['Past 30 days'].total_ticket_count
+                             if ticket_slas_by_periods['Past 30 days'].total_ticket_count > 0 else 0)
+        },
+        'MTTC': {
+            'Yesterday': (ticket_slas_by_periods['Yesterday'].time_to_contain_secs / 60 /
+                          ticket_slas_by_periods['Yesterday'].total_ticket_count
+                          if ticket_slas_by_periods['Yesterday'].total_ticket_count > 0 else 0),
+            'Past 7 days': (ticket_slas_by_periods['Past 7 days'].time_to_contain_secs / 60 /
+                            ticket_slas_by_periods['Past 7 days'].total_ticket_count
+                            if ticket_slas_by_periods['Past 7 days'].total_ticket_count > 0 else 0),
+            'Past 30 days': (ticket_slas_by_periods['Past 30 days'].time_to_contain_secs / 60 /
+                             ticket_slas_by_periods['Past 30 days'].total_ticket_count
+                             if ticket_slas_by_periods['Past 30 days'].total_ticket_count > 0 else 0)
+        }
+    }
+
+    # Width of each bar and positions of the bars
+    width = 0.25
+    x = np.arange(2)  # Two groups: MTTR and MTTC
+
+    # Create bars and store their container objects
+    mttr_yesterday = metrics['MTTR']['Yesterday']
+    mttr_7days = metrics['MTTR']['Past 7 days']
+    mttr_30days = metrics['MTTR']['Past 30 days']
+    mttc_yesterday = metrics['MTTC']['Yesterday']
+    mttc_7days = metrics['MTTC']['Past 7 days']
+    mttc_30days = metrics['MTTC']['Past 30 days']
+
+    bar1 = plt.bar(x + width, [mttr_30days, mttc_30days],
+                   width, label='Past 30 days', color='#2ca02c')
+    bar2 = plt.bar(x, [mttr_7days, mttc_7days],
+                   width, label='Past 7 days', color='#ff7f0e')
+    bar3 = plt.bar(x - width, [mttr_yesterday, mttc_yesterday],
+                   width, label='Yesterday', color='#1f77b4')
+
+
+    # Customize the plot
+    plt.ylabel('Minutes')
+    plt.title('MTTR & MTTC by Period')
+    plt.xticks(x, ['MTTR', 'MTTC'])
+    plt.legend()
+
+    # Add value labels on top of each bar using the bar container objects
+    for bars in [bar1, bar2, bar3]:
+        for bar in bars:
+            height = bar.get_height()
+            plt.text(bar.get_x() + bar.get_width() / 2., height,
+                     f'{height:.1f}',
+                     ha='center', va='bottom')
+
+    # Add grid for better readability
+    plt.grid(True, axis='y', linestyle='--', alpha=0.7)
+
+    # Adjust layout to prevent label clipping
+    plt.tight_layout()
+
+    # Convert plot to base64 for Adaptive Card
+    buf = io.BytesIO()
+    plt.savefig(buf, format="png", bbox_inches='tight', dpi=300)  # Adjust dpi as needed
+    buf.seek(0)
+    image_base64 = base64.b64encode(buf.read()).decode('utf-8')
+    plt.close()  # Close the plot to free resources
+    buf.close()
+
+    card = AdaptiveCard(
+        body=[
+            Image(url=f"data:image/png;base64,{image_base64}"),
+        ]
+    )
+
+    return card
+
+
+class MttcMttr(Command):
+    """Webex Bot command to display a graph of mean times to respond and contain."""
+    QUERY = '-category:job type:METCIRT -owner:""'
+    PERIOD = {
+        "byTo": "months",
+        "toValue": None,
+        "byFrom": "months",
+        "fromValue": 1
+    }
+
+    def __init__(self):
+        super().__init__(command_keyword="mttr_mttc", help_message="MTTR-MTTC")
+
+    def pre_execute(self, message, attachment_actions, activity):
+        return f"{activity['actor']['displayName']}, {random.choice(fun_messages)}"
+
+    def execute(self, message, attachment_actions, activity):
+        incident_fetcher = IncidentFetcher()
+        tickets = incident_fetcher.get_tickets(query=self.QUERY, period=self.PERIOD)
+        tickets_by_periods = get_tickets_by_periods(tickets)
+        card = get_slas_card(tickets_by_periods)
+
+        return response_from_adaptive_card(card)
