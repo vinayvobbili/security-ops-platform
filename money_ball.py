@@ -17,7 +17,7 @@ def main():
             "Y2lzY29zcGFyazovL3VzL1JPT00vZWU5ZDMyYzAtYTFjYS0xMWVmLWIyZjYtNTcwMThiNzRiOTUx"  # METCIRT Metrics,
             "Y2lzY29zcGFyazovL3VzL1JPT00vMDBmYmIzMjAtZTEyZi0xMWViLTg5M2ItNDdkNjNlNmIwYzUy"  # Vinay's test space
         ],
-        bot_name="The Metrics Bot!"
+        bot_name="Metricmeister!"
     )
     bot.add_command(AgingTickets())
     bot.add_command(MttcMttr())

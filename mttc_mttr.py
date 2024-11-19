@@ -29,16 +29,6 @@ class TicketSLAs:
 
 
 def get_tickets_by_periods(tickets):
-    """
-        Analyze tickets and group them by time
-
-        Parameters:
-        tickets (List[dict]): List of ticket dictionaries
-
-        Returns:
-        Dict[str, IncidentMetrics]: Incident metrics grouped by time ticket_slas_by_periods
-        """
-    # Get current date and time
     current_date = datetime.now()
 
     # Calculate reference dates
@@ -153,16 +143,16 @@ def get_slas_card(ticket_slas_by_periods):
     # Customize the plot
     plt.ylabel('Minutes', fontdict={'fontsize': 12, 'fontweight': 'bold'})
     plt.title('MTTR & MTTC by Period', fontdict={'fontsize': 12, 'fontweight': 'bold'})
-    plt.xticks(x, ['MTTR', 'MTTC'], fontdict={'fontsize': 12, 'fontweight': 'bold'})
+    plt.xticks(x, ['MTTR (SLA=3 mins)', 'MTTC (SLA=15 mins)'], fontdict={'fontsize': 12, 'fontweight': 'bold'})
     plt.legend()
 
     # Add value labels on top of each bar using the bar container objects
     for bars in [bar1, bar2, bar3]:
         for bar in bars:
             height = bar.get_height()
-            plt.text(bar.get_x() + bar.get_width() / 2., height,
+            plt.text(bar.get_x() + bar.get_width() / 2., height / 2,
                      f'{height:.1f}',
-                     ha='center', va='bottom', fontdict={'fontsize': 12, 'fontweight': 'bold'})
+                     ha='center', va='bottom', fontdict={'fontsize': 14, 'fontweight': 'bold'})
 
     # Add grid for better readability
     plt.grid(True, axis='y', linestyle='--', alpha=0.7)

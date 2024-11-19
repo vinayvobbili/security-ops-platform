@@ -5,3 +5,5 @@ webexpythonsdk~=2.0.1
 requests~=2.32.3
 webex_bot~=0.5.2
 pytz~=2024.2
+
+numpy~=2.1.3

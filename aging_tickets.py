@@ -66,11 +66,11 @@ def generate_plot(tickets: list) -> str | None:
         max_count = max(type_counts)
         for i, v in enumerate(type_counts):
             label_y = v + (max_count * 0.05) if v < max_count * 0.1 else v / 2
-            plt.text(i, label_y, str(v), ha='center', va='center', fontsize=12, fontweight='bold')
+            plt.text(i, label_y, str(v), ha='center', va='center', fontsize=14, fontweight='bold')
 
         now_eastern = datetime.datetime.now(eastern)  # Get the current time in Eastern
         plt.text(len(categories) * 0.85, max_count * 0.95,
-                 f"Date: {now_eastern.strftime('%m/%d/%Y %I:%M %p %Z')}",
+                 f"{now_eastern.strftime('%m/%d/%Y %I:%M %p %Z')}",
                  ha='right', va='bottom', fontsize=10)
         plt.text(len(categories) * 0.85, max_count * 0.85,
                  f"Total: {sum(type_counts)}",
