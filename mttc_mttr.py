@@ -142,18 +142,18 @@ def get_slas_card(ticket_slas_by_periods):
     mttc_7days = metrics['MTTC']['Past 7 days']
     mttc_30days = metrics['MTTC']['Past 30 days']
 
-    bar1 = plt.bar(x + width, [mttr_30days, mttc_30days],
+    bar1 = plt.bar(x - width, [mttr_30days, mttc_30days],
                    width, label='Past 30 days', color='#2ca02c')
     bar2 = plt.bar(x, [mttr_7days, mttc_7days],
                    width, label='Past 7 days', color='#ff7f0e')
-    bar3 = plt.bar(x - width, [mttr_yesterday, mttc_yesterday],
+    bar3 = plt.bar(x + width, [mttr_yesterday, mttc_yesterday],
                    width, label='Yesterday', color='#1f77b4')
 
 
     # Customize the plot
-    plt.ylabel('Minutes')
-    plt.title('MTTR & MTTC by Period')
-    plt.xticks(x, ['MTTR', 'MTTC'])
+    plt.ylabel('Minutes', fontdict={'fontsize': 12, 'fontweight': 'bold'})
+    plt.title('MTTR & MTTC by Period', fontdict={'fontsize': 12, 'fontweight': 'bold'})
+    plt.xticks(x, ['MTTR', 'MTTC'], fontdict={'fontsize': 12, 'fontweight': 'bold'})
     plt.legend()
 
     # Add value labels on top of each bar using the bar container objects
@@ -162,7 +162,7 @@ def get_slas_card(ticket_slas_by_periods):
             height = bar.get_height()
             plt.text(bar.get_x() + bar.get_width() / 2., height,
                      f'{height:.1f}',
-                     ha='center', va='bottom')
+                     ha='center', va='bottom', fontdict={'fontsize': 12, 'fontweight': 'bold'})
 
     # Add grid for better readability
     plt.grid(True, axis='y', linestyle='--', alpha=0.7)
