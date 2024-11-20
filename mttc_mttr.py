@@ -5,8 +5,10 @@ import random
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
+import matplotlib.transforms as transforms
 import numpy as np
 from matplotlib import pyplot as plt
+from pytz import timezone
 from webex_bot.models.command import Command
 from webex_bot.models.response import response_from_adaptive_card
 from webexpythonsdk.models.cards import AdaptiveCard, Image
@@ -14,6 +16,8 @@ from webexpythonsdk.models.cards import AdaptiveCard, Image
 from incident_fetcher import IncidentFetcher
 
 fun_messages = []
+eastern = timezone('US/Eastern')  # Define the Eastern time zone
+
 with open('fun_messages.json', 'r') as f:
     messages_data = json.load(f)
     fun_messages.extend(messages_data.get("messages", []))  # Modify the global list
@@ -111,17 +115,27 @@ def get_mttr_mttc_card(ticket_slas_by_periods):
 
     # Get x-axis limits
     xmin, xmax = plt.xlim()
+    ymin, ymax = plt.ylim()
 
     # Calculate midpoint for half-width lines
     midpoint = xmin + (xmax - xmin) / 2
 
     # Draw the hlines from the midpoint to the right edge
-    plt.hlines(y=3, xmin=xmin, xmax=midpoint, color='r', linestyle='-', label='Response SLA Target')
-    plt.hlines(y=15, xmin=midpoint, xmax=xmax, color='g', linestyle='-', label='Containment SLA Target')
+    plt.hlines(y=3, xmin=xmin, xmax=midpoint, color='r', linestyle='-', label='Response SLA')
+    plt.hlines(y=15, xmin=midpoint, xmax=xmax, color='g', linestyle='-', label='Containment SLA')
+
+    # Get figure and axes objects
+    fig = plt.gcf()
+    ax = plt.gca()
+    # Transform coordinates to figure coordinates (bottom-left is 0,0)
+    trans = transforms.blended_transform_factory(fig.transFigure, ax.transAxes)  # gets transform object
+    now_eastern = datetime.now(eastern).strftime('%m/%d/%Y %I:%M %p %Z')
+    plt.text(0.1, -0.15, now_eastern, transform=trans, ha='left', va='bottom', fontsize=10)
+    plt.text(0.45, -0.15, '(*)-Total tickets received during that period', transform=trans, ha='left', va='bottom', fontsize=10)# uses transform object instead of xmin, ymin
 
     # Customize the plot
     plt.ylabel('Minutes', fontdict={'fontsize': 12, 'fontweight': 'bold'})
-    plt.title('MTTR & MTTC by Period', fontdict={'fontsize': 12, 'fontweight': 'bold'})
+    plt.title(f'MTTR & MTTC by Period', fontdict={'fontsize': 12, 'fontweight': 'bold'})
     plt.xticks(x, ['MTTR', 'MTTC'], fontdict={'fontsize': 12, 'fontweight': 'bold'})
     plt.legend()
 
