@@ -4,6 +4,8 @@ from webex_bot.webex_bot import WebexBot
 from all import All
 from config import load_config
 from mttc_mttr import MttcMttr
+from sla_breaches import SlaBreaches
+
 config = load_config()
 
 
@@ -17,10 +19,11 @@ def main():
             "Y2lzY29zcGFyazovL3VzL1JPT00vZWU5ZDMyYzAtYTFjYS0xMWVmLWIyZjYtNTcwMThiNzRiOTUx"  # METCIRT Metrics,
             "Y2lzY29zcGFyazovL3VzL1JPT00vMDBmYmIzMjAtZTEyZi0xMWViLTg5M2ItNDdkNjNlNmIwYzUy"  # Vinay's test space
         ],
-        bot_name="Metricmeister!"
+        bot_name="Hello, Metricmeister!"
     )
     bot.add_command(AgingTickets())
     bot.add_command(MttcMttr())
+    bot.add_command(SlaBreaches())
     bot.add_command(All())
     bot.run()
 
