@@ -17,9 +17,9 @@ class IncidentFetcher:
             'x-xdr-auth-id': config.xsoar_auth_id,
             'Content-Type': 'application/json'
         }
-        self.api_url = config.xsoar_api_url
+        self.api_url = config.xsoar_api_base_url + '/incidents/search'
 
-    def get_tickets(self, query, period) -> dict | None:  # Improved type hint
+    def get_tickets(self, query, period) -> dict | None:
         """Fetches security incidents from XSOAR."""
         payload = {
             "filter": {
