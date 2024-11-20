@@ -116,8 +116,8 @@ def get_mttr_mttc_card(ticket_slas_by_periods):
     midpoint = xmin + (xmax - xmin) / 2
 
     # Draw the hlines from the midpoint to the right edge
-    plt.hlines(y=3, xmin=xmin, xmax=midpoint, color='r', linestyle='--', label='Response SLA Target')
-    plt.hlines(y=15, xmin=midpoint, xmax=xmax, color='g', linestyle='--', label='Containment SLA Target')
+    plt.hlines(y=3, xmin=xmin, xmax=midpoint, color='r', linestyle='-', label='Response SLA Target')
+    plt.hlines(y=15, xmin=midpoint, xmax=xmax, color='g', linestyle='-', label='Containment SLA Target')
 
     # Customize the plot
     plt.ylabel('Minutes', fontdict={'fontsize': 12, 'fontweight': 'bold'})
