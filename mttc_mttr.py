@@ -95,28 +95,20 @@ def get_tickets_by_periods(tickets):
 
 def get_slas_card(ticket_slas_by_periods):
     # Calculate metrics in minutes for each period
+    thirty_days_ticket_count = ticket_slas_by_periods['Past 30 days'].total_ticket_count
+    seven_days_ticket_count = ticket_slas_by_periods['Past 7 days'].total_ticket_count
+    yesterday_ticket_count = ticket_slas_by_periods['Yesterday'].total_ticket_count
+
     metrics = {
         'MTTR': {
-            'Yesterday': (ticket_slas_by_periods['Yesterday'].time_to_respond_secs / 60 /
-                          ticket_slas_by_periods['Yesterday'].total_ticket_count
-                          if ticket_slas_by_periods['Yesterday'].total_ticket_count > 0 else 0),
-            'Past 7 days': (ticket_slas_by_periods['Past 7 days'].time_to_respond_secs / 60 /
-                            ticket_slas_by_periods['Past 7 days'].total_ticket_count
-                            if ticket_slas_by_periods['Past 7 days'].total_ticket_count > 0 else 0),
-            'Past 30 days': (ticket_slas_by_periods['Past 30 days'].time_to_respond_secs / 60 /
-                             ticket_slas_by_periods['Past 30 days'].total_ticket_count
-                             if ticket_slas_by_periods['Past 30 days'].total_ticket_count > 0 else 0)
+            'Yesterday': (ticket_slas_by_periods['Yesterday'].time_to_respond_secs / 60 / yesterday_ticket_count if yesterday_ticket_count > 0 else 0),
+            'Past 7 days': (ticket_slas_by_periods['Past 7 days'].time_to_respond_secs / 60 / seven_days_ticket_count if seven_days_ticket_count > 0 else 0),
+            'Past 30 days': (ticket_slas_by_periods['Past 30 days'].time_to_respond_secs / 60 / thirty_days_ticket_count if thirty_days_ticket_count > 0 else 0)
         },
         'MTTC': {
-            'Yesterday': (ticket_slas_by_periods['Yesterday'].time_to_contain_secs / 60 /
-                          ticket_slas_by_periods['Yesterday'].total_ticket_count
-                          if ticket_slas_by_periods['Yesterday'].total_ticket_count > 0 else 0),
-            'Past 7 days': (ticket_slas_by_periods['Past 7 days'].time_to_contain_secs / 60 /
-                            ticket_slas_by_periods['Past 7 days'].total_ticket_count
-                            if ticket_slas_by_periods['Past 7 days'].total_ticket_count > 0 else 0),
-            'Past 30 days': (ticket_slas_by_periods['Past 30 days'].time_to_contain_secs / 60 /
-                             ticket_slas_by_periods['Past 30 days'].total_ticket_count
-                             if ticket_slas_by_periods['Past 30 days'].total_ticket_count > 0 else 0)
+            'Yesterday': (ticket_slas_by_periods['Yesterday'].time_to_contain_secs / 60 / yesterday_ticket_count if yesterday_ticket_count > 0 else 0),
+            'Past 7 days': (ticket_slas_by_periods['Past 7 days'].time_to_contain_secs / 60 / seven_days_ticket_count if seven_days_ticket_count > 0 else 0),
+            'Past 30 days': (ticket_slas_by_periods['Past 30 days'].time_to_contain_secs / 60 / thirty_days_ticket_count if thirty_days_ticket_count > 0 else 0)
         }
     }
 
@@ -132,13 +124,9 @@ def get_slas_card(ticket_slas_by_periods):
     mttc_7days = metrics['MTTC']['Past 7 days']
     mttc_30days = metrics['MTTC']['Past 30 days']
 
-    bar1 = plt.bar(x - width, [mttr_30days, mttc_30days],
-                   width, label='Past 30 days', color='#2ca02c')
-    bar2 = plt.bar(x, [mttr_7days, mttc_7days],
-                   width, label='Past 7 days', color='#ff7f0e')
-    bar3 = plt.bar(x + width, [mttr_yesterday, mttc_yesterday],
-                   width, label='Yesterday', color='#1f77b4')
-
+    bar1 = plt.bar(x - width, [mttr_30days, mttc_30days], width, label=f'Past 30 days ({thirty_days_ticket_count})', color='#2ca02c')
+    bar2 = plt.bar(x, [mttr_7days, mttc_7days], width, label=f'Past 7 days ({seven_days_ticket_count})', color='#ff7f0e')
+    bar3 = plt.bar(x + width, [mttr_yesterday, mttc_yesterday], width, label=f'Yesterday ({yesterday_ticket_count})', color='#1f77b4')
 
     # Customize the plot
     plt.ylabel('Minutes', fontdict={'fontsize': 12, 'fontweight': 'bold'})
