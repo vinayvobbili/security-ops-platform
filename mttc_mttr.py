@@ -155,7 +155,7 @@ def get_mttr_mttc_card(ticket_slas_by_periods):
 
     # Convert plot to base64 for Adaptive Card
     buf = io.BytesIO()
-    plt.savefig(buf, format="png", bbox_inches='tight', dpi=300)  # Adjust dpi as needed
+    plt.savefig(buf, format="png", bbox_inches='tight', dpi=600)  # Adjust dpi as needed
     buf.seek(0)
     image_base64 = base64.b64encode(buf.read()).decode('utf-8')
     plt.close()  # Close the plot to free resources
