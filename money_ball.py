@@ -24,7 +24,7 @@ def main():
     bot.add_command(AgingTickets())
     bot.add_command(MttcMttr())
     bot.add_command(SlaBreaches())
-    bot.add_command(All())
+    # bot.add_command(All())
     bot.run()
 
 

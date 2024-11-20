@@ -109,10 +109,20 @@ def get_mttr_mttc_card(ticket_slas_by_periods):
     bar2 = plt.bar(x, [mttr_7days, mttc_7days], width, label=f'Past 7 days ({seven_days_ticket_count})', color='#ff7f0e')
     bar3 = plt.bar(x + width, [mttr_yesterday, mttc_yesterday], width, label=f'Yesterday ({yesterday_ticket_count})', color='#1f77b4')
 
+    # Get x-axis limits
+    xmin, xmax = plt.xlim()
+
+    # Calculate midpoint for half-width lines
+    midpoint = xmin + (xmax - xmin) / 2
+
+    # Draw the hlines from the midpoint to the right edge
+    plt.hlines(y=3, xmin=xmin, xmax=midpoint, color='r', linestyle='--', label='Response SLA Target')
+    plt.hlines(y=15, xmin=midpoint, xmax=xmax, color='g', linestyle='--', label='Containment SLA Target')
+
     # Customize the plot
     plt.ylabel('Minutes', fontdict={'fontsize': 12, 'fontweight': 'bold'})
     plt.title('MTTR & MTTC by Period', fontdict={'fontsize': 12, 'fontweight': 'bold'})
-    plt.xticks(x, ['MTTR (SLA=3 mins)', 'MTTC (SLA=15 mins)'], fontdict={'fontsize': 12, 'fontweight': 'bold'})
+    plt.xticks(x, ['MTTR', 'MTTC'], fontdict={'fontsize': 12, 'fontweight': 'bold'})
     plt.legend()
 
     # Add value labels on top of each bar using the bar container objects
