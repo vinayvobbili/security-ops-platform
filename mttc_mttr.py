@@ -131,7 +131,7 @@ def get_mttr_mttc_card(ticket_slas_by_periods):
     trans = transforms.blended_transform_factory(fig.transFigure, ax.transAxes)  # gets transform object
     now_eastern = datetime.now(eastern).strftime('%m/%d/%Y %I:%M %p %Z')
     plt.text(0.1, -0.15, now_eastern, transform=trans, ha='left', va='bottom', fontsize=10)
-    plt.text(0.45, -0.15, '(*)-Total tickets received during that period', transform=trans, ha='left', va='bottom', fontsize=10)# uses transform object instead of xmin, ymin
+    plt.text(0.45, -0.15, '(*) Total tickets received during that period', transform=trans, ha='left', va='bottom', fontsize=10)# uses transform object instead of xmin, ymin
 
     # Customize the plot
     plt.ylabel('Minutes', fontdict={'fontsize': 12, 'fontweight': 'bold'})

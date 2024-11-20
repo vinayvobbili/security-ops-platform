@@ -1,10 +1,10 @@
 import logging
 import requests
 
-from config import load_config
+from config import get_config
 
 # Load configuration
-config = load_config()
+config = get_config()
 
 # Configure logging
 log = logging.getLogger(__name__)  # Consistent with best practices
