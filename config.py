@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
-def load_config():
+def get_config():
     return Config(
         bot_api_token=os.environ["BOT_API_TOKEN"],
         webex_recipient_room_id=os.environ["WEBEX_RECIPIENT_ROOM_ID"],

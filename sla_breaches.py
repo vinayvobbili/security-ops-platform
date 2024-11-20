@@ -5,8 +5,10 @@ import random
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
+import matplotlib.transforms as transforms
 import numpy as np
 from matplotlib import pyplot as plt
+from pytz import timezone
 from webex_bot.models.command import Command
 from webex_bot.models.response import response_from_adaptive_card
 from webexpythonsdk.models.cards import AdaptiveCard, Image
@@ -14,6 +16,8 @@ from webexpythonsdk.models.cards import AdaptiveCard, Image
 from incident_fetcher import IncidentFetcher
 
 fun_messages = []
+eastern = timezone('US/Eastern')  # Define the Eastern time zone
+
 with open('fun_messages.json', 'r') as f:
     messages_data = json.load(f)
     fun_messages.extend(messages_data.get("messages", []))  # Modify the global list
@@ -113,6 +117,15 @@ def get_sla_breaches_card(ticket_slas_by_periods):
     bar1 = plt.bar(x - width, [response_breaches_30days, containment_breaches_30days], width, label=f'Past 30 days ({thirty_days_ticket_count})', color='#2ca02c')
     bar2 = plt.bar(x, [response_breaches_7days, containment_breaches_7days], width, label=f'Past 7 days ({seven_days_ticket_count})', color='#ff7f0e')
     bar3 = plt.bar(x + width, [response_breaches_yesterday, containment_breaches_yesterday], width, label=f'Yesterday ({yesterday_ticket_count})', color='#1f77b4')
+
+    # Get figure and axes objects
+    fig = plt.gcf()
+    ax = plt.gca()
+    # Transform coordinates to figure coordinates (bottom-left is 0,0)
+    trans = transforms.blended_transform_factory(fig.transFigure, ax.transAxes)  # gets transform object
+    now_eastern = datetime.now(eastern).strftime('%m/%d/%Y %I:%M %p %Z')
+    plt.text(0.1, -0.15, now_eastern, transform=trans, ha='left', va='bottom', fontsize=10)
+    plt.text(0.45, -0.15, '(*) Total tickets received during that period', transform=trans, ha='left', va='bottom', fontsize=10)  # uses transform object instead of xmin, ymin
 
     # Customize the plot
     plt.ylabel('Counts', fontdict={'fontsize': 12, 'fontweight': 'bold'})

@@ -13,13 +13,13 @@ from webex_bot.models.response import response_from_adaptive_card
 from webexpythonsdk import WebexAPI
 from webexpythonsdk.models.cards import AdaptiveCard, Image, TextBlock
 
-from config import load_config
+from config import get_config
 from incident_fetcher import IncidentFetcher
 
 import datetime
 import pytz
 
-config = load_config()
+config = get_config()
 api = WebexAPI(access_token=config.bot_api_token)
 
 # Configure logging

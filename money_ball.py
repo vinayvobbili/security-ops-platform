@@ -1,11 +1,11 @@
 from webex_bot.webex_bot import WebexBot
 
 from aging_tickets import AgingTickets
-from config import load_config
+from config import get_config
 from mttc_mttr import MttcMttr
 from sla_breaches import SlaBreaches
 
-config = load_config()
+config = get_config()
 
 
 def main():
