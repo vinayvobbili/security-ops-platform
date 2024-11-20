@@ -1,0 +1,15 @@
+
+# Webex Bot access token
+BOT_API_TOKEN=replace_with_your_bot_access_token
+
+# Webex Room ID for bot interaction
+WEBEX_RECIPIENT_ROOM_ID=replace_with_your_webex_room_id
+
+# XSOAR API URL for incident fetching
+XSOAR_API_URL=replace_with_your_xsoar_api_url
+
+# XSOAR authentication token
+XSOAR_AUTH_TOKEN=replace_with_your_xsoar_auth_token
+
+# XSOAR authentication ID
+XSOAR_AUTH_ID=replace_with_your_xsoar_auth_id
