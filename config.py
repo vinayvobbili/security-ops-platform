@@ -10,7 +10,7 @@ def load_config():
     return Config(
         bot_api_token=os.environ["BOT_API_TOKEN"],
         webex_recipient_room_id=os.environ["WEBEX_RECIPIENT_ROOM_ID"],
-        xsoar_api_base_url=os.environ["XSOAR_API_URL"],
+        xsoar_api_base_url=os.environ["XSOAR_API_BASE_URL"],
         xsoar_auth_token=os.environ["XSOAR_AUTH_TOKEN"],
         xsoar_auth_id=os.environ["XSOAR_AUTH_ID"]
     )
