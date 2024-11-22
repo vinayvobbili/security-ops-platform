@@ -1,8 +1,8 @@
-import unittest
 import base64
-import io
-import matplotlib.pyplot as plt
+import unittest
+
 import pandas as pd
+
 from aging_tickets import generate_plot, get_df  # Assuming these functions are in aging_tickets.py
 
 
@@ -35,8 +35,7 @@ class TestGeneratePlot(unittest.TestCase):
     def test_generate_plot_empty_tickets(self):
 
         result = generate_plot([])  # Empty list
-        self.assertIsNone(result) # Or assert some default behavior for empty input
-
+        self.assertIsNone(result)  # Or assert some default behavior for empty input
 
     def test_generate_plot_invalid_input(self):
         # Test case with an invalid input type (e.g., None, string, etc.)
@@ -44,15 +43,12 @@ class TestGeneratePlot(unittest.TestCase):
         with self.assertRaises(AttributeError):  # Expect AttributeError if 'type' not available
             generate_plot(invalid_input)
 
-
-
     def test_get_df(self):  # Example using a simple dataframe, expand as needed
         data = {'created': ['2024-01-01', '2024-01-02'], 'type': ['METCIRT Incident', 'METCIRT Other']}
         tickets = pd.DataFrame(data).to_dict('records')
         df = get_df(tickets)
         self.assertEqual(len(df), 2)
         self.assertEqual(df['type'].tolist(), ['Incident', 'Other'])  # Check the cleaning logic
-
 
 
 if __name__ == '__main__':

@@ -23,7 +23,7 @@ with open('fun_messages.json', 'r') as f:
     fun_messages.extend(messages_data.get("messages", []))  # Modify the global list
 
 
-def create_flashback_chart(tickets) -> str:
+def create_monthly_chart(tickets) -> str:
     df = pd.DataFrame(tickets)
 
     df['type'] = df['type'].str.replace('METCIRT ', '', regex=False)
@@ -79,7 +79,7 @@ def create_flashback_chart(tickets) -> str:
     return filepath  # Return the full path
 
 
-class Flashback(Command):
+class Monthly(Command):
     """Webex Bot command to display a graph of mean times to respond and contain."""
     QUERY = '-category:job status:closed type:METCIRT -owner:""'
     PERIOD = {
@@ -90,16 +90,16 @@ class Flashback(Command):
     }
 
     def __init__(self):
-        super().__init__(command_keyword="flashback", help_message="Flashback")
+        super().__init__(command_keyword="monthly", help_message="Monthly")
 
     def execute(self, message, attachment_actions, activity):
         incident_fetcher = IncidentFetcher()
         tickets = incident_fetcher.get_tickets(query=self.QUERY, period=self.PERIOD)
-        filepath = create_flashback_chart(tickets)  # Store the full path
+        filepath = create_monthly_chart(tickets)  # Store the full path
 
         # Use WebexTeamsAPI to send the file
         api.messages.create(
             roomId=attachment_actions.json_data["roomId"],
-            text=f"{activity['actor']['displayName']}, here's your Flashback chart!",
+            text=f"{activity['actor']['displayName']}, here's your Monthly chart!",
             files=[filepath]  # Path to the file
         )

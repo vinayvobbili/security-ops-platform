@@ -1,4 +1,5 @@
 import base64
+import datetime
 import io
 import json
 import logging
@@ -7,7 +8,7 @@ from typing import List, Dict, Any
 
 import matplotlib.pyplot as plt
 import pandas as pd
-
+import pytz
 from webex_bot.models.command import Command
 from webex_bot.models.response import response_from_adaptive_card
 from webexpythonsdk import WebexAPI
@@ -15,9 +16,6 @@ from webexpythonsdk.models.cards import AdaptiveCard, Image, TextBlock
 
 from config import get_config
 from incident_fetcher import IncidentFetcher
-
-import datetime
-import pytz
 
 config = get_config()
 api = WebexAPI(access_token=config.bot_api_token)
