@@ -1,89 +1,81 @@
+import base64
+import io
 import json
 import random
-import matplotlib.pyplot as plt
+from datetime import datetime
 
+import matplotlib.pyplot as plt
 import pandas as pd
-import numpy as np
+from matplotlib import transforms
+from pytz import timezone
 from webex_bot.models.command import Command
 from webex_bot.models.response import response_from_adaptive_card
 from webexpythonsdk.models.cards import AdaptiveCard, Image, ImageSize
 
 from incident_fetcher import IncidentFetcher
 
+eastern = timezone('US/Eastern')  # Define the Eastern time zone
 fun_messages = []
 with open('fun_messages.json', 'r') as f:
     messages_data = json.load(f)
     fun_messages.extend(messages_data.get("messages", []))  # Modify the global list
 
 
-def get_flashback_card():
-    return AdaptiveCard(
-        body=[Image(url="flashback.png", size=ImageSize.LARGE)]
-    )
-
-
 def create_flashback_chart(tickets):
     df = pd.DataFrame(tickets)
-    # Extract impact from CustomFields
-    df['impact'] = df['CustomFields'].apply(lambda x: x.get('impact', 'Unknown') if x else 'Unknown')
 
+    df['type'] = df['type'].str.replace('METCIRT ', '', regex=False)
     # Calculate counts for outer pie (type)
     type_counts = df['type'].value_counts()
 
-    # Calculate counts for inner pie (impact)
-    impact_counts = df['impact'].value_counts()
-
     # Set up the colors
-    outer_colors = plt.cm.Set3(np.linspace(0, 1, len(type_counts)))
-    inner_colors = plt.cm.Greys(np.linspace(0.4, 0.8, len(impact_counts)))
+    outer_colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#bcbd22', '#17becf', '#7f7f7f', '#ff9896', '#c5b0d5']
 
     # Create figure and axis
     fig, ax = plt.subplots()
 
     # Create the outer pie chart (types)
-    outer_pie = ax.pie(type_counts.values,
-                       radius=1,
-                       labels=type_counts.index,
-                       colors=outer_colors,
-                       wedgeprops=dict(width=0.3, edgecolor='white'),
-                       labeldistance=1.1,
-                       pctdistance=0.85)
-
-    # Create the inner pie chart (impacts)
-    inner_pie = ax.pie(impact_counts.values,
-                       radius=0.7,
-                       labels=impact_counts.index,
-                       colors=inner_colors,
-                       wedgeprops=dict(width=0.4, edgecolor='white'),
-                       labeldistance=0.6,
-                       pctdistance=0.75)
-
-    # Add title
-    plt.title('Ticket Distribution by Type and Impact', pad=20, size=14)
-
-    # Add legend for both pies
-    outer_legend = ax.legend(outer_pie[0], type_counts.index,
-                             title="Ticket Types",
-                             loc="center left",
-                             bbox_to_anchor=(1, 0, 0.5, 1))
-
-    # Add the first legend manually
-    plt.gca().add_artist(outer_legend)
-
-    # Add legend for inner pie
-    ax.legend(inner_pie[0], impact_counts.index,
-              title="Impact",
-              loc="center left",
-              bbox_to_anchor=(1, 0, 0.5, 0))
+    ax.pie(type_counts.values,
+           radius=1,
+           labels=type_counts.index,
+           colors=outer_colors,
+           wedgeprops=dict(width=0.3, edgecolor='white'),
+           labeldistance=1.1,
+           pctdistance=0.85)
 
     # Add counts as annotations
     total_tickets = len(df)
-    plt.annotate(f'Total Tickets: {total_tickets}',
-                 xy=(0, 0),
-                 xytext=(0, -1.2),
-                 ha='center',
-                 va='center')
-    plt.savefig('flashback.png', bbox_inches='tight', dpi=600)
+    # Get figure and axes objects
+    fig = plt.gcf()
+    ax = plt.gca()
+    # Transform coordinates to figure coordinates (bottom-left is 0,0)
+    trans = transforms.blended_transform_factory(fig.transFigure, ax.transAxes)  # gets transform object
+    now_eastern = datetime.now(eastern).strftime('%m/%d/%Y %I:%M %p %Z')
+    plt.text(0, -0.15, now_eastern, transform=trans, ha='left', va='bottom', fontsize=10)
+    plt.text(0.45, -0.15, f'Total tickets past month: {total_tickets}', transform=trans, ha='left', va='bottom', fontsize=12, fontweight='bold')  # uses transform object instead of xmin, ymin
+
+    # Adjust layout to prevent label clipping
+    plt.tight_layout()
+
+    # Convert plot to base64 for Adaptive Card
+    buf = io.BytesIO()
+    plt.savefig(buf, format="png", bbox_inches='tight', dpi=300)  # Adjust dpi as needed
+    buf.seek(0)
+    image_base64 = base64.b64encode(buf.read()).decode('utf-8')
+    plt.close()  # Close the plot to free resources
+    buf.close()
+
+    # Create Adaptive Card
+    card = AdaptiveCard(
+        body=[
+            Image(
+                url=f"data:image/png;base64,{image_base64}",
+                size=ImageSize.AUTO
+            ),
+        ]
+    )
+
+    return card
 
 
 class Flashback(Command):
@@ -105,6 +97,5 @@ class Flashback(Command):
     def execute(self, message, attachment_actions, activity):
         incident_fetcher = IncidentFetcher()
         tickets = incident_fetcher.get_tickets(query=self.QUERY, period=self.PERIOD)
-        create_flashback_chart(tickets)
-        card = get_flashback_card()
+        card = create_flashback_chart(tickets)
         return response_from_adaptive_card(card)

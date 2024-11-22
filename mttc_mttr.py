@@ -163,7 +163,7 @@ def get_mttr_mttc_card(ticket_slas_by_periods):
 
     card = AdaptiveCard(
         body=[
-            Image(url=f"data:image/png;base64,{image_base64}", size=ImageSize.LARGE),
+            Image(url=f"data:image/png;base64,{image_base64}", size=ImageSize.STRETCH),
         ]
     )
 
