@@ -2,6 +2,7 @@ from webex_bot.webex_bot import WebexBot
 
 from aging_tickets import AgingTickets
 from config import get_config
+from flashback import Flashback
 from mttc_mttr import MttcMttr
 from sla_breaches import SlaBreaches
 
@@ -23,7 +24,7 @@ def main():
     bot.add_command(AgingTickets())
     bot.add_command(MttcMttr())
     bot.add_command(SlaBreaches())
-    # bot.add_command(All())
+    bot.add_command(Flashback())
     bot.run()
 
 

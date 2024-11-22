@@ -11,7 +11,7 @@ from matplotlib import pyplot as plt
 from pytz import timezone
 from webex_bot.models.command import Command
 from webex_bot.models.response import response_from_adaptive_card
-from webexpythonsdk.models.cards import AdaptiveCard, Image
+from webexpythonsdk.models.cards import AdaptiveCard, Image, ImageSize
 
 from incident_fetcher import IncidentFetcher
 
@@ -163,7 +163,7 @@ def get_mttr_mttc_card(ticket_slas_by_periods):
 
     card = AdaptiveCard(
         body=[
-            Image(url=f"data:image/png;base64,{image_base64}"),
+            Image(url=f"data:image/png;base64,{image_base64}", size=ImageSize.LARGE),
         ]
     )
 
