@@ -1,7 +1,4 @@
-import base64
-import io
-import json
-import random
+import tempfile
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
@@ -10,17 +7,14 @@ import numpy as np
 from matplotlib import pyplot as plt
 from pytz import timezone
 from webex_bot.models.command import Command
-from webex_bot.models.response import response_from_adaptive_card
-from webexpythonsdk.models.cards import AdaptiveCard, Image
+from webexteamssdk import WebexTeamsAPI
 
+from config import get_config
 from incident_fetcher import IncidentFetcher
 
-fun_messages = []
 eastern = timezone('US/Eastern')  # Define the Eastern time zone
-
-with open('fun_messages.json', 'r') as f:
-    messages_data = json.load(f)
-    fun_messages.extend(messages_data.get("messages", []))  # Modify the global list
+config = get_config()
+api = WebexTeamsAPI(access_token=config.bot_api_token)
 
 
 @dataclass
@@ -84,7 +78,7 @@ def get_tickets_by_periods(tickets):
     return ticket_slas_by_periods
 
 
-def get_sla_breaches_card(ticket_slas_by_periods):
+def get_sla_breaches_chart(ticket_slas_by_periods):
     thirty_days_ticket_count = ticket_slas_by_periods['Past 30 days'].total_ticket_count
     seven_days_ticket_count = ticket_slas_by_periods['Past 7 days'].total_ticket_count
     yesterday_ticket_count = ticket_slas_by_periods['Yesterday'].total_ticket_count
@@ -125,7 +119,7 @@ def get_sla_breaches_card(ticket_slas_by_periods):
     trans = transforms.blended_transform_factory(fig.transFigure, ax.transAxes)  # gets transform object
     now_eastern = datetime.now(eastern).strftime('%m/%d/%Y %I:%M %p %Z')
     plt.text(0.1, -0.15, now_eastern, transform=trans, ha='left', va='bottom', fontsize=10)
-    plt.text(0.45, -0.15, '(*) Total tickets received during that period', transform=trans, ha='left', va='bottom', fontsize=10)  # uses transform object instead of xmin, ymin
+    plt.text(0.45, -0.15, '(*) Ticket counts that period', transform=trans, ha='left', va='bottom', fontsize=10)  # uses transform object instead of xmin, ymin
 
     # Customize the plot
     plt.ylabel('Counts', fontdict={'fontsize': 12, 'fontweight': 'bold'})
@@ -147,21 +141,12 @@ def get_sla_breaches_card(ticket_slas_by_periods):
     # Adjust layout to prevent label clipping
     plt.tight_layout()
 
-    # Convert plot to base64 for Adaptive Card
-    buf = io.BytesIO()
-    plt.savefig(buf, format="png", bbox_inches='tight', dpi=300)  # Adjust dpi as needed
-    buf.seek(0)
-    image_base64 = base64.b64encode(buf.read()).decode('utf-8')
-    plt.close()  # Close the plot to free resources
-    buf.close()
+    with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmpfile:
+        filepath = tmpfile.name  # Get the full path
+        plt.savefig(filepath, format="png", bbox_inches='tight', dpi=300)
+        plt.close(fig)
 
-    card = AdaptiveCard(
-        body=[
-            Image(url=f"data:image/png;base64,{image_base64}"),
-        ]
-    )
-
-    return card
+    return filepath  # Return the full path
 
 
 class SlaBreaches(Command):
@@ -177,13 +162,15 @@ class SlaBreaches(Command):
     def __init__(self):
         super().__init__(command_keyword="sla_breach", help_message="SLA Breaches")
 
-    def pre_execute(self, message, attachment_actions, activity):
-        return f"{activity['actor']['displayName']}, {random.choice(fun_messages)}"
-
     def execute(self, message, attachment_actions, activity):
         incident_fetcher = IncidentFetcher()
         tickets = incident_fetcher.get_tickets(query=self.QUERY, period=self.PERIOD)
         tickets_by_periods = get_tickets_by_periods(tickets)
-        card = get_sla_breaches_card(tickets_by_periods)
+        filepath = get_sla_breaches_chart(tickets_by_periods)  # Store the full path
 
-        return response_from_adaptive_card(card)
+        # Use WebexTeamsAPI to send the file
+        api.messages.create(
+            roomId=attachment_actions.json_data["roomId"],
+            text=f"{activity['actor']['displayName']}, here's the latest SLA Breaches chart!",
+            files=[filepath]  # Path to the file
+        )

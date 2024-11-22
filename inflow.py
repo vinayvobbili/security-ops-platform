@@ -23,7 +23,7 @@ with open('fun_messages.json', 'r') as f:
     fun_messages.extend(messages_data.get("messages", []))  # Modify the global list
 
 
-def create_monthly_chart(tickets) -> str:
+def create_inflow_chart(tickets) -> str:
     df = pd.DataFrame(tickets)
 
     df['type'] = df['type'].str.replace('METCIRT ', '', regex=False)
@@ -66,7 +66,7 @@ def create_monthly_chart(tickets) -> str:
     now_eastern = datetime.now(eastern).strftime('%m/%d/%Y %I:%M %p %Z')
     plt.text(0, -0.15, now_eastern, transform=trans, ha='left', va='bottom', fontsize=10)
 
-    plt.title(f'Total tickets past month: {total_tickets}', transform=trans, loc='left', ha='left', va='bottom', fontsize=12, fontweight='bold')  # uses transform object instead of xmin, ymin
+    plt.title(f'Tickets received yesterday: {total_tickets}', transform=trans, loc='left', ha='left', va='bottom', fontsize=12, fontweight='bold')  # uses transform object instead of xmin, ymin
 
     # Adjust layout to prevent label clipping
     plt.tight_layout()
@@ -79,27 +79,25 @@ def create_monthly_chart(tickets) -> str:
     return filepath  # Return the full path
 
 
-class Monthly(Command):
+class Inflow(Command):
     """Webex Bot command to display a graph of mean times to respond and contain."""
-    QUERY = '-category:job status:closed type:METCIRT -owner:""'
+    QUERY = '-category:job type:METCIRT -owner:""'
     PERIOD = {
-        "byTo": "months",
-        "toValue": None,
-        "byFrom": "months",
+        "byFrom": "days",
         "fromValue": 1
     }
 
     def __init__(self):
-        super().__init__(command_keyword="monthly", help_message="Monthly")
+        super().__init__(command_keyword="inflow", help_message="Inflow")
 
     def execute(self, message, attachment_actions, activity):
         incident_fetcher = IncidentFetcher()
         tickets = incident_fetcher.get_tickets(query=self.QUERY, period=self.PERIOD)
-        filepath = create_monthly_chart(tickets)  # Store the full path
+        filepath = create_inflow_chart(tickets)  # Store the full path
 
         # Use WebexTeamsAPI to send the file
         api.messages.create(
             roomId=attachment_actions.json_data["roomId"],
-            text=f"{activity['actor']['displayName']}, here's your Monthly chart!",
+            text=f"{activity['actor']['displayName']}, here's your Inflow chart!",
             files=[filepath]  # Path to the file
         )
