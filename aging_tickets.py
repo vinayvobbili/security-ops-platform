@@ -112,11 +112,11 @@ class AgingTickets(Command):
 
     def execute(self, message, attachment_actions, activity):
         tickets = IncidentFetcher().get_tickets(query=self.QUERY, period=self.PERIOD)
-        plot_paramsfilepath = generate_plot(tickets)
+        plot_filepath = generate_plot(tickets)
 
         # Use WebexTeamsAPI to send the file
         api.messages.create(
             roomId=attachment_actions.json_data["roomId"],
             text=f"{activity['actor']['displayName']}, here's the latest Aging Tickets chart!",
-            files=[plot_paramsfilepath]  # Path to the file
+            files=[plot_filepath]  # Path to the file
         )
