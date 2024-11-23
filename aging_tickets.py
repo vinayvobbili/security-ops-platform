@@ -34,6 +34,9 @@ with open('fun_messages.json', 'r') as f:
 
 
 def get_df(tickets: List[Dict[Any, Any]]) -> pd.DataFrame:
+    if not tickets:
+        return pd.DataFrame(columns=['created', 'type', 'phase'])
+
     df = pd.DataFrame(tickets)
     df['created'] = pd.to_datetime(df['created'])
     # Clean up type names by removing 'METCIRT ' prefix
@@ -47,32 +50,41 @@ def generate_plot(tickets) -> str | None:
     """Generate a bar plot of open ticket types older than 30 days, returned as a base64 string."""
     df = get_df(tickets)
 
-    # Group and count tickets by 'type' and 'phase'
-    grouped_data = df.groupby(['type', 'phase']).size().unstack(fill_value=0)
+    if df.empty:
+        # Create a simple figure with a message
+        fig, ax = plt.subplots(figsize=(8, 6))
+        ax.text(0.5, 0.5, 'No tickets found!',
+                horizontalalignment='center',
+                verticalalignment='center',
+                transform=ax.transAxes,
+                fontsize=12)
+    else:
+        # Group and count tickets by 'type' and 'phase'
+        grouped_data = df.groupby(['type', 'phase']).size().unstack(fill_value=0)
 
-    # Sort types by total count in descending order
-    grouped_data['total'] = grouped_data.sum(axis=1)
-    grouped_data = grouped_data.sort_values(by='total', ascending=False).drop(columns='total')
+        # Sort types by total count in descending order
+        grouped_data['total'] = grouped_data.sum(axis=1)
+        grouped_data = grouped_data.sort_values(by='total', ascending=False).drop(columns='total')
 
-    colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#bcbd22', '#17becf', '#7f7f7f', '#ff9896']
+        colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#bcbd22', '#17becf', '#7f7f7f', '#ff9896']
 
-    # Adjust figure size to control overall width
-    fig, ax = plt.subplots(figsize=(8, 6))  # Example: plt.subplots(figsize=(10, 6)) makes 10 inches wide, 6 inches tall. Adjust these values.
+        # Adjust figure size to control overall width
+        fig, ax = plt.subplots(figsize=(8, 6))  # Example: plt.subplots(figsize=(10, 6)) makes 10 inches wide, 6 inches tall. Adjust these values.
+
+        # Plotting
+        grouped_data.plot(
+            kind='bar',
+            stacked=True,
+            color=colors,
+            edgecolor='black',
+            ax=ax,
+            width=0.2,  # Controls bar width
+        )
 
     # Transform coordinates to figure coordinates (bottom-left is 0,0)
     trans = transforms.blended_transform_factory(fig.transFigure, ax.transAxes)  # gets transform object
     now_eastern = datetime.now(eastern).strftime('%m/%d/%Y %I:%M %p %Z')
     plt.text(0.05, -0.3, now_eastern, transform=trans, ha='left', va='bottom', fontsize=10)
-
-    # Plotting
-    grouped_data.plot(
-        kind='bar',
-        stacked=True,
-        color=colors,
-        edgecolor='black',
-        ax=ax,
-        width=0.2,  # Controls bar width
-    )
 
     # Annotate each segment of the stacked bars
     for container in ax.containers:  # ax.containers contains the bar segments
