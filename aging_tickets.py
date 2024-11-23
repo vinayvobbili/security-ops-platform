@@ -57,7 +57,7 @@ def generate_plot(tickets) -> str | None:
     colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#bcbd22', '#17becf', '#7f7f7f', '#ff9896']
 
     # Adjust figure size to control overall width
-    fig, ax = plt.subplots()  # Example: plt.subplots(figsize=(10, 6)) makes 10 inches wide, 6 inches tall. Adjust these values.
+    fig, ax = plt.subplots(figsize=(8, 6))  # Example: plt.subplots(figsize=(10, 6)) makes 10 inches wide, 6 inches tall. Adjust these values.
 
     # Transform coordinates to figure coordinates (bottom-left is 0,0)
     trans = transforms.blended_transform_factory(fig.transFigure, ax.transAxes)  # gets transform object
@@ -70,7 +70,8 @@ def generate_plot(tickets) -> str | None:
         stacked=True,
         color=colors,
         edgecolor='black',
-        ax=ax
+        ax=ax,
+        width=0.2,  # Controls bar width
     )
 
     # Annotate each segment of the stacked bars
