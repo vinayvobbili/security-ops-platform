@@ -8,7 +8,6 @@ import matplotlib.pyplot as plt
 import matplotlib.transforms as transforms
 import pandas as pd
 import pytz
-from pandas.plotting import plot_params
 from webex_bot.models.command import Command
 from webexpythonsdk import WebexAPI
 
