@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 import matplotlib.transforms as transforms
 import pandas as pd
 import pytz
+from pandas.plotting import plot_params
 from webex_bot.models.command import Command
 from webexpythonsdk import WebexAPI
 
@@ -111,13 +112,12 @@ class AgingTickets(Command):
         super().__init__(command_keyword="aging_tickets", help_message="Aging Tickets")
 
     def execute(self, message, attachment_actions, activity):
-        incident_fetcher = IncidentFetcher()
-        tickets = incident_fetcher.get_tickets(query=self.QUERY, period=self.PERIOD)
-        filepath = generate_plot(tickets)
+        tickets = IncidentFetcher().get_tickets(query=self.QUERY, period=self.PERIOD)
+        plot_paramsfilepath = generate_plot(tickets)
 
         # Use WebexTeamsAPI to send the file
         api.messages.create(
             roomId=attachment_actions.json_data["roomId"],
             text=f"{activity['actor']['displayName']}, here's the latest Aging Tickets chart!",
-            files=[filepath]  # Path to the file
+            files=[plot_paramsfilepath]  # Path to the file
         )
