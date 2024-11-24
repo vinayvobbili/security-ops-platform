@@ -14,7 +14,7 @@ from incident_fetcher import IncidentFetcher
 
 config = get_config()
 eastern = timezone('US/Eastern')  # Define the Eastern time zone
-api = WebexTeamsAPI(access_token=config.bot_api_token)
+webex_api = WebexTeamsAPI(access_token=config.bot_api_token)
 
 
 @dataclass
@@ -175,7 +175,7 @@ class MttcMttr(Command):
         filepath = get_mttr_mttc_chart(tickets_by_periods)  # Store the full path
 
         # Use WebexTeamsAPI to send the file
-        api.messages.create(
+        webex_api.messages.create(
             roomId=attachment_actions.json_data["roomId"],
             text=f"{activity['actor']['displayName']}, here's the latest MTTR-MTTC chart!",
             files=[filepath]  # Path to the file
