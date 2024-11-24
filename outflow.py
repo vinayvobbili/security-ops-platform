@@ -12,11 +12,11 @@ config = get_config()
 api = WebexTeamsAPI(access_token=config.bot_api_token)
 
 
-class Inflow(Command):
-    QUERY_TEMPLATE = '-category:job type:METCIRT -owner:"" created:>={start} created:<{end}'
+class Outflow(Command):
+    QUERY_TEMPLATE = '-category:job type:METCIRT -owner:"" closed:>={start} closed:<{end}'
 
     def __init__(self):
-        super().__init__(command_keyword="inflow", help_message="Inflow")
+        super().__init__(command_keyword="outflow", help_message="Outflow")
 
     def execute(self, message, attachment_actions, activity):
         # Calculate fresh values EACH TIME the command is run
@@ -29,11 +29,11 @@ class Inflow(Command):
         # Use an f-string or format to create the query dynamically
         query = self.QUERY_TEMPLATE.format(start=yesterday_start_utc, end=yesterday_end_utc)
         tickets = IncidentFetcher().get_tickets(query=query)
-        filepath = chart.make_pie(tickets, 'Inflow Yesterday')  # Store the full path
+        filepath = chart.make_pie(tickets, 'Outflow Yesterday')  # Store the full path
 
         # Use WebexTeamsAPI to send the file
         api.messages.create(
             roomId=attachment_actions.json_data["roomId"],
-            text=f"{activity['actor']['displayName']}, here's your Inflow chart!",
+            text=f"{activity['actor']['displayName']}, here's the latest Outflow chart!",
             files=[filepath]  # Path to the file
         )

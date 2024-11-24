@@ -4,6 +4,7 @@ from aging_tickets import AgingTickets
 from config import get_config
 from inflow import Inflow
 from mttc_mttr import MttcMttr
+from outflow import Outflow
 from sla_breaches import SlaBreaches
 
 config = get_config()
@@ -25,6 +26,7 @@ def main():
     bot.add_command(MttcMttr())
     bot.add_command(SlaBreaches())
     bot.add_command(Inflow())
+    bot.add_command(Outflow())
     bot.run()
 
 
