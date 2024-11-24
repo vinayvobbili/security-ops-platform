@@ -34,6 +34,6 @@ class Inflow(Command):
         # Use WebexTeamsAPI to send the file
         api.messages.create(
             roomId=attachment_actions.json_data["roomId"],
-            text=f"{activity['actor']['displayName']}, here's your Inflow chart!",
+            text=f"{activity['actor']['displayName']}, here's the Inflow chart!",
             files=[filepath]  # Path to the file
         )

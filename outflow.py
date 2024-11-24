@@ -34,6 +34,6 @@ class Outflow(Command):
         # Use WebexTeamsAPI to send the file
         api.messages.create(
             roomId=attachment_actions.json_data["roomId"],
-            text=f"{activity['actor']['displayName']}, here's the latest Outflow chart!",
+            text=f"{activity['actor']['displayName']}, here's the Outflow chart!",
             files=[filepath]  # Path to the file
         )
