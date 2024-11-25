@@ -98,7 +98,7 @@ def generate_plot(tickets) -> str | None:
                             textcoords="offset points",
                             ha='center', va='bottom', fontsize=10, color='black', fontweight='bold')
 
-    plt.title('Counts of Tickets created 30+ days ago', fontweight='bold')
+    plt.title('Tickets created 30+ days ago', fontweight='bold')
     plt.xlabel('Type', fontweight='bold')
     plt.ylabel('Count', fontweight='bold')
     plt.xticks(rotation=45, ha='right', fontsize=8)  # Rotate X-axis labels by 45 degrees
