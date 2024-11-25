@@ -111,7 +111,6 @@ def adjust_color_brightness(hex_color, factor):
     return '#{:02x}{:02x}{:02x}'.format(*new_rgb)
 
 
-
 def plot_outflow() -> str:
     # Calculate fresh values EACH TIME the command is run
     et = pytz.timezone("US/Eastern")
