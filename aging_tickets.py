@@ -15,7 +15,7 @@ from config import get_config
 from incident_fetcher import IncidentFetcher
 
 config = get_config()
-api = WebexAPI(access_token=config.bot_api_token)
+webex_api = WebexAPI(access_token=config.bot_api_token)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -128,7 +128,7 @@ class AgingTickets(Command):
         plot_filepath = generate_plot(tickets)
 
         # Use WebexTeamsAPI to send the file
-        api.messages.create(
+        webex_api.messages.create(
             roomId=attachment_actions.json_data["roomId"],
             text=f"{activity['actor']['displayName']}, here's the latest Aging Tickets chart!",
             files=[plot_filepath]  # Path to the file

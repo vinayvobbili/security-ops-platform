@@ -20,17 +20,18 @@ class IncidentFetcher:
         }
         self.api_url = config.xsoar_api_base_url + '/incidents/search'
 
-    def get_tickets(self, query, period) -> dict | None:
+    def get_tickets(self, query, period=None) -> dict | None:
         """Fetches security incidents from XSOAR."""
         payload = {
             "filter": {
                 "query": query,
-                "period": period,
                 "page": 0,
                 "size": 10000,  # Good to have a large size
                 "sort": [{"field": "created", "asc": False}]
             }
         }
+        if period:  # Add period to the payload only if it's provided
+            payload["filter"]["period"] = period
 
         try:
             response = requests.post(self.api_url, headers=self.headers, json=payload, timeout=60)
