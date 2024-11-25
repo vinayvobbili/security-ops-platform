@@ -38,13 +38,22 @@ def create_nested_donut(tickets):
     types = list(type_counts.keys())
     type_values = list(type_counts.values())
 
-    # Color scheme matching your image
-    base_colors = ['#2196F3',  # Blue
-                   '#FF9800',  # Orange
-                   '#4CAF50',  # Green
-                   '#f44336',  # Red
-                   '#9C27B0',  # Purple
-                   '#795548']  # Brown
+    # Color scheme
+    base_colors = [
+        '#2196F3',  # Blue
+        '#FF9800',  # Orange
+        '#4CAF50',  # Green
+        '#f44336',  # Red
+        '#9C27B0',  # Purple
+        '#795548',  # Brown
+        '#00BCD4',  # Cyan
+        '#FFEB3B',  # Yellow
+        '#E91E63',  # Pink
+        '#607D8B',  # Blue Grey
+        '#8BC34A',  # Light Green
+        '#FFC107',  # Amber
+        '#673AB7'  # Deep Purple
+    ]
 
     # Create figure and axis
     fig, ax = plt.subplots(figsize=(10, 4))
