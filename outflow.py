@@ -102,7 +102,7 @@ def create_nested_donut(tickets):
     # Save to temporary file
     with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmpfile:
         filepath = tmpfile.name
-        plt.savefig(filepath, format="png", bbox_inches='tight', dpi=300)
+        plt.savefig(filepath, format="png", bbox_inches='tight', dpi=600)
         plt.close(fig)
 
     return filepath
