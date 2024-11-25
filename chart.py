@@ -29,7 +29,7 @@ def make_pie(tickets, title) -> str:
                     '#c5b0d5', '#a6cee3', '#1f78b4', '#b2df8a', '#33a02c', '#fb9a99']
 
     # Reduce height in figure size
-    fig, ax = plt.subplots(figsize=(7, 4))
+    fig, ax = plt.subplots(figsize=(6, 4))
 
     # Create the outer pie chart (types)
     wedges, _, autotexts = ax.pie(type_counts.values,

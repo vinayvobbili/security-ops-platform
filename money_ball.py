@@ -3,7 +3,7 @@ from webex_bot.webex_bot import WebexBot
 from aging_tickets import AgingTickets
 from config import get_config
 from inflow import Inflow
-from mttc_mttr import MttcMttr
+from mttr_mttc import MttcMttr
 from outflow import Outflow
 from sla_breaches import SlaBreaches
 
