@@ -1,19 +1,15 @@
-import base64
-import datetime
-import io
 import json
 import logging
-import random
 import tempfile
+from datetime import datetime
 from typing import List, Dict, Any
 
 import matplotlib.pyplot as plt
+import matplotlib.transforms as transforms
 import pandas as pd
 import pytz
 from webex_bot.models.command import Command
-from webex_bot.models.response import response_from_adaptive_card
 from webexpythonsdk import WebexAPI
-from webexpythonsdk.models.cards import AdaptiveCard, Image, TextBlock
 
 from config import get_config
 from incident_fetcher import IncidentFetcher
@@ -38,43 +34,77 @@ with open('fun_messages.json', 'r') as f:
 
 
 def get_df(tickets: List[Dict[Any, Any]]) -> pd.DataFrame:
+    if not tickets:
+        return pd.DataFrame(columns=['created', 'type', 'phase'])
+
     df = pd.DataFrame(tickets)
     df['created'] = pd.to_datetime(df['created'])
     # Clean up type names by removing 'METCIRT ' prefix
     df['type'] = df['type'].str.replace('METCIRT ', '', regex=False)
+    # Set 'phase' to 'Unknown' if it's missing
+    df['phase'] = df['phase'].fillna('Unknown')
     return df
 
 
-def generate_plot(tickets: list) -> str | None:
+def generate_plot(tickets) -> str | None:
     """Generate a bar plot of open ticket types older than 30 days, returned as a base64 string."""
     df = get_df(tickets)
 
-    type_counts = df['type'].value_counts()
-    categories = df['type'].unique()
-    plt.bar(categories, type_counts)
+    if df.empty:
+        # Create a simple figure with a message
+        fig, ax = plt.subplots(figsize=(8, 6))
+        ax.text(0.5, 0.5, 'No tickets found!',
+                horizontalalignment='center',
+                verticalalignment='center',
+                transform=ax.transAxes,
+                fontsize=12)
+    else:
+        # Group and count tickets by 'type' and 'phase'
+        grouped_data = df.groupby(['type', 'phase']).size().unstack(fill_value=0)
 
-    # Bold the title, x-label, and y-label
-    plt.title('Counts of Tickets created 30+ days ago by Type', fontweight='bold')
-    plt.xlabel('METCIRT Ticket Types', fontweight='bold')
-    plt.ylabel('Counts', fontweight='bold')
+        # Sort types by total count in descending order
+        grouped_data['total'] = grouped_data.sum(axis=1)
+        grouped_data = grouped_data.sort_values(by='total', ascending=False).drop(columns='total')
 
-    plt.xticks(rotation=45, ha='right')
+        colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#bcbd22', '#17becf', '#7f7f7f', '#ff9896']
 
-    # Add value labels and total
-    max_count = max(type_counts)
-    for i, v in enumerate(type_counts):
-        label_y = v + (max_count * 0.05) if v < max_count * 0.1 else v / 2
-        plt.text(i, label_y, str(v), ha='center', va='center', fontsize=14, fontweight='bold')
+        # Adjust figure size to control overall width
+        fig, ax = plt.subplots(figsize=(8, 6))  # Example: plt.subplots(figsize=(10, 6)) makes 10 inches wide, 6 inches tall. Adjust these values.
 
-    now_eastern = datetime.datetime.now(eastern)  # Get the current time in Eastern
-    plt.text(len(categories) * 0.8, max_count * 0.95,
-             f"{now_eastern.strftime('%m/%d/%Y %I:%M %p %Z')}",
-             ha='right', va='bottom', fontsize=10)
-    plt.text(len(categories) * 0.8, max_count * 0.85,
-             f"Total: {sum(type_counts)}",
-             ha='right', va='bottom', fontsize=12, fontweight='bold')
+        # Plotting
+        grouped_data.plot(
+            kind='bar',
+            stacked=True,
+            color=colors,
+            edgecolor='black',
+            ax=ax,
+            width=0.2,  # Controls bar width
+        )
 
-    # Adjust layout to prevent label clipping
+    # Transform coordinates to figure coordinates (bottom-left is 0,0)
+    trans = transforms.blended_transform_factory(fig.transFigure, ax.transAxes)  # gets transform object
+    now_eastern = datetime.now(eastern).strftime('%m/%d/%Y %I:%M %p %Z')
+    plt.text(0.05, -0.3, now_eastern, transform=trans, ha='left', va='bottom', fontsize=10)
+
+    # Annotate each segment of the stacked bars
+    for container in ax.containers:  # ax.containers contains the bar segments
+        for bar in container:
+            height = bar.get_height()
+            # Only annotate if height is non-zero
+            if height > 0:  # Skip annotating bars with zero height
+                ax.annotate(f'{int(height)}',  # just height is showing the decimal part too
+                            xy=(bar.get_x() + bar.get_width() / 2, bar.get_y() + height / 2),
+                            xytext=(0, 3),  # 3 points vertical offset for better visibility. Adjust as needed
+                            textcoords="offset points",
+                            ha='center', va='bottom', fontsize=10, color='black', fontweight='bold')
+
+    plt.title('Counts of Tickets created 30+ days ago', fontweight='bold')
+    plt.xlabel('Type', fontweight='bold')
+    plt.ylabel('Count', fontweight='bold')
+    plt.xticks(rotation=45, ha='right', fontsize=8)  # Rotate X-axis labels by 45 degrees
+
+    # Update legend
+    plt.legend(title='Phase', loc='upper right')
     plt.tight_layout()
 
     with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmpfile:
@@ -94,13 +124,12 @@ class AgingTickets(Command):
         super().__init__(command_keyword="aging_tickets", help_message="Aging Tickets")
 
     def execute(self, message, attachment_actions, activity):
-        incident_fetcher = IncidentFetcher()
-        tickets = incident_fetcher.get_tickets(query=self.QUERY, period=self.PERIOD)
-        filepath = generate_plot(tickets)  # Store the full path
+        tickets = IncidentFetcher().get_tickets(query=self.QUERY, period=self.PERIOD)
+        plot_filepath = generate_plot(tickets)
 
         # Use WebexTeamsAPI to send the file
         api.messages.create(
             roomId=attachment_actions.json_data["roomId"],
             text=f"{activity['actor']['displayName']}, here's the latest Aging Tickets chart!",
-            files=[filepath]  # Path to the file
+            files=[plot_filepath]  # Path to the file
         )
