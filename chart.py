@@ -10,6 +10,16 @@ def make_pie(tickets, title) -> str:
     eastern = timezone('US/Eastern')  # Define the Eastern time zone
     df = pd.DataFrame(tickets)
 
+    if df.empty:
+        fig, ax = plt.subplots()
+        ax.text(0.5, 0.5, "No data available", ha='center', va='center')
+
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmpfile:
+            filepath = tmpfile.name
+            plt.savefig(filepath, format="png", bbox_inches='tight', dpi=300)
+            plt.close(fig)
+        return filepath
+
     df['type'] = df['type'].str.replace('METCIRT ', '', regex=False)
     # Calculate counts for outer pie (type)
     type_counts = df['type'].value_counts()
