@@ -40,19 +40,19 @@ def create_nested_donut(tickets):
 
     # Color scheme
     base_colors = [
-        '#2196F3',  # Blue
-        '#FF9800',  # Orange
-        '#4CAF50',  # Green
-        '#f44336',  # Red
-        '#9C27B0',  # Purple
-        '#795548',  # Brown
-        '#00BCD4',  # Cyan
-        '#FFEB3B',  # Yellow
-        '#E91E63',  # Pink
-        '#607D8B',  # Blue Grey
-        '#8BC34A',  # Light Green
-        '#FFC107',  # Amber
-        '#673AB7'  # Deep Purple
+        '#1A237E',  # Navy Blue
+        '#E65100',  # Dark Orange
+        '#1B5E20',  # Dark Green
+        '#B71C1C',  # Dark Red
+        '#4A148C',  # Dark Purple
+        '#3E2723',  # Dark Brown
+        '#006064',  # Dark Cyan
+        '#827717',  # Olive Green
+        '#004D40',  # Dark Teal
+        '#0D47A1',  # Dark Blue
+        '#33691E',  # Deep Green
+        '#FF6F00',  # Dark Amber
+        '#311B92'  # Dark Deep Purple
     ]
 
     # Create figure and axis
