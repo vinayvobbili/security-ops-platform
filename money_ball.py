@@ -6,6 +6,7 @@ from inflow import Inflow
 from mttr_mttc import MttcMttr
 from outflow import Outflow
 from sla_breaches import SlaBreaches
+from heatmap import HeatMap
 
 config = get_config()
 
@@ -27,6 +28,7 @@ def main():
     bot.add_command(SlaBreaches())
     bot.add_command(Inflow())
     bot.add_command(Outflow())
+    bot.add_command(HeatMap())
     bot.run()
 
 
