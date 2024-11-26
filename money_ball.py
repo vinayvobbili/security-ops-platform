@@ -29,6 +29,7 @@ def main():
     bot.add_command(Inflow())
     bot.add_command(Outflow())
     bot.add_command(Lifespan())
+    bot.add_command(HeatMap())
     bot.run()
 
 
