@@ -39,8 +39,8 @@ def get_df(tickets: List[Dict[Any, Any]]) -> pd.DataFrame:
 
     df = pd.DataFrame(tickets)
     df['created'] = pd.to_datetime(df['created'])
-    # Clean up type names by removing 'METCIRT ' prefix
-    df['type'] = df['type'].str.replace('METCIRT ', '', regex=False)
+    # Clean up type names by removing repeating prefix
+    df['type'] = df['type'].str.replace(config.ticket_type_prefix, '', regex=False, case=False)
     # Set 'phase' to 'Unknown' if it's missing
     df['phase'] = df['phase'].fillna('Unknown')
     return df
@@ -117,7 +117,7 @@ def generate_plot(tickets) -> str | None:
 
 class AgingTickets(Command):
     """Webex Bot command to display a graph of aging tickets."""
-    QUERY = "-status:closed -category:job type:METCIRT"
+    QUERY = f"-status:closed -category:job type:{config.ticket_type_prefix}"
     PERIOD = {"byTo": "months", "toValue": 1, "byFrom": "months", "fromValue": None}
 
     def __init__(self):

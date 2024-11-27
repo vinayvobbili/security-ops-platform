@@ -7,6 +7,7 @@ from lifespan import Lifespan
 from mttr_mttc import MttcMttr
 from outflow import Outflow
 from sla_breaches import SlaBreaches
+from heatmap import HeatMap
 
 config = get_config()
 

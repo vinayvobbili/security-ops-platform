@@ -12,7 +12,7 @@ from incident_fetcher import IncidentFetcher
 config = get_config()
 webex_api = WebexTeamsAPI(access_token=config.bot_access_token)
 
-QUERY_TEMPLATE = '-category:job type:METCIRT -owner:"" closed:>={start} closed:<{end}'
+QUERY_TEMPLATE = '-category:job type:{ticket_type_prefix} -owner:"" closed:>={start} closed:<{end}'
 
 
 def create_nested_donut(tickets):
@@ -23,7 +23,7 @@ def create_nested_donut(tickets):
     impact_by_type = {}
 
     for ticket in tickets:
-        ticket_type = ticket['type'].replace('METCIRT ', '', 1)
+        ticket_type = ticket['type'].replace(config.ticket_type_prefix, '', 1)
         impact = ticket['CustomFields'].get('impact', 'Unknown')
 
         # Count types for outer ring
@@ -59,10 +59,10 @@ def create_nested_donut(tickets):
     fig, ax = plt.subplots(figsize=(10, 4))
 
     # Plot outer ring - with larger radius and width
-    outer_ring = ax.pie(type_values, radius=1, labels=types, labeldistance=1,
-                        colors=base_colors[:len(types)],
-                        wedgeprops=dict(width=0.35, edgecolor='white'),
-                        textprops={'fontsize': 8, 'wrap': True})
+    ax.pie(type_values, radius=1, labels=types, labeldistance=1,
+           colors=base_colors[:len(types)],
+           wedgeprops=dict(width=0.35, edgecolor='white'),
+           textprops={'fontsize': 8, 'wrap': True})
 
     # Prepare inner ring data
     inner_data = []
@@ -85,10 +85,10 @@ def create_nested_donut(tickets):
             inner_labels.append(f'{impact}: {count}')
 
     # Plot inner ring - with smaller radius and width
-    inner_ring = ax.pie(inner_data, radius=0.65, labels=inner_labels, labeldistance=0.7,
-                        colors=inner_colors,
-                        wedgeprops=dict(width=0.25, edgecolor='white'),
-                        textprops={'fontsize': 8})
+    ax.pie(inner_data, radius=0.65, labels=inner_labels, labeldistance=0.7,
+           colors=inner_colors,
+           wedgeprops=dict(width=0.25, edgecolor='white'),
+           textprops={'fontsize': 8})
 
     plt.title(f'Outflow Yesterday: {len(tickets)}', pad=1, fontsize=12, fontweight='bold')
 
@@ -128,10 +128,8 @@ def plot_outflow() -> str:
     yesterday_start_utc = yesterday_start.astimezone(pytz.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
     yesterday_end_utc = yesterday_end.astimezone(pytz.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
 
-    # Use an f-string or format to create the query dynamically
-    query = QUERY_TEMPLATE.format(start=yesterday_start_utc, end=yesterday_end_utc)
+    query = QUERY_TEMPLATE.format(ticket_type_prefix=config.ticket_type_prefix, start=yesterday_start_utc, end=yesterday_end_utc)
     tickets = IncidentFetcher().get_tickets(query=query)
-    # filepath = chart.make_pie(tickets, 'Outflow Yesterday')  # Store the full path
     filepath = create_nested_donut(tickets)
 
     return filepath

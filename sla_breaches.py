@@ -151,7 +151,7 @@ def get_sla_breaches_chart(ticket_slas_by_periods):
 
 class SlaBreaches(Command):
     """Webex Bot command to display a graph of mean times to respond and contain."""
-    QUERY = '-category:job type:METCIRT -owner:""'
+    QUERY = f'-category:job type:{config.ticket_type_prefix} -owner:""'
     PERIOD = {
         "byTo": "months",
         "toValue": None,
@@ -169,7 +169,7 @@ class SlaBreaches(Command):
         filepath = get_sla_breaches_chart(tickets_by_periods)  # Store the full path
 
         # Use WebexTeamsAPI to send the file
-        api.messages.create(
+        webex_api.messages.create(
             roomId=attachment_actions.json_data["roomId"],
             text=f"{activity['actor']['displayName']}, here's the latest SLA Breaches chart!",
             files=[filepath]  # Path to the file

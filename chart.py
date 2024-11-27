@@ -5,6 +5,10 @@ import pandas as pd
 from matplotlib import pyplot as plt
 from pytz import timezone
 
+from config import get_config
+
+config = get_config()
+
 
 def make_pie(tickets, title) -> str:
     eastern = timezone('US/Eastern')  # Define the Eastern time zone
@@ -20,7 +24,7 @@ def make_pie(tickets, title) -> str:
             plt.close(fig)
         return filepath
 
-    df['type'] = df['type'].str.replace('METCIRT ', '', regex=False)
+    df['type'] = df['type'].str.replace(config.ticket_type_prefix, '', regex=False)
     # Calculate counts for outer pie (type)
     type_counts = df['type'].value_counts()
 
