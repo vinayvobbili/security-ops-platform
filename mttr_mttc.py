@@ -157,7 +157,7 @@ def get_mttr_mttc_chart(ticket_slas_by_periods):
 
 class MttcMttr(Command):
     """Webex Bot command to display a graph of mean times to respond and contain."""
-    QUERY = '-category:job type:METCIRT -owner:""'
+    QUERY = f'-category:job type:{config.ticket_type_prefix} -owner:""'
     PERIOD = {
         "byTo": "months",
         "toValue": None,
