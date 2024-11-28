@@ -46,7 +46,7 @@ def create_choropleth_map():
             country_key = x_cartopy_country_name_mapping.get(country, country)
             data[country_key] = ticket_counts_by_country[country] / host_count
 
-    # print(ticket_counts_by_country)
+    print(ticket_counts_by_country)
 
     cmap = cm.YlOrRd
     norm = colors.Normalize(vmin=min(data.values()), vmax=max(data.values()))
@@ -56,8 +56,13 @@ def create_choropleth_map():
     ax.add_feature(cfeature.COASTLINE, linewidth=0.01, zorder=1, linestyle='None')
     ax.add_feature(cfeature.BORDERS, linestyle='None', zorder=1, linewidth=0.01)
     ax.set_global()  # Important for proper display with PlateCarree
-    # Set ocean color to light blue
-    ax.add_feature(cfeature.OCEAN, color='lightblue')
+
+    # Set ocean color to Global density or light blue
+    if 'Global' in data:
+        ocean_color = cmap(norm(data['Global']))
+    else:
+        ocean_color = 'lightblue'  # or any other suitable color
+    ax.add_feature(cfeature.OCEAN, color=ocean_color)
 
     # Country size threshold (experiment to find a good value)
     area_threshold = 50  # Example: Treat countries smaller than this as "small"
