@@ -17,7 +17,7 @@ config = get_config()
 webex_api = WebexTeamsAPI(access_token=config.bot_access_token)
 
 QUERY_TEMPLATE = '-category:job status:closed type:{ticket_type_prefix} -owner:""'
-PERIOD = {"byTo": "months", "toValue": None, "byFrom": "months", "fromValue": 1}
+PERIOD = {"byFrom": "days", "fromValue": 30}
 
 with open('host_counts_by_country.json', 'r') as f:
     host_counts_by_country = json.load(f)
@@ -46,7 +46,7 @@ def create_choropleth_map():
             country_key = x_cartopy_country_name_mapping.get(country, country)
             data[country_key] = ticket_counts_by_country[country] / host_count
 
-    # print(ticket_counts_by_country)
+    print(ticket_counts_by_country)
 
     cmap = cm.YlOrRd
     norm = colors.Normalize(vmin=min(data.values()), vmax=max(data.values()))
@@ -69,6 +69,8 @@ def create_choropleth_map():
     countries = reader.records()
 
     for country in countries:
+        # print(country.attributes['NAME_EN'])
+
         country_name = country.attributes['NAME_EN']
         country_name = x_cartopy_country_name_mapping.get(country_name, country_name)
 
@@ -114,7 +116,7 @@ def create_choropleth_map():
                  'color': 'dimgray',  # Label color
                  'weight': 'bold',
                  'size': 10}  # Increased font size
-    cbar.set_label("Ticket counts per thousand hosts (last 30 days)", fontdict=cbar_font)  # Set label with fontdict
+    cbar.set_label("Ticket counts per thousand hosts", fontdict=cbar_font)  # Set label with fontdict
     cbar.ax.tick_params(labelsize=8, labelcolor='gray')  # Adjust tick label size and color
 
     # Stylish and colorful title
@@ -124,7 +126,7 @@ def create_choropleth_map():
                   'size': 20,  # Adjust size as needed
                   'style': 'italic',  # Add a style
                   'alpha': 0.8}  # Make it slightly transparent
-    plt.title("IR Heat Map", fontdict=title_font)
+    plt.title(f"{config.ticket_type_prefix} XSOAR Tickets Heat Map (last 30 days)", fontdict=title_font)
 
     # Adjust layout to prevent label clipping
     plt.tight_layout()
