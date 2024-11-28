@@ -15,7 +15,7 @@ def main():
     """the main"""
 
     bot = WebexBot(
-        config.bot_api_token,
+        config.bot_access_token,
         approved_domains=[config.approved_domains],
         approved_rooms=[config.approved_rooms],
         bot_name="Hello, Metricmeister!"
