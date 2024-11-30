@@ -126,7 +126,7 @@ def create_choropleth_map():
                   'size': 20,  # Adjust size as needed
                   'style': 'italic',  # Add a style
                   'alpha': 0.8}  # Make it slightly transparent
-    plt.title(f"{config.ticket_type_prefix} XSOAR Tickets Heat Map (last 30 days)", fontdict=title_font)
+    plt.title(f"IR Heat Map (last 30 days)", fontdict=title_font)
 
     # Adjust layout to prevent label clipping
     plt.tight_layout()
