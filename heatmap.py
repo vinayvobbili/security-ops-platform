@@ -116,7 +116,7 @@ def create_choropleth_map():
                  'color': 'dimgray',  # Label color
                  'weight': 'bold',
                  'size': 10}  # Increased font size
-    cbar.set_label("Ticket counts per thousand hosts", fontdict=cbar_font)  # Set label with fontdict
+    cbar.set_label("Ticket counts per thousand hosts (last 30 days)", fontdict=cbar_font)  # Set label with fontdict
     cbar.ax.tick_params(labelsize=8, labelcolor='gray')  # Adjust tick label size and color
 
     # Stylish and colorful title
@@ -126,7 +126,7 @@ def create_choropleth_map():
                   'size': 20,  # Adjust size as needed
                   'style': 'italic',  # Add a style
                   'alpha': 0.8}  # Make it slightly transparent
-    plt.title(f"IR Heat Map (last 30 days)", fontdict=title_font)
+    plt.title(f"IR Heat Map", fontdict=title_font)
 
     # Adjust layout to prevent label clipping
     plt.tight_layout()
