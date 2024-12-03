@@ -3,6 +3,7 @@ from webex_bot.webex_bot import WebexBot
 from aging_tickets import AgingTickets
 from config import get_config
 from inflow import Inflow
+from lifespan import Lifespan
 from mttr_mttc import MttcMttr
 from outflow import Outflow
 from sla_breaches import SlaBreaches
@@ -14,7 +15,7 @@ def main():
     """the main"""
 
     bot = WebexBot(
-        config.bot_api_token,
+        config.bot_access_token,
         approved_domains=['company.com'],
         approved_rooms=[
             "Y2lzY29zcGFyazovL3VzL1JPT00vZWU5ZDMyYzAtYTFjYS0xMWVmLWIyZjYtNTcwMThiNzRiOTUx"  # METCIRT Metrics,
@@ -27,6 +28,7 @@ def main():
     bot.add_command(SlaBreaches())
     bot.add_command(Inflow())
     bot.add_command(Outflow())
+    bot.add_command(Lifespan())
     bot.run()
 
 
