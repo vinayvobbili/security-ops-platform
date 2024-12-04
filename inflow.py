@@ -11,7 +11,7 @@ from incident_fetcher import IncidentFetcher
 QUERY_TEMPLATE = '-category:job type:METCIRT -owner:"" created:>={start} created:<{end}'
 
 config = get_config()
-webex_api = WebexTeamsAPI(access_token=config.bot_api_token)
+webex_api = WebexTeamsAPI(access_token=config.bot_access_token)
 
 
 def plot_inflow() -> str:
