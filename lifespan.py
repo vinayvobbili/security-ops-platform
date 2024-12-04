@@ -59,14 +59,15 @@ def get_lifespan_chart(tickets):
     colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd']
     fig, ax = plt.subplots(figsize=(12, 6))
 
+    bar_width = 0.6
     bottom = 0
     for i, col in enumerate(['closure', 'lessons', 'eradicate', 'investigate', 'triage']):
-        ax.bar(df['type'], df[col], label=col.capitalize(), bottom=bottom, color=colors[i % len(colors)])
+        ax.bar(df['type'], df[col], label=col.capitalize(), bottom=bottom, color=colors[i % len(colors)], width=bar_width)
         bottom += df[col]
 
     ax.set_xlabel("Ticket Type (last 30 days)", fontweight='bold')
     ax.set_ylabel("Hours", fontweight='bold')
-    ax.set_title("Ticket Lifespan by Type", fontweight='bold', fontsize=14, fontname='Arial', color='darkred', backgroundcolor='#f0f0f0', pad=1)
+    ax.set_title("Cumulative Lifespan by Type", fontweight='bold', fontsize=14, fontname='Arial', color='darkred', backgroundcolor='#f0f0f0', pad=1)
     ax.legend()
     plt.xticks(rotation=45, ha='right')  # Rotate x-axis labels if needed
 
