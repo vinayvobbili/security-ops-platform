@@ -5,7 +5,6 @@ from datetime import datetime
 import matplotlib.pyplot as plt
 import pandas as pd
 import pytz
-from matplotlib import transforms
 from webex_bot.models.command import Command
 from webexpythonsdk import WebexAPI
 
@@ -72,7 +71,10 @@ def get_lifespan_chart(tickets):
         )
 
     df = pd.DataFrame(data)
-    df = df.groupby('type').sum().reset_index()
+    # Calculate counts *before* grouping
+    df['count'] = 1  # Add a 'count' column initialized to 1
+    df = df.groupby('type').agg(
+        {'triage': 'sum', 'lessons': 'sum', 'investigate': 'sum', 'eradicate': 'sum', 'closure': 'sum', 'lifespan': 'sum', 'count': 'sum'}).reset_index()  # Aggregate all columns, including count
 
     # Filter out rows where lifespan is 0 *before* sorting
     df = df[df['lifespan'] > 0]  # Keep only rows with lifespan > 0
@@ -106,24 +108,22 @@ def get_lifespan_chart(tickets):
     )
     ax.legend()
 
-    # Transform coordinates to figure coordinates (bottom-left is 0,0)
-    trans = transforms.blended_transform_factory(fig.transFigure, ax.transAxes)  # gets transform object
     now_eastern = datetime.now(eastern).strftime('%m/%d/%Y %I:%M %p %Z')
-    plt.text(0.05, -0.7, now_eastern, transform=trans, ha='left', va='bottom', fontsize=10)
+    fig.text(0.05, 0.01, now_eastern, ha='left', fontsize=10)  # Lower position
 
     plt.xticks(rotation=45, ha='right')  # Rotate x-axis labels if needed
 
-    # Annotate bars with counts
-    for bar, label in zip(ax.containers[0], df['type']):  # Iterate over the main bar containers
+    # Annotate bars with counts (now from the 'count' column)
+    for bar, label in zip(ax.containers[0], df['type']):
         height = bar.get_height()
-        count = df[df['type'] == label]['lifespan'].values[0]  # Get total lifespan count for ticket type
-        ax.annotate(f'({int(count)})',
+        count = df[df['type'] == label]['count'].values[0]  # Access the 'count' column
+        ax.annotate(f'({int(count)})',  # Annotate with the count
                     xy=(bar.get_x() + bar.get_width() / 2, height),
                     xytext=(0, 3),  # 3 points vertical offset
                     textcoords="offset points",
-                    ha='center', va='bottom', fontsize=8, fontweight='bold')
+                    ha='center', va='bottom', fontsize=12, color='black')
 
-    plt.tight_layout()  # Adjust layout to prevent labels from overlapping
+    plt.tight_layout(rect=[0, 0.1, 1, 1])  # Adjust the tight_layout area
 
     # Save the plot to a temporary file
     with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmpfile:
