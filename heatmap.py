@@ -1,5 +1,6 @@
 import json
 import tempfile
+from datetime import datetime
 
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
@@ -7,6 +8,8 @@ import cartopy.io.shapereader as shpreader
 import matplotlib.cm as cm
 import matplotlib.colors as colors
 import matplotlib.pyplot as plt
+from matplotlib import transforms
+from pytz import timezone
 from webex_bot.models.command import Command
 from webexteamssdk import WebexTeamsAPI
 
@@ -15,6 +18,8 @@ from incident_fetcher import IncidentFetcher
 
 config = get_config()
 webex_api = WebexTeamsAPI(access_token=config.bot_access_token)
+
+eastern = timezone('US/Eastern')  # Define the Eastern time zone
 
 QUERY_TEMPLATE = '-category:job status:closed type:{ticket_type_prefix} -owner:""'
 PERIOD = {"byFrom": "days", "fromValue": 30}
@@ -127,6 +132,11 @@ def create_choropleth_map():
                   'style': 'italic',  # Add a style
                   'alpha': 0.8}  # Make it slightly transparent
     plt.title(f"IR Heat Map", fontdict=title_font)
+
+    # Transform coordinates to figure coordinates (bottom-left is 0,0)
+    trans = transforms.blended_transform_factory(fig.transFigure, ax.transAxes)  # gets transform object
+    now_eastern = datetime.now(eastern).strftime('%m/%d/%Y %I:%M %p %Z')
+    plt.text(0.1, -0.15, now_eastern, transform=trans, ha='left', va='bottom', fontsize=10)
 
     # Adjust layout to prevent label clipping
     plt.tight_layout()
