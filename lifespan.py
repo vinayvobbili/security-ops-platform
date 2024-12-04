@@ -1,15 +1,19 @@
 import logging
-import tempfile
-from datetime import datetime
 
-import matplotlib.pyplot as plt
-import pandas as pd
 import pytz
 from webex_bot.models.command import Command
 from webexpythonsdk import WebexAPI
 
 from config import get_config
 from incident_fetcher import IncidentFetcher
+
+eastern = pytz.timezone('US/Eastern')  # Define the Eastern time zone
+
+import tempfile
+from datetime import datetime
+
+import matplotlib.pyplot as plt
+import pandas as pd
 
 config = get_config()
 webex_api = WebexAPI(access_token=config.bot_access_token)
@@ -24,114 +28,63 @@ PERIOD = {
     "fromValue": 1
 }
 
-eastern = pytz.timezone('US/Eastern')  # Define the Eastern time zone
-
 
 def get_lifespan_chart(tickets):
     if not tickets:
-        # Handle empty ticket list
         fig, ax = plt.subplots()
         ax.text(0.5, 0.5, 'No tickets found!', ha='center', va='center', fontsize=12)
-        # Save the plot to a temporary file
         with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmpfile:
-            filepath = tmpfile.name
-            plt.savefig(filepath, format="png")
-            plt.close()
-        return filepath
+            plt.savefig(tmpfile.name, format="png")
+        plt.close()
+        return tmpfile.name
 
     data = []
     for ticket in tickets:
-        ticket_type = ticket.get('type').replace('METCIRT ', '')
-        custom_fields = ticket.get('CustomFields', {})  # Handle missing CustomFields
-
-        # Extract time fields and handle potential missing values with .get()
-        triage_time = custom_fields.get('labtriagetime', {}).get('totalDuration', 0) / 3600  # Default to 0 if not found
-        lessons_time = custom_fields.get('lablessonslearnedtime', {}).get('totalDuration', 0) / 3600
-        investigate_time = custom_fields.get('labinvestigatetime', {}).get('totalDuration', 0) / 3600
-        eradication_time = custom_fields.get('laberadicationtime', {}).get('totalDuration', 0) / 3600
-        closure_time = custom_fields.get('labclosuretime', {}).get('totalDuration', 0) / 3600
-
-        lifespan = (
-                triage_time
-                + lessons_time
-                + investigate_time
-                + eradication_time
-                + closure_time
-        )
-        data.append(
-            {
-                'type': ticket_type,
-                'triage': triage_time,
-                'lessons': lessons_time,
-                'investigate': investigate_time,
-                'eradicate': eradication_time,
-                'closure': closure_time,
-                'lifespan': lifespan,
-            }
-        )
+        custom_fields = ticket.get('CustomFields', {})
+        data.append({
+            'type': ticket.get('type').replace('METCIRT ', ''),
+            'triage': custom_fields.get('labtriagetime', {}).get('totalDuration', 0) / 3600,
+            'lessons': custom_fields.get('lablessonslearnedtime', {}).get('totalDuration', 0) / 3600,
+            'investigate': custom_fields.get('labinvestigatetime', {}).get('totalDuration', 0) / 3600,
+            'eradicate': custom_fields.get('laberadicationtime', {}).get('totalDuration', 0) / 3600,
+            'closure': custom_fields.get('labclosuretime', {}).get('totalDuration', 0) / 3600,
+        })
 
     df = pd.DataFrame(data)
-    # Calculate counts *before* grouping
-    df['count'] = 1  # Add a 'count' column initialized to 1
-    df = df.groupby('type').agg(
-        {'triage': 'sum', 'lessons': 'sum', 'investigate': 'sum', 'eradicate': 'sum', 'closure': 'sum', 'lifespan': 'sum', 'count': 'sum'}).reset_index()  # Aggregate all columns, including count
+    df['lifespan'] = df[['triage', 'lessons', 'investigate', 'eradicate', 'closure']].sum(axis=1)
+    df['count'] = 1
+    df = df.groupby('type').sum().reset_index()
+    df = df[df['lifespan'] > 0].sort_values('lifespan', ascending=False)
 
-    # Filter out rows where lifespan is 0 *before* sorting
-    df = df[df['lifespan'] > 0]  # Keep only rows with lifespan > 0
-
-    # Sort the DataFrame by 'lifespan' column in descending order
-    df = df.sort_values('lifespan', ascending=False)
-
+    colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd']
     fig, ax = plt.subplots(figsize=(12, 6))
 
-    # Define a list of colors for the stacked bars. Add more as needed.
-    colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd']
-
-    bottom = [0] * len(df)  # Ensures the segments start at the bottom
-
-    # The order you specify determines stack order (bottom to top):
-    for i, col in enumerate(['closure', 'lessons', 'eradicate', 'investigate', 'triage']):  # Correct order
+    bottom = 0
+    for i, col in enumerate(['closure', 'lessons', 'eradicate', 'investigate', 'triage']):
         ax.bar(df['type'], df[col], label=col.capitalize(), bottom=bottom, color=colors[i % len(colors)])
-        bottom += df[col]  # Important: Increment bottom for the next segment
+        bottom += df[col]
 
     ax.set_xlabel("Ticket Type (last 30 days)", fontweight='bold')
     ax.set_ylabel("Hours", fontweight='bold')
-    ax.set_title(
-        "Ticket Lifespan by Type",
-        fontweight='bold',  # Keep the bold
-        fontsize=14,  # Increase font size
-        fontname='Arial',  # Use a clear font like Arial, Tahoma, or Calibri
-        color='darkred',  # Darker gray for better contrast (adjust as needed)
-        # Use a background color for the title (adjust as needed):
-        backgroundcolor='#f0f0f0',  # Light gray
-        pad=1  # Add some padding
-    )
+    ax.set_title("Ticket Lifespan by Type", fontweight='bold', fontsize=14, fontname='Arial', color='darkred', backgroundcolor='#f0f0f0', pad=1)
     ax.legend()
-
-    now_eastern = datetime.now(eastern).strftime('%m/%d/%Y %I:%M %p %Z')
-    fig.text(0.05, 0.01, now_eastern, ha='left', fontsize=10)  # Lower position
-
     plt.xticks(rotation=45, ha='right')  # Rotate x-axis labels if needed
 
-    # Annotate bars with counts (now from the 'count' column)
-    for bar, label in zip(ax.containers[0], df['type']):
-        height = bar.get_height()
-        count = df[df['type'] == label]['count'].values[0]  # Access the 'count' column
-        ax.annotate(f'({int(count)})',  # Annotate with the count
-                    xy=(bar.get_x() + bar.get_width() / 2, height),
-                    xytext=(0, 3),  # 3 points vertical offset
-                    textcoords="offset points",
-                    ha='center', va='bottom', fontsize=12, color='black')
+    for bar, label in zip(ax.containers[0], df['type']):  # Correct container indexing
+        height = bar.get_height()  # Height is now correct since bottom is updated within the loop
+        count = df[df['type'] == label]['count'].values[0]
+        ax.annotate(f'({int(count)})', xy=(bar.get_x() + bar.get_width() / 2, height), xytext=(0, 3), textcoords="offset points", ha='center', va='bottom',
+                    fontsize=12)  # ha and va are correct here for annotations
 
-    plt.tight_layout(rect=[0, 0.1, 1, 1])  # Adjust the tight_layout area
+    now_eastern = datetime.now(eastern).strftime('%m/%d/%Y %I:%M %p %Z')
+    fig.text(0.05, 0.01, now_eastern, ha='left', fontsize=10)
 
-    # Save the plot to a temporary file
+    plt.tight_layout(rect=[0, 0.1, 1, 1])
+
     with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmpfile:
-        filepath = tmpfile.name
-        plt.savefig(filepath, format="png")
-        plt.close()
-
-    return filepath
+        plt.savefig(tmpfile.name, format="png")
+    plt.close()
+    return tmpfile.name
 
 
 class Lifespan(Command):
