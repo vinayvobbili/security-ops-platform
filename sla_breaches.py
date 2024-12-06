@@ -47,7 +47,7 @@ def get_tickets_by_periods(tickets):
 
         incident_date = datetime.strptime(
             ticket['created'],
-            '%Y-%m-%dT%H:%M:%S.%fZ'
+            '%Y-%m-%dT%H:%M:%S.%fZ' if '.' in ticket['created'] else '%Y-%m-%dT%H:%M:%SZ'
         ).date()
 
         # Update metrics for each time period
