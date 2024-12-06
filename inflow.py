@@ -8,7 +8,7 @@ import chart
 from config import get_config
 from incident_fetcher import IncidentFetcher
 
-QUERY_TEMPLATE = '-category:job type:METCIRT -owner:"" created:>={start} created:<{end}'
+QUERY_TEMPLATE = '-category:job type:{ticket_type_prefix} -owner:"" created:>={start} created:<{end}'
 
 config = get_config()
 webex_api = WebexTeamsAPI(access_token=config.bot_access_token)
@@ -24,7 +24,7 @@ def plot_inflow() -> str:
     yesterday_end_utc = yesterday_end.astimezone(pytz.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
 
     # Use an f-string or format to create the query dynamically
-    query = QUERY_TEMPLATE.format(start=yesterday_start_utc, end=yesterday_end_utc)
+    query = QUERY_TEMPLATE.format(ticket_type_prefix=config.ticket_type_prefix, start=yesterday_start_utc, end=yesterday_end_utc)
     tickets = IncidentFetcher().get_tickets(query=query)
     filepath = chart.make_pie(tickets, 'Inflow Yesterday')  # Store the full path
 
@@ -38,7 +38,7 @@ class Inflow(Command):
 
     def execute(self, message, attachment_actions, activity):
         inflow_chart_filepath = plot_inflow()
-        
+
         webex_api.messages.create(
             roomId=attachment_actions.json_data["roomId"],
             text=f"{activity['actor']['displayName']}, here's the Inflow chart!",

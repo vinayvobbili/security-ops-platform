@@ -7,6 +7,7 @@ from lifespan import Lifespan
 from mttr_mttc import MttcMttr
 from outflow import Outflow
 from sla_breaches import SlaBreaches
+from heatmap import HeatMap
 
 config = get_config()
 
@@ -16,11 +17,8 @@ def main():
 
     bot = WebexBot(
         config.bot_access_token,
-        approved_domains=['company.com'],
-        approved_rooms=[
-            "Y2lzY29zcGFyazovL3VzL1JPT00vZWU5ZDMyYzAtYTFjYS0xMWVmLWIyZjYtNTcwMThiNzRiOTUx",  # METCIRT Metrics,
-            "Y2lzY29zcGFyazovL3VzL1JPT00vMDBmYmIzMjAtZTEyZi0xMWViLTg5M2ItNDdkNjNlNmIwYzUy"  # Vinay's test space
-        ],
+        approved_domains=[config.approved_domains],
+        approved_rooms=[config.approved_rooms],
         bot_name="Hello, Metricmeister!"
     )
     bot.add_command(AgingTickets())
@@ -29,6 +27,7 @@ def main():
     bot.add_command(Inflow())
     bot.add_command(Outflow())
     bot.add_command(Lifespan())
+    bot.add_command(HeatMap())
     bot.run()
 
 
