@@ -14,7 +14,7 @@ from incident_fetcher import IncidentFetcher
 
 eastern = timezone('US/Eastern')  # Define the Eastern time zone
 config = get_config()
-api = WebexTeamsAPI(access_token=config.bot_access_token)
+webex_api = WebexTeamsAPI(access_token=config.bot_access_token)
 
 
 @dataclass

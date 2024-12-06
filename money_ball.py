@@ -17,11 +17,8 @@ def main():
 
     bot = WebexBot(
         config.bot_access_token,
-        approved_domains=['company.com'],
-        approved_rooms=[
-            "Y2lzY29zcGFyazovL3VzL1JPT00vZWU5ZDMyYzAtYTFjYS0xMWVmLWIyZjYtNTcwMThiNzRiOTUx",  # METCIRT Metrics,
-            "Y2lzY29zcGFyazovL3VzL1JPT00vMDBmYmIzMjAtZTEyZi0xMWViLTg5M2ItNDdkNjNlNmIwYzUy"  # Vinay's test space
-        ],
+        approved_domains=[config.approved_domains],
+        approved_rooms=[config.approved_rooms],
         bot_name="Hello, Metricmeister!"
     )
     bot.add_command(AgingTickets())
