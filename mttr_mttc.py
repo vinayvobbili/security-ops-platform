@@ -155,7 +155,7 @@ def get_mttr_mttc_chart(ticket_slas_by_periods):
     return filepath  # Return the full path
 
 
-class MttcMttr(Command):
+class MttrMttc(Command):
     """Webex Bot command to display a graph of mean times to respond and contain."""
     QUERY = f'-category:job type:{config.ticket_type_prefix} -owner:""'
     PERIOD = {
