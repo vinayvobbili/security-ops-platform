@@ -14,7 +14,10 @@ from webex_bot.models.command import Command
 from webexteamssdk import WebexTeamsAPI
 
 from config import get_config
+from helper_methods import log_activity
 from incident_fetcher import IncidentFetcher
+
+from bot_rooms import get_room_name
 
 config = get_config()
 webex_api = WebexTeamsAPI(access_token=config.bot_access_token)
@@ -153,9 +156,8 @@ class HeatMap(Command):
     def __init__(self):
         super().__init__(command_keyword="heat_map", help_message="Heat Map")
 
+    @log_activity
     def execute(self, message, attachment_actions, activity):
-        # Example usage
-
         map_file_path = create_choropleth_map()  # Store the full path
 
         # Use WebexTeamsAPI to send the file

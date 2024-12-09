@@ -1,5 +1,6 @@
 from webex_bot.webex_bot import WebexBot
 
+from Test import Test
 from aging_tickets import AgingTickets
 from config import get_config
 from inflow import Inflow
@@ -28,6 +29,7 @@ def main():
     bot.add_command(Outflow())
     bot.add_command(Lifespan())
     bot.add_command(HeatMap())
+    bot.add_command(Test())
     bot.run()
 
 
