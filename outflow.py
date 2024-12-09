@@ -6,8 +6,12 @@ from matplotlib import pyplot as plt
 from webex_bot.models.command import Command
 from webexteamssdk import WebexTeamsAPI
 
+from bot_rooms import get_room_name
 from config import get_config
+from helper_methods import log_activity
 from incident_fetcher import IncidentFetcher
+
+eastern = pytz.timezone('US/Eastern')  # Define the Eastern time zone
 
 config = get_config()
 webex_api = WebexTeamsAPI(access_token=config.bot_access_token)
@@ -140,6 +144,7 @@ class Outflow(Command):
     def __init__(self):
         super().__init__(command_keyword="outflow", help_message="Outflow")
 
+    @log_activity
     def execute(self, message, attachment_actions, activity):
         outflow_chart_filepath = plot_outflow()
 

@@ -70,5 +70,39 @@ def main():
         print("No rooms found or error occurred.")
 
 
+class InvalidRoomIDException(Exception):
+    """Exception raised when the room ID is invalid."""
+    pass
+
+
+def get_room_name(room_id):
+    """
+    Retrieve the room name for a given room ID.
+
+    :param room_id: The ID of the room
+    :return: The name of the room
+    :raises InvalidRoomIDException: If the room ID is invalid
+    """
+    url = f"https://webexapis.com/v1/rooms/{room_id}"
+    headers = {
+        "Authorization": f"Bearer {BOT_ACCESS_TOKEN}",
+        "Content-Type": "application/json"
+    }
+
+    try:
+        response = requests.get(url, headers=headers)
+        if response.status_code == 200:
+            room_data = response.json()
+            return room_data['title']
+        elif response.status_code == 404:
+            raise InvalidRoomIDException(f"Room ID {room_id} is invalid.")
+        else:
+            print(f"Error: {response.status_code}")
+            print(response.text)
+            return None
+    except requests.RequestException as e:
+        print(f"Request error: {e}")
+        return None
+
 if __name__ == "__main__":
     main()

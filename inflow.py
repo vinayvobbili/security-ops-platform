@@ -5,9 +5,12 @@ from webex_bot.models.command import Command
 from webexteamssdk import WebexTeamsAPI
 
 import chart
+from bot_rooms import get_room_name
 from config import get_config
+from helper_methods import log_activity
 from incident_fetcher import IncidentFetcher
 
+eastern = pytz.timezone('US/Eastern')  # Define the Eastern time zone
 QUERY_TEMPLATE = '-category:job type:{ticket_type_prefix} -owner:"" created:>={start} created:<{end}'
 
 config = get_config()
@@ -36,6 +39,7 @@ class Inflow(Command):
     def __init__(self):
         super().__init__(command_keyword="inflow", help_message="Inflow")
 
+    @log_activity
     def execute(self, message, attachment_actions, activity):
         inflow_chart_filepath = plot_inflow()
 

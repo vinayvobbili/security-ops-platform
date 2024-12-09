@@ -11,7 +11,9 @@ import pytz
 from webex_bot.models.command import Command
 from webexpythonsdk import WebexAPI
 
+from bot_rooms import get_room_name
 from config import get_config
+from helper_methods import log_activity
 from incident_fetcher import IncidentFetcher
 
 config = get_config()
@@ -123,6 +125,7 @@ class AgingTickets(Command):
     def __init__(self):
         super().__init__(command_keyword="aging_tickets", help_message="Aging Tickets")
 
+    @log_activity
     def execute(self, message, attachment_actions, activity):
         tickets = IncidentFetcher().get_tickets(query=self.QUERY, period=self.PERIOD)
         plot_filepath = generate_plot(tickets)

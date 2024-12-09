@@ -9,7 +9,9 @@ from pytz import timezone
 from webex_bot.models.command import Command
 from webexteamssdk import WebexTeamsAPI
 
+from bot_rooms import get_room_name
 from config import get_config
+from helper_methods import log_activity
 from incident_fetcher import IncidentFetcher
 
 config = get_config()
@@ -168,6 +170,7 @@ class MttrMttc(Command):
     def __init__(self):
         super().__init__(command_keyword="mttr_mttc", help_message="MTTR-MTTC")
 
+    @log_activity
     def execute(self, message, attachment_actions, activity):
         incident_fetcher = IncidentFetcher()
         tickets = incident_fetcher.get_tickets(query=self.QUERY, period=self.PERIOD)
