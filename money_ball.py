@@ -17,8 +17,8 @@ def main():
 
     bot = WebexBot(
         config.bot_access_token,
-        approved_domains=[config.approved_domains],
-        approved_rooms=[config.approved_rooms],
+        approved_domains=config.approved_domains.split(','),
+        approved_rooms=config.approved_rooms.split(','),
         bot_name="Hello, Metricmeister!"
     )
     bot.add_command(AgingTickets())
