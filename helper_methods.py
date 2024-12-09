@@ -12,7 +12,7 @@ def log_activity(func):
         activity = args[3]
 
         now_eastern = datetime.now(eastern).strftime('%m/%d/%Y %I:%M:%S %p %Z')
-        with open("activity_log.txt", "a") as f:
+        with open("activity_log.csv", "a") as f:
             f.write(f"{activity['actor']['displayName']},{attachment_actions.json_data['text']},{get_room_name(attachment_actions.json_data['roomId'])},{now_eastern}\n")
         return func(*args, **kwargs)
 
