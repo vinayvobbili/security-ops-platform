@@ -4,7 +4,7 @@ from aging_tickets import AgingTickets
 from config import get_config
 from inflow import Inflow
 from lifespan import Lifespan
-from mttr_mttc import MttcMttr
+from mttr_mttc import MttrMttc
 from outflow import Outflow
 from sla_breaches import SlaBreaches
 from heatmap import HeatMap
@@ -22,7 +22,7 @@ def main():
         bot_name="Hello, Metricmeister!"
     )
     bot.add_command(AgingTickets())
-    bot.add_command(MttcMttr())
+    bot.add_command(MttrMttc())
     bot.add_command(SlaBreaches())
     bot.add_command(Inflow())
     bot.add_command(Outflow())
