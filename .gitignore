@@ -1,1 +1,4 @@
 .env
+activity_log.txt
+host_counts_by_country.json
+x_cartopy_country_name_mapping.json
