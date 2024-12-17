@@ -15,7 +15,7 @@ from incident_fetcher import IncidentFetcher
 eastern = pytz.timezone('US/Eastern')  # Define the Eastern time zone
 
 config = get_config()
-webex_api = WebexTeamsAPI(access_token=config.bot_access_token)
+webex_api = WebexTeamsAPI(access_token=config.webex_bot_access_token)
 
 QUERY_TEMPLATE = '-category:job type:{ticket_type_prefix} -owner:"" closed:>={start} closed:<{end}'
 
