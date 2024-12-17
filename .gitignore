@@ -3,5 +3,5 @@
 .ipynb_checkpoints
 __pycache__/
 .idea
-activity_log.csv
+data/activity_log.csv
 host_counts_by_country.json
