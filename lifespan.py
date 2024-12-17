@@ -82,7 +82,7 @@ def get_lifespan_chart(tickets):
     now_eastern = datetime.now(eastern).strftime('%m/%d/%Y %I:%M %p %Z')
     fig.text(0.05, 0.01, now_eastern, ha='left', fontsize=10)
 
-    plt.tight_layout(rect=[0, 0.1, 1, 1])
+    plt.tight_layout(rect=(0, 0.1, 1, 1))
 
     with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmpfile:
         plt.savefig(tmpfile.name, format="png")
