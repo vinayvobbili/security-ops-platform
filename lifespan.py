@@ -7,13 +7,13 @@ from webexpythonsdk import WebexAPI
 from config import get_config
 from incident_fetcher import IncidentFetcher
 
-eastern = pytz.timezone('US/Eastern')  # Define the Eastern time zone
-
 import tempfile
 from datetime import datetime
 
 import matplotlib.pyplot as plt
 import pandas as pd
+
+eastern = pytz.timezone('US/Eastern')  # Define the Eastern time zone
 
 config = get_config()
 webex_api = WebexAPI(access_token=config.webex_bot_access_token)
@@ -80,7 +80,7 @@ def get_lifespan_chart(tickets):
     now_eastern = datetime.now(eastern).strftime('%m/%d/%Y %I:%M %p %Z')
     fig.text(0.05, 0.01, now_eastern, ha='left', fontsize=10)
 
-    plt.tight_layout(rect=[0, 0.1, 1, 1])
+    plt.tight_layout(rect=(0, 0.1, 1, 1))
 
     with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmpfile:
         plt.savefig(tmpfile.name, format="png")
