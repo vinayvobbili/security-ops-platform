@@ -16,6 +16,8 @@ from config import get_config
 from helper_methods import log_activity
 from incident_fetcher import IncidentFetcher
 
+from constants import TICKET_TYPE_MAPPING
+
 config = get_config()
 webex_api = WebexAPI(access_token=config.bot_access_token)
 
@@ -43,6 +45,7 @@ def get_df(tickets: List[Dict[Any, Any]]) -> pd.DataFrame:
     df['created'] = pd.to_datetime(df['created'])
     # Clean up type names by removing repeating prefix
     df['type'] = df['type'].str.replace(config.ticket_type_prefix, '', regex=False, case=False)
+    df['type'] = df['type'].map(TICKET_TYPE_MAPPING).fillna(df['type'])
     # Set 'phase' to 'Unknown' if it's missing
     df['phase'] = df['phase'].fillna('Unknown')
     return df
@@ -103,7 +106,7 @@ def generate_plot(tickets) -> str | None:
     plt.title('Tickets created 30+ days ago', fontweight='bold')
     plt.xlabel('Type', fontweight='bold')
     plt.ylabel('Count', fontweight='bold')
-    plt.xticks(rotation=45, ha='right', fontsize=8)  # Rotate X-axis labels by 45 degrees
+    plt.xticks(rotation=0, ha='right', fontsize=8)  # Rotate X-axis labels by 45 degrees
 
     # Update legend
     plt.legend(title='Phase', loc='upper right')
@@ -123,7 +126,7 @@ class AgingTickets(Command):
     PERIOD = {"byTo": "months", "toValue": 1, "byFrom": "months", "fromValue": None}
 
     def __init__(self):
-        super().__init__(command_keyword="aging_tickets", help_message="Aging Tickets")
+        super().__init__(command_keyword="aging", help_message="Aging Tickets")
 
     @log_activity
     def execute(self, message, attachment_actions, activity):
