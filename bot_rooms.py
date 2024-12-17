@@ -50,7 +50,7 @@ def get_webex_bot_rooms(bot_access_token):
 
 
 config = get_config()
-BOT_ACCESS_TOKEN = config.bot_access_token
+BOT_ACCESS_TOKEN = config.webex_bot_access_token
 
 
 # Usage example

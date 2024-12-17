@@ -13,7 +13,7 @@ def log_activity(func):
 
         now_eastern = datetime.now(eastern).strftime('%m/%d/%Y %I:%M:%S %p %Z')
         try:
-            with open("activity_log.csv", "a") as f:
+            with open("data/activity_log.csv", "a") as f:
                 f.write(f"{activity['actor']['displayName']},{attachment_actions.json_data.get('inputs', {}).get('command_keyword') or attachment_actions.json_data['text']},{get_room_name(attachment_actions.json_data['roomId'])},{now_eastern}\n")
         except Exception as e:
             print(f"Error logging activity: {e}")

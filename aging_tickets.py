@@ -32,7 +32,7 @@ webex_headers = {
 eastern = pytz.timezone('US/Eastern')  # Define the Eastern time zone
 
 fun_messages = []
-with open('fun_messages.json', 'r') as f:
+with open('data/fun_messages.json', 'r') as f:
     messages_data = json.load(f)
     fun_messages.extend(messages_data.get("messages", []))  # Modify the global list
 
