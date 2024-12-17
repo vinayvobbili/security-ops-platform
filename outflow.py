@@ -8,6 +8,7 @@ from webexteamssdk import WebexTeamsAPI
 
 from bot_rooms import get_room_name
 from config import get_config
+from constants import TICKET_TYPE_MAPPING, IMPACT_MAPPING
 from helper_methods import log_activity
 from incident_fetcher import IncidentFetcher
 
@@ -28,7 +29,9 @@ def create_nested_donut(tickets):
 
     for ticket in tickets:
         ticket_type = ticket['type'].replace(config.ticket_type_prefix, '', 1)
+        ticket_type = TICKET_TYPE_MAPPING.get(ticket_type, ticket_type)
         impact = ticket['CustomFields'].get('impact', 'Unknown')
+        impact = IMPACT_MAPPING.get(impact, impact)
 
         # Count types for outer ring
         type_counts[ticket_type] = type_counts.get(ticket_type, 0) + 1
@@ -94,7 +97,7 @@ def create_nested_donut(tickets):
            wedgeprops=dict(width=0.25, edgecolor='white'),
            textprops={'fontsize': 8})
 
-    plt.title(f'Outflow Yesterday: {len(tickets)}', pad=1, fontsize=12, fontweight='bold')
+    plt.title(f'Outflow Yesterday: {len(tickets)}', pad=1, fontsize=10, fontweight='bold')
 
     # Add timestamp at bottom right
     now_eastern = datetime.now(eastern).strftime('%m/%d/%Y %I:%M %p EST')
