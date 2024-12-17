@@ -16,7 +16,8 @@ def get_config():
         approved_rooms=os.environ["APPROVED_ROOMS"],
         ticket_type_prefix=os.environ["TICKET_TYPE_PREFIX"],
         azdo_org=os.environ["AZDO_ORGANIZATION"],
-        azdo_project=os.environ["AZDO_PROJECT"],
+        azdo_de_project=os.environ["AZDO_DE_PROJECT"],
+        azdo_re_project=os.environ["AZDO_RE_PROJECT"],
         azdo_pat=os.environ["AZDO_PERSONAL_ACCESS_TOKEN"]
     )
 
@@ -32,6 +33,7 @@ class Config:
     approved_domains: str
     approved_rooms: str
     azdo_org: str
-    azdo_project: str
+    azdo_de_project: str
+    azdo_re_project: str
     azdo_pat: str
     webex_api_url: str = "https://webexapis.com/v1/messages"
