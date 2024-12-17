@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 
 config = get_config()
-webex_api = WebexAPI(access_token=config.bot_access_token)
+webex_api = WebexAPI(access_token=config.webex_bot_access_token)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
