@@ -1,8 +1,16 @@
 import base64
 from collections import Counter
+from datetime import datetime
 
 import matplotlib.pyplot as plt
+import pytz
 import requests
+from matplotlib import transforms
+
+from config import get_config
+
+config = get_config()
+eastern = pytz.timezone('US/Eastern')  # Define the Eastern time zone
 
 
 class ADOWorkItemRetriever:
@@ -116,37 +124,35 @@ class ADOWorkItemRetriever:
 
 # Example usage
 def main():
-    # Replace these with your actual values
-    ORGANIZATION = 'MetLife-US'
-    PROJECT = 'Detection-Engineering'
-    PERSONAL_ACCESS_TOKEN = 'yfb5ocrcwhstjzmrdqju7mlpj3vh7qonues2ktat6z357iif7x7q'
-
     # Initialize the retriever
-    ado_retriever = ADOWorkItemRetriever(ORGANIZATION, PROJECT, PERSONAL_ACCESS_TOKEN)
+    ado_retriever = ADOWorkItemRetriever(config.azdo_org, config.azdo_project, config.azdo_pat)
 
     # Retrieve work items
     try:
         # Example 1: Get recent work items
         state_counts = ado_retriever.get_work_items_by_state()
-        print(f"Recent Work Items Count: {state_counts}")
+        # print(f"Recent Work Items Count: {state_counts}")
 
         # Plot the bar graph
         plt.figure(figsize=(10, 6))  # Adjust figure size for better readability
         bars = plt.bar(state_counts.keys(), state_counts.values(), color='#1f77b4')  # Store bar objects
-        plt.xlabel('Work Item State (last 180 days)')
+        plt.xlabel('Work Items Created in the last 180 days')
         plt.ylabel('Count')
-        plt.title('DE AZDO Work Items by State')
+        plt.title('Detection Engineering AZDO Work Items by State')
 
         # Add count labels on top of each bar
         for bar in bars:
             yval = bar.get_height()
             plt.text(bar.get_x() + bar.get_width() / 2, yval, int(yval), va='bottom', ha='center', fontdict={'fontsize': 10, 'fontweight': 'bold'})  # Display count as integer
 
+        now_eastern = datetime.now(eastern).strftime('%m/%d/%Y %I:%M %p %Z')
+        fig = plt.gcf()  # Get the current figure
+        trans = transforms.blended_transform_factory(fig.transFigure, fig.transFigure)
+        plt.text(0.1, 0, now_eastern, ha='left', va='bottom', fontsize=10, transform=trans)
+
         plt.xticks(rotation=45, ha='right')  # Rotate x-axis labels for better readability
         plt.tight_layout()  # Adjust layout to prevent labels from overlapping
-        plt.show()
-
-
+        plt.savefig('charts/de_stories.png')
 
     except requests.exceptions.RequestException as e:
         print(f"Error retrieving work items: {e}")
