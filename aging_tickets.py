@@ -15,7 +15,7 @@ from config import get_config
 from incident_fetcher import IncidentFetcher
 
 config = get_config()
-webex_api = WebexAPI(access_token=config.bot_access_token)
+webex_api = WebexAPI(access_token=config.webex_bot_access_token)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 webex_headers = {
     'Content-Type': 'application/json',
-    'Authorization': f"Bearer {config.bot_access_token}"
+    'Authorization': f"Bearer {config.webex_bot_access_token}"
 }
 eastern = pytz.timezone('US/Eastern')  # Define the Eastern time zone
 
