@@ -13,5 +13,5 @@ TICKET_TYPE_MAPPING = {
 IMPACT_MAPPING = {
     "Ignore": "Ig",
     "Testing": "Test",
-    "Prevented": "Pr"
+    "Prevented": "Prev"
 }
