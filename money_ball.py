@@ -5,6 +5,7 @@ from webexteamssdk import WebexTeamsAPI
 from Test import Test
 from aging_tickets import AgingTickets
 from config import get_config
+from helper_methods import log_activity
 from inflow import Inflow
 from lifespan import Lifespan
 from mttr_mttc import MttrMttc
@@ -21,6 +22,7 @@ class DE_Stories(Command):
     def __init__(self):
         super().__init__(command_keyword="de", help_message="DE Stories")
 
+    @log_activity
     def execute(self, message, attachment_actions, activity):
         webex_api.messages.create(
             roomId=attachment_actions.json_data['roomId'],
