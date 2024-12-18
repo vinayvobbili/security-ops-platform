@@ -45,9 +45,7 @@ class ADOWorkItemRetriever:
         """
         today = datetime.now(eastern).strftime('%Y-%m-%dT%H:%M:%SZ')
         wiql_query = f'''SELECT [System.Id], [System.State] FROM WorkItems 
-                        WHERE [System.TeamProject] = "{self.project}" 
-                        AND [System.WorkItemType] = "Story"
-                        AND [System.AreaPath] Under "Incident Response Tier III" 
+                        WHERE [System.AreaPath] Under "Acme-Cyber-Security\METCIRT\METCIRT Tier III" 
                         AND [System.CreatedDate] >= @Today - {days_back}'''
 
         wiql_endpoint = f'{self.base_url}/wit/wiql?api-version=6.0'
@@ -55,6 +53,8 @@ class ADOWorkItemRetriever:
 
         try:
             response = requests.post(wiql_endpoint, headers=self.headers, json=query_body)
+            print(response.text)
+            response.raise_for_status()
 
             # Extract work item IDs
             work_item_ids = [item['id'] for item in response.json().get('workItems', [])]
