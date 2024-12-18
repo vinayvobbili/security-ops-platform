@@ -1,6 +1,6 @@
 TICKET_TYPE_MAPPING = {
-    "Prisma Cloud Compute Runtime Alert": "Prisma Compute",
-    "UEBA Prisma Cloud": "prisma UEBA",
+    "Prisma Cloud Compute Runtime Alert": "Pr. Comp",
+    "UEBA Prisma Cloud": "Pr. UEBA",
     "Third Party Compromise": "TP",
     "Qradar Alert": "QR",
     "Ticket QA": "QA",
