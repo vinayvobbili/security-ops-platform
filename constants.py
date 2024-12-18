@@ -1,5 +1,6 @@
 TICKET_TYPE_MAPPING = {
-    "Prisma Cloud Compute Runtime Alert": "Prisma",
+    "Prisma Cloud Compute Runtime Alert": "Prisma Compute",
+    "UEBA Prisma Cloud": "prisma UEBA",
     "Third Party Compromise": "TP",
     "Qradar Alert": "QR",
     "Ticket QA": "QA",
@@ -13,5 +14,7 @@ TICKET_TYPE_MAPPING = {
 IMPACT_MAPPING = {
     "Ignore": "Ig",
     "Testing": "Test",
-    "Prevented": "Prev"
+    "Prevented": "Prev",
+    "False Positive": "FP",
+    "Confirmed": "Con"
 }
