@@ -33,7 +33,7 @@ class DE_Stories(Command):
 
 class RE_Stories(Command):
     def __init__(self):
-        super().__init__(command_keyword="de", help_message="DE Stories")
+        super().__init__(command_keyword="re", help_message="RE Stories")
 
     @log_activity
     def execute(self, message, attachment_actions, activity):
