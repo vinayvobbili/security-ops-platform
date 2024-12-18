@@ -14,7 +14,7 @@ eastern = pytz.timezone('US/Eastern')  # Define the Eastern time zone
 
 
 class ADOWorkItemRetriever:
-    def __init__(self, organization, project, personal_access_token):
+    def __init__(self):
         """
         Initialize the ADO Work Item Retriever
 
@@ -22,9 +22,9 @@ class ADOWorkItemRetriever:
         :param project: The specific project to query
         :param personal_access_token: PAT for authentication
         """
-        self.org = organization
-        self.project = project
-        self.pat = personal_access_token
+        self.org = config.azdo_org
+        self.project = config.azdo_de_project
+        self.pat = config.azdo_pat
 
         # Prepare authentication
         self.credentials = base64.b64encode(f":{self.pat}".encode('ascii')).decode('ascii')
@@ -80,56 +80,15 @@ class ADOWorkItemRetriever:
             print(f"Error retrieving work items: {e}")
             return {}
 
-    def create_work_item(self, work_item_type, title, description=None, additional_fields=None):
-        """
-        Create a new work item
-
-        :param work_item_type: Type of work item (e.g., 'Bug', 'Task')
-        :param title: Title of the work item
-        :param description: Optional description
-        :param additional_fields: Optional dictionary of additional field values
-        :return: Created work item details
-        """
-        create_endpoint = f'{self.base_url}/wit/workitems/${work_item_type}?api-version=6.0'
-
-        # Prepare work item payload
-        payload = [
-            {'op': 'add', 'path': '/fields/System.Title', 'value': title}
-        ]
-
-        if description:
-            payload.append({
-                'op': 'add',
-                'path': '/fields/System.Description',
-                'value': description
-            })
-
-        # Add any additional fields
-        if additional_fields:
-            for field, value in additional_fields.items():
-                payload.append({
-                    'op': 'add',
-                    'path': f'/fields/{field}',
-                    'value': value
-                })
-
-        # Create the work item
-        response = requests.post(create_endpoint,
-                                 headers=self.headers,
-                                 json=payload)
-        response.raise_for_status()
-
-        return response.json()
-
 
 # Example usage
 def main():
     # Initialize the retriever
-    ado_retriever = ADOWorkItemRetriever(config.azdo_org, config.azdo_project, config.azdo_pat)
+    ado_retriever = ADOWorkItemRetriever()
 
     # Retrieve work items
     try:
-        # Example 1: Get recent work items
+        # Get recent work items
         state_counts = ado_retriever.get_work_items_by_state()
         # print(f"Recent Work Items Count: {state_counts}")
 
