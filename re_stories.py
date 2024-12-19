@@ -17,10 +17,6 @@ class ADOWorkItemRetriever:
     def __init__(self):
         """
         Initialize the ADO Work Item Retriever
-
-        :param organization: Your Azure DevOps organization name
-        :param project: The specific project to query
-        :param personal_access_token: PAT for authentication
         """
         self.org = config.azdo_org
         self.project = config.azdo_re_project
@@ -106,7 +102,7 @@ def main():
         # Add count labels on top of each bar
         for bar in bars:
             yval = bar.get_height()
-            plt.text(bar.get_x() + bar.get_width() / 2, yval, int(yval), va='bottom', ha='center', fontdict={'fontsize': 10, 'fontweight': 'bold'})  # Display count as integer
+            plt.text(bar.get_x() + bar.get_width() / 2, yval, yval, va='bottom', ha='center', fontdict={'fontsize': 10, 'fontweight': 'bold'})  # Display count as integer
 
         now_eastern = datetime.now(eastern).strftime('%m/%d/%Y %I:%M %p %Z')
         fig = plt.gcf()  # Get the current figure
