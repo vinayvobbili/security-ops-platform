@@ -18,7 +18,7 @@ config = get_config()
 webex_api = WebexTeamsAPI(access_token=config.webex_bot_access_token)
 
 
-class DE_Stories(Command):
+class DetectionEngineeringStories(Command):
     def __init__(self):
         super().__init__(command_keyword="de", help_message="DE Stories")
 
@@ -31,7 +31,7 @@ class DE_Stories(Command):
         )
 
 
-class RE_Stories(Command):
+class ResponseEngineeringStories(Command):
     def __init__(self):
         super().__init__(command_keyword="re", help_message="RE Stories")
 
@@ -60,8 +60,8 @@ def main():
     bot.add_command(Outflow())
     bot.add_command(Lifespan())
     bot.add_command(HeatMap())
-    bot.add_command(DE_Stories())
-    bot.add_command(RE_Stories())
+    bot.add_command(DetectionEngineeringStories())
+    bot.add_command(ResponseEngineeringStories())
     bot.add_command(Test())
     bot.run()
 
