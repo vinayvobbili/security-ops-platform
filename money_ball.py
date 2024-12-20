@@ -60,8 +60,8 @@ def main():
     bot.add_command(Outflow())
     bot.add_command(Lifespan())
     bot.add_command(HeatMap())
-    bot.add_command(DetectionEngineeringStories())
-    bot.add_command(ResponseEngineeringStories())
+    # bot.add_command(DetectionEngineeringStories())
+    # bot.add_command(ResponseEngineeringStories())
     bot.add_command(Test())
     bot.run()
 
