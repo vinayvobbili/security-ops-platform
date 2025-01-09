@@ -5,7 +5,6 @@ from webex_bot.models.command import Command
 from webexteamssdk import WebexTeamsAPI
 
 import chart
-from bot_rooms import get_room_name
 from config import get_config
 from helper_methods import log_activity
 from incident_fetcher import IncidentFetcher

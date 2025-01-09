@@ -6,7 +6,6 @@ from matplotlib import pyplot as plt
 from webex_bot.models.command import Command
 from webexteamssdk import WebexTeamsAPI
 
-from bot_rooms import get_room_name
 from config import get_config
 from constants import TICKET_TYPE_MAPPING, IMPACT_MAPPING
 from helper_methods import log_activity
