@@ -18,7 +18,9 @@ from incident_fetcher import IncidentFetcher
 from constants import TICKET_TYPE_MAPPING
 
 config = get_config()
-webex_api = WebexAPI(access_token=config.webex_bot_access_token)
+
+QUERY = f"-status:closed -category:job type:{config.ticket_type_prefix}"
+PERIOD = {"byTo": "months", "toValue": 1, "byFrom": "months", "fromValue": None}
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -26,7 +28,7 @@ logger = logging.getLogger(__name__)
 
 webex_headers = {
     'Content-Type': 'application/json',
-    'Authorization': f"Bearer {config.webex_bot_access_token}"
+    'Authorization': f"Bearer {config.webex_bot_access_token_moneyball}"
 }
 eastern = pytz.timezone('US/Eastern')  # Define the Eastern time zone
 
@@ -121,8 +123,6 @@ def generate_plot(tickets) -> str | None:
 
 class AgingTickets(Command):
     """Webex Bot command to display a graph of aging tickets."""
-    QUERY = f"-status:closed -category:job type:{config.ticket_type_prefix}"
-    PERIOD = {"byTo": "months", "toValue": 1, "byFrom": "months", "fromValue": None}
 
     def __init__(self):
         super().__init__(command_keyword="aging", help_message="Aging Tickets")
@@ -132,9 +132,40 @@ class AgingTickets(Command):
         tickets = IncidentFetcher().get_tickets(query=self.QUERY, period=self.PERIOD)
         plot_filepath = generate_plot(tickets)
 
+        webex_api = WebexAPI(access_token=config.webex_bot_access_token_moneyball)
         # Use WebexTeamsAPI to send the file
         webex_api.messages.create(
             roomId=attachment_actions.json_data["roomId"],
             text=f"{activity['actor']['displayName']}, here's the latest Aging Tickets chart!",
             files=[plot_filepath]  # Path to the file
         )
+
+
+def generate_daily_summary(tickets) -> str | None:
+    if tickets is None:
+        return pd.DataFrame(columns=['Owner', 'Count', 'Average Age (days)']).to_markdown(index=False)
+
+    # group tickets by owner and calculate counts of tickets per owner
+    df = pd.DataFrame(tickets)
+    df['owner'] = df['owner'].str.replace('@company.com', '', regex=False)
+    now = pd.Timestamp.now(tz='UTC')
+    df['created'] = pd.to_datetime(df['created'])
+    df['age'] = (now - df['created']).dt.days
+
+    # Calculate average age per owner
+    table = df.groupby('owner').agg({'id': 'count', 'age': 'mean'})
+    table = table.reset_index()
+    table = table.rename(columns={'owner': 'Owner', 'id': 'Count', 'age': 'Average Age (days)'})
+
+    return table.to_markdown(index=False)
+
+
+def send_report():
+    tickets = IncidentFetcher().get_tickets(query=QUERY, period=PERIOD)
+
+    webex_api = WebexAPI(access_token=config.webex_bot_access_token_xsoar)
+    webex_api.messages.create(
+        roomId=config.webex_room_id_aging_tickets,
+        text=f"Aging Tickets Summary!",
+        markdown=f'Summary \n ``` \n {generate_daily_summary(tickets)}'
+    )
