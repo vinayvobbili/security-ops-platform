@@ -15,7 +15,7 @@ from heatmap import HeatMap
 import os
 
 config = get_config()
-webex_api = WebexTeamsAPI(access_token=config.webex_bot_access_token)
+webex_api = WebexTeamsAPI(access_token=config.webex_bot_access_token_moneyball)
 
 
 class DetectionEngineeringStories(Command):
@@ -48,7 +48,7 @@ def main():
     """the main"""
 
     bot = WebexBot(
-        config.webex_bot_access_token,
+        config.webex_bot_access_token_moneyball,
         approved_domains=config.approved_domains.split(','),
         approved_rooms=config.approved_rooms.split(','),
         bot_name="Hello, Metricmeister!"
