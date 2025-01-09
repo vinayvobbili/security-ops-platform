@@ -12,10 +12,9 @@ from webex_bot.models.command import Command
 from webexpythonsdk import WebexAPI
 
 from config import get_config
+from constants import TICKET_TYPE_MAPPING
 from helper_methods import log_activity
 from incident_fetcher import IncidentFetcher
-
-from constants import TICKET_TYPE_MAPPING
 
 config = get_config()
 

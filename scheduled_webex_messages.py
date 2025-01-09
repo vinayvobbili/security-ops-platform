@@ -1,15 +1,22 @@
-import schedule
 import time
+
 import pytz
+import schedule
 
 import aging_tickets
 
-# run once
-# aging_tickets.send_report()
 
-# schedule
-schedule.every().day.at("08:00", pytz.timezone('US/Eastern')).do(aging_tickets.send_report)
+def main():
+    # run once
+    # aging_tickets.send_report()
 
-while True:
-    schedule.run_pending()
-    time.sleep(60)
+    # schedule
+    schedule.every().day.at("08:00", pytz.timezone('US/Eastern')).do(aging_tickets.send_report)
+
+    while True:
+        schedule.run_pending()
+        time.sleep(60)
+
+
+if __name__ in ('__main__', '__builtin__', 'builtins'):
+    main()

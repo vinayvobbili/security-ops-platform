@@ -1,4 +1,5 @@
 import requests
+
 from config import get_config
 
 
@@ -103,6 +104,7 @@ def get_room_name(room_id):
     except requests.RequestException as e:
         print(f"Request error: {e}")
         return None
+
 
 if __name__ == "__main__":
     main()
