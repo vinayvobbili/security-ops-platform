@@ -8,7 +8,7 @@ import aging_tickets
 
 def main():
     # run once
-    aging_tickets.send_report()
+    # aging_tickets.send_report()
 
     # schedule
     schedule.every().day.at("08:00", pytz.timezone('US/Eastern')).do(aging_tickets.send_report)
