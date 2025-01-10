@@ -11,6 +11,7 @@ def get_config():
         webex_bot_access_token_moneyball=os.environ["WEBEX_BOT_ACCESS_TOKEN_MONEYBALL"],
         webex_bot_access_token_xsoar=os.environ["WEBEX_BOT_ACCESS_TOKEN_XSOAR"],
         webex_room_id_aging_tickets=os.environ["WEBEX_ROOM_ID_AGING_TICKETS"],
+        webex_room_id_vinay_test_space=os.environ["WEBEX_ROOM_ID_VINAY_TEST_SPACE"],
         xsoar_api_base_url=os.environ["XSOAR_API_BASE_URL"],
         xsoar_auth_token=os.environ["XSOAR_AUTH_TOKEN"],
         xsoar_auth_id=os.environ["XSOAR_AUTH_ID"],
@@ -30,6 +31,7 @@ class Config:
     webex_bot_access_token_moneyball: str
     webex_bot_access_token_xsoar: str
     webex_room_id_aging_tickets: str
+    webex_room_id_vinay_test_space: str
     xsoar_api_base_url: str
     xsoar_auth_token: str
     xsoar_auth_id: str
