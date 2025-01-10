@@ -20,7 +20,7 @@
 <img src="/static/icons/circle-left-solid.svg" alt="Left Arrow" class="arrow left" onclick="moveSlide(-1)">
 <img src="/static/icons/circle-right-solid.svg" alt="Right Arrow" class="arrow right" onclick="moveSlide(1)">
 <div class="nav-buttons">
-    {% for i in range(image_count) %}
+    {% for image_file in image_files %}
     <button onclick="goToSlide({{ loop.index0 }})" class="nav-dot"></button>
     {% endfor %}
 </div>
