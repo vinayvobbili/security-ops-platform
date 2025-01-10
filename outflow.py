@@ -6,7 +6,6 @@ from matplotlib import pyplot as plt
 from webex_bot.models.command import Command
 from webexteamssdk import WebexTeamsAPI
 
-from bot_rooms import get_room_name
 from config import get_config
 from constants import TICKET_TYPE_MAPPING, IMPACT_MAPPING
 from helper_methods import log_activity
@@ -15,7 +14,7 @@ from incident_fetcher import IncidentFetcher
 eastern = pytz.timezone('US/Eastern')  # Define the Eastern time zone
 
 config = get_config()
-webex_api = WebexTeamsAPI(access_token=config.webex_bot_access_token)
+webex_api = WebexTeamsAPI(access_token=config.webex_bot_access_token_moneyball)
 
 QUERY_TEMPLATE = '-category:job type:{ticket_type_prefix} -owner:"" closed:>={start} closed:<{end}'
 
