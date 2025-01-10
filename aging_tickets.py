@@ -18,9 +18,6 @@ from incident_fetcher import IncidentFetcher
 
 config = get_config()
 
-QUERY = f"-status:closed -category:job type:{config.ticket_type_prefix}"
-PERIOD = {"byTo": "months", "toValue": 1, "byFrom": "months", "fromValue": None}
-
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -122,13 +119,15 @@ def generate_plot(tickets) -> str | None:
 
 class AgingTickets(Command):
     """Webex Bot command to display a graph of aging tickets."""
+    QUERY = f"-status:closed -category:job type:{config.ticket_type_prefix}"
+    PERIOD = {"byTo": "months", "toValue": 1, "byFrom": "months", "fromValue": None}
 
     def __init__(self):
         super().__init__(command_keyword="aging", help_message="Aging Tickets")
 
     @log_activity
     def execute(self, message, attachment_actions, activity):
-        tickets = IncidentFetcher().get_tickets(query=self.QUERY, period=self.PERIOD)
+        tickets = IncidentFetcher().get_tickets(query=QUERY, period=PERIOD)
         plot_filepath = generate_plot(tickets)
 
         webex_api = WebexAPI(access_token=config.webex_bot_access_token_moneyball)
@@ -160,11 +159,26 @@ def generate_daily_summary(tickets) -> str | None:
 
 
 def send_report():
-    tickets = IncidentFetcher().get_tickets(query=QUERY, period=PERIOD)
-
     webex_api = WebexAPI(access_token=config.webex_bot_access_token_xsoar)
+    # room_id = config.webex_room_id_vinay_test_space
+    room_id = config.webex_room_id_aging_tickets
+
+    query = f'-status:closed -category:job type:{config.ticket_type_prefix} -type:"METCIRT Third Party Compromise"'
+    period = {"byTo": "months", "toValue": 1, "byFrom": "months", "fromValue": None}
+    tickets = IncidentFetcher().get_tickets(query=query, period=period)
+
     webex_api.messages.create(
-        roomId=config.webex_room_id_aging_tickets,
+        roomId=room_id,
         text=f"Aging Tickets Summary!",
-        markdown=f'Summary \n ``` \n {generate_daily_summary(tickets)}'
+        markdown=f'Summary (Type=METCIRT* - TP, Created=30+ days ago)\n ``` \n {generate_daily_summary(tickets)}'
+    )
+
+    query = f'-status:closed -category:job type:"METCIRT Third Party Compromise"'
+    period = {"byTo": "months", "toValue": 3, "byFrom": "months", "fromValue": None}
+    tickets = IncidentFetcher().get_tickets(query=query, period=period)
+
+    webex_api.messages.create(
+        roomId=room_id,
+        text=f"Aging Tickets Summary!",
+        markdown=f'Summary (Type=TP, Created=90+ days ago)\n ``` \n {generate_daily_summary(tickets)}'
     )
