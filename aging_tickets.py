@@ -119,15 +119,16 @@ def generate_plot(tickets) -> str | None:
 
 class AgingTickets(Command):
     """Webex Bot command to display a graph of aging tickets."""
-    QUERY = f"-status:closed -category:job type:{config.ticket_type_prefix}"
-    PERIOD = {"byTo": "months", "toValue": 1, "byFrom": "months", "fromValue": None}
 
     def __init__(self):
         super().__init__(command_keyword="aging", help_message="Aging Tickets")
 
     @log_activity
     def execute(self, message, attachment_actions, activity):
-        tickets = IncidentFetcher().get_tickets(query=QUERY, period=PERIOD)
+        query = f"-status:closed -category:job type:{config.ticket_type_prefix}"
+        period = {"byTo": "months", "toValue": 1, "byFrom": "months", "fromValue": None}
+
+        tickets = IncidentFetcher().get_tickets(query=query, period=period)
         plot_filepath = generate_plot(tickets)
 
         webex_api = WebexAPI(access_token=config.webex_bot_access_token_moneyball)
