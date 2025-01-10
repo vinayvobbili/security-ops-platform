@@ -1,3 +1,5 @@
+import os
+
 from webex_bot.models.command import Command
 from webex_bot.webex_bot import WebexBot
 from webexteamssdk import WebexTeamsAPI
@@ -5,22 +7,21 @@ from webexteamssdk import WebexTeamsAPI
 from Test import Test
 from aging_tickets import AgingTickets
 from config import get_config
+from heatmap import HeatMap
 from helper_methods import log_activity
 from inflow import Inflow
 from lifespan import Lifespan
 from mttr_mttc import MttrMttc
 from outflow import Outflow
 from sla_breaches import SlaBreaches
-from heatmap import HeatMap
-import os
 
 config = get_config()
-webex_api = WebexTeamsAPI(access_token=config.webex_bot_access_token)
+webex_api = WebexTeamsAPI(access_token=config.webex_bot_access_token_moneyball)
 
 
 class DetectionEngineeringStories(Command):
     def __init__(self):
-        super().__init__(command_keyword="de", help_message="DE Stories")
+        super().__init__(command_keyword="det_eng", help_message="DE Stories")
 
     @log_activity
     def execute(self, message, attachment_actions, activity):
@@ -33,7 +34,7 @@ class DetectionEngineeringStories(Command):
 
 class ResponseEngineeringStories(Command):
     def __init__(self):
-        super().__init__(command_keyword="re", help_message="RE Stories")
+        super().__init__(command_keyword="resp_eng", help_message="RE Stories")
 
     @log_activity
     def execute(self, message, attachment_actions, activity):
@@ -48,7 +49,7 @@ def main():
     """the main"""
 
     bot = WebexBot(
-        config.webex_bot_access_token,
+        config.webex_bot_access_token_moneyball,
         approved_domains=config.approved_domains.split(','),
         approved_rooms=config.approved_rooms.split(','),
         bot_name="Hello, Metricmeister!"
@@ -60,8 +61,8 @@ def main():
     bot.add_command(Outflow())
     bot.add_command(Lifespan())
     bot.add_command(HeatMap())
-    # bot.add_command(DetectionEngineeringStories())
-    # bot.add_command(ResponseEngineeringStories())
+    bot.add_command(DetectionEngineeringStories())
+    bot.add_command(ResponseEngineeringStories())
     bot.add_command(Test())
     bot.run()
 
