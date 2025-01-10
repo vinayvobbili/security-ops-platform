@@ -1,9 +1,10 @@
 import requests
-from config import get_config
 
+from config import get_config
 
 config = get_config()
 BOT_ACCESS_TOKEN = config.bot_access_token
+
 
 def get_webex_bot_rooms(bot_access_token):
     """
@@ -54,7 +55,6 @@ def get_webex_bot_rooms(bot_access_token):
 
 # Usage example
 def main():
-
     # Get rooms the bot is in
     bot_rooms = get_webex_bot_rooms(BOT_ACCESS_TOKEN)
 
