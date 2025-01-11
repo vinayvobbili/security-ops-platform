@@ -83,6 +83,8 @@ def generate_plot(tickets) -> str | None:
             width=0.2,  # Controls bar width
         )
 
+        ax.set_yticks(range(0, int(grouped_data.sum(axis=1).max()) + 2))  # +2 ensures enough
+
     # Transform coordinates to figure coordinates (bottom-left is 0,0)
     trans = transforms.blended_transform_factory(fig.transFigure, ax.transAxes)  # gets transform object
     now_eastern = datetime.now(eastern).strftime('%m/%d/%Y %I:%M %p %Z')
