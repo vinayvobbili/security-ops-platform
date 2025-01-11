@@ -161,8 +161,8 @@ def generate_daily_summary(tickets) -> str | None:
 
 def send_report():
     webex_api = WebexAPI(access_token=config.webex_bot_access_token_xsoar)
-    # room_id = config.webex_room_id_vinay_test_space
     room_id = config.webex_room_id_aging_tickets
+    # room_id = config.webex_room_id_vinay_test_space
 
     query = f'-status:closed -category:job type:{config.ticket_type_prefix} -type:"METCIRT Third Party Compromise"'
     period = {"byTo": "months", "toValue": 1, "byFrom": "months", "fromValue": None}
