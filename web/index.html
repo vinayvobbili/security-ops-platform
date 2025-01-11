@@ -12,7 +12,11 @@
     <div class="slides">
         {% for image_file in image_files %}
         <figure>
-            <img src="/static/images/{{ image_file }}" alt="Description of {{ image_file }}">
+            {% if image_file.startswith('charts/') %}  <!-- Check if the image is from the charts directory -->
+            <img src="/charts/{{ image_file[7:] }}" alt="{{ image_file }}">  <!-- Construct correct path -->
+            {% else %}
+            <img src="/static/images/{{ image_file }}" alt="{{ image_file }}">
+            {% endif %}
         </figure>
         {% endfor %}
     </div>
