@@ -11,6 +11,7 @@ def main():
     # aging_tickets.send_report()
 
     # schedule
+    print("Starting the scheduler...")
     schedule.every().day.at("08:00", pytz.timezone('US/Eastern')).do(aging_tickets.send_report)
 
     while True:
