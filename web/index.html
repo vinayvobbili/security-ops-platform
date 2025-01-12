@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IR Dashboard</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link rel="icon" href="static/icons/metrics-dashboard-icon.ico" type="image/x-icon">
+</head>
+<body>
+<div class="slider-container">
+    <div class="slides">
+        {% for image_file in image_files %}
+        <figure>
+            {% if image_file.startswith('charts/') %}  <!-- Check if the image is from the charts directory -->
+            <img src="/charts/{{ image_file[7:] }}" alt="{{ image_file }}">  <!-- Construct correct path -->
+            {% else %}
+            <img src="/static/images/{{ image_file }}" alt="{{ image_file }}">
+            {% endif %}
+        </figure>
+        {% endfor %}
+    </div>
+</div>
+<img src="/static/icons/circle-left-solid.svg" alt="Left Arrow" class="arrow left" onclick="moveSlide(-1)">
+<img src="/static/icons/circle-right-solid.svg" alt="Right Arrow" class="arrow right" onclick="moveSlide(1)">
+<div class="nav-buttons">
+    {% for image_file in image_files %}
+    <button onclick="goToSlide({{ loop.index0 }})" class="nav-dot"></button>
+    {% endfor %}
+</div>
+<img id="pausePlayButton" onclick="toggleSlideshow()" src="/static/icons/pause-solid.svg" alt="Pause">
+
+<audio id="music" src="/static/audio/inspirational-uplifting-calm-piano-254764.mp3" loop muted></audio>
+
+<div class="audio-controls">
+    <button onclick="toggleAudio()">
+        <img src="/static/icons/volume-xmark-solid.svg" alt="Unmute Icon" class="music-icon" id="music-icon">
+    </button>
+</div>
+
+</body>
+<script src="/static/script.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.5.1/dist/confetti.browser.min.js"></script>
+</html>

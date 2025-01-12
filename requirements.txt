@@ -1,11 +1,15 @@
-python-dotenv~=1.0.1
-matplotlib~=3.9.2
-pandas~=2.2.3
-webexpythonsdk~=2.0.1
-requests~=2.32.3
-pytz~=2024.2
+python-dotenv
+matplotlib
+pandas
+webexpythonsdk
+requests
+pytz
 
-numpy~=2.1.3
-webexteamssdk~=1.6.1
-Cartopy~=0.24.1
-schedule~=1.2.2
+numpy
+webexteamssdk
+Cartopy
+schedule
+uvicorn
+fastapi
+jinja2
+tabulate

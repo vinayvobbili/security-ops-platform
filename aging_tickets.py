@@ -83,6 +83,8 @@ def generate_plot(tickets) -> str | None:
             width=0.2,  # Controls bar width
         )
 
+        ax.set_yticks(range(0, int(grouped_data.sum(axis=1).max()) + 2))  # +2 ensures enough
+
     # Transform coordinates to figure coordinates (bottom-left is 0,0)
     trans = transforms.blended_transform_factory(fig.transFigure, ax.transAxes)  # gets transform object
     now_eastern = datetime.now(eastern).strftime('%m/%d/%Y %I:%M %p %Z')
@@ -161,8 +163,8 @@ def generate_daily_summary(tickets) -> str | None:
 
 def send_report():
     webex_api = WebexAPI(access_token=config.webex_bot_access_token_xsoar)
-    # room_id = config.webex_room_id_vinay_test_space
     room_id = config.webex_room_id_aging_tickets
+    # room_id = config.webex_room_id_vinay_test_space
 
     query = f'-status:closed -category:job type:{config.ticket_type_prefix} -type:"METCIRT Third Party Compromise"'
     period = {"byTo": "months", "toValue": 1, "byFrom": "months", "fromValue": None}
@@ -181,5 +183,5 @@ def send_report():
     webex_api.messages.create(
         roomId=room_id,
         text=f"Aging Tickets Summary!",
-        markdown=f'Summary (Type=TP, Created=90+ days ago)\n ``` \n {generate_daily_summary(tickets)}'
+        markdown=f'Summary (Type=Third Party Compromise, Created=90+ days ago)\n ``` \n {generate_daily_summary(tickets)}'
     )
