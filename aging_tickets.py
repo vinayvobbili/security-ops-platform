@@ -183,5 +183,5 @@ def send_report():
     webex_api.messages.create(
         roomId=room_id,
         text=f"Aging Tickets Summary!",
-        markdown=f'Summary (Type=TP, Created=90+ days ago)\n ``` \n {generate_daily_summary(tickets)}'
+        markdown=f'Summary (Type=Third Party Compromise, Created=90+ days ago)\n ``` \n {generate_daily_summary(tickets)}'
     )
