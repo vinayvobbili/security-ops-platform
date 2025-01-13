@@ -5,15 +5,12 @@ from webex_bot.webex_bot import WebexBot
 from webexteamssdk import WebexTeamsAPI
 
 from Test import Test
-from aging_tickets import AgingTickets
 from config import get_config
 from heatmap import HeatMap
 from helper_methods import log_activity
 from inflow import Inflow
 from lifespan import Lifespan
-from mttr_mttc import MttrMttc
 from outflow import Outflow
-from sla_breaches import SlaBreaches
 
 config = get_config()
 webex_api = WebexTeamsAPI(access_token=config.webex_bot_access_token_moneyball)
@@ -42,6 +39,54 @@ class ResponseEngineeringStories(Command):
             roomId=attachment_actions.json_data['roomId'],
             text=f"{activity['actor']['displayName']}, here's the latest RE Stories chart!",
             files=[os.path.join(os.path.dirname(__file__), 'charts', 're_stories.png')]
+        )
+
+
+class MttrMttc(Command):
+    """Webex Bot command to display a graph of mean times to respond and contain."""
+
+    def __init__(self):
+        super().__init__(command_keyword="mttr_mttc", help_message="MTTR-MTTC")
+
+    @log_activity
+    def execute(self, message, attachment_actions, activity):
+        # Use WebexTeamsAPI to send the file
+        webex_api.messages.create(
+            roomId=attachment_actions.json_data["roomId"],
+            text=f"{activity['actor']['displayName']}, here's the latest MTTR-MTTC chart!",
+            files=[os.path.join(os.path.dirname(__file__), 'charts', 'MTTR MTTC.png')]
+        )
+
+
+class AgingTickets(Command):
+    """Webex Bot command to display a graph of aging tickets."""
+
+    def __init__(self):
+        super().__init__(command_keyword="aging", help_message="Aging Tickets")
+
+    @log_activity
+    def execute(self, message, attachment_actions, activity):
+        # Use WebexTeamsAPI to send the file
+        webex_api.messages.create(
+            roomId=attachment_actions.json_data["roomId"],
+            text=f"{activity['actor']['displayName']}, here's the latest Aging Tickets chart!",
+            files=[os.path.join(os.path.dirname(__file__), 'charts', 'Aging Tickets.png')]
+        )
+
+
+class SlaBreaches(Command):
+    """Webex Bot command to display a graph of mean times to respond and contain."""
+
+    def __init__(self):
+        super().__init__(command_keyword="sla_breach", help_message="SLA Breaches")
+
+    @log_activity
+    def execute(self, message, attachment_actions, activity):
+        # Use WebexTeamsAPI to send the file
+        webex_api.messages.create(
+            roomId=attachment_actions.json_data["roomId"],
+            text=f"{activity['actor']['displayName']}, here's the latest SLA Breaches chart!",
+            files=[os.path.join(os.path.dirname(__file__), 'charts', 'SLA Breaches.png')]
         )
 
 
