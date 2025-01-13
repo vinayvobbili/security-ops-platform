@@ -36,6 +36,7 @@ IMAGE_ORDER = [
     "Company Logo.jpg",
     "GDnR Coin.png",
     "IR_Metrics.jpeg",
+    "charts/Threatcon Level.png",
     "charts/Aging Tickets.png",
     "charts/Inflow.png",
     "charts/SLA Breaches.png",
