@@ -2,7 +2,7 @@ import os
 from typing import List
 
 import uvicorn
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Form
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -52,7 +52,7 @@ IMAGE_ORDER = [
 
 
 @app.get("/full", response_class=HTMLResponse)
-async def read_root(request: Request):
+async def get_ir_dashboard_charts(request: Request):
     """Renders the HTML template with the ordered list of image files."""
 
     image_files = get_image_files()
@@ -62,5 +62,23 @@ async def read_root(request: Request):
     return templates.TemplateResponse("index.html", {"request": request, "image_files": image_files})
 
 
+@app.get("/msoc", response_class=HTMLResponse)
+async def display_form(request: Request):
+    """Displays the MSOC form."""
+    return templates.TemplateResponse("msoc_form.html", {"request": request})
+
+
+@app.post("/submit", response_class=HTMLResponse)
+async def handle_msoc_form_submission(request: Request, site: str = Form(...), server: str = Form(...)):
+    """Handles MSOC form submissions and processes the data."""
+
+    # Process the submitted data.  For example, print it:
+    print(f"Site: {site}")
+    print(f"Server: {server}")
+
+    # You can then redirect to a success page, return a response, or process the data further
+    return templates.TemplateResponse("msoc_success.html", {"request": request, "site": site, "server": server})
+
+
 if __name__ == "__main__":
-    uvicorn.run("dashboard:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("web_server:app", host="0.0.0.0", port=8000, reload=True)
