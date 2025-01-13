@@ -1,6 +1,6 @@
 import json
 import logging
-import tempfile
+import os
 from datetime import datetime
 from typing import List, Dict, Any
 
@@ -48,7 +48,7 @@ def get_df(tickets: List[Dict[Any, Any]]) -> pd.DataFrame:
     return df
 
 
-def generate_plot(tickets) -> str | None:
+def generate_plot(tickets):
     """Generate a bar plot of open ticket types older than 30 days, returned as a base64 string."""
     df = get_df(tickets)
 
@@ -111,12 +111,7 @@ def generate_plot(tickets) -> str | None:
     plt.legend(title='Phase', loc='upper right')
     plt.tight_layout()
 
-    with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmpfile:
-        filepath = tmpfile.name  # Get the full path
-        plt.savefig(filepath, format="png", bbox_inches='tight', dpi=300)
-        plt.close()
-
-    return filepath  # Return the full path
+    plt.savefig('charts/Aging Tickets.png')
 
 
 class AgingTickets(Command):
@@ -127,19 +122,26 @@ class AgingTickets(Command):
 
     @log_activity
     def execute(self, message, attachment_actions, activity):
-        query = f"-status:closed -category:job type:{config.ticket_type_prefix}"
-        period = {"byTo": "months", "toValue": 1, "byFrom": "months", "fromValue": None}
-
-        tickets = IncidentFetcher().get_tickets(query=query, period=period)
-        plot_filepath = generate_plot(tickets)
-
         webex_api = WebexAPI(access_token=config.webex_bot_access_token_moneyball)
         # Use WebexTeamsAPI to send the file
         webex_api.messages.create(
             roomId=attachment_actions.json_data["roomId"],
             text=f"{activity['actor']['displayName']}, here's the latest Aging Tickets chart!",
-            files=[plot_filepath]  # Path to the file
+            files=[os.path.join(os.path.dirname(__file__), 'charts', 'Aging Tickets.png')]
         )
+
+
+def make_chart():
+    query = f'-status:closed -category:job type:{config.ticket_type_prefix} -type:"METCIRT Third Party Compromise"'
+    period = {"byTo": "months", "toValue": 1, "byFrom": "months", "fromValue": None}
+
+    tickets = IncidentFetcher().get_tickets(query=query, period=period)
+
+    query = f'-status:closed -category:job type:"METCIRT Third Party Compromise"'
+    period = {"byTo": "months", "toValue": 3, "byFrom": "months", "fromValue": None}
+    tickets = tickets + IncidentFetcher().get_tickets(query=query, period=period)
+
+    generate_plot(tickets)
 
 
 def generate_daily_summary(tickets) -> str | None:
