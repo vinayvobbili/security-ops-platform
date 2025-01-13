@@ -5,6 +5,7 @@ import schedule
 
 import aging_tickets
 import de_stories
+import mttr_mttc
 import re_stories
 
 
@@ -17,7 +18,8 @@ def main():
     schedule.every().day.at("00:01", pytz.timezone('US/Eastern')).do(lambda: (
         aging_tickets.make_chart(),
         de_stories.make_chart(),
-        re_stories.make_chart()
+        re_stories.make_chart(),
+        mttr_mttc.make_chart()
     ))
 
     while True:

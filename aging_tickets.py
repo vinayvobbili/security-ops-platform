@@ -114,23 +114,6 @@ def generate_plot(tickets):
     plt.savefig('charts/Aging Tickets.png')
 
 
-class AgingTickets(Command):
-    """Webex Bot command to display a graph of aging tickets."""
-
-    def __init__(self):
-        super().__init__(command_keyword="aging", help_message="Aging Tickets")
-
-    @log_activity
-    def execute(self, message, attachment_actions, activity):
-        webex_api = WebexAPI(access_token=config.webex_bot_access_token_moneyball)
-        # Use WebexTeamsAPI to send the file
-        webex_api.messages.create(
-            roomId=attachment_actions.json_data["roomId"],
-            text=f"{activity['actor']['displayName']}, here's the latest Aging Tickets chart!",
-            files=[os.path.join(os.path.dirname(__file__), 'charts', 'Aging Tickets.png')]
-        )
-
-
 def make_chart():
     query = f'-status:closed -category:job type:{config.ticket_type_prefix} -type:"METCIRT Third Party Compromise"'
     period = {"byTo": "months", "toValue": 1, "byFrom": "months", "fromValue": None}

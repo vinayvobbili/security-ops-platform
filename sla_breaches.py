@@ -1,4 +1,3 @@
-import tempfile
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
@@ -6,16 +5,12 @@ import matplotlib.transforms as transforms
 import numpy as np
 from matplotlib import pyplot as plt
 from pytz import timezone
-from webex_bot.models.command import Command
-from webexteamssdk import WebexTeamsAPI
 
 from config import get_config
-from helper_methods import log_activity
 from incident_fetcher import IncidentFetcher
 
 eastern = timezone('US/Eastern')  # Define the Eastern time zone
 config = get_config()
-webex_api = WebexTeamsAPI(access_token=config.webex_bot_access_token_moneyball)
 
 
 @dataclass
@@ -79,7 +74,7 @@ def get_tickets_by_periods(tickets):
     return ticket_slas_by_periods
 
 
-def get_sla_breaches_chart(ticket_slas_by_periods):
+def save_sla_breaches_chart(ticket_slas_by_periods):
     thirty_days_ticket_count = ticket_slas_by_periods['Past 30 days'].total_ticket_count
     seven_days_ticket_count = ticket_slas_by_periods['Past 7 days'].total_ticket_count
     yesterday_ticket_count = ticket_slas_by_periods['Yesterday'].total_ticket_count
@@ -141,37 +136,19 @@ def get_sla_breaches_chart(ticket_slas_by_periods):
     # Adjust layout to prevent label clipping
     plt.tight_layout()
 
-    with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmpfile:
-        filepath = tmpfile.name  # Get the full path
-        plt.savefig(filepath, format="png", bbox_inches='tight', dpi=600)
-        plt.close(fig)
-
-    return filepath  # Return the full path
+    plt.savefig('charts/SLA Breaches.png')
 
 
-class SlaBreaches(Command):
-    """Webex Bot command to display a graph of mean times to respond and contain."""
-    QUERY = f'-category:job type:{config.ticket_type_prefix} -owner:""'
-    PERIOD = {
+def make_chart():
+    query = f'-category:job type:{config.ticket_type_prefix} -owner:""'
+    period = {
         "byTo": "months",
         "toValue": None,
         "byFrom": "months",
         "fromValue": 1
     }
 
-    def __init__(self):
-        super().__init__(command_keyword="sla_breach", help_message="SLA Breaches")
-
-    @log_activity
-    def execute(self, message, attachment_actions, activity):
-        incident_fetcher = IncidentFetcher()
-        tickets = incident_fetcher.get_tickets(query=self.QUERY, period=self.PERIOD)
-        tickets_by_periods = get_tickets_by_periods(tickets)
-        filepath = get_sla_breaches_chart(tickets_by_periods)  # Store the full path
-
-        # Use WebexTeamsAPI to send the file
-        webex_api.messages.create(
-            roomId=attachment_actions.json_data["roomId"],
-            text=f"{activity['actor']['displayName']}, here's the latest SLA Breaches chart!",
-            files=[filepath]  # Path to the file
-        )
+    incident_fetcher = IncidentFetcher()
+    tickets = incident_fetcher.get_tickets(query=query, period=period)
+    tickets_by_periods = get_tickets_by_periods(tickets)
+    save_sla_breaches_chart(tickets_by_periods)
