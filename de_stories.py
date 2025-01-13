@@ -82,7 +82,7 @@ class ADOWorkItemRetriever:
 
 
 # Example usage
-def main():
+def make_chart():
     # Initialize the retriever
     ado_retriever = ADOWorkItemRetriever()
 
@@ -118,4 +118,4 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    make_chart()
