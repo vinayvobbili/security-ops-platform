@@ -21,19 +21,6 @@ def _setup_logger():
     return logger
 
 
-def detect_number_region(self, image_path):
-    """Enhanced position detection focusing on the upper left of the sign"""
-    img = cv2.imread(str(image_path))
-    height, width = img.shape[:2]
-
-    # Adjust these values to move the number right and slightly down
-    sign_top = int(height * 0.2)
-    sign_left = int(width * 0.15)
-
-    # Increase the x-offset to move it right
-    return sign_left + 165, sign_top + 45  # Adjusted x-coordinate from 45 to 165
-
-
 class CounterImageModifier:
     def __init__(self, tesseract_path=None):
         """Initialize with better default styling"""
@@ -55,6 +42,8 @@ class CounterImageModifier:
             "Futura.ttc"  # Added Futura for a more modern look
         ]
 
+        self.number_position = (200, 115)  # Default position
+
     def update_counter(self, image_path, number, output_path=None, font_size=None, font_color=None, background_color=None):
         """Updated counter with improved styling and positioning"""
         try:
@@ -62,7 +51,7 @@ class CounterImageModifier:
             draw = ImageDraw.Draw(img)
 
             # Get optimized position
-            number_position = detect_number_region(self, image_path)
+            number_position = self.number_position
 
             # Use custom or default styling
             font_size = font_size or self.default_font_size
@@ -211,9 +200,9 @@ def main():
             "web/static/images/days since last incident.jpg",
             42,
             output_path="charts/days since last incident.jpg",
-            font_size=70,
-            font_color="#0000FF",
-            background_color="#D3D3D3"  # Using hex code for lightgray
+            font_size=50,
+            font_color="green",
+            background_color="#C3D3B8"  # Using hex code for lightgray
         )
 
     except Exception as e:
