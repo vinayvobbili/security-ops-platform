@@ -190,7 +190,7 @@ class CounterImageModifier:
         return 0
 
 
-def main():
+def make_chart():
     """Update the base image with the current days since last incident"""
     # Initialize the modifier
     modifier = CounterImageModifier()
@@ -210,4 +210,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    make_chart()
