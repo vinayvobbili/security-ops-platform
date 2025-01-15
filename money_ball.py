@@ -4,7 +4,7 @@ from webex_bot.models.command import Command
 from webex_bot.webex_bot import WebexBot
 from webexteamssdk import WebexTeamsAPI
 
-from Test import Test
+from test import Test
 from config import get_config
 from heatmap import HeatMap
 from helper_methods import log_activity
