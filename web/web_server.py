@@ -41,7 +41,7 @@ IMAGE_ORDER = [
     "charts/Aging Tickets.png",
     "charts/Inflow.png",
     "charts/SLA Breaches.png",
-    "charts/MTTR-MTTC.png",
+    "charts/MTTR MTTC.png",
     "charts/Outflow.png",
     "charts/Heatmap.png",
     "charts/DE Stories.png",

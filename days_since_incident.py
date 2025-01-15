@@ -209,7 +209,7 @@ def make_chart():
 
     try:
         modifier.update_counter(
-            "web/static/images/days since last incident.jpg",
+            "web/static/images/base/days since last incident.jpg",
             2,
             output_path="charts/Days Since Last Incident.jpg",
             font_size=50,

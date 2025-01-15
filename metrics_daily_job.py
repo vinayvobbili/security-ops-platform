@@ -5,6 +5,7 @@ import schedule
 
 import aging_tickets
 import de_stories
+import heatmap
 import mttr_mttc
 import re_stories
 import sla_breaches
@@ -18,10 +19,11 @@ def main():
     print("Starting the scheduler...")
     schedule.every().day.at("00:01", pytz.timezone('US/Eastern')).do(lambda: (
         aging_tickets.make_chart(),
-        de_stories.make_chart(),
-        re_stories.make_chart(),
         mttr_mttc.make_chart(),
-        sla_breaches.make_chart()
+        sla_breaches.make_chart(),
+        heatmap.make_chart(),
+        de_stories.make_chart(),
+        re_stories.make_chart()
     ))
 
     while True:
