@@ -20,7 +20,7 @@ class IncidentFetcher:
         }
         self.api_url = config.xsoar_api_base_url + '/incidents/search'
 
-    def get_tickets(self, query, period=None) -> dict | None:
+    def get_tickets(self, query, period=None) -> list:
         """Fetches security incidents from XSOAR."""
         payload = {
             "filter": {
@@ -38,7 +38,7 @@ class IncidentFetcher:
             response.raise_for_status()  # Raise HTTPError for bad responses (4xx or 5xx)
             tickets = response.json()
             log.info(f'Retrieved {tickets.get("total", 0)} incidents')  # Handles missing "total"
-            return tickets.get('data', {})  # Return the JSON response
+            return tickets.get('data', [])  # Return the JSON response
         except requests.exceptions.RequestException as e:
             log.error(f"Error fetching incidents: {e}")
-            return None  # Return None on error
+            return []  # Return an empty list on error
