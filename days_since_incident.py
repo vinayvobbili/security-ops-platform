@@ -6,6 +6,11 @@ import numpy as np
 import pytesseract
 from PIL import Image, ImageDraw, ImageFont
 
+import config
+from incident_fetcher import IncidentFetcher
+
+config = config.get_config()
+
 
 def _setup_logger():
     """Configure logging"""
@@ -13,9 +18,7 @@ def _setup_logger():
     logger.setLevel(logging.INFO)
 
     handler = logging.StreamHandler(sys.stdout)
-    handler.setFormatter(logging.Formatter(
-        '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    ))
+    handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
     logger.addHandler(handler)
 
     return logger
@@ -188,6 +191,15 @@ class CounterImageModifier:
 
         self.logger.warning("Could not recognize number, defaulting to 0")
         return 0
+
+
+def get_days_since_last_incident():
+    """Get the current days since the last incident"""
+    # Placeholder function, replace with actual logic
+    query = f'-category:job type:{config.ticket_type_prefix} impact:Confirmed'
+    period = {"byTo": "months", "toValue": None, "byFrom": "months", "fromValue": 1}
+    tickets = IncidentFetcher().get_tickets(query=query, period=period)
+    return 42
 
 
 def make_chart():
