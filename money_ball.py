@@ -38,7 +38,7 @@ class ResponseEngineeringStories(Command):
         webex_api.messages.create(
             roomId=attachment_actions.json_data['roomId'],
             text=f"{activity['actor']['displayName']}, here's the latest RE Stories chart!",
-            files=[os.path.join(os.path.dirname(__file__), 'charts', 're_stories.png')]
+            files=[os.path.join(os.path.dirname(__file__), 'charts', 'RE Stories.png')]
         )
 
 
