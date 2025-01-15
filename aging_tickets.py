@@ -1,6 +1,5 @@
 import json
 import logging
-import os
 from datetime import datetime
 from typing import List, Dict, Any
 
@@ -8,15 +7,13 @@ import matplotlib.pyplot as plt
 import matplotlib.transforms as transforms
 import pandas as pd
 import pytz
-from webex_bot.models.command import Command
 from webexpythonsdk import WebexAPI
 
-from config import get_config
+import config
 from constants import TICKET_TYPE_MAPPING
-from helper_methods import log_activity
 from incident_fetcher import IncidentFetcher
 
-config = get_config()
+config = config.get_config()
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
