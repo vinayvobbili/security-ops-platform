@@ -84,7 +84,6 @@ function updateSlider() {
     }
 }
 
-
 document.addEventListener('DOMContentLoaded', () => {
     const music = document.getElementById('music');
     const music_icon = document.getElementById('music-icon');
