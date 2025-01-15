@@ -210,8 +210,8 @@ def make_chart():
     try:
         modifier.update_counter(
             "web/static/images/days since last incident.jpg",
-            42,
-            output_path="charts/days since last incident.jpg",
+            2,
+            output_path="charts/Days Since Last Incident.jpg",
             font_size=50,
             font_color="green",
             background_color="#C3D3B8"  # Using hex code for lightgray
