@@ -7,6 +7,7 @@ import aging_tickets
 import de_stories
 import mttr_mttc
 import re_stories
+import sla_breaches
 
 
 def main():
@@ -19,7 +20,8 @@ def main():
         aging_tickets.make_chart(),
         de_stories.make_chart(),
         re_stories.make_chart(),
-        mttr_mttc.make_chart()
+        mttr_mttc.make_chart(),
+        sla_breaches.make_chart()
     ))
 
     while True:
