@@ -67,4 +67,5 @@ def gauge(color):
 # Create gauge with value 60
 gauge('yellow')
 plt.savefig('charts/Threatcon Level.png')
+plt.close()
 

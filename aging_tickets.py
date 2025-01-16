@@ -109,6 +109,7 @@ def generate_plot(tickets):
     plt.tight_layout()
 
     plt.savefig('charts/Aging Tickets.png')
+    plt.close(fig)
 
 
 def make_chart():

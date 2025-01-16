@@ -144,6 +144,7 @@ def save_mttr_mttc_chart(ticket_slas_by_periods):
     plt.tight_layout()
 
     plt.savefig('charts/MTTR MTTC.png')
+    plt.close(fig)
 
 
 def make_chart():

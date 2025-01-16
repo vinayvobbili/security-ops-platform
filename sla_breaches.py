@@ -137,6 +137,7 @@ def save_sla_breaches_chart(ticket_slas_by_periods):
     plt.tight_layout()
 
     plt.savefig('charts/SLA Breaches.png')
+    plt.close(fig)
 
 
 def make_chart():
