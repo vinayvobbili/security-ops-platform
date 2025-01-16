@@ -21,19 +21,24 @@ class Test(Command):
         return "Test passed!"
 
 
-schedule.every().day.at("11:29", pytz.timezone('US/Eastern')).do(lambda: (
-    aging_tickets.make_chart(),
-    mttr_mttc.make_chart(),
-    sla_breaches.make_chart(),
-    de_stories.make_chart(),
-    re_stories.make_chart()
-))
-# schedule.every().day.at("11:29", pytz.timezone('US/Eastern')).do(aging_tickets.make_chart)
-# schedule.every().day.at("11:30", pytz.timezone('US/Eastern')).do(mttr_mttc.make_chart)
-# schedule.every().day.at("11:31", pytz.timezone('US/Eastern')).do(sla_breaches.make_chart)
-# schedule.every().day.at("11:32", pytz.timezone('US/Eastern')).do(de_stories.make_chart)
-# schedule.every().day.at("11:13", pytz.timezone('US/Eastern')).do(re_stories.make_chart)
+def main():
+    # run once
+    # aging_tickets.send_report()
 
-while True:
-    schedule.run_pending()
-    time.sleep(60)
+    # schedule
+    print("Starting the scheduler...")
+    schedule.every().day.at("00:01", pytz.timezone('US/Eastern')).do(lambda: (
+        aging_tickets.make_chart(),
+        mttr_mttc.make_chart(),
+        sla_breaches.make_chart(),
+        de_stories.make_chart(),
+        re_stories.make_chart()
+    ))
+
+    while True:
+        schedule.run_pending()
+        time.sleep(60)
+
+
+if __name__ in ('__main__', '__builtin__', 'builtins'):
+    main()
