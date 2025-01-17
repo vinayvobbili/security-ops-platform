@@ -7,6 +7,8 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
+from services import transfer_ticket
+
 # Initialize FastAPI app
 app = FastAPI()
 
@@ -52,7 +54,7 @@ IMAGE_ORDER = [
 ]
 
 
-@app.get("/full", response_class=HTMLResponse)
+@app.get("/full-slide-show", response_class=HTMLResponse)
 async def get_ir_dashboard_charts(request: Request):
     """Renders the HTML template with the ordered list of image files."""
 
@@ -63,13 +65,13 @@ async def get_ir_dashboard_charts(request: Request):
     return templates.TemplateResponse("index.html", {"request": request, "image_files": image_files})
 
 
-@app.get("/msoc", response_class=HTMLResponse)
+@app.get("/msoc-form", response_class=HTMLResponse)
 async def display_form(request: Request):
     """Displays the MSOC form."""
     return templates.TemplateResponse("msoc_form.html", {"request": request})
 
 
-@app.post("/submit", response_class=HTMLResponse)
+@app.post("/submit-msoc-form", response_class=HTMLResponse)
 async def handle_msoc_form_submission(request: Request, site: str = Form(...), server: str = Form(...)):
     """Handles MSOC form submissions and processes the data."""
 
@@ -79,6 +81,26 @@ async def handle_msoc_form_submission(request: Request, site: str = Form(...), s
 
     # You can then redirect to a success page, return a response, or process the data further
     return templates.TemplateResponse("msoc_success.html", {"request": request, "site": site, "server": server})
+
+
+@app.get("/xsoar-ticket-import-form", response_class=HTMLResponse)
+async def display_form(request: Request):
+    """Displays the MSOC form."""
+    return templates.TemplateResponse("xsoar-ticket-import-form.html", {"request": request})
+
+
+@app.post("/import-xsoar-ticket", response_class=HTMLResponse)
+async def handle_msoc_form_submission(request: Request, source_ticket_number: str = Form(...)):
+    """Handles MSOC form submissions and processes the data."""
+
+    print(f"Source ticket number: {source_ticket_number}")
+    destination_ticket_number, destination_ticket_link = transfer_ticket.import_ticket(source_ticket_number)
+    return templates.TemplateResponse("xsoar-ticket-import-response.html", {
+        "request": request,
+        "source_ticket_number": source_ticket_number,
+        "destination_ticket_number": destination_ticket_number,
+        "destination_ticket_link": destination_ticket_link
+    })
 
 
 if __name__ == "__main__":
