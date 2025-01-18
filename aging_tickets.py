@@ -125,23 +125,25 @@ def make_chart():
     generate_plot(tickets)
 
 
+logger = logging.getLogger(__name__)  # Make sure this is initialized
+
+
 def generate_daily_summary(tickets) -> str | None:
-    if tickets is None:
-        return pd.DataFrame(columns=['Owner', 'Count', 'Average Age (days)']).to_markdown(index=False)
-
-    # group tickets by owner and calculate counts of tickets per owner
-    df = pd.DataFrame(tickets)
-    df['owner'] = df['owner'].str.replace('@company.com', '', regex=False)
-    now = pd.Timestamp.now(tz='UTC')
-    df['created'] = pd.to_datetime(df['created'])
-    df['age'] = (now - df['created']).dt.days
-
-    # Calculate average age per owner
-    table = df.groupby('owner').agg({'id': 'count', 'age': 'mean'})
-    table = table.reset_index()
-    table = table.rename(columns={'owner': 'Owner', 'id': 'Count', 'age': 'Average Age (days)'})
-
-    return table.to_markdown(index=False)
+    try:
+        if tickets is None:
+            return pd.DataFrame(columns=['Owner', 'Count', 'Average Age (days)']).to_markdown(index=False)
+        df = pd.DataFrame(tickets)
+        df['owner'] = df['owner'].astype(str).str.replace('@company.com', '', regex=False)
+        now = pd.Timestamp.now(tz='UTC')
+        df['created'] = pd.to_datetime(df['created'])
+        df['age'] = (now - df['created']).dt.days
+        table = df.groupby('owner').agg({'id': 'count', 'age': 'mean'})
+        table = table.reset_index()
+        table = table.rename(columns={'owner': 'Owner', 'id': 'Count', 'age': 'Average Age (days)'})
+        return table.to_markdown(index=False)
+    except (KeyError, TypeError, ValueError) as e:  # Catch potential data errors
+        logger.error(f"Error generating daily summary: {e}")  # Log the error
+        return "Error generating report. Please check the logs."  # Return a user-friendly message
 
 
 def send_report():
