@@ -125,9 +125,6 @@ def make_chart():
     generate_plot(tickets)
 
 
-logger = logging.getLogger(__name__)  # Make sure this is initialized
-
-
 def generate_daily_summary(tickets) -> str | None:
     try:
         if tickets is None:
