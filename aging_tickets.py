@@ -162,8 +162,9 @@ def send_report():
     period = {"byTo": "months", "toValue": 3, "byFrom": "months", "fromValue": None}
     tickets = IncidentFetcher().get_tickets(query=query, period=period)
 
-    webex_api.messages.create(
-        roomId=room_id,
-        text=f"Aging Tickets Summary!",
-        markdown=f'Summary (Type=Third Party Compromise, Created=90+ days ago)\n ``` \n {generate_daily_summary(tickets)}'
-    )
+    if tickets:
+        webex_api.messages.create(
+            roomId=room_id,
+            text=f"Aging Tickets Summary!",
+            markdown=f'Summary (Type=Third Party Compromise, Created=90+ days ago)\n ``` \n {generate_daily_summary(tickets)}'
+        )
