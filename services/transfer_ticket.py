@@ -164,5 +164,6 @@ def import_ticket(source_ticket_number):
 
 
 if __name__ == "__main__":
-    ticket_number = ""
-    import_ticket()
+    ticket_number = "538806"
+    destination_ticket_number, destination_ticket_link = import_ticket(ticket_number)
+    print(f"Ticket {ticket_number} transferred to {destination_ticket_number}. Link: {destination_ticket_link}")
