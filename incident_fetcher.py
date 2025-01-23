@@ -20,13 +20,13 @@ class IncidentFetcher:
         }
         self.api_url = config.xsoar_api_base_url + '/incidents/search'
 
-    def get_tickets(self, query, period=None) -> list:
+    def get_tickets(self, query, period=None, size=10000) -> list:
         """Fetches security incidents from XSOAR."""
         payload = {
             "filter": {
                 "query": query,
                 "page": 0,
-                "size": 10000,  # Good to have a large size
+                "size": size,  # Good to have a large size
                 "sort": [{"field": "created", "asc": False}]
             }
         }
