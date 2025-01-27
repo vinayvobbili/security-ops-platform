@@ -62,7 +62,7 @@ def make_pie(tickets, title) -> str:
 
     # Timestamp with minimal bottom margin
     now_eastern = datetime.now(eastern).strftime('%m/%d/%Y %I:%M %p %Z')
-    plt.figtext(0.99, 0.02, now_eastern, fontsize=10, ha='right')
+    plt.figtext(0.99, 0.02, now_eastern, fontsize=8, ha='right')
 
     # Much tighter vertical margins
     plt.subplots_adjust(left=0.05, right=0.85, top=0.95, bottom=0.05)

@@ -3,12 +3,10 @@ from datetime import datetime, timedelta
 
 import pytz
 from matplotlib import pyplot as plt
-from webex_bot.models.command import Command
 from webexteamssdk import WebexTeamsAPI
 
 from config import get_config
 from constants import TICKET_TYPE_MAPPING, IMPACT_MAPPING
-from helper_methods import log_activity
 from incident_fetcher import IncidentFetcher
 
 eastern = pytz.timezone('US/Eastern')  # Define the Eastern time zone
@@ -100,18 +98,13 @@ def create_nested_donut(tickets):
 
     # Add timestamp at bottom right
     now_eastern = datetime.now(eastern).strftime('%m/%d/%Y %I:%M %p EST')
-    plt.figtext(0.7, 0.01, now_eastern, fontsize=6, ha='right')
+    plt.figtext(0.7, 0.1, now_eastern, fontsize=6, ha='right')
 
     # Adjust layout
     plt.subplots_adjust(left=0.1, right=0.9, top=0.9, bottom=0.1)
 
-    # Save to temporary file
-    with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmpfile:
-        filepath = tmpfile.name
-        plt.savefig(filepath, format="png", bbox_inches='tight', dpi=600)
-        plt.close(fig)
-
-    return filepath
+    plt.savefig('charts/Outflow Yesterday.png')
+    plt.close(fig)
 
 
 def adjust_color_brightness(hex_color, factor):
@@ -126,7 +119,7 @@ def adjust_color_brightness(hex_color, factor):
     return '#{:02x}{:02x}{:02x}'.format(*new_rgb)
 
 
-def plot_outflow() -> str:
+def make_chart() -> str:
     # Calculate fresh values EACH TIME the command is run
     et = pytz.timezone("US/Eastern")
     yesterday_start = datetime.now(et).replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=1)
@@ -136,22 +129,8 @@ def plot_outflow() -> str:
 
     query = QUERY_TEMPLATE.format(ticket_type_prefix=config.ticket_type_prefix, start=yesterday_start_utc, end=yesterday_end_utc)
     tickets = IncidentFetcher().get_tickets(query=query)
-    filepath = create_nested_donut(tickets)
-
-    return filepath
+    create_nested_donut(tickets)
 
 
-class Outflow(Command):
-
-    def __init__(self):
-        super().__init__(command_keyword="outflow", help_message="Outflow")
-
-    @log_activity
-    def execute(self, message, attachment_actions, activity):
-        outflow_chart_filepath = plot_outflow()
-
-        webex_api.messages.create(
-            roomId=attachment_actions.json_data["roomId"],
-            text=f"{activity['actor']['displayName']}, here's the Outflow chart!",
-            files=[outflow_chart_filepath]  # Path to the file
-        )
+if __name__ in ('__main__', '__builtin__', 'builtins'):
+    make_chart()

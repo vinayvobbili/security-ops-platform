@@ -44,7 +44,7 @@ IMAGE_ORDER = [
     "charts/Inflow Yesterday.png",
     "charts/SLA Breaches.png",
     "charts/MTTR MTTC.png",
-    "charts/Outflow.png",
+    "charts/Outflow Yesterday.png",
     "charts/Heatmap.png",
     "charts/Days Since Last Incident.jpg",
     "charts/Vectra Detections by Rule.png",

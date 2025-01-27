@@ -7,6 +7,7 @@ import aging_tickets
 import days_since_incident
 import de_stories
 import mttr_mttc
+import outflow
 import re_stories
 import sla_breaches
 
@@ -23,7 +24,8 @@ def main():
         sla_breaches.make_chart(),
         de_stories.make_chart(),
         re_stories.make_chart(),
-        days_since_incident.make_chart()
+        days_since_incident.make_chart(),
+        outflow.make_chart()
     ))
 
     while True:
