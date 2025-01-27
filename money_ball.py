@@ -4,13 +4,13 @@ from webex_bot.models.command import Command
 from webex_bot.webex_bot import WebexBot
 from webexteamssdk import WebexTeamsAPI
 
-from test import Test
 from config import get_config
 from heatmap import HeatMap
 from helper_methods import log_activity
 from inflow import Inflow
 from lifespan import Lifespan
 from outflow import Outflow
+from test import Test
 
 # Load configuration
 config = get_config()
@@ -79,6 +79,16 @@ class SlaBreaches(Command):
     @log_activity
     def execute(self, message, attachment_actions, activity):
         send_chart(attachment_actions.json_data["roomId"], activity['actor']['displayName'], "SLA Breaches", "SLA Breaches.png")
+
+
+class Outflow(Command):
+
+    def __init__(self):
+        super().__init__(command_keyword="outflow", help_message="Outflow")
+
+    @log_activity
+    def execute(self, message, attachment_actions, activity):
+        send_chart(attachment_actions.json_data["roomId"], activity['actor']['displayName'], "Outflow Yesterday", "Outflow Yesterday.png")
 
 
 def main():
