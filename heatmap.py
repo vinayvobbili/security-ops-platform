@@ -1,5 +1,4 @@
 import json
-import tempfile
 from datetime import datetime
 
 import cartopy.crs as ccrs
@@ -10,11 +9,9 @@ import matplotlib.colors as colors
 import matplotlib.pyplot as plt
 from matplotlib import transforms
 from pytz import timezone
-from webex_bot.models.command import Command
 from webexteamssdk import WebexTeamsAPI
 
 from config import get_config
-from helper_methods import log_activity
 from incident_fetcher import IncidentFetcher
 
 config = get_config()
@@ -142,25 +139,9 @@ def create_choropleth_map():
     # Adjust layout to prevent label clipping
     plt.tight_layout()
 
-    with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmpfile:
-        filepath = tmpfile.name  # Get the full path
-        plt.savefig(filepath, format="png", bbox_inches='tight', dpi=600)
-        plt.close(fig)
-
-    return filepath  # Return the full path
+    plt.savefig('charts/Heat Map.png')
+    plt.close(fig)
 
 
-class HeatMap(Command):
-    def __init__(self):
-        super().__init__(command_keyword="heat_map", help_message="Heat Map")
-
-    @log_activity
-    def execute(self, message, attachment_actions, activity):
-        map_file_path = create_choropleth_map()  # Store the full path
-
-        # Use WebexTeamsAPI to send the file
-        webex_api.messages.create(
-            roomId=attachment_actions.json_data["roomId"],
-            text=f"{activity['actor']['displayName']}, here's the latest heat map!",
-            files=[map_file_path]  # Path to the file
-        )
+if __name__ in ('__main__', '__builtin__', 'builtins'):
+    create_choropleth_map()
