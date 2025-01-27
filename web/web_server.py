@@ -41,16 +41,18 @@ IMAGE_ORDER = [
     "charts/Threatcon Level.png",
     "charts/Days Since Last Incident.jpg",
     "charts/Aging Tickets.png",
-    "charts/Inflow.png",
+    "charts/Inflow Yesterday.png",
     "charts/SLA Breaches.png",
     "charts/MTTR MTTC.png",
     "charts/Outflow.png",
     "charts/Heatmap.png",
+    "charts/Days Since Last Incident.jpg",
+    "charts/Vectra Detections by Rule.png",
     "charts/DE Stories.png",
     "charts/RE Stories.png",
     "End of presentation.jpg",
     "Feedback Email.png",
-    "Thanks.png"
+    "Thanks.png",
 ]
 
 
