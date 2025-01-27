@@ -6,6 +6,7 @@ import schedule
 import aging_tickets
 import days_since_incident
 import de_stories
+import heatmap
 import mttr_mttc
 import outflow
 import re_stories
@@ -25,7 +26,8 @@ def main():
         de_stories.make_chart(),
         re_stories.make_chart(),
         days_since_incident.make_chart(),
-        outflow.make_chart()
+        outflow.make_chart(),
+        heatmap.create_choropleth_map()
     ))
 
     while True:
