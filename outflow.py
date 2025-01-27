@@ -1,4 +1,3 @@
-import tempfile
 from datetime import datetime, timedelta
 
 import pytz
@@ -119,7 +118,7 @@ def adjust_color_brightness(hex_color, factor):
     return '#{:02x}{:02x}{:02x}'.format(*new_rgb)
 
 
-def make_chart() -> str:
+def make_chart() -> None:
     # Calculate fresh values EACH TIME the command is run
     et = pytz.timezone("US/Eastern")
     yesterday_start = datetime.now(et).replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=1)
