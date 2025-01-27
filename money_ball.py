@@ -91,6 +91,15 @@ class Outflow(Command):
         send_chart(attachment_actions.json_data["roomId"], activity['actor']['displayName'], "Outflow Yesterday", "Outflow Yesterday.png")
 
 
+class HeatMap(Command):
+    def __init__(self):
+        super().__init__(command_keyword="heat_map", help_message="Heat Map")
+
+    @log_activity
+    def execute(self, message, attachment_actions, activity):
+        send_chart(attachment_actions.json_data["roomId"], activity['actor']['displayName'], "Heat Map", "Heat Map.png")
+
+
 def main():
     """Initialize and run the Webex bot."""
 
