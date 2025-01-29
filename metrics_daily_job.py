@@ -11,11 +11,13 @@ import mttr_mttc
 import outflow
 import re_stories
 import sla_breaches
+import verify_host_online_status
 
 
 def main():
     # run once
     # aging_tickets.send_report()
+    # verify_host_online_status.start()
 
     # schedule
     print("Starting the scheduler...")
@@ -29,6 +31,7 @@ def main():
         outflow.make_chart(),
         heatmap.create_choropleth_map()
     ))
+    schedule.every(5).minutes.do(verify_host_online_status.start)
 
     while True:
         schedule.run_pending()

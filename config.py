@@ -13,6 +13,7 @@ def get_config():
         webex_room_id_aging_tickets=os.environ["WEBEX_ROOM_ID_AGING_TICKETS"],
         webex_room_id_vinay_test_space=os.environ["WEBEX_ROOM_ID_VINAY_TEST_SPACE"],
         xsoar_api_base_url=os.environ["XSOAR_API_BASE_URL"],
+        xsoar_ui_base_url=os.environ["XSOAR_UI_BASE_URL"],
         xsoar_auth_token=os.environ["XSOAR_AUTH_TOKEN"],
         xsoar_auth_id=os.environ["XSOAR_AUTH_ID"],
         approved_domains=os.environ["APPROVED_DOMAINS"],
@@ -21,7 +22,10 @@ def get_config():
         azdo_org=os.environ["AZDO_ORGANIZATION"],
         azdo_de_project=os.environ["AZDO_DE_PROJECT"],
         azdo_re_project=os.environ["AZDO_RE_PROJECT"],
-        azdo_pat=os.environ["AZDO_PERSONAL_ACCESS_TOKEN"]
+        azdo_pat=os.environ["AZDO_PERSONAL_ACCESS_TOKEN"],
+        cs_client_id=os.environ["CROWD_STRIKE_CLIENT_ID"],
+        cs_client_secret=os.environ["CROWD_STRIKE_CLIENT_SECRET"],
+        webex_host_announcements_room_id=os.environ["WEBEX_HOST_ANNOUNCEMRNTS_ROOM_ID"]
     )
 
 
@@ -33,6 +37,7 @@ class Config:
     webex_room_id_aging_tickets: str
     webex_room_id_vinay_test_space: str
     xsoar_api_base_url: str
+    xsoar_ui_base_url: str
     xsoar_auth_token: str
     xsoar_auth_id: str
     ticket_type_prefix: str
@@ -42,4 +47,8 @@ class Config:
     azdo_de_project: str
     azdo_re_project: str
     azdo_pat: str
+    cs_client_id: str
+    cs_client_secret: str
+    webex_host_announcements_room_id: str
+
     webex_api_url: str = "https://webexapis.com/v1/messages"
