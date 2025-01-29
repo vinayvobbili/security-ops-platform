@@ -21,7 +21,7 @@ webex_api = WebexAPI(access_token=config.webex_bot_access_token_moneyball)
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-QUERY = '-category:job type:METCIRT -owner:"" status:closed'
+QUERY = f'-category:job type:{config.ticket_type_prefix} -owner:"" status:closed'
 PERIOD = {
     "byFrom": "months",
     "fromValue": 1
@@ -41,12 +41,12 @@ def get_lifespan_chart(tickets):
     for ticket in tickets:
         custom_fields = ticket.get('CustomFields', {})
         data.append({
-            'type': ticket.get('type').replace('METCIRT ', ''),
-            'triage': custom_fields.get('metcirttriagetime', {}).get('totalDuration', 0) / 3600,
-            'lessons': custom_fields.get('metcirtlessonslearnedtime', {}).get('totalDuration', 0) / 3600,
-            'investigate': custom_fields.get('metcirtinvestigatetime', {}).get('totalDuration', 0) / 3600,
-            'eradicate': custom_fields.get('metcirteradicationtime', {}).get('totalDuration', 0) / 3600,
-            'closure': custom_fields.get('metcirtclosuretime', {}).get('totalDuration', 0) / 3600,
+            'type': ticket.get('type').replace(f'{config.ticket_type_prefix} ', ''),
+            'triage': custom_fields.get(config.triage_timer, {}).get('totalDuration', 0) / 3600,
+            'lessons': custom_fields.get(config.lessons_learned_time, {}).get('totalDuration', 0) / 3600,
+            'investigate': custom_fields.get(config.investigation_time, {}).get('totalDuration', 0) / 3600,
+            'eradicate': custom_fields.get(config.eradication_time, {}).get('totalDuration', 0) / 3600,
+            'closure': custom_fields.get(config.closure_time, {}).get('totalDuration', 0) / 3600,
         })
 
     df = pd.DataFrame(data)

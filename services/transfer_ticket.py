@@ -2,6 +2,10 @@ import json
 
 import requests
 
+from config import get_config
+
+config = get_config()
+
 
 class XSOARAPIError(Exception):
     """Custom exception for XSOAR API errors"""
@@ -63,7 +67,7 @@ def create_incident(base_url, incident_data, auth_id, auth_key):
             "details": incident_data.get('details', 'Details not found'),
             "name": incident_data.get('name', 'Name not found'),
             "severity": incident_data.get('severity', 1),
-            "type": incident_data.get('type', 'METCIRT Case'),
+            "type": incident_data.get('type', f'{config.ticket_type_prefix} Case'),
             "CustomFields": {
                 'detectionsource': incident_data.get('CustomFields', {}).get('detectionsource', 'Unknown'),
                 'securitycategory': incident_data.get('CustomFields', {}).get('securitycategory', 'Unknown'),
