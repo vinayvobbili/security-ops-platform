@@ -5,11 +5,9 @@ from webex_bot.webex_bot import WebexBot
 from webexteamssdk import WebexTeamsAPI
 
 from config import get_config
-from heatmap import HeatMap
 from helper_methods import log_activity
 from inflow import Inflow
 from lifespan import Lifespan
-from outflow import Outflow
 from test import Test
 
 # Load configuration

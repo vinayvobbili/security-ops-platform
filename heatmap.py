@@ -49,7 +49,7 @@ def create_choropleth_map():
             country_key = x_cartopy_country_name_mapping.get(country, country)
             data[country_key] = ticket_counts_by_country[country] / host_count
 
-    print(ticket_counts_by_country)
+    # print(ticket_counts_by_country)
 
     cmap = cm.YlOrRd
     norm = colors.Normalize(vmin=min(data.values()), vmax=max(data.values()))
