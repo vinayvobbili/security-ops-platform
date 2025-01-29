@@ -41,7 +41,7 @@ class ADOWorkItemRetriever:
         """
         today = datetime.now(eastern).strftime('%Y-%m-%dT%H:%M:%SZ')
         wiql_query = f'''SELECT [System.Id], [System.State] FROM WorkItems 
-                        WHERE [System.AreaPath] Under "Acme-Cyber-Security\\METCIRT\\METCIRT Tier III" 
+                        WHERE [System.AreaPath] Under "Acme-Cyber-Security\\{config.ticket_type_prefix}\\{config.ticket_type_prefix} Tier III" 
                         AND [System.CreatedDate] >= @Today - {days_back}'''
 
         wiql_endpoint = f'{self.base_url}/wit/wiql?api-version=6.0'

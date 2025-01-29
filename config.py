@@ -25,7 +25,12 @@ def get_config():
         azdo_pat=os.environ["AZDO_PERSONAL_ACCESS_TOKEN"],
         cs_client_id=os.environ["CROWD_STRIKE_CLIENT_ID"],
         cs_client_secret=os.environ["CROWD_STRIKE_CLIENT_SECRET"],
-        webex_host_announcements_room_id=os.environ["WEBEX_HOST_ANNOUNCEMRNTS_ROOM_ID"]
+        webex_host_announcements_room_id=os.environ["WEBEX_HOST_ANNOUNCEMENTS_ROOM_ID"],
+        triage_timer=os.environ["TRIAGE_TIMER"],
+        lessons_learned_time=os.environ["LESSONS_LEARNED_TIME"],
+        investigation_time=os.environ["INVESTIGATION_TIME"],
+        eradication_time=os.environ["ERADICATION_TIME"],
+        closure_time=os.environ["CLOSURE_TIME"]
     )
 
 
@@ -50,5 +55,9 @@ class Config:
     cs_client_id: str
     cs_client_secret: str
     webex_host_announcements_room_id: str
-
+    triage_timer: str
+    lessons_learned_time: str
+    investigation_time: str
+    eradication_time: str
+    closure_time: str
     webex_api_url: str = "https://webexapis.com/v1/messages"
