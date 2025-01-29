@@ -77,7 +77,7 @@ def generate_plot(tickets):
             color=colors,
             edgecolor='black',
             ax=ax,
-            width=0.2,  # Controls bar width
+            width=0.1,  # Controls bar width
         )
 
         ax.set_yticks(range(0, int(grouped_data.sum(axis=1).max()) + 2))  # +2 ensures enough
@@ -168,3 +168,11 @@ def send_report():
             text=f"Aging Tickets Summary!",
             markdown=f'Summary (Type=Third Party Compromise, Created=90+ days ago)\n ``` \n {generate_daily_summary(tickets)}'
         )
+
+
+def main():
+    make_chart()
+
+
+if __name__ == "__main__":
+    main()
