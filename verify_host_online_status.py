@@ -99,17 +99,17 @@ def get_device_online_status(host_name):
 
 def start():
     try:
-        print('Starting host online status verification....')
+        # print('Starting host online status verification....')
         all_lists: list = get_all_lists()
         online_hosts = []
         offline_hosts_data, offline_hosts_list_version = get_list_by_name(all_lists, offline_hosts_list_name)
-        print(f'{offline_hosts_data=}, {offline_hosts_list_version=}')
+        # print(f'{offline_hosts_data=}, {offline_hosts_list_version=}')
         offline_hosts = offline_hosts_data.split(',')
         for host_name_ticket_ID in offline_hosts:
             if '-' in host_name_ticket_ID:
                 host_name, ticket_ID = [item for item in host_name_ticket_ID.split('-')]
                 status = get_device_online_status(host_name)  # crowdstrike API
-                print(f'{host_name=}, {ticket_ID=}, {status=}')
+                # print(f'{host_name=}, {ticket_ID=}, {status=}')
                 if status == "online":
                     send_webex_notification(host_name, ticket_ID)  # webex API
                     online_hosts.append(host_name_ticket_ID)
