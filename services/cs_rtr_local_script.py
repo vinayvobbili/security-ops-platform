@@ -21,12 +21,17 @@ def get_host_id(hostname):
         raise Exception(f"Host '{hostname}' not found or error occurred: {response['body']['errors']}")
 
 
-def execute_script_on_host(host_id, script_name):
+def execute_script_on_host(hostname, script_name):
     """Execute a script on the host using RTR.
         - Takes a script from your local machine.
         - Uploads it to the target host using CrowdStrike's Real Time Response (RTR).
         - Executes the script on the target host.
     """
+    host_id = get_host_id(hostname)
+    if not host_id:
+        raise Exception(f"Host '{hostname}' not found.")
+    print(f"Host ID for '{hostname}': {host_id}")
+
     # Initiate an RTR session
     session_response = rtr_api.init_session(device_id=host_id)
     if session_response['status_code'] != 201:
@@ -73,7 +78,6 @@ if __name__ == "__main__":
     script_name = sys.argv[2]
 
     try:
-        host_id = get_host_id(hostname)
-        execute_script_on_host(host_id, script_name)
+        execute_script_on_host(hostname, script_name)
     except Exception as e:
         print(f"Error: {e}")
