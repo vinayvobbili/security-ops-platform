@@ -22,7 +22,11 @@ def get_host_id(hostname):
 
 
 def execute_script_on_host(host_id, script_name):
-    """Execute a script on the host using RTR."""
+    """Execute a script on the host using RTR.
+        - Takes a script from your local machine.
+        - Uploads it to the target host using CrowdStrike's Real Time Response (RTR).
+        - Executes the script on the target host.
+    """
     # Initiate an RTR session
     session_response = rtr_api.init_session(device_id=host_id)
     if session_response['status_code'] != 201:

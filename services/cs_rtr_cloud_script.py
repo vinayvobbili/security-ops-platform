@@ -22,7 +22,11 @@ def get_host_id(hostname):
 
 
 def execute_script_on_host(hostname, script_name):
-    """Execute a script on the host using RTR."""
+    """Execute a script on the host using RTR.
+        - The script is already uploaded to CrowdStrike's cloud.
+        - Downloads the script from CrowdStrike's cloud onto the target host.
+        - Executes the script on the target host.
+    """
     host_id = get_host_id(hostname)
     if not host_id:
         raise Exception(f"Host '{hostname}' not found.")
