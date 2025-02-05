@@ -1,3 +1,5 @@
+import base64
+
 from falconpy import Hosts, RealTimeResponse
 
 from config import get_config
@@ -22,17 +24,11 @@ def get_host_id(hostname):
 
 
 def execute_script_on_host(hostname, script_name):
-    """Execute a script on the host using RTR.
-        - Takes a script from your local machine.
-        - Uploads it to the target host using CrowdStrike's Real Time Response (RTR).
-        - Executes the script on the target host.
-    """
+    """Execute a script on the host using RTR."""
     host_id = get_host_id(hostname)
     if not host_id:
         raise Exception(f"Host '{hostname}' not found.")
-    print(f"Host ID for '{hostname}': {host_id}")
 
-    # Initiate an RTR session
     session_response = rtr_api.init_session(device_id=host_id)
     if session_response['status_code'] != 201:
         raise Exception(f"Failed to initiate RTR session: {session_response['body']['errors']}")
@@ -40,19 +36,15 @@ def execute_script_on_host(hostname, script_name):
     session_id = session_response['body']['resources'][0]['session_id']
 
     try:
-        # Upload the script to the host
         with open(script_name, 'rb') as script_file:
             script_content = script_file.read()
+            # Encode the script content in base64
+            b64_script_content = base64.b64encode(script_content).decode('utf-8')
 
-        upload_response = rtr_api.put_file(session_id=session_id, file_data=script_content, file_name=script_name)
-        if upload_response['status_code'] != 201:
-            raise Exception(f"Failed to upload script: {upload_response['body']['errors']}")
+        # Use the 'upload' command to send and execute the script
+        command_string = f"upload -f -; echo {script_name} | /usr/bin/awk -F '/' '{{print $NF}}' > uploaded_script.sh; chmod +x uploaded_script.sh; ./uploaded_script.sh"
 
-        # Execute the script
-        execute_response = rtr_api.execute_command(session_id=session_id, command_string=f"runscript -CloudFile={script_name}")
-        if execute_response['status_code'] != 201:
-            raise Exception(f"Failed to execute script: {execute_response['body']['errors']}")
-
+        execute_response = rtr_api.execute_command(session_id=session_id, command_string=command_string, file=script_content)  # Pass the file content directly
         print(f"Script '{script_name}' executed successfully on host with ID '{host_id}'.")
 
         # Optionally, retrieve the results
