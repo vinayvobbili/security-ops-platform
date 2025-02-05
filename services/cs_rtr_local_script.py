@@ -21,12 +21,8 @@ def get_host_id(hostname):
         raise Exception(f"Host '{hostname}' not found or error occurred: {response['body']['errors']}")
 
 
-def execute_script_on_host(hostname, script_name):
-    """Execute a script on the host using RTR.
-        - Takes a script from your local machine.
-        - Uploads it to the target host using CrowdStrike's Real Time Response (RTR).
-        - Executes the script on the target host.
-    """
+def execute_script_on_host(hostname, script_path):
+    """Upload and execute a script on the host using RTR."""
     host_id = get_host_id(hostname)
     if not host_id:
         raise Exception(f"Host '{hostname}' not found.")
@@ -40,23 +36,29 @@ def execute_script_on_host(hostname, script_name):
     session_id = session_response['body']['resources'][0]['session_id']
 
     try:
-        # Upload the script to the host
-        with open(script_name, 'rb') as script_file:
-            script_content = script_file.read()
+        # Read the script from the local file
+        with open(script_path, 'rb') as script_file:
+            script_content = script_file.read().decode('utf-8')  # Decode to string for RTR
 
-        upload_response = rtr_api.put_file(session_id=session_id, file_data=script_content, file_name=script_name)
+        # Upload the script to the host
+        upload_command = f"put {script_path}"
+        upload_response = rtr_api.execute_active_responder_command(session_id=session_id, base_command=upload_command, command_string=script_content)
         if upload_response['status_code'] != 201:
             raise Exception(f"Failed to upload script: {upload_response['body']['errors']}")
 
-        # Execute the script
-        execute_response = rtr_api.execute_command(session_id=session_id, command_string=f"runscript -CloudFile={script_name}")
+        print(f"Script '{script_path}' uploaded successfully to host with ID '{host_id}'.")
+
+        # Execute the script on the host
+        execute_command = f"runscript -Raw=```{script_content}```"
+        execute_response = rtr_api.execute_active_responder_command(session_id=session_id, base_command="runscript", command_string=execute_command)
         if execute_response['status_code'] != 201:
             raise Exception(f"Failed to execute script: {execute_response['body']['errors']}")
 
-        print(f"Script '{script_name}' executed successfully on host with ID '{host_id}'.")
+        print(f"Script '{script_path}' executed successfully on host with ID '{host_id}'.")
 
-        # Optionally, retrieve the results
-        result_response = rtr_api.get_command_result(session_id=session_id, sequence_id=execute_response['body']['resources'][0]['sequence_id'])
+        # Retrieve the command results
+        sequence_id = execute_response['body']['resources'][0]['sequence_id']
+        result_response = rtr_api.check_command_status(session_id=session_id, sequence_id=sequence_id)
         if result_response['status_code'] == 200:
             print("Command Result:", result_response['body']['resources'][0]['stdout'])
         else:
@@ -68,16 +70,11 @@ def execute_script_on_host(hostname, script_name):
 
 
 if __name__ == "__main__":
-    import sys
 
-    if len(sys.argv) != 3:
-        print("Usage: python execute_rtr_script.py <hostname> <script_name>")
-        sys.exit(1)
-
-    hostname = sys.argv[1]
-    script_name = sys.argv[2]
+    hostname = 'C02G7C6VMD6R'
+    script_path = 'test_script_mac.sh'
 
     try:
-        execute_script_on_host(hostname, script_name)
+        execute_script_on_host(hostname, script_path)
     except Exception as e:
         print(f"Error: {e}")
