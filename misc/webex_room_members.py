@@ -4,7 +4,7 @@ from config import get_config
 
 config = get_config()
 room_id = ''
-access_token = config.webex_bot_access_token_xsoar
+access_token = config.webex_bot_access_token_toodles
 
 headers = {
     'Authorization': f'Bearer {access_token}',
