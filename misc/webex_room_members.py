@@ -1,7 +1,10 @@
 import requests
 
+from config import get_config
+
+config = get_config()
 room_id = ''
-access_token = 'your_access_token_here'
+access_token = config.webex_bot_access_token_xsoar
 
 headers = {
     'Authorization': f'Bearer {access_token}',
