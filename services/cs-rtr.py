@@ -5,7 +5,12 @@ from config import get_config
 config = get_config()
 
 # Authenticate
-falcon_auth = OAuth2(client_id=config.cs_client_id, client_secret=config.cs_client_secret, ssl_verify=False)
+falcon_auth = OAuth2(
+    client_id=config.cs_client_id,
+    client_secret=config.cs_client_secret,
+    base_url="https://api.us-2.crowdstrike.com",
+    ssl_verify=False
+)
 falcon_rtr = RealTimeResponse(auth_object=falcon_auth)
 falcon_hosts = Hosts(auth_object=falcon_auth)
 
@@ -64,6 +69,7 @@ def get_device_id(host_filter):
 def main():
     host_filter = "hostname:'C02G7C6VMD6R'"
     device_id = get_device_id(host_filter)
+    print(f"Device ID: {device_id}")
     script_content = """
     # Your script content here (e.g., PowerShell, Bash, Python, etc.)
     # Example PowerShell:
