@@ -8,7 +8,7 @@ config = get_config()
 falcon_auth = OAuth2(
     client_id=config.cs_client_id,
     client_secret=config.cs_client_secret,
-    base_url="https://api.us-2.crowdstrike.com",
+    base_url="api.us-2.crowdstrike.com",
     ssl_verify=False
 )
 falcon_rtr = RealTimeResponse(auth_object=falcon_auth)
@@ -16,6 +16,7 @@ falcon_hosts = Hosts(auth_object=falcon_auth)
 
 
 def execute_script(device_id, script_content):
+    print(f"Executing script on device: {device_id}")
     rtr_execute_result = falcon_rtr.execute_command(
         device_id=device_id,
         command="runscript",
