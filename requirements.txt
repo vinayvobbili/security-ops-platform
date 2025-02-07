@@ -16,3 +16,4 @@ pillow~=11.1.0
 opencv-python~=4.10.0.84
 config~=0.5.1
 crowdstrike-falconpy~=1.4.6
+falcon~=4.0.2
