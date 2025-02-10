@@ -1,8 +1,8 @@
-import json
 import time
 
 import requests
 import schedule
+from webexteamssdk import WebexTeamsAPI
 
 from config import get_config
 
@@ -22,15 +22,13 @@ def save(data, version):
     # write information back to Offline_Hosts list; "data" is what is to be written back to Offline_Hosts (in string form)
     api_url = config.xsoar_api_base_url + '/lists/save'
 
-    response = requests.post(api_url, headers=xsoar_headers, json={
+    requests.post(api_url, headers=xsoar_headers, json={
         "data": ','.join(data),
         "name": offline_hosts_list_name,
         "type": "plain_text",
         "id": offline_hosts_list_name,
         "version": version
     })
-
-    # print(response.json())
 
 
 def get_all_lists() -> list:
@@ -43,18 +41,13 @@ def get_list_by_name(all_lists, list_name):
     return list_contents['data'], list_contents['version']
 
 
-def send_webex_notification(host_name, ticket_ID):
-    # send Webex message to notify host is online
-    incident_url = config.xsoar_ui_base_url + "/#/Custom/caseinfoid/" + ticket_ID
-    webex_headers = {
-        'Content-Type': 'application/json',
-        'Authorization': f"Bearer {config.webex_bot_access_token_xsoar}"
-    }
-    payload_json = {
-        'roomId': config.webex_host_announcements_room_id,
-        'markdown': f'Host {host_name} associated with ticket [#{ticket_ID}]({incident_url}) is back online'
-    }
-    requests.post(config.webex_api_url, headers=webex_headers, json=payload_json)
+def send_webex_notification(host_name, ticket_id):
+    incident_url = config.xsoar_ui_base_url + "/#/Custom/caseinfoid/" + ticket_id
+    webex_teams_api = WebexTeamsAPI(access_token=config.webex_bot_access_token_xsoar)
+    webex_teams_api.messages.create(
+        roomId=config.webex_host_announcements_room_id,
+        markdown=f'Host {host_name} associated with ticket [#{ticket_id}]({incident_url}) is now online'
+    )
 
 
 def get_access_token():
@@ -105,16 +98,16 @@ def start():
         offline_hosts_data, offline_hosts_list_version = get_list_by_name(all_lists, offline_hosts_list_name)
         # print(f'{offline_hosts_data=}, {offline_hosts_list_version=}')
         offline_hosts = offline_hosts_data.split(',')
-        for host_name_ticket_ID in offline_hosts:
-            if '-' in host_name_ticket_ID:
-                host_name, ticket_ID = [item for item in host_name_ticket_ID.split('-')]
+        for host_name_ticket_id in offline_hosts:
+            if '-' in host_name_ticket_id:
+                host_name, ticket_id = [item for item in host_name_ticket_id.split('-')]
                 status = get_device_online_status(host_name)  # crowdstrike API
                 # print(f'{host_name=}, {ticket_ID=}, {status=}')
                 if status == "online":
-                    send_webex_notification(host_name, ticket_ID)  # webex API
-                    online_hosts.append(host_name_ticket_ID)
+                    send_webex_notification(host_name, ticket_id)  # webex API
+                    online_hosts.append(host_name_ticket_id)
                 elif status is None:
-                    online_hosts.append(host_name_ticket_ID)
+                    online_hosts.append(host_name_ticket_id)
 
         if len(online_hosts) > 0:
             save(list(set(offline_hosts).difference(online_hosts)), offline_hosts_list_version)
