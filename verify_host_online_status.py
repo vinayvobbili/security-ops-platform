@@ -55,7 +55,7 @@ def get_access_token():
     url = 'https://api.us-2.crowdstrike.com/oauth2/token'
     body = {
         'client_id': config.cs_client_id,
-        'client_secret': config.cs_client_secret
+        'client_secret': config.cs_ro_client_secret
     }
     response = requests.post(url, data=body, verify=False)
     json_data = response.json()
