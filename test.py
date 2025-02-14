@@ -1,44 +1,13 @@
-import time
+from falconpy import OAuth2
 
-import pytz
-import schedule
-from webex_bot.models.command import Command
+from config import get_config
 
-import aging_tickets
-import de_stories
-import mttr_mttc
-import re_stories
-import sla_breaches
-from helper_methods import log_activity
+config = get_config()
 
+client_id = config.cs_rtr_client_id
+client_secret = config.cs_rtr_client_secret
 
-class Test(Command):
-    def __init__(self):
-        super().__init__(command_keyword="test")
+auth = OAuth2(client_id=client_id, client_secret=client_secret, base_url="https://api.us-2.crowdstrike.com")
 
-    @log_activity
-    def execute(self, message, attachment_actions, activity):
-        return "Test passed!"
-
-
-def main():
-    # run once
-    # aging_tickets.send_report()
-
-    # schedule
-    print("Starting the scheduler...")
-    schedule.every().day.at("00:01", pytz.timezone('US/Eastern')).do(lambda: (
-        aging_tickets.make_chart(),
-        mttr_mttc.make_chart(),
-        sla_breaches.make_chart(),
-        de_stories.make_chart(),
-        re_stories.make_chart()
-    ))
-
-    while True:
-        schedule.run_pending()
-        time.sleep(60)
-
-
-if __name__ in ('__main__', '__builtin__', 'builtins'):
-    main()
+token_response = auth.token()
+print(token_response)

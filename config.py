@@ -24,8 +24,10 @@ def get_config():
         azdo_de_project=os.environ["AZDO_DE_PROJECT"],
         azdo_re_project=os.environ["AZDO_RE_PROJECT"],
         azdo_pat=os.environ["AZDO_PERSONAL_ACCESS_TOKEN"],
-        cs_client_id=os.environ["CROWD_STRIKE_CLIENT_ID"],
-        cs_client_secret=os.environ["CROWD_STRIKE_CLIENT_SECRET"],
+        cs_ro_client_id=os.environ["CROWD_STRIKE_RO_CLIENT_ID"],
+        cs_ro_client_secret=os.environ["CROWD_STRIKE_RO_CLIENT_SECRET"],
+        cs_rtr_client_id=os.environ["CROWD_STRIKE_RTR_CLIENT_ID"],
+        cs_rtr_client_secret=os.environ["CROWD_STRIKE_RTR_CLIENT_SECRET"],
         webex_host_announcements_room_id=os.environ["WEBEX_HOST_ANNOUNCEMENTS_ROOM_ID"],
         triage_timer=os.environ["TRIAGE_TIMER"],
         lessons_learned_time=os.environ["LESSONS_LEARNED_TIME"],
@@ -54,8 +56,10 @@ class Config:
     azdo_de_project: str
     azdo_re_project: str
     azdo_pat: str
-    cs_client_id: str
-    cs_client_secret: str
+    cs_ro_client_id: str
+    cs_ro_client_secret: str
+    cs_rtr_client_id: str
+    cs_rtr_client_secret: str
     webex_host_announcements_room_id: str
     triage_timer: str
     lessons_learned_time: str
