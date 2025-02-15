@@ -131,7 +131,7 @@ def generate_daily_summary(tickets) -> str | None:
             return pd.DataFrame(columns=['Owner', 'Count', 'Average Age (days)']).to_markdown(index=False)
         df = pd.DataFrame(tickets)
         df['owner'] = df['owner'].astype(str).str.replace('@company.com', '', regex=False)
-        now = pd.Timestamp.now(tz='UTC')
+        now = pd.Timestamp.now(tz=eastern)
         df['created'] = pd.to_datetime(df['created'])
         df['age'] = (now - df['created']).dt.days
         table = df.groupby('owner').agg({'id': 'count', 'age': 'mean'})
