@@ -1,7 +1,5 @@
 import logging
-
 import requests
-
 from config import get_config
 
 # Load configuration
@@ -13,12 +11,13 @@ log = logging.getLogger(__name__)  # Consistent with best practices
 
 class IncidentFetcher:
     def __init__(self):
-        self.headers = {  # More generic name
+        self.headers = {
             'Authorization': config.xsoar_auth_token,
             'x-xdr-auth-id': config.xsoar_auth_id,
             'Content-Type': 'application/json'
         }
-        self.api_url = config.xsoar_api_base_url + '/incidents/search'
+        self.incident_search_url = config.xsoar_api_base_url + '/incidents/search'
+        self.incident_entries_url = config.xsoar_api_base_url + '/incidents/{incident_id}/entries'  # Endpoint for entries
 
     def get_tickets(self, query, period=None, size=10000) -> list:
         """Fetches security incidents from XSOAR."""
@@ -26,19 +25,32 @@ class IncidentFetcher:
             "filter": {
                 "query": query,
                 "page": 0,
-                "size": size,  # Good to have a large size
+                "size": size,
                 "sort": [{"field": "created", "asc": False}]
             }
         }
-        if period:  # Add period to the payload only if it's provided
+        if period:
             payload["filter"]["period"] = period
 
         try:
-            response = requests.post(self.api_url, headers=self.headers, json=payload, timeout=60)
-            response.raise_for_status()  # Raise HTTPError for bad responses (4xx or 5xx)
+            response = requests.post(self.incident_search_url, headers=self.headers, json=payload, timeout=60)
+            response.raise_for_status()
             tickets = response.json()
-            log.info(f'Retrieved {tickets.get("total", 0)} incidents')  # Handles missing "total"
-            return tickets.get('data', [])  # Return the JSON response
+            log.info(f'Retrieved {tickets.get("total", 0)} incidents')
+            return tickets.get('data', [])  # Ensure only incident data is returned
         except requests.exceptions.RequestException as e:
             log.error(f"Error fetching incidents: {e}")
-            return []  # Return an empty list on error
+            return []
+
+    def get_entries(self, incident_id) -> list:
+        """Fetches entries (comments, notes) for a given incident."""
+        url = self.incident_entries_url.format(incident_id=incident_id)  # Format the URL with incident ID
+
+        try:
+            response = requests.get(url, headers=self.headers, timeout=60)
+            response.raise_for_status()
+            entries = response.json()
+            return entries.get('data', [])  # Extract entries from response
+        except requests.exceptions.RequestException as e:
+            log.error(f"Error fetching entries for incident {incident_id}: {e}")
+            return []  # Return empty list on failure
