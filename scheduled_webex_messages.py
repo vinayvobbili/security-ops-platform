@@ -3,6 +3,7 @@ import time
 import pytz
 import schedule
 
+import abandoned_tickets
 import aging_tickets
 
 
@@ -12,7 +13,10 @@ def main():
 
     # schedule
     print("Starting the scheduler...")
-    schedule.every().day.at("08:00", pytz.timezone('US/Eastern')).do(aging_tickets.send_report)
+    schedule.every().day.at("08:00", pytz.timezone('US/Eastern')).do(lambda: (
+        aging_tickets.send_report(),
+        abandoned_tickets.send_report(),
+    ))
 
     while True:
         schedule.run_pending()
