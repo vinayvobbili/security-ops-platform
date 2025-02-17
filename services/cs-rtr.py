@@ -1,16 +1,12 @@
-from falconpy import OAuth2, Hosts, RealTimeResponse
-from config import get_config
 import base64
+
+from falconpy import OAuth2, Hosts, RealTimeResponse
+
+from config import get_config
 
 config = get_config()
 
-# Authenticate
-falcon_auth = OAuth2(
-    client_id=config.cs_ro_client_id,
-    client_secret=config.cs_ro_client_secret,
-    base_url="https://api.us-2.crowdstrike.com",
-    ssl_verify=False
-)
+falcon_auth = OAuth2(client_id=config.cs_rtr_client_id, client_secret=config.cs_rtr_client_secret, ssl_verify=False)
 falcon_rtr = RealTimeResponse(auth_object=falcon_auth)
 falcon_hosts = Hosts(auth_object=falcon_auth)
 
@@ -22,30 +18,33 @@ def execute_script(device_id, script_content):
 
     print(f"Executing script on device: {device_id}")
 
-    # Encode script for safer execution
-    encoded_script = base64.b64encode(script_content.encode()).decode()
-    command_args = f"-Base64 {encoded_script}"
+    # Explicitly use UTF-16LE encoding and -EncodedCommand
+    encoded_script = base64.b64encode(script_content.encode('utf-16le')).decode()
+    command_args = f"-EncodedCommand {encoded_script}"
 
-    # Open an RTR session first
     session_result = falcon_rtr.init_session(device_id=device_id)
-    if not session_result["resources"]:
-        print(f"Failed to create RTR session: {session_result}")
+    if session_result['status_code'] != 201:  # Check status code directly
+        print(f"Failed to create RTR session: {session_result}")  # More detailed error
         return
 
-    session_id = session_result["resources"][0]
+    session_id = session_result['body']["resources"][0]['session_id']
     print(f"RTR session started: {session_id}")
 
-    # Execute script
     rtr_execute_result = falcon_rtr.execute_command(
         session_id=session_id,
         base_command="runscript",
         command_string=command_args
     )
-    print(f"RTR Execution Result: {rtr_execute_result}")
 
-    # Clean up the session
-    falcon_rtr.delete_session(session_id=session_id)
-    print(f"RTR session {session_id} closed.")
+    if rtr_execute_result['status_code'] != 201:  # Check for success (201 Created)
+        print(f"Failed to execute script: {rtr_execute_result['body']['errors']}")  # Print full response for debugging
+        # Consider raising an exception here if you need to halt further processing
+    else:
+        print(f"Script executed successfully: {rtr_execute_result}")
+
+    cleanup_result = falcon_rtr.delete_session(session_id=session_id)
+    if cleanup_result["status_code"] != 204:  # Expected code for successful deletion
+        print(f"Failed to close session: {cleanup_result}")
 
 
 def get_device_id(host_filter):
@@ -64,12 +63,12 @@ def get_device_id(host_filter):
 
 
 def main():
-    host_filter = "hostname:'c02g7c7lmd6r'"
+    host_filter = "hostname:'C02G7C7LMD6R'"
     device_id = get_device_id(host_filter)
     print(f"Device ID: {device_id}")
 
     script_content = """
-    Write-Output "Hello from my script!"
+    Write-Host "Hello from my script!"
     """  # PowerShell example
 
     execute_script(device_id, script_content)
