@@ -1,5 +1,3 @@
-import base64
-
 from falconpy import OAuth2, Hosts, RealTimeResponse
 
 from config import get_config
@@ -16,11 +14,7 @@ def execute_script(device_id, script_content):
         print("No valid device ID provided. Skipping execution.")
         return
 
-    print(f"Executing script on device: {device_id}")
-
-    # Explicitly use UTF-16LE encoding and -EncodedCommand
-    encoded_script = base64.b64encode(script_content.encode('utf-16le')).decode()
-    command_args = f"-EncodedCommand {encoded_script}"
+    # print(f"Executing script on device: {device_id}")
 
     session_result = falcon_rtr.init_session(device_id=device_id)
     if session_result['status_code'] != 201:  # Check status code directly
@@ -28,16 +22,19 @@ def execute_script(device_id, script_content):
         return
 
     session_id = session_result['body']["resources"][0]['session_id']
-    print(f"RTR session started: {session_id}")
+    # print(f"RTR session started: {session_id}")
 
+    command_string = f"runscript -Raw=\"{script_content}\""  # Use -Raw
+
+    print(f"Executing command: {command_string}")
     rtr_execute_result = falcon_rtr.execute_command(
         session_id=session_id,
-        base_command="runscript",
-        command_string=command_args
+        base_command="run",
+        command_string=command_string
     )
 
     if rtr_execute_result['status_code'] != 201:  # Check for success (201 Created)
-        print(f"Failed to execute script: {rtr_execute_result['body']['errors']}")  # Print full response for debugging
+        print(f"Failed to execute script: {rtr_execute_result['body']['errors']}")
         # Consider raising an exception here if you need to halt further processing
     else:
         print(f"Script executed successfully: {rtr_execute_result}")
@@ -67,11 +64,13 @@ def main():
     device_id = get_device_id(host_filter)
     print(f"Device ID: {device_id}")
 
-    script_content = """
-    Write-Host "Hello from my script!"
-    """  # PowerShell example
+    # script_content = """Write-Host 'Test RTR script execution'"""  # Simple test script
+    # execute_script(device_id, script_content)
 
-    execute_script(device_id, script_content)
+    test_commands = ["whoami", "hostname", "date"]  # macOS-compatible commands
+
+    for command in test_commands:
+        execute_script(device_id, command)
 
 
 if __name__ == "__main__":
