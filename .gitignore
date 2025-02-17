@@ -4,4 +4,4 @@
 __pycache__/
 data/activity_log.csv
 host_counts_by_country.json
-/charts
+web/static/charts/*
