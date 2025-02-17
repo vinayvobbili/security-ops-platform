@@ -1,13 +1,20 @@
-from falconpy import OAuth2
+import requests
 
 from config import get_config
 
 config = get_config()
+id = "531774"
+url = f"{config.xsoar_api_base_url}/incident/load/{id}"
 
-client_id = config.cs_rtr_client_id
-client_secret = config.cs_rtr_client_secret
+headers = {
+    "authorization": config.xsoar_auth_token,
+    "x-xdr-auth-id": config.xsoar_auth_id,
+    "Accept": "application/json"
+}
 
-auth = OAuth2(client_id=client_id, client_secret=client_secret, base_url="https://api.us-2.crowdstrike.com")
+response = requests.get(url, headers=headers)
+print(response.json())
 
-token_response = auth.token()
-print(token_response)
+incident_entries_url = config.xsoar_api_base_url + f'/incidents/{id}/entries'
+response_entries = requests.get(incident_entries_url, headers=headers)
+print(response_entries.text)

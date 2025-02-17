@@ -8,7 +8,6 @@ from config import get_config
 from helper_methods import log_activity
 from inflow import Inflow
 from lifespan import Lifespan
-from test import Test
 
 # Load configuration
 config = get_config()
@@ -23,7 +22,7 @@ def send_chart(room_id, display_name, chart_name, chart_filename):
     webex_api.messages.create(
         roomId=room_id,
         text=f"{display_name}, here's the latest {chart_name} chart!",
-        files=[os.path.join(os.path.dirname(__file__), 'charts', chart_filename)]
+        files=[os.path.join(os.path.dirname(__file__), 'web/static/charts', chart_filename)]
     )
 
 
@@ -118,7 +117,6 @@ def main():
     bot.add_command(HeatMap())
     bot.add_command(DetectionEngineeringStories())
     bot.add_command(ResponseEngineeringStories())
-    bot.add_command(Test())
 
     # Start the bot
     bot.run()

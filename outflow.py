@@ -102,7 +102,7 @@ def create_nested_donut(tickets):
     # Adjust layout
     plt.subplots_adjust(left=0.1, right=0.9, top=0.9, bottom=0.1)
 
-    plt.savefig('charts/Outflow Yesterday.png')
+    plt.savefig('web/static/charts/Outflow Yesterday.png')
     plt.close(fig)
 
 
