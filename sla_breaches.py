@@ -136,7 +136,7 @@ def save_sla_breaches_chart(ticket_slas_by_periods):
     # Adjust layout to prevent label clipping
     plt.tight_layout()
 
-    plt.savefig('charts/SLA Breaches.png')
+    plt.savefig('web/static/charts/SLA Breaches.png')
     plt.close(fig)
 
 

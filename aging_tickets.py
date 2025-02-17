@@ -108,7 +108,7 @@ def generate_plot(tickets):
     plt.legend(title='Phase', loc='upper right')
     plt.tight_layout()
 
-    plt.savefig('charts/Aging Tickets.png')
+    plt.savefig('web/static/charts/Aging Tickets.png')
     plt.close(fig)
 
 
@@ -146,7 +146,7 @@ def generate_daily_summary(tickets) -> str | None:
 def send_report():
     webex_api = WebexAPI(access_token=config.webex_bot_access_token_xsoar)
     room_id = config.webex_room_id_aging_tickets
-    # room_id = config.webex_room_id_vinay_test_space
+    room_id = config.webex_room_id_vinay_test_space
 
     query = f'-status:closed -category:job type:{config.ticket_type_prefix} -type:"{config.ticket_type_prefix} Third Party Compromise"'
     period = {"byTo": "months", "toValue": 1, "byFrom": "months", "fromValue": None}

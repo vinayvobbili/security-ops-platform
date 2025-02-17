@@ -143,7 +143,7 @@ def save_mttr_mttc_chart(ticket_slas_by_periods):
     # Adjust layout to prevent label clipping
     plt.tight_layout()
 
-    plt.savefig('charts/MTTR MTTC.png')
+    plt.savefig('web/static/charts/MTTR MTTC.png')
     plt.close(fig)
 
 
