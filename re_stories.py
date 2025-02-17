@@ -111,7 +111,7 @@ def make_chart():
 
         plt.xticks(rotation=45, ha='right')  # Rotate x-axis labels for better readability
         plt.tight_layout()  # Adjust layout to prevent labels from overlapping
-        plt.savefig('charts/RE Stories.png')
+        plt.savefig('web/static/charts/RE Stories.png')
         plt.close(fig)
 
     except requests.exceptions.RequestException as e:

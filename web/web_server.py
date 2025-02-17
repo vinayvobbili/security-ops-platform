@@ -1,22 +1,11 @@
 import os
 from typing import List
 
-import uvicorn
-from fastapi import FastAPI, Request, Form
-from fastapi.responses import HTMLResponse
-from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
+from flask import Flask, render_template, request, url_for
 
 from services import transfer_ticket
 
-# Initialize FastAPI app
-app = FastAPI()
-
-app.mount("/static", StaticFiles(directory="static"), name="static")
-app.mount("/charts", StaticFiles(directory="../charts"), name="charts")  # Serve the 'charts' directory as well
-
-# Configure Jinja2 templates
-templates = Jinja2Templates(directory=".")
+app = Flask(__name__, static_folder='static', static_url_path='/static', template_folder='templates')
 
 # Supported image extensions
 IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".gif", ".svg")
@@ -26,18 +15,19 @@ def get_image_files() -> List[str]:
     """Retrieves a list of image files from the static and charts directories."""
     image_files = []
 
-    for directory, prefix in (("static/images", ""), ("../charts", "charts/")):  # add prefix for chart images
+    for subdir in ['images', 'charts']:  # Iterate through subdirectories
+        directory = os.path.join(app.static_folder, subdir)
         for filename in os.listdir(directory):
             if filename.endswith(IMAGE_EXTENSIONS):
-                image_files.append(prefix + filename)  # Prefix filenames from charts directory
+                image_files.append(os.path.join(subdir, filename))  # construct path relative to /static
     return image_files
 
 
 # Pre-defined image order for display
 IMAGE_ORDER = [
-    "Company Logo.jpg",
-    "GDnR Coin.png",
-    "IR_Metrics.jpeg",
+    "images/Company Logo.jpg",
+    "images/GDnR Coin.png",
+    "images/IR_Metrics.jpeg",
     "charts/Threatcon Level.png",
     "charts/Days Since Last Incident.jpg",
     "charts/Aging Tickets.png",
@@ -53,57 +43,67 @@ IMAGE_ORDER = [
     "End of presentation.jpg",
     "Feedback Email.png",
     "Thanks.png",
+    "images/End of presentation.jpg",
+    "images/Feedback Email.png",
+    "images/Thanks.png"
 ]
 
 
-@app.get("/full-slide-show", response_class=HTMLResponse)
-async def get_ir_dashboard_charts(request: Request):
+@app.route("/full-slide-show")
+def get_ir_dashboard_slide_show():
     """Renders the HTML template with the ordered list of image files."""
-
     image_files = get_image_files()
     # Sort image files according to the predefined order
     image_files.sort(key=lambda x: IMAGE_ORDER.index(x) if x in IMAGE_ORDER else len(IMAGE_ORDER))
+    return render_template("index.html", image_files=image_files)
 
-    return templates.TemplateResponse("index.html", {"request": request, "image_files": image_files})
 
-
-@app.get("/msoc-form", response_class=HTMLResponse)
-async def display_form(request: Request):
+@app.route("/msoc-form")
+def display_form():
     """Displays the MSOC form."""
-    return templates.TemplateResponse("msoc_form.html", {"request": request})
+    return render_template("msoc_form.html")
 
 
-@app.post("/submit-msoc-form", response_class=HTMLResponse)
-async def handle_msoc_form_submission(request: Request, site: str = Form(...), server: str = Form(...)):
+@app.route("/submit-msoc-form", methods=['POST'])
+def handle_msoc_form_submission():
     """Handles MSOC form submissions and processes the data."""
 
     # Process the submitted data.  For example, print it:
+    site = request.form.get('site')
+    server = request.form.get('server')
+
     print(f"Site: {site}")
     print(f"Server: {server}")
 
     # You can then redirect to a success page, return a response, or process the data further
-    return templates.TemplateResponse("msoc_success.html", {"request": request, "site": site, "server": server})
+    return render_template("msoc_success.html", site=site, server=server)
 
 
-@app.get("/xsoar-ticket-import-form", response_class=HTMLResponse)
-async def display_form(request: Request):
-    """Displays the MSOC form."""
-    return templates.TemplateResponse("xsoar-ticket-import-form.html", {"request": request})
+@app.route('/xsoar-ticket-import-form', methods=['GET', 'POST'])
+def xsoar_ticket_import_form():
+    if request.method == 'POST':
+        source_ticket_number = request.form.get('source_ticket_number')
+        if source_ticket_number:  # Check if the field is not empty
+            destination_ticket_number, destination_ticket_link = transfer_ticket.import_ticket(source_ticket_number)
+            return render_template('xsoar-ticket-import-response.html',
+                                   source_ticket_number=source_ticket_number,
+                                   destination_ticket_number=destination_ticket_number,
+                                   destination_ticket_link=destination_ticket_link)
+    return render_template('xsoar-ticket-import-form.html')
 
 
-@app.post("/import-xsoar-ticket", response_class=HTMLResponse)
-async def handle_msoc_form_submission(request: Request, source_ticket_number: str = Form(...)):
+@app.route("/import-xsoar-ticket", methods=['POST'])
+def import_xsoar_ticket():
     """Handles MSOC form submissions and processes the data."""
-
-    print(f"Source ticket number: {source_ticket_number}")
+    source_ticket_number = request.form.get('source_ticket_number')
     destination_ticket_number, destination_ticket_link = transfer_ticket.import_ticket(source_ticket_number)
-    return templates.TemplateResponse("xsoar-ticket-import-response.html", {
-        "request": request,
-        "source_ticket_number": source_ticket_number,
-        "destination_ticket_number": destination_ticket_number,
-        "destination_ticket_link": destination_ticket_link
-    })
+    return render_template("xsoar-ticket-import-response.html",
+                           source_ticket_number=source_ticket_number,
+                           destination_ticket_number=destination_ticket_number,
+                           destination_ticket_link=destination_ticket_link)
 
 
 if __name__ == "__main__":
-    uvicorn.run("web_server:app", host="0.0.0.0", port=8000, reload=True)
+    charts_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../charts'))
+    app.config['CHARTS_DIR'] = charts_dir
+    app.run(debug=True, host='0.0.0.0', port=8000, threaded=True)
