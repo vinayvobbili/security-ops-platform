@@ -33,7 +33,8 @@ def get_config():
         lessons_learned_time=os.environ["LESSONS_LEARNED_TIME"],
         investigation_time=os.environ["INVESTIGATION_TIME"],
         eradication_time=os.environ["ERADICATION_TIME"],
-        closure_time=os.environ["CLOSURE_TIME"]
+        closure_time=os.environ["CLOSURE_TIME"],
+        secops_shift_staffing_filename=os.environ["SECOPS_STAFFING_FILENAME"]
     )
 
 
@@ -66,4 +67,5 @@ class Config:
     investigation_time: str
     eradication_time: str
     closure_time: str
+    secops_shift_staffing_filename: str
     webex_api_url: str = "https://webexapis.com/v1/messages"
