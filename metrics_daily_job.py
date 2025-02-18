@@ -16,7 +16,6 @@ import verify_host_online_status
 
 def main():
     # run once
-    aging_tickets.send_report()
     # verify_host_online_status.start()
     # aging_tickets.make_chart()
     # outflow.make_chart()
