@@ -139,7 +139,7 @@ def create_choropleth_map():
     # Adjust layout to prevent label clipping
     plt.tight_layout()
 
-    plt.savefig('charts/Heat Map.png')
+    plt.savefig('web/static/charts/Heat Map.png')
     plt.close(fig)
 
 
