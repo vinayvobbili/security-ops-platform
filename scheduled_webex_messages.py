@@ -15,7 +15,7 @@ def main():
     print("Starting the scheduler...")
     schedule.every().day.at("08:00", pytz.timezone('US/Eastern')).do(lambda: (
         aging_tickets.send_report(),
-        abandoned_tickets.send_report(),
+        # abandoned_tickets.send_report(),
     ))
 
     while True:
