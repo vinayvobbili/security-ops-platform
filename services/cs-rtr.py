@@ -24,21 +24,40 @@ def execute_script(device_id, script_content):
     session_id = session_result['body']["resources"][0]['session_id']
     # print(f"RTR session started: {session_id}")
 
-    command_string = f"runscript -Raw=```{script_content}```"  # Use -Raw
+    command_string = script_content
 
     print(f"Executing command: {command_string}")
     rtr_execute_result = falcon_rtr.execute_command(
         session_id=session_id,
-        base_command="runscript",
+        base_command="run",
         command_string=command_string
     )
 
     if rtr_execute_result['status_code'] != 201:  # Check for success (201 Created)
         print(f"Failed to execute script: {rtr_execute_result['body']['errors']}")
         # Consider raising an exception here if you need to halt further processing
-    else:
-        print(f"Script executed successfully: {rtr_execute_result}")
 
+    # get the execution result
+    cloud_request_id = rtr_execute_result['body']['resources'][0]['cloud_request_id']
+    sequence_id = 0  # Start with the first sequence
+    complete = False
+
+    while not complete:
+        status_result = falcon_rtr.check_command_status(cloud_request_id=cloud_request_id, sequence_id=sequence_id)
+        print(status_result)
+        if status_result['status_code'] != 200:
+            print(f"Failed to get command status: {status_result}")
+            break
+
+        stdout = status_result['body']['resources'][0].get('stdout', '')
+        stderr = status_result['body']['resources'][0].get('stderr', '')
+        complete = status_result['body']['resources'][0]['complete']
+        # print(f"Sequence {sequence_id}: stdout={stdout}, stderr={stderr}, complete={complete}")
+
+        if not complete:
+            sequence_id += 1
+
+    # Cleanup: Close the session
     cleanup_result = falcon_rtr.delete_session(session_id=session_id)
     if cleanup_result["status_code"] != 204:  # Expected code for successful deletion
         print(f"Failed to close session: {cleanup_result}")
@@ -67,7 +86,7 @@ def main():
     # script_content = """Write-Host 'Test RTR script execution'"""  # Simple test script
     # execute_script(device_id, script_content)
 
-    test_commands = ["ls", "whoami", "hostname", "date"]  # macOS-compatible commands
+    test_commands = ["ls"]
 
     for command in test_commands:
         execute_script(device_id, command)
