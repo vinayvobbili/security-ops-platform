@@ -21,7 +21,7 @@ with open('data/cell_names_by_shift.json', 'r') as f:
     cell_names_by_shift = json.load(f)
 
 
-def announce_shift_staffing(shift):
+def announce_shift_change(shift):
     day_name = datetime.now().strftime("%A")
     shift_cell_names = cell_names_by_shift[day_name][shift]
     staffing_data = {}
@@ -44,9 +44,9 @@ def announce_shift_staffing(shift):
 
 
 def main():
-    announce_shift_staffing('morning')
-    announce_shift_staffing('afternoon')
-    announce_shift_staffing('night')
+    announce_shift_change('morning')
+    announce_shift_change('afternoon')
+    announce_shift_change('night')
 
 
 if __name__ == "__main__":
