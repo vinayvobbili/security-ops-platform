@@ -4,7 +4,7 @@ from config import get_config
 
 config = get_config()
 
-falcon_auth = OAuth2(client_id=config.cs_rtr_client_id, client_secret=config.cs_rtr_client_secret, ssl_verify=False)
+falcon_auth = OAuth2(client_id=config.cs_rtr_client_id, client_secret=config.cs_rtr_client_secret, base_url="api.us-2.crowdstrike.com", ssl_verify=False)
 falcon_rtr = RealTimeResponse(auth_object=falcon_auth)
 falcon_hosts = Hosts(auth_object=falcon_auth)
 
@@ -29,7 +29,7 @@ def execute_script(device_id, script_content):
     print(f"Executing command: {command_string}")
     rtr_execute_result = falcon_rtr.execute_command(
         session_id=session_id,
-        base_command="run",
+        base_command="runscript",
         command_string=command_string
     )
 
@@ -67,7 +67,7 @@ def main():
     # script_content = """Write-Host 'Test RTR script execution'"""  # Simple test script
     # execute_script(device_id, script_content)
 
-    test_commands = ["whoami", "hostname", "date"]  # macOS-compatible commands
+    test_commands = ["ls", "whoami", "hostname", "date"]  # macOS-compatible commands
 
     for command in test_commands:
         execute_script(device_id, command)

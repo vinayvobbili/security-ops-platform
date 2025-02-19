@@ -1,11 +1,9 @@
 import logging
 import sys
+from datetime import datetime, timezone
 
-import cv2
-import numpy as np
 import pytesseract
 from PIL import Image, ImageDraw, ImageFont
-from datetime import datetime, timezone
 
 import config
 from incident_fetcher import IncidentFetcher
@@ -151,7 +149,7 @@ def make_chart():
         modifier.update_counter(
             "web/static/images/base/days since last incident.jpg",
             get_days_since_last_incident(),
-            output_path="charts/Days Since Last Incident.jpg",
+            output_path="web/static/charts/Days Since Last Incident.jpg",
             font_size=50,
             font_color="green",
             background_color="#C3D3B8"  # Using hex code for lightgray
