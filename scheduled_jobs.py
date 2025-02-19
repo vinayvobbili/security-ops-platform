@@ -10,7 +10,7 @@ import heatmap
 import mttr_mttc
 import outflow
 import re_stories
-import secops_shift_staffing
+import secops
 import sla_breaches
 import verify_host_online_status
 
@@ -39,9 +39,9 @@ def main():
 
     schedule.every(5).minutes.do(verify_host_online_status.start)
 
-    schedule.every().day.at("03:30", pytz.timezone('US/Eastern')).do(lambda: secops_shift_staffing.announce_shift_staffing('morning'))
-    schedule.every().day.at("11:30", pytz.timezone('US/Eastern')).do(lambda: secops_shift_staffing.announce_shift_staffing('afternoon'))
-    schedule.every().day.at("19:30", pytz.timezone('US/Eastern')).do(lambda: secops_shift_staffing.announce_shift_staffing('night'))
+    schedule.every().day.at("03:30", pytz.timezone('US/Eastern')).do(lambda: secops.announce_shift_change('morning'))
+    schedule.every().day.at("11:30", pytz.timezone('US/Eastern')).do(lambda: secops.announce_shift_change('afternoon'))
+    schedule.every().day.at("19:30", pytz.timezone('US/Eastern')).do(lambda: secops.announce_shift_change('night'))
 
     while True:
         schedule.run_pending()
