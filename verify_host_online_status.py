@@ -43,7 +43,7 @@ def get_list_by_name(all_lists, list_name):
 
 def send_webex_notification(host_name, ticket_id):
     incident_url = config.xsoar_ui_base_url + "/#/Custom/caseinfoid/" + ticket_id
-    webex_teams_api = WebexTeamsAPI(access_token=config.webex_bot_access_token_xsoar)
+    webex_teams_api = WebexTeamsAPI(access_token=config.webex_bot_access_token_soar)
     webex_teams_api.messages.create(
         roomId=config.webex_host_announcements_room_id,
         markdown=f'Host {host_name} associated with ticket [#{ticket_id}]({incident_url}) is now online'

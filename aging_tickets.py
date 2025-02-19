@@ -144,7 +144,7 @@ def generate_daily_summary(tickets) -> str | None:
 
 
 def send_report():
-    webex_api = WebexAPI(access_token=config.webex_bot_access_token_xsoar)
+    webex_api = WebexAPI(access_token=config.webex_bot_access_token_soar)
     room_id = config.webex_room_id_aging_tickets
     # room_id = config.webex_room_id_vinay_test_space
 

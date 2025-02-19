@@ -9,10 +9,11 @@ load_dotenv()
 def get_config():
     return Config(
         webex_bot_access_token_moneyball=os.environ["WEBEX_BOT_ACCESS_TOKEN_MONEYBALL"],
-        webex_bot_access_token_xsoar=os.environ["WEBEX_BOT_ACCESS_TOKEN_XSOAR"],
+        webex_bot_access_token_soar=os.environ["WEBEX_BOT_ACCESS_TOKEN_SOAR"],
         webex_bot_access_token_toodles=os.environ["WEBEX_BOT_ACCESS_TOKEN_TOODLES"],
         webex_room_id_aging_tickets=os.environ["WEBEX_ROOM_ID_AGING_TICKETS"],
         webex_room_id_vinay_test_space=os.environ["WEBEX_ROOM_ID_VINAY_TEST_SPACE"],
+        webex_room_id_soc_shift_updates=os.environ["WEBEX_ROOM_ID_SOC_SHIFT_UPDATES"],
         xsoar_api_base_url=os.environ["XSOAR_API_BASE_URL"],
         xsoar_ui_base_url=os.environ["XSOAR_UI_BASE_URL"],
         xsoar_auth_token=os.environ["XSOAR_AUTH_TOKEN"],
@@ -42,10 +43,11 @@ def get_config():
 class Config:
     """Configuration settings for the application."""
     webex_bot_access_token_moneyball: str
-    webex_bot_access_token_xsoar: str
+    webex_bot_access_token_soar: str
     webex_bot_access_token_toodles: str
     webex_room_id_aging_tickets: str
     webex_room_id_vinay_test_space: str
+    webex_room_id_soc_shift_updates: str
     xsoar_api_base_url: str
     xsoar_ui_base_url: str
     xsoar_auth_token: str
