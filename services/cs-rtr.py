@@ -24,7 +24,7 @@ def execute_script(device_id, script_content):
     session_id = session_result['body']["resources"][0]['session_id']
     # print(f"RTR session started: {session_id}")
 
-    command_string = f"runscript -Raw=\"{script_content}\""  # Use -Raw
+    command_string = f"runscript -Raw=```{script_content}```"  # Use -Raw
 
     print(f"Executing command: {command_string}")
     rtr_execute_result = falcon_rtr.execute_command(
