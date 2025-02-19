@@ -16,12 +16,6 @@ wb = load_workbook('data/' + config.secops_shift_staffing_filename)
 # Select the sheet
 sheet = wb['Jan - Feb 2025']
 
-# Remove all conditional formatting
-sheet.conditional_formatting.clear()
-
-# Save the workbook
-wb.save('data/your_workbook.xlsx')
-
 # get the cell names by shift from the sheet
 with open('data/cell_names_by_shift.json', 'r') as f:
     cell_names_by_shift = json.load(f)
