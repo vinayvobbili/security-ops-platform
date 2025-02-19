@@ -3,8 +3,8 @@ import time
 import pytz
 import schedule
 
-import abandoned_tickets
 import aging_tickets
+import secops_shift_staffing
 
 
 def main():
@@ -17,6 +17,10 @@ def main():
         aging_tickets.send_report(),
         # abandoned_tickets.send_report(),
     ))
+
+    schedule.every().day.at("03:30", pytz.timezone('US/Eastern')).do(lambda: secops_shift_staffing.announce_shift_staffing('morning'))
+    schedule.every().day.at("11:30", pytz.timezone('US/Eastern')).do(lambda: secops_shift_staffing.announce_shift_staffing('afternoon'))
+    schedule.every().day.at("19:30", pytz.timezone('US/Eastern')).do(lambda: secops_shift_staffing.announce_shift_staffing('night'))
 
     while True:
         schedule.run_pending()
