@@ -390,5 +390,10 @@
         "AC31"
       ]
     }
+  },
+  "shift_timings": {
+    "night": "C10",
+    "morning": "C19",
+    "afternoon": "C34"
   }
 }

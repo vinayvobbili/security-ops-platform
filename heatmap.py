@@ -22,15 +22,6 @@ eastern = timezone('US/Eastern')  # Define the Eastern time zone
 QUERY_TEMPLATE = '-category:job status:closed type:{ticket_type_prefix} -owner:""'
 PERIOD = {"byFrom": "days", "fromValue": 30}
 
-with open('data/host_counts_by_country.json', 'r') as f:
-    host_counts_by_country = json.load(f)
-
-with open('data/country_name_abbreviations.json', 'r') as f:
-    country_name_abbreviations = json.load(f)
-
-with open('data/x_cartopy_country_name_mapping.json', 'r') as f:
-    x_cartopy_country_name_mapping = json.load(f)
-
 
 def create_choropleth_map():
     """Create a world choropleth map using Cartopy."""
@@ -144,4 +135,13 @@ def create_choropleth_map():
 
 
 if __name__ in ('__main__', '__builtin__', 'builtins'):
+    with open('data/host_counts_by_country.json', 'r') as f:
+        host_counts_by_country = json.load(f)
+
+    with open('data/country_name_abbreviations.json', 'r') as f:
+        country_name_abbreviations = json.load(f)
+
+    with open('data/x_cartopy_country_name_mapping.json', 'r') as f:
+        x_cartopy_country_name_mapping = json.load(f)
+
     create_choropleth_map()
