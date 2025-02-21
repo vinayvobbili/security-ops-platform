@@ -52,6 +52,7 @@ def announce_shift_change(shift):
         markdown=f"Good **{shift.upper()}**! A new shift's starting now!\n"
                  f"Timings: {sheet[cell_names_by_shift['shift_timings'][shift]].value}\n"
                  f"Open METCIRT* tickets: {get_open_tickets()}\n"
+                 f"Hosts in Containment: US123, IN456, AU789\n"
                  f"Staffing:\n"
                  f"```\n{shift_data_table}\n```"
     )
