@@ -16,6 +16,9 @@ import verify_host_online_status
 
 
 def main():
+    """
+    Main function to run the scheduled jobs.
+    """
     # run once
     '''
     aging_tickets.make_chart(),
