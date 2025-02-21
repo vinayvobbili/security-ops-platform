@@ -18,7 +18,6 @@ import verify_host_online_status
 def main():
     # run once
     '''
-    aging_tickets.send_report()
     aging_tickets.make_chart(),
     mttr_mttc.make_chart(),
     sla_breaches.make_chart(),
