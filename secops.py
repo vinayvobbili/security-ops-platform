@@ -10,7 +10,7 @@ from incident_fetcher import IncidentFetcher
 
 config = get_config()
 webex_api = WebexAPI(config.webex_bot_access_token_soar)
-room_id = config.webex_room_id_vinay_test_space
+room_id = config.webex_room_id_soc_shift_updates
 
 # Load the workbook
 wb = load_workbook('data/' + config.secops_shift_staffing_filename)
