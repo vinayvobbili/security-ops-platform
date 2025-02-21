@@ -10,7 +10,7 @@ from incident_fetcher import IncidentFetcher
 
 config = get_config()
 webex_api = WebexAPI(config.webex_bot_access_token_soar)
-room_id = config.webex_room_id_soc_shift_updates
+room_id = config.webex_room_id_vinay_test_space
 
 # Load the workbook
 wb = load_workbook('data/' + config.secops_shift_staffing_filename)
@@ -40,26 +40,79 @@ def announce_shift_change(shift):
 
     # Convert staffing_data to a table with the first column as headers
     headers = list(staffing_data.keys())
-    table_data = list(zip(*staffing_data.values()))
-    table = tabulate(table_data, headers=headers, tablefmt="simple")
+    shift_data_table = list(zip(*staffing_data.values()))
+    shift_data_table = tabulate(shift_data_table, headers=headers, tablefmt="simple")
 
     # print(f"{shift.upper()} Shift Staffing:\n{table}")
 
-    # Send message to Webex room
+    # Send new shift starting message to Webex room
     webex_api.messages.create(
         roomId=room_id,
-        text=f"Shift Staffing Update!",
-        markdown=f"Good {shift.upper()}! A new shift's starting now!\n"
+        text=f"Shift Change Notice!",
+        markdown=f"Good **{shift.upper()}**! A new shift's starting now!\n"
                  f"Timings: {sheet[cell_names_by_shift['shift_timings'][shift]].value}\n"
                  f"Open METCIRT* tickets: {get_open_tickets()}\n"
                  f"Staffing:\n"
-                 f"```\n{table}\n```"
+                 f"```\n{shift_data_table}\n```"
+    )
+
+    # Send previous shift performance to Webex room
+    period = {
+        "byFrom": "hours",
+        "fromValue": 8,
+        "byTo": "hours",
+        "toValue": 0
+    }
+    incident_fetcher = IncidentFetcher()
+    base_query = f'-category:job type:{config.ticket_type_prefix} -owner:""'
+    inflow = incident_fetcher.get_tickets(
+        query=base_query,
+        period=period
+    )
+    outflow = incident_fetcher.get_tickets(
+        query=base_query + ' -status:closed',
+        period=period
+    )
+    response_sla_breaches = incident_fetcher.get_tickets(
+        query=base_query + ' responsesla.slaStatus:late',
+        period=period
+    )
+    containment_sla_breaches = incident_fetcher.get_tickets(
+        query=base_query + ' containmentsla.slaStatus:late',
+        period=period
+    )
+    total_time_to_respond = 0
+    total_time_to_contain = 0
+    for ticket in inflow:
+        total_time_to_respond += ticket['CustomFields']['responsesla']['totalDuration']
+        total_time_to_contain += ticket['CustomFields']['containmentsla']['totalDuration']
+
+    shift_performance = {
+        'Shift Lead': 'John Doe',
+        'Inflow': len(inflow),
+        'Outflow': len(outflow),
+        'Response SLA Breaches': len(response_sla_breaches),
+        'Containment SLA Breaches': len(containment_sla_breaches),
+        'MTTR': f"{int(total_time_to_respond // 60)}:{int(total_time_to_respond % 60):02d}",
+        'MTTC': f"{int(total_time_to_contain // 60)}:{int(total_time_to_contain % 60):02d}"
+    }
+    shift_performance = tabulate(shift_performance.items(), tablefmt="simple")
+    webex_api.messages.create(
+        roomId=room_id,
+        text=f"Previous Shift Performance!",
+        markdown=f"**Previous Shift Performance**:\n"
+                 f"```\n{shift_performance}\n```"
+    )
+    webex_api.messages.create(
+        roomId=room_id,
+        text=f"Management Notes",
+        markdown=f"**Management Notes**: Lorem Ipsum Dolor Sit Amet Consectetur Adipiscing Elit."
     )
 
 
 def main():
-    announce_shift_change('morning')
-    # announce_shift_change('afternoon')
+    # announce_shift_change('morning')
+    announce_shift_change('afternoon')
     # announce_shift_change('night')
 
 
