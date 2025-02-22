@@ -11,7 +11,8 @@ from incident_fetcher import IncidentFetcher
 
 config = get_config()
 webex_api = WebexAPI(config.webex_bot_access_token_soar)
-room_id = config.webex_room_id_soc_shift_updates
+
+base_query = f'-category:job type:{config.ticket_type_prefix} -owner:""'
 
 # Load the workbook
 wb = load_workbook('data/' + config.secops_shift_staffing_filename)
@@ -24,15 +25,16 @@ with open('data/cell_names_by_shift.json', 'r') as f:
 
 
 def get_open_tickets():
-    all_tickets = IncidentFetcher().get_tickets(query=f'-category:job -status:Closed type:{config.ticket_type_prefix}')
+    all_tickets = IncidentFetcher().get_tickets(query=base_query + ' -status:closed')
     total_tickets = len(all_tickets)
     ticket_show_count = min(total_tickets, 30)
     ticket_base_url = config.xsoar_ui_base_url + "/Custom/caseinfoid/"
     open_tickets = [f"[{ticket['id']}]({ticket_base_url}{ticket['id']})" for ticket in all_tickets[0:ticket_show_count]]
-    return ', '.join(map(str, open_tickets)) + (f" and {total_tickets - ticket_show_count} more" if total_tickets > ticket_show_count else '')
+    diff = total_tickets - ticket_show_count
+    return ', '.join(map(str, open_tickets)) + (f" and {diff} more" if diff > 0 else '')
 
 
-def announce_shift_change(shift):
+def announce_shift_change(shift, room_id):
     day_name = datetime.now().strftime("%A")
     shift_cell_names = cell_names_by_shift[day_name][shift]
     staffing_data = {}
@@ -69,7 +71,7 @@ def announce_shift_change(shift):
         "toValue": 0
     }
     incident_fetcher = IncidentFetcher()
-    base_query = f'-category:job type:{config.ticket_type_prefix} -owner:""'
+
     inflow = incident_fetcher.get_tickets(
         query=base_query,
         period=period
@@ -114,7 +116,8 @@ def main():
     """
     Main function to run the scheduled jobs.
     """
-    # announce_shift_change('morning')
+    room_id = config.webex_room_id_vinay_test_space
+    announce_shift_change('morning', room_id)
     # announce_shift_change('afternoon')
     # announce_shift_change('night')
 

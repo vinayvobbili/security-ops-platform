@@ -14,6 +14,9 @@ import secops
 import sla_breaches
 import threatcon_level
 import verify_host_online_status
+from config import get_config
+
+config = get_config()
 
 
 def main():
@@ -48,10 +51,10 @@ def main():
     ))
 
     schedule.every(5).minutes.do(verify_host_online_status.start)
-
-    schedule.every().day.at("03:30", pytz.timezone('US/Eastern')).do(lambda: secops.announce_shift_change('morning'))
-    schedule.every().day.at("11:30", pytz.timezone('US/Eastern')).do(lambda: secops.announce_shift_change('afternoon'))
-    schedule.every().day.at("19:30", pytz.timezone('US/Eastern')).do(lambda: secops.announce_shift_change('night'))
+    room_id = config.webex_room_id_soc_shift_updates
+    schedule.every().day.at("03:30", pytz.timezone('US/Eastern')).do(lambda: secops.announce_shift_change('morning', room_id))
+    schedule.every().day.at("11:30", pytz.timezone('US/Eastern')).do(lambda: secops.announce_shift_change('afternoon', room_id))
+    schedule.every().day.at("19:30", pytz.timezone('US/Eastern')).do(lambda: secops.announce_shift_change('night', room_id))
 
     while True:
         schedule.run_pending()
