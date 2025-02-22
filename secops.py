@@ -101,7 +101,10 @@ def announce_shift_change(shift, room_id):
         'Resp. SLA Breaches': len(response_sla_breaches),
         'Cont. SLA Breaches': len(containment_sla_breaches),
         'MTTR': f"{int(total_time_to_respond // 60)}:{int(total_time_to_respond % 60):02d}",
-        'MTTC': f"{int(total_time_to_contain // 60)}:{int(total_time_to_contain % 60):02d}"
+        'MTTC': f"{int(total_time_to_contain // 60)}:{int(total_time_to_contain % 60):02d}",
+        'IOCs blocked': '1.2.3.4, 5.6.7.8, example.com',
+        'Hosts contained': 'US123, IN456, AU789',
+        'Tuning requests submitted:': 'US321',
     }
     shift_performance = tabulate(shift_performance.items(), tablefmt="simple")
     webex_api.messages.create(
