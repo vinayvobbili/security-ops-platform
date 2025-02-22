@@ -55,7 +55,7 @@ def gauge(color):
     ax.plot(0, 0, 'ko', markersize=10)
 
     # Set title
-    ax.text(0, 1.4, 'Threatcon Level', ha='center', va='center', fontsize=12)
+    ax.text(0, 1.4, 'Threatcon Level', ha='center', va='center', fontsize=12, fontweight='bold')
 
     # Configure plot
     ax.set_aspect('equal')

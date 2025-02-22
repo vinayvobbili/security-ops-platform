@@ -97,6 +97,15 @@ class HeatMap(Command):
         send_chart(attachment_actions.json_data["roomId"], activity['actor']['displayName'], "Heat Map", "Heat Map.png")
 
 
+class ThreatconLevel(Command):
+    def __init__(self):
+        super().__init__(command_keyword="threatcon_level", help_message="Threatcon Level")
+
+    @log_activity
+    def execute(self, message, attachment_actions, activity):
+        send_chart(attachment_actions.json_data["roomId"], activity['actor']['displayName'], "Threatcon Level", "Threatcon Level.png")
+
+
 def main():
     """Initialize and run the Webex bot."""
 
@@ -117,6 +126,7 @@ def main():
     bot.add_command(HeatMap())
     bot.add_command(DetectionEngineeringStories())
     bot.add_command(ResponseEngineeringStories())
+    bot.add_command(ThreatconLevel())
 
     # Start the bot
     bot.run()
