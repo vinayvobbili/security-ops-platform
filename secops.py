@@ -10,7 +10,7 @@ from incident_fetcher import IncidentFetcher
 
 config = get_config()
 webex_api = WebexAPI(config.webex_bot_access_token_soar)
-room_id = config.webex_room_id_vinay_test_space
+room_id = config.webex_room_id_soc_shift_updates
 
 # Load the workbook
 wb = load_workbook('data/' + config.secops_shift_staffing_filename)
@@ -90,8 +90,8 @@ def announce_shift_change(shift):
 
     shift_performance = {
         'Shift Lead': 'John Doe',
-        'Inflow': len(inflow),
-        'Outflow': len(outflow),
+        'Tickets responded to': len(inflow),
+        'Tickets closed out': len(outflow),
         'Response SLA Breaches': len(response_sla_breaches),
         'Containment SLA Breaches': len(containment_sla_breaches),
         'MTTR': f"{int(total_time_to_respond // 60)}:{int(total_time_to_respond % 60):02d}",
@@ -104,6 +104,8 @@ def announce_shift_change(shift):
         markdown=f"**Previous Shift Performance**:\n"
                  f"```\n{shift_performance}\n```"
     )
+
+    # Send management notes to Webex room
     webex_api.messages.create(
         roomId=room_id,
         text=f"Management Notes",
@@ -112,8 +114,11 @@ def announce_shift_change(shift):
 
 
 def main():
+    """
+    Main function to run the scheduled jobs.
+    """
     # announce_shift_change('morning')
-    announce_shift_change('afternoon')
+    # announce_shift_change('afternoon')
     # announce_shift_change('night')
 
 
