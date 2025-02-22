@@ -12,6 +12,7 @@ import outflow
 import re_stories
 import secops
 import sla_breaches
+import threatcon_level
 import verify_host_online_status
 
 
@@ -42,7 +43,8 @@ def main():
         re_stories.make_chart(),
         days_since_incident.make_chart(),
         outflow.make_chart(),
-        heatmap.create_choropleth_map()
+        heatmap.create_choropleth_map(),
+        threatcon_level.make_chart(),
     ))
 
     schedule.every(5).minutes.do(verify_host_online_status.start)
