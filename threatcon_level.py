@@ -5,6 +5,7 @@ from matplotlib.patches import Arrow
 
 def gauge(color):
     # Create figure and axis
+    rad_angle = 0
     fig, ax = plt.subplots(figsize=(8, 4))
 
     # Set the gauge range
@@ -65,7 +66,6 @@ def gauge(color):
 
 
 # Create gauge with value 60
-gauge('yellow')
-plt.savefig('charts/Threatcon Level.png')
+gauge('orange')
+plt.savefig('web/static/charts/Threatcon Level.png')
 plt.close()
-
