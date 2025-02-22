@@ -65,7 +65,12 @@ def gauge(color):
     return fig
 
 
-# Create gauge with value 60
-gauge('orange')
-plt.savefig('web/static/charts/Threatcon Level.png')
-plt.close()
+def make_chart():
+    # Create gauge with value 60
+    gauge('orange')
+    plt.savefig('web/static/charts/Threatcon Level.png')
+    plt.close()
+
+
+if __name__ == '__main__':
+    make_chart()
