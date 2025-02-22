@@ -1,4 +1,5 @@
 import json
+import time
 from datetime import datetime
 
 from openpyxl import load_workbook
@@ -53,9 +54,12 @@ def announce_shift_change(shift):
                  f"Timings: {sheet[cell_names_by_shift['shift_timings'][shift]].value}\n"
                  f"Open METCIRT* tickets: {get_open_tickets()}\n"
                  f"Hosts in Containment: US123, IN456, AU789\n"
+                 f"**Management Notes**: Lorem Ipsum Dolor Sit Amet Consectetur Adipiscing Elit.\n"
                  f"Staffing:\n"
                  f"```\n{shift_data_table}\n```"
     )
+    # sleep for 5 minutes
+    time.sleep(300)
 
     # Send previous shift performance to Webex room
     period = {
@@ -92,8 +96,8 @@ def announce_shift_change(shift):
         'Shift Lead': 'John Doe',
         'Tickets responded to': len(inflow),
         'Tickets closed out': len(outflow),
-        'Response SLA Breaches': len(response_sla_breaches),
-        'Containment SLA Breaches': len(containment_sla_breaches),
+        'Resp. SLA Breaches': len(response_sla_breaches),
+        'Cont. SLA Breaches': len(containment_sla_breaches),
         'MTTR': f"{int(total_time_to_respond // 60)}:{int(total_time_to_respond % 60):02d}",
         'MTTC': f"{int(total_time_to_contain // 60)}:{int(total_time_to_contain % 60):02d}"
     }
@@ -103,13 +107,6 @@ def announce_shift_change(shift):
         text=f"Previous Shift Performance!",
         markdown=f"**Previous Shift Performance**:\n"
                  f"```\n{shift_performance}\n```"
-    )
-
-    # Send management notes to Webex room
-    webex_api.messages.create(
-        roomId=room_id,
-        text=f"Management Notes",
-        markdown=f"**Management Notes**: Lorem Ipsum Dolor Sit Amet Consectetur Adipiscing Elit."
     )
 
 
