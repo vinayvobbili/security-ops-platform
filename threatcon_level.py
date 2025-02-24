@@ -64,9 +64,10 @@ def gauge(color):
             outer_radius * np.sin(np.radians(angles)),
             color='black', linewidth=1)
 
-    # Set title with underline
-    text = ax.text(0, 1.2, f'Threatcon Level - {datetime.today().strftime("%m/%d/%Y")}', ha='center', va='center', fontsize=12, fontweight='normal')
-    text.set_path_effects([path_effects.withStroke(linewidth=1, foreground='black')])
+    # Set title with a nice font and underline
+    ax.text(0, 1.2, f'Threatcon Level - {datetime.today().strftime("%m/%d/%Y")}',
+                   ha='center', va='center', fontsize=14, fontweight='normal',
+                   fontname='Comic Sans MS')
 
     # Configure plot
     ax.set_aspect('equal')
