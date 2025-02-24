@@ -22,18 +22,19 @@ def gauge(color):
 
     # Plot the colored arcs
     radius = 1
+    # Plot the colored arcs with darker colors
     ax.plot(radius * np.cos(np.radians(angles[red])),
             radius * np.sin(np.radians(angles[red])),
-            color='red', linewidth=20)
+            color='#8B0000', linewidth=20)  # Dark red
     ax.plot(radius * np.cos(np.radians(angles[orange])),
             radius * np.sin(np.radians(angles[orange])),
-            color='orange', linewidth=20)
+            color='#FF8C00', linewidth=20)  # Dark orange
     ax.plot(radius * np.cos(np.radians(angles[yellow])),
             radius * np.sin(np.radians(angles[yellow])),
-            color='yellow', linewidth=20)
+            color='#FFD700', linewidth=20)  # Dark yellow
     ax.plot(radius * np.cos(np.radians(angles[green])),
             radius * np.sin(np.radians(angles[green])),
-            color='green', linewidth=20)
+            color='#006400', linewidth=20)  # Dark green
 
     # Add the arrow (needle)
     if color == 'red':
