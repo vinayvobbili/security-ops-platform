@@ -45,8 +45,8 @@ def gauge(color):
     elif color == 'green':
         rad_angle = np.radians(157.5)
 
-    arrow_length = 0.72
-    arrow_width = 0.05
+    arrow_length = 0.75
+    arrow_width = 0.04
     arrow = FancyArrow(0, 0,
                        arrow_length * np.cos(rad_angle),
                        arrow_length * np.sin(rad_angle),
