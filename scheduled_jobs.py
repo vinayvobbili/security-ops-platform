@@ -6,7 +6,6 @@ import schedule
 import aging_tickets
 import days_since_incident
 import de_stories
-import heatmap
 import mttr_mttc
 import outflow
 import re_stories
@@ -29,6 +28,8 @@ def main():
     mttr_mttc.make_chart(),
     sla_breaches.make_chart(),
     outflow.make_chart(),
+    # heatmap.create_choropleth_map(),
+    threatcon_level.make_chart(),
     '''
 
     # schedule
@@ -46,7 +47,6 @@ def main():
         re_stories.make_chart(),
         days_since_incident.make_chart(),
         outflow.make_chart(),
-        heatmap.create_choropleth_map(),
         threatcon_level.make_chart(),
     ))
 

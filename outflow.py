@@ -59,7 +59,7 @@ def create_nested_donut(tickets):
     ]
 
     # Create figure and axis
-    fig, ax = plt.subplots(figsize=(10, 4))
+    fig, ax = plt.subplots(figsize=(8, 6))
 
     # Plot outer ring - with larger radius and width
     ax.pie(type_values, radius=1, labels=types, labeldistance=1,
