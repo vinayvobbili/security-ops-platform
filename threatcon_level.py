@@ -1,6 +1,6 @@
 import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib.patches import Arrow
+from matplotlib.patches import FancyArrow
 
 
 def gauge(color):
@@ -42,20 +42,20 @@ def gauge(color):
     elif color == 'green':
         rad_angle = np.radians(157.5)
 
-    arrow_length = 0.9
-    arrow_width = 0.1
-    arrow = Arrow(0, 0,
-                  arrow_length * np.cos(rad_angle),
-                  arrow_length * np.sin(rad_angle),
-                  width=arrow_width,
-                  color='black')
+    arrow_length = 0.72
+    arrow_width = 0.05
+    arrow = FancyArrow(0, 0,
+                       arrow_length * np.cos(rad_angle),
+                       arrow_length * np.sin(rad_angle),
+                       width=arrow_width,
+                       color='black')
     ax.add_patch(arrow)
 
     # Add a center dot
     ax.plot(0, 0, 'ko', markersize=10)
 
-    # Set title
-    ax.text(0, 1.4, 'Threatcon Level', ha='center', va='center', fontsize=12, fontweight='bold')
+    # Set title with padding
+    ax.text(0, 1.2, 'Today\'s Threatcon Level', ha='center', va='center', fontsize=12, fontweight='bold')
 
     # Configure plot
     ax.set_aspect('equal')
@@ -67,8 +67,13 @@ def gauge(color):
 
 def make_chart():
     # Create gauge with value 60
-    gauge('orange')
-    plt.savefig('web/static/charts/Threatcon Level.png')
+    fig = gauge('orange')
+
+    # Add a thin black border around the figure
+    fig.patch.set_edgecolor('black')
+    fig.patch.set_linewidth(10)
+
+    fig.savefig('web/static/charts/Threatcon Level.png', format='png', bbox_inches='tight', pad_inches=0.1)
     plt.close()
 
 
