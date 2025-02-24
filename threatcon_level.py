@@ -1,3 +1,6 @@
+from datetime import datetime
+
+import matplotlib.patheffects as path_effects
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.patches import FancyArrow
@@ -54,8 +57,9 @@ def gauge(color):
     # Add a center dot
     ax.plot(0, 0, 'ko', markersize=10)
 
-    # Set title with padding
-    ax.text(0, 1.2, 'Today\'s Threatcon Level', ha='center', va='center', fontsize=12, fontweight='bold')
+    # Set title with underline
+    text = ax.text(0, 1.2, f'Threatcon Level - {datetime.today().strftime("%m/%d/%Y")}', ha='center', va='center', fontsize=12, fontweight='normal')
+    text.set_path_effects([path_effects.withStroke(linewidth=1, foreground='black')])
 
     # Configure plot
     ax.set_aspect('equal')
