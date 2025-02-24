@@ -57,6 +57,12 @@ def gauge(color):
     # Add a center dot
     ax.plot(0, 0, 'ko', markersize=10)
 
+    # Add a black line along the top edge of the gauge, moved outward a bit
+    outer_radius = 1.05  # Adjust this value to move the line outward
+    ax.plot(outer_radius * np.cos(np.radians(angles)),
+            outer_radius * np.sin(np.radians(angles)),
+            color='black', linewidth=1)
+
     # Set title with underline
     text = ax.text(0, 1.2, f'Threatcon Level - {datetime.today().strftime("%m/%d/%Y")}', ha='center', va='center', fontsize=12, fontweight='normal')
     text.set_path_effects([path_effects.withStroke(linewidth=1, foreground='black')])
@@ -77,7 +83,7 @@ def make_chart():
     fig.patch.set_edgecolor('black')
     fig.patch.set_linewidth(10)
 
-    fig.savefig('web/static/charts/Threatcon Level.png', format='png', bbox_inches='tight', pad_inches=0.1)
+    fig.savefig('web/static/charts/Threatcon Level.png', format='png', bbox_inches='tight', pad_inches=0.2)
     plt.close()
 
 
