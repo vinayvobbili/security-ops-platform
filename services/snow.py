@@ -16,7 +16,7 @@ class ServiceNowClient:
         cred_bytes = credentials.encode("utf-8")
         encoded_u = base64.b64encode(cred_bytes)
         header = {'Authorization': 'Basic %s' % encoded_u, 'Content-Type': 'application/json', 'X-IBM-Client-Id': self.client_id}
-        token_response = requests.get(url, headers=header, auth=(self.user_name, self.password))
+        token_response = requests.get(url, headers=header, auth=(self.user_name, self.password), verify=False)
         if not token_response:
             err_msg = 'Authorization Error: User has no authorization to create a token.' \
                       ' Please make sure you entered the credentials correctly.'
@@ -25,6 +25,9 @@ class ServiceNowClient:
 
 
 base_url = 'https://portal.internal.amer.apic.company.com/acme/production'
-client_id = demisto.params().get('ClientID')
-
+client_id = ''
+user_name = ''
+password = ''
 client = ServiceNowClient(base_url, user_name, password, client_id)
+
+print(client.get_token_request())
