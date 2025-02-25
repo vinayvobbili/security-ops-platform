@@ -20,7 +20,7 @@ class ServiceNowClient:
         cred_bytes = credentials.encode("utf-8")
         encoded_u = base64.b64encode(cred_bytes)
         header = {'Authorization': 'Basic %s' % encoded_u, 'Content-Type': 'application/json', 'X-IBM-Client-Id': self.client_id}
-        response = requests.get(url, headers=header, auth=(self.user_name, self.password), verify=False)
+        response = requests.get(url, headers=header, auth=(self.user_name, self.password))
         print(response.text)
         return response.json()['access_token']
 
