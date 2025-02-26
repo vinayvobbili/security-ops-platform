@@ -324,7 +324,6 @@ class ServiceNowClient:
         self.cleanup()
 
 
-# Example usage
 if __name__ == "__main__":
 
     try:
