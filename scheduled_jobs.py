@@ -16,6 +16,7 @@ import verify_host_online_status
 from config import get_config
 
 config = get_config()
+eastern = pytz.timezone('US/Eastern')
 
 
 def main():
@@ -34,12 +35,12 @@ def main():
 
     # schedule
     print("Starting the scheduler...")
-    schedule.every().day.at("08:00", pytz.timezone('US/Eastern')).do(lambda: (
+    schedule.every().day.at("08:00", eastern).do(lambda: (
         aging_tickets.send_report(),
         # abandoned_tickets.send_report(),
     ))
 
-    schedule.every().day.at("00:01", pytz.timezone('US/Eastern')).do(lambda: (
+    schedule.every().day.at("00:01", eastern).do(lambda: (
         aging_tickets.make_chart(),
         mttr_mttc.make_chart(),
         sla_breaches.make_chart(),
@@ -52,9 +53,9 @@ def main():
 
     schedule.every(5).minutes.do(verify_host_online_status.start)
     room_id = config.webex_room_id_soc_shift_updates
-    schedule.every().day.at("03:30", pytz.timezone('US/Eastern')).do(lambda: secops.announce_shift_change('morning', room_id))
-    schedule.every().day.at("11:30", pytz.timezone('US/Eastern')).do(lambda: secops.announce_shift_change('afternoon', room_id))
-    schedule.every().day.at("19:30", pytz.timezone('US/Eastern')).do(lambda: secops.announce_shift_change('night', room_id))
+    schedule.every().day.at("03:30", eastern).do(lambda: secops.announce_shift_change('morning', room_id))
+    schedule.every().day.at("11:30", eastern).do(lambda: secops.announce_shift_change('afternoon', room_id))
+    schedule.every().day.at("19:30", eastern).do(lambda: secops.announce_shift_change('night', room_id))
 
     while True:
         schedule.run_pending()
