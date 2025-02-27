@@ -328,7 +328,7 @@ if __name__ == "__main__":
 
     try:
         # Create a client instance
-        with ServiceNowClient(config.snow_base_url, config.snow_functional_account_id, config.snow_functional_account_password, config.snow_client_key) as client:
+        with ServiceNowClient(config.snow_base_url, config.snow_functional_account_id, config.snow_functional_account_password, config.snow_creds) as client:
             # Example 1: Get token
             token = client.get_token()
             logger.info(f"Access token: {token[:10]}...")
