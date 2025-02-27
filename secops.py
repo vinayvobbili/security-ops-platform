@@ -94,14 +94,17 @@ def announce_shift_change(shift, room_id):
         total_time_to_respond += ticket['CustomFields']['responsesla']['totalDuration']
         total_time_to_contain += ticket['CustomFields']['containmentsla']['totalDuration']
 
+    mean_time_to_respond = total_time_to_respond / len(inflow)
+    mean_time_to_contain = total_time_to_contain / len(inflow)
+
     shift_performance = {
         'Shift Lead': 'John Doe',
         'Tickets responded to': len(inflow),
         'Tickets closed out': len(outflow),
         'Resp. SLA Breaches': len(response_sla_breaches),
         'Cont. SLA Breaches': len(containment_sla_breaches),
-        'MTTR': f"{int(total_time_to_respond // 60)}:{int(total_time_to_respond % 60):02d}",
-        'MTTC': f"{int(total_time_to_contain // 60)}:{int(total_time_to_contain % 60):02d}",
+        'MTTR': f"{int(mean_time_to_respond // 60)}:{int(mean_time_to_respond % 60):02d}",
+        'MTTC': f"{int(mean_time_to_contain // 60)}:{int(mean_time_to_contain % 60):02d}",
         'IOCs blocked': '1.2.3.4, 5.6.7.8, example.com',
         'Hosts contained': 'US123, IN456, AU789',
         'Tuning requests submitted:': 'US321',
