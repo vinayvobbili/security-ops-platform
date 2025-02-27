@@ -22,7 +22,7 @@ def execute_script(device_id, script_content):
         return
 
     session_id = session_result['body']["resources"][0]['session_id']
-    # print(f"RTR session started: {session_id}")
+    print(f"RTR session started. Session ID: {session_id}")
 
     command_string = script_content
 
@@ -32,6 +32,7 @@ def execute_script(device_id, script_content):
         base_command="run",
         command_string=command_string
     )
+    print(f"RTR execution result: {rtr_execute_result}")
 
     if rtr_execute_result['status_code'] != 201:  # Check for success (201 Created)
         print(f"Failed to execute script: {rtr_execute_result['body']['errors']}")
