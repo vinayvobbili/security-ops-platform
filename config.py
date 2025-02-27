@@ -36,7 +36,11 @@ def get_config():
         eradication_time=os.environ["ERADICATION_TIME"],
         closure_time=os.environ["CLOSURE_TIME"],
         secops_shift_staffing_filename=os.environ["SECOPS_STAFFING_FILENAME"],
-        snow_creds=os.environ["SNOW_CREDS"],
+        snow_client_key=os.environ["SNOW_CLIENT_KEY"],
+        snow_client_secret=os.environ["SNOW_CLIENT_SECRET"],
+        snow_functional_account_id=os.environ["SNOW_FUNCTIONAL_ACCOUNT_ID"],
+        snow_functional_account_password=os.environ["SNOW_FUNCTIONAL_ACCOUNT_PASSWORD"],
+        snow_base_url=os.environ["SNOW_BASE_URL"],
     )
 
 
@@ -71,6 +75,10 @@ class Config:
     eradication_time: str
     closure_time: str
     secops_shift_staffing_filename: str
-    snow_creds: str
+    snow_client_key: str
+    snow_client_secret: str
+    snow_functional_account_id: str
+    snow_functional_account_password: str
+    snow_base_url: str
 
     webex_api_url: str = "https://webexapis.com/v1/messages"
