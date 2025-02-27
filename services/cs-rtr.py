@@ -1,3 +1,5 @@
+import time  # Import the time module
+
 from falconpy import OAuth2, Hosts, RealTimeResponse
 
 from config import get_config
@@ -14,11 +16,9 @@ def execute_script(device_id, script_content):
         print("No valid device ID provided. Skipping execution.")
         return
 
-    # print(f"Executing script on device: {device_id}")
-
     session_result = falcon_rtr.init_session(device_id=device_id)
     if session_result['status_code'] != 201:  # Check status code directly
-        print(f"Failed to create RTR session: {session_result}")  # More detailed error
+        print(f"Failed to create RTR session: {session_result}")
         return
 
     session_id = session_result['body']["resources"][0]['session_id']
@@ -27,36 +27,62 @@ def execute_script(device_id, script_content):
     command_string = script_content
 
     print(f"Executing command: {command_string}")
-    rtr_execute_result = falcon_rtr.execute_command(
+    rtr_execute_response = falcon_rtr.execute_command(
         session_id=session_id,
         base_command="run",
         command_string=command_string
     )
-    print(f"RTR execution result: {rtr_execute_result}")
+    print(f"RTR execution response: {rtr_execute_response}")
 
-    if rtr_execute_result['status_code'] != 201:  # Check for success (201 Created)
-        print(f"Failed to execute script: {rtr_execute_result['body']['errors']}")
-        # Consider raising an exception here if you need to halt further processing
+    if rtr_execute_response['status_code'] != 201:  # Check for success (201 Created)
+        print(f"Failed to execute script: {rtr_execute_response['body']['errors']}")
+        return
 
     # get the execution result
-    cloud_request_id = rtr_execute_result['body']['resources'][0]['cloud_request_id']
+    cloud_request_id = rtr_execute_response['body']['resources'][0]['cloud_request_id']
     sequence_id = 0  # Start with the first sequence
     complete = False
+    all_stdout = ""
+    all_stderr = ""
+    max_wait_time = 60  # Max wait time in seconds. You can set a value based on the command.
+
+    start_time = time.time()
 
     while not complete:
+        if time.time() - start_time > max_wait_time:
+            print("Maximum wait time for command reached.")
+            break;
+
         status_result = falcon_rtr.check_command_status(cloud_request_id=cloud_request_id, sequence_id=sequence_id)
-        print(status_result)
+
         if status_result['status_code'] != 200:
             print(f"Failed to get command status: {status_result}")
             break
 
-        stdout = status_result['body']['resources'][0].get('stdout', '')
-        stderr = status_result['body']['resources'][0].get('stderr', '')
-        complete = status_result['body']['resources'][0]['complete']
-        # print(f"Sequence {sequence_id}: stdout={stdout}, stderr={stderr}, complete={complete}")
+        # check if there is resources object
+        if 'resources' in status_result['body'] and status_result['body']['resources']:
+            stdout = status_result['body']['resources'][0].get('stdout', '')
+            stderr = status_result['body']['resources'][0].get('stderr', '')
+            complete = status_result['body']['resources'][0]['complete']
 
-        if not complete:
+            all_stdout += stdout
+            all_stderr += stderr
+
+            print(f"Sequence {sequence_id}:")
+            if stdout:
+                print(f"  stdout: {stdout}")
+            if stderr:
+                print(f"  stderr: {stderr}")
+            print(f"  complete: {complete}")
+            if complete:
+                break;
             sequence_id += 1
+        else:
+            print(f"No resources found in sequence {sequence_id}, waiting...")
+
+        time.sleep(10)  # Wait for 10 second before checking again. Increase if needed
+
+    print(f"Command Execution output: stdout: {all_stdout}, stderr: {all_stderr}")
 
     # Cleanup: Close the session
     cleanup_result = falcon_rtr.delete_session(session_id=session_id)
@@ -80,14 +106,14 @@ def get_device_id(host_filter):
 
 
 def main():
-    host_filter = "hostname:'C02G7C7LMD6R'"
+    host_filter = "hostname:'USHNTDTQ3'"
     device_id = get_device_id(host_filter)
     print(f"Device ID: {device_id}")
 
     # script_content = """Write-Host 'Test RTR script execution'"""  # Simple test script
     # execute_script(device_id, script_content)
 
-    test_commands = ["ls"]
+    test_commands = ["ls", "whoami", "systeminfo"]
 
     for command in test_commands:
         execute_script(device_id, command)
