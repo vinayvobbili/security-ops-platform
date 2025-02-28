@@ -1,121 +1,124 @@
+import json
+import re
 from datetime import datetime, timedelta
 
+import matplotlib.pyplot as plt
+import pandas as pd
 import pytz
-from matplotlib import pyplot as plt
-from webexteamssdk import WebexTeamsAPI
+from matplotlib import transforms
 
 from config import get_config
-from constants import TICKET_TYPE_MAPPING, IMPACT_MAPPING
 from incident_fetcher import IncidentFetcher
 
-eastern = pytz.timezone('US/Eastern')  # Define the Eastern time zone
+eastern = pytz.timezone('US/Eastern')
 
 config = get_config()
-webex_api = WebexTeamsAPI(access_token=config.webex_bot_access_token_moneyball)
+
+with open('data/detection_source_codes_by_name.json', 'r') as f:
+    detection_source_codes_by_name = json.load(f)
 
 QUERY_TEMPLATE = '-category:job type:{ticket_type_prefix} -owner:"" closed:>={start} closed:<{end}'
 
+# Define a custom order for the impacts
+CUSTOM_IMPACT_ORDER = ["Significant", "Confirmed", "Detected", "Prevented", "Ignore", "Testing", "False Positive"]
 
-def create_nested_donut(tickets):
-    eastern = pytz.timezone('US/Eastern')
 
-    # Process data for outer ring (ticket types)
-    type_counts = {}
-    impact_by_type = {}
+def create_graph(tickets):
+    if not tickets:
+        print("No tickets to plot.")
+        return
 
-    for ticket in tickets:
-        ticket_type = ticket['type'].replace(config.ticket_type_prefix, '', 1)
-        ticket_type = TICKET_TYPE_MAPPING.get(ticket_type, ticket_type)
-        impact = ticket['CustomFields'].get('impact', 'Unknown')
-        impact = IMPACT_MAPPING.get(impact, impact)
+    # Process data
+    df = pd.DataFrame(tickets)
 
-        # Count types for outer ring
-        type_counts[ticket_type] = type_counts.get(ticket_type, 0) + 1
+    # Extract the 'detectionsource' and 'impact' from the 'CustomFields' dictionary
+    df['source'] = df['CustomFields'].apply(lambda x: x.get('detectionsource'))
+    df['impact'] = df['CustomFields'].apply(lambda x: x.get('impact'))
 
-        # Count impacts within each type for inner ring
-        if ticket_type not in impact_by_type:
-            impact_by_type[ticket_type] = {}
-        impact_by_type[ticket_type][impact] = impact_by_type[ticket_type].get(impact, 0) + 1
+    for pattern, replacement in detection_source_codes_by_name.items():
+        df['source'] = df['source'].str.replace(pattern, replacement, regex=True, flags=re.IGNORECASE)
 
-    # Prepare data for plotting
-    types = list(type_counts.keys())
-    type_values = list(type_counts.values())
+    # Count the occurrences of each source and impact
+    source_impact_counts = df.groupby(['source', 'impact']).size().reset_index(name='count')
 
-    # Color scheme
-    base_colors = [
-        '#1A237E',  # Navy Blue
-        '#E65100',  # Dark Orange
-        '#1B5E20',  # Dark Green
-        '#B71C1C',  # Dark Red
-        '#4A148C',  # Dark Purple
-        '#3E2723',  # Dark Brown
-        '#006064',  # Dark Cyan
-        '#827717',  # Olive Green
-        '#004D40',  # Dark Teal
-        '#0D47A1',  # Dark Blue
-        '#33691E',  # Deep Green
-        '#FF6F00',  # Dark Amber
-        '#311B92'  # Dark Deep Purple
-    ]
+    # Sort sources by total ticket count (descending)
+    source_totals = source_impact_counts.groupby('source')['count'].sum().sort_values(ascending=False)
+    sorted_sources = source_totals.index.tolist()
+
+    # Define Colors for impacts (Updated for new values)
+    impact_colors = {
+        "Significant": "#ff0000",  # Red
+        "Confirmed": "#ffa500",  # Orange
+        "Detected": "#ffd700",  # Gold
+        "Prevented": "#008000",  # Green
+        "Ignore": "#808080",  # Gray
+        "Testing": "#add8e6",  # Light Blue
+        "False Positive": "#90ee90",  # Light green
+    }
 
     # Create figure and axis
-    fig, ax = plt.subplots(figsize=(8, 6))
+    fig, ax = plt.subplots(figsize=(12, 10))
 
-    # Plot outer ring - with larger radius and width
-    ax.pie(type_values, radius=1, labels=types, labeldistance=1,
-           colors=base_colors[:len(types)],
-           wedgeprops=dict(width=0.35, edgecolor='white'),
-           textprops={'fontsize': 8, 'wrap': True})
+    # Plot data
+    bottom = [0] * len(sorted_sources)
+    impacts = source_impact_counts['impact'].unique()
 
-    # Prepare inner ring data
-    inner_data = []
-    inner_colors = []
-    inner_labels = []
+    # Sort impacts based on the custom order
+    sorted_impacts = [impact for impact in CUSTOM_IMPACT_ORDER if impact in impacts]
 
-    for type_idx, ticket_type in enumerate(types):
-        base_color = base_colors[type_idx]
-        impacts = impact_by_type[ticket_type]
+    for impact in sorted_impacts:
+        impact_data = source_impact_counts[source_impact_counts['impact'] == impact]
 
-        # Number of impacts within this type
-        num_impacts = len(impacts)
-        # Generate progressively lighter colors for each impact
-        color_variations = [adjust_color_brightness(base_color, (i + 1) / (num_impacts + 1))
-                            for i in range(num_impacts)]
+        # Use the pre-sorted sources
+        counts = []
+        for source in sorted_sources:
+            if source in impact_data['source'].values:
+                count = impact_data.loc[impact_data['source'] == source, 'count'].iloc[0]
+                counts.append(count)
+            else:
+                counts.append(0)
 
-        for idx, (impact, count) in enumerate(impacts.items()):
-            inner_data.append(count)
-            inner_colors.append(color_variations[idx])  # Use progressively lighter colors
-            inner_labels.append(f'{impact}: {count}')
+        ax.barh(sorted_sources, counts, left=bottom, label=impact, color=impact_colors.get(impact, "#808080"),
+                edgecolor="black", linewidth=0.3)
 
-    # Plot inner ring - with smaller radius and width
-    ax.pie(inner_data, radius=0.65, labels=inner_labels, labeldistance=0.7,
-           colors=inner_colors,
-           wedgeprops=dict(width=0.25, edgecolor='white'),
-           textprops={'fontsize': 8})
+        # Add Value Labels
+        for i, count in enumerate(counts):
+            if count > 0:
+                x_pos = bottom[i] + count / 2
+                if impact in ("Ignore", "Testing", "False Positive"):
+                    ax.text(x_pos, i, str(count), ha='center', va='center', color='black', fontsize=10, fontweight='bold')
+                else:
+                    ax.text(x_pos, i, str(count), ha='center', va='center', color='white', fontsize=10, fontweight='bold')
 
-    plt.title(f'Outflow Yesterday: {len(tickets)}', pad=1, fontsize=10, fontweight='bold')
+        bottom = [b + c for b, c in zip(bottom, counts)]
 
-    # Add timestamp at bottom right
-    now_eastern = datetime.now(eastern).strftime('%m/%d/%Y %I:%M %p EST')
-    plt.figtext(0.7, 0.1, now_eastern, fontsize=6, ha='right')
+    # Extend the x-axis
+    max_x_value = max(bottom)
+    ax.set_xlim([0, max_x_value * 1.1])  # Extend 10% beyond the maximum x-value
+
+    # Add labels and title
+    ax.set_yticks(range(len(sorted_sources)))
+    ax.set_yticklabels(sorted_sources)
+    ax.set_ylabel('Detection Source')
+    ax.set_xlabel('Ticket Counts')
+
+    ax.set_title('Outflow Yesterday', fontweight='bold', fontsize=12)
+    ax.legend(title='Impact', loc='upper right')
+
+    # Add a thin black border around the figure
+    fig.patch.set_edgecolor('black')
+    fig.patch.set_linewidth(5)
+
+    # Add the current time to the chart
+    now_eastern = datetime.now(eastern).strftime('%m/%d/%Y %I:%M %p %Z')
+    """Adds a timestamp to the chart."""
+    trans = transforms.blended_transform_factory(fig.transFigure, fig.transFigure)
+    plt.text(0.08, 0.03, now_eastern, ha='left', va='bottom', fontsize=10, transform=trans)
 
     # Adjust layout
-    plt.subplots_adjust(left=0.1, right=0.9, top=0.9, bottom=0.1)
-
-    plt.savefig('web/static/charts/Outflow Yesterday.png')
+    plt.tight_layout()
+    plt.savefig('web/static/charts/Outflow.png')
     plt.close(fig)
-
-
-def adjust_color_brightness(hex_color, factor):
-    """Adjust the brightness of a hex color progressively."""
-    hex_color = hex_color.lstrip('#')
-    rgb = tuple(int(hex_color[i:i + 2], 16) for i in (0, 2, 4))
-    # Apply brightness adjustment based on the factor
-    new_rgb = tuple(
-        int(min(255, c + (255 - c) * factor)) if factor > 0 else max(0, c + c * factor)
-        for c in rgb
-    )
-    return '#{:02x}{:02x}{:02x}'.format(*new_rgb)
 
 
 def make_chart() -> None:
@@ -126,9 +129,11 @@ def make_chart() -> None:
     yesterday_start_utc = yesterday_start.astimezone(pytz.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
     yesterday_end_utc = yesterday_end.astimezone(pytz.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
 
-    query = QUERY_TEMPLATE.format(ticket_type_prefix=config.ticket_type_prefix, start=yesterday_start_utc, end=yesterday_end_utc)
+    query = QUERY_TEMPLATE.format(ticket_type_prefix=config.ticket_type_prefix, start=yesterday_start_utc,
+                                  end=yesterday_end_utc)
     tickets = IncidentFetcher().get_tickets(query=query)
-    create_nested_donut(tickets)
+    print(f"Number of tickets returned: {len(tickets)}")
+    create_graph(tickets)
 
 
 if __name__ in ('__main__', '__builtin__', 'builtins'):
