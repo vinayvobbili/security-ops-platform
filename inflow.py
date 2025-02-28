@@ -25,12 +25,23 @@ def create_stacked_bar_chart(df, x_label, y_label, title):
     # Pivot the DataFrame to get the counts of each severity per source
     df_pivot = df.pivot_table(index='source', columns='severity', values='count', fill_value=0)
 
-    # Plot the stacked bar chart
-    df_pivot.plot(kind='bar', stacked=True, ax=ax, color=['#153289', '#1f77b4', '#ff7f0e', '#2ca02c'])
+    # Plot the stacked bar chart with lighter shades
+    bars = df_pivot.plot(kind='bar', stacked=True, ax=ax, color=['#6989e8', '#ffbb78', '#98df8a', '#ff9896'])
 
     ax.set_xlabel(x_label)
     ax.set_ylabel(y_label)
     ax.set_title(title, fontweight='bold', fontsize=12)
+
+    # Increase the y-axis limit a few units over the max value
+    max_value = df_pivot.sum(axis=1).max()
+    ax.set_ylim(0, max_value + 3)
+
+    # Add count labels on top of each stack
+    for container in bars.containers:
+        for bar in container:
+            height = bar.get_height()
+            if height > 0:
+                ax.text(bar.get_x() + bar.get_width() / 2, bar.get_y() + height / 2, f'{int(height)}', ha='center', va='center', fontsize=10, fontweight='bold')
 
     plt.xticks(rotation=45, ha='right')
     plt.tight_layout()
@@ -76,7 +87,7 @@ def plot_inflow():
 
     # Add a thin black border around the figure
     fig.patch.set_edgecolor('black')
-    fig.patch.set_linewidth(10)
+    fig.patch.set_linewidth(5)
 
     # Add the current time to the chart
     now_eastern = datetime.now(eastern).strftime('%m/%d/%Y %I:%M %p %Z')
