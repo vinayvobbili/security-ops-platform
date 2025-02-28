@@ -110,6 +110,11 @@ def save_sla_breaches_chart(ticket_slas_by_periods):
 
     # Get figure and axes objects
     fig = plt.gcf()
+
+    # Add a thin black border around the figure
+    fig.patch.set_edgecolor('black')
+    fig.patch.set_linewidth(5)
+
     ax = plt.gca()
     # Transform coordinates to figure coordinates (bottom-left is 0,0)
     trans = transforms.blended_transform_factory(fig.transFigure, ax.transAxes)  # gets transform object
@@ -153,3 +158,7 @@ def make_chart():
     tickets = incident_fetcher.get_tickets(query=query, period=period)
     tickets_by_periods = get_tickets_by_periods(tickets)
     save_sla_breaches_chart(tickets_by_periods)
+
+
+if __name__ == '__main__':
+    make_chart()
