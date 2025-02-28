@@ -90,8 +90,9 @@ def execute_script(device_id, script_content):
         print(f"Failed to close session: {cleanup_result}")
 
 
-def get_device_id(host_filter):
+def get_device_id(hostname):
     """Retrieve the first device ID matching the filter."""
+    host_filter = f"hostname:'{hostname}'"
     response = falcon_hosts.query_devices_by_filter(filter=host_filter)
 
     if response.get("status_code") == 200:
@@ -106,8 +107,8 @@ def get_device_id(host_filter):
 
 
 def main():
-    host_filter = "hostname:'USHNTDTQ3'"
-    device_id = get_device_id(host_filter)
+    hostname = 'USHNTDTQ3'
+    device_id = get_device_id(hostname)
     print(f"Device ID: {device_id}")
 
     # script_content = """Write-Host 'Test RTR script execution'"""  # Simple test script

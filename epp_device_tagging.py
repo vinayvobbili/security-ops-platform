@@ -1,9 +1,17 @@
+import json
 import math
 import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import List, Optional, Dict
+from typing import List, Optional
+
+from falconpy import OAuth2, Hosts, RealTimeResponse
+
+from config import get_config
+from services.service_now import ServiceNowClient
+
+config = get_config()
 
 '''
 Here are 10 key points about what this code does:
@@ -41,21 +49,21 @@ Here are 10 key points about what this code does:
 10. Handles various edge cases and potential errors, such as empty environment lists, missing device information, and parsing timestamp data.
 '''
 
-# Load configurations from Demisto
-COUNTRY_REGION_MAP = json.loads(demisto.executeCommand('getList', {'listName': 'Country_Region_JSON'})[0]['Contents'])
+COUNTRY_REGION_MAP = {}
+with open('data/regions_by_country.json', 'r') as f:
+    COUNTRY_REGION_MAP = json.load(f)
 
-COUNTRIES_BY_CODE: Dict[str, str] = {
-    "US": "United States",
-    "JP": "Japan",
-    "S1": "Japan",
-    "KR": "Korea, Republic of",
-    "UK": "United Kingdom",
-}
-
-EMAIL_SENDER_INSTANCE = 'EWSO365 Mail Sender METCIRT'
-RECEIVER_EMAIL_ADDRESSES = ["user@company.com"]
+COUNTRIES_BY_CODE = {}
+with open('data/countries_by_code.json', 'r') as f:
+    COUNTRIES_BY_CODE = json.load(f)
 
 hosts_with_region_guessed = []
+
+falcon_auth = OAuth2(client_id=config.cs_rtr_client_id, client_secret=config.cs_rtr_client_secret, base_url="api.us-2.crowdstrike.com", ssl_verify=False)
+falcon_rtr = RealTimeResponse(auth_object=falcon_auth)
+falcon_hosts = Hosts(auth_object=falcon_auth)
+
+service_now = ServiceNowClient(config.snow_base_url, config.snow_functional_account_id, config.snow_functional_account_password, config.snow_client_key)
 
 
 class HostCategory(Enum):
@@ -82,20 +90,18 @@ class Host:
 
     def _initialize_host_data(self) -> None:
         """Initialize all host data in one method."""
-        self._set_crowd_strike_details()
+        self._set_cs_device_id()
         if self.device_id:
-            self._set_category_and_environment_from_splunk()
-            self._set_country_and_region_from_splunk()
+            self._set_host_details_from_snow()
 
-    def _set_crowd_strike_details(self) -> None:
-        try:
-            result = demisto.executeCommand("cs-falcon-search-device", {
-                "hostname": self.name,
-                "using": "CrowdstrikeFalcon_instance_1"
-            })
-            resources = result[0]['Contents'].get('resources', [])
-        except Exception as e:
-            print(f'Error while searching Falcon for {self.name}: {str(e)}')
+
+    def _set_cs_device_id(self) -> None:
+        host_filter = f"hostname:'{self.name}'"
+        response = falcon_hosts.query_devices_by_filter(filter=host_filter)
+
+        resources = []
+        if response.get("status_code") == 200:
+            resources = response["body"].get("resources", [])
 
         if resources:
             # Sort resources by 'last_seen' and get the most recent one
@@ -108,12 +114,8 @@ class Host:
         if self.device_id:
             self.current_crowd_strike_tags = resources[0]['tags']
 
-    def _set_category_and_environment_from_splunk(self) -> None:
-        host_details = demisto.executeCommand('splunk-search', {
-            'query': f'`get_host_details({self.name})`',
-            'app': "acme_app_security",
-            'using': "Splunk_PROD_METCIRT_Alerting"
-        })[0]['Contents']
+    def _set_host_details_from_snow(self) -> None:
+        host_details = service_now.get_host_details(self.name)
 
         if host_details:
             host_details = host_details[0]
@@ -125,50 +127,35 @@ class Host:
 
             self.environment = host_details.get('Environment')
 
-    def _set_country_and_region_from_splunk(self) -> None:
-        search_result = demisto.executeCommand('splunk-search', {
-            'query': f'| `get_host_country({self.name})`',
-            'app': "acme_app_security",
-            'using': "Splunk_PROD_METCIRT_Alerting"
-        })[0]['Contents'][0]
-
-        if 'country' in search_result:
-            region_country = search_result['country']
+            region_country = host_details['country']
             if region_country != 'Unknown':
                 parts = region_country.split()
                 if len(parts) == 2:
                     self.region, self.country = parts
 
-        # Special case handling
-        if self.country == 'Korea':
-            self.country = 'South Korea'
+            # Special case handling
+            if self.country == 'Korea':
+                self.country = 'South Korea'
 
-        if self.country == '':
-            # there's no country/region detail in Splunk for this host. Resort to guessing based on the hostname
-            country_code = self.name[:2]
-            self.country = COUNTRIES_BY_CODE.get(country_code)
+            if self.country == '':
+                # there's no country/region detail in Splunk for this host. Resort to guessing based on the hostname
+                country_code = self.name[:2]
+                self.country = COUNTRIES_BY_CODE.get(country_code)
 
-            if self.country:
-                self.region = COUNTRY_REGION_MAP.get(self.country)
-                if self.region:
-                    hosts_with_region_guessed.append(self.name)
+                if self.country:
+                    self.region = COUNTRY_REGION_MAP.get(self.country)
+                    if self.region:
+                        hosts_with_region_guessed.append(self.name)
 
-        # per requirement
-        if self.country == 'US':
-            self.region = 'US'
-        elif self.country == 'Japan':
-            self.region = 'Japan'
+                # per requirement
+                if self.country == 'US':
+                    self.region = 'US'
+                elif self.country == 'Japan':
+                    self.region = 'Japan'
 
-    def add_tag_to_crowd_strike(self) -> Dict:
+    def add_tag_to_crowd_strike(self):
         """Add the generated tag to CrowdStrike."""
-        if not self.device_id:
-            raise ValueError(f"Device ID is not set for host {self.name}")
-
-        return demisto.executeCommand("cs-update-device-tags", {
-            "domain_updatedevicetagsrequestv1_action": 'add',
-            "domain_updatedevicetagsrequestv1_device_ids": self.device_id,
-            "domain_updatedevicetagsrequestv1_tags": f'FalconGroupingTags/{self.new_crowd_strike_tag}'
-        })[0]['Contents']
+        falcon_hosts.update_device_tags('add', self.device_id, self.new_crowd_strike_tag)
 
     @staticmethod
     def generate_tags(hosts: List['Host']) -> None:
@@ -197,12 +184,7 @@ class Host:
                 ]
                 total = len(work_stations_by_region_country)
 
-                ring_sizes = [
-                    int(0.1 * total),
-                    int(0.2 * total),
-                    int(0.3 * total),
-                ]
-                ring_sizes.append(total - sum(ring_sizes))
+                ring_sizes = [int(0.1 * total), int(0.2 * total), int(0.3 * total), total - sum(ring_sizes)]
 
                 for ring, size in enumerate(ring_sizes, start=1):
                     for ws in work_stations_by_region_country[:size]:
@@ -212,7 +194,7 @@ class Host:
         # Process servers
         for server in servers:
             if isinstance(server.environment, list):
-                if len(server.environment):
+                if len(server.environment) > 1:
                     env = server.environment[0].lower().strip() or server.environment[1].lower().strip()
                 else:
                     print(f"Empty environment list for server")
@@ -346,73 +328,25 @@ def generate_and_email_csv_report(hosts: List[Host], problematic_hosts_report: L
                 "Current CS Tags": str(host.current_crowd_strike_tags)
             })
         except Exception as e:
-            demisto.error(f"Error processing host {host.name}: {str(e)}")
             continue
 
     if not csv_array:
         raise ValueError("No valid host data to include in report")
 
-    # Create file entry in XSOAR
-    export_result = demisto.executeCommand('ExportToCSV', {
-        'fileName': filename,
-        'csvArray': csv_array
-    })
-
-    if isError(export_result):
-        raise RuntimeError(f"Failed to create CSV file: {get_error(export_result)}")
-
-    # Get the file ID from the correct location in the response
-    if not export_result or not isinstance(export_result, list) or not export_result[0]:
-        raise RuntimeError("Invalid export result structure")
-
-    file_id = export_result[0].get('FileID')
-    if not file_id:
-        demisto.debug(f"Full export result for debugging: {json.dumps(export_result, indent=2)}")
-        raise RuntimeError("No FileID found in export result")
-
-    # Send email with the file
-    email_subject = f'Host Report - {current_time}'
-    email_body = f"""Host Report Generated: {current_time}
-
-Count of hosts with tags generated: {len(hosts)}
-
-{problematic_hosts_report}
-
-The full report of hosts with tags generated is attached as {filename}.
-\n\n
-"""
-    email_result = demisto.executeCommand('send-mail', {
-        'using': EMAIL_SENDER_INSTANCE,
-        'subject': email_subject,
-        'to': ','.join(RECEIVER_EMAIL_ADDRESSES),
-        'body': email_body,
-        'attachIDs': file_id,
-        'attachNames': filename
-    })
-
-    if isError(email_result):
-        raise RuntimeError(f"Failed to send email: {get_error(email_result)}")
-
     # Return success message
-    demisto.results({
-        'Type': entryTypes['note'],
-        'ContentsFormat': formats['markdown'],
+    success_message = {
         'Contents': {
             'Success': True,
             'HostsProcessed': len(hosts),
             'HostsInReport': len(csv_array),
-            'Recipients': RECEIVER_EMAIL_ADDRESSES,
             'Filename': filename,
-            'FileID': file_id
         },
         'HumanReadable': f"""### CSV Report Generation Summary
 - Successfully generated report: {filename}
 - Total hosts processed: {len(hosts)}
 - Hosts included in report: {len(csv_array)}
-- Report emailed to: {', '.join(RECEIVER_EMAIL_ADDRESSES)}
-- File ID: {file_id}
 """
-    })
+    }
 
 
 def main() -> None:
@@ -420,7 +354,7 @@ def main() -> None:
 
     # Fetch and initialize hosts
     fetch_start = time.time()
-    hosts_list = demisto.executeCommand('getList', {'listName': 'EPP_Assets'})[0]['Contents']
+    hosts_list = []
 
     hosts = [Host.create_and_initialize(name.strip()) for name in hosts_list.splitlines() if name.strip()]
     fetch_end = time.time()
@@ -463,7 +397,7 @@ Fetching and initializing hosts took {format_duration(fetch_duration)}
 Generating tags took {format_duration(generate_tag_duration)}
 Total execution time: {format_duration(total_duration)}"""
 
-    return_results(f"{problematic_hosts_report}\n\n{time_report}\n\n{output_table}\n")
+    return (f"{problematic_hosts_report}\n\n{time_report}\n\n{output_table}\n")
 
 
 if __name__ in ('__main__', '__builtin__', 'builtins'):
