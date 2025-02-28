@@ -1,11 +1,14 @@
 import json
+import os  # Import the 'os' module
 import re
 from datetime import datetime, timedelta
 
 import matplotlib.pyplot as plt
 import pandas as pd
 import pytz
+from PIL import Image
 from matplotlib import transforms
+from matplotlib.offsetbox import OffsetImage, AnnotationBbox  # Import necessary classes
 
 from config import get_config
 from incident_fetcher import IncidentFetcher
@@ -21,6 +24,23 @@ QUERY_TEMPLATE = '-category:job type:{ticket_type_prefix} -owner:"" closed:>={st
 
 # Define a custom order for the impacts
 CUSTOM_IMPACT_ORDER = ["Significant", "Confirmed", "Detected", "Prevented", "Ignore", "Testing", "False Positive"]
+
+# --- Logo Configuration ---
+LOGO_DIR = "web/static/logos"  # Directory where logos are stored
+LOGO_SIZE = 0.04  # Size of the logo relative to the figure width (adjust as needed)
+
+# Create a mapping of detection sources to logo file names (lowercase for matching)
+LOGO_MAPPING = {
+    "crowdstrike": "crowdstrike.png",
+    "sentinelone": "sentinelone.png",
+    "microsoft defender": "microsoft_defender.png",
+    "cofense": "cofense.png",
+    "proofpoint": "proofpoint.png",
+    "virustotal": "virustotal.png",
+    "trendmicro": "trendmicro.png",
+    "mcafee": "mcafee.png",
+    "checkpoint": "checkpoint.png"
+}
 
 
 def create_graph(tickets):
@@ -78,19 +98,52 @@ def create_graph(tickets):
             else:
                 counts.append(0)
 
-        ax.barh(sorted_sources, counts, left=bottom, label=impact, color=impact_colors.get(impact, "#808080"),
-                edgecolor="black", linewidth=0.3)
+        bars = ax.barh(sorted_sources, counts, left=bottom, label=impact, color=impact_colors.get(impact, "#808080"),
+                       edgecolor="black", linewidth=0.3)
 
         # Add Value Labels
         for i, count in enumerate(counts):
             if count > 0:
                 x_pos = bottom[i] + count / 2
                 if impact in ("Ignore", "Testing", "False Positive"):
-                    ax.text(x_pos, i, str(count), ha='center', va='center', color='black', fontsize=10, fontweight='bold')
+                    ax.text(x_pos, i, str(count), ha='center', va='center', color='black', fontsize=8, fontweight='bold')
                 else:
-                    ax.text(x_pos, i, str(count), ha='center', va='center', color='white', fontsize=10, fontweight='bold')
+                    ax.text(x_pos, i, str(count), ha='center', va='center', color='white', fontsize=8, fontweight='bold')
 
         bottom = [b + c for b, c in zip(bottom, counts)]
+
+        # --- Add Logos at the End of Bars ---
+        for i, bar in enumerate(bars):
+            if counts[i] == 0:
+                continue  # no logo on empty bars
+
+            source = sorted_sources[i]
+            logo_filename = LOGO_MAPPING.get(source.lower())  # match logo with source
+
+            if logo_filename:  # If a logo is found for the source
+                logo_path = os.path.join(LOGO_DIR, logo_filename)
+                if os.path.exists(logo_path):  # Verify that the logo file exists
+                    try:
+                        # Resize logo
+                        im = Image.open(logo_path)
+                        width, height = im.size
+                        max_size = 50  # max size for the logo
+                        if max(width, height) > max_size:
+                            if width > height:
+                                new_width = max_size
+                                new_height = int(max_size * (height / width))
+                            else:
+                                new_height = max_size
+                                new_width = int(max_size * (width / height))
+                            im = im.resize((new_width, new_height))
+                        im.save(logo_path)
+                        image = plt.imread(logo_path)
+                        imagebox = OffsetImage(image, zoom=LOGO_SIZE)
+                        ab = AnnotationBbox(imagebox, (bar.get_width() + bottom[i], bar.get_y() + bar.get_height() / 2),
+                                            frameon=False)
+                        ax.add_artist(ab)
+                    except Exception as e:
+                        print(f"Error adding logo {logo_filename}: {e}")
 
     # Extend the x-axis
     max_x_value = max(bottom)
@@ -111,7 +164,6 @@ def create_graph(tickets):
 
     # Add the current time to the chart
     now_eastern = datetime.now(eastern).strftime('%m/%d/%Y %I:%M %p %Z')
-    """Adds a timestamp to the chart."""
     trans = transforms.blended_transform_factory(fig.transFigure, fig.transFigure)
     plt.text(0.08, 0.03, now_eastern, ha='left', va='bottom', fontsize=10, transform=trans)
 
@@ -129,8 +181,7 @@ def make_chart() -> None:
     yesterday_start_utc = yesterday_start.astimezone(pytz.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
     yesterday_end_utc = yesterday_end.astimezone(pytz.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
 
-    query = QUERY_TEMPLATE.format(ticket_type_prefix=config.ticket_type_prefix, start=yesterday_start_utc,
-                                  end=yesterday_end_utc)
+    query = QUERY_TEMPLATE.format(ticket_type_prefix=config.ticket_type_prefix, start=yesterday_start_utc, end=yesterday_end_utc)
     tickets = IncidentFetcher().get_tickets(query=query)
     print(f"Number of tickets returned: {len(tickets)}")
     create_graph(tickets)
