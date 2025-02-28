@@ -60,8 +60,8 @@ def announce_shift_change(shift, room_id):
                  f"Staffing:\n"
                  f"```\n{shift_data_table}\n```"
     )
-    # sleep for 5 minutes
-    time.sleep(300)
+
+    time.sleep(300)  # give time to digest the shift change message before sending the performance message
 
     # Send previous shift performance to Webex room
     period = {
@@ -92,10 +92,14 @@ def announce_shift_change(shift, room_id):
     total_time_to_contain = 0
     for ticket in inflow:
         total_time_to_respond += ticket['CustomFields']['responsesla']['totalDuration']
-        total_time_to_contain += ticket['CustomFields']['containmentsla']['totalDuration']
-
     mean_time_to_respond = total_time_to_respond / len(inflow)
-    mean_time_to_contain = total_time_to_contain / len(inflow)
+
+    inflow_tickets_with_host = [ticket for ticket in inflow if ticket.get('CustomFields', {}).get('hostname')]
+    for ticket in inflow_tickets_with_host:
+        total_time_to_contain += ticket['CustomFields']['containmentsla']['totalDuration']
+    mean_time_to_contain = 0
+    if inflow_tickets_with_host:
+        mean_time_to_contain = total_time_to_contain / len(inflow_tickets_with_host)
 
     shift_performance = {
         'Shift Lead': 'John Doe',
@@ -123,7 +127,7 @@ def main():
     Main function to run the scheduled jobs.
     """
     room_id = config.webex_room_id_vinay_test_space
-    announce_shift_change('morning', room_id)
+    announce_shift_change('night', room_id)
     # announce_shift_change('afternoon')
     # announce_shift_change('night')
 
