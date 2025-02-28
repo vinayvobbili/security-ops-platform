@@ -18,19 +18,19 @@ with open('data/detection_source_codes_by_name.json', 'r') as f:
     detection_source_codes_by_name = json.load(f)
 
 
-def create_bar_chart(df, x_label, y_label, title):
-    """Creates a bar chart from a pandas DataFrame."""
+def create_stacked_bar_chart(df, x_label, y_label, title):
+    """Creates a stacked bar chart from a pandas DataFrame."""
     fig, ax = plt.subplots(figsize=(10, 6))
-    bars = ax.bar(df.index, df['count'], color='#153289', width=0.5)
+
+    # Pivot the DataFrame to get the counts of each severity per source
+    df_pivot = df.pivot_table(index='source', columns='severity', values='count', fill_value=0)
+
+    # Plot the stacked bar chart
+    df_pivot.plot(kind='bar', stacked=True, ax=ax, color=['#153289', '#1f77b4', '#ff7f0e', '#2ca02c'])
+
     ax.set_xlabel(x_label)
     ax.set_ylabel(y_label)
-    ax.set_title(title, fontweight='bold', fontsize=12, )
-
-    # Add count labels on top of each bar
-    for bar in bars:
-        yval = bar.get_height()
-        ax.text(bar.get_x() + bar.get_width() / 2, yval, yval, va='bottom', ha='center',
-                fontdict={'fontsize': 10, 'fontweight': 'bold'})
+    ax.set_title(title, fontweight='bold', fontsize=12)
 
     plt.xticks(rotation=45, ha='right')
     plt.tight_layout()
@@ -61,18 +61,18 @@ def plot_inflow():
 
     df = pd.DataFrame(tickets)
 
-    # Extract the 'detectionsource' from the 'CustomFields' dictionary
+    # Extract the 'detectionsource' from the 'CustomFields' dictionary and 'severity' directly from the ticket
     df['source'] = df['CustomFields'].apply(lambda x: x.get('detectionsource'))
+    df['severity'] = df['severity']
 
     for pattern, replacement in detection_source_codes_by_name.items():
         df['source'] = df['source'].str.replace(pattern, replacement, regex=True, flags=re.IGNORECASE)
 
-    # Count the occurrences of each source
-    source_counts = df['source'].value_counts().rename_axis('source').reset_index(name='count')
-    source_counts = source_counts.set_index('source')
+    # Count the occurrences of each source and severity
+    source_severity_counts = df.groupby(['source', 'severity']).size().reset_index(name='count')
 
-    # Create the bar chart
-    fig = create_bar_chart(source_counts, "Detection Source", "Number of Alerts", "Inflow Yesterday")
+    # Create the stacked bar chart
+    fig = create_stacked_bar_chart(source_severity_counts, "Detection Source", "Number of Alerts", "Inflow Yesterday")
 
     # Add a thin black border around the figure
     fig.patch.set_edgecolor('black')
