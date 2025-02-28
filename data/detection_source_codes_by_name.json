@@ -1,0 +1,7 @@
+{
+  ".*CrowdStrike.*": "CrowdStrike",
+  ".*Zscaler.*": "ZScaler",
+  ".*Tanium.*": "Tanium",
+  ".*Azure.*": "Azure",
+  ".*Employee Reported.*": "Emp. Report"
+}
