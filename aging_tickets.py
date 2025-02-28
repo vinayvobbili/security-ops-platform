@@ -77,10 +77,14 @@ def generate_plot(tickets):
             color=colors,
             edgecolor='black',
             ax=ax,
-            width=0.1,  # Controls bar width
+            width=0.05,  # Controls bar width
         )
 
         ax.set_yticks(range(0, int(grouped_data.sum(axis=1).max()) + 2))  # +2 ensures enough
+
+    # Add a thin black border around the figure
+    fig.patch.set_edgecolor('black')
+    fig.patch.set_linewidth(10)
 
     # Transform coordinates to figure coordinates (bottom-left is 0,0)
     trans = transforms.blended_transform_factory(fig.transFigure, ax.transAxes)  # gets transform object
@@ -113,11 +117,13 @@ def generate_plot(tickets):
 
 
 def make_chart():
+    # METCIRT* tickets minus the Third Party are considered aging after 30 days
     query = f'-status:closed -category:job type:{config.ticket_type_prefix} -type:"{config.ticket_type_prefix} Third Party Compromise"'
     period = {"byTo": "months", "toValue": 1, "byFrom": "months", "fromValue": None}
 
     tickets = IncidentFetcher().get_tickets(query=query, period=period)
 
+    # Third Party Compromise tickets are considered aging after 90 days
     query = f'-status:closed -category:job type:"{config.ticket_type_prefix} Third Party Compromise"'
     period = {"byTo": "months", "toValue": 3, "byFrom": "months", "fromValue": None}
     tickets = tickets + IncidentFetcher().get_tickets(query=query, period=period)
