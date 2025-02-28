@@ -46,7 +46,7 @@ class CounterImageModifier:
 
         self.number_position = (195, 115)  # Default position
 
-    def update_counter(self, image_path, number, output_path=None, font_size=None, font_color=None, background_color=None):
+    def update_counter(self, image_path, days_since_last_incident, last_incident_date, last_incident_id, output_path=None, font_size=None, font_color=None, background_color=None):
         """Updated counter with improved styling and positioning"""
         try:
             img = Image.open(image_path)
@@ -64,9 +64,12 @@ class CounterImageModifier:
             font = self._get_font(font_size)
 
             # Draw with slight transparency for better blending
-            text = str(number)
+            text = str(days_since_last_incident)
             bbox = draw.textbbox(number_position, text, font=font, anchor="mm")
             padding = 8  # Reduced padding
+
+            # add text at the left bottom corner 'X#{last_incident_id} was declared as an incident on {last_incident_date}'
+            draw.text((10, img.height - 30), f'X#{last_incident_id} was declared as an incident on {last_incident_date}', font_color='black', font_size=12)
 
             # Create slightly transparent background
             background = Image.new('RGBA', img.size, (0, 0, 0, 0))
@@ -101,12 +104,15 @@ class CounterImageModifier:
                 anchor="mm"
             )
 
+            # Add a thin black border around the figure
+            draw.rectangle([(0, 0), (img.width - 1, img.height - 1)], outline="black", width=1)
+
             # Convert back to RGB for saving
             img = img.convert('RGB')
             output_path = output_path or image_path
             img.save(output_path, quality=95)
 
-            self.logger.info(f"Successfully updated counter to {number}")
+            self.logger.info(f"Successfully updated counter to {days_since_last_incident}")
             return output_path
 
         except Exception as e:
@@ -125,7 +131,7 @@ class CounterImageModifier:
         return ImageFont.load_default()
 
 
-def get_days_since_last_incident():
+def get_last_incident_details():
     """Get the current days since the last incident"""
     query = f'-category:job type:{config.ticket_type_prefix} impact:Confirmed'
     period = {"byTo": "months", "toValue": None, "byFrom": "months", "fromValue": 1}
@@ -135,7 +141,7 @@ def get_days_since_last_incident():
         latest_incident_create_date_str = ticket[0].get('created')
         latest_incident_create_date = datetime.fromisoformat(latest_incident_create_date_str.replace('Z', '+00:00'))
         today_utc = datetime.now(timezone.utc)  # Ensure both dates are timezone-aware
-        return (today_utc - latest_incident_create_date).days
+        return (today_utc - latest_incident_create_date).days + 1, latest_incident_create_date.strftime('%-m/%-d/%Y'), ticket[0].get('id')
     else:
         return -1  # Or some other value to indicate no incidents found
 
@@ -144,11 +150,12 @@ def make_chart():
     """Update the base image with the current days since last incident"""
     # Initialize the modifier
     modifier = CounterImageModifier()
+    days_since_last_incident, last_incident_date, last_incident_id = get_last_incident_details()
 
     try:
         modifier.update_counter(
             "web/static/images/base/days since last incident.jpg",
-            get_days_since_last_incident(),
+            days_since_last_incident, last_incident_date, last_incident_id,
             output_path="web/static/charts/Days Since Last Incident.jpg",
             font_size=50,
             font_color="green",
