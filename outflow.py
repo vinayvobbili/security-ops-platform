@@ -65,6 +65,10 @@ def create_graph(tickets):
     source_totals = source_impact_counts.groupby('source')['count'].sum().sort_values(ascending=False)
     sorted_sources = source_totals.index.tolist()
 
+    # Reorder sources to form a pyramid shape
+    mid_index = len(sorted_sources) // 2
+    pyramid_sources = sorted_sources[mid_index::-1] + sorted_sources[mid_index + 1:]
+
     # Define Colors for impacts (Updated for new values)
     impact_colors = {
         "Significant": "#ff0000",  # Red
@@ -80,7 +84,7 @@ def create_graph(tickets):
     fig, ax = plt.subplots(figsize=(12, 10))
 
     # Plot data
-    bottom = [0] * len(sorted_sources)
+    bottom = [0] * len(pyramid_sources)
     impacts = source_impact_counts['impact'].unique()
 
     # Sort impacts based on the custom order
@@ -91,14 +95,14 @@ def create_graph(tickets):
 
         # Use the pre-sorted sources
         counts = []
-        for source in sorted_sources:
+        for source in pyramid_sources:
             if source in impact_data['source'].values:
                 count = impact_data.loc[impact_data['source'] == source, 'count'].iloc[0]
                 counts.append(count)
             else:
                 counts.append(0)
 
-        bars = ax.barh(sorted_sources, counts, left=bottom, label=impact, color=impact_colors.get(impact, "#808080"),
+        bars = ax.barh(pyramid_sources, counts, left=bottom, label=impact, color=impact_colors.get(impact, "#808080"),
                        edgecolor="black", linewidth=0.3)
 
         # Add Value Labels
@@ -117,7 +121,7 @@ def create_graph(tickets):
             if counts[i] == 0:
                 continue  # no logo on empty bars
 
-            source = sorted_sources[i]
+            source = pyramid_sources[i]
             logo_filename = LOGO_MAPPING.get(source.lower())  # match logo with source
 
             if logo_filename:  # If a logo is found for the source
@@ -139,8 +143,7 @@ def create_graph(tickets):
                         im.save(logo_path)
                         image = plt.imread(logo_path)
                         imagebox = OffsetImage(image, zoom=LOGO_SIZE)
-                        ab = AnnotationBbox(imagebox, (bar.get_width() + bottom[i], bar.get_y() + bar.get_height() / 2),
-                                            frameon=False)
+                        ab = AnnotationBbox(imagebox, (bar.get_width() + bottom[i], bar.get_y() + bar.get_height() / 2), frameon=False)
                         ax.add_artist(ab)
                     except Exception as e:
                         print(f"Error adding logo {logo_filename}: {e}")
@@ -150,10 +153,10 @@ def create_graph(tickets):
     ax.set_xlim([0, max_x_value * 1.1])  # Extend 10% beyond the maximum x-value
 
     # Add labels and title
-    ax.set_yticks(range(len(sorted_sources)))
-    ax.set_yticklabels(sorted_sources)
-    ax.set_ylabel('Detection Source')
-    ax.set_xlabel('Ticket Counts')
+    ax.set_yticks(range(len(pyramid_sources)))
+    ax.set_yticklabels(pyramid_sources)
+    ax.set_ylabel('Detection Source', fontweight='bold')
+    ax.set_xlabel('Ticket Counts', fontweight='bold')
 
     ax.set_title('Outflow Yesterday', fontweight='bold', fontsize=12)
     ax.legend(title='Impact', loc='upper right')
