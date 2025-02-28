@@ -57,13 +57,13 @@ def gauge(color):
     # Add a center dot
     ax.plot(0, 0, 'ko', markersize=10)
 
-    # Add a black line along the top edge of the gauge, moved outward a bit
+    # Add a black line along the top edge of the gauge
     outer_radius = 1.05  # Adjust this value to move the line outward
     ax.plot(outer_radius * np.cos(np.radians(angles)),
             outer_radius * np.sin(np.radians(angles)),
             color='black', linewidth=1)
 
-    # Set title with a nice font and underline
+    # Set title with a nice font
     ax.text(0, 1.2, f'Threatcon Level - {datetime.today().strftime("%m/%d/%Y")}',
             ha='center', va='center', fontsize=14, fontweight='normal',
             fontname='Comic Sans MS')
