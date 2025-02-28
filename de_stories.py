@@ -17,10 +17,6 @@ class ADOWorkItemRetriever:
     def __init__(self):
         """
         Initialize the ADO Work Item Retriever
-
-        :param organization: Your Azure DevOps organization name
-        :param project: The specific project to query
-        :param personal_access_token: PAT for authentication
         """
         self.org = config.azdo_org
         self.project = config.azdo_de_project
@@ -93,8 +89,8 @@ def make_chart():
         # print(f"Recent Work Items Count: {state_counts}")
 
         # Plot the bar graph
-        plt.figure(figsize=(10, 6))  # Adjust figure size for better readability
-        bars = plt.bar(state_counts.keys(), state_counts.values(), color='#1f77b4')  # Store bar objects
+        plt.figure(figsize=(10, 8))  # Adjust figure size for better readability
+        bars = plt.bar(state_counts.keys(), state_counts.values(), color='#1f77b4', width=0.5)  # Store bar objects
         plt.xlabel('Work Items Created in the last 180 days')
         plt.ylabel('Count')
         plt.title('Detection Engineering AZDO Work Items by State')
@@ -102,12 +98,17 @@ def make_chart():
         # Add count labels on top of each bar
         for bar in bars:
             yval = bar.get_height()
-            plt.text(bar.get_x() + bar.get_width() / 2, yval, int(yval), va='bottom', ha='center', fontdict={'fontsize': 10, 'fontweight': 'bold'})  # Display count as integer
+            plt.text(bar.get_x() + bar.get_width() / 2, yval, yval, va='bottom', ha='center', fontdict={'fontsize': 10, 'fontweight': 'bold'})  # Display count as integer
 
         now_eastern = datetime.now(eastern).strftime('%m/%d/%Y %I:%M %p %Z')
         fig = plt.gcf()  # Get the current figure
+
+        # Add a thin black border around the figure
+        fig.patch.set_edgecolor('black')
+        fig.patch.set_linewidth(10)
+
         trans = transforms.blended_transform_factory(fig.transFigure, fig.transFigure)
-        plt.text(0.1, 0, now_eastern, ha='left', va='bottom', fontsize=10, transform=trans)
+        plt.text(0.08, 0.03, now_eastern, ha='left', va='bottom', fontsize=10, transform=trans)
 
         plt.xticks(rotation=45, ha='right')  # Rotate x-axis labels for better readability
         plt.tight_layout()  # Adjust layout to prevent labels from overlapping
