@@ -3,5 +3,7 @@
   ".*Zscaler.*": "ZScaler",
   ".*Tanium.*": "Tanium",
   ".*Azure.*": "Azure",
-  ".*Employee Reported.*": "Emp. Report"
+  ".*Employee Reported.*": "Emp. Report",
+  ".*Vectra.*": "Vectra",
+  ".*Prisma.*": "Prisma"
 }
