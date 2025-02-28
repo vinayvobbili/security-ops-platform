@@ -9,17 +9,15 @@ import matplotlib.colors as colors
 import matplotlib.pyplot as plt
 from matplotlib import transforms
 from pytz import timezone
-from webexteamssdk import WebexTeamsAPI
 
 from config import get_config
 from incident_fetcher import IncidentFetcher
 
 config = get_config()
-webex_api = WebexTeamsAPI(access_token=config.webex_bot_access_token_moneyball)
 
-eastern = timezone('US/Eastern')  # Define the Eastern time zone
+eastern = timezone('US/Eastern')
 
-QUERY_TEMPLATE = '-category:job status:closed type:{ticket_type_prefix} -owner:""'
+QUERY_TEMPLATE = f'-category:job status:closed type:{config.ticket_type_prefix} -owner:""'
 PERIOD = {"byFrom": "days", "fromValue": 30}
 
 
@@ -57,6 +55,11 @@ def create_choropleth_map():
 
     # Create the map
     fig, ax = plt.subplots(figsize=(15, 10), subplot_kw={'projection': ccrs.PlateCarree()})
+
+    # Add a thin black border around the figure
+    fig.patch.set_edgecolor('black')
+    fig.patch.set_linewidth(10)
+
     ax.add_feature(cfeature.COASTLINE, linewidth=0.01, zorder=1, linestyle='None')
     ax.add_feature(cfeature.BORDERS, linestyle='None', zorder=1, linewidth=0.01)
     ax.set_global()  # Important for proper display with PlateCarree
