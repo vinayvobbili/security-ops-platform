@@ -117,6 +117,10 @@ def save_mttr_mttc_chart(ticket_slas_by_periods):
     # Get figure and axes objects
     fig = plt.gcf()
     ax = plt.gca()
+    # Add a thin black border around the figure
+    fig.patch.set_edgecolor('black')
+    fig.patch.set_linewidth(5)
+
     # Transform coordinates to figure coordinates (bottom-left is 0,0)
     trans = transforms.blended_transform_factory(fig.transFigure, ax.transAxes)  # gets transform object
     now_eastern = datetime.now(eastern).strftime('%m/%d/%Y %I:%M %p %Z')
@@ -125,7 +129,7 @@ def save_mttr_mttc_chart(ticket_slas_by_periods):
 
     # Customize the plot
     plt.ylabel('Minutes', fontdict={'fontsize': 12, 'fontweight': 'bold'})
-    plt.title(f'MTTR & MTTC by Period', fontdict={'fontsize': 12, 'fontweight': 'bold'})
+    plt.title(f'Mean Times', fontdict={'fontsize': 12, 'fontweight': 'bold'})
     plt.xticks(x, ['MTTR', 'MTTC'], fontdict={'fontsize': 12, 'fontweight': 'bold'})
     plt.legend(loc='upper left')
 
@@ -160,3 +164,7 @@ def make_chart():
     tickets = incident_fetcher.get_tickets(query=query, period=period)
     tickets_by_periods = get_tickets_by_periods(tickets)
     save_mttr_mttc_chart(tickets_by_periods)
+
+
+if __name__ == '__main__':
+    make_chart()
