@@ -104,39 +104,44 @@ def save_sla_breaches_chart(ticket_slas_by_periods):
     containment_breaches_7days = metrics['Containment SLA Breaches']['Past 7 days']
     containment_breaches_30days = metrics['Containment SLA Breaches']['Past 30 days']
 
-    bar1 = plt.bar(x - width, [response_breaches_30days, containment_breaches_30days], width, label=f'Past 30 days ({thirty_days_ticket_count})', color='#2ca02c')
-    bar2 = plt.bar(x, [response_breaches_7days, containment_breaches_7days], width, label=f'Past 7 days ({seven_days_ticket_count})', color='#ff7f0e')
-    bar3 = plt.bar(x + width, [response_breaches_yesterday, containment_breaches_yesterday], width, label=f'Yesterday ({yesterday_ticket_count})', color='#1f77b4')
+    # Adjust figure size here
+    fig, ax = plt.subplots(figsize=(8, 6))
+
+    bar1 = ax.bar(x - width, [response_breaches_30days, containment_breaches_30days], width, label=f'Past 30 days ({thirty_days_ticket_count})', color='#2ca02c')
+    bar2 = ax.bar(x, [response_breaches_7days, containment_breaches_7days], width, label=f'Past 7 days ({seven_days_ticket_count})', color='#ff7f0e')
+    bar3 = ax.bar(x + width, [response_breaches_yesterday, containment_breaches_yesterday], width, label=f'Yesterday ({yesterday_ticket_count})', color='#1f77b4')
 
     # Get figure and axes objects
-    fig = plt.gcf()
+    # fig = plt.gcf() # No longer needed because fig, ax = plt.subplots was set above
 
     # Add a thin black border around the figure
     fig.patch.set_edgecolor('black')
     fig.patch.set_linewidth(5)
 
-    ax = plt.gca()
+    # ax = plt.gca() # No longer needed because fig, ax = plt.subplots was set above
+
     # Transform coordinates to figure coordinates (bottom-left is 0,0)
     trans = transforms.blended_transform_factory(fig.transFigure, ax.transAxes)  # gets transform object
     now_eastern = datetime.now(eastern).strftime('%m/%d/%Y %I:%M %p %Z')
     plt.text(0.1, -0.15, now_eastern, transform=trans, ha='left', va='bottom', fontsize=10)
 
     # Customize the plot
-    plt.ylabel('Counts', fontdict={'fontsize': 12, 'fontweight': 'bold'})
-    plt.title('Response and Containment SLA Breaches by Period', fontdict={'fontsize': 12, 'fontweight': 'bold'})
-    plt.xticks(x, ['Resp. SLA Breaches', 'Cont. SLA Breaches'], fontdict={'fontsize': 12, 'fontweight': 'bold'})
-    plt.legend(title='Period (Ticket Count)', loc='upper right')
+    ax.set_ylabel('Counts', fontdict={'fontsize': 12, 'fontweight': 'bold'})
+    ax.set_title('SLA Breaches', fontdict={'fontsize': 12, 'fontweight': 'bold'})
+    ax.set_xticks(x)
+    ax.set_xticklabels(['Resp. SLA Breaches', 'Cont. SLA Breaches'], fontdict={'fontsize': 12, 'fontweight': 'bold'})
+    ax.legend(title='Period (Ticket Count)', loc='upper right')
 
     # Add value labels on top of each bar using the bar container objects
     for bars in [bar1, bar2, bar3]:
         for bar in bars:
             height = bar.get_height()
-            plt.text(bar.get_x() + bar.get_width() / 2., height / 2,
-                     f'{height}',
-                     ha='center', va='bottom', fontdict={'fontsize': 14, 'fontweight': 'bold'})
+            ax.text(bar.get_x() + bar.get_width() / 2., height / 2,
+                    f'{height}',
+                    ha='center', va='bottom', fontdict={'fontsize': 14, 'fontweight': 'bold'})
 
     # Add grid for better readability
-    plt.grid(True, axis='y', linestyle='--', alpha=0.7)
+    ax.grid(True, axis='y', linestyle='--', alpha=0.7)
 
     # Adjust layout to prevent label clipping
     plt.tight_layout()
