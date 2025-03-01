@@ -10,9 +10,11 @@ from matplotlib import transforms
 from config import get_config
 from incident_fetcher import IncidentFetcher
 
-eastern = pytz.timezone('US/Eastern')  # Define the Eastern time zone
+eastern = pytz.timezone('US/Eastern')
 
 config = get_config()
+
+QUERY_TEMPLATE = '-category:job type:{ticket_type_prefix} -owner:"" created:>={start} created:<{end}'
 
 with open('data/detection_source_codes_by_name.json', 'r') as f:
     detection_source_codes_by_name = json.load(f)
@@ -48,22 +50,19 @@ def create_stacked_bar_chart(df, x_label, y_label, title):
     return fig
 
 
-def add_timestamp(fig, now_eastern):
-    """Adds a timestamp to the chart."""
-    trans = transforms.blended_transform_factory(fig.transFigure, fig.transFigure)
-    plt.text(0.08, 0.03, now_eastern, ha='left', va='bottom', fontsize=10, transform=trans)
+def make_chart():
+    """Plots the ticket inflow by source."""
 
+    # Calculate fresh values EACH TIME the command is run
+    et = pytz.timezone("US/Eastern")
+    yesterday_start = datetime.now(et).replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=1)
+    yesterday_end = yesterday_start + timedelta(days=1)
+    yesterday_start_utc = yesterday_start.astimezone(pytz.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+    yesterday_end_utc = yesterday_end.astimezone(pytz.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
 
-def plot_inflow():
-    """Plots the ticket inflow by source using pandas."""
-    query = f'-category:job type:{config.ticket_type_prefix} -owner:""'
-    # Unable to build a period that fetches only yesterday's tickets. Work around: Fetch both today's and yesterday's tickets and filter out today's
-    period = {"byFrom": "days", "fromValue": 1, "byTo": "days", "toValue": 0}
-
-    tickets = IncidentFetcher().get_tickets(query=query, period=period)
-
-    yesterday = (datetime.now(eastern) - timedelta(days=1)).date()
-    tickets = [ticket for ticket in tickets if datetime.strptime(ticket.get('created'), '%Y-%m-%dT%H:%M:%S.%fZ').date() == yesterday]
+    query = QUERY_TEMPLATE.format(ticket_type_prefix=config.ticket_type_prefix, start=yesterday_start_utc, end=yesterday_end_utc)
+    tickets = IncidentFetcher().get_tickets(query=query)
+    print(f"Number of tickets returned: {len(tickets)}")
 
     # Create a DataFrame from the tickets
     if not tickets:
@@ -91,11 +90,12 @@ def plot_inflow():
 
     # Add the current time to the chart
     now_eastern = datetime.now(eastern).strftime('%m/%d/%Y %I:%M %p %Z')
-    add_timestamp(fig, now_eastern)
+    trans = transforms.blended_transform_factory(fig.transFigure, fig.transFigure)
+    plt.text(0.08, 0.03, now_eastern, ha='left', va='bottom', fontsize=10, transform=trans)
 
     fig.savefig('web/static/charts/Inflow.png')
     plt.close(fig)
 
 
 if __name__ == '__main__':
-    plot_inflow()
+    make_chart()
