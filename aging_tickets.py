@@ -84,7 +84,7 @@ def generate_plot(tickets):
 
     # Add a thin black border around the figure
     fig.patch.set_edgecolor('black')
-    fig.patch.set_linewidth(10)
+    fig.patch.set_linewidth(5)
 
     # Transform coordinates to figure coordinates (bottom-left is 0,0)
     trans = transforms.blended_transform_factory(fig.transFigure, ax.transAxes)  # gets transform object
