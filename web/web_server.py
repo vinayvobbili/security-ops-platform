@@ -1,7 +1,7 @@
 import os
 from typing import List
 
-from flask import Flask, render_template, request, url_for
+from flask import Flask, render_template, request
 
 from services import transfer_ticket
 
@@ -31,18 +31,15 @@ IMAGE_ORDER = [
     "charts/Threatcon Level.png",
     "charts/Days Since Last Incident.jpg",
     "charts/Aging Tickets.png",
-    "charts/Inflow Yesterday.png",
+    "charts/Inflow.png",
+    "charts/Outflow.png",
     "charts/SLA Breaches.png",
     "charts/MTTR MTTC.png",
-    "charts/Outflow Yesterday.png",
-    "charts/Heatmap.png",
-    "charts/Days Since Last Incident.jpg",
+    "charts/Lifespan.png",
+    "charts/Heat Map.png",
     "charts/Vectra Detections by Rule.png",
     "charts/DE Stories.png",
     "charts/RE Stories.png",
-    "End of presentation.jpg",
-    "Feedback Email.png",
-    "Thanks.png",
     "images/End of presentation.jpg",
     "images/Feedback Email.png",
     "images/Thanks.png"
