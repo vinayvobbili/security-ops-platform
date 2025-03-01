@@ -82,7 +82,7 @@ def make_chart():
 
     # Add a thin black border around the figure
     fig.patch.set_edgecolor('black')
-    fig.patch.set_linewidth(10)
+    fig.patch.set_linewidth(5)
 
     fig.savefig('web/static/charts/Threatcon Level.png', format='png', bbox_inches='tight', pad_inches=0.2)
     plt.close()
