@@ -77,7 +77,7 @@ def generate_plot(tickets):
             color=colors,
             edgecolor='black',
             ax=ax,
-            width=0.05,  # Controls bar width
+            width=0.5,  # Controls bar width
         )
 
         ax.set_yticks(range(0, int(grouped_data.sum(axis=1).max()) + 2))  # +2 ensures enough

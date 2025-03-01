@@ -44,15 +44,15 @@ class CounterImageModifier:
             "Futura.ttc"  # Added Futura for a more modern look
         ]
 
-        self.number_position = (195, 115)  # Default position
+        self.number_position = (255, 155)
 
     def update_counter(self, image_path, days_since_last_incident, last_incident_date, last_incident_id, output_path=None, font_size=None, font_color=None, background_color=None):
         """Updated counter with improved styling and positioning"""
         try:
             img = Image.open(image_path)
+            img = img.resize((800, 600))
             draw = ImageDraw.Draw(img)
 
-            # Get optimized position
             number_position = self.number_position
 
             # Use custom or default styling
@@ -66,10 +66,9 @@ class CounterImageModifier:
             # Draw with slight transparency for better blending
             text = str(days_since_last_incident)
             bbox = draw.textbbox(number_position, text, font=font, anchor="mm")
-            padding = 8  # Reduced padding
+            padding = 8
 
-            # add text at the left bottom corner 'X#{last_incident_id} was declared as an incident on {last_incident_date}'
-            draw.text((10, img.height - 30), f'X#{last_incident_id} was declared as an incident on {last_incident_date}', font_color='black', font_size=12)
+            draw.text((200, img.height - 30), f'X#{last_incident_id} was declared as an incident on {last_incident_date}', font_color='black', font_size=14)
 
             # Create slightly transparent background
             background = Image.new('RGBA', img.size, (0, 0, 0, 0))
