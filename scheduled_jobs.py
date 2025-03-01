@@ -6,6 +6,9 @@ import schedule
 import aging_tickets
 import days_since_incident
 import de_stories
+import heatmap
+import inflow
+import lifespan
 import mttr_mttc
 import outflow
 import re_stories
@@ -26,11 +29,16 @@ def main():
     # run once
     '''
     aging_tickets.make_chart(),
+    days_since_incident.make_chart(),
+    de_stories.make_chart(),
+    heatmap.create_choropleth_map(),
+    inflow.make_chart(),
+    lifespan.make_chart(),
     mttr_mttc.make_chart(),
-    sla_breaches.make_chart(),
     outflow.make_chart(),
-    # heatmap.create_choropleth_map(),
-    threatcon_level.make_chart(),
+    re_stories.make_chart(),
+    sla_breaches.make_chart(),
+    threatcon_level.make_chart()
     '''
 
     # schedule
@@ -42,13 +50,16 @@ def main():
 
     schedule.every().day.at("00:01", eastern).do(lambda: (
         aging_tickets.make_chart(),
-        mttr_mttc.make_chart(),
-        sla_breaches.make_chart(),
-        de_stories.make_chart(),
-        re_stories.make_chart(),
         days_since_incident.make_chart(),
+        de_stories.make_chart(),
+        heatmap.create_choropleth_map(),
+        inflow.make_chart(),
+        lifespan.make_chart(),
+        mttr_mttc.make_chart(),
         outflow.make_chart(),
-        threatcon_level.make_chart(),
+        re_stories.make_chart(),
+        sla_breaches.make_chart(),
+        threatcon_level.make_chart()
     ))
 
     schedule.every(5).minutes.do(verify_host_online_status.start)
