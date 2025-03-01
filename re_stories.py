@@ -10,7 +10,7 @@ from matplotlib import transforms
 from config import get_config
 
 config = get_config()
-eastern = pytz.timezone('US/Eastern')  # Define the Eastern time zone
+eastern = pytz.timezone('US/Eastern')
 
 
 class ADOWorkItemRetriever:
@@ -93,8 +93,8 @@ def make_chart():
         # print(f"Recent Work Items Count: {state_counts}")
 
         # Plot the bar graph
-        plt.figure(figsize=(10, 6))  # Adjust figure size for better readability
-        bars = plt.bar(state_counts.keys(), state_counts.values(), color='#1f77b4')  # Store bar objects
+        plt.figure(figsize=(8, 6))  # Adjust figure size for better readability
+        bars = plt.bar(state_counts.keys(), state_counts.values(), color='#1f77b4', width=0.5)  # Store bar objects
         plt.xlabel('Work Items Created in the last 180 days')
         plt.ylabel('Count')
         plt.title('Response Engineering AZDO Work Items by State')
@@ -106,8 +106,14 @@ def make_chart():
 
         now_eastern = datetime.now(eastern).strftime('%m/%d/%Y %I:%M %p %Z')
         fig = plt.gcf()  # Get the current figure
+
+        # Add a thin black border around the figure
+        fig.patch.set_edgecolor('black')
+        fig.patch.set_linewidth(5)
+
+        # Transform coordinates to figure coordinates (bottom-left is 0,0)
         trans = transforms.blended_transform_factory(fig.transFigure, fig.transFigure)
-        plt.text(0.1, 0, now_eastern, ha='left', va='bottom', fontsize=10, transform=trans)
+        plt.text(0.05, 0.02, now_eastern, ha='left', va='bottom', fontsize=10, transform=trans)
 
         plt.xticks(rotation=45, ha='right')  # Rotate x-axis labels for better readability
         plt.tight_layout()  # Adjust layout to prevent labels from overlapping

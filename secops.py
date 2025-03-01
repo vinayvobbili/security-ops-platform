@@ -103,7 +103,7 @@ def announce_shift_change(shift, room_id):
 
     shift_performance = {
         'Shift Lead': 'John Doe',
-        'Tickets responded to': len(inflow),
+        'New Tickets ack\'ed': len(inflow),
         'Tickets closed out': len(outflow),
         'Resp. SLA Breaches': len(response_sla_breaches),
         'Cont. SLA Breaches': len(containment_sla_breaches),
