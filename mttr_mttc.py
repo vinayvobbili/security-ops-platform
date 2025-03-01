@@ -99,24 +99,24 @@ def save_mttr_mttc_chart(ticket_slas_by_periods):
     mttc_7days = metrics['MTTC']['Past 7 days']
     mttc_30days = metrics['MTTC']['Past 30 days']
 
-    bar1 = plt.bar(x - width, [mttr_30days, mttc_30days], width, label=f'Past 30 days ({thirty_days_ticket_count})', color='#2ca02c')
-    bar2 = plt.bar(x, [mttr_7days, mttc_7days], width, label=f'Past 7 days ({seven_days_ticket_count})', color='#ff7f0e')
-    bar3 = plt.bar(x + width, [mttr_yesterday, mttc_yesterday], width, label=f'Yesterday ({yesterday_ticket_count})', color='#1f77b4')
+    # Adjust figure size here
+    fig, ax = plt.subplots(figsize=(8, 6))
+
+    bar1 = ax.bar(x - width, [mttr_30days, mttc_30days], width, label=f'Past 30 days ({thirty_days_ticket_count})', color='#2ca02c')
+    bar2 = ax.bar(x, [mttr_7days, mttc_7days], width, label=f'Past 7 days ({seven_days_ticket_count})', color='#ff7f0e')
+    bar3 = ax.bar(x + width, [mttr_yesterday, mttc_yesterday], width, label=f'Yesterday ({yesterday_ticket_count})', color='#1f77b4')
 
     # Get x-axis limits
-    xmin, xmax = plt.xlim()
-    ymin, ymax = plt.ylim()
+    xmin, xmax = ax.get_xlim()
+    ymin, ymax = ax.get_ylim()
 
     # Calculate midpoint for half-width lines
     midpoint = xmin + (xmax - xmin) / 2
 
     # Draw the hlines from the midpoint to the right edge
-    plt.hlines(y=3, xmin=xmin, xmax=midpoint, color='r', linestyle='-', label='Response SLA')
-    plt.hlines(y=15, xmin=midpoint, xmax=xmax, color='g', linestyle='-', label='Containment SLA')
+    ax.hlines(y=3, xmin=xmin, xmax=midpoint, color='r', linestyle='-', label='Response SLA')
+    ax.hlines(y=15, xmin=midpoint, xmax=xmax, color='g', linestyle='-', label='Containment SLA')
 
-    # Get figure and axes objects
-    fig = plt.gcf()
-    ax = plt.gca()
     # Add a thin black border around the figure
     fig.patch.set_edgecolor('black')
     fig.patch.set_linewidth(5)
@@ -125,24 +125,25 @@ def save_mttr_mttc_chart(ticket_slas_by_periods):
     trans = transforms.blended_transform_factory(fig.transFigure, ax.transAxes)  # gets transform object
     now_eastern = datetime.now(eastern).strftime('%m/%d/%Y %I:%M %p %Z')
     plt.text(0.1, -0.15, now_eastern, transform=trans, ha='left', va='bottom', fontsize=10)
-    plt.text(0.45, -0.15, '(*) Ticket counts that period', transform=trans, ha='left', va='bottom', fontsize=10)  # uses transform object instead of xmin, ymin
+    plt.text(0.7, -0.15, '(*) Ticket counts that period', transform=trans, ha='left', va='bottom', fontsize=10)  # uses transform object instead of xmin, ymin
 
     # Customize the plot
-    plt.ylabel('Minutes', fontdict={'fontsize': 12, 'fontweight': 'bold'})
-    plt.title(f'Mean Times', fontdict={'fontsize': 12, 'fontweight': 'bold'})
-    plt.xticks(x, ['MTTR', 'MTTC'], fontdict={'fontsize': 12, 'fontweight': 'bold'})
-    plt.legend(loc='upper left')
+    ax.set_ylabel('Minutes', fontdict={'fontsize': 12, 'fontweight': 'bold'})
+    ax.set_title(f'Mean Times', fontdict={'fontsize': 12, 'fontweight': 'bold'})
+    ax.set_xticks(x)
+    ax.set_xticklabels(['MTTR', 'MTTC'], fontdict={'fontsize': 12, 'fontweight': 'bold'})
+    ax.legend(loc='upper left')
 
     # Add value labels on top of each bar using the bar container objects
     for bars in [bar1, bar2, bar3]:
         for bar in bars:
             height = bar.get_height()
-            plt.text(bar.get_x() + bar.get_width() / 2., height / 2,
-                     f'{height:.1f}',
-                     ha='center', va='bottom', fontdict={'fontsize': 14, 'fontweight': 'bold'})
+            ax.text(bar.get_x() + bar.get_width() / 2., height / 2,
+                    f'{height:.1f}',
+                    ha='center', va='bottom', fontdict={'fontsize': 14, 'fontweight': 'bold'})
 
     # Add grid for better readability
-    plt.grid(True, axis='y', linestyle='--', alpha=0.7)
+    ax.grid(True, axis='y', linestyle='--', alpha=0.7)
 
     # Adjust layout to prevent label clipping
     plt.tight_layout()
