@@ -93,7 +93,7 @@ def make_chart():
         bars = plt.bar(state_counts.keys(), state_counts.values(), color='#1f77b4', width=0.5)  # Store bar objects
         plt.xlabel('Work Items Created in the last 180 days')
         plt.ylabel('Count')
-        plt.title('Detection Engineering AZDO Work Items by State')
+        plt.title('Detection Engineering AZDO Work Items', fontweight='bold', fontsize=12)
 
         # Add count labels on top of each bar
         for bar in bars:
