@@ -58,7 +58,7 @@ def create_choropleth_map():
 
     # Add a thin black border around the figure
     fig.patch.set_edgecolor('black')
-    fig.patch.set_linewidth(10)
+    fig.patch.set_linewidth(5)
 
     ax.add_feature(cfeature.COASTLINE, linewidth=0.01, zorder=1, linestyle='None')
     ax.add_feature(cfeature.BORDERS, linestyle='None', zorder=1, linewidth=0.01)
@@ -76,7 +76,6 @@ def create_choropleth_map():
     countries = reader.records()
 
     for country in countries:
-        # print(country.attributes['NAME_EN'])
 
         country_name = country.attributes['NAME_EN']
         country_name = x_cartopy_country_name_mapping.get(country_name, country_name)
@@ -123,7 +122,7 @@ def create_choropleth_map():
                  'color': 'dimgray',  # Label color
                  'weight': 'bold',
                  'size': 10}  # Increased font size
-    cbar.set_label("Ticket counts per thousand hosts (last 30 days)", fontdict=cbar_font)  # Set label with fontdict
+    cbar.set_label("Alert counts per thousand hosts (last 30 days)", fontdict=cbar_font)  # Set label with fontdict
     cbar.ax.tick_params(labelsize=8, labelcolor='gray')  # Adjust tick label size and color
 
     # Stylish and colorful title

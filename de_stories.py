@@ -89,7 +89,7 @@ def make_chart():
         # print(f"Recent Work Items Count: {state_counts}")
 
         # Plot the bar graph
-        plt.figure(figsize=(10, 8))  # Adjust figure size for better readability
+        plt.figure(figsize=(8, 6))  # Adjust figure size for better readability
         bars = plt.bar(state_counts.keys(), state_counts.values(), color='#1f77b4', width=0.5)  # Store bar objects
         plt.xlabel('Work Items Created in the last 180 days')
         plt.ylabel('Count')
@@ -105,7 +105,7 @@ def make_chart():
 
         # Add a thin black border around the figure
         fig.patch.set_edgecolor('black')
-        fig.patch.set_linewidth(10)
+        fig.patch.set_linewidth(5)
 
         trans = transforms.blended_transform_factory(fig.transFigure, fig.transFigure)
         plt.text(0.08, 0.03, now_eastern, ha='left', va='bottom', fontsize=10, transform=trans)

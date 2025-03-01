@@ -28,8 +28,8 @@ def get_tickets_by_periods(tickets):
     seven_days_ago = (current_date - timedelta(days=7)).date()
     thirty_days_ago = (current_date - timedelta(days=30)).date()
 
-    # Initialize data structure for ticket_slas_by_periods
-    ticket_slas_by_periods = {
+    # Initialize data structure for sla_breach_counts_by_periods
+    sla_breach_counts_by_periods = {
         'Yesterday': SlaBreachCounts(),
         'Past 7 days': SlaBreachCounts(),
         'Past 30 days': SlaBreachCounts()
@@ -48,30 +48,30 @@ def get_tickets_by_periods(tickets):
 
         # Update metrics for each time period
         if incident_date == yesterday:
-            ticket_slas_by_periods['Yesterday'].total_ticket_count += 1
+            sla_breach_counts_by_periods['Yesterday'].total_ticket_count += 1
 
             if response_sla_status == 2:
-                ticket_slas_by_periods['Yesterday'].response_sla_breach_count += 1
+                sla_breach_counts_by_periods['Yesterday'].response_sla_breach_count += 1
             if containment_sla_status == 2:
-                ticket_slas_by_periods['Yesterday'].containment_sla_breach_count += 1
+                sla_breach_counts_by_periods['Yesterday'].containment_sla_breach_count += 1
 
         if seven_days_ago <= incident_date <= current_date.date():
-            ticket_slas_by_periods['Past 7 days'].total_ticket_count += 1
+            sla_breach_counts_by_periods['Past 7 days'].total_ticket_count += 1
 
             if response_sla_status == 2:
-                ticket_slas_by_periods['Past 7 days'].response_sla_breach_count += 1
+                sla_breach_counts_by_periods['Past 7 days'].response_sla_breach_count += 1
             if containment_sla_status == 2:
-                ticket_slas_by_periods['Past 7 days'].containment_sla_breach_count += 1
+                sla_breach_counts_by_periods['Past 7 days'].containment_sla_breach_count += 1
 
         if thirty_days_ago <= incident_date <= current_date.date():
-            ticket_slas_by_periods['Past 30 days'].total_ticket_count += 1
+            sla_breach_counts_by_periods['Past 30 days'].total_ticket_count += 1
 
             if response_sla_status == 2:
-                ticket_slas_by_periods['Past 30 days'].response_sla_breach_count += 1
+                sla_breach_counts_by_periods['Past 30 days'].response_sla_breach_count += 1
             if containment_sla_status == 2:
-                ticket_slas_by_periods['Past 30 days'].containment_sla_breach_count += 1
+                sla_breach_counts_by_periods['Past 30 days'].containment_sla_breach_count += 1
 
-    return ticket_slas_by_periods
+    return sla_breach_counts_by_periods
 
 
 def save_sla_breaches_chart(ticket_slas_by_periods):
@@ -111,9 +111,6 @@ def save_sla_breaches_chart(ticket_slas_by_periods):
     bar2 = ax.bar(x, [response_breaches_7days, containment_breaches_7days], width, label=f'Past 7 days ({seven_days_ticket_count})', color='#ff7f0e')
     bar3 = ax.bar(x + width, [response_breaches_yesterday, containment_breaches_yesterday], width, label=f'Yesterday ({yesterday_ticket_count})', color='#1f77b4')
 
-    # Get figure and axes objects
-    # fig = plt.gcf() # No longer needed because fig, ax = plt.subplots was set above
-
     # Add a thin black border around the figure
     fig.patch.set_edgecolor('black')
     fig.patch.set_linewidth(5)
@@ -129,7 +126,7 @@ def save_sla_breaches_chart(ticket_slas_by_periods):
     ax.set_ylabel('Counts', fontdict={'fontsize': 12, 'fontweight': 'bold'})
     ax.set_title('SLA Breaches', fontdict={'fontsize': 12, 'fontweight': 'bold'})
     ax.set_xticks(x)
-    ax.set_xticklabels(['Resp. SLA Breaches', 'Cont. SLA Breaches'], fontdict={'fontsize': 12, 'fontweight': 'bold'})
+    ax.set_xticklabels(['Response', 'Containment'], fontdict={'fontsize': 12, 'fontweight': 'bold'})
     ax.legend(title='Period (Ticket Count)', loc='upper right')
 
     # Add value labels on top of each bar using the bar container objects
