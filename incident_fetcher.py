@@ -1,5 +1,7 @@
 import logging
+
 import requests
+
 from config import get_config
 
 # Load configuration
@@ -21,6 +23,7 @@ class IncidentFetcher:
 
     def get_tickets(self, query, period=None, size=10000) -> list:
         """Fetches security incidents from XSOAR."""
+        query = query + f' -category:job -type:"{config.ticket_type_prefix} Ticket QA" -type:"{config.ticket_type_prefix} SNOW Whitelist Request"'
         payload = {
             "filter": {
                 "query": query,

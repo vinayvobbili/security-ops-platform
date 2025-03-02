@@ -14,7 +14,7 @@ eastern = pytz.timezone('US/Eastern')
 
 config = get_config()
 
-QUERY_TEMPLATE = '-category:job type:{ticket_type_prefix} -owner:"" created:>={start} created:<{end}'
+QUERY_TEMPLATE = 'type:{ticket_type_prefix} -owner:"" created:>={start} created:<{end}'
 
 with open('data/detection_source_codes_by_name.json', 'r') as f:
     detection_source_codes_by_name = json.load(f)
@@ -62,7 +62,6 @@ def make_chart():
 
     query = QUERY_TEMPLATE.format(ticket_type_prefix=config.ticket_type_prefix, start=yesterday_start_utc, end=yesterday_end_utc)
     tickets = IncidentFetcher().get_tickets(query=query)
-    print(f"Number of tickets returned: {len(tickets)}")
 
     # Create a DataFrame from the tickets
     if not tickets:

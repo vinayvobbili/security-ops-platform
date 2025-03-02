@@ -148,7 +148,7 @@ def save_sla_breaches_chart(ticket_slas_by_periods):
 
 
 def make_chart():
-    query = f'-category:job type:{config.ticket_type_prefix} -owner:""'
+    query = f'type:{config.ticket_type_prefix} -owner:""'
     period = {
         "byTo": "months",
         "toValue": None,
