@@ -22,7 +22,7 @@ with open('data/detection_source_codes_by_name.json', 'r') as f:
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-QUERY = f'-category:job type:{config.ticket_type_prefix} -owner:"" status:closed'
+QUERY = f'type:{config.ticket_type_prefix} -owner:"" status:closed'
 PERIOD = {
     "byFrom": "months",
     "fromValue": 1

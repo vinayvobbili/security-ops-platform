@@ -12,7 +12,7 @@ from incident_fetcher import IncidentFetcher
 config = get_config()
 webex_api = WebexAPI(config.webex_bot_access_token_soar)
 
-base_query = f'-category:job type:{config.ticket_type_prefix} -owner:""'
+base_query = f'type:{config.ticket_type_prefix} -owner:""'
 
 # Load the workbook
 wb = load_workbook('data/' + config.secops_shift_staffing_filename)

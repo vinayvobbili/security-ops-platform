@@ -9,6 +9,7 @@ import pytz
 from PIL import Image
 from matplotlib import transforms
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox  # Import necessary classes
+from matplotlib.ticker import MaxNLocator
 
 from config import get_config
 from incident_fetcher import IncidentFetcher
@@ -20,7 +21,7 @@ config = get_config()
 with open('data/detection_source_codes_by_name.json', 'r') as f:
     detection_source_codes_by_name = json.load(f)
 
-QUERY_TEMPLATE = '-category:job type:{ticket_type_prefix} -owner:"" closed:>={start} closed:<{end}'
+QUERY_TEMPLATE = 'type:{ticket_type_prefix} -owner:"" closed:>={start} closed:<{end}'
 
 # Define a custom order for the impacts
 CUSTOM_IMPACT_ORDER = ["Significant", "Confirmed", "Detected", "Prevented", "Ignore", "Testing", "False Positive"]
@@ -109,10 +110,7 @@ def create_graph(tickets):
         for i, count in enumerate(counts):
             if count > 0:
                 x_pos = bottom[i] + count / 2
-                if impact in ("Ignore", "Testing", "False Positive"):
-                    ax.text(x_pos, i, str(count), ha='center', va='center', color='black', fontsize=8, fontweight='bold')
-                else:
-                    ax.text(x_pos, i, str(count), ha='center', va='center', color='white', fontsize=8, fontweight='bold')
+                ax.text(x_pos, i, str(count), ha='center', va='center', color='black' if impact in ("Ignore", "Testing", "False Positive") else 'white', fontsize=12, fontweight='bold')
 
         bottom = [b + c for b, c in zip(bottom, counts)]
 
@@ -148,6 +146,8 @@ def create_graph(tickets):
                     except Exception as e:
                         print(f"Error adding logo {logo_filename}: {e}")
 
+    ax.xaxis.set_major_locator(MaxNLocator(integer=True))
+
     # Extend the x-axis
     max_x_value = max(bottom)
     ax.set_xlim([0, max_x_value * 1.1])  # Extend 10% beyond the maximum x-value
@@ -155,11 +155,11 @@ def create_graph(tickets):
     # Add labels and title
     ax.set_yticks(range(len(pyramid_sources)))
     ax.set_yticklabels(pyramid_sources)
-    ax.set_ylabel('Detection Source', fontweight='bold')
-    ax.set_xlabel('Ticket Counts', fontweight='bold')
+    ax.set_ylabel('Detection Source', fontweight='bold', fontsize=12)
+    ax.set_xlabel('Alert Counts', fontweight='bold', fontsize=10, labelpad=10)
 
     ax.set_title('Outflow Yesterday', fontweight='bold', fontsize=12)
-    ax.legend(title='Impact', loc='upper right')
+    ax.legend(title='Impact', loc='upper right', fontsize=10, title_fontsize=12)
 
     # Add a thin black border around the figure
     fig.patch.set_edgecolor('black')
@@ -186,7 +186,6 @@ def make_chart() -> None:
 
     query = QUERY_TEMPLATE.format(ticket_type_prefix=config.ticket_type_prefix, start=yesterday_start_utc, end=yesterday_end_utc)
     tickets = IncidentFetcher().get_tickets(query=query)
-    print(f"Number of tickets returned: {len(tickets)}")
     create_graph(tickets)
 
 

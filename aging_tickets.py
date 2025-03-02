@@ -118,13 +118,13 @@ def generate_plot(tickets):
 
 def make_chart():
     # METCIRT* tickets minus the Third Party are considered aging after 30 days
-    query = f'-status:closed -category:job type:{config.ticket_type_prefix} -type:"{config.ticket_type_prefix} Third Party Compromise"'
+    query = f'-status:closed type:{config.ticket_type_prefix} -type:"{config.ticket_type_prefix} Third Party Compromise"'
     period = {"byTo": "months", "toValue": 1, "byFrom": "months", "fromValue": None}
 
     tickets = IncidentFetcher().get_tickets(query=query, period=period)
 
     # Third Party Compromise tickets are considered aging after 90 days
-    query = f'-status:closed -category:job type:"{config.ticket_type_prefix} Third Party Compromise"'
+    query = f'-status:closed type:"{config.ticket_type_prefix} Third Party Compromise"'
     period = {"byTo": "months", "toValue": 3, "byFrom": "months", "fromValue": None}
     tickets = tickets + IncidentFetcher().get_tickets(query=query, period=period)
 
@@ -154,7 +154,7 @@ def send_report():
     room_id = config.webex_room_id_aging_tickets
     # room_id = config.webex_room_id_vinay_test_space
 
-    query = f'-status:closed -category:job type:{config.ticket_type_prefix} -type:"{config.ticket_type_prefix} Third Party Compromise"'
+    query = f'-status:closed type:{config.ticket_type_prefix} -type:"{config.ticket_type_prefix} Third Party Compromise"'
     period = {"byTo": "months", "toValue": 1, "byFrom": "months", "fromValue": None}
     tickets = IncidentFetcher().get_tickets(query=query, period=period)
 
@@ -164,7 +164,7 @@ def send_report():
         markdown=f'Summary (Type={config.ticket_type_prefix}* - TP, Created=30+ days ago)\n ``` \n {generate_daily_summary(tickets)}'
     )
 
-    query = f'-status:closed -category:job type:"{config.ticket_type_prefix} Third Party Compromise"'
+    query = f'-status:closed type:"{config.ticket_type_prefix} Third Party Compromise"'
     period = {"byTo": "months", "toValue": 3, "byFrom": "months", "fromValue": None}
     tickets = IncidentFetcher().get_tickets(query=query, period=period)
 

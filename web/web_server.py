@@ -26,10 +26,11 @@ def get_image_files() -> List[str]:
 # Pre-defined image order for display
 IMAGE_ORDER = [
     "images/Company Logo.jpg",
-    "images/GDnR Coin.png",
+    "images/DnR Welcome.png",
     "images/IR_Metrics.jpeg",
     "charts/Threatcon Level.png",
     "charts/Days Since Last Incident.jpg",
+    "images/IR Dashboard.png",
     "charts/Aging Tickets.png",
     "charts/Inflow.png",
     "charts/Outflow.png",

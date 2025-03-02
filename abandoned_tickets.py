@@ -63,7 +63,7 @@ def send_report():
 
     today_minus_7 = pd.Timestamp.now(tz=eastern) - pd.Timedelta(days=7)
 
-    query = f'-status:closed -category:job type:{config.ticket_type_prefix} -type:"{config.ticket_type_prefix} Third Party Compromise"'
+    query = f'-status:closed type:{config.ticket_type_prefix} -type:"{config.ticket_type_prefix} Third Party Compromise"'
     period = {"byTo": "months", "toValue": None, "byFrom": "months", "fromValue": None}
     tickets = IncidentFetcher().get_tickets(query=query, period=period)
 

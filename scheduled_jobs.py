@@ -27,7 +27,6 @@ def main():
     Main function to run the scheduled jobs.
     """
     # run once
-    '''
     aging_tickets.make_chart(),
     days_since_incident.make_chart(),
     de_stories.make_chart(),
@@ -39,7 +38,6 @@ def main():
     re_stories.make_chart(),
     sla_breaches.make_chart(),
     threatcon_level.make_chart()
-    '''
 
     # schedule
     print("Starting the scheduler...")

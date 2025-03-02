@@ -5,14 +5,12 @@ import matplotlib.transforms as transforms
 import numpy as np
 from matplotlib import pyplot as plt
 from pytz import timezone
-from webexteamssdk import WebexTeamsAPI
 
 from config import get_config
 from incident_fetcher import IncidentFetcher
 
 config = get_config()
 eastern = timezone('US/Eastern')  # Define the Eastern time zone
-webex_api = WebexTeamsAPI(access_token=config.webex_bot_access_token_moneyball)
 
 
 @dataclass
@@ -20,6 +18,7 @@ class TicketSlaTimes:
     time_to_contain_secs: int = 0
     time_to_respond_secs: int = 0
     total_ticket_count: int = 0
+    host_ticket_count: int = 0
 
 
 def get_tickets_by_periods(tickets):
@@ -30,8 +29,8 @@ def get_tickets_by_periods(tickets):
     seven_days_ago = (current_date - timedelta(days=7)).date()
     thirty_days_ago = (current_date - timedelta(days=30)).date()
 
-    # Initialize data structure for ticket_slas_by_periods
-    ticket_slas_by_periods = {
+    # Initialize data structure for ticket_timess_by_periods
+    ticket_timess_by_periods = {
         'Yesterday': TicketSlaTimes(),
         'Past 7 days': TicketSlaTimes(),
         'Past 30 days': TicketSlaTimes()
@@ -46,44 +45,68 @@ def get_tickets_by_periods(tickets):
             '%Y-%m-%dT%H:%M:%S.%fZ' if '.' in ticket['created'] else '%Y-%m-%dT%H:%M:%SZ'
         ).date()
 
-        containment_duration = custom_fields['containmentsla']['totalDuration']
         response_duration = custom_fields['responsesla']['totalDuration']
 
         # Update metrics for each time period
         if incident_date == yesterday:
-            ticket_slas_by_periods['Yesterday'].time_to_contain_secs += containment_duration
-            ticket_slas_by_periods['Yesterday'].time_to_respond_secs += response_duration
-            ticket_slas_by_periods['Yesterday'].total_ticket_count += 1
+            ticket_timess_by_periods['Yesterday'].time_to_respond_secs += response_duration
+            ticket_timess_by_periods['Yesterday'].total_ticket_count += 1
 
         if seven_days_ago <= incident_date <= current_date.date():
-            ticket_slas_by_periods['Past 7 days'].time_to_contain_secs += containment_duration
-            ticket_slas_by_periods['Past 7 days'].time_to_respond_secs += response_duration
-            ticket_slas_by_periods['Past 7 days'].total_ticket_count += 1
+            ticket_timess_by_periods['Past 7 days'].time_to_respond_secs += response_duration
+            ticket_timess_by_periods['Past 7 days'].total_ticket_count += 1
 
         if thirty_days_ago <= incident_date <= current_date.date():
-            ticket_slas_by_periods['Past 30 days'].time_to_contain_secs += containment_duration
-            ticket_slas_by_periods['Past 30 days'].time_to_respond_secs += response_duration
-            ticket_slas_by_periods['Past 30 days'].total_ticket_count += 1
+            ticket_timess_by_periods['Past 30 days'].time_to_respond_secs += response_duration
+            ticket_timess_by_periods['Past 30 days'].total_ticket_count += 1
 
-    return ticket_slas_by_periods
+    host_tickets = [ticket for ticket in tickets if ticket['CustomFields'].get('hostname', '')]
+    for ticket in host_tickets:
+        custom_fields = ticket['CustomFields']
+
+        incident_date = datetime.strptime(
+            ticket['created'],
+            '%Y-%m-%dT%H:%M:%S.%fZ' if '.' in ticket['created'] else '%Y-%m-%dT%H:%M:%SZ'
+        ).date()
+
+        containment_duration = custom_fields['containmentsla']['totalDuration']
+
+        # Update metrics for each time period
+        if incident_date == yesterday:
+            ticket_timess_by_periods['Yesterday'].time_to_contain_secs += containment_duration
+            ticket_timess_by_periods['Yesterday'].host_ticket_count += 1
+
+        if seven_days_ago <= incident_date <= current_date.date():
+            ticket_timess_by_periods['Past 7 days'].time_to_contain_secs += containment_duration
+            ticket_timess_by_periods['Past 7 days'].host_ticket_count += 1
+
+        if thirty_days_ago <= incident_date <= current_date.date():
+            ticket_timess_by_periods['Past 30 days'].time_to_contain_secs += containment_duration
+            ticket_timess_by_periods['Past 30 days'].host_ticket_count += 1
+
+    return ticket_timess_by_periods
 
 
 def save_mttr_mttc_chart(ticket_slas_by_periods):
     # Calculate metrics in minutes for each period
-    thirty_days_ticket_count = ticket_slas_by_periods['Past 30 days'].total_ticket_count
-    seven_days_ticket_count = ticket_slas_by_periods['Past 7 days'].total_ticket_count
-    yesterday_ticket_count = ticket_slas_by_periods['Yesterday'].total_ticket_count
+    thirty_days_total_ticket_count = ticket_slas_by_periods['Past 30 days'].total_ticket_count
+    seven_days_total_ticket_count = ticket_slas_by_periods['Past 7 days'].total_ticket_count
+    yesterday_total_ticket_count = ticket_slas_by_periods['Yesterday'].total_ticket_count
+
+    thirty_days_host_ticket_count = ticket_slas_by_periods['Past 30 days'].host_ticket_count
+    seven_days_host_ticket_count = ticket_slas_by_periods['Past 7 days'].host_ticket_count
+    yesterday_host_ticket_count = ticket_slas_by_periods['Yesterday'].host_ticket_count
 
     metrics = {
         'MTTR': {
-            'Yesterday': (ticket_slas_by_periods['Yesterday'].time_to_respond_secs / 60 / yesterday_ticket_count if yesterday_ticket_count > 0 else 0),
-            'Past 7 days': (ticket_slas_by_periods['Past 7 days'].time_to_respond_secs / 60 / seven_days_ticket_count if seven_days_ticket_count > 0 else 0),
-            'Past 30 days': (ticket_slas_by_periods['Past 30 days'].time_to_respond_secs / 60 / thirty_days_ticket_count if thirty_days_ticket_count > 0 else 0)
+            'Yesterday': (ticket_slas_by_periods['Yesterday'].time_to_respond_secs / 60 / yesterday_total_ticket_count if yesterday_total_ticket_count > 0 else 0),
+            'Past 7 days': (ticket_slas_by_periods['Past 7 days'].time_to_respond_secs / 60 / seven_days_total_ticket_count if seven_days_total_ticket_count > 0 else 0),
+            'Past 30 days': (ticket_slas_by_periods['Past 30 days'].time_to_respond_secs / 60 / thirty_days_total_ticket_count if thirty_days_total_ticket_count > 0 else 0)
         },
         'MTTC': {
-            'Yesterday': (ticket_slas_by_periods['Yesterday'].time_to_contain_secs / 60 / yesterday_ticket_count if yesterday_ticket_count > 0 else 0),
-            'Past 7 days': (ticket_slas_by_periods['Past 7 days'].time_to_contain_secs / 60 / seven_days_ticket_count if seven_days_ticket_count > 0 else 0),
-            'Past 30 days': (ticket_slas_by_periods['Past 30 days'].time_to_contain_secs / 60 / thirty_days_ticket_count if thirty_days_ticket_count > 0 else 0)
+            'Yesterday': (ticket_slas_by_periods['Yesterday'].time_to_contain_secs / 60 / yesterday_host_ticket_count if yesterday_host_ticket_count > 0 else 0),
+            'Past 7 days': (ticket_slas_by_periods['Past 7 days'].time_to_contain_secs / 60 / seven_days_host_ticket_count if seven_days_host_ticket_count > 0 else 0),
+            'Past 30 days': (ticket_slas_by_periods['Past 30 days'].time_to_contain_secs / 60 / thirty_days_host_ticket_count if thirty_days_host_ticket_count > 0 else 0)
         }
     }
 
@@ -102,9 +125,9 @@ def save_mttr_mttc_chart(ticket_slas_by_periods):
     # Adjust figure size here
     fig, ax = plt.subplots(figsize=(8, 6))
 
-    bar1 = ax.bar(x - width, [mttr_30days, mttc_30days], width, label=f'Past 30 days ({thirty_days_ticket_count})', color='#2ca02c')
-    bar2 = ax.bar(x, [mttr_7days, mttc_7days], width, label=f'Past 7 days ({seven_days_ticket_count})', color='#ff7f0e')
-    bar3 = ax.bar(x + width, [mttr_yesterday, mttc_yesterday], width, label=f'Yesterday ({yesterday_ticket_count})', color='#1f77b4')
+    bar1 = ax.bar(x - width, [mttr_30days, mttc_30days], width, label=f'Past 30 days ({thirty_days_total_ticket_count})', color='#2ca02c')
+    bar2 = ax.bar(x, [mttr_7days, mttc_7days], width, label=f'Past 7 days ({seven_days_total_ticket_count})', color='#ff7f0e')
+    bar3 = ax.bar(x + width, [mttr_yesterday, mttc_yesterday], width, label=f'Yesterday ({yesterday_total_ticket_count})', color='#1f77b4')
 
     # Get x-axis limits
     xmin, xmax = ax.get_xlim()
@@ -113,7 +136,7 @@ def save_mttr_mttc_chart(ticket_slas_by_periods):
     # Calculate midpoint for half-width lines
     midpoint = xmin + (xmax - xmin) / 2
 
-    # Draw the hlines from the midpoint to the right edge
+    # Draw the hlines from the midpoint to the edges
     ax.hlines(y=3, xmin=xmin, xmax=midpoint, color='r', linestyle='-', label='Response SLA')
     ax.hlines(y=15, xmin=midpoint, xmax=xmax, color='g', linestyle='-', label='Containment SLA')
 
@@ -142,9 +165,6 @@ def save_mttr_mttc_chart(ticket_slas_by_periods):
                     f'{height:.1f}',
                     ha='center', va='bottom', fontdict={'fontsize': 14, 'fontweight': 'bold'})
 
-    # Add grid for better readability
-    ax.grid(True, axis='y', linestyle='--', alpha=0.7)
-
     # Adjust layout to prevent label clipping
     plt.tight_layout()
 
@@ -153,7 +173,7 @@ def save_mttr_mttc_chart(ticket_slas_by_periods):
 
 
 def make_chart():
-    query = f'-category:job type:{config.ticket_type_prefix} -owner:""'
+    query = f' type:{config.ticket_type_prefix} -owner:""'
     period = {
         "byTo": "months",
         "toValue": None,

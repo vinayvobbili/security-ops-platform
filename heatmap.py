@@ -17,7 +17,7 @@ config = get_config()
 
 eastern = timezone('US/Eastern')
 
-QUERY_TEMPLATE = f'-category:job status:closed type:{config.ticket_type_prefix} -owner:""'
+QUERY_TEMPLATE = f'status:closed type:{config.ticket_type_prefix} -owner:""'
 PERIOD = {"byFrom": "days", "fromValue": 30}
 
 
