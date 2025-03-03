@@ -29,8 +29,8 @@ def get_tickets_by_periods(tickets):
     seven_days_ago = (current_date - timedelta(days=7)).date()
     thirty_days_ago = (current_date - timedelta(days=30)).date()
 
-    # Initialize data structure for ticket_timess_by_periods
-    ticket_timess_by_periods = {
+    # Initialize data structure for ticket_times_by_periods
+    ticket_times_by_periods = {
         'Yesterday': TicketSlaTimes(),
         'Past 7 days': TicketSlaTimes(),
         'Past 30 days': TicketSlaTimes()
@@ -49,16 +49,16 @@ def get_tickets_by_periods(tickets):
 
         # Update metrics for each time period
         if incident_date == yesterday:
-            ticket_timess_by_periods['Yesterday'].time_to_respond_secs += response_duration
-            ticket_timess_by_periods['Yesterday'].total_ticket_count += 1
+            ticket_times_by_periods['Yesterday'].time_to_respond_secs += response_duration
+            ticket_times_by_periods['Yesterday'].total_ticket_count += 1
 
         if seven_days_ago <= incident_date <= current_date.date():
-            ticket_timess_by_periods['Past 7 days'].time_to_respond_secs += response_duration
-            ticket_timess_by_periods['Past 7 days'].total_ticket_count += 1
+            ticket_times_by_periods['Past 7 days'].time_to_respond_secs += response_duration
+            ticket_times_by_periods['Past 7 days'].total_ticket_count += 1
 
         if thirty_days_ago <= incident_date <= current_date.date():
-            ticket_timess_by_periods['Past 30 days'].time_to_respond_secs += response_duration
-            ticket_timess_by_periods['Past 30 days'].total_ticket_count += 1
+            ticket_times_by_periods['Past 30 days'].time_to_respond_secs += response_duration
+            ticket_times_by_periods['Past 30 days'].total_ticket_count += 1
 
     host_tickets = [ticket for ticket in tickets if ticket['CustomFields'].get('hostname', '')]
     for ticket in host_tickets:
@@ -73,18 +73,18 @@ def get_tickets_by_periods(tickets):
 
         # Update metrics for each time period
         if incident_date == yesterday:
-            ticket_timess_by_periods['Yesterday'].time_to_contain_secs += containment_duration
-            ticket_timess_by_periods['Yesterday'].host_ticket_count += 1
+            ticket_times_by_periods['Yesterday'].time_to_contain_secs += containment_duration
+            ticket_times_by_periods['Yesterday'].host_ticket_count += 1
 
         if seven_days_ago <= incident_date <= current_date.date():
-            ticket_timess_by_periods['Past 7 days'].time_to_contain_secs += containment_duration
-            ticket_timess_by_periods['Past 7 days'].host_ticket_count += 1
+            ticket_times_by_periods['Past 7 days'].time_to_contain_secs += containment_duration
+            ticket_times_by_periods['Past 7 days'].host_ticket_count += 1
 
         if thirty_days_ago <= incident_date <= current_date.date():
-            ticket_timess_by_periods['Past 30 days'].time_to_contain_secs += containment_duration
-            ticket_timess_by_periods['Past 30 days'].host_ticket_count += 1
+            ticket_times_by_periods['Past 30 days'].time_to_contain_secs += containment_duration
+            ticket_times_by_periods['Past 30 days'].host_ticket_count += 1
 
-    return ticket_timess_by_periods
+    return ticket_times_by_periods
 
 
 def save_mttr_mttc_chart(ticket_slas_by_periods):
@@ -137,8 +137,8 @@ def save_mttr_mttc_chart(ticket_slas_by_periods):
     midpoint = xmin + (xmax - xmin) / 2
 
     # Draw the hlines from the midpoint to the edges
-    ax.hlines(y=3, xmin=xmin, xmax=midpoint, color='r', linestyle='-', label='Response SLA')
-    ax.hlines(y=15, xmin=midpoint, xmax=xmax, color='g', linestyle='-', label='Containment SLA')
+    ax.hlines(y=3, xmin=xmin, xmax=midpoint, color='r', linestyle='-', label='Respond')
+    ax.hlines(y=15, xmin=midpoint, xmax=xmax, color='g', linestyle='-', label='Contain')
 
     # Add a thin black border around the figure
     fig.patch.set_edgecolor('black')
@@ -152,7 +152,7 @@ def save_mttr_mttc_chart(ticket_slas_by_periods):
 
     # Customize the plot
     ax.set_ylabel('Minutes', fontdict={'fontsize': 12, 'fontweight': 'bold'})
-    ax.set_title(f'Mean Times', fontdict={'fontsize': 12, 'fontweight': 'bold'})
+    ax.set_title(f'Mean Time To', fontdict={'fontsize': 12, 'fontweight': 'bold'})
     ax.set_xticks(x)
     ax.set_xticklabels(['MTTR', 'MTTC'], fontdict={'fontsize': 12, 'fontweight': 'bold'})
     ax.legend(loc='upper left')

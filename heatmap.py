@@ -122,7 +122,7 @@ def create_choropleth_map():
                  'color': 'dimgray',  # Label color
                  'weight': 'bold',
                  'size': 10}  # Increased font size
-    cbar.set_label("Alert counts per thousand hosts (last 30 days)", fontdict=cbar_font)  # Set label with fontdict
+    cbar.set_label("Alert counts per thousand hosts (last 30 days)", fontdict=cbar_font, labelpad=10)
     cbar.ax.tick_params(labelsize=8, labelcolor='gray')  # Adjust tick label size and color
 
     # Stylish and colorful title

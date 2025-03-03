@@ -105,7 +105,7 @@ def main():
     print(f"Device ID: {device_id}")
 
     device_online_state = falcon_hosts.get_online_state(ids=device_id)['body']['resources'][0]['state']
-    print(f"Device {host_filter} online status: {device_online_state}")
+    print(f"Device {hostname}'s online status: {device_online_state}")
 
     # script_content = """Write-Host 'Test RTR script execution'"""  # Simple test script
     # execute_script(device_id, script_content)
