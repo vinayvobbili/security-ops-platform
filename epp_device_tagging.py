@@ -94,7 +94,6 @@ class Host:
         if self.device_id:
             self._set_host_details_from_snow()
 
-
     def _set_cs_device_id(self) -> None:
         host_filter = f"hostname:'{self.name}'"
         response = falcon_hosts.query_devices_by_filter(filter=host_filter)
@@ -308,7 +307,7 @@ def format_duration(seconds):
     return " ".join(parts)
 
 
-def generate_and_email_csv_report(hosts: List[Host], problematic_hosts_report: List[Host]) -> None:
+def generate_and_email_csv_report(hosts: List[Host]) -> None:
     """
     Generates a CSV report of hosts and emails it
     """
@@ -349,7 +348,7 @@ def generate_and_email_csv_report(hosts: List[Host], problematic_hosts_report: L
     }
 
 
-def main() -> None:
+def main() -> str:
     start_time = time.time()
 
     # Fetch and initialize hosts
@@ -386,8 +385,7 @@ Hosts with region guessed: {', '.join(hosts_with_region_guessed)}"""
 
     # Email the report
     generate_and_email_csv_report(
-        hosts=hosts,
-        problematic_hosts_report=problematic_hosts_report
+        hosts=hosts
     )
 
     end_time = time.time()
@@ -397,7 +395,7 @@ Fetching and initializing hosts took {format_duration(fetch_duration)}
 Generating tags took {format_duration(generate_tag_duration)}
 Total execution time: {format_duration(total_duration)}"""
 
-    return (f"{problematic_hosts_report}\n\n{time_report}\n\n{output_table}\n")
+    return f"{problematic_hosts_report}\n\n{time_report}\n\n{output_table}\n"
 
 
 if __name__ in ('__main__', '__builtin__', 'builtins'):

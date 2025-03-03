@@ -333,21 +333,20 @@ if __name__ == "__main__":
             token = client.get_token()
             logger.info(f"Access token: {token[:10]}...")
 
-            # Example 2: Get host by name
-            hostname = "C02G7C6VMD6R"
-            logger.info(f"Looking up host by name: {hostname}")
-            host = client.get_host_details(hostname=hostname)
+            # Example 2: Get host_details by name
+            hostname = "CLAZEMETU0008"
+            logger.info(f"Looking up host_details by name: {hostname}")
+            host_details = client.get_host_details(hostname=hostname)['items']
 
-            if host:
-                if isinstance(host, list):
-                    logger.info(f"Found {len(host)} hosts matching name: {hostname}")
-                    for h in host:
-                        logger.info(f"Host: {h['name']}, IP: {h.get('ip_address', 'N/A')}, OS: {h.get('os', 'N/A')}")
+            if host_details:
+                if isinstance(host_details, list):
+                    logger.info(f"Found {len(host_details)} hosts matching name: {hostname}")
+                    for h in host_details:
+                        logger.info(f"Hostname: {h['name']}, IP: {h.get('ipAddress', 'N/A')}, Class: {h.get('ciClass', 'N/A')},Environment: {h.get('environment', 'N/A')}, Country: {h.get('supportedCountry', 'N/A')}")
                 else:
-                    logger.info(f"Found host: {host['name']}, IP: {host.get('ip_address', 'N/A')}, OS: {host.get('os', 'N/A')}")
+                    logger.info(f"Found host_details: {host_details['name']}, IP: {host_details.get('ip_address', 'N/A')}, OS: {host_details.get('os', 'N/A')}")
             else:
-                logger.info(f"No host found with name: {hostname}")
-
+                logger.info(f"No host_details found with name: {hostname}")
 
     except Exception as e:
         logger.error(f"Error: {e}")

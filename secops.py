@@ -2,7 +2,6 @@ import json
 import time
 from datetime import datetime, timedelta
 
-from numpy.f2py.crackfortran import previous_context
 from openpyxl import load_workbook
 from tabulate import tabulate
 from webexpythonsdk import WebexAPI
@@ -18,7 +17,7 @@ BASE_QUERY = f'type:{config.ticket_type_prefix} -owner:""'
 # Load the workbook
 wb = load_workbook('data/' + config.secops_shift_staffing_filename)
 # Select the sheet
-sheet = wb['Jan - Feb 2025']
+sheet = wb['March-April 2025']
 
 # get the cell names by shift from the sheet
 with open('data/cell_names_by_shift.json', 'r') as f:
