@@ -6,8 +6,6 @@ from webexteamssdk import WebexTeamsAPI
 
 from config import get_config
 from helper_methods import log_activity
-from inflow import Inflow
-from lifespan import Lifespan
 
 # Load configuration
 config = get_config()
@@ -85,7 +83,17 @@ class Outflow(Command):
 
     @log_activity
     def execute(self, message, attachment_actions, activity):
-        send_chart(attachment_actions.json_data["roomId"], activity['actor']['displayName'], "Outflow Yesterday", "Outflow Yesterday.png")
+        send_chart(attachment_actions.json_data["roomId"], activity['actor']['displayName'], "Outflow Yesterday", "Outflow.png")
+
+
+class Inflow(Command):
+
+    def __init__(self):
+        super().__init__(command_keyword="inflow", help_message="Inflow")
+
+    @log_activity
+    def execute(self, message, attachment_actions, activity):
+        send_chart(attachment_actions.json_data["roomId"], activity['actor']['displayName'], "Inflow Yesterday", "Inflow.png")
 
 
 class HeatMap(Command):

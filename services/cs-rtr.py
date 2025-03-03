@@ -44,15 +44,8 @@ def execute_script(device_id, script_content):
     complete = False
     all_stdout = ""
     all_stderr = ""
-    max_wait_time = 60  # Max wait time in seconds. You can set a value based on the command.
-
-    start_time = time.time()
 
     while not complete:
-        if time.time() - start_time > max_wait_time:
-            print("Maximum wait time for command reached.")
-            break;
-
         status_result = falcon_rtr.check_command_status(cloud_request_id=cloud_request_id, sequence_id=sequence_id)
 
         if status_result['status_code'] != 200:
@@ -75,12 +68,12 @@ def execute_script(device_id, script_content):
                 print(f"  stderr: {stderr}")
             print(f"  complete: {complete}")
             if complete:
-                break;
+                break
             sequence_id += 1
         else:
             print(f"No resources found in sequence {sequence_id}, waiting...")
 
-        time.sleep(10)  # Wait for 10 second before checking again. Increase if needed
+        time.sleep(10)  # Wait before checking again. Increase if needed
 
     print(f"Command Execution output: stdout: {all_stdout}, stderr: {all_stderr}")
 
@@ -111,13 +104,17 @@ def main():
     device_id = get_device_id(hostname)
     print(f"Device ID: {device_id}")
 
+    device_online_state = falcon_hosts.get_online_state(ids=device_id)['body']['resources'][0]['state']
+    print(f"Device {host_filter} online status: {device_online_state}")
+
     # script_content = """Write-Host 'Test RTR script execution'"""  # Simple test script
     # execute_script(device_id, script_content)
 
-    test_commands = ["ls", "whoami", "systeminfo"]
+    if device_online_state:
+        test_commands = ["ls", "whoami", "systeminfo"]
 
-    for command in test_commands:
-        execute_script(device_id, command)
+        for command in test_commands:
+            execute_script(device_id, command)
 
 
 if __name__ == "__main__":
