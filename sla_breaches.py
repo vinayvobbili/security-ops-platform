@@ -137,9 +137,6 @@ def save_sla_breaches_chart(ticket_slas_by_periods):
                     f'{height}',
                     ha='center', va='bottom', fontdict={'fontsize': 14, 'fontweight': 'bold'})
 
-    # Add grid for better readability
-    ax.grid(True, axis='y', linestyle='--', alpha=0.7)
-
     # Adjust layout to prevent label clipping
     plt.tight_layout()
 
