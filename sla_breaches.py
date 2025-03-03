@@ -9,7 +9,7 @@ from pytz import timezone
 from config import get_config
 from incident_fetcher import IncidentFetcher
 
-eastern = timezone('US/Eastern')  # Define the Eastern time zone
+eastern = timezone('US/Eastern')
 config = get_config()
 
 
@@ -114,8 +114,6 @@ def save_sla_breaches_chart(ticket_slas_by_periods):
     # Add a thin black border around the figure
     fig.patch.set_edgecolor('black')
     fig.patch.set_linewidth(5)
-
-    # ax = plt.gca() # No longer needed because fig, ax = plt.subplots was set above
 
     # Transform coordinates to figure coordinates (bottom-left is 0,0)
     trans = transforms.blended_transform_factory(fig.transFigure, ax.transAxes)  # gets transform object
