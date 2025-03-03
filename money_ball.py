@@ -122,10 +122,6 @@ def main():
     bot.add_command(SlaBreaches())
     bot.add_command(Inflow())
     bot.add_command(Outflow())
-    bot.add_command(Lifespan())
-    bot.add_command(HeatMap())
-    bot.add_command(DetectionEngineeringStories())
-    bot.add_command(ResponseEngineeringStories())
     bot.add_command(ThreatconLevel())
 
     # Start the bot
