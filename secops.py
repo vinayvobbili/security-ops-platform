@@ -1,6 +1,6 @@
 import json
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from openpyxl import load_workbook
 from tabulate import tabulate
@@ -34,12 +34,18 @@ def get_open_tickets():
     return ', '.join(map(str, open_tickets)) + (f" and {diff} more" if diff > 0 else '')
 
 
-def announce_shift_change(shift, room_id):
-    day_name = datetime.now().strftime("%A")
-    shift_cell_names = cell_names_by_shift[day_name][shift]
+def get_staffing_data(day_name, shift_name):
+    shift_cell_names = cell_names_by_shift[day_name][shift_name]
     staffing_data = {}
     for team, cell_names in shift_cell_names.items():
         staffing_data[team] = [sheet[cell_name].value for cell_name in cell_names if sheet[cell_name].value != '\xa0']
+    return staffing_data
+
+
+def announce_shift_change(shift_name, room_id):
+    day_name = datetime.now().strftime("%A")
+    staffing_data = get_staffing_data(day_name, shift_name)
+    staffing_data['SA'][0] = staffing_data['SA'][0] + ' (Lead)'
 
     # Convert staffing_data to a table with the first column as headers
     headers = list(staffing_data.keys())
@@ -52,7 +58,7 @@ def announce_shift_change(shift, room_id):
     webex_api.messages.create(
         roomId=room_id,
         text=f"Shift Change Notice!",
-        markdown=f"Good **{shift.upper()}**! A new shift's starting now!\n"
+        markdown=f"Good **{shift_name.upper()}**! A new shift's starting now!\n"
                  f"Timings: {sheet[cell_names_by_shift['shift_timings'][shift]].value}\n"
                  f"Open METCIRT* tickets: {get_open_tickets()}\n"
                  f"Hosts in Containment: US123, IN456, AU789\n"
@@ -101,10 +107,27 @@ def announce_shift_change(shift, room_id):
     if inflow_tickets_with_host:
         mean_time_to_contain = total_time_to_contain / len(inflow_tickets_with_host)
 
+    total_staff_count = sum(len(staff) for staff in staffing_data.values())
+    tickets_closed_per_analyst = len(outflow) / total_staff_count
+
+    shift_mapping = {
+        'morning': ((datetime.now() - timedelta(days=1)).strftime("%A"), 'night'),
+        'afternoon': (day_name, 'morning'),
+        'night': (day_name, 'afternoon'),
+    }
+
+    previous_shift_day, previous_shift_name = shift_mapping.get(shift_name, (None, None))
+
+    if previous_shift_name is None:
+        print(f"Warning: No previous shift defined for {shift_name}")
+        return
+
+    previous_shift_staffing_data = get_staffing_data(previous_shift_day, previous_shift_name)
+
     shift_performance = {
-        'Shift Lead': 'John Doe',
+        'Shift Lead': previous_shift_staffing_data['SA'][0],
         'New Tickets ack\'ed': len(inflow),
-        'Tickets closed out': len(outflow),
+        'Tickets closed out': f'{len(outflow)} ({tickets_closed_per_analyst:.2f} per analyst)',
         'Resp. SLA Breaches': len(response_sla_breaches),
         'Cont. SLA Breaches': len(containment_sla_breaches),
         'MTTR': f"{int(mean_time_to_respond // 60)}:{int(mean_time_to_respond % 60):02d}",
