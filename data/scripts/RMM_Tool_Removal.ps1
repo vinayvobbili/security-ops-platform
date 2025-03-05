@@ -17,7 +17,8 @@ $rmmProcesses = @(
 )
 
 # Function to write to log
-function Write-Log {
+function Write-Log
+{
     param($Message)
     "$timestamp - $Message" | Out-File -FilePath $logPath -Append
 }
@@ -25,35 +26,45 @@ function Write-Log {
 Write-Log "Starting RMM detection and cleanup"
 
 # Check for running processes
-foreach ($process in $rmmProcesses) {
-    $foundProcesses = Get-Process | Where-Object {$_.ProcessName -like "*$process*"}
-    if ($foundProcesses) {
-        foreach ($proc in $foundProcesses) {
-            Write-Log "Found RMM process: $($proc.ProcessName)"
-            try {
+foreach ($process in $rmmProcesses)
+{
+    $foundProcesses = Get-Process | Where-Object { $_.ProcessName -like "*$process*" }
+    if ($foundProcesses)
+    {
+        foreach ($proc in $foundProcesses)
+        {
+            Write-Log "Found RMM process: $( $proc.ProcessName )"
+            try
+            {
                 Stop-Process -Id $proc.Id -Force
-                Write-Log "Successfully terminated process: $($proc.ProcessName)"
+                Write-Log "Successfully terminated process: $( $proc.ProcessName )"
             }
-            catch {
-                Write-Log "Error terminating process $($proc.ProcessName): $_"
+            catch
+            {
+                Write-Log "Error terminating process $( $proc.ProcessName ): $_"
             }
         }
     }
 }
 
 # Check for services
-foreach ($service in $rmmProcesses) {
-    $foundServices = Get-Service | Where-Object {$_.Name -like "*$service*"}
-    if ($foundServices) {
-        foreach ($svc in $foundServices) {
-            Write-Log "Found RMM service: $($svc.Name)"
-            try {
+foreach ($service in $rmmProcesses)
+{
+    $foundServices = Get-Service | Where-Object { $_.Name -like "*$service*" }
+    if ($foundServices)
+    {
+        foreach ($svc in $foundServices)
+        {
+            Write-Log "Found RMM service: $( $svc.Name )"
+            try
+            {
                 Stop-Service -Name $svc.Name -Force
                 Set-Service -Name $svc.Name -StartupType Disabled
-                Write-Log "Successfully stopped and disabled service: $($svc.Name)"
+                Write-Log "Successfully stopped and disabled service: $( $svc.Name )"
             }
-            catch {
-                Write-Log "Error stopping service $($svc.Name): $_"
+            catch
+            {
+                Write-Log "Error stopping service $( $svc.Name ): $_"
             }
         }
     }
@@ -68,17 +79,22 @@ $commonPaths = @(
 )
 
 # Search and remove RMM software folders
-foreach ($basePath in $commonPaths) {
-    foreach ($rmm in $rmmProcesses) {
+foreach ($basePath in $commonPaths)
+{
+    foreach ($rmm in $rmmProcesses)
+    {
         $rmmPaths = Get-ChildItem -Path $basePath -Directory -Filter "*$rmm*" -ErrorAction SilentlyContinue
-        foreach ($path in $rmmPaths) {
-            Write-Log "Found RMM installation: $($path.FullName)"
-            try {
+        foreach ($path in $rmmPaths)
+        {
+            Write-Log "Found RMM installation: $( $path.FullName )"
+            try
+            {
                 Remove-Item -Path $path.FullName -Recurse -Force
-                Write-Log "Successfully removed installation: $($path.FullName)"
+                Write-Log "Successfully removed installation: $( $path.FullName )"
             }
-            catch {
-                Write-Log "Error removing installation $($path.FullName): $_"
+            catch
+            {
+                Write-Log "Error removing installation $( $path.FullName ): $_"
             }
         }
     }

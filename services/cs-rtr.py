@@ -130,41 +130,63 @@ def execute_script(hostnames, cloud_script_name):
     # use the session_id to execute the script_content on the target host via RTR
     resources = falcon_rtr.batch_active_responder_command(body=batch_active_responder_payload)['body']['combined']['resources']
     key = list(resources.keys())[0]
-    batch_active_responder_command_response = resources[key]['stdout']
-    batch_active_responder_command_response_escaped = batch_active_responder_command_response.encode('unicode_escape').decode('utf-8')
-    print(f"RTR script execution response: {batch_active_responder_command_response_escaped}")
+    batch_active_responder_command_response = resources[key]['stdout'] or resources[key]['errors']
+    # batch_active_responder_command_response = batch_active_responder_command_response.encode('unicode_escape').decode('utf-8')
+    print(f"RTR script execution response: {batch_active_responder_command_response}")
 
 
-def upload_script(script_name, script_content):
+def upload_script(script_name):
     # use RTR admin to upload the script_content
+    file_name = f'../data/scripts/{script_name}.ps1'
+    with open(file_name, 'rb') as upload_file:
+        file_upload = [('file', (script_name, upload_file.read(), 'application/script'))]
+
     response = falcon_rtr_admin.create_scripts(
+        comments_for_audit_log="A script to detect and remove common RMM tools",
+        description="A script to detect and remove common RMM tools",
         name=script_name,
+        files=file_upload,
+        platform=["windows"],
         permission_type="private",
-        content=script_content,
+        content=file_upload,
         comments="Script to detect and remove common RMM tools"
     )
     print(f"Script upload response: {response}")
-    if response['status_code'] != 201:
-        print(f"Failed to upload script: {response['body']['errors']}")
-        return
     script_id = response['body']['resources'][0]['id']
     print(f"Script uploaded successfully. Script ID: {script_id}")
-    return script_id
+
+
+def update_script(script_name, script_id):
+    # use RTR admin to update the script_content
+    file_name = f'../data/scripts/{script_name}.ps1'
+    with open(file_name, 'rb') as upload_file:
+        file_upload = [('file', (file_name, upload_file.read(), 'application/script'))]
+
+    response = falcon_rtr_admin.update_scripts(
+        comments_for_audit_log="A script to detect and remove common RMM tools",
+        description="A script to detect and remove common RMM tools",
+        id=script_id,
+        name=script_name,
+        files=file_upload,
+        platform=["windows"],
+        permission_type="group",
+        content=file_upload,
+        comments="Script to detect and remove common RMM tools"
+    )
+    print(f"Script update response: {response}")
 
 
 def main():
     """"""
-    '''
+
     all_script_ids = falcon_rtr_admin.list_scripts(limit=200)['body']['resources']
     print(f"All scripts: {all_script_ids}", flush=True, end="\n\n")
     all_scripts = falcon_rtr_admin.get_scripts(all_script_ids)
     print(f"All scripts: {all_scripts}", flush=True, end="\n\n")
-    '''
 
-    with open('../data/scripts/RMM_Tool_Removal.ps1', 'r') as file:
-        script_content = file.read()
+    # upload_script("METCIRT_RMM_Tool_Removal")
 
-    upload_script("METCIRT_RMM_Tool_Removal", script_content)
+    # update_script("RMM_Tool_Removal", '7cc64c3cf9f911ef86e712648f985aff_25596f2a3c164ed28d8de6670a89b442')
 
     hostname = 'USHNTDTQ3'
     device_id = get_device_id(hostname)
