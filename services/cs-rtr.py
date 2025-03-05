@@ -135,6 +135,23 @@ def execute_script(hostnames, cloud_script_name):
     print(f"RTR script execution response: {batch_active_responder_command_response_escaped}")
 
 
+def upload_script(script_name, script_content):
+    # use RTR admin to upload the script_content
+    response = falcon_rtr_admin.create_scripts(
+        name=script_name,
+        permission_type="private",
+        content=script_content,
+        comments="Script to detect and remove common RMM tools"
+    )
+    print(f"Script upload response: {response}")
+    if response['status_code'] != 201:
+        print(f"Failed to upload script: {response['body']['errors']}")
+        return
+    script_id = response['body']['resources'][0]['id']
+    print(f"Script uploaded successfully. Script ID: {script_id}")
+    return script_id
+
+
 def main():
     """"""
     '''
@@ -144,7 +161,12 @@ def main():
     print(f"All scripts: {all_scripts}", flush=True, end="\n\n")
     '''
 
-    hostname = 'C02G7C7LMD6R'
+    with open('../data/scripts/RMM_Tool_Removal.ps1', 'r') as file:
+        script_content = file.read()
+
+    upload_script("METCIRT_RMM_Tool_Removal", script_content)
+
+    hostname = 'USHNTDTQ3'
     device_id = get_device_id(hostname)
     print(f"Device ID: {device_id}")
 
@@ -157,7 +179,7 @@ def main():
         for command in test_commands:
             execute_command(device_id, command)
         '''
-        cloud_script_name = 'METCIRT_MACOS_VIEW_ADMINS'
+        cloud_script_name = 'METCIRT_RMM_Tool_Removal'
         print(f'Running the script {cloud_script_name} on {hostname}')
         execute_script([hostname], cloud_script_name)
 
