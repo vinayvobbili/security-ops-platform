@@ -140,7 +140,7 @@ def get_last_incident_details():
         latest_incident_create_date_str = ticket[0].get('created')
         latest_incident_create_date = datetime.fromisoformat(latest_incident_create_date_str.replace('Z', '+00:00'))
         today_utc = datetime.now(timezone.utc)  # Ensure both dates are timezone-aware
-        return (today_utc - latest_incident_create_date).days + 1, latest_incident_create_date.strftime('%-m/%-d/%Y'), ticket[0].get('id')
+        return (today_utc - latest_incident_create_date).days, latest_incident_create_date.strftime('%-m/%-d/%Y'), ticket[0].get('id')
     else:
         return -1  # Or some other value to indicate no incidents found
 
