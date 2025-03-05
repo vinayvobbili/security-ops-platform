@@ -70,6 +70,11 @@ def generate_plot(tickets):
         # Adjust figure size to control overall width
         fig, ax = plt.subplots(figsize=(8, 6))  # Example: plt.subplots(figsize=(10, 6)) makes 10 inches wide, 6 inches tall. Adjust these values.
 
+        # set bar width here:
+        bar_width = 0.5
+        if len(grouped_data) == 1:
+            bar_width = 0.1  # or any other value <0.5
+
         # Plotting
         grouped_data.plot(
             kind='bar',
@@ -77,7 +82,7 @@ def generate_plot(tickets):
             color=colors,
             edgecolor='black',
             ax=ax,
-            width=0.5,  # Controls bar width
+            width=bar_width,  # Controls bar width
         )
 
         ax.set_yticks(range(0, int(grouped_data.sum(axis=1).max()) + 2))  # +2 ensures enough
