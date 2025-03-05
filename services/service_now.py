@@ -338,15 +338,8 @@ if __name__ == "__main__":
             logger.info(f"Looking up host_details by name: {hostname}")
             host_details = client.get_host_details(hostname=hostname)['items']
 
-            if host_details:
-                if isinstance(host_details, list):
-                    logger.info(f"Found {len(host_details)} hosts matching name: {hostname}")
-                    for h in host_details:
-                        logger.info(f"Hostname: {h['name']}, IP: {h.get('ipAddress', 'N/A')}, Class: {h.get('ciClass', 'N/A')},Environment: {h.get('environment', 'N/A')}, Country: {h.get('supportedCountry', 'N/A')}")
-                else:
-                    logger.info(f"Found host_details: {host_details['name']}, IP: {host_details.get('ip_address', 'N/A')}, OS: {host_details.get('os', 'N/A')}")
-            else:
-                logger.info(f"No host_details found with name: {hostname}")
+            for h in host_details:
+                logger.info(f"Hostname: {h['name']}, IP: {h.get('ipAddress', 'N/A')}, Class: {h.get('ciClass', 'N/A')}, Environment: {h.get('environment', 'N/A')}, Country: {h.get('supportedCountry', 'N/A')}")
 
     except Exception as e:
         logger.error(f"Error: {e}")
