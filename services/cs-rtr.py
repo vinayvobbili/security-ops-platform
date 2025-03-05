@@ -1,6 +1,6 @@
 import time  # Import the time module
 
-from falconpy import OAuth2, Hosts, RealTimeResponse
+from falconpy import OAuth2, Hosts, RealTimeResponse, RealTimeResponseAdmin
 
 from config import get_config
 
@@ -8,6 +8,7 @@ config = get_config()
 
 falcon_auth = OAuth2(client_id=config.cs_rtr_client_id, client_secret=config.cs_rtr_client_secret, base_url="api.us-2.crowdstrike.com", ssl_verify=False)
 falcon_rtr = RealTimeResponse(auth_object=falcon_auth)
+falcon_rtr_admin = RealTimeResponseAdmin(auth_object=falcon_auth)
 falcon_hosts = Hosts(auth_object=falcon_auth)
 
 
@@ -109,37 +110,40 @@ def execute_script(hostnames, cloud_script_name):
         "queue_offline": True
     }
     session_init_result = falcon_rtr.batch_init_sessions(body=body)
+    # print(f"RTR session init response: {session_init_result}")
     if session_init_result['status_code'] != 201:  # Check status code directly
         print(f"Failed to create RTR session: {session_init_result}")
         return
-    resources = session_init_result['body'].get("resources")
-    session_id = ''
-    if resources and isinstance(resources, dict):
-        for key in resources:
-            inner_dict: dict = resources[key]
-            session_id = inner_dict.get('session_id')
-            break
-    else:
-        print(f"Could not find 'batch_id' in the RTR session response: {session_init_result['body']}")
+    batch_id = session_init_result['body'].get("batch_id")
+
+    if not batch_id:
+        print("Could not find 'session_id' in the RTR session response.")
         return
 
-    if not session_id:
-        print("Could not find 'batch_id' in the RTR session response.")
-        return
-
-    print(f"RTR session started. Batch ID: {session_id}")
+    # print(f"RTR session started. Batch ID: {batch_id}")
 
     batch_active_responder_payload = {
         "base_command": "runscript",
-        "batch_id": session_id,
+        "batch_id": batch_id,
         "command_string": "runscript -CloudFile='" + cloud_script_name + "' -CommandLine=''"
     }
     # use the session_id to execute the script_content on the target host via RTR
-    batch_active_responder_command_response = falcon_rtr.batch_active_responder_command(body=batch_active_responder_payload)
-    print(f"RTR script execution response: {batch_active_responder_command_response}")
+    resources = falcon_rtr.batch_active_responder_command(body=batch_active_responder_payload)['body']['combined']['resources']
+    key = list(resources.keys())[0]
+    batch_active_responder_command_response = resources[key]['stdout']
+    batch_active_responder_command_response_escaped = batch_active_responder_command_response.encode('unicode_escape').decode('utf-8')
+    print(f"RTR script execution response: {batch_active_responder_command_response_escaped}")
 
 
 def main():
+    """"""
+    '''
+    all_script_ids = falcon_rtr_admin.list_scripts(limit=200)['body']['resources']
+    print(f"All scripts: {all_script_ids}", flush=True, end="\n\n")
+    all_scripts = falcon_rtr_admin.get_scripts(all_script_ids)
+    print(f"All scripts: {all_scripts}", flush=True, end="\n\n")
+    '''
+
     hostname = 'C02G7C7LMD6R'
     device_id = get_device_id(hostname)
     print(f"Device ID: {device_id}")
@@ -149,11 +153,12 @@ def main():
 
     if device_online_state:
         test_commands = ["ls", "whoami", "systeminfo"]
-
+        '''
         for command in test_commands:
             execute_command(device_id, command)
-
-        cloud_script_name = 'IsolationNotify'
+        '''
+        cloud_script_name = 'METCIRT_MACOS_VIEW_ADMINS'
+        print(f'Running the script {cloud_script_name} on {hostname}')
         execute_script([hostname], cloud_script_name)
 
 
