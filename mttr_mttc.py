@@ -137,8 +137,8 @@ def save_mttr_mttc_chart(ticket_slas_by_periods):
     midpoint = xmin + (xmax - xmin) / 2
 
     # Draw the hlines from the midpoint to the edges
-    ax.hlines(y=3, xmin=xmin, xmax=midpoint, color='r', linestyle='-', label='Respond')
-    ax.hlines(y=15, xmin=midpoint, xmax=xmax, color='g', linestyle='-', label='Contain')
+    ax.hlines(y=3, xmin=xmin, xmax=midpoint, color='r', linestyle='-', label='Response SLA')
+    ax.hlines(y=15, xmin=midpoint, xmax=xmax, color='g', linestyle='-', label='Containment SLA')
 
     # Add a thin black border around the figure
     fig.patch.set_edgecolor('black')
@@ -154,8 +154,10 @@ def save_mttr_mttc_chart(ticket_slas_by_periods):
     ax.set_ylabel('Minutes', fontdict={'fontsize': 12, 'fontweight': 'bold'})
     ax.set_title(f'Mean Time To', fontdict={'fontsize': 12, 'fontweight': 'bold'})
     ax.set_xticks(x)
-    ax.set_xticklabels(['MTTR', 'MTTC'], fontdict={'fontsize': 12, 'fontweight': 'bold'})
+    ax.set_xticklabels(['Respond', 'Contain'], fontdict={'fontsize': 12, 'fontweight': 'bold'})
     ax.legend(loc='upper left')
+
+    ax.set_yticks(np.arange(0, 16, 1))
 
     # Add value labels on top of each bar using the bar container objects
     for bars in [bar1, bar2, bar3]:
