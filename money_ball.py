@@ -114,6 +114,15 @@ class ThreatconLevel(Command):
         send_chart(attachment_actions.json_data["roomId"], activity['actor']['displayName'], "Threatcon Level", "Threatcon Level.png")
 
 
+class QRadarRuleEfficacy(Command):
+    def __init__(self):
+        super().__init__(command_keyword="efficacy", help_message="QR Rule Efficacy")
+
+    @log_activity
+    def execute(self, message, attachment_actions, activity):
+        send_chart(attachment_actions.json_data["roomId"], activity['actor']['displayName'], "QR Rule Efficacy", "QR Rule Efficacy.png")
+
+
 def main():
     """Initialize and run the Webex bot."""
 
@@ -131,6 +140,7 @@ def main():
     bot.add_command(Inflow())
     bot.add_command(Outflow())
     bot.add_command(ThreatconLevel())
+    bot.add_command(QRadarRuleEfficacy())
 
     # Start the bot
     bot.run()
