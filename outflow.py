@@ -18,7 +18,7 @@ eastern = pytz.timezone('US/Eastern')
 
 config = get_config()
 
-with open('data/detection_source_codes_by_name.json', 'r') as f:
+with open('data/detection_source_name_abbreviations.json', 'r') as f:
     detection_source_codes_by_name = json.load(f)
 
 QUERY_TEMPLATE = 'type:{ticket_type_prefix} -owner:"" closed:>={start} closed:<{end}'
@@ -70,7 +70,7 @@ def create_graph(tickets):
     mid_index = len(sorted_sources) // 2
     pyramid_sources = sorted_sources[mid_index::-1] + sorted_sources[mid_index + 1:]
 
-    # Define Colors for impacts (Updated for new values)
+    # Define Colors for impacts
     impact_colors = {
         "Significant": "#ff0000",  # Red
         "Confirmed": "#ffa500",  # Orange

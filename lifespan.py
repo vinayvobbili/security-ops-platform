@@ -15,7 +15,7 @@ eastern = pytz.timezone('US/Eastern')  # Define the Eastern time zone
 
 config = get_config()
 
-with open('data/detection_source_codes_by_name.json', 'r') as f:
+with open('data/detection_source_name_abbreviations.json', 'r') as f:
     detection_source_codes_by_name = json.load(f)
 
 # Configure logging
