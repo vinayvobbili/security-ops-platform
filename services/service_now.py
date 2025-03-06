@@ -208,9 +208,10 @@ class ServiceNowComputeAPI:
         if base_url.endswith('/'):
             base_url = base_url[:-1]
 
-        self.compute_url = f"{base_url}/itsm-compute/compute/instances"
+        self.server_compute_url = f"{base_url}/itsm-compute/compute/instances"
+        self.workstation_compute_url = f"{base_url}/itsm-compute/compute/computers"
 
-    def get_host_by_name(self, hostname):
+    def get_host_details_by_name(self, hostname):
         """
         Get host details by hostname
 
@@ -220,7 +221,11 @@ class ServiceNowComputeAPI:
         Returns:
             dict: Host details if found, None if not found
         """
-        return self._make_get_request(self.compute_url, {'name': hostname})
+        host_details = self._make_get_request(self.server_compute_url, {'name': hostname})
+        if host_details:
+            return host_details
+        else:
+            return self._make_get_request(self.workstation_compute_url, {'name': hostname})
 
     def _make_get_request(self, endpoint, params=None):
         """
@@ -239,19 +244,9 @@ class ServiceNowComputeAPI:
 
         try:
             response = requests.get(endpoint, headers=headers, params=params)
-            print(response.text)
             response.raise_for_status()
 
-            data = response.json()
-
-            # Handle different response formats
-            if 'result' in data:
-                if isinstance(data['result'], list):
-                    return data['result']
-                else:
-                    return data['result']
-
-            return data
+            return response.json()['items']
 
         except requests.exceptions.RequestException as e:
             logger.error(f"API request failed: {e}")
@@ -305,7 +300,7 @@ class ServiceNowClient:
             dict: Host details if found, None if not found
         """
         if hostname:
-            return self.compute_api.get_host_by_name(hostname)
+            return self.compute_api.get_host_details_by_name(hostname)
         else:
             raise ValueError("Hostname must be provided")
 
@@ -333,13 +328,24 @@ if __name__ == "__main__":
             token = client.get_token()
             logger.info(f"Access token: {token[:10]}...")
 
-            # Example 2: Get host_details by name
-            hostname = "CLAZEMETU0008"
-            logger.info(f"Looking up host_details by name: {hostname}")
+            # Example 2: Get host by name
+            hostname = "C02G7C6VMD6R"
+            logger.info(f"Looking up host by name: {hostname}")
             host_details = client.get_host_details(hostname=hostname)['items']
+            logger.info(f"Host details: {host_details}")
 
-            for h in host_details:
-                logger.info(f"Hostname: {h['name']}, IP: {h.get('ipAddress', 'N/A')}, Class: {h.get('ciClass', 'N/A')}, Environment: {h.get('environment', 'N/A')}, Country: {h.get('supportedCountry', 'N/A')}")
+            # print host details as a table
+            if host_details:
+                for host in host_details:
+                    print(f"Host Name: {host['name']}")
+                    print(f"Host IP: {host['ipAddress']}")
+                    print(f"Host Category: {host['ciClass']}")
+                    print(f"Host OS: {host['operatingSystem']}")
+                    print(f"Host Country: {host['country']}")
+                    print(f"Host Status: {host['state']}")
+                    print("-" * 20)
+            else:
+                print(f"Host {hostname} not found.")
 
     except Exception as e:
         logger.error(f"Error: {e}")
