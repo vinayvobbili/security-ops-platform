@@ -15,7 +15,7 @@ def log_activity(func):
 
         now_eastern = datetime.now(eastern).strftime('%m/%d/%Y %I:%M:%S %p %Z')
         try:
-            with open("data/activity_log.csv", "a", newline="") as f:
+            with open("data/moneyball_activity_log.csv", "a", newline="") as f:
                 writer = csv.writer(f, quoting=csv.QUOTE_MINIMAL)  # Use csv.writer for proper quoting
                 writer.writerow([
                     f'"{activity["actor"]["displayName"]}"',  # Quote the name field

@@ -1,11 +1,16 @@
+import csv
 import os
+from datetime import datetime
+from functools import wraps
 from typing import List
 
+import pytz
 from flask import Flask, render_template, request
 
 from services import transfer_ticket
 
 app = Flask(__name__, static_folder='static', static_url_path='/static', template_folder='templates')
+eastern = pytz.timezone('US/Eastern')
 
 # Supported image extensions
 IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".gif", ".svg")
@@ -51,7 +56,23 @@ def get_image_files() -> List[str]:
     return image_files
 
 
+def log_web_activity(func):
+    """Logs web activity to a CSV file."""
+
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        if request:
+            client_ip = request.remote_addr
+            now_eastern = datetime.now(eastern).strftime('%m/%d/%Y %I:%M:%S %p %Z')
+            with open('../data/web_server_activity_log.csv', 'a', newline='\n') as csvfile:
+                csv.writer(csvfile).writerow([request.path, client_ip, now_eastern])
+        return func(*args, **kwargs)
+
+    return wrapper
+
+
 @app.route("/full-slide-show")
+@log_web_activity
 def get_ir_dashboard_slide_show():
     """Renders the HTML template with the ordered list of image files."""
     image_files = get_image_files()
@@ -59,12 +80,14 @@ def get_ir_dashboard_slide_show():
 
 
 @app.route("/msoc-form")
+@log_web_activity
 def display_form():
     """Displays the MSOC form."""
     return render_template("msoc_form.html")
 
 
 @app.route("/submit-msoc-form", methods=['POST'])
+@log_web_activity
 def handle_msoc_form_submission():
     """Handles MSOC form submissions and processes the data."""
 
@@ -80,6 +103,7 @@ def handle_msoc_form_submission():
 
 
 @app.route('/xsoar-ticket-import-form', methods=['GET', 'POST'])
+@log_web_activity
 def xsoar_ticket_import_form():
     if request.method == 'POST':
         source_ticket_number = request.form.get('source_ticket_number')
@@ -93,6 +117,7 @@ def xsoar_ticket_import_form():
 
 
 @app.route("/import-xsoar-ticket", methods=['POST'])
+@log_web_activity
 def import_xsoar_ticket():
     """Handles MSOC form submissions and processes the data."""
     source_ticket_number = request.form.get('source_ticket_number')

@@ -2,8 +2,9 @@
 .idea
 .ipynb_checkpoints
 __pycache__/
-data/activity_log.csv
+data/moneyball_activity_log.csv
 host_counts_by_country.json
 web/static/charts/*
 data/MET-CIRT SHIELD Daily Work Schedule.xlsx
 data/service_now_access_token.json
+data/web_server_activity_log.csv
