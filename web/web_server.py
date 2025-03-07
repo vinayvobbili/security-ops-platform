@@ -38,6 +38,7 @@ IMAGE_ORDER = [
     "charts/MTTR MTTC.png",
     "charts/Lifespan.png",
     "charts/Heat Map.png",
+    "charts/QR Rule Efficacy.png",
     "charts/Vectra Detections by Rule.png",
     "charts/DE Stories.png",
     "charts/RE Stories.png",
