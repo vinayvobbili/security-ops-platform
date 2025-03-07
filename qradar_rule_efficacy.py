@@ -59,7 +59,7 @@ def make_chart():
     for pattern, replacement in rule_name_abbreviations.items():
         df.index = df.index.str.replace(pattern, replacement, regex=True, flags=re.IGNORECASE)
 
-    # Convert index to string type before plotting - this is the key fix
+    # Convert index to string type before plotting
     df.index = df.index.astype(str)
 
     print("Unabbreviated Rule Names:")
