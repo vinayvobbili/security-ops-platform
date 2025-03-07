@@ -164,7 +164,7 @@ def send_report():
     webex_api.messages.create(
         roomId=room_id,
         text=f"Aging Tickets Summary!",
-        markdown=f'Summary (Type={config.ticket_type_prefix}* - TP, Created=30+ days ago)\n ``` \n {generate_daily_summary(tickets)}'
+        markdown=f'Summary (Type={config.ticket_type_prefix}* - TP, Created=1+ months ago)\n ``` \n {generate_daily_summary(tickets)}'
     )
 
     query = f'-status:closed type:"{config.ticket_type_prefix} Third Party Compromise"'
@@ -175,7 +175,7 @@ def send_report():
         webex_api.messages.create(
             roomId=room_id,
             text=f"Aging Tickets Summary!",
-            markdown=f'Summary (Type=Third Party Compromise, Created=90+ days ago)\n ``` \n {generate_daily_summary(tickets)}'
+            markdown=f'Summary (Type=Third Party Compromise, Created=3+ months ago)\n ``` \n {generate_daily_summary(tickets)}'
         )
 
 
