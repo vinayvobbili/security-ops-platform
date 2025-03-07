@@ -13,47 +13,48 @@ IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".gif", ".svg")
 
 def get_image_files() -> List[str]:
     """Retrieves a list of image files from the static and charts directories."""
+    IMAGE_ORDER = [
+        "images/Company Logo.jpg",
+        "images/DnR Welcome.png",
+        "images/IR_Metrics.jpeg",
+        "charts/Threatcon Level.png",
+        "charts/Days Since Last Incident.jpg",
+        "images/IR Dashboard.png",
+        "charts/Aging Tickets.png",
+        "charts/Inflow.png",
+        "charts/Outflow.png",
+        "charts/SLA Breaches.png",
+        "charts/MTTR MTTC.png",
+        "charts/Lifespan.png",
+        "charts/Heat Map.png",
+        "charts/QR Rule Efficacy.png",
+        "charts/Vectra Detections by Rule.png",
+        "charts/DE Stories.png",
+        "charts/RE Stories.png",
+        "images/End of presentation.jpg",
+        "images/Feedback Email.png",
+        "images/Thanks.png"
+    ]
     image_files = []
+    # fetch files per that image order
+    for image_path in IMAGE_ORDER:
+        full_path = os.path.join(app.static_folder, image_path)
+        if os.path.exists(full_path):
+            image_files.append(image_path)
+        else:
+            full_path = os.path.join(app.config['CHARTS_DIR'], image_path.split('/')[-1])
+            if os.path.exists(full_path):
+                image_files.append(image_path)
+            else:
+                print(f"File not found: {full_path}")
 
-    for subdir in ['images', 'charts']:  # Iterate through subdirectories
-        directory = os.path.join(app.static_folder, subdir)
-        for filename in os.listdir(directory):
-            if filename.endswith(IMAGE_EXTENSIONS):
-                image_files.append(os.path.join(subdir, filename))  # construct path relative to /static
     return image_files
-
-
-# Pre-defined image order for display
-IMAGE_ORDER = [
-    "images/Company Logo.jpg",
-    "images/DnR Welcome.png",
-    "images/IR_Metrics.jpeg",
-    "charts/Threatcon Level.png",
-    "charts/Days Since Last Incident.jpg",
-    "images/IR Dashboard.png",
-    "charts/Aging Tickets.png",
-    "charts/Inflow.png",
-    "charts/Outflow.png",
-    "charts/SLA Breaches.png",
-    "charts/MTTR MTTC.png",
-    "charts/Lifespan.png",
-    "charts/Heat Map.png",
-    "charts/QR Rule Efficacy.png",
-    "charts/Vectra Detections by Rule.png",
-    "charts/DE Stories.png",
-    "charts/RE Stories.png",
-    "images/End of presentation.jpg",
-    "images/Feedback Email.png",
-    "images/Thanks.png"
-]
 
 
 @app.route("/full-slide-show")
 def get_ir_dashboard_slide_show():
     """Renders the HTML template with the ordered list of image files."""
     image_files = get_image_files()
-    # Sort image files according to the predefined order
-    image_files.sort(key=lambda x: IMAGE_ORDER.index(x) if x in IMAGE_ORDER else len(IMAGE_ORDER))
     return render_template("index.html", image_files=image_files)
 
 
