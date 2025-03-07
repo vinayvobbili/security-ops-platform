@@ -82,7 +82,7 @@ def make_chart():
     fig, ax = plt.subplots(figsize=(14, 8))
 
     # Plot with explicit index positions
-    bars = df.plot(kind='barh', stacked=True, ax=ax, color=[impact_colors.get(x, "#cccccc") for x in df.columns])
+    df.plot(kind='barh', stacked=True, ax=ax, color=[impact_colors.get(x, "#cccccc") for x in df.columns])
 
     # Set y-ticks with numeric positions
     y_labels = df.index.tolist()
@@ -94,7 +94,7 @@ def make_chart():
     now_eastern = datetime.now(eastern).strftime('%m/%d/%Y %I:%M %p %Z')
     trans = transforms.blended_transform_factory(fig.transFigure, fig.transFigure)
     fig.text(0.08, 0.01, now_eastern, ha='left', va='bottom', fontsize=10, transform=trans)
-    fig.text(0.7, 0.001, 'Noise = (Total - Confirmed - Testing) / Total * 100%', ha='left', va='bottom', fontsize=10, transform=trans)
+    fig.text(0.75, 0.001, 'Noise = (Total - Confirmed - Testing) / Total * 100%', ha='left', va='bottom', fontsize=10, transform=trans)
 
     # Add text labels to bars
     for i, row in enumerate(df.iterrows()):
@@ -104,8 +104,8 @@ def make_chart():
                 ax.text(left + value / 2, i, int(value), ha='center', va='center')
             left += float(value)
 
-    plt.title('QRadar Rule Efficacy', fontweight='bold', fontsize=12, pad=10)
-    plt.xlabel('Number of Tickets (last 3 months)', fontweight='bold', fontsize=10, labelpad=10)
+    plt.title('QRadar Rule Efficacy (Top 20 by Volume)', fontsize=12, pad=10, fontweight='bold')
+    plt.xlabel('Number of Tickets (last 3 months)', fontsize=10, labelpad=10, fontweight='bold')
     plt.ylabel('Correlation Rule', fontweight='bold', fontsize=10)
 
     # Add noise percentage labels
