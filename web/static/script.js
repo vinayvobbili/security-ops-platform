@@ -4,6 +4,9 @@ const pausePlayButton = document.getElementById('pausePlayButton');
 let currentSlide = 0;
 const totalSlides = document.querySelectorAll('.slides figure').length;
 let intervalId; // Variable to store the interval ID
+const music = document.getElementById('music');
+const music_icon = document.getElementById('music-icon');
+music.volume = 0.5; // Set initial volume (0.0 to 1.0)
 
 // Start the auto-slide when the page loads
 window.addEventListener('load', initializeSlider);
@@ -84,26 +87,18 @@ function updateSlider() {
     }
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-    const music = document.getElementById('music');
-    const music_icon = document.getElementById('music-icon');
-
-    music.volume = 0.5; // Set initial volume (0.0 to 1.0)
-
-    function toggleAudio() {
-        if (music.muted) {
-            music.muted = false;
-            music.play();
-            music_icon.src = '/static/icons/volume-high-solid.svg';
-        } else {
-            music.muted = true; // Or music.pause(); if you want to stop playback entirely.
-            music_icon.src = '/static/icons/volume-xmark-solid.svg';
-        }
+function toggleAudio() {
+    if (music.muted) {
+        music.muted = false;
+        music.play();
+        music_icon.src = '/static/icons/volume-high-solid.svg';
+    } else {
+        music.muted = true; // Or music.pause(); if you want to stop playback entirely.
+        music_icon.src = '/static/icons/volume-xmark-solid.svg';
     }
+}
 
-
+document.addEventListener('DOMContentLoaded', () => {
     music_icon.addEventListener('click', toggleAudio);
     music.play(); // Start playback muted
-
 });
-
