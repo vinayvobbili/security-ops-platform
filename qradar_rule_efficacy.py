@@ -39,7 +39,7 @@ def make_chart():
 
     for rule, impacts in correlation_rule_counts.items():
         total = sum(impacts.values())
-        noise = round((total - impacts.get('Confirmed', 0)) / total * 100) if total > 0 else 0
+        noise = round((total - impacts.get('Confirmed', 0) - impacts.get('Testing', 0)) / total * 100) if total > 0 else 0
         correlation_rule_counts[rule]['Noise'] = noise
 
     unabbreviated_rules = []
@@ -81,8 +81,6 @@ def make_chart():
 
     fig, ax = plt.subplots(figsize=(14, 8))
 
-    print(df)
-
     # Plot with explicit index positions
     bars = df.plot(kind='barh', stacked=True, ax=ax, color=[impact_colors.get(x, "#cccccc") for x in df.columns])
 
@@ -91,11 +89,12 @@ def make_chart():
     ax.set_yticks(range(len(y_labels)))
     ax.set_yticklabels(y_labels)
 
-    ax.legend(title="Impact", loc='upper right', fontsize=10, title_fontsize=12)
+    ax.legend(title="Impact", loc='upper right', fontsize=10, title_fontsize=10)
 
     now_eastern = datetime.now(eastern).strftime('%m/%d/%Y %I:%M %p %Z')
     trans = transforms.blended_transform_factory(fig.transFigure, fig.transFigure)
-    fig.text(0.08, 0.03, now_eastern, ha='left', va='bottom', fontsize=10, transform=trans)
+    fig.text(0.08, 0.01, now_eastern, ha='left', va='bottom', fontsize=10, transform=trans)
+    fig.text(0.7, 0.001, 'Noise = (Total - Confirmed - Testing) / Total * 100%', ha='left', va='bottom', fontsize=10, transform=trans)
 
     # Add text labels to bars
     for i, row in enumerate(df.iterrows()):
