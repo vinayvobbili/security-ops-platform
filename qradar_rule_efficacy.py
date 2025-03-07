@@ -93,15 +93,15 @@ def make_chart():
 
     now_eastern = datetime.now(eastern).strftime('%m/%d/%Y %I:%M %p %Z')
     trans = transforms.blended_transform_factory(fig.transFigure, fig.transFigure)
-    fig.text(0.08, 0.01, now_eastern, ha='left', va='bottom', fontsize=10, transform=trans)
-    fig.text(0.75, 0.001, 'Noise = (Total - Confirmed - Testing) / Total * 100%', ha='left', va='bottom', fontsize=10, transform=trans)
+    fig.text(0.02, 0.01, now_eastern, ha='left', va='bottom', fontsize=10, transform=trans)
+    fig.text(0.73, 0.001, 'Noise = (Total - Confirmed - Testing) / Total * 100%', ha='left', va='bottom', fontsize=10, transform=trans)
 
     # Add text labels to bars
     for i, row in enumerate(df.iterrows()):
         left = 0
         for value in row[1].values:  # Access values from the Series in row[1]
             if value > 0:
-                ax.text(left + value / 2, i, int(value), ha='center', va='center')
+                ax.text(left + value / 2, i, str(int(value)), ha='center', va='center')
             left += float(value)
 
     plt.title('QRadar Rule Efficacy (Top 20 by Volume)', fontsize=12, pad=10, fontweight='bold')
@@ -112,6 +112,10 @@ def make_chart():
     for i, noise in enumerate(noise_series):
         total_width = df.iloc[i].sum()
         ax.text(total_width, i, f'  {int(noise)}% noise', va='center', ha='left', fontsize=10)
+
+    # Add a thin black border around the figure
+    fig.patch.set_edgecolor('black')
+    fig.patch.set_linewidth(5)
 
     plt.tight_layout()
     plt.savefig('web/static/charts/QR Rule Efficacy.png')
