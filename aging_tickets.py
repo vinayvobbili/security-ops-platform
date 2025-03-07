@@ -71,9 +71,7 @@ def generate_plot(tickets):
         fig, ax = plt.subplots(figsize=(8, 6))  # Example: plt.subplots(figsize=(10, 6)) makes 10 inches wide, 6 inches tall. Adjust these values.
 
         # set bar width here:
-        bar_width = 0.5
-        if len(grouped_data) == 1:
-            bar_width = 0.1  # or any other value <0.5
+        bar_width = 0.2
 
         # Plotting
         grouped_data.plot(
@@ -94,7 +92,7 @@ def generate_plot(tickets):
     # Transform coordinates to figure coordinates (bottom-left is 0,0)
     trans = transforms.blended_transform_factory(fig.transFigure, ax.transAxes)  # gets transform object
     now_eastern = datetime.now(eastern).strftime('%m/%d/%Y %I:%M %p %Z')
-    plt.text(0.1, -0.1, now_eastern, transform=trans, ha='left', va='bottom', fontsize=8)
+    plt.text(0.05, -0.3, now_eastern, transform=trans, ha='left', va='bottom', fontsize=8)
 
     # Annotate each segment of the stacked bars
     for container in ax.containers:  # ax.containers contains the bar segments
@@ -111,7 +109,7 @@ def generate_plot(tickets):
     plt.title('Tickets created 30+ days ago', fontweight='bold')
     plt.xlabel('Type', fontweight='bold')
     plt.ylabel('Count', fontweight='bold')
-    plt.xticks(rotation=0, ha='right', fontsize=8)  # Rotate X-axis labels by 45 degrees
+    plt.xticks(rotation=45, ha='right', fontsize=8)  # Rotate X-axis labels by 45 degrees
 
     # Update legend
     plt.legend(title='Phase', loc='upper right')
