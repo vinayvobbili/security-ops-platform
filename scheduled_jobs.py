@@ -11,6 +11,7 @@ import inflow
 import lifespan
 import mttr_mttc
 import outflow
+import qradar_rule_efficacy
 import re_stories
 import secops
 import sla_breaches
@@ -59,7 +60,8 @@ def main():
         outflow.make_chart(),
         re_stories.make_chart(),
         sla_breaches.make_chart(),
-        threatcon_level.make_chart()
+        threatcon_level.make_chart(),
+        qradar_rule_efficacy.make_chart(),
     ))
 
     schedule.every(5).minutes.do(verify_host_online_status.start)
