@@ -3,11 +3,13 @@ import sys
 from datetime import datetime, timezone
 
 import pytesseract
+import pytz
 from PIL import Image, ImageDraw, ImageFont
 
 import config
 from incident_fetcher import IncidentFetcher
 
+eastern = pytz.timezone('US/Eastern')
 config = config.get_config()
 
 
@@ -68,7 +70,7 @@ class CounterImageModifier:
             bbox = draw.textbbox(number_position, text, font=font, anchor="mm")
             padding = 8
 
-            draw.text((200, img.height - 30), f'X#{last_incident_id} was declared as an incident on {last_incident_date}', font_color='black', font_size=14)
+            draw.text((200, img.height - 30), f'X#{last_incident_id} was declared as an incident on {last_incident_date}', fill='black', font_size=14)
 
             # Create slightly transparent background
             background = Image.new('RGBA', img.size, (0, 0, 0, 0))
@@ -102,6 +104,10 @@ class CounterImageModifier:
                 font=font,
                 anchor="mm"
             )
+
+            # Add the current time to the chart
+            now_eastern = datetime.now(eastern).strftime('%m/%d/%Y %I:%M %p %Z')
+            draw.text((600, img.height - 20), now_eastern, fill='black', font_size=12)
 
             # Add a thin black border around the figure
             draw.rectangle([(0, 0), (img.width - 1, img.height - 1)], outline="black", width=1)
