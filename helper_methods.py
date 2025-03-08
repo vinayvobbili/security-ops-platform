@@ -20,7 +20,7 @@ def log_activity(func):
         try:
             actor = activity["actor"]["displayName"]
             if actor is not config.my_name:
-                with open("data/moneyball_activity_log.csv", "a", newline="") as f:
+                with open("data/transient/moneyball_activity_log.csv", "a", newline="") as f:
                     writer = csv.writer(f, quoting=csv.QUOTE_MINIMAL)  # Use csv.writer for proper quoting
                     writer.writerow([
                         f'"{activity["actor"]["displayName"]}"',  # Quote the name field

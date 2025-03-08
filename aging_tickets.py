@@ -1,4 +1,3 @@
-import json
 import logging
 from datetime import datetime
 from typing import List, Dict, Any
@@ -24,11 +23,6 @@ webex_headers = {
     'Authorization': f"Bearer {config.webex_bot_access_token_moneyball}"
 }
 eastern = pytz.timezone('US/Eastern')  # Define the Eastern time zone
-
-fun_messages = []
-with open('data/fun_messages.json', 'r') as f:
-    messages_data = json.load(f)
-    fun_messages.extend(messages_data.get("messages", []))  # Modify the global list
 
 
 def get_df(tickets: List[Dict[Any, Any]]) -> pd.DataFrame:
