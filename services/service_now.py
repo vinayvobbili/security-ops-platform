@@ -138,9 +138,13 @@ class ServiceNowComputeAPI:
         """
         host_details = self._make_get_request(self.server_compute_url, {'name': hostname})
         if host_details:
+            host_details['host_category'] = 'server'
             return host_details
         else:
-            return self._make_get_request(self.workstation_compute_url, {'name': hostname})
+            host_details = self._make_get_request(self.workstation_compute_url, {'name': hostname})
+            if host_details:
+                host_details['host_category'] = 'workstation'
+                return host_details
 
     def _make_get_request(self, endpoint, params=None):
         """

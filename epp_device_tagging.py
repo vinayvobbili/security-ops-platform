@@ -49,13 +49,13 @@ Here are 10 key points about what this code does:
 10. Handles various edge cases and potential errors, such as empty environment lists, missing device information, and parsing timestamp data.
 '''
 
-COUNTRY_REGION_MAP = {}
-with open('data/regions_by_country.json', 'r') as f:
-    COUNTRY_REGION_MAP = json.load(f)
 
-COUNTRIES_BY_CODE = {}
+with open('data/regions_by_country.json', 'r') as f:
+    REGIONS_BY_COUNTRY = json.load(f)
+
+
 with open('data/countries_by_code.json', 'r') as f:
-    COUNTRIES_BY_CODE = json.load(f)
+    COUNTRY_NAMES_BY_ABBREVIATION = json.load(f)
 
 hosts_with_region_guessed = []
 
@@ -139,10 +139,10 @@ class Host:
             if self.country == '':
                 # there's no country/region detail in Splunk for this host. Resort to guessing based on the hostname
                 country_code = self.name[:2]
-                self.country = COUNTRIES_BY_CODE.get(country_code)
+                self.country = COUNTRY_NAMES_BY_ABBREVIATION.get(country_code)
 
                 if self.country:
-                    self.region = COUNTRY_REGION_MAP.get(self.country)
+                    self.region = REGIONS_BY_COUNTRY.get(self.country)
                     if self.region:
                         hosts_with_region_guessed.append(self.name)
 
