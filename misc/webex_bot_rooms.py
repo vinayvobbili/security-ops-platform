@@ -1,4 +1,5 @@
 from webexteamssdk import WebexTeamsAPI
+
 from config import get_config
 
 config = get_config()
@@ -26,7 +27,6 @@ def get_webex_bot_rooms(bot_access_token: str) -> list:
     except Exception as e:
         print(f"Error: {e}")
         return []
-
 
 
 # Usage example
