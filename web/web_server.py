@@ -8,9 +8,11 @@ import pytz
 from flask import Flask, render_template, request
 
 import xsoar
+from config import get_config
 
 app = Flask(__name__, static_folder='static', static_url_path='/static', template_folder='templates')
 eastern = pytz.timezone('US/Eastern')
+config = get_config()
 
 # Supported image extensions
 IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".gif", ".svg")
@@ -93,15 +95,12 @@ def handle_msoc_form_submission():
     """Handles MSOC form submissions and processes the data."""
 
     # Process the submitted data
-    form = request.form
-    site = request.form.get('site')
-    server = request.form.get('server')
-
-    print(f"Site: {site}")
-    print(f"Server: {server}")
-
+    form = request.form.to_dict()
+    form['type'] = 'MSOC Site Security Device Management'
+    response = xsoar.create_incident(config.xsoar_dev_api_base_url, form, config.xsoar_dev_auth_id, config.xsoar_dev_auth_token)
+    print(response)
     # You can then redirect to a success page, return a response, or process the data further
-    return render_template("msoc_success.html", site=site, server=server)
+    return render_template("msoc_success.html", site="A", server="B")
 
 
 @app.route('/xsoar-ticket-import-form', methods=['GET'])
