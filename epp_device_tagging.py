@@ -4,86 +4,92 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import List, Optional
+from pathlib import Path
+from typing import Optional, List, Union
 
+import openpyxl
 from falconpy import OAuth2, Hosts, RealTimeResponse
+from pytz import timezone
+from webexpythonsdk import WebexAPI
 
 from config import get_config
 from services.service_now import ServiceNowClient
 
+# Load configuration
 config = get_config()
 
-'''
-Here are 10 key points about what this code does:
+# Constants
+DATA_DIR = Path("data")
+TRANSIENT_DIR = DATA_DIR / "transient"
+REGIONS_FILE = DATA_DIR / "regions_by_country.json"
+COUNTRIES_FILE = DATA_DIR / "countries_by_code.json"
+INPUT_FILE = TRANSIENT_DIR / "EPP-Falcon ring tagging.xlsx"
 
-1. Processes a list of host names from an enterprise system, retrieving detailed information about each host from CrowdStrike, Splunk, and other internal systems.
+# Ring distribution percentages
+RING_1_PERCENT = 0.1
+RING_2_PERCENT = 0.2
+RING_3_PERCENT = 0.3
+# Ring 4 is the remainder
 
-2. Categorizes hosts as either PCs or servers, and determines their geographic region and country based on available data sources.
+# Server environment mappings
+RING_1_ENVS = {"dev", "poc", "lab", "integration"}
+RING_2_ENVS = {"qa", "test"}
+RING_3_ENVS = {"dr"}
+# Ring 4 is for production or unknown environments
 
-3. Implements a sophisticated tagging mechanism for hosts, distributing workstations into rings (1-4) based on their region and country, and servers into rings based on their environment type.
+# Ensure directories exist
+TRANSIENT_DIR.mkdir(parents=True, exist_ok=True)
 
-4. Filters out hosts that lack critical information like device ID, category, or region to ensure data quality.
-
-5. Generates new CrowdStrike tags for hosts that don't already have ring-based tags, following a specific distribution logic for workstations and servers.
-
-    For workstations, the code uses these percentage-based ring allocations:
-        Ring 1: 10% of workstations in a specific region and country
-        Ring 2: 20% of workstations in a specific region and country
-        Ring 3: 30% of workstations in a specific region and country
-        Ring 4: Remaining workstations in that region and country
-
-    For servers, the ring is determined by environment type:
-        Ring 1: Dev, POC, Lab, Integration environments
-        Ring 2: QA, Test environments
-        Ring 3: DR (Disaster Recovery) environments
-        Ring 4: Production or unknown environments
-
-6. Creates a detailed, aligned output table showing host details including name, category, environment, region, new tag, and current tags.
-
-7. Generates a CSV report of processed hosts and emails it to specified recipients using an internal email sender.
-
-8. Tracks and reports on problematic hosts, including those not found in CrowdStrike, those without a device category, and those with guessed regions.
-
-9. Measures and reports the execution time of different stages of the process, including host fetching and tag generation.
-
-10. Handles various edge cases and potential errors, such as empty environment lists, missing device information, and parsing timestamp data.
-'''
-
-
-with open('data/regions_by_country.json', 'r') as f:
+# Load mapping data
+with open(REGIONS_FILE, 'r') as f:
     REGIONS_BY_COUNTRY = json.load(f)
 
-
-with open('data/countries_by_code.json', 'r') as f:
+with open(COUNTRIES_FILE, 'r') as f:
     COUNTRY_NAMES_BY_ABBREVIATION = json.load(f)
 
-hosts_with_region_guessed = []
-
-falcon_auth = OAuth2(client_id=config.cs_rtr_client_id, client_secret=config.cs_rtr_client_secret, base_url="api.us-2.crowdstrike.com", ssl_verify=False)
+# Initialize API clients
+falcon_auth = OAuth2(
+    client_id=config.cs_rtr_client_id,
+    client_secret=config.cs_rtr_client_secret,
+    base_url="api.us-2.crowdstrike.com",
+    ssl_verify=False
+)
 falcon_rtr = RealTimeResponse(auth_object=falcon_auth)
 falcon_hosts = Hosts(auth_object=falcon_auth)
-
-service_now = ServiceNowClient(config.snow_base_url, config.snow_functional_account_id, config.snow_functional_account_password, config.snow_client_key)
+service_now = ServiceNowClient(
+    config.snow_base_url,
+    config.snow_functional_account_id,
+    config.snow_functional_account_password,
+    config.snow_client_key
+)
 
 
 class HostCategory(Enum):
-    PC = "PC"
+    """Enumeration of possible host categories."""
+    WORKSTATION = "Workstation"
     SERVER = "Server"
 
 
 @dataclass
 class Host:
+    """
+    Represents a host with all its relevant attributes and tagging information.
+    """
     name: str
-    device_id: str = ''
-    country: str = ''
-    region: str = ''
+    device_id: str = ""
+    country: str = ""
+    region: str = ""
     category: Optional[HostCategory] = None
-    environment: str = ''
-    current_crowd_strike_tags: list[str] = field(default_factory=list)
-    new_crowd_strike_tag: str = ''
+    environment: Union[str, List[str]] = ""
+    current_crowd_strike_tags: List[str] = field(default_factory=list)
+    new_crowd_strike_tag: str = ""
+    was_country_guessed: bool = False
+    life_cycle_status: str = ""
+    status_message: str = ""
 
     @classmethod
     def create_and_initialize(cls, name: str) -> 'Host':
+        """Factory method to create and initialize a host with its data."""
         host = cls(name)
         host._initialize_host_data()
         return host
@@ -91,206 +97,262 @@ class Host:
     def _initialize_host_data(self) -> None:
         """Initialize all host data in one method."""
         self._set_cs_device_id()
-        if self.device_id:
-            self._set_host_details_from_snow()
+
+        if not self.device_id:
+            self.status_message = "No CrowdStrike device ID found"
+            return
+
+        self._set_host_details_from_snow()
+        self._normalize_country_data()
+        self._determine_region()
 
     def _set_cs_device_id(self) -> None:
-        host_filter = f"hostname:'{self.name}'"
-        response = falcon_hosts.query_devices_by_filter(filter=host_filter)
+        """Retrieve device ID and tags from CrowdStrike."""
+        try:
+            host_filter = f"hostname:'{self.name}'"
+            response = falcon_hosts.query_devices_by_filter(filter=host_filter)
 
-        resources = []
-        if response.get("status_code") == 200:
+            if response.get("status_code") != 200:
+                self.status_message = f"CrowdStrike API error: {response.get('errors', ['Unknown error'])}"
+                return
+
             resources = response["body"].get("resources", [])
 
-        if resources:
-            # Sort resources by 'last_seen' and get the most recent one
-            resources.sort(
-                key=lambda x: parse_timestamp(x.get('last_seen')) or datetime.min,
-                reverse=True
-            )
-            self.device_id = resources[0]['device_id']
+            if not resources:
+                self.status_message = "Host not found in CrowdStrike"
+                return
 
-        if self.device_id:
-            self.current_crowd_strike_tags = resources[0]['tags']
+            # Get the most recently seen device if multiple exist
+            if len(resources) > 1:
+                resources.sort(
+                    key=lambda x: parse_timestamp(x.get('last_seen')) or datetime.min,
+                    reverse=True
+                )
+
+            self.device_id = resources[0]
+
+            # Fetch device details including tags
+            device_response = falcon_hosts.get_device_details(ids=self.device_id)
+
+            if device_response.get("status_code") != 200:
+                self.status_message = f"Error fetching device details: {device_response.get('errors', ['Unknown error'])}"
+                return
+
+            device_resources = device_response["body"].get("resources", [])
+
+            if device_resources:
+                self.current_crowd_strike_tags = device_resources[0].get('tags', [])
+
+        except Exception as e:
+            self.status_message = f"Error retrieving CrowdStrike data: {str(e)}"
 
     def _set_host_details_from_snow(self) -> None:
-        host_details = service_now.get_host_details(self.name)
+        """Retrieve host details from ServiceNow."""
+        try:
+            host_details = service_now.get_host_details(self.name)
 
-        if host_details:
-            host_details = host_details[0]
-            category = host_details.get('Category')
-            if category == 'PC':
-                self.category = HostCategory.PC
-            elif category == 'Server':
+            if not host_details:
+                self.status_message = "Host not found in ServiceNow"
+                return
+
+            # Map category
+            category = host_details.get('category', '').lower()
+            if category == 'workstation':
+                self.category = HostCategory.WORKSTATION
+            elif category == 'server':
                 self.category = HostCategory.SERVER
+            else:
+                self.status_message = f"Unknown host category: {category}"
 
-            self.environment = host_details.get('Environment')
+            self.environment = host_details.get('environment', '')
+            self.country = host_details.get('country', '')
+            self.life_cycle_status = host_details.get('lifecycleStatus', '')
 
-            region_country = host_details['country']
-            if region_country != 'Unknown':
-                parts = region_country.split()
-                if len(parts) == 2:
-                    self.region, self.country = parts
+        except Exception as e:
+            self.status_message = f"Error retrieving ServiceNow data: {str(e)}"
 
-            # Special case handling
-            if self.country == 'Korea':
-                self.country = 'South Korea'
+    def _normalize_country_data(self) -> None:
+        """Normalize country data and handle special cases."""
+        # Handle special cases
+        if self.country == 'Korea':
+            self.country = 'South Korea'
 
-            if self.country == '':
-                # there's no country/region detail in Splunk for this host. Resort to guessing based on the hostname
-                country_code = self.name[:2]
-                self.country = COUNTRY_NAMES_BY_ABBREVIATION.get(country_code)
+        if not self.country:
+            # Try to infer country from hostname prefix
+            country_code = self.name[:2].upper()
+            self.country = COUNTRY_NAMES_BY_ABBREVIATION.get(country_code, '')
 
-                if self.country:
-                    self.region = REGIONS_BY_COUNTRY.get(self.country)
-                    if self.region:
-                        hosts_with_region_guessed.append(self.name)
+            if self.country:
+                self.was_country_guessed = True
+                self.status_message = f"Country guessed from hostname: {self.country}"
+            else:
+                self.status_message = "Country unknown and couldn't be guessed"
 
-                # per requirement
-                if self.country == 'US':
-                    self.region = 'US'
-                elif self.country == 'Japan':
-                    self.region = 'Japan'
+    def _determine_region(self) -> None:
+        """Determine the region based on country with special case handling."""
+        self.region = REGIONS_BY_COUNTRY.get(self.country, '')
 
-    def add_tag_to_crowd_strike(self):
+        # Special cases per requirements
+        if self.country == 'US':
+            self.region = 'US'
+        elif self.country == 'Japan':
+            self.region = 'Japan'
+
+        if not self.region:
+            self.status_message = "Region could not be determined"
+
+    def add_tag_to_crowd_strike(self) -> bool:
         """Add the generated tag to CrowdStrike."""
-        falcon_hosts.update_device_tags('add', self.device_id, self.new_crowd_strike_tag)
+        try:
+            if not self.new_crowd_strike_tag or not self.device_id:
+                return False
+
+            response = falcon_hosts.update_device_tags(
+                action_name='add',
+                ids=self.device_id,
+                tags=[self.new_crowd_strike_tag]
+            )
+
+            if response.get("status_code") == 200:
+                return True
+            else:
+                self.status_message = f"Failed to add tag: {response.get('errors', ['Unknown error'])}"
+                return False
+
+        except Exception as e:
+            self.status_message = f"Error adding tag: {str(e)}"
+            return False
+
+    @staticmethod
+    def needs_tagging(host: 'Host') -> bool:
+        """Check if host needs tagging (no existing ring tags)."""
+        return not any(
+            tag.startswith('Falcon') and 'ring' in tag.lower()
+            for tag in host.current_crowd_strike_tags
+        )
 
     @staticmethod
     def generate_tags(hosts: List['Host']) -> None:
-        # Filter hosts to only include those without Falcon tags containing 'ring'
-        hosts = [
-            host for host in hosts
-            if not any(
-                tag.startswith('Falcon') and 'ring' in tag.lower()
-                for tag in host.current_crowd_strike_tags
-            )
+        """Assign rings to hosts based on predefined distribution."""
+        # Filter hosts to only include those without existing ring tags
+        hosts_to_tag = [host for host in hosts if Host.needs_tagging(host)]
+
+        # Skip hosts with missing critical data
+        valid_hosts = [
+            host for host in hosts_to_tag
+            if host.device_id and host.category and host.region
         ]
 
-        """Assign rings to hosts based on predefined distribution."""
-        work_stations = [host for host in hosts if host.category == HostCategory.PC]
-        servers = [host for host in hosts if host.category == HostCategory.SERVER]
+        # Separate workstations and servers
+        workstations = [host for host in valid_hosts if host.category == HostCategory.WORKSTATION]
+        servers = [host for host in valid_hosts if host.category == HostCategory.SERVER]
 
-        regions = set(host.region for host in hosts)
-        countries = set(host.country for host in hosts)
+        # Get unique regions and countries
+        regions = {host.region for host in valid_hosts if host.region}
+        countries = {host.country for host in valid_hosts if host.country}
 
-        # Process work stations
-        for region in regions:
-            for country in countries:
-                work_stations_by_region_country = [
-                    ws for ws in work_stations
-                    if ws.region == region and ws.country == country
-                ]
-                total = len(work_stations_by_region_country)
-
-                ring_sizes = [int(0.1 * total), int(0.2 * total), int(0.3 * total), total - sum(ring_sizes)]
-
-                for ring, size in enumerate(ring_sizes, start=1):
-                    for ws in work_stations_by_region_country[:size]:
-                        ws.new_crowd_strike_tag = f"{ws.region}WksRing{ring}"
-                    work_stations_by_region_country = work_stations_by_region_country[size:]
+        # Process workstations
+        Host._process_workstations(workstations, regions, countries)
 
         # Process servers
-        for server in servers:
-            if isinstance(server.environment, list):
-                if len(server.environment) > 1:
-                    env = server.environment[0].lower().strip() or server.environment[1].lower().strip()
-                else:
-                    print(f"Empty environment list for server")
-                    env = ""
-            else:
-                env = server.environment.lower().strip()
+        Host._process_servers(servers)
 
-            if env in ("dev", "poc", "lab", "integration"):
+    @staticmethod
+    def _process_workstations(workstations: List['Host'], regions: set, countries: set) -> None:
+        """Process workstations and assign ring tags based on distribution."""
+        for region in regions:
+            for country in countries:
+                # Filter workstations by region and country
+                ws_group = [
+                    ws for ws in workstations
+                    if ws.region == region and ws.country == country
+                ]
+
+                total = len(ws_group)
+                if total == 0:
+                    continue
+
+                # Calculate ring sizes
+                ring_1_size = max(1, int(RING_1_PERCENT * total)) if total >= 10 else 0
+                ring_2_size = max(1, int(RING_2_PERCENT * total)) if total >= 5 else 0
+                ring_3_size = max(1, int(RING_3_PERCENT * total)) if total >= 3 else 0
+                ring_4_size = total - ring_1_size - ring_2_size - ring_3_size
+
+                # Ensure at least one host in each ring when possible
+                ring_sizes = [ring_1_size, ring_2_size, ring_3_size, ring_4_size]
+
+                # Distribute workstations into rings
+                current_index = 0
+                for ring, size in enumerate(ring_sizes, start=1):
+                    if size <= 0:
+                        continue
+
+                    for i in range(size):
+                        if current_index < len(ws_group):
+                            ws_group[current_index].new_crowd_strike_tag = f"{region}WksRing{ring}"
+                            current_index += 1
+
+    @staticmethod
+    def _process_servers(servers: List['Host']) -> None:
+        """Process servers and assign ring tags based on environment."""
+        for server in servers:
+            # Normalize environment data
+            env = Host._normalize_environment(server.environment)
+
+            # Determine ring based on environment
+            if env in RING_1_ENVS:
                 ring = 1
-            elif env in ("qa", "test"):
+            elif env in RING_2_ENVS:
                 ring = 2
-            elif env == "dr":
+            elif env in RING_3_ENVS:
                 ring = 3
             else:  # production or unknown
                 ring = 4
+                if not env:
+                    server.status_message = "No environment data, assigned to Ring 4"
 
             server.new_crowd_strike_tag = f"{server.region}SRVRing{ring}"
 
+    @staticmethod
+    def _normalize_environment(environment: Union[str, List[str]]) -> str | None:
+        """Normalize environment data to a single string value."""
+        if isinstance(environment, list):
+            if not environment:
+                return ""
+            elif len(environment) >= 1:
+                return environment[0].lower().strip()
+        else:
+            return environment.lower().strip()
 
-def parse_timestamp(date_str: str) -> Optional[datetime]:
+
+def parse_timestamp(date_str: Optional[str]) -> Optional[datetime]:
     """Parse an ISO 8601 timestamp string into a datetime object."""
-    return datetime.strptime(date_str, "%Y-%m-%dT%H:%M:%SZ")
+    if not date_str:
+        return None
+    try:
+        return datetime.strptime(date_str, "%Y-%m-%dT%H:%M:%SZ")
+    except ValueError:
+        return None
 
 
-def apply_tags(hosts: List[Host]) -> None:
+def apply_tags(hosts: List[Host]) -> List[Host]:
+    """Apply tags to hosts and update their status."""
+    successfully_tagged = []
+
     for host in hosts:
-        host.add_tag_to_crowd_strike()
+        if host.new_crowd_strike_tag:
+            success = host.add_tag_to_crowd_strike()
+            if success:
+                host.status_message = f"Successfully tagged with {host.new_crowd_strike_tag}"
+                successfully_tagged.append(host)
+            else:
+                host.status_message = f"Failed to tag with {host.new_crowd_strike_tag}"
+
+    return successfully_tagged
 
 
-def create_aligned_table(hosts: List[Host]) -> str:
-    # Default minimum widths based on header names
-    default_widths = {
-        'name': len("Name"),
-        'category': len("Category"),
-        'environment': len("Environment"),
-        'region': len("Region"),
-        'new_tag': len("New CS Tag"),
-        'current_tags': len("Current CS Tags")
-    }
-
-    column_widths = {
-        'name': max(
-            max((len(host.name) for host in hosts), default=0),
-            default_widths['name']
-        ),
-        'category': max(
-            max((len(host.category.value) for host in hosts), default=0),
-            default_widths['category']
-        ),
-        'environment': max(
-            max((len(str(host.environment)) for host in hosts), default=0),
-            default_widths['environment']
-        ),
-        'region': max(
-            max((len(host.region) for host in hosts), default=0),
-            default_widths['region']
-        ),
-        'new_tag': max(
-            max((len(host.new_crowd_strike_tag) for host in hosts), default=0),
-            default_widths['new_tag']
-        ),
-        'current_tags': max(
-            max((len(str(host.current_crowd_strike_tags)) for host in hosts), default=0),
-            default_widths['current_tags']
-        )
-    }
-
-    # Format header
-    header = (
-        f"{'Name':<{column_widths['name']}} | "
-        f"{'Category':<{column_widths['category']}} | "
-        f"{'Environment':<{column_widths['environment']}} | "
-        f"{'Region':<{column_widths['region']}} | "
-        f"{'New CS Tag':<{column_widths['new_tag']}} | "
-        f"{'Current CS Tags':<{column_widths['current_tags']}}"
-    )
-
-    # Create separator line
-    separator = '-' * len(header)
-
-    rows = []
-    for host in hosts:
-        row = (
-            f"{host.name:<{column_widths['name']}} | "
-            f"{host.category.value:<{column_widths['category']}} | "
-            f"{str(host.environment):<{column_widths['environment']}} | "
-            f"{host.region:<{column_widths['region']}} | "
-            f"{host.new_crowd_strike_tag:<{column_widths['new_tag']}} | "
-            f"{str(host.current_crowd_strike_tags):<{column_widths['current_tags']}}"
-        )
-        rows.append(row)
-
-    # Combine all parts
-    return '\n'.join([header, separator] + rows)
-
-
-def format_duration(seconds):
+def format_duration(seconds: float) -> str:
+    """Format seconds into a human-readable duration string."""
     minutes, seconds = divmod(seconds, 60)
     hours, minutes = divmod(minutes, 60)
 
@@ -307,72 +369,115 @@ def format_duration(seconds):
     return " ".join(parts)
 
 
-def generate_and_email_csv_report(hosts: List[Host]) -> None:
+def write_results_to_file(hosts: List[Host]) -> str:
     """
-    Generates a CSV report of hosts and emails it
-    """
-    current_time = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-    filename = f'host_report_{current_time}.csv'
+    Writes the results to a new Excel sheet with timestamps.
 
-    # Create array of dictionaries for CSV export
-    csv_array = []
+    Args:
+        hosts: List of Host objects to write to the sheet.
+
+    Returns:
+        str: Path to the output file
+    """
+    # Get the current date and time in ET
+    et_timezone = timezone('US/Eastern')
+    current_time_et = datetime.now(et_timezone).strftime("%m_%d_%Y %I:%M %p %Z")
+    output_file = TRANSIENT_DIR / f'EPP-Falcon ring tagging {current_time_et}.xlsx'
+
+    # Create a new workbook
+    workbook = openpyxl.Workbook()
+    sheet = workbook.active
+
+    # Add headers
+    headers = [
+        "Name", "CS Device ID", "Category", "Environment", "Life Cycle Status",
+        "Country", "Region", "Was Country Guessed", "Current CS Tags",
+        "Generated CS Tag", "Status"
+    ]
+    sheet.append(headers)
+
+    # Write the results to the sheet
     for host in hosts:
-        try:
-            csv_array.append({
-                "Name": host.name,
-                "Category": host.category.value if host.category else "",
-                "Environment": host.environment,
-                "Region": host.region,
-                "New CS Tag": host.new_crowd_strike_tag,
-                "Current CS Tags": str(host.current_crowd_strike_tags)
-            })
-        except Exception as e:
-            continue
+        sheet.append([
+            host.name,
+            host.device_id,
+            host.category.value if host.category else '',
+            host.environment if isinstance(host.environment, str) else ', '.join(host.environment),
+            host.life_cycle_status,
+            host.country,
+            host.region,
+            'Yes' if host.was_country_guessed else 'No',
+            ', '.join(host.current_crowd_strike_tags),
+            host.new_crowd_strike_tag,
+            host.status_message or ('Ring tag generated' if host.new_crowd_strike_tag else 'No tag needed'),
+        ])
 
-    if not csv_array:
-        raise ValueError("No valid host data to include in report")
+    # Save the workbook
+    try:
+        output_file.parent.mkdir(parents=True, exist_ok=True)
+        workbook.save(output_file)
+        print(f"Results written to new file: {output_file}")
+    except Exception as e:
+        print(f"An error occurred while saving the workbook: {e}")
+        return ""
 
-    # Return success message
-    success_message = {
-        'Contents': {
-            'Success': True,
-            'HostsProcessed': len(hosts),
-            'HostsInReport': len(csv_array),
-            'Filename': filename,
-        },
-        'HumanReadable': f"""### CSV Report Generation Summary
-- Successfully generated report: {filename}
-- Total hosts processed: {len(hosts)}
-- Hosts included in report: {len(csv_array)}
-"""
-    }
+    return str(output_file)
 
 
-def main() -> str:
+def get_hostnames(input_file=INPUT_FILE) -> List[str]:
+    """
+    Retrieves hostnames from an Excel file.
+
+    Args:
+        input_file: The path to the Excel file containing hostnames.
+
+    Returns:
+        List of hostnames, or an empty list if the file is not found.
+    """
+    try:
+        workbook = openpyxl.load_workbook(input_file)
+        sheet = workbook.active
+        hostnames = [row[0].value for row in sheet.iter_rows(min_row=2) if row[0].value]
+        print(f'Found {len(hostnames)} hostnames in input file')
+        return hostnames
+    except FileNotFoundError:
+        print(f"Error: Input file '{input_file}' not found.")
+        return []
+    except Exception as e:
+        print(f"Error reading input file: {e}")
+        return []
+
+
+def send_report(output_filename: str, time_report) -> bool:
+    """Send report via Webex with the results file attached."""
+    try:
+        webex_api = WebexAPI(config.webex_bot_access_token_moneyball)
+        response = webex_api.messages.create(
+            roomId=config.webex_room_id_vinay_test_space,
+            markdown=f"EPP-Falcon ring tagging results are attached.\n\n```{time_report}",
+            files=[output_filename]
+        )
+        return bool(response)
+    except Exception as e:
+        print(f"Error sending report: {e}")
+        return False
+
+
+def main() -> None:
+    """Main execution function."""
     start_time = time.time()
 
     # Fetch and initialize hosts
     fetch_start = time.time()
-    hosts_list = []
+    hostnames = get_hostnames()
 
-    hosts = [Host.create_and_initialize(name.strip()) for name in hosts_list.splitlines() if name.strip()]
+    if not hostnames:
+        print("No hostnames found in input file. Exiting.")
+        return
+
+    hosts = [Host.create_and_initialize(name) for name in hostnames]
     fetch_end = time.time()
     fetch_duration = fetch_end - fetch_start
-
-    # Categorize problematic hosts
-    hostnames_not_in_crowd_strike = [host.name for host in hosts if not host.device_id]
-    hostnames_without_category = [host.name for host in hosts if not host.category]
-    hostnames_without_region = [host.name for host in hosts if not host.region]
-
-    # Log problematic hosts
-    problematic_hosts_report = f"""
-Hosts not in CrowdStrike: {', '.join(hostnames_not_in_crowd_strike)}
-Hosts without device category: {', '.join(hostnames_without_category)}
-Hosts without region: {', '.join(hostnames_without_region)}
-Hosts with region guessed: {', '.join(hosts_with_region_guessed)}"""
-
-    # Filter out problematic hosts
-    hosts = [host for host in hosts if host.device_id and host.category and host.region]
 
     # Generate tags
     generate_tag_start = time.time()
@@ -380,22 +485,45 @@ Hosts with region guessed: {', '.join(hosts_with_region_guessed)}"""
     generate_tag_end = time.time()
     generate_tag_duration = generate_tag_end - generate_tag_start
 
-    # Create aligned output table
-    output_table = create_aligned_table(hosts)
+    # Filter statistics
+    total_hosts = len(hosts)
+    hosts_with_device_id = sum(1 for host in hosts if host.device_id)
+    hosts_with_tags = sum(1 for host in hosts if host.new_crowd_strike_tag)
 
-    # Email the report
-    generate_and_email_csv_report(
-        hosts=hosts
-    )
+    # Write results before applying tags (for documentation)
+    output_filename = write_results_to_file(hosts)
 
+    # Apply tags
+    apply_tag_start = time.time()
+    # Uncomment the next line to actually apply tags
+    # successfully_tagged = apply_tags(hosts)
+    apply_tag_end = time.time()
+    apply_tag_duration = apply_tag_end - apply_tag_start
+
+    # Generate timing report
     end_time = time.time()
     total_duration = end_time - start_time
-    time_report = f"""
-Fetching and initializing hosts took {format_duration(fetch_duration)}
-Generating tags took {format_duration(generate_tag_duration)}
-Total execution time: {format_duration(total_duration)}"""
 
-    return f"{problematic_hosts_report}\n\n{time_report}\n\n{output_table}\n"
+    time_report = f"""
+Summary:
+- Total hosts processed: {total_hosts}
+- Hosts found in CrowdStrike: {hosts_with_device_id}
+- Hosts tagged: {hosts_with_tags}
+
+Timing:
+- Fetching and initializing hosts: {format_duration(fetch_duration)}
+- Generating tags: {format_duration(generate_tag_duration)}
+- Applying tags: {format_duration(apply_tag_duration)}
+- Total execution time: {format_duration(total_duration)}
+        """
+
+    send_report_success = send_report(output_filename, time_report)
+    if send_report_success:
+        print(f"Report successfully sent to Webex")
+    else:
+        print("Failed to send report to Webex")
+
+    print(time_report)
 
 
 if __name__ in ('__main__', '__builtin__', 'builtins'):

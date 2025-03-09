@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 config = get_config()
 
-SNOW_ACCESS_TOKEN_FILE = os.path.join(os.path.dirname(__file__), '../data/service_now_access_token.json')
+SNOW_ACCESS_TOKEN_FILE = os.path.join(os.path.dirname(__file__), '../data/transient/service_now_access_token.json')
 
 
 class ServiceNowTokenManager:
@@ -136,14 +136,18 @@ class ServiceNowComputeAPI:
         Returns:
             dict: Host details if found, None if not found
         """
-        host_details = self._make_get_request(self.server_compute_url, {'name': hostname})
+        response = self._make_get_request(self.server_compute_url, {'name': hostname})
+        # TODO What if SNOW returns multiple results? Use the first one for now
+        host_details = response[0] if response else None
         if host_details:
-            host_details['host_category'] = 'server'
+            host_details['category'] = 'server'
             return host_details
         else:
-            host_details = self._make_get_request(self.workstation_compute_url, {'name': hostname})
+            response = self._make_get_request(self.workstation_compute_url, {'name': hostname})
+            # TODO What if SNOW returns multiple results? Use the first one for now
+            host_details = response[0] if response else None
             if host_details:
-                host_details['host_category'] = 'workstation'
+                host_details['category'] = 'workstation'
                 return host_details
 
     def _make_get_request(self, endpoint, params=None):
