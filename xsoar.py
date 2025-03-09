@@ -120,18 +120,18 @@ def transfer_incident(source_url, target_url, incident_id, source_auth, target_a
 def import_ticket(source_ticket_number):
     # Configuration
     source_env = {
-        'url': 'https://api-msoar.crtx.us.paloaltonetworks.com',
+        'url': config.xsoar_api_base_url,
         'auth': {
-            'auth_id': '25',
-            'auth_key': 'OP2JKkAze7xIW6ca4YnYhpvkqFQTzD8L2AOnTLZ8IoeTOPuyzvDxuStSfuxQLoZkm4sjRNLvT4nfPialwnDgdBY986o1ps8wV5EZfD0gRulObNPAd3uRBr0LfSITkKBe',
+            'auth_id': config.xsoar_auth_id,
+            'auth_key': config.xsoar_auth_key,
         }
     }
 
     target_env = {
-        'url': 'https://api-msoardev.crtx.us.paloaltonetworks.com',
+        'url': config.xsoar_dev_api_base_url,
         'auth': {
-            'auth_id': '66',
-            'auth_key': 'bumyL61MBpjgMiZ2AoYsqyShcRnBUm9LwIYII7nCQZkNXGMAc5QPYov3tis9IDmHhOugMQnDP7Z0IB8REERT1vHqUSAtNm0WcU5jNM9ssHOGBEFkjmwRj3CKuxfbRzz7'
+            'auth_id': config.xsoar_dev_auth_id,
+            'auth_key': config.xsoar_dev_auth_key,
         }
     }
 
@@ -144,7 +144,7 @@ def import_ticket(source_ticket_number):
     )
 
     destination_ticket_number = result.get('target_incident_id')
-    return destination_ticket_number, f'https://msoardev.crtx.us.paloaltonetworks.com/Custom/caseinfoid/{destination_ticket_number}'
+    return destination_ticket_number, f'{config.xsoar_dev_ui_base_url}/Custom/caseinfoid/{destination_ticket_number}'
 
 
 class IncidentFetcher:
