@@ -26,7 +26,7 @@ def get_incident(base_url, incident_id, auth_id, auth_key):
     }
 
     try:
-        incident_url = f"{base_url}/xsoar/public/v1/incident/load/{incident_id}"
+        incident_url = f"{base_url}/incident/load/{incident_id}"
         response = requests.get(
             incident_url,
             headers=headers,
@@ -39,17 +39,17 @@ def get_incident(base_url, incident_id, auth_id, auth_key):
         raise Exception(f"Network error while fetching incident: {str(e)}")
 
 
-def create_incident(base_url, incident_data, auth_id, auth_key):
+def create_incident(base_url, incident_data, auth_id, auth_token):
     """Create incident in target environment"""
     headers = {
         'Accept': 'application/json',
         'Content-Type': 'application/json',
-        'authorization': auth_key,
+        'authorization': auth_token,
         'x-xdr-auth-id': auth_id
     }
 
     try:
-        create_url = f"{base_url}/xsoar/public/v1/incident"
+        create_url = f"{base_url}/incident"
         payload = {
             "details": incident_data.get('details', 'Details not found'),
             "name": incident_data.get('name', 'Name not found'),
@@ -66,6 +66,10 @@ def create_incident(base_url, incident_data, auth_id, auth_key):
             "force": True,
         }
 
+        # Validate payload
+        if not isinstance(payload, dict):
+            raise ValueError("Payload must be a dictionary")
+
         response = requests.post(
             create_url,
             headers=headers,
@@ -73,11 +77,13 @@ def create_incident(base_url, incident_data, auth_id, auth_key):
             verify=False,
             timeout=30
         )
-        # print("Create Incident Response: ", response.json())
+        response.raise_for_status()  # Raise an error for bad status codes
         return response.json()
 
     except requests.exceptions.RequestException as e:
         raise Exception(f"Network error while creating incident: {str(e)}")
+    except ValueError as e:
+        raise Exception(f"Payload error: {str(e)}")
 
 
 def transfer_incident(source_url, target_url, incident_id, source_auth, target_auth):
@@ -100,7 +106,7 @@ def transfer_incident(source_url, target_url, incident_id, source_auth, target_a
             target_url,
             incident_data,
             auth_id=target_auth['auth_id'],
-            auth_key=target_auth['auth_key']
+            auth_token=target_auth['auth_key']
         )
 
         return {
