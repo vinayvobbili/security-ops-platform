@@ -104,17 +104,9 @@ def handle_msoc_form_submission():
     return render_template("msoc_success.html", site=site, server=server)
 
 
-@app.route('/xsoar-ticket-import-form', methods=['GET', 'POST'])
+@app.route('/xsoar-ticket-import-form', methods=['GET'])
 @log_web_activity
 def xsoar_ticket_import_form():
-    if request.method == 'POST':
-        source_ticket_number = request.form.get('source_ticket_number')
-        if source_ticket_number:  # Check if the field is not empty
-            destination_ticket_number, destination_ticket_link = xsoar.import_ticket(source_ticket_number)
-            return render_template('xsoar-ticket-import-response.html',
-                                   source_ticket_number=source_ticket_number,
-                                   destination_ticket_number=destination_ticket_number,
-                                   destination_ticket_link=destination_ticket_link)
     return render_template('xsoar-ticket-import-form.html')
 
 
