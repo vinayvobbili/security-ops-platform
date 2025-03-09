@@ -15,7 +15,7 @@ webex_api = WebexAPI(config.webex_bot_access_token_soar)
 BASE_QUERY = f'type:{config.ticket_type_prefix} -owner:""'
 
 # Load the workbook
-wb = load_workbook('data/' + config.secops_shift_staffing_filename)
+wb = load_workbook('data/transient/' + config.secops_shift_staffing_filename)
 # Select the sheet
 sheet = wb['March-April 2025']
 
