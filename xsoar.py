@@ -10,14 +10,16 @@ config = get_config()
 # Configure logging
 log = logging.getLogger(__name__)  # Consistent with best practices
 
+headers = {
+    'Authorization': config.xsoar_auth_token,
+    'x-xdr-auth-id': config.xsoar_auth_id,
+    'Content-Type': 'application/json'
+}
+
 
 class IncidentFetcher:
     def __init__(self):
-        self.headers = {
-            'Authorization': config.xsoar_auth_token,
-            'x-xdr-auth-id': config.xsoar_auth_id,
-            'Content-Type': 'application/json'
-        }
+        self.headers = headers
         self.incident_search_url = config.xsoar_api_base_url + '/incidents/search'
         self.incident_entries_url = config.xsoar_api_base_url + '/incidents/{incident_id}/entries'  # Endpoint for entries
 
@@ -57,3 +59,19 @@ class IncidentFetcher:
         except requests.exceptions.RequestException as e:
             log.error(f"Error fetching entries for incident {incident_id}: {e}")
             return []  # Return empty list on failure
+
+
+def __get_all_lists__() -> list:
+    api_url = config.xsoar_api_base_url + '/lists'
+    return requests.get(api_url, headers=headers).json()
+
+
+def get_list_by_name(all_lists, list_name):
+    list_contents = list(filter(lambda item: item['id'] == list_name, all_lists))[0]
+    return list_contents['data'], list_contents['version']
+
+
+class ListFetcher:
+    def __init__(self):
+        self.headers = headers
+        self.list_fetch_url = config.xsoar_api_base_url + '/lists'

@@ -12,7 +12,7 @@ from matplotlib.offsetbox import OffsetImage, AnnotationBbox  # Import necessary
 from matplotlib.ticker import MaxNLocator
 
 from config import get_config
-from incident_fetcher import IncidentFetcher
+from xsoar import IncidentFetcher
 
 eastern = pytz.timezone('US/Eastern')
 

@@ -10,7 +10,7 @@ from webexpythonsdk import WebexAPI
 
 import config
 from constants import TICKET_TYPE_MAPPING
-from incident_fetcher import IncidentFetcher
+from xsoar import IncidentFetcher
 
 config = config.get_config()
 

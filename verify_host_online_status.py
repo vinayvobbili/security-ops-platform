@@ -2,6 +2,7 @@ import time
 
 import requests
 import schedule
+from falconpy import OAuth2, Hosts
 from webexteamssdk import WebexTeamsAPI
 
 from config import get_config
@@ -17,11 +18,13 @@ xsoar_headers = {
     'Content-Type': 'application/json'
 }
 
+# Initialize FalconPy OAuth2 and Hosts
+falcon = OAuth2(client_id=config.cs_ro_client_id, client_secret=config.cs_ro_client_secret)
+hosts = Hosts(auth_object=falcon)
+
 
 def save(data, version):
-    # write information back to Offline_Hosts list; "data" is what is to be written back to Offline_Hosts (in string form)
     api_url = config.xsoar_api_base_url + '/lists/save'
-
     requests.post(api_url, headers=xsoar_headers, json={
         "data": ','.join(data),
         "name": offline_hosts_list_name,
@@ -50,61 +53,33 @@ def send_webex_notification(host_name, ticket_id):
     )
 
 
-def get_access_token():
-    """get CS access token"""
-    url = 'https://api.us-2.crowdstrike.com/oauth2/token'
-    body = {
-        'client_id': config.cs_client_id,
-        'client_secret': config.cs_ro_client_secret
-    }
-    response = requests.post(url, data=body, verify=False)
-    json_data = response.json()
-    return json_data['access_token']
-
-
 def get_device_id(host_name):
-    """get CS asset ID"""
-    url = 'https://api.us-2.crowdstrike.com/devices/queries/devices/v1?filter=hostname:' + '\'' + host_name + '\''
-    headers = {
-        'Authorization': f'Bearer {get_access_token()}'
-    }
-    response = requests.get(url, headers=headers, verify=False)
-    json_data = response.json()
-    return json_data['resources']
+    response = hosts.QueryDevicesByFilter(filter=f"hostname:'{host_name}'")
+    return response['resources']
 
 
 def get_device_online_status(host_name):
-    """get device's online status in Crowd Strike"""
-    url = 'https://api.us-2.crowdstrike.com/devices/entities/online-state/v1'
-    headers = {
-        'content-type': 'application/json',
-        'Authorization': f'Bearer {get_access_token()}'
-    }
-    params = {
-        "ids": get_device_id(host_name)
-    }
-    response = requests.get(url, headers=headers, params=params, verify=False)
-    json_data = response.json()
-    if 'resources' not in json_data:
-        return
-    return json_data['resources'][0]['state']
+    device_ids = get_device_id(host_name)
+    if not device_ids:
+        return None
+    response = hosts.GetDeviceDetails(ids=device_ids)
+    if 'resources' not in response:
+        return None
+    return response['resources'][0]['state']
 
 
 def start():
     try:
-        # print('Starting host online status verification....')
         all_lists: list = get_all_lists()
         online_hosts = []
         offline_hosts_data, offline_hosts_list_version = get_list_by_name(all_lists, offline_hosts_list_name)
-        # print(f'{offline_hosts_data=}, {offline_hosts_list_version=}')
         offline_hosts = offline_hosts_data.split(',')
         for host_name_ticket_id in offline_hosts:
             if '-' in host_name_ticket_id:
                 host_name, ticket_id = [item for item in host_name_ticket_id.split('-')]
-                status = get_device_online_status(host_name)  # crowdstrike API
-                # print(f'{host_name=}, {ticket_ID=}, {status=}')
+                status = get_device_online_status(host_name)
                 if status == "online":
-                    send_webex_notification(host_name, ticket_id)  # webex API
+                    send_webex_notification(host_name, ticket_id)
                     online_hosts.append(host_name_ticket_id)
                 elif status is None:
                     online_hosts.append(host_name_ticket_id)
