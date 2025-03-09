@@ -7,7 +7,7 @@ from typing import List
 import pytz
 from flask import Flask, render_template, request
 
-from services import transfer_ticket
+import xsoar
 
 app = Flask(__name__, static_folder='static', static_url_path='/static', template_folder='templates')
 eastern = pytz.timezone('US/Eastern')
@@ -92,7 +92,8 @@ def display_form():
 def handle_msoc_form_submission():
     """Handles MSOC form submissions and processes the data."""
 
-    # Process the submitted data.  For example, print it:
+    # Process the submitted data
+    form = request.form
     site = request.form.get('site')
     server = request.form.get('server')
 
@@ -109,7 +110,7 @@ def xsoar_ticket_import_form():
     if request.method == 'POST':
         source_ticket_number = request.form.get('source_ticket_number')
         if source_ticket_number:  # Check if the field is not empty
-            destination_ticket_number, destination_ticket_link = transfer_ticket.import_ticket(source_ticket_number)
+            destination_ticket_number, destination_ticket_link = xsoar.import_ticket(source_ticket_number)
             return render_template('xsoar-ticket-import-response.html',
                                    source_ticket_number=source_ticket_number,
                                    destination_ticket_number=destination_ticket_number,
@@ -120,9 +121,8 @@ def xsoar_ticket_import_form():
 @app.route("/import-xsoar-ticket", methods=['POST'])
 @log_web_activity
 def import_xsoar_ticket():
-    """Handles MSOC form submissions and processes the data."""
     source_ticket_number = request.form.get('source_ticket_number')
-    destination_ticket_number, destination_ticket_link = transfer_ticket.import_ticket(source_ticket_number)
+    destination_ticket_number, destination_ticket_link = xsoar.import_ticket(source_ticket_number)
     return render_template("xsoar-ticket-import-response.html",
                            source_ticket_number=source_ticket_number,
                            destination_ticket_number=destination_ticket_number,
