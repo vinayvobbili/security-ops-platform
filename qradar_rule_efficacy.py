@@ -104,9 +104,11 @@ def make_chart():
                 ax.text(left + value / 2, i, str(int(value)), ha='center', va='center')
             left += float(value)
 
-    plt.title('QRadar Rule Efficacy (Top 20 by Volume)', fontsize=12, pad=10, fontweight='bold')
-    plt.xlabel('Number of Tickets (last 3 months)', fontsize=10, labelpad=10, fontweight='bold')
+    plt.title('QRadar Rule Efficacy (Top 20 by Volume)', fontsize=12, pad=10, fontweight='bold', loc='left')
+    plt.xlabel('Number of Tickets (last 3 months)', fontsize=10, labelpad=10, fontweight='bold', loc='left')
     plt.ylabel('Correlation Rule', fontweight='bold', fontsize=10)
+
+    ax.set_xticks(ax.get_xticks())
 
     # Add noise percentage labels
     for i, noise in enumerate(noise_series):
