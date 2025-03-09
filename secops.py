@@ -7,7 +7,7 @@ from tabulate import tabulate
 from webexpythonsdk import WebexAPI
 
 from config import get_config  # If you still use a config file for the path
-from incident_fetcher import IncidentFetcher
+from xsoar import IncidentFetcher
 
 config = get_config()
 webex_api = WebexAPI(config.webex_bot_access_token_soar)

@@ -9,7 +9,7 @@ import pandas as pd
 import pytz
 
 from config import get_config
-from incident_fetcher import IncidentFetcher
+from xsoar import IncidentFetcher
 
 eastern = pytz.timezone('US/Eastern')  # Define the Eastern time zone
 
