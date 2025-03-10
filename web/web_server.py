@@ -24,7 +24,6 @@ def get_image_files() -> List[str]:
     IMAGE_ORDER = [
         "images/Company Logo.jpg",
         "images/DnR Welcome.png",
-        "images/IR_Metrics.jpeg",
         "charts/Threatcon Level.png",
         "charts/Days Since Last Incident.jpg",
         "images/IR Dashboard.png",
@@ -36,7 +35,6 @@ def get_image_files() -> List[str]:
         "charts/Lifespan.png",
         "charts/Heat Map.png",
         "charts/QR Rule Efficacy.png",
-        "charts/Vectra Detections by Rule.png",
         "charts/DE Stories.png",
         "charts/RE Stories.png",
         "images/End of presentation.jpg",
@@ -80,7 +78,7 @@ def log_web_activity(func):
 def get_ir_dashboard_slide_show():
     """Renders the HTML template with the ordered list of image files."""
     image_files = get_image_files()
-    return render_template("index.html", image_files=image_files)
+    return render_template("slide-show.html", image_files=image_files)
 
 
 @app.route("/msoc-form")
