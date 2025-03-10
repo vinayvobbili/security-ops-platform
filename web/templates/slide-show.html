@@ -4,16 +4,16 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>IR Dashboard</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/slide-show.css') }}">
     <link rel="icon" href="{{ url_for('static', filename='icons/metrics-dashboard-icon.ico') }}" type="image/x-icon">
 </head>
 <body>
 <div class="slider-container">
     <div class="slides">
         {% for filename in image_files %}
-            <figure>
-                <img src="{{ url_for('static', filename=filename) }}" alt="{{ filename }}">
-            </figure>
+        <figure>
+            <img src="{{ url_for('static', filename=filename) }}" alt="{{ filename }}">
+        </figure>
         {% endfor %}
     </div>
 </div>
@@ -35,6 +35,6 @@
 </div>
 
 </body>
-<script src="{{ url_for('static', filename='script.js') }}"></script>
+<script src="{{ url_for('static', filename='js/slide-show.js') }}"></script>
 <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.5.1/dist/confetti.browser.min.js"></script>
 </html>

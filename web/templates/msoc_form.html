@@ -4,46 +4,64 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Styled Form</title>
-    <link rel="stylesheet" href="../css/msoc.css">  <!-- Link to external CSS -->
+    <link rel="stylesheet" href="/static/css/msoc.css">
 </head>
 <body>
 
 <div class="form-container">
-    <form>
-        <label for="name">Name:</label>
-        <input type="text" id="name">
+    <h1>MSOC Form</h1>
+    <form id="msocForm">
+        <div class="form-group">
+            <label for="name">Name:</label>
+            <input type="text" id="name" name="name">
+        </div>
 
-        <label for="details">Details:</label>
-        <input type="text" id="details">
+        <div class="form-group">
+            <label for="details">Details:</label>
+            <input type="text" id="details" name="details">
+        </div>
 
-        <label for="severity">Severity:</label>
-        <input type="text" id="severity">
+        <div class="form-group">
+            <label for="severity">Severity:</label>
+            <input type="text" id="severity" name="severity">
+        </div>
 
-        <label for="site">Site:</label><br>
-        <input type="text" id="site" name="site"><br><br>
+        <div class="form-group">
+            <label for="site">Site:</label>
+            <input type="text" id="site" name="site">
+        </div>
 
-        <label for="comm_server">Comm Server:</label><br>
-        <input type="text" id="comm_server" name="comm_server"><br><br>
+        <div class="form-group">
+            <label for="comm_server">Comm Server:</label>
+            <input type="text" id="comm_server" name="comm_server">
+        </div>
 
-        <label for="tech_onsite">Tech Onsite:</label><br>
-        <input type="text" id="tech_onsite" name="tech_onsite"><br><br>
+        <div class="form-group">
+            <label for="tech_onsite">Tech Onsite:</label>
+            <input type="text" id="tech_onsite" name="tech_onsite">
+        </div>
 
-        <label for="category">Category:</label><br>
-        <select id="category" name="category">
-            <option value="network">Network</option>
-            <option value="server">Server</option>
-            <option value="application">Application</option>
-        </select><br><br>
+        <div class="form-group">
+            <label for="category">Category:</label>
+            <select id="category" name="category">
+                <option value="network">Network</option>
+                <option value="server">Server</option>
+                <option value="application">Application</option>
+            </select>
+        </div>
 
-        <label for="subcategory">Subcategory:</label><br>
-        <select id="subcategory" name="subcategory">
-            <!-- Options will be populated dynamically -->
-        </select><br><br>
+        <div class="form-group">
+            <label for="subcategory">Subcategory:</label>
+            <select id="subcategory" name="subcategory">
+                <!-- Options will be populated dynamically -->
+            </select>
+        </div>
 
         <button type="submit">Submit</button>
     </form>
+    <div id="response"></div>
 </div>
 
-<script src="../js/msoc.js"></script> <!-- Link to external JavaScript -->
+<script src="/static/js/msoc.js"></script>
 </body>
 </html>
