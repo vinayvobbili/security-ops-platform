@@ -77,7 +77,6 @@ def create_incident(base_url, incident_data, auth_id, auth_token):
             verify=False,
             timeout=30
         )
-        print(response.text)
         response.raise_for_status()  # Raise an error for bad status codes
         return response.json()
 

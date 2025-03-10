@@ -1,46 +1,49 @@
-<form id="msocForm" method="POST" action="/submit-msoc-form">
-    <label for="name">Name:</label><br>
-    <input type="text" id="name" name="name"><br><br>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Styled Form</title>
+    <link rel="stylesheet" href="../css/msoc.css">  <!-- Link to external CSS -->
+</head>
+<body>
 
-    <label for="details">Details:</label><br>
-    <input type="text" id="details" name="details"><br><br>
+<div class="form-container">
+    <form>
+        <label for="name">Name:</label>
+        <input type="text" id="name">
 
-    <label for="severity">Severity:</label><br>
-    <input type="number" id="severity" name="severity"><br><br>
+        <label for="details">Details:</label>
+        <input type="text" id="details">
 
-    <label for="site">Site:</label><br>
-    <input type="text" id="site" name="site"><br><br>
+        <label for="severity">Severity:</label>
+        <input type="text" id="severity">
 
-    <label for="comm_server">Comm Server:</label><br>
-    <input type="text" id="comm_server" name="comm_server"><br><br>
+        <label for="site">Site:</label><br>
+        <input type="text" id="site" name="site"><br><br>
 
-    <label for="tech_onsite">Tech Onsite:</label><br>
-    <input type="text" id="tech_onsite" name="tech_onsite"><br><br>
-    <button type="submit">Submit</button>
-</form>
-<div id="response"></div>
+        <label for="comm_server">Comm Server:</label><br>
+        <input type="text" id="comm_server" name="comm_server"><br><br>
 
-<script>
-    document.getElementById('msocForm').addEventListener('submit', function (event) {
-        event.preventDefault(); // Prevent the default form submission
+        <label for="tech_onsite">Tech Onsite:</label><br>
+        <input type="text" id="tech_onsite" name="tech_onsite"><br><br>
 
-        const formData = new FormData(this);
+        <label for="category">Category:</label><br>
+        <select id="category" name="category">
+            <option value="network">Network</option>
+            <option value="server">Server</option>
+            <option value="application">Application</option>
+        </select><br><br>
 
-        fetch('/submit-msoc-form', {
-            method: 'POST',
-            body: formData
-        })
-            .then(response => response.json())
-            .then(data => {
-                // Update the response div with the new incident details
-                document.getElementById('response').innerHTML = `
-            <h1>Form submitted successfully!</h1>
-            <p>XSOAR Ticket#: ${data.new_incident_id}</p>
-            <p>XSOAR Ticket Link: <a href="${data.new_incident_link}">${data.new_incident_link}</a></p>
-        `;
-            })
-            .catch(error => {
-                console.error('Error:', error);
-            });
-    });
-</script>
+        <label for="subcategory">Subcategory:</label><br>
+        <select id="subcategory" name="subcategory">
+            <!-- Options will be populated dynamically -->
+        </select><br><br>
+
+        <button type="submit">Submit</button>
+    </form>
+</div>
+
+<script src="../js/msoc.js"></script> <!-- Link to external JavaScript -->
+</body>
+</html>
