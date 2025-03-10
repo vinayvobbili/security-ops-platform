@@ -44,8 +44,8 @@ def create_incident(base_url, incident_data, auth_id, auth_token):
     headers = {
         'Accept': 'application/json',
         'Content-Type': 'application/json',
+        'x-xdr-auth-id': auth_id,
         'authorization': auth_token,
-        'x-xdr-auth-id': auth_id
     }
 
     try:
@@ -53,7 +53,7 @@ def create_incident(base_url, incident_data, auth_id, auth_token):
         payload = {
             "details": incident_data.get('details', 'Details not found'),
             "name": incident_data.get('name', 'Name not found'),
-            "severity": incident_data.get('severity', 1),
+            "severity": int(incident_data.get('severity', 1)),
             "type": incident_data.get('type', f'{config.ticket_type_prefix} Case'),
             "CustomFields": {
                 'detectionsource': incident_data.get('CustomFields', {}).get('detectionsource', 'Unknown'),
@@ -77,6 +77,7 @@ def create_incident(base_url, incident_data, auth_id, auth_token):
             verify=False,
             timeout=30
         )
+        print(response.text)
         response.raise_for_status()  # Raise an error for bad status codes
         return response.json()
 
@@ -129,7 +130,7 @@ def import_ticket(source_ticket_number):
         'url': config.xsoar_api_base_url,
         'auth': {
             'auth_id': config.xsoar_auth_id,
-            'auth_key': config.xsoar_auth_key,
+            'auth_key': config.xsoar_auth_token,
         }
     }
 
@@ -137,7 +138,7 @@ def import_ticket(source_ticket_number):
         'url': config.xsoar_dev_api_base_url,
         'auth': {
             'auth_id': config.xsoar_dev_auth_id,
-            'auth_key': config.xsoar_dev_auth_key,
+            'auth_key': config.xsoar_dev_auth_token,
         }
     }
 
