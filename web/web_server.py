@@ -6,6 +6,7 @@ from typing import List
 
 import pytz
 from flask import Flask, render_template, request
+from flask import jsonify
 
 import xsoar
 from config import get_config
@@ -99,11 +100,11 @@ def handle_msoc_form_submission():
     form['type'] = 'MSOC Site Security Device Management'
     response = xsoar.create_incident(config.xsoar_dev_api_base_url, form, config.xsoar_dev_auth_id, config.xsoar_dev_auth_token)
     print(response)
-    # You can then redirect to a success page, return a response, or process the data further
-    return render_template(
-        "msoc_success.html",
-        new_incident_id=response['id'],
-        new_incident_link=f"{config.xsoar_dev_ui_base_url}/Custom/caseinfoid/{response['id']}")
+    # Return a JSON response
+    return jsonify({
+        'new_incident_id': response['id'],
+        'new_incident_link': f"{config.xsoar_dev_ui_base_url}/Custom/caseinfoid/{response['id']}"
+    })
 
 
 @app.route('/xsoar-ticket-import-form', methods=['GET'])
@@ -117,10 +118,11 @@ def xsoar_ticket_import_form():
 def import_xsoar_ticket():
     source_ticket_number = request.form.get('source_ticket_number')
     destination_ticket_number, destination_ticket_link = xsoar.import_ticket(source_ticket_number)
-    return render_template("xsoar-ticket-import-response.html",
-                           source_ticket_number=source_ticket_number,
-                           destination_ticket_number=destination_ticket_number,
-                           destination_ticket_link=destination_ticket_link)
+    return jsonify({
+        'source_ticket_number': source_ticket_number,
+        'destination_ticket_number': destination_ticket_number,
+        'destination_ticket_link': destination_ticket_link
+    })
 
 
 def main():

@@ -1,4 +1,4 @@
-<form action="/submit-msoc-form" method="post">
+<form id="msocForm" method="POST" action="/submit-msoc-form">
     <label for="name">Name:</label><br>
     <input type="text" id="name" name="name"><br><br>
 
@@ -16,6 +16,31 @@
 
     <label for="tech_onsite">Tech Onsite:</label><br>
     <input type="text" id="tech_onsite" name="tech_onsite"><br><br>
-
-    <input type="submit" value="Submit">
+    <button type="submit">Submit</button>
 </form>
+<div id="response"></div>
+
+<script>
+    document.getElementById('msocForm').addEventListener('submit', function (event) {
+        event.preventDefault(); // Prevent the default form submission
+
+        const formData = new FormData(this);
+
+        fetch('/submit-msoc-form', {
+            method: 'POST',
+            body: formData
+        })
+            .then(response => response.json())
+            .then(data => {
+                // Update the response div with the new incident details
+                document.getElementById('response').innerHTML = `
+            <h1>Form submitted successfully!</h1>
+            <p>XSOAR Ticket#: ${data.new_incident_id}</p>
+            <p>XSOAR Ticket Link: <a href="${data.new_incident_link}">${data.new_incident_link}</a></p>
+        `;
+            })
+            .catch(error => {
+                console.error('Error:', error);
+            });
+    });
+</script>

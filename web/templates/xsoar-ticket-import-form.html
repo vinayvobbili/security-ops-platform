@@ -1,7 +1,32 @@
-<form action="/import-xsoar-ticket" method="post">
-     <h1>Import a ticket from XSOAR Prod to Dev</h1>
-    <label for="source_ticket_number">Ticket #</label><br>
+<form id="xsoarTicketImportForm" method="POST" action="/import-xsoar-ticket">
+    <label for="source_ticket_number">Source Ticket Number:</label><br>
     <input type="text" id="source_ticket_number" name="source_ticket_number"><br><br>
-
-    <input type="submit" value="Import">
+    <button type="submit">Submit</button>
 </form>
+<div id="response"></div>
+
+<script>
+    document.getElementById('xsoarTicketImportForm').addEventListener('submit', function (event) {
+        event.preventDefault(); // Prevent the default form submission
+
+        const formData = new FormData(this);
+
+        fetch('/import-xsoar-ticket', {
+            method: 'POST',
+            body: formData
+        })
+            .then(response => response.json())
+            .then(data => {
+                // Update the response div with the new incident details
+                document.getElementById('response').innerHTML = `
+            <h1>Ticket imported successfully!</h1>
+            <p>Source Ticket#: ${data.source_ticket_number}</p>
+            <p>Destination Ticket#: ${data.destination_ticket_number}</p>
+            <p>Destination Ticket Link: <a href="${data.destination_ticket_link}">${data.destination_ticket_link}</a></p>
+        `;
+            })
+            .catch(error => {
+                console.error('Error:', error);
+            });
+    });
+</script>
