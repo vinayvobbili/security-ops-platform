@@ -99,7 +99,6 @@ def handle_msoc_form_submission():
     form = request.form.to_dict()
     form['type'] = 'MSOC Site Security Device Management'
     response = xsoar.create_incident(config.xsoar_dev_api_base_url, form, config.xsoar_dev_auth_id, config.xsoar_dev_auth_token)
-    print(response)
     # Return a JSON response
     return jsonify({
         'new_incident_id': response['id'],
