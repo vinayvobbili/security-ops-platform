@@ -100,7 +100,10 @@ def handle_msoc_form_submission():
     response = xsoar.create_incident(config.xsoar_dev_api_base_url, form, config.xsoar_dev_auth_id, config.xsoar_dev_auth_token)
     print(response)
     # You can then redirect to a success page, return a response, or process the data further
-    return render_template("msoc_success.html", site="A", server="B")
+    return render_template(
+        "msoc_success.html",
+        new_incident_id=response['id'],
+        new_incident_link=f"{config.xsoar_dev_ui_base_url}/Custom/caseinfoid/{response['id']}")
 
 
 @app.route('/xsoar-ticket-import-form', methods=['GET'])
