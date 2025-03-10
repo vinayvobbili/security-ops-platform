@@ -122,6 +122,11 @@ def import_xsoar_ticket():
     })
 
 
+@app.route('/favicon.ico')
+def favicon():
+    return app.send_static_file('favicon.ico')
+
+
 def main():
     charts_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../charts'))
     app.config['CHARTS_DIR'] = charts_dir
