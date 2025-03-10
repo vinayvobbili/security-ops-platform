@@ -111,3 +111,13 @@ button:hover {
         width: 100%;
     }
 }
+
+.form-group select {
+    width: 100%;
+}
+
+.small-submit-button {
+    width: 10px; /* Adjust as needed */
+    padding: 10px 15px;
+    margin-top: 10px;
+}
