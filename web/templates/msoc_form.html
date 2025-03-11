@@ -66,10 +66,20 @@
         </div>
 
         <div class="submit-container">
+            <button type="button" id="clearButton">Clear</button>
             <button type="submit">Submit</button>
         </div>
     </form>
-    <div id="response"></div>
+    <!-- The Modal -->
+    <div id="responseModal" class="modal">
+        <!-- Modal content -->
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <div id="response">
+                <!-- Response will be loaded here -->
+            </div>
+        </div>
+    </div>
 </div>
 
 <script src="/static/js/msoc.js"></script>
