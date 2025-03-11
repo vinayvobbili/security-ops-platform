@@ -56,11 +56,15 @@ def create_graph(tickets):
     df['source'] = df['CustomFields'].apply(lambda x: x.get('detectionsource'))
     df['impact'] = df['CustomFields'].apply(lambda x: x.get('impact'))
 
+    # Fill missing values in source with "Unknown Source" at the beginning
+    df['source'] = df['source'].fillna('Unknown Source')  # Corrected line
+
     for pattern, replacement in detection_source_codes_by_name.items():
         df['source'] = df['source'].str.replace(pattern, replacement, regex=True, flags=re.IGNORECASE)
 
     # Modify the source based on ticket type
-    df['source'] = df.apply(lambda row: 'Qradar- ' + row['source'] if 'METCIRT Qradar Alert' in row['type'] else row['source'], axis=1)
+    df['source'] = df.apply(lambda row: 'Qradar- ' + row['source'] if 'Qradar' in row['type'] else row['source'], axis=1)
+    df['source'] = df.apply(lambda row: 'Splunk- ' + row['source'] if 'Splunk' in row['type'] else row['source'], axis=1)
 
     # Count the occurrences of each source and impact
     source_impact_counts = df.groupby(['source', 'impact']).size().reset_index(name='count')
