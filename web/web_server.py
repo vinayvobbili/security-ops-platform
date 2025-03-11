@@ -22,7 +22,7 @@ IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".gif", ".svg")
 def get_image_files() -> List[str]:
     """Retrieves a list of image files from the static and charts directories."""
     IMAGE_ORDER = [
-        "images/Company Logo.jpg",
+        "images/Company Logo.png",
         "images/DnR Welcome.png",
         "charts/Threatcon Level.png",
         "charts/Days Since Last Incident.jpg",
