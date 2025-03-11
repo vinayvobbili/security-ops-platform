@@ -23,6 +23,10 @@ document.getElementById('category').addEventListener('change', function () {
             subcategorySelect.appendChild(option);
         });
     }
+    // Apply the loaded class with a delay
+    setTimeout(() => {
+        subcategorySelect.classList.add('loaded');
+    }, 0);
 });
 
 // Clear button functionality
@@ -59,25 +63,25 @@ document.getElementById('msocForm').addEventListener('submit', function (event) 
             responseDiv.innerHTML = `
              <h3>Form submitted successfully!</h3>
              <p><strong>XSOAR Ticket#:</strong> ${data.new_incident_id}</p>
-             <p><strong>Ticket Link:</strong> <a href="${data.new_incident_link}" target="_blank">${data.new_incident_link}</a></p>
+             <p><strong>XSOAR Ticket Link:</strong> <a href="${data.new_incident_link}" target="_blank">${data.new_incident_link}</a></p>
             `;
 
             // Get the modal
             const modal = document.getElementById("responseModal");
             // Show the modal
-            modal.style.display = "block";
+            modal.classList.add("show");
 
             // Get the <span> element that closes the modal
             const span = document.getElementsByClassName("close")[0];
 
             // When the user clicks on <span> (x), close the modal
             span.onclick = function () {
-                modal.style.display = "none";
+                modal.classList.remove("show");
             }
             // When the user clicks anywhere outside of the modal, close it
             window.onclick = function (event) {
                 if (event.target == modal) {
-                    modal.style.display = "none";
+                    modal.classList.remove("show");
                 }
             }
         })
