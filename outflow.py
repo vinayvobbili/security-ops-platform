@@ -1,5 +1,5 @@
 import json
-import os  # Import the 'os' module
+import os
 import re
 from datetime import datetime, timedelta
 
@@ -8,7 +8,7 @@ import pandas as pd
 import pytz
 from PIL import Image
 from matplotlib import transforms
-from matplotlib.offsetbox import OffsetImage, AnnotationBbox  # Import necessary classes
+from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 from matplotlib.ticker import MaxNLocator
 
 from config import get_config
@@ -58,6 +58,9 @@ def create_graph(tickets):
 
     for pattern, replacement in detection_source_codes_by_name.items():
         df['source'] = df['source'].str.replace(pattern, replacement, regex=True, flags=re.IGNORECASE)
+
+    # Modify the source based on ticket type
+    df['source'] = df.apply(lambda row: 'Qradar- ' + row['source'] if 'METCIRT Qradar Alert' in row['type'] else row['source'], axis=1)
 
     # Count the occurrences of each source and impact
     source_impact_counts = df.groupby(['source', 'impact']).size().reset_index(name='count')
