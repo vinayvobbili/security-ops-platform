@@ -119,8 +119,25 @@ button:hover {
     width: 100%;
 }
 
-.small-submit-button {
-    width: 10px; /* Adjust as needed */
-    padding: 10px 15px;
-    margin-top: 10px;
+textarea {
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    font-size: 14px;
+    transition: 0.3s;
+    background: rgba(255, 255, 255, 0.2);
+    color: #fff;
+    resize: vertical; /* Allow vertical resizing by the user */
+    font-family: 'Roboto', sans-serif;
+    width: 100%;
+}
+
+textarea:focus {
+    border-color: #0072ff;
+    box-shadow: 0 0 5px rgba(0, 114, 255, 0.5);
+    background: rgba(255, 255, 255, 0.3);
+}
+
+textarea:hover {
+    background: rgba(255, 255, 255, 0.3);
 }
