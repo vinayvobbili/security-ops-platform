@@ -9,12 +9,20 @@ document.getElementById('category').addEventListener('change', function () {
     const subcategorySelect = document.getElementById('subcategory');
     subcategorySelect.innerHTML = ''; // Clear existing options
 
-    subcategoryOptions[category].forEach(function (subcategory) {
-        const option = document.createElement('option');
-        option.value = subcategory;
-        option.textContent = subcategory;
-        subcategorySelect.appendChild(option);
-    });
+    const defaultOption = document.createElement('option');
+    defaultOption.value = "";
+    defaultOption.textContent = "Select Subcategory";
+    subcategorySelect.appendChild(defaultOption);
+
+    // Check if the category exists in subcategoryOptions
+    if (subcategoryOptions[category]) {
+        subcategoryOptions[category].forEach(function (subcategory) {
+            const option = document.createElement('option');
+            option.value = subcategory;
+            option.textContent = subcategory;
+            subcategorySelect.appendChild(option);
+        });
+    }
 });
 
 document.getElementById('msocForm').addEventListener('submit', function (event) {
@@ -26,18 +34,15 @@ document.getElementById('msocForm').addEventListener('submit', function (event) 
         method: 'POST',
         body: formData
     })
-    .then(response => response.json())
-    .then(data => {
-        document.getElementById('response').innerHTML = `
+        .then(response => response.json())
+        .then(data => {
+            document.getElementById('response').innerHTML = `
             <h3>Form submitted successfully!</h3>
             <p><strong>XSOAR Ticket#:</strong> ${data.new_incident_id}</p>
             <p><strong>Ticket Link:</strong> <a href="${data.new_incident_link}" target="_blank">${data.new_incident_link}</a></p>
         `;
-    })
-    .catch(error => {
-        console.error('Error:', error);
-    });
+        })
+        .catch(error => {
+            console.error('Error:', error);
+        });
 });
-
-// Trigger change event to populate subcategory on page load
-document.getElementById('category').dispatchEvent(new Event('change'));

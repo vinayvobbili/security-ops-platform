@@ -18,12 +18,18 @@
 
         <div class="form-group">
             <label for="details">Details</label>
-            <input type="text" id="details" name="details">
+            <textarea id="details" name="details" rows="5" style="resize: vertical;"></textarea>
         </div>
 
         <div class="form-group">
             <label for="severity">Severity</label>
-            <input type="text" id="severity" name="severity">
+            <select id="severity" name="severity">
+                <option value="">Select Severity</option>
+                <option value="1">Low</option>
+                <option value="2">Medium</option>
+                <option value="3">High</option>
+                <option value="4">Critical</option>
+            </select>
         </div>
 
         <div class="form-group">
@@ -44,6 +50,7 @@
         <div class="form-group">
             <label for="category">Category</label>
             <select id="category" name="category">
+                <option value="">Select Category</option>
                 <option value="network">Network</option>
                 <option value="server">Server</option>
                 <option value="application">Application</option>
@@ -53,6 +60,7 @@
         <div class="form-group">
             <label for="subcategory">Subcategory</label>
             <select id="subcategory" name="subcategory">
+                <option value="">Select Subcategory</option>
                 <!-- Options will be populated dynamically -->
             </select>
         </div>
@@ -65,5 +73,10 @@
 </div>
 
 <script src="/static/js/msoc.js"></script>
+<script>
+    window.addEventListener('load', (event) => {
+        document.getElementById('category').dispatchEvent(new Event('change'));
+    });
+</script>
 </body>
 </html>
