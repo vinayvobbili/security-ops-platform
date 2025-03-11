@@ -22,7 +22,7 @@ webex_headers = {
     'Content-Type': 'application/json',
     'Authorization': f"Bearer {config.webex_bot_access_token_moneyball}"
 }
-eastern = pytz.timezone('US/Eastern')  # Define the Eastern time zone
+eastern = pytz.timezone('US/Eastern')
 
 
 def get_df(tickets: List[Dict[Any, Any]]) -> pd.DataFrame:
@@ -33,7 +33,6 @@ def get_df(tickets: List[Dict[Any, Any]]) -> pd.DataFrame:
     df['created'] = pd.to_datetime(df['created'])
     # Clean up type names by removing repeating prefix
     df['type'] = df['type'].str.replace(config.ticket_type_prefix, '', regex=False, case=False)
-    df['type'] = df['type'].map(TICKET_TYPE_MAPPING).fillna(df['type'])
     # Set 'phase' to 'Unknown' if it's missing
     df['phase'] = df['phase'].fillna('Unknown')
     return df
