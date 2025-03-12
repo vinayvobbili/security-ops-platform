@@ -172,10 +172,7 @@ class Host:
             self.status_message = f"Error retrieving ServiceNow data: {str(e)}"
 
     def _normalize_country_data(self) -> None:
-        """Normalize country data and handle special cases."""
-        # Handle special cases
-        if self.country == 'Korea':
-            self.country = 'South Korea'
+        """Normalize country data"""
 
         if not self.country:
             # Try to infer country from hostname prefix
