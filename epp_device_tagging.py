@@ -110,7 +110,7 @@ class Host:
         """Retrieve device ID and tags from CrowdStrike."""
         try:
             host_filter = f"hostname:'{self.name}'"
-            response = falcon_hosts.query_devices_by_filter(filter=host_filter)
+            response = falcon_hosts.query_devices_by_filter(filter=host_filter, sort_by="last_seen.desc", limit=1)
 
             if response.get("status_code") != 200:
                 self.status_message = f"CrowdStrike API error: {response.get('errors', ['Unknown error'])}"
@@ -121,13 +121,6 @@ class Host:
             if not resources:
                 self.status_message = "Host not found in CrowdStrike"
                 return
-
-            # Get the most recently seen device if multiple exist
-            if len(resources) > 1:
-                resources.sort(
-                    key=lambda x: parse_timestamp(x.get('last_seen')) or datetime.min,
-                    reverse=True
-                )
 
             self.device_id = resources[0]
 
