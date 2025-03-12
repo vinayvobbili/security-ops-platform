@@ -9,7 +9,6 @@ import pytz
 from webexpythonsdk import WebexAPI
 
 import config
-from constants import TICKET_TYPE_MAPPING
 from xsoar import IncidentFetcher
 
 config = config.get_config()
@@ -99,10 +98,10 @@ def generate_plot(tickets):
                             textcoords="offset points",
                             ha='center', va='bottom', fontsize=10, color='black', fontweight='bold')
 
-    plt.title('Tickets created 30+ days ago', fontweight='bold')
+    plt.title('Tickets created 1+ months ago', fontweight='bold')
     plt.xlabel('Type', fontweight='bold')
     plt.ylabel('Count', fontweight='bold')
-    plt.xticks(rotation=45, ha='right', fontsize=8)  # Rotate X-axis labels by 45 degrees
+    plt.xticks(rotation=45, ha='right', fontsize=8)
 
     # Update legend
     plt.legend(title='Phase', loc='upper right')
