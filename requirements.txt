@@ -1,7 +1,7 @@
 python-dotenv~=1.0.1
 matplotlib~=3.9.4
 pandas~=2.2.3
-webexpythonsdk~=2.0.2
+webexpythonsdk~=2.0.4
 requests~=2.32.3
 pytz~=2024.2
 
