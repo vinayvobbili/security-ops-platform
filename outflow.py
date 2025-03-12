@@ -56,15 +56,17 @@ def create_graph(tickets):
     df['source'] = df['CustomFields'].apply(lambda x: x.get('detectionsource'))
     df['impact'] = df['CustomFields'].apply(lambda x: x.get('impact'))
 
-    # Fill missing values in source with "Unknown Source" at the beginning
-    df['source'] = df['source'].fillna('Unknown Source')  # Corrected line
+    # Fill missing values in source with "Unknown" at the beginning
+    df['source'] = df['source'].fillna('Unknown')
 
     for pattern, replacement in detection_source_codes_by_name.items():
         df['source'] = df['source'].str.replace(pattern, replacement, regex=True, flags=re.IGNORECASE)
 
-    # Modify the source based on ticket type
-    df['source'] = df.apply(lambda row: 'Qradar- ' + row['source'] if 'Qradar' in row['type'] else row['source'], axis=1)
-    df['source'] = df.apply(lambda row: 'Splunk- ' + row['source'] if 'Splunk' in row['type'] else row['source'], axis=1)
+    df['source'] = df.apply(lambda row: row['type']
+                            .replace(config.ticket_type_prefix, '').strip()
+                            .replace('CrowdStrike Falcon Detection', 'CS Detection').strip()
+                            .replace('CrowdStrike Falcon Incident', 'CS Incident').strip()
+                                        + ' - ' + row['source'], axis=1)
 
     # Count the occurrences of each source and impact
     source_impact_counts = df.groupby(['source', 'impact']).size().reset_index(name='count')
@@ -162,7 +164,7 @@ def create_graph(tickets):
     # Add labels and title
     ax.set_yticks(range(len(pyramid_sources)))
     ax.set_yticklabels(pyramid_sources)
-    ax.set_ylabel('Detection Source', fontweight='bold', fontsize=12)
+    ax.set_ylabel('Ticket Type - Detection Source', fontweight='bold', fontsize=12)
     ax.set_xlabel('Alert Counts', fontweight='bold', fontsize=10, labelpad=10)
 
     ax.set_title('Outflow Yesterday', fontweight='bold', fontsize=12)
