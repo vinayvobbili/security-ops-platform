@@ -4,6 +4,26 @@ const subcategoryOptions = {
     application: ['Web App', 'Mobile App', 'Desktop App']
 };
 
+const music = document.getElementById('music');
+const music_icon = document.getElementById('music-icon');
+
+music.volume = 0.5; // Set initial volume (0.0 to 1.0)
+
+function toggleAudio() {
+    if (music.muted) {
+        music.muted = false;
+        music.play();
+        music_icon.src = '/static/icons/volume-high-solid.svg';
+    } else {
+        music.muted = true; // Or music.pause(); if you want to stop playback entirely.
+        music_icon.src = '/static/icons/volume-xmark-solid.svg';
+    }
+}
+
+window.addEventListener('load', (event) => {
+    document.getElementById('category').dispatchEvent(new Event('change'));
+});
+
 document.getElementById('category').addEventListener('change', function () {
     const category = this.value;
     const subcategorySelect = document.getElementById('subcategory');
@@ -62,8 +82,7 @@ document.getElementById('msocForm').addEventListener('submit', function (event) 
             const responseDiv = document.getElementById('response');
             responseDiv.innerHTML = `
              <h3>Form submitted successfully!</h3>
-             <p><strong>XSOAR Ticket#:</strong> ${data.new_incident_id}</p>
-             <p><strong>XSOAR Ticket Link:</strong> <a href="${data.new_incident_link}" target="_blank">${data.new_incident_link}</a></p>
+             <p><strong>XSOAR Ticket#:</strong> <a href="${data.new_incident_link}" target="_blank">${data.new_incident_id}</a></p>
             `;
 
             // Get the modal
