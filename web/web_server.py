@@ -99,6 +99,7 @@ def handle_msoc_form_submission():
     response = xsoar.create_incident(config.xsoar_dev_api_base_url, form, config.xsoar_dev_auth_id, config.xsoar_dev_auth_token)
     # Return a JSON response
     return jsonify({
+        'status': 'success',
         'new_incident_id': response['id'],
         'new_incident_link': f"{config.xsoar_dev_ui_base_url}/Custom/caseinfoid/{response['id']}"
     })
