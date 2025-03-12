@@ -94,7 +94,7 @@ def make_chart():
     now_eastern = datetime.now(eastern).strftime('%m/%d/%Y %I:%M %p %Z')
     trans = transforms.blended_transform_factory(fig.transFigure, fig.transFigure)
     fig.text(0.02, 0.01, now_eastern, ha='left', va='bottom', fontsize=10, transform=trans)
-    fig.text(0.73, 0.001, 'Noise = (Total - Confirmed - Testing) / Total * 100%', ha='left', va='bottom', fontsize=10, transform=trans)
+    fig.text(0.73, 0.01, 'Noise = (Total - Confirmed - Testing) / Total * 100%', ha='left', va='bottom', fontsize=10, transform=trans)
 
     # Add text labels to bars
     for i, row in enumerate(df.iterrows()):
