@@ -174,7 +174,7 @@ class IncidentFetcher:
             payload["filter"]["period"] = period
 
         try:
-            response = requests.post(self.incident_search_url, headers=self.headers, json=payload, timeout=60)
+            response = requests.post(self.incident_search_url, headers=self.headers, json=payload, timeout=120)
             response.raise_for_status()
             tickets = response.json()
             log.info(f'Retrieved {tickets.get("total", 0)} incidents')
