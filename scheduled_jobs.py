@@ -40,6 +40,7 @@ def main():
     re_stories.make_chart(),
     sla_breaches.make_chart(),
     threatcon_level.make_chart()
+    qradar_rule_efficacy.send_chart()
     '''
 
     # schedule
@@ -69,6 +70,7 @@ def main():
     schedule.every().day.at("03:30", eastern).do(lambda: secops.announce_shift_change('morning', room_id))
     schedule.every().day.at("11:30", eastern).do(lambda: secops.announce_shift_change('afternoon', room_id))
     schedule.every().day.at("19:30", eastern).do(lambda: secops.announce_shift_change('night', room_id))
+    schedule.every().friday.at("08:00", eastern).do(lambda: qradar_rule_efficacy.send_chart())
 
     while True:
         schedule.run_pending()
