@@ -178,36 +178,6 @@ def update_script(script_name, script_id):
     print(f"Script update response: {response}")
 
 
-def main():
-    """"""
-
-    all_script_ids = falcon_rtr_admin.list_scripts(limit=200)['body']['resources']
-    print(f"All scripts: {all_script_ids}", flush=True, end="\n\n")
-    all_scripts = falcon_rtr_admin.get_scripts(all_script_ids)
-    print(f"All scripts: {all_scripts}", flush=True, end="\n\n")
-
-    # upload_script("METCIRT_RMM_Tool_Removal")
-
-    # update_script("RMM_Tool_Removal", '7cc64c3cf9f911ef86e712648f985aff_25596f2a3c164ed28d8de6670a89b442')
-
-    hostname = 'USHNTDTQ3'
-    device_id = get_device_id(hostname)
-    print(f"Device ID: {device_id}")
-
-    device_online_state = falcon_hosts.get_online_state(ids=device_id)['body']['resources'][0]['state']
-    print(f"Device {hostname}'s online status: {device_online_state}")
-
-    if device_online_state:
-        test_commands = ["ls", "whoami", "systeminfo"]
-        '''
-        for command in test_commands:
-            execute_command(device_id, command)
-        '''
-        cloud_script_name = 'METCIRT_RMM_Tool_Removal'
-        print(f'Running the script {cloud_script_name} on {hostname}')
-        execute_script([hostname], cloud_script_name)
-
-
 def fetch_all_hosts_and_write_to_csv(csv_filename="all_hosts.csv"):
     """
     Fetches all hosts from CrowdStrike Falcon and writes their details (hostname, host ID, current tags) to a CSV file.
@@ -270,6 +240,36 @@ def fetch_all_hosts_and_write_to_csv(csv_filename="all_hosts.csv"):
         print(f"Successfully wrote {len(all_host_data)} host records to {csv_filename}")
     except Exception as e:
         print(f"An error occurred while writing to CSV: {e}")
+
+
+def main():
+    """"""
+
+    all_script_ids = falcon_rtr_admin.list_scripts(limit=200)['body']['resources']
+    print(f"All scripts: {all_script_ids}", flush=True, end="\n\n")
+    all_scripts = falcon_rtr_admin.get_scripts(all_script_ids)
+    print(f"All scripts: {all_scripts}", flush=True, end="\n\n")
+
+    # upload_script("METCIRT_RMM_Tool_Removal")
+
+    # update_script("RMM_Tool_Removal", '7cc64c3cf9f911ef86e712648f985aff_25596f2a3c164ed28d8de6670a89b442')
+
+    hostname = 'USHNTDTQ3'
+    device_id = get_device_id(hostname)
+    print(f"Device ID: {device_id}")
+
+    device_online_state = falcon_hosts.get_online_state(ids=device_id)['body']['resources'][0]['state']
+    print(f"Device {hostname}'s online status: {device_online_state}")
+
+    if device_online_state:
+        test_commands = ["ls", "whoami", "systeminfo"]
+        '''
+        for command in test_commands:
+            execute_command(device_id, command)
+        '''
+        cloud_script_name = 'METCIRT_RMM_Tool_Removal'
+        print(f'Running the script {cloud_script_name} on {hostname}')
+        execute_script([hostname], cloud_script_name)
 
 
 if __name__ == "__main__":
