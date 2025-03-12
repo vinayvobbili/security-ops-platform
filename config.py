@@ -46,6 +46,7 @@ def get_config():
         snow_functional_account_password=os.environ["SNOW_FUNCTIONAL_ACCOUNT_PASSWORD"],
         snow_base_url=os.environ["SNOW_BASE_URL"],
         my_name=os.environ["MY_NAME"],
+        qradar_rule_efficacy_chart_receiver=os.environ["QRADAR_EFFICACY_CHART_RECEIVER"],
     )
 
 
@@ -90,5 +91,6 @@ class Config:
     snow_functional_account_password: str
     snow_base_url: str
     my_name: str
+    qradar_rule_efficacy_chart_receiver: str
 
     webex_api_url: str = "https://webexapis.com/v1/messages"

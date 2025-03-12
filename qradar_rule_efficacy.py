@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import pytz
 from matplotlib import transforms
+from webexpythonsdk import WebexAPI
 
 from config import get_config
 from xsoar import IncidentFetcher
@@ -18,6 +19,8 @@ log = logging.getLogger(__name__)
 
 eastern = pytz.timezone('US/Eastern')
 config = get_config()
+
+webex = WebexAPI(access_token=config.webex_bot_access_token_moneyball)
 
 # Ensure the data directory exists
 data_dir = 'data'
@@ -145,6 +148,11 @@ def make_chart():
 
     except Exception as e:
         log.error(f"An error occurred: {e}", exc_info=True)
+
+
+def send_chart():
+    file_path = 'web/static/charts/QR Rule Efficacy.png'
+    webex.messages.create(toPersonEmail=config.qradar_rule_efficacy_chart_receiver, files=[file_path])
 
 
 def main():
