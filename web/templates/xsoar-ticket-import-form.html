@@ -22,7 +22,7 @@
             <h1>Ticket imported successfully!</h1>
             <p>Source Ticket#: ${data.source_ticket_number}</p>
             <p>Destination Ticket#: ${data.destination_ticket_number}</p>
-            <p>Destination Ticket Link: <a href="${data.destination_ticket_link}">${data.destination_ticket_link}</a></p>
+            <p>Destination Ticket Link: <a href="${data.destination_ticket_link}" target="_blank">${data.destination_ticket_link}</a></p>
         `;
             })
             .catch(error => {

@@ -55,10 +55,15 @@ def create_incident(base_url, incident_data, auth_id, auth_token):
             "name": incident_data.get('name', 'Name not found'),
             "severity": int(incident_data.get('severity', 1)),
             "type": incident_data.get('type', f'{config.ticket_type_prefix} Case'),
+            "closeNotes": incident_data.get('closeNotes', 'Close notes not found'),
+            "closeReason": incident_data.get('closeReason', 'Close reason not found'),
             "CustomFields": {
                 'detectionsource': incident_data.get('CustomFields', {}).get('detectionsource', 'Unknown'),
                 'securitycategory': incident_data.get('CustomFields', {}).get('securitycategory', 'Unknown'),
                 'qradareventid': incident_data.get('CustomFields', {}).get('qradareventid', 'Unknown'),
+                'impact': incident_data.get('CustomFields', {}).get('impact', 'Unknown'),
+                'rootcause': incident_data.get('CustomFields', {}).get('rootcause', 'Unknown'),
+                'securitysubcategory': incident_data.get('CustomFields', {}).get('securitysubcategory', 'Unknown')
             },
             "all": True,
             "createInvestigation": True,
