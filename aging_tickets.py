@@ -138,16 +138,16 @@ def generate_daily_summary(tickets) -> str | None:
         table = df.groupby('owner').agg({'id': 'count', 'age': 'mean'})
         table = table.reset_index()
         table = table.rename(columns={'owner': 'Owner', 'id': 'Count', 'age': 'Average Age (days)'})
+        table['Average Age (days)'] = table['Average Age (days)'].round(1)
+        table = table.sort_values(by='Average Age (days)', ascending=False)
         return table.to_markdown(index=False)
     except (KeyError, TypeError, ValueError) as e:  # Catch potential data errors
         logger.error(f"Error generating daily summary: {e}")  # Log the error
         return "Error generating report. Please check the logs."  # Return a user-friendly message
 
 
-def send_report():
+def send_report(room_id):
     webex_api = WebexAPI(access_token=config.webex_bot_access_token_soar)
-    room_id = config.webex_room_id_aging_tickets
-    # room_id = config.webex_room_id_vinay_test_space
 
     query = f'-status:closed type:{config.ticket_type_prefix} -type:"{config.ticket_type_prefix} Third Party Compromise"'
     period = {"byTo": "months", "toValue": 1, "byFrom": "months", "fromValue": None}
@@ -172,6 +172,9 @@ def send_report():
 
 
 def main():
+    room_id = config.webex_room_id_aging_tickets
+    # room_id = config.webex_room_id_vinay_test_space
+    send_report(room_id)
     make_chart()
 
 
