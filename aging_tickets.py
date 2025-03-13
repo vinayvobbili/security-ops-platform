@@ -172,8 +172,7 @@ def send_report(room_id):
 
 
 def main():
-    room_id = config.webex_room_id_aging_tickets
-    # room_id = config.webex_room_id_vinay_test_space
+    room_id = config.webex_room_id_vinay_test_space
     send_report(room_id)
     make_chart()
 
