@@ -46,7 +46,7 @@ def main():
     # schedule
     print("Starting the scheduler...")
     schedule.every().day.at("08:00", eastern).do(lambda: (
-        aging_tickets.send_report(),
+        aging_tickets.send_report(config.webex_room_id_aging_tickets),
         # abandoned_tickets.send_report(),
     ))
 
