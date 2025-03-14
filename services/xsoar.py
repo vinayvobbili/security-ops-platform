@@ -57,6 +57,8 @@ def create_incident(base_url, incident_data, auth_id, auth_token):
             "type": incident_data.get('type', f'{config.ticket_type_prefix} Case'),
             "closeNotes": incident_data.get('closeNotes', 'Close notes not found'),
             "closeReason": incident_data.get('closeReason', 'Close reason not found'),
+            "email": incident_data.get('email', 'Email not found'),
+            "emailbodyhtml": incident_data.get('emailbodyhtml', 'Email body HTML not found'),
             "CustomFields": {
                 'detectionsource': incident_data.get('CustomFields', {}).get('detectionsource', 'Unknown'),
                 'securitycategory': incident_data.get('CustomFields', {}).get('securitycategory', 'Unknown'),

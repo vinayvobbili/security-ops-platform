@@ -485,12 +485,10 @@ def main() -> None:
 
     # Apply tags
     apply_tag_start = time.time()
-    # Uncomment the next line to actually apply tags
-    # successfully_tagged = apply_tags(hosts)
     apply_tag_end = time.time()
     apply_tag_duration = apply_tag_end - apply_tag_start
 
-    # Generate timing report
+    # Generate a timing report
     end_time = time.time()
     total_duration = end_time - start_time
 
