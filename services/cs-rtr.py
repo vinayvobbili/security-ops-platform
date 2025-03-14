@@ -188,7 +188,7 @@ def fetch_all_hosts_and_write_to_csv(csv_filename="all_hosts.csv"):
 
     all_host_data = []
     offset = None
-    limit = 10000  # Maximum allowed by the API
+    limit = 5000  # Maximum allowed by the API
 
     print("Fetching ALL host data...")
     start_time = time.time()
@@ -232,9 +232,9 @@ def fetch_all_hosts_and_write_to_csv(csv_filename="all_hosts.csv"):
 
     print(f"Writing host data to {csv_filename}...")
     try:
-        with open(csv_filename, "w", newline="", encoding="utf-8") as csvfile:  # type: ignore
+        with open(csv_filename, "w", newline="", encoding="utf-8") as csvfile:
             fieldnames = ["hostname", "host_id", "current_tags"]
-            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+            writer = csv.DictWriter('../data/transient/' + csvfile, fieldnames=fieldnames)
             writer.writeheader()
             writer.writerows(all_host_data)
         print(f"Successfully wrote {len(all_host_data)} host records to {csv_filename}")
@@ -244,7 +244,6 @@ def fetch_all_hosts_and_write_to_csv(csv_filename="all_hosts.csv"):
 
 def main():
     """"""
-
     all_script_ids = falcon_rtr_admin.list_scripts(limit=200)['body']['resources']
     print(f"All scripts: {all_script_ids}", flush=True, end="\n\n")
     all_scripts = falcon_rtr_admin.get_scripts(all_script_ids)
@@ -263,10 +262,10 @@ def main():
 
     if device_online_state:
         test_commands = ["ls", "whoami", "systeminfo"]
-        '''
+
         for command in test_commands:
             execute_command(device_id, command)
-        '''
+
         cloud_script_name = 'METCIRT_RMM_Tool_Removal'
         print(f'Running the script {cloud_script_name} on {hostname}')
         execute_script([hostname], cloud_script_name)
