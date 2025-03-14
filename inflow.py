@@ -8,7 +8,7 @@ import pytz
 from matplotlib import transforms
 
 from config import get_config
-from xsoar import IncidentFetcher
+from services.xsoar import IncidentFetcher
 
 eastern = pytz.timezone('US/Eastern')
 

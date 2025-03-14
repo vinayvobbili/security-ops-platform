@@ -11,7 +11,7 @@ from matplotlib import transforms
 from webexpythonsdk import WebexAPI
 
 from config import get_config
-from xsoar import IncidentFetcher
+from services.xsoar import IncidentFetcher
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')

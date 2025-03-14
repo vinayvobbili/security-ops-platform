@@ -11,7 +11,7 @@ from matplotlib import transforms
 from pytz import timezone
 
 from config import get_config
-from xsoar import IncidentFetcher
+from services.xsoar import IncidentFetcher
 
 config = get_config()
 
