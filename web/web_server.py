@@ -8,7 +8,7 @@ import pytz
 from flask import Flask, render_template, request
 from flask import jsonify
 
-import xsoar
+from services import xsoar
 from config import get_config
 
 app = Flask(__name__, static_folder='static', static_url_path='/static', template_folder='templates')

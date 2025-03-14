@@ -3,7 +3,7 @@ import pandas as pd
 import pytz
 from webexpythonsdk import WebexAPI
 import config
-from xsoar import IncidentFetcher
+from services.xsoar import IncidentFetcher
 
 config = config.get_config()
 

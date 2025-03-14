@@ -7,7 +7,7 @@ import pytz
 from PIL import Image, ImageDraw, ImageFont
 
 import config
-from xsoar import IncidentFetcher
+from services.xsoar import IncidentFetcher
 
 eastern = pytz.timezone('US/Eastern')
 config = config.get_config()
