@@ -133,7 +133,7 @@ def announce_shift_change(shift_name, room_id):
 
     # print(f"{shift.upper()} Shift Staffing:\n{table}")
 
-    # Send new shift starting message to Webex room
+    # Send a new shift starting message to Webex room
     webex_api.messages.create(
         roomId=room_id,
         text=f"Shift Change Notice!",
