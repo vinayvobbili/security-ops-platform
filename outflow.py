@@ -167,7 +167,7 @@ def create_graph(tickets):
     ax.set_ylabel('Ticket Type - Detection Source', fontweight='bold', fontsize=12)
     ax.set_xlabel('Alert Counts', fontweight='bold', fontsize=10, labelpad=10)
 
-    ax.set_title('Outflow Yesterday', fontweight='bold', fontsize=12)
+    ax.set_title(f'Outflow Yesterday ({len(tickets)})', fontweight='bold', fontsize=12)
     ax.legend(title='Impact', loc='upper right', fontsize=10, title_fontsize=12)
 
     # Add a thin black border around the figure
