@@ -38,6 +38,9 @@ def create_stacked_bar_chart(df, x_label, y_label, title):
     max_value = df_pivot.sum(axis=1).max()
     ax.set_ylim(0, max_value + 3)
 
+    # Ensure y-ticks are integers
+    ax.yaxis.set_major_locator(plt.MaxNLocator(integer=True))
+
     # Add count labels on top of each stack
     for container in bars.containers:
         for bar in container:
@@ -74,14 +77,21 @@ def make_chart():
     df['source'] = df['CustomFields'].apply(lambda x: x.get('detectionsource'))
     df['severity'] = df['severity']
 
+    # Handle missing values:
+    df['source'] = df['source'].fillna('Unknown')
+    df['severity'] = df['severity'].fillna('Unknown')
+
     for pattern, replacement in detection_source_codes_by_name.items():
         df['source'] = df['source'].str.replace(pattern, replacement, regex=True, flags=re.IGNORECASE)
+
+    # Normalize empty strings to "Unknown"
+    df['source'] = df['source'].replace('', 'Unknown')
 
     # Count the occurrences of each source and severity
     source_severity_counts = df.groupby(['source', 'severity']).size().reset_index(name='count')
 
     # Create the stacked bar chart
-    fig = create_stacked_bar_chart(source_severity_counts, "Detection Source", "Number of Alerts", "Inflow Yesterday")
+    fig = create_stacked_bar_chart(source_severity_counts, "Detection Source", "Number of Alerts", f"Inflow Yesterday ({len(tickets)})")
 
     # Add a thin black border around the figure
     fig.patch.set_edgecolor('black')
