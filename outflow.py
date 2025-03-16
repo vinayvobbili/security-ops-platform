@@ -56,7 +56,7 @@ def create_graph(tickets):
     df['source'] = df['CustomFields'].apply(lambda x: x.get('detectionsource'))
     df['impact'] = df['CustomFields'].apply(lambda x: x.get('impact'))
 
-    # Fill missing values in source with "Unknown" at the beginning
+    # Fill missing values in a source with "Unknown" at the beginning
     df['source'] = df['source'].fillna('Unknown')
 
     for pattern, replacement in detection_source_codes_by_name.items():
@@ -112,8 +112,7 @@ def create_graph(tickets):
             else:
                 counts.append(0)
 
-        bars = ax.barh(pyramid_sources, counts, left=bottom, label=impact, color=impact_colors.get(impact, "#808080"),
-                       edgecolor="black", linewidth=0.3)
+        bars = ax.barh(pyramid_sources, counts, height=0.5, left=bottom, label=impact, color=impact_colors.get(impact, "#808080"), edgecolor="black", linewidth=0.3)
 
         # Add Value Labels
         for i, count in enumerate(counts):
@@ -129,7 +128,7 @@ def create_graph(tickets):
                 continue  # no logo on empty bars
 
             source = pyramid_sources[i]
-            logo_filename = LOGO_MAPPING.get(source.lower())  # match logo with source
+            logo_filename = LOGO_MAPPING.get(source.lower())  # match logo with a source
 
             if logo_filename:  # If a logo is found for the source
                 logo_path = os.path.join(LOGO_DIR, logo_filename)
