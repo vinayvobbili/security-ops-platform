@@ -152,7 +152,7 @@ def make_chart():
 
 def send_chart():
     file_path = 'web/static/charts/QR Rule Efficacy.png'
-    webex.messages.create(toPersonEmail=config.qradar_rule_efficacy_chart_receiver, files=[file_path])
+    webex.messages.create(toPersonEmail=config.qradar_efficacy_chart_receiver, files=[file_path])
 
 
 def main():
