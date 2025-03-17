@@ -1,3 +1,5 @@
+from datetime import datetime
+
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.patches import FancyArrow
@@ -73,12 +75,12 @@ def gauge(color):
     '''
     # Add a horizontal black line at the bottom of the gauge
     ax.plot([-outer_radius, outer_radius], [0, 0], color='black', linewidth=1)
+    '''
 
     # Set title with a nice font
     ax.text(0, 1.2, f'Threatcon Level - {datetime.today().strftime("%m/%d/%Y")}',
             ha='center', va='center', fontsize=14, fontweight='normal',
             fontname='Arial')
-    '''
 
     # Configure plot
     ax.set_aspect('equal')
@@ -95,7 +97,6 @@ def gauge(color):
         ["RED", "There is an ongoing attack confirmed to be targeting Acme"]
     ]
 
-    # Create a table at the bottom of the chart
     # Create a table at the bottom of the chart
     table = plt.table(
         cellText=threat_details[1:],  # Skip the header row for cell text
@@ -146,7 +147,7 @@ def make_chart():
     fig.patch.set_edgecolor('black')
     fig.patch.set_linewidth(5)
 
-    fig.savefig('web/static/charts/Threatcon Level.png', format='png', bbox_inches='tight', pad_inches=0.2, dpi=150)
+    fig.savefig('web/static/charts/Threatcon Level.png', format='png', bbox_inches='tight', pad_inches=0.2, dpi=300)
     plt.close()
 
 
