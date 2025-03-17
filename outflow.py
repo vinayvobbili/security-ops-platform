@@ -91,7 +91,7 @@ def create_graph(tickets):
     }
 
     # Create figure and axis
-    fig, ax = plt.subplots(figsize=(12, 10))
+    fig, ax = plt.subplots(figsize=(14, 10))
 
     # Plot data
     bottom = [0] * len(pyramid_sources)
@@ -162,7 +162,7 @@ def create_graph(tickets):
 
     # Add labels and title
     ax.set_yticks(range(len(pyramid_sources)))
-    ax.set_yticklabels(pyramid_sources)
+    ax.set_yticklabels(pyramid_sources, fontsize=12)
     ax.set_ylabel('Ticket Type - Detection Source', fontweight='bold', fontsize=12)
     ax.set_xlabel('Alert Counts', fontweight='bold', fontsize=10, labelpad=10)
 
