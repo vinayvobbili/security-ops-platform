@@ -1,5 +1,3 @@
-from datetime import datetime
-
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.patches import FancyArrow
@@ -67,15 +65,20 @@ def gauge(color):
     ax.plot(0, 0, 'ko', markersize=10)
 
     # Add a black line along the top edge of the gauge
-    outer_radius = 1.05  # Adjust this value to move the line outward
+    outer_radius = 1.04  # Adjust this value to move the line outward
     ax.plot(outer_radius * np.cos(np.radians(angles)),
             outer_radius * np.sin(np.radians(angles)),
             color='black', linewidth=1)
+
+    '''
+    # Add a horizontal black line at the bottom of the gauge
+    ax.plot([-outer_radius, outer_radius], [0, 0], color='black', linewidth=1)
 
     # Set title with a nice font
     ax.text(0, 1.2, f'Threatcon Level - {datetime.today().strftime("%m/%d/%Y")}',
             ha='center', va='center', fontsize=14, fontweight='normal',
             fontname='Arial')
+    '''
 
     # Configure plot
     ax.set_aspect('equal')
