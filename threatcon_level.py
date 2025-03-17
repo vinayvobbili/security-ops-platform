@@ -79,7 +79,7 @@ def gauge(color):
 
     # Set title with a nice font
     ax.text(0, 1.2, f'Threatcon Level - {datetime.today().strftime("%m/%d/%Y")}',
-            ha='center', va='center', fontsize=14, fontweight='normal',
+            ha='center', va='center', fontsize=14, fontweight='bold',
             fontname='Arial')
 
     # Configure plot
