@@ -77,8 +77,7 @@ def gauge(color):
 
 
 def make_chart():
-    # Create gauge with value 60
-    fig = gauge('orange')
+    fig = gauge('yellow')
 
     # Add a thin black border around the figure
     fig.patch.set_edgecolor('black')
