@@ -6,9 +6,18 @@ from matplotlib.patches import FancyArrow
 
 
 def gauge(color):
+    """
+    Creates a gauge chart representing the threat level.
+
+    Args:
+        color (str): The color representing the threat level ('red', 'orange', 'yellow', 'green').
+
+    Returns:
+        matplotlib.figure.Figure: The generated gauge chart figure.
+    """
     # Create figure and axis
     rad_angle = 0
-    fig, ax = plt.subplots(figsize=(8, 4))
+    fig, ax = plt.subplots(figsize=(8, 6))  # Increased figure height to accommodate table
 
     # Set the gauge range
     angles = np.linspace(0, 180)
@@ -66,24 +75,75 @@ def gauge(color):
     # Set title with a nice font
     ax.text(0, 1.2, f'Threatcon Level - {datetime.today().strftime("%m/%d/%Y")}',
             ha='center', va='center', fontsize=14, fontweight='normal',
-            fontname='Comic Sans MS')
+            fontname='Arial')
 
     # Configure plot
     ax.set_aspect('equal')
     ax.axis('off')
     plt.tight_layout()
 
+    # --- Add Text Table based on the attachment ---
+    # Define the threat level details according to the attachment
+    threat_details = [
+        ["Level", "Description"],
+        ["GREEN", "No known significant threats or on-going attacks"],
+        ["YELLOW", "There are global threats and/or non-specific threats which could affect Acme"],
+        ["ORANGE", "There are known threats which are specifically targeting Acme"],
+        ["RED", "There is an ongoing attack confirmed to be targeting Acme"]
+    ]
+
+    # Create a table at the bottom of the chart
+    # Create a table at the bottom of the chart
+    table = plt.table(
+        cellText=threat_details[1:],  # Skip the header row for cell text
+        colLabels=threat_details[0],  # Use the header row for column labels
+        cellLoc='left',
+        loc='bottom',
+        bbox=[0.0, -0.65, 1.0, 0.3],  # Adjust position and size as needed
+        colWidths=[0.2, 0.8]  # Set the column widths - 20% for Level, 80% for Description
+    )
+
+    # Style the table
+    table.auto_set_font_size(False)
+    table.set_fontsize(10)
+
+    # Apply colors to the cells
+    table.get_celld()[(0, 0)].set_facecolor('#3366CC')  # Header background
+    table.get_celld()[(0, 1)].set_facecolor('#3366CC')  # Header background
+    table.get_celld()[(0, 0)].set_text_props(color='white')  # Header text color
+    table.get_celld()[(0, 1)].set_text_props(color='white')  # Header text color
+
+    # Color the level cells according to the threat level
+    table.get_celld()[(1, 0)].set_facecolor('#00CC00')  # GREEN
+    table.get_celld()[(2, 0)].set_facecolor('#FFFF00')  # YELLOW
+    table.get_celld()[(3, 0)].set_facecolor('#FF9900')  # ORANGE
+    table.get_celld()[(4, 0)].set_facecolor('#FF0000')  # RED
+
+    # Set the description cell backgrounds
+    table.get_celld()[(1, 1)].set_facecolor('#B3FFB3')  # Light green
+    table.get_celld()[(2, 1)].set_facecolor('#FFFFB3')  # Light yellow
+    table.get_celld()[(3, 1)].set_facecolor('#FFCC99')  # Light orange
+    table.get_celld()[(4, 1)].set_facecolor('#FFB3B3')  # Light red
+
+    # Adjust the table scale
+    table.scale(1, 1.5)
+
     return fig
 
 
 def make_chart():
-    fig = gauge('yellow')
+    """
+    Generates the threat level gauge chart with the text table and saves it as an image.
+    """
+    threat_level = "yellow"  # Example threat level
+
+    fig = gauge(threat_level)
 
     # Add a thin black border around the figure
     fig.patch.set_edgecolor('black')
     fig.patch.set_linewidth(5)
 
-    fig.savefig('web/static/charts/Threatcon Level.png', format='png', bbox_inches='tight', pad_inches=0.2)
+    fig.savefig('web/static/charts/Threatcon Level.png', format='png', bbox_inches='tight', pad_inches=0.2, dpi=150)
     plt.close()
 
 
