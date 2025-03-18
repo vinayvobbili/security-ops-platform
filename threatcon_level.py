@@ -118,10 +118,10 @@ def gauge(color):
     table.get_celld()[(0, 1)].set_text_props(color='white')  # Header text color
 
     # Color the level cells according to the threat level
-    table.get_celld()[(1, 0)].set_facecolor('#00CC00')  # GREEN
-    table.get_celld()[(2, 0)].set_facecolor('#FFFF00')  # YELLOW
-    table.get_celld()[(3, 0)].set_facecolor('#FF9900')  # ORANGE
-    table.get_celld()[(4, 0)].set_facecolor('#FF0000')  # RED
+    table.get_celld()[(1, 0)].set_facecolor('#006400')  # Dark GREEN
+    table.get_celld()[(2, 0)].set_facecolor('#FFD700')  # Dark YELLOW
+    table.get_celld()[(3, 0)].set_facecolor('#FF8C00')  # Dark ORANGE
+    table.get_celld()[(4, 0)].set_facecolor('#8B0000')  # Dark RED
 
     # Set the description cell backgrounds
     table.get_celld()[(1, 1)].set_facecolor('#B3FFB3')  # Light green
