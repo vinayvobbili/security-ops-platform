@@ -30,7 +30,7 @@
   ".*IPS block inbound response: phishing content detected by Zscaler.*": "IPS block inbound response: phishing content detected by Zscaler",
   ".*Azure AD: Existing Policy Modified.*": "Azure AD: Existing Policy Modified",
   ".*AdvancedIpScannerDetected.*": "AdvancedIpScannerDetected",
-  ".*CVE-2019-0708 - RDP Session from Same User.*": "CVE-2019-0708 - RDP Session from Same User",
+  ".*RDP Session from Same User.*": "RDP Session from Same User",
   ".*Connection to uncommon web port via Palo Alto Proxy.*": "Connection to uncommon web port via Palo Alto Proxy",
   ".*Multiple RMM Detections in Short time on Same Host.*": "Multiple RMM Detections in Short time on Same Host",
   ".*O365 Exchange Transport Rule Created or Modified.*": "O365 Exchange Transport Rule Created or Modified",
@@ -97,5 +97,13 @@
   ".*Windows Firewall Disabled.*": "Windows Firewall Disabled",
   ".*CERTUTIL to Download or Decode Files.*": "CERTUTIL to Download or Decode Files",
   ".*Malware Infection on Critical Assets.*": "Malware Infection on Critical Assets",
-  ".*File Observed followed by Webshell Observed.*": "File Observed followed by Webshell Observed"
+  ".*File Observed followed by Webshell Observed.*": "File Observed followed by Webshell Observed",
+  ".*Entra ID High Risk User Login Activity.*": "Entra ID High Risk User Login Activity",
+  ".*vulnerable server contacted on port 22 or 5480.*": "vulnerable server contacted on port 22 or 5480",
+  ".*Possible DCSync activity from non DC\\(Vectra\\).*": "Possible DCSync activity from non DC(Vectra)",
+  ".*Apache Camel CVE-2025-27636.*": "Apache Camel CVE-2025-27636",
+  ".*Dumping Password Hash File.*": "Dumping Password Hash File",
+  ".*Azure AD: Existing Policy Deleted.*": "Azure AD: Existing Policy Deleted",
+  ".*SMB Used For Potential Network Share Enumeration.*": "SMB Used For Potential Network Share Enumeration",
+  ".*Escalation Events on Vulnerable VMWare.*": "Escalation Events on Vulnerable VMWare"
 }

@@ -33,3 +33,14 @@ def log_activity(func):
         return func(*args, **kwargs)
 
     return wrapper
+
+
+impact_colors = {
+    "Significant": "#ff0000",  # red
+    "Confirmed": "#ffa500",  # orange
+    "Detected": "#ffd700",  # gold
+    "Prevented": "#008000",  # green
+    "Ignore": "#808080",  # gray
+    "Testing": "#add8e6",  # light blue
+    "False Positive": "#90ee90",  # light green
+}
