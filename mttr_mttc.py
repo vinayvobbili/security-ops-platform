@@ -152,7 +152,7 @@ def save_mttr_mttc_chart(ticket_slas_by_periods):
 
     # Customize the plot
     ax.set_ylabel('Minutes', fontdict={'fontsize': 12, 'fontweight': 'bold'})
-    ax.set_title(f'Yesterday\'s Mean Time To', fontdict={'fontsize': 12, 'fontweight': 'bold'})
+    ax.set_title(f'Mean Time To', fontdict={'fontsize': 12, 'fontweight': 'bold'})
     ax.set_xticks(x)
     ax.set_xticklabels(['Respond', 'Contain'], fontdict={'fontsize': 12, 'fontweight': 'bold'})
     ax.legend(loc='upper left')
