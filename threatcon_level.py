@@ -33,16 +33,16 @@ def gauge(color):
     # Plot the colored arcs with darker colors
     ax.plot(radius * np.cos(np.radians(angles[red])),
             radius * np.sin(np.radians(angles[red])),
-            color='#8B0000', linewidth=20)  # Dark red
+            color='#8B0000', linewidth=20, zorder=1)  # Dark red
     ax.plot(radius * np.cos(np.radians(angles[orange])),
             radius * np.sin(np.radians(angles[orange])),
-            color='#FF8C00', linewidth=20)  # Dark orange
+            color='#FF8C00', linewidth=20, zorder=1)  # Dark orange
     ax.plot(radius * np.cos(np.radians(angles[yellow])),
             radius * np.sin(np.radians(angles[yellow])),
-            color='#FFD700', linewidth=20)  # Dark yellow
+            color='#FFD700', linewidth=20, zorder=1)  # Dark yellow
     ax.plot(radius * np.cos(np.radians(angles[green])),
             radius * np.sin(np.radians(angles[green])),
-            color='#006400', linewidth=20)  # Dark green
+            color='#006400', linewidth=20, zorder=1)  # Dark green
 
     # Add the arrow (needle)
     if color == 'red':
@@ -54,28 +54,26 @@ def gauge(color):
     elif color == 'green':
         rad_angle = np.radians(157.5)
 
-    arrow_length = 0.75
+    arrow_length = 0.80
     arrow_width = 0.04
     arrow = FancyArrow(0, 0,
                        arrow_length * np.cos(rad_angle),
                        arrow_length * np.sin(rad_angle),
                        width=arrow_width,
-                       color='black')
+                       color='black', zorder=3)  # set zorder to 3
     ax.add_patch(arrow)
 
     # Add a center dot
-    ax.plot(0, 0, 'ko', markersize=10)
+    ax.plot(0, 0, 'ko', markersize=20, zorder=2)  # set zorder to 2
 
     # Add a black line along the top edge of the gauge
     outer_radius = 1.04  # Adjust this value to move the line outward
     ax.plot(outer_radius * np.cos(np.radians(angles)),
             outer_radius * np.sin(np.radians(angles)),
-            color='black', linewidth=1)
+            color='black', linewidth=1, zorder=2)  # set zorder to 2
 
-    '''
     # Add a horizontal black line at the bottom of the gauge
-    ax.plot([-outer_radius, outer_radius], [0, 0], color='black', linewidth=1)
-    '''
+    ax.plot([-outer_radius, outer_radius], [0, 0], color='black', linewidth=1, zorder=2)  # set zorder to 2
 
     # Set title with a nice font
     ax.text(0, 1.2, f'Threatcon Level - {datetime.today().strftime("%m/%d/%Y")}',
