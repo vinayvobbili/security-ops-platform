@@ -82,7 +82,10 @@ def gauge(color):
 
     # Configure plot
     ax.set_aspect('equal')
-    ax.axis('off')
+    # ax.axis('off') #removed this line
+    ax.set_ylim(bottom=0)  # added this line
+    ax.set_xlim([-1.1, 1.1])  # added this line
+    ax.axis('off')  # added this line
     plt.tight_layout()
 
     # --- Add Text Table based on the attachment ---
