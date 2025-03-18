@@ -8,8 +8,8 @@ import pytz
 from flask import Flask, render_template, request
 from flask import jsonify
 
-from services import xsoar
 from config import get_config
+from services import xsoar
 
 app = Flask(__name__, static_folder='static', static_url_path='/static', template_folder='templates')
 eastern = pytz.timezone('US/Eastern')
@@ -33,7 +33,9 @@ def get_image_files() -> List[str]:
         "charts/SLA Breaches.png",
         "charts/MTTR MTTC.png",
         "charts/Heat Map.png",
-        "charts/QR Rule Efficacy.png",
+        "charts/QR Rule Efficacy-Quarter.png",
+        "charts/QR Rule Efficacy-Month.png",
+        "charts/QR Rule Efficacy-Week.png",
         "images/Threat Hunting Intro.png",
         "charts/DE Stories.png",
         "charts/RE Stories.png",
