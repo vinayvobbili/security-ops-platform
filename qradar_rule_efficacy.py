@@ -78,11 +78,13 @@ class QRadarEfficacyChart:
             total = sum(impacts.values())
             confirmed = impacts.get('Confirmed', 0)
             testing = impacts.get('Testing', 0)
-            noise = round((total - confirmed - testing) / total * 100) if total > 0 else 0
+            prevented = impacts.get('Prevented', 0)
+
+            noise = round((total - confirmed - testing - prevented) / total * 100) if total > 0 else 0
             correlation_rule_counts[rule]['Noise'] = noise
 
         # Log unabbreviated rule names
-        unabbreviated_rules = self._find_unabbreviated_rules(correlation_rule_counts.keys())
+        unabbreviated_rules = self._find_unabbreviated_rules(list(correlation_rule_counts.keys()))
         log.info("Unabbreviated Rule Names:")
         for rule in unabbreviated_rules:
             log.info(rule)
@@ -96,12 +98,13 @@ class QRadarEfficacyChart:
         for pattern, replacement in rule_name_abbreviations.items():
             df.index = df.index.str.replace(pattern, replacement, regex=True, flags=re.IGNORECASE)
 
-        # Convert index to string type
+        # Convert index to a string type
         df.index = df.index.astype(str)
 
         return df
 
-    def _find_unabbreviated_rules(self, rules: List[str]) -> List[str]:
+    @staticmethod
+    def _find_unabbreviated_rules(rules: List[str]) -> List[str]:
         """Find rules that don't have abbreviations defined."""
         unabbreviated = []
         for rule in rules:
@@ -143,7 +146,7 @@ class QRadarEfficacyChart:
         now_eastern = datetime.now(EASTERN_TZ).strftime('%m/%d/%Y %I:%M %p %Z')
         trans = transforms.blended_transform_factory(fig.transFigure, fig.transFigure)
         fig.text(0.02, 0.01, now_eastern, ha='left', va='bottom', fontsize=10, transform=trans)
-        fig.text(0.73, 0.01, 'Noise = (Total - Confirmed - Testing) / Total * 100%',
+        fig.text(0.68, 0.01, 'Noise = (Total - Confirmed - Testing - Prevented) / Total * 100%',
                  ha='left', va='bottom', fontsize=10, transform=trans)
 
         # Add text labels to bars
@@ -168,19 +171,22 @@ class QRadarEfficacyChart:
         plt.close(fig)  # Close the figure explicitly
         log.info(f"Chart saved to: {output_path}")
 
-    def _add_bar_labels(self, ax, df: pd.DataFrame) -> None:
+    @staticmethod
+    def _add_bar_labels(ax, df: pd.DataFrame) -> None:
         """Add value labels to bars."""
         for i, row in enumerate(df.iterrows()):
             left = 0
             for value in row[1].values:
-                if value > 0:
+                if int(value) > 0:
                     ax.text(left + value / 2, i, str(int(value)), ha='center', va='center')
                 left += float(value)
 
-    def _add_noise_labels(self, ax, df: pd.DataFrame, noise_series: pd.Series) -> None:
+    @staticmethod
+    def _add_noise_labels(ax, df: pd.DataFrame, noise_series: pd.Series) -> None:
         """Add noise percentage labels."""
         for i, noise in enumerate(noise_series):
             total_width = df.iloc[i].sum()
+            # Make sure i is an integer index
             ax.text(total_width, i, f'  {int(noise)}% noise', va='center', ha='left', fontsize=10)
 
     def generate_chart_for_period(self, period: Dict[str, Any], title: str, time_period_label: str, output_filename: str) -> None:
@@ -249,5 +255,5 @@ def make_chart() -> None:
 
 
 if __name__ == '__main__':
-    # make_chart()
-    send_charts()
+    make_chart()
+    # send_charts()
