@@ -108,7 +108,7 @@ def transfer_incident(source_url, target_url, incident_id, source_auth, target_a
         # print("Successfully retrieved incident data")
 
         # Create incident in target
-        # print("Creating incident in target environment...")
+        print("Creating the incident in target environment...")
         new_incident = create_incident(
             target_url,
             incident_data,
@@ -201,7 +201,7 @@ class IncidentFetcher:
             return entries.get('data', [])  # Extract entries from response
         except requests.exceptions.RequestException as e:
             log.error(f"Error fetching entries for incident {incident_id}: {e}")
-            return []  # Return empty list on failure
+            return []  # Return an empty list on failure
 
 
 def __get_all_lists__() -> list:
