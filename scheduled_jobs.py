@@ -18,6 +18,7 @@ import sla_breaches
 import threatcon_level
 import verify_host_online_status
 from config import get_config
+from services import phish_fort
 
 config = get_config()
 eastern = pytz.timezone('US/Eastern')
@@ -41,6 +42,7 @@ def main():
     sla_breaches.make_chart(),
     threatcon_level.make_chart()
     qradar_rule_efficacy.send_chart()
+    phish_fort.fetch_and_report_incidents()
     '''
 
     # schedule
@@ -71,6 +73,7 @@ def main():
     schedule.every().day.at("11:30", eastern).do(lambda: secops.announce_shift_change('afternoon', room_id))
     schedule.every().day.at("19:30", eastern).do(lambda: secops.announce_shift_change('night', room_id))
     schedule.every().friday.at("08:00", eastern).do(lambda: qradar_rule_efficacy.send_charts())
+    # schedule.every().monday.at("08:00", eastern).do(lambda: phish_fort.fetch_and_report_incidents())
 
     while True:
         schedule.run_pending()

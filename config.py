@@ -47,6 +47,8 @@ def get_config():
         snow_base_url=os.environ["SNOW_BASE_URL"],
         my_name=os.environ["MY_NAME"],
         qradar_efficacy_chart_receiver=os.environ["QRADAR_EFFICACY_CHART_RECEIVER"],
+        phish_fort_api_key=os.environ["PHISH_FORT_API_KEY"],
+        phish_fort_room_id=os.environ["PHISH_FORT_ROOM_ID"],
     )
 
 
@@ -92,5 +94,7 @@ class Config:
     snow_base_url: str
     my_name: str
     qradar_efficacy_chart_receiver: str
+    phish_fort_api_key: str
+    phish_fort_room_id: str
 
     webex_api_url: str = "https://webexapis.com/v1/messages"
