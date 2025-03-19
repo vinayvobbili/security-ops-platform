@@ -25,7 +25,7 @@ webex_api = WebexAPI(access_token=CONFIG.webex_bot_access_token_soar)
 # Constants
 PHISHFORT_API_URL = "https://capi.phishfort.com/v1/incidents"
 PHISHFORT_API_KEY = CONFIG.phish_fort_api_key
-WEBEX_ROOM_ID = CONFIG.webex_room_id_vinay_test_space  # CONFIG.phish_fort_room_id
+WEBEX_ROOM_ID = CONFIG.phish_fort_room_id
 WEBEX_MESSAGE_BATCH_SIZE = 7000
 
 # List of incident statuses to fetch
@@ -40,19 +40,19 @@ INCIDENT_STATUSES = [
 
 # DataFrame columns to display in the report
 DISPLAY_COLUMNS = [
-    "statusVerbose",
     "id",
     "domain",
     "timestamp",
+    "statusVerbose",
     "reportedBy"
 ]
 
 # Column name mappings for better readability
 COLUMN_MAPPINGS = {
-    "statusVerbose": "Status",
     "id": "PF Incident No.",
     "domain": "Subject",
     "timestamp": "Submitted on",
+    "statusVerbose": "Status",
     "reportedBy": "Submitted by"
 }
 
