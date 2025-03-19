@@ -13,7 +13,7 @@ from services import xsoar
 
 app = Flask(__name__, static_folder='static', static_url_path='/static', template_folder='templates')
 eastern = pytz.timezone('US/Eastern')
-config = get_config()
+CONFIG = get_config()
 
 # Supported image extensions
 IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".gif", ".svg")
@@ -97,20 +97,35 @@ def display_speak_up_form():
     return render_template("speak_up_form.html")
 
 
-@app.route("/submit-msoc-form", methods=['POST'])
 @log_web_activity
-def handle_msoc_form_submission():
-    """Handles MSOC form submissions and processes the data."""
-
-    # Process the submitted data
+@app.route("/submit-speak-up-form", methods=['POST'])
+def handle_speak_up_form_submission():
+    """Handles the Speak Up form submissions and processes the data."""
     form = request.form.to_dict()
-    form['type'] = 'MSOC Site Security Device Management'
-    response = xsoar.create_incident(config.xsoar_dev_api_base_url, form, config.xsoar_dev_auth_id, config.xsoar_dev_auth_token)
+    form['name'] = 'Speak Up Report'
+    form['type'] = 'METCIRT Employee Reported Incident'
+    form['details'] = form.pop('description')
+    response = xsoar.create_incident(CONFIG.xsoar_dev_api_base_url, form, CONFIG.xsoar_dev_auth_id, CONFIG.xsoar_dev_auth_token)
     # Return a JSON response
     return jsonify({
         'status': 'success',
         'new_incident_id': response['id'],
-        'new_incident_link': f"{config.xsoar_dev_ui_base_url}/Custom/caseinfoid/{response['id']}"
+        'new_incident_link': f"{CONFIG.xsoar_dev_ui_base_url}/Custom/caseinfoid/{response['id']}"
+    })
+
+
+@app.route("/submit-msoc-form", methods=['POST'])
+@log_web_activity
+def handle_msoc_form_submission():
+    """Handles MSOC form submissions and processes the data."""
+    form = request.form.to_dict()
+    form['type'] = 'MSOC Site Security Device Management'
+    response = xsoar.create_incident(CONFIG.xsoar_dev_api_base_url, form, CONFIG.xsoar_dev_auth_id, CONFIG.xsoar_dev_auth_token)
+    # Return a JSON response
+    return jsonify({
+        'status': 'success',
+        'new_incident_id': response['id'],
+        'new_incident_link': f"{CONFIG.xsoar_dev_ui_base_url}/Custom/caseinfoid/{response['id']}"
     })
 
 

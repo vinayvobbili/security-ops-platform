@@ -6,7 +6,7 @@ from openpyxl import load_workbook
 from tabulate import tabulate
 from webexpythonsdk import WebexAPI
 
-from config import get_config  # If you still use a config file for the path
+from config import get_config  # If you still use a CONFIG file for the path
 from services.xsoar import IncidentFetcher
 
 config = get_config()
