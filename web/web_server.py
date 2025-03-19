@@ -102,9 +102,28 @@ def display_speak_up_form():
 def handle_speak_up_form_submission():
     """Handles the Speak Up form submissions and processes the data."""
     form = request.form.to_dict()
+
+    # Format the date from yyyy-mm-dd to mm/dd/yyyy
+    date_occurred = form.get('dateOccurred', '')
+    if date_occurred:
+        try:
+            # Parse the date string from the form (likely in yyyy-mm-dd format)
+            year, month, day = date_occurred.split('-')
+            # Format it as mm/dd/yyyy
+            formatted_date = f"{month}/{day}/{year}"
+        except ValueError:
+            # If there's an error parsing, use the original value
+            formatted_date = date_occurred
+    else:
+        formatted_date = ""
+
     form['name'] = 'Speak Up Report'
     form['type'] = 'METCIRT Employee Reported Incident'
-    form['details'] = form.pop('description')
+    form['details'] = (
+        f"Date Occurred: {formatted_date} \n"
+        f"Issue Type: {form.get('issueType')} \n"
+        f"Description: {form.get('description')} \n"
+    )
     response = xsoar.create_incident(CONFIG.xsoar_dev_api_base_url, form, CONFIG.xsoar_dev_auth_id, CONFIG.xsoar_dev_auth_token)
     # Return a JSON response
     return jsonify({
