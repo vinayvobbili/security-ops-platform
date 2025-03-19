@@ -80,7 +80,7 @@ def contact_phishfort_api(status: str) -> Optional[Dict]:
             params=payload,
             headers=headers,
             timeout=30,
-            verify=True
+            verify=False
         )
         response.raise_for_status()
         return response.json()
