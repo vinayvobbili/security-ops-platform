@@ -85,9 +85,16 @@ def get_ir_dashboard_slide_show():
 
 @app.route("/msoc-form")
 @log_web_activity
-def display_form():
+def display_msoc_form():
     """Displays the MSOC form."""
     return render_template("msoc_form.html")
+
+
+@app.route("/speak-up-form")
+@log_web_activity
+def display_speak_up_form():
+    """Displays the Speak Up form."""
+    return render_template("speak_up_form.html")
 
 
 @app.route("/submit-msoc-form", methods=['POST'])
