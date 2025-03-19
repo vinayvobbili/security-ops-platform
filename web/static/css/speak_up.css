@@ -151,7 +151,7 @@ button:hover {
 /* Modal content styling */
 .modal-content {
     background: linear-gradient(to bottom, #ffffff, #f5f9fa); /* Gradient background like the form */
-    margin: 10% auto; /* Reduced from 15% to show higher on screen */
+    margin: 10% auto;
     padding: 30px;
     border-radius: 8px; /* Rounded corners to match form styling */
     border: none;

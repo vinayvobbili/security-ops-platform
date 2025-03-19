@@ -10,43 +10,42 @@
 <div class="form-container">
     <h1>Report a CyberSecurity Incident</h1>
 
-    <form id="speakUpForm">
+    <form id="speakUpForm" method="post" action="/submit-speak-up-form">
         <div class="form-group">
             <div class="date-label-container">
                 <label>1. Date Occurred<span class="required">*</span></label>
                 <label>
-                    <input type="date" max="" required>
+                    <input type="date" id="dateOccurred" name="dateOccurred" max="" required>
                 </label>
             </div>
-            <div class="helper-text">Estimated date for when incident occurred
-            </div>
+            <div class="helper-text">Estimated date for when incident occurred</div>
         </div>
 
         <div class="form-group">
             <label>2. Issue Type<span class="required">*</span></label>
             <div class="radio-group">
                 <div class="radio-option">
-                    <input type="radio" id="communication" name="issueType" required>
+                    <input type="radio" id="communication" name="issueType" value="Suspicious Communication: Email, Text Message, Phone Call, etc." required>
                     <label for="communication">Suspicious Communication: Email, Text Message, Phone Call, etc.</label>
                 </div>
                 <div class="radio-option">
-                    <input type="radio" id="activity" name="issueType">
+                    <input type="radio" id="activity" name="issueType" value="Suspicious Activity on Computer">
                     <label for="activity">Suspicious Activity on Computer</label>
                 </div>
                 <div class="radio-option">
-                    <input type="radio" id="social" name="issueType">
+                    <input type="radio" id="social" name="issueType" value="Suspicious Social Media Profile">
                     <label for="social">Suspicious Social Media Profile</label>
                 </div>
                 <div class="radio-option">
-                    <input type="radio" id="website" name="issueType">
+                    <input type="radio" id="website" name="issueType" value="Suspicious Website">
                     <label for="website">Suspicious Website</label>
                 </div>
                 <div class="radio-option">
-                    <input type="radio" id="stolen" name="issueType">
+                    <input type="radio" id="stolen" name="issueType" value="Lost/Stolen Computer">
                     <label for="stolen">Lost/Stolen Computer</label>
                 </div>
                 <div class="radio-option">
-                    <input type="radio" id="other" name="issueType">
+                    <input type="radio" id="other" name="issueType" value="Other">
                     <label for="other">Other</label>
                 </div>
             </div>
@@ -56,7 +55,7 @@
             <label>3. Description<span class="required">*</span></label>
             <div class="helper-text">Please provide all relevant details of the report incident</div>
             <label>
-                <textarea required></textarea>
+                <textarea id="description" name="description" required></textarea>
             </label>
         </div>
 
