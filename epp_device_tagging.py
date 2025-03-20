@@ -439,7 +439,7 @@ def get_hostnames(input_file=INPUT_FILE) -> List[str]:
 
 
 def send_report(output_filename: str, time_report) -> bool:
-    """Send report via Webex with the results file attached."""
+    """Send a report via Webex with the result file attached."""
     try:
         webex_api = WebexAPI(config.webex_bot_access_token_moneyball)
         response = webex_api.messages.create(

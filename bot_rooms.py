@@ -76,7 +76,7 @@ class InvalidRoomIDException(Exception):
     pass
 
 
-def get_room_name(room_id):
+def get_room_name(room_id, bot_access_token):
     """
     Retrieve the room name for a given room ID.
 
@@ -86,7 +86,7 @@ def get_room_name(room_id):
     """
     url = f"https://webexapis.com/v1/rooms/{room_id}"
     headers = {
-        "Authorization": f"Bearer {BOT_ACCESS_TOKEN}",
+        "Authorization": f"Bearer {bot_access_token}",
         "Content-Type": "application/json"
     }
 

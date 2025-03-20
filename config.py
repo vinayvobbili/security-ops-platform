@@ -11,9 +11,11 @@ def get_config():
         webex_bot_access_token_moneyball=os.environ["WEBEX_BOT_ACCESS_TOKEN_MONEYBALL"],
         webex_bot_access_token_soar=os.environ["WEBEX_BOT_ACCESS_TOKEN_SOAR"],
         webex_bot_access_token_toodles=os.environ["WEBEX_BOT_ACCESS_TOKEN_TOODLES"],
+        webex_bot_access_token_jarvais=os.environ["WEBEX_BOT_ACCESS_TOKEN_JARVAIS"],
         webex_room_id_aging_tickets=os.environ["WEBEX_ROOM_ID_AGING_TICKETS"],
         webex_room_id_vinay_test_space=os.environ["WEBEX_ROOM_ID_VINAY_TEST_SPACE"],
         webex_room_id_soc_shift_updates=os.environ["WEBEX_ROOM_ID_SOC_SHIFT_UPDATES"],
+        webex_room_id_epp_tagging=os.environ["WEBEX_ROOM_ID_EPP_TAGGING"],
         xsoar_api_base_url=os.environ["XSOAR_API_BASE_URL"],
         xsoar_ui_base_url=os.environ["XSOAR_UI_BASE_URL"],
         xsoar_dev_api_base_url=os.environ["XSOAR_DEV_API_BASE_URL"],
@@ -22,8 +24,8 @@ def get_config():
         xsoar_auth_id=os.environ["XSOAR_AUTH_ID"],
         xsoar_dev_auth_token=os.environ["XSOAR_DEV_AUTH_TOKEN"],
         xsoar_dev_auth_id=os.environ["XSOAR_DEV_AUTH_ID"],
-        approved_domains=os.environ["APPROVED_DOMAINS"],
-        approved_rooms=os.environ["APPROVED_ROOMS"],
+        jarvais_approved_rooms=os.environ["JARVAIS_APPROVED_ROOMS"],
+        money_ball_approved_rooms=os.environ["MONEY_BALL_APPROVED_ROOMS"],
         ticket_type_prefix=os.environ["TICKET_TYPE_PREFIX"],
         azdo_org=os.environ["AZDO_ORGANIZATION"],
         azdo_de_project=os.environ["AZDO_DE_PROJECT"],
@@ -58,9 +60,11 @@ class Config:
     webex_bot_access_token_moneyball: str
     webex_bot_access_token_soar: str
     webex_bot_access_token_toodles: str
+    webex_bot_access_token_jarvais: str
     webex_room_id_aging_tickets: str
     webex_room_id_vinay_test_space: str
     webex_room_id_soc_shift_updates: str
+    webex_room_id_epp_tagging: str
     xsoar_api_base_url: str
     xsoar_ui_base_url: str
     xsoar_dev_api_base_url: str
@@ -70,8 +74,8 @@ class Config:
     xsoar_dev_auth_token: str
     xsoar_dev_auth_id: str
     ticket_type_prefix: str
-    approved_domains: str
-    approved_rooms: str
+    jarvais_approved_rooms: str
+    money_ball_approved_rooms: str
     azdo_org: str
     azdo_de_project: str
     azdo_re_project: str

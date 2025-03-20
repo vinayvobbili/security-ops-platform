@@ -1,0 +1,135 @@
+import time
+from typing import List, Dict
+
+import pandas as pd
+from falconpy import Hosts
+from falconpy import OAuth2
+
+from config import get_config
+
+CONFIG = get_config()
+falcon_auth = OAuth2(
+    client_id=CONFIG.cs_rtr_client_id,
+    client_secret=CONFIG.cs_rtr_client_secret,
+    base_url="api.us-2.crowdstrike.com",
+    ssl_verify=False,
+)
+falcon_hosts = Hosts(auth_object=falcon_auth)
+
+
+def fetch_all_hosts_and_write_to_xlsx(xlsx_filename: str = "all_hosts.xlsx") -> None:
+    """
+    Fetches all hosts from CrowdStrike Falcon and writes their details (hostname, host ID, current tags) to an XLSX file.
+
+    Args:
+        xlsx_filename (str): The name of the XLSX file to write to. Defaults to "all_hosts.xlsx".
+    """
+
+    all_host_data: List[Dict[str, str]] = []
+    offset: str | None = None
+    limit: int = 5000  # Maximum allowed by the API
+
+    print("Fetching ALL host data...")
+    start_time = time.time()
+
+    try:
+        while True:
+            response = falcon_hosts.query_devices_by_filter_scroll(
+                limit=limit, offset=offset
+            )
+
+            if response["status_code"] == 200:
+                host_ids = response["body"].get("resources", [])
+                if not host_ids:
+                    break
+
+                # Get details for each host ID
+                details_response = falcon_hosts.get_device_details(ids=host_ids)
+                if details_response["status_code"] == 200:
+                    host_details = details_response["body"].get("resources", [])
+                    for host in host_details:
+                        all_host_data.append(
+                            {
+                                "hostname": host.get("hostname"),
+                                "host_id": host.get("device_id"),
+                                "current_tags": ", ".join(host.get("tags", [])),
+                            }
+                        )
+                else:
+                    print(
+                        f"Error retrieving details for host IDs: {details_response}"
+                    )
+                    break
+
+                offset = (
+                    response["body"]
+                    .get("meta", {})
+                    .get("pagination", {})
+                    .get("offset")
+                )
+                if not offset:
+                    break  # No more pages
+            else:
+                print(f"Error retrieving host IDs: {response}")
+                break
+
+    except Exception as e:
+        print(f"An error occurred: {e}")
+
+    end_time = time.time()
+    elapsed_time = end_time - start_time
+    print(f"Finished fetching host data in {elapsed_time:.2f} seconds.")
+
+    print(f"Writing host data to {xlsx_filename}...")
+    try:
+        df = pd.DataFrame(all_host_data)
+        df.to_excel('../data/transient/tagging/' + xlsx_filename, index=False, engine='openpyxl')
+        print(
+            f"Successfully wrote {len(all_host_data)} host records to {xlsx_filename}"
+        )
+    except Exception as e:
+        print(f"An error occurred while writing to XLSX: {e}")
+
+
+def list_cs_hosts_without_ring_tag(input_xlsx_filename: str = "../data/transient/tagging/all_hosts.xlsx", output_xlsx_filename: str = "../data/transient/tagging/cs_hosts_without_ring_tag.xlsx") -> None:
+    """
+    List CrowdStrike hosts that do not have a FalconGroupingTags/*Ring* tag.
+    Read from all_hosts.xlsx, filter hosts, and write the results to a new XLSX file.
+    """
+    hosts_without_ring_tag: List[Dict[str, str]] = []
+
+    try:
+        df = pd.read_excel(input_xlsx_filename, engine='openpyxl')
+        for index, row in df.iterrows():
+            current_tags = row["current_tags"]
+            if isinstance(current_tags, str):
+                tags = current_tags.split(", ")
+            else:
+                tags = []
+            has_ring_tag = False
+            for tag in tags:
+                if tag.startswith("FalconGroupingTags/") and "Ring" in tag:
+                    has_ring_tag = True
+                    break
+            if not has_ring_tag:
+                hosts_without_ring_tag.append(row.to_dict())
+
+        output_df = pd.DataFrame(hosts_without_ring_tag)
+        output_df.to_excel(output_xlsx_filename, index=False, engine='openpyxl')
+
+        print(f"Found {len(hosts_without_ring_tag)} hosts without a Ring tag.")
+        print(f"Wrote results to {output_xlsx_filename}")
+
+    except FileNotFoundError:
+        print(f"Error: Input file {input_xlsx_filename} not found.")
+    except Exception as e:
+        print(f"An error occurred: {e}")
+
+
+def main() -> None:
+    # fetch_all_hosts_and_write_to_xlsx()
+    list_cs_hosts_without_ring_tag()
+
+
+if __name__ == "__main__":
+    main()
