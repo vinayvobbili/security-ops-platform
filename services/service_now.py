@@ -223,6 +223,8 @@ class ServiceNowClient:
             dict: Host details if found, None if not found
         """
         if hostname:
+            # if hostname ustry1metv0ae6l.internal.company.com, make hostname = ustry1metv0ae6l
+            hostname = hostname.split('.')[0]
             return self.compute_api.get_host_details_by_name(hostname)
         else:
             raise ValueError("Hostname must be provided")
