@@ -68,7 +68,7 @@ def log_web_activity(func):
             client_ip = request.remote_addr
             if client_ip not in ['192.168.1.100', '127.0.0.1', '192.168.1.102']:  # don't log the activity for my IP address
                 now_eastern = datetime.now(eastern).strftime('%m/%d/%Y %I:%M:%S %p %Z')
-                with open('../data/transient/web_server_activity_log.csv', 'a', newline='\n') as csvfile:
+                with open('../data/transient/logs/web_server_activity_log.csv', 'a', newline='\n') as csvfile:
                     csv.writer(csvfile).writerow([request.path, client_ip, now_eastern])
         return func(*args, **kwargs)
 

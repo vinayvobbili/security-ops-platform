@@ -5,7 +5,7 @@ from webex_bot.webex_bot import WebexBot
 from webexteamssdk import WebexTeamsAPI
 
 from config import get_config
-from helper_methods import log_activity
+from helper_methods import log_moneyball_activity
 
 # Load configuration
 config = get_config()
@@ -29,7 +29,7 @@ class DetectionEngineeringStories(Command):
     def __init__(self):
         super().__init__(command_keyword="det_eng", help_message="DE Stories")
 
-    @log_activity
+    @log_moneyball_activity(bot_access_token=config.webex_bot_access_token_moneyball)
     def execute(self, message, attachment_actions, activity):
         send_chart(attachment_actions.json_data['roomId'], activity['actor']['displayName'], "DE Stories", "de_stories.png")
 
@@ -38,7 +38,7 @@ class ResponseEngineeringStories(Command):
     def __init__(self):
         super().__init__(command_keyword="resp_eng", help_message="RE Stories")
 
-    @log_activity
+    @log_moneyball_activity(bot_access_token=config.webex_bot_access_token_moneyball)
     def execute(self, message, attachment_actions, activity):
         send_chart(attachment_actions.json_data['roomId'], activity['actor']['displayName'], "RE Stories", "RE Stories.png")
 
@@ -49,7 +49,7 @@ class MttrMttc(Command):
     def __init__(self):
         super().__init__(command_keyword="mttr_mttc", help_message="MTTR-MTTC")
 
-    @log_activity
+    @log_moneyball_activity(bot_access_token=config.webex_bot_access_token_moneyball)
     def execute(self, message, attachment_actions, activity):
         send_chart(attachment_actions.json_data["roomId"], activity['actor']['displayName'], "MTTR-MTTC", "MTTR MTTC.png")
 
@@ -60,7 +60,7 @@ class AgingTickets(Command):
     def __init__(self):
         super().__init__(command_keyword="aging", help_message="Aging Tickets")
 
-    @log_activity
+    @log_moneyball_activity(bot_access_token=config.webex_bot_access_token_moneyball)
     def execute(self, message, attachment_actions, activity):
         send_chart(attachment_actions.json_data["roomId"], activity['actor']['displayName'], "Aging Tickets", "Aging Tickets.png")
 
@@ -71,7 +71,7 @@ class SlaBreaches(Command):
     def __init__(self):
         super().__init__(command_keyword="sla_breach", help_message="SLA Breaches")
 
-    @log_activity
+    @log_moneyball_activity(bot_access_token=config.webex_bot_access_token_moneyball)
     def execute(self, message, attachment_actions, activity):
         send_chart(attachment_actions.json_data["roomId"], activity['actor']['displayName'], "SLA Breaches", "SLA Breaches.png")
 
@@ -81,7 +81,7 @@ class Outflow(Command):
     def __init__(self):
         super().__init__(command_keyword="outflow", help_message="Outflow")
 
-    @log_activity
+    @log_moneyball_activity(bot_access_token=config.webex_bot_access_token_moneyball)
     def execute(self, message, attachment_actions, activity):
         send_chart(attachment_actions.json_data["roomId"], activity['actor']['displayName'], "Outflow Yesterday", "Outflow.png")
 
@@ -91,7 +91,7 @@ class Inflow(Command):
     def __init__(self):
         super().__init__(command_keyword="inflow", help_message="Inflow")
 
-    @log_activity
+    @log_moneyball_activity(bot_access_token=config.webex_bot_access_token_moneyball)
     def execute(self, message, attachment_actions, activity):
         send_chart(attachment_actions.json_data["roomId"], activity['actor']['displayName'], "Inflow Yesterday", "Inflow.png")
 
@@ -100,7 +100,7 @@ class HeatMap(Command):
     def __init__(self):
         super().__init__(command_keyword="heat_map", help_message="Heat Map")
 
-    @log_activity
+    @log_moneyball_activity(bot_access_token=config.webex_bot_access_token_moneyball)
     def execute(self, message, attachment_actions, activity):
         send_chart(attachment_actions.json_data["roomId"], activity['actor']['displayName'], "Heat Map", "Heat Map.png")
 
@@ -109,7 +109,7 @@ class ThreatconLevel(Command):
     def __init__(self):
         super().__init__(command_keyword="threatcon_level", help_message="Threatcon Level")
 
-    @log_activity
+    @log_moneyball_activity(bot_access_token=config.webex_bot_access_token_moneyball)
     def execute(self, message, attachment_actions, activity):
         send_chart(attachment_actions.json_data["roomId"], activity['actor']['displayName'], "Threatcon Level", "Threatcon Level.png")
 
@@ -118,7 +118,7 @@ class QRadarRuleEfficacy(Command):
     def __init__(self):
         super().__init__(command_keyword="efficacy", help_message="QR Rule Efficacy")
 
-    @log_activity
+    @log_moneyball_activity(bot_access_token=config.webex_bot_access_token_moneyball)
     def execute(self, message, attachment_actions, activity):
         send_chart(attachment_actions.json_data["roomId"], activity['actor']['displayName'], "QR Rule Efficacy", "QR Rule Efficacy.png")
 
@@ -128,8 +128,7 @@ def main():
 
     bot = WebexBot(
         config.webex_bot_access_token_moneyball,
-        approved_domains=config.approved_domains.split(','),
-        approved_rooms=config.approved_rooms.split(','),
+        approved_rooms=config.money_ball_approved_rooms.split(','),
         bot_name="Hello, Metricmeister!"
     )
 

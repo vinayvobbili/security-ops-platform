@@ -1,4 +1,3 @@
-import csv
 import time
 
 from falconpy import Hosts
@@ -176,70 +175,6 @@ def update_script(script_name, script_id):
         comments="Script to detect and remove common RMM tools"
     )
     print(f"Script update response: {response}")
-
-
-def fetch_all_hosts_and_write_to_csv(csv_filename="all_hosts.csv"):
-    """
-    Fetches all hosts from CrowdStrike Falcon and writes their details (hostname, host ID, current tags) to a CSV file.
-
-    Args:
-        csv_filename (str): The name of the CSV file to write to. Defaults to "all_hosts.csv".
-    """
-
-    all_host_data = []
-    offset = None
-    limit = 5000  # Maximum allowed by the API
-
-    print("Fetching ALL host data...")
-    start_time = time.time()
-
-    try:
-        while True:
-            response = falcon_hosts.query_devices_by_filter_scroll(limit=limit, offset=offset)
-
-            if response["status_code"] == 200:
-                host_ids = response["body"].get("resources", [])
-                if not host_ids:
-                    break
-
-                # Get details for each host ID
-                details_response = falcon_hosts.get_device_details(ids=host_ids)
-                if details_response["status_code"] == 200:
-                    host_details = details_response["body"].get("resources", [])
-                    for host in host_details:
-                        all_host_data.append({
-                            "hostname": host.get("hostname"),
-                            "host_id": host.get("device_id"),
-                            "current_tags": ", ".join(host.get("tags", [])),
-                        })
-                else:
-                    print(f"Error retrieving details for host IDs: {details_response}")
-                    break
-
-                offset = response["body"].get("meta", {}).get("pagination", {}).get("offset")
-                if not offset:
-                    break  # No more pages
-            else:
-                print(f"Error retrieving host IDs: {response}")
-                break
-
-    except Exception as e:
-        print(f"An error occurred: {e}")
-
-    end_time = time.time()
-    elapsed_time = end_time - start_time
-    print(f"Finished fetching host data in {elapsed_time:.2f} seconds.")
-
-    print(f"Writing host data to {csv_filename}...")
-    try:
-        with open(csv_filename, "w", newline="", encoding="utf-8") as csvfile:
-            fieldnames = ["hostname", "host_id", "current_tags"]
-            writer = csv.DictWriter('../data/transient/' + csvfile, fieldnames=fieldnames)
-            writer.writeheader()
-            writer.writerows(all_host_data)
-        print(f"Successfully wrote {len(all_host_data)} host records to {csv_filename}")
-    except Exception as e:
-        print(f"An error occurred while writing to CSV: {e}")
 
 
 def main():
