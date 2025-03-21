@@ -11,6 +11,7 @@
   "Colombia": "LATAM",
   "Cyprus": "EMEA",
   "Czech Republic": "EMEA",
+  "Ecuador": "LATAM",
   "Egypt": "EMEA",
   "France": "EMEA",
   "Germany": "EMEA",
@@ -43,7 +44,7 @@
   "Ukraine": "EMEA",
   "United Arab Emirates": "EMEA",
   "United Kingdom": "EMEA",
-  "United States": "AMERICAS",
+  "United States": "US",
   "Uruguay": "LATAM",
   "Vietnam": "APAC"
 }
