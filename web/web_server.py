@@ -5,7 +5,7 @@ from functools import wraps
 from typing import List
 
 import pytz
-from flask import Flask, render_template, request
+from flask import Flask, render_template, request, abort
 from flask import jsonify
 
 from config import get_config
@@ -17,6 +17,13 @@ CONFIG = get_config()
 
 # Supported image extensions
 IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".gif", ".svg")
+blocked_ips = ["10.49.70.105"]
+
+
+@app.before_request
+def block_ip():
+    if request.remote_addr in blocked_ips:
+        abort(403)  # Forbidden
 
 
 def get_image_files() -> List[str]:
