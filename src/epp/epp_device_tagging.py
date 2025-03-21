@@ -19,7 +19,7 @@ from services.service_now import ServiceNowClient
 config = get_config()
 
 # Constants
-DATA_DIR = Path("data")
+DATA_DIR = Path("../../data")
 TRANSIENT_DIR = DATA_DIR / "transient"
 REGIONS_FILE = DATA_DIR / "regions_by_country.json"
 COUNTRIES_FILE = DATA_DIR / "countries_by_code.json"

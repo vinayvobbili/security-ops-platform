@@ -1,11 +1,10 @@
 import csv
-import os
 from datetime import datetime
 from functools import wraps
 
 from pytz import timezone
 
-from bot_rooms import get_room_name
+from services.bot_rooms import get_room_name
 from config import get_config
 
 eastern = timezone('US/Eastern')
@@ -28,7 +27,7 @@ def log_moneyball_activity(bot_access_token):
             try:
                 actor = activity["actor"]["displayName"]
                 if actor is not config.my_name:
-                    with open("data/transient/logs/moneyball_activity_log.csv", "a", newline="") as f:
+                    with open("../data/transient/logs/moneyball_activity_log.csv", "a", newline="") as f:
                         writer = csv.writer(f, quoting=csv.QUOTE_MINIMAL)  # Use csv.writer for proper quoting
                         writer.writerow([
                             f'"{activity["actor"]["displayName"]}"',  # Quote the name field
@@ -60,7 +59,7 @@ def log_jarvais_activity(bot_access_token):
             try:
                 actor = activity["actor"]["displayName"]
                 if actor is not config.my_name:
-                    with open("data/transient/logs/jarvais_activity_log.csv", "a", newline="") as f:
+                    with open("../data/transient/logs/jarvais_activity_log.csv", "a", newline="") as f:
                         writer = csv.writer(f, quoting=csv.QUOTE_MINIMAL)  # Use csv.writer for proper quoting
                         writer.writerow([
                             f'"{activity["actor"]["displayName"]}"',  # Quote the name field
@@ -77,12 +76,3 @@ def log_jarvais_activity(bot_access_token):
     return decorator
 
 
-impact_colors = {
-    "Significant": "#ff0000",  # red
-    "Confirmed": "#ffa500",  # orange
-    "Detected": "#ffd700",  # gold
-    "Prevented": "#008000",  # green
-    "Ignore": "#808080",  # gray
-    "Testing": "#add8e6",  # light blue
-    "False Positive": "#90ee90",  # light green
-}
