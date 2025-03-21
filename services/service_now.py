@@ -3,6 +3,8 @@ import json
 import logging
 import os
 import time
+import typing
+from datetime import datetime
 
 import requests
 
@@ -46,8 +48,10 @@ class ServiceNowTokenManager:
             'refresh_token': self.refresh_token,
             'token_expiry': self.token_expiry
         }
-        with open(SNOW_ACCESS_TOKEN_FILE, 'w') as file:
+
+        with open(SNOW_ACCESS_TOKEN_FILE, 'w') as file:  # type: typing.TextIO
             json.dump(token_data, file)
+
         logger.info("Token saved to file")
 
     def get_initial_token(self):
@@ -137,18 +141,25 @@ class ServiceNowComputeAPI:
             dict: Host details if found, None if not found
         """
         response = self._make_get_request(self.server_compute_url, {'name': hostname})
-        # TODO What if SNOW returns multiple results? Use the first one for now
+        if response and len(response) > 1:
+            response = sorted(response,
+                              key=lambda x: datetime.strptime(x.get('mostRecentDiscovery', '01-01-1970 12:00 AM'), '%m-%d-%Y %I:%M %p') if x.get('mostRecentDiscovery') else datetime(1970, 1, 1),
+                              reverse=True)
+
         host_details = response[0] if response else None
         if host_details:
             host_details['category'] = 'server'
             return host_details
         else:
             response = self._make_get_request(self.workstation_compute_url, {'name': hostname})
-            # TODO What if SNOW returns multiple results? Use the first one for now
+            if response and len(response) > 1:
+                response = sorted(response, key=lambda x: datetime.strptime(x.get('mostRecentDiscovery', '01-01-1970 12:00 AM'), '%m-%d-%Y %I:%M %p'), reverse=True)
             host_details = response[0] if response else None
             if host_details:
                 host_details['category'] = 'workstation'
                 return host_details
+
+        return None
 
     def _make_get_request(self, endpoint, params=None):
         """
@@ -168,8 +179,15 @@ class ServiceNowComputeAPI:
         try:
             response = requests.get(endpoint, headers=headers, params=params)
             response.raise_for_status()
+            response_data = response.json()
 
-            return response.json()['items']
+            logger.info(f"Response data type: {type(response_data)}")
+            logger.info(f"Response data: {response_data}")
+
+            if isinstance(response_data, dict) and 'items' in response_data:
+                return response_data['items']
+            else:
+                return response_data
 
         except requests.exceptions.RequestException as e:
             logger.error(f"API request failed: {e}")
@@ -248,18 +266,14 @@ if __name__ == "__main__":
             host_details = client.get_host_details(hostname)
             logger.info(f"Host details: {host_details}")
 
-            # print host details as a table
-            if host_details:
-                for host in host_details:
-                    print(f"Host Name: {host['name']}")
-                    print(f"Host IP: {host['ipAddress']}")
-                    print(f"Host Category: {host['ciClass']}")
-                    print(f"Host OS: {host['operatingSystem']}")
-                    print(f"Host Country: {host['country']}")
-                    print(f"Host Status: {host['state']}")
-                    print("-" * 20)
-            else:
-                print(f"Host {hostname} not found.")
+            print(f"Host Name: {host_details['name']}")
+            print(f"Host IP: {host_details['ipAddress']}")
+            print(f"Host Category: {host_details['ciClass']}")
+            print(f"Host OS: {host_details['operatingSystem']}")
+            print(f"Host Country: {host_details['country']}")
+            print(f"Host Status: {host_details['state']}")
+            print("-" * 20)
+
 
     except Exception as e:
         logger.error(f"Error: {e}")
