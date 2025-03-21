@@ -24,16 +24,12 @@ class SaveNotes(Command):
             "body": [
                 {
                     "type": "TextBlock",
-                    "text": "Notes Saved Successfully",
+                    "text": "Notes Updated Successfully",
                     "weight": "Bolder"
                 },
                 {
                     "type": "TextBlock",
                     "text": "Your management notes have been updated."
-                },
-                {
-                    "type": "TextBlock",
-                    "text": "Type '@bot notes' to view or edit notes again."
                 }
             ],
             "version": "1.0"
@@ -75,7 +71,7 @@ class ManagementNotes(Command):
             "actions": [
                 {
                     "type": "Action.Submit",
-                    "title": "Save",
+                    "title": "Update",
                     "style": "positive",
                     "data": {"callback_keyword": "save_notes"},
                     "horizontalAlignment": "Right"
