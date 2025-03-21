@@ -7,7 +7,7 @@ from webex_bot.webex_bot import WebexBot
 from webexteamssdk import WebexTeamsAPI
 
 from config import get_config
-from helper_methods import log_moneyball_activity
+from src.helper_methods import log_moneyball_activity
 
 # Load configuration
 config = get_config()

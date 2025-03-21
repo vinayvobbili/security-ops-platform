@@ -3,19 +3,8 @@ import time
 import pytz
 import schedule
 
-import aging_tickets
-import days_since_incident
-import de_stories
-import heatmap
-import inflow
-import lifespan
-import mttr_mttc
-import outflow
-import qradar_rule_efficacy
-import re_stories
+from src.charts import mttr_mttc, outflow, lifespan, heatmap, sla_breaches, aging_tickets, inflow, qradar_rule_efficacy, de_stories, days_since_incident, re_stories, threatcon_level
 import secops
-import sla_breaches
-import threatcon_level
 import verify_host_online_status
 from config import get_config
 from services import phish_fort
