@@ -13,6 +13,22 @@ BOT_ACCESS_TOKEN = CONFIG.webex_bot_access_token_soar
 webex_api = WebexTeamsAPI(access_token=BOT_ACCESS_TOKEN)
 
 
+class SaveNotes(Command):
+    def __init__(self):
+        super().__init__(
+            command_keyword="save_notes",
+            card=None,
+        )
+
+    def execute(self, message, attachment_actions, activity):
+        # save the content of the adaptive card back to management_notes.txt
+        with open("../data/transient/notes/management_notes.txt", "w") as file:
+            file.write(attachment_actions.inputs['notes'])
+        # delete the card
+        webex_api.messages.delete(attachment_actions.json_data['messageId'])
+        return "Notes saved successfully."
+
+
 class ManagementNotes(Command):
     def __init__(self):
         super().__init__(command_keyword="notes", help_message="Management Notes")
@@ -32,12 +48,40 @@ class ManagementNotes(Command):
                     "content": {
                         "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
                         "type": "AdaptiveCard",
-                        "version": "1.0",
+                        "version": "1.3",
                         "body": [
                             {
-                                "type": "TextBlock",
-                                "text": content,
-                                "wrap": True
+                                "type": "Container",
+                                "items": [
+                                    {
+                                        "type": "TextBlock",
+                                        "text": "Current Notes",
+                                        "weight": "Bolder",
+                                        "size": "Medium"
+                                    },
+                                    {
+                                        "type": "Input.Text",
+                                        "id": "notes",
+                                        "value": content,
+                                        "isMultiline": True,
+                                        "placeholder": "Enter notes here",
+                                        "style": "text"
+                                    }
+                                ]
+                            },
+                            {
+                                "type": "ActionSet",
+                                "actions": [
+                                    {
+                                        "type": "Action.Submit",
+                                        "title": "Submit",
+                                        "style": "positive",
+                                        "horizontalAlignment": "Right",
+                                        "data": {
+                                            "callback_keyword": "save_notes"
+                                        }
+                                    }
+                                ]
                             }
                         ]
                     }
@@ -57,6 +101,7 @@ def main():
 
     # Add commands to the bot
     bot.add_command(ManagementNotes())
+    bot.add_command(SaveNotes())
 
     # Start the bot
     bot.run()
