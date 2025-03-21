@@ -26,6 +26,7 @@ def get_config():
         xsoar_dev_auth_id=os.environ["XSOAR_DEV_AUTH_ID"],
         jarvais_approved_rooms=os.environ["JARVAIS_APPROVED_ROOMS"],
         money_ball_approved_rooms=os.environ["MONEY_BALL_APPROVED_ROOMS"],
+        soar_bot_approved_users=os.environ["SOAR_BOT_APPROVED_USERS"],
         ticket_type_prefix=os.environ["TICKET_TYPE_PREFIX"],
         azdo_org=os.environ["AZDO_ORGANIZATION"],
         azdo_de_project=os.environ["AZDO_DE_PROJECT"],
@@ -76,6 +77,7 @@ class Config:
     ticket_type_prefix: str
     jarvais_approved_rooms: str
     money_ball_approved_rooms: str
+    soar_bot_approved_users: str
     azdo_org: str
     azdo_de_project: str
     azdo_re_project: str
