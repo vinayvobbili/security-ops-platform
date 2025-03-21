@@ -112,6 +112,14 @@ class ServiceNowTokenManager:
         pass
 
 
+def parse_discovery_date(date_string):
+    """Parses a date string or returns a default datetime if parsing fails."""
+    try:
+        return datetime.strptime(date_string, '%m-%d-%Y %I:%M %p')
+    except (ValueError, TypeError):  # Handle cases where date_string is invalid or None.
+        return datetime(1970, 1, 1)  # Return default if parsing fails.
+
+
 class ServiceNowComputeAPI:
     def __init__(self, token_manager, base_url):
         """
@@ -142,9 +150,7 @@ class ServiceNowComputeAPI:
         """
         response = self._make_get_request(self.server_compute_url, {'name': hostname})
         if response and len(response) > 1:
-            response = sorted(response,
-                              key=lambda x: datetime.strptime(x.get('mostRecentDiscovery', '01-01-1970 12:00 AM'), '%m-%d-%Y %I:%M %p') if x.get('mostRecentDiscovery') else datetime(1970, 1, 1),
-                              reverse=True)
+            response = sorted(response, key=lambda x: parse_discovery_date(x.get('mostRecentDiscovery')), reverse=True)
 
         host_details = response[0] if response else None
         if host_details:
@@ -153,7 +159,7 @@ class ServiceNowComputeAPI:
         else:
             response = self._make_get_request(self.workstation_compute_url, {'name': hostname})
             if response and len(response) > 1:
-                response = sorted(response, key=lambda x: datetime.strptime(x.get('mostRecentDiscovery', '01-01-1970 12:00 AM'), '%m-%d-%Y %I:%M %p'), reverse=True)
+                response = sorted(response, key=lambda x: parse_discovery_date(x.get('mostRecentDiscovery')), reverse=True)
             host_details = response[0] if response else None
             if host_details:
                 host_details['category'] = 'workstation'
@@ -241,7 +247,6 @@ class ServiceNowClient:
             dict: Host details if found, None if not found
         """
         if hostname:
-            # if hostname ustry1metv0ae6l.internal.company.com, make hostname = ustry1metv0ae6l
             hostname = hostname.split('.')[0]
             return self.compute_api.get_host_details_by_name(hostname)
         else:
@@ -261,7 +266,7 @@ if __name__ == "__main__":
         with ServiceNowClient(config.snow_base_url, config.snow_functional_account_id, config.snow_functional_account_password, config.snow_client_key) as client:
 
             # Example 2: Get host by name
-            hostname = "CLAZEMETU0008"
+            hostname = "vm8251e1dv0002"
             logger.info(f"Looking up host {hostname} in CMDB...")
             host_details = client.get_host_details(hostname)
             logger.info(f"Host details: {host_details}")
