@@ -20,7 +20,7 @@ def send_chart(room_id, display_name, chart_name, chart_filename):
     webex_api.messages.create(
         roomId=room_id,
         text=f"{display_name}, here's the latest {chart_name} chart!",
-        files=[os.path.join(os.path.dirname(__file__), 'web/static/charts', chart_filename)]
+        files=[os.path.join(os.path.dirname(__file__), '../web/static/charts', chart_filename)]
     )
 
 
