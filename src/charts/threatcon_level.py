@@ -1,8 +1,11 @@
+import json
 from datetime import datetime
 
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.patches import FancyArrow
+
+THREAT_CON_FILE = "../data/transient/secOps/threatcon.json"
 
 
 def gauge(color):
@@ -140,7 +143,11 @@ def make_chart():
     """
     Generates the threat level gauge chart with the text table and saves it as an image.
     """
-    threat_level = "yellow"  # Example threat level
+    with open(THREAT_CON_FILE, "r") as file:
+        threatcon_details = file.read()
+
+    threatcon_details = json.loads(threatcon_details)
+    threat_level = threatcon_details.get('level', 'green')
 
     fig = gauge(threat_level)
 
