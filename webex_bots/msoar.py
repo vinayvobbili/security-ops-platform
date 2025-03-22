@@ -164,8 +164,8 @@ class ThreatconLevel(Command):
             threatcon_details = file.read()
 
         threatcon_details = json.loads(threatcon_details)
-        level = threatcon_details.get('level', 'Umnknown Level')
-        reason = threatcon_details.get('reason', 'Unknown Reason')
+        level = threatcon_details.get('level', 'green')
+        reason = threatcon_details.get('reason', 'No current threats!')
 
         card = {
             "type": "AdaptiveCard",
