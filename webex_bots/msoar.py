@@ -30,14 +30,19 @@ class SaveNotes(Command):
                 {
                     "type": "TextBlock",
                     "text": "Notes Updated Successfully",
-                    "weight": "Bolder"
+                    "horizontalAlignment": "Center",
+                    "weight": "bolder",
+                    "color": "Accent",
+                    "isSubtle": True,
+                    "size": "Medium"
                 },
                 {
                     "type": "TextBlock",
                     "text": "Your management notes have been updated."
                 }
             ],
-            "version": "1.0"
+            "version": "1.3",
+            "$schema": "http://adaptivecards.io/schemas/adaptive-card.json"
         }
 
         webex_api.messages.create(
@@ -63,26 +68,38 @@ class ManagementNotes(Command):
                 {
                     "type": "TextBlock",
                     "text": "Management Notes",
-                    "weight": "Bolder"
+                    "horizontalAlignment": "Center",
+                    "weight": "bolder",
+                    "color": "Accent",
+                    "isSubtle": True,
+                    "size": "Medium"
                 },
                 {
                     "type": "Input.Text",
                     "id": "management_notes",
                     "value": content,
                     "isMultiline": True,
-                    "placeholder": "Enter notes here"
-                }
-            ],
-            "actions": [
+                    "placeholder": "Enter notes here",
+                    "isRequired": True,
+                    "errorMessage": "Required"
+                },
                 {
-                    "type": "Action.Submit",
-                    "title": "Update",
-                    "style": "positive",
-                    "data": {"callback_keyword": "save_notes"},
-                    "horizontalAlignment": "Right"
+                    "type": "ActionSet",
+                    "horizontalAlignment": "Right",
+                    "spacing": "None",
+                    "actions": [
+                        {
+                            "type": "Action.Submit",
+                            "title": "Update",
+                            "style": "positive",
+                            "data": {"callback_keyword": "save_notes"},
+                            "horizontalAlignment": "Right"
+                        }
+                    ]
                 }
             ],
-            "version": "1.3"
+            "version": "1.3",
+            "$schema": "http://adaptivecards.io/schemas/adaptive-card.json"
         }
 
         webex_api.messages.create(
@@ -126,7 +143,8 @@ class SaveThreatcon(Command):
                     "text": f"Reason: {reason}",
                 }
             ],
-            "version": "1.0"
+            "version": "1.3",
+            "$schema": "http://adaptivecards.io/schemas/adaptive-card.json"
         }
 
         webex_api.messages.create(
@@ -155,7 +173,11 @@ class ThreatconLevel(Command):
                 {
                     "type": "TextBlock",
                     "text": "ThreatCon Level",
-                    "weight": "Bolder"
+                    "horizontalAlignment": "Center",
+                    "weight": "bolder",
+                    "color": "Accent",
+                    "isSubtle": True,
+                    "size": "Medium"
                 },
                 {
                     "type": "Input.ChoiceSet",
@@ -168,7 +190,7 @@ class ThreatconLevel(Command):
                         {"title": "Orange", "value": "orange"},
                         {"title": "Red", "value": "red"}
                     ],
-                    "style": "compact"
+                    "style": "expanded"
                 },
                 {
                     "type": "Input.Text",
@@ -176,19 +198,27 @@ class ThreatconLevel(Command):
                     "label": "Reason",
                     "isMultiline": True,
                     "value": reason,
-                    "placeholder": "Enter reason here"
-                }
-            ],
-            "actions": [
+                    "placeholder": "Enter reason here",
+                    "isRequired": True,
+                    "errorMessage": "Required"
+                },
                 {
-                    "type": "Action.Submit",
-                    "title": "Update",
-                    "style": "positive",
+                    "type": "ActionSet",
                     "horizontalAlignment": "Right",
-                    "data": {"callback_keyword": "save_threatcon"}
+                    "spacing": "None",
+                    "actions": [
+                        {
+                            "type": "Action.Submit",
+                            "title": "Update",
+                            "style": "positive",
+
+                            "data": {"callback_keyword": "save_threatcon"}
+                        }
+                    ]
                 }
             ],
-            "version": "1.3"
+            "version": "1.3",
+            "$schema": "http://adaptivecards.io/schemas/adaptive-card.json"
         }
 
         webex_api.messages.create(
