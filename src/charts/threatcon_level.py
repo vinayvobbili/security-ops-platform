@@ -231,7 +231,6 @@ def create_definitions_table(plt):
     return definitions_table
 
 
-# Add title with a fancier style
 def add_fancy_title(ax):
     """
     Add a fancy title to the gauge chart.
