@@ -246,7 +246,7 @@ def add_fancy_title(ax):
             fontname='Arial Black',  # More impactful font
             color='#003366',  # Navy blue for corporate feel
             bbox=dict(
-                boxstyle="round,pad=0.6",
+                boxstyle="round,pad=0.3",
                 ec=(0.1, 0.1, 0.1, 0.9),  # Dark edge
                 fc=(0.9, 0.9, 0.95, 0.7),  # Light blue background with transparency
                 lw=2
