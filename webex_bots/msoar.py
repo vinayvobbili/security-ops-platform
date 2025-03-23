@@ -38,11 +38,12 @@ class SaveNotes(Command):
                     "weight": "bolder",
                     "color": "Accent",
                     "isSubtle": True,
-                    "size": "Medium"
+                    "size": "Small"
                 },
                 {
                     "type": "TextBlock",
-                    "text": "Your management notes have been updated."
+                    "text": f"**New Note**: {attachment_actions.inputs['management_notes']}",
+                    "wrap": True
                 }
             ],
             "version": "1.3",
@@ -92,7 +93,7 @@ class ManagementNotes(Command):
                                     "text": "Management Notes",
                                     "wrap": True,
                                     "fontType": "Default",
-                                    "size": "Large",
+                                    "size": "Medium",
                                     "weight": "Bolder",
                                     "color": "Accent",
                                     "horizontalAlignment": "Center"
@@ -160,7 +161,11 @@ class SaveThreatcon(Command):
                 {
                     "type": "TextBlock",
                     "text": "ThreatCon Level Updated Successfully",
-                    "weight": "Bolder"
+                    "weight": "Bolder",
+                    "color": "Accent",
+                    "isSubtle": True,
+                    "size": "Medium",
+                    "horizontalAlignment": "Center"
                 },
                 {
                     "type": "TextBlock",
