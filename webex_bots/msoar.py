@@ -13,7 +13,7 @@ webex_api = WebexTeamsAPI(access_token=bot_token)
 
 NOTES_FILE = "../data/transient/secOps/management_notes.txt"
 THREAT_CON_FILE = "../data/transient/secOps/threatcon.json"
-BOAT_IMAGE_FILE = "../data/images/boat.txt"
+COMPANY_LOGO = "../web/static/icons/company_logo.txt"
 
 
 # Command to save notes
@@ -164,8 +164,8 @@ class ThreatconLevel(Command):
         with open(THREAT_CON_FILE, "r") as file:
             threatcon_details = file.read()
 
-        with open(BOAT_IMAGE_FILE, "r") as file:
-            boat_image = file.read()
+        with open(COMPANY_LOGO, "r") as file:
+            company_logo = file.read()
 
         threatcon_details = json.loads(threatcon_details)
         level = threatcon_details.get('level', 'green')
@@ -175,13 +175,37 @@ class ThreatconLevel(Command):
             "type": "AdaptiveCard",
             "body": [
                 {
-                    "type": "TextBlock",
-                    "text": "ThreatCon",
-                    "horizontalAlignment": "Center",
-                    "weight": "bolder",
-                    "color": "Accent",
-                    "isSubtle": True,
-                    "size": "Medium"
+                    "type": "ColumnSet",
+                    "columns": [
+                        {
+                            "type": "Column",
+                            "items": [
+                                {
+                                    "type": "Image",
+                                    "url": f"{company_logo}",
+                                    "height": "30px",
+                                    "style": "Person"
+                                }
+                            ],
+                            "width": "auto"
+                        },
+                        {
+                            "type": "Column",
+                            "items": [
+                                {
+                                    "type": "TextBlock",
+                                    "text": "ThreatCon",
+                                    "wrap": True,
+                                    "fontType": "Default",
+                                    "size": "Large",
+                                    "weight": "Bolder",
+                                    "color": "Accent",
+                                    "horizontalAlignment": "Center"
+                                }
+                            ],
+                            "width": "stretch"
+                        }
+                    ]
                 },
                 {
                     "type": "Input.ChoiceSet",
