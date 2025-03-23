@@ -13,7 +13,10 @@ webex_api = WebexTeamsAPI(access_token=bot_token)
 
 NOTES_FILE = "../data/transient/secOps/management_notes.txt"
 THREAT_CON_FILE = "../data/transient/secOps/threatcon.json"
-COMPANY_LOGO = "../web/static/icons/company_logo.txt"
+COMPANY_LOGO_BASE64 = "../web/static/icons/company_logo.txt"
+
+with open(COMPANY_LOGO_BASE64, "r") as file:
+    company_logo = file.read()
 
 
 # Command to save notes
@@ -67,13 +70,37 @@ class ManagementNotes(Command):
             "type": "AdaptiveCard",
             "body": [
                 {
-                    "type": "TextBlock",
-                    "text": "Management Notes",
-                    "horizontalAlignment": "Center",
-                    "weight": "bolder",
-                    "color": "Accent",
-                    "isSubtle": True,
-                    "size": "Medium"
+                    "type": "ColumnSet",
+                    "columns": [
+                        {
+                            "type": "Column",
+                            "items": [
+                                {
+                                    "type": "Image",
+                                    "url": f"{company_logo}",
+                                    "height": "30px",
+                                    "style": "Person"
+                                }
+                            ],
+                            "width": "auto"
+                        },
+                        {
+                            "type": "Column",
+                            "items": [
+                                {
+                                    "type": "TextBlock",
+                                    "text": "Management Notes",
+                                    "wrap": True,
+                                    "fontType": "Default",
+                                    "size": "Large",
+                                    "weight": "Bolder",
+                                    "color": "Accent",
+                                    "horizontalAlignment": "Center"
+                                }
+                            ],
+                            "width": "stretch"
+                        }
+                    ]
                 },
                 {
                     "type": "Input.Text",
@@ -163,9 +190,6 @@ class ThreatconLevel(Command):
     def execute(self, message, attachment_actions, activity):
         with open(THREAT_CON_FILE, "r") as file:
             threatcon_details = file.read()
-
-        with open(COMPANY_LOGO, "r") as file:
-            company_logo = file.read()
 
         threatcon_details = json.loads(threatcon_details)
         level = threatcon_details.get('level', 'green')
