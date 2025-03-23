@@ -13,6 +13,7 @@ webex_api = WebexTeamsAPI(access_token=bot_token)
 
 NOTES_FILE = "../data/transient/secOps/management_notes.txt"
 THREAT_CON_FILE = "../data/transient/secOps/threatcon.json"
+BOAT_IMAGE_FILE = "../data/images/boat.txt"
 
 
 # Command to save notes
@@ -60,7 +61,7 @@ class ManagementNotes(Command):
     @log_soar_activity(bot_access_token=bot_token)
     def execute(self, message, attachment_actions, activity):
         with open(NOTES_FILE, "r") as file:
-            content = file.read()
+            notes = file.read()
 
         card = {
             "type": "AdaptiveCard",
@@ -77,7 +78,7 @@ class ManagementNotes(Command):
                 {
                     "type": "Input.Text",
                     "id": "management_notes",
-                    "value": content,
+                    "value": notes,
                     "isMultiline": True,
                     "placeholder": "Enter notes here",
                     "isRequired": True,
@@ -163,6 +164,9 @@ class ThreatconLevel(Command):
         with open(THREAT_CON_FILE, "r") as file:
             threatcon_details = file.read()
 
+        with open(BOAT_IMAGE_FILE, "r") as file:
+            boat_image = file.read()
+
         threatcon_details = json.loads(threatcon_details)
         level = threatcon_details.get('level', 'green')
         reason = threatcon_details.get('reason', 'No current threats!')
@@ -172,7 +176,7 @@ class ThreatconLevel(Command):
             "body": [
                 {
                     "type": "TextBlock",
-                    "text": "ThreatCon Level",
+                    "text": "ThreatCon",
                     "horizontalAlignment": "Center",
                     "weight": "bolder",
                     "color": "Accent",
@@ -185,10 +189,10 @@ class ThreatconLevel(Command):
                     "value": level,
                     "label": "Level",
                     "choices": [
-                        {"title": "Green", "value": "green"},
-                        {"title": "Yellow", "value": "yellow"},
-                        {"title": "Orange", "value": "orange"},
-                        {"title": "Red", "value": "red"}
+                        {"title": "🟢 Green", "value": "green"},
+                        {"title": "🟡 Yellow", "value": "yellow"},
+                        {"title": "🟠 Orange", "value": "orange"},
+                        {"title": "🔴 Red", "value": "red"}
                     ],
                     "style": "expanded"
                 },
