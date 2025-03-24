@@ -1,6 +1,7 @@
 import json
 import time
 from datetime import datetime, timedelta
+from pathlib import Path
 
 from openpyxl import load_workbook
 from tabulate import tabulate
@@ -13,14 +14,16 @@ config = get_config()
 webex_api = WebexAPI(config.webex_bot_access_token_soar)
 
 BASE_QUERY = f'type:{config.ticket_type_prefix} -owner:""'
+root_directory = Path(__file__).parent.parent
 
 # Load the workbook
-wb = load_workbook('data/transient/' + config.secops_shift_staffing_filename)
+wb = load_workbook(root_directory / 'data' / 'transient' / config.secops_shift_staffing_filename)
 # Select the sheet
 sheet = wb['March-April 2025']
 
 # get the cell names by shift from the sheet
-with open('../data/cell_names_by_shift.json', 'r') as f:
+SECOPS_SHIFT_STAFFING_FILENAME = root_directory / 'data' / 'cell_names_by_shift.json'
+with open(SECOPS_SHIFT_STAFFING_FILENAME, 'r') as f:
     cell_names_by_shift = json.load(f)
 
 
