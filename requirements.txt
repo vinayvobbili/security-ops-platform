@@ -21,5 +21,3 @@ msrest~=0.7.1
 adaptivecardbuilder~=0.0.9
 webex_bot~=0.5.2
 websockets==11.0.3
-PyJWT~=2.8.0
-style==1.1.0
