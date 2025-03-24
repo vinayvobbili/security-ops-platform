@@ -2,6 +2,7 @@ import json
 import os
 import re
 from datetime import datetime, timedelta
+from pathlib import Path
 
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -18,7 +19,11 @@ eastern = pytz.timezone('US/Eastern')
 
 config = get_config()
 
-with open('../../data/detection_source_name_abbreviations.json', 'r') as f:
+root_directory = Path(__file__).parent.parent.parent
+DETECTION_SOURCE_NAMES_ABBREVIATION_FILE = root_directory / 'data' / 'detection_source_name_abbreviations.json'
+OUTPUT_PATH = root_directory / "web" / "static" / "charts" / "Outflow.png"
+
+with open(DETECTION_SOURCE_NAMES_ABBREVIATION_FILE, 'r') as f:
     detection_source_codes_by_name = json.load(f)
 
 QUERY_TEMPLATE = 'type:{ticket_type_prefix} -owner:"" closed:>={start} closed:<{end}'
@@ -180,7 +185,7 @@ def create_graph(tickets):
 
     # Adjust layout
     plt.tight_layout()
-    plt.savefig('web/static/charts/Outflow.png')
+    plt.savefig(OUTPUT_PATH)
     plt.close(fig)
 
 

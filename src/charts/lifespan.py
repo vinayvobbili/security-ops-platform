@@ -3,6 +3,7 @@ import logging
 import re
 import tempfile
 from datetime import datetime
+from pathlib import Path
 
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -15,7 +16,11 @@ eastern = pytz.timezone('US/Eastern')  # Define the Eastern time zone
 
 config = get_config()
 
-with open('../../data/detection_source_name_abbreviations.json', 'r') as f:
+root_directory = Path(__file__).parent.parent.parent
+DETECTION_SOURCE_NAMES_ABBREVIATION_FILE = root_directory / 'data' / 'detection_source_name_abbreviations.json'
+OUTPUT_PATH = root_directory / "web" / "static" / "charts" / "Lifespan.png"
+
+with open(DETECTION_SOURCE_NAMES_ABBREVIATION_FILE, 'r') as f:
     detection_source_codes_by_name = json.load(f)
 
 # Configure logging
@@ -88,7 +93,7 @@ def get_lifespan_chart(tickets):
 
     plt.tight_layout()
 
-    plt.savefig('web/static/charts/Lifespan.png', format="png")
+    plt.savefig(OUTPUT_PATH, format="png")
     plt.close()
 
 

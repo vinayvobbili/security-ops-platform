@@ -3,6 +3,7 @@ import logging
 import os
 import re
 from datetime import datetime
+from pathlib import Path
 from typing import Dict, List, Any
 
 import matplotlib.pyplot as plt
@@ -12,8 +13,8 @@ from matplotlib import transforms
 from webexpythonsdk import WebexAPI
 
 from config import get_config
-from src.data_maps import impact_colors
 from services.xsoar import IncidentFetcher
+from src.data_maps import impact_colors
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -23,18 +24,17 @@ log = logging.getLogger(__name__)
 EASTERN_TZ = pytz.timezone('US/Eastern')
 CONFIG = get_config()
 DATA_DIR = '../../data'
-OUTPUT_DIR = '../../web/static/charts'
 RULE_ABBR_FILE = os.path.join(DATA_DIR, 'rule_name_abbreviations.json')
-
-# Ensure directories exist
-os.makedirs(DATA_DIR, exist_ok=True)
-os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 # Initialize Webex API
 webex = WebexAPI(access_token=CONFIG.webex_bot_access_token_moneyball)
 
 # Load rule name abbreviations
-with open(RULE_ABBR_FILE, 'r') as f:
+root_directory = Path(__file__).parent.parent.parent
+QR_RULE_NAMES_ABBREVIATION_FILE = root_directory / 'data' / 'rule_name_abbreviations.json'
+OUTPUT_DIR = root_directory / "web" / "static" / "charts"
+
+with open(QR_RULE_NAMES_ABBREVIATION_FILE, 'r') as f:
     rule_name_abbreviations = json.load(f)
 
 

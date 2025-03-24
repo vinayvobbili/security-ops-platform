@@ -1,6 +1,7 @@
 import json
 import re
 from datetime import datetime, timedelta
+from pathlib import Path
 
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -16,7 +17,11 @@ config = get_config()
 
 QUERY_TEMPLATE = 'type:{ticket_type_prefix} -owner:"" created:>={start} created:<{end}'
 
-with open('../../data/detection_source_name_abbreviations.json', 'r') as f:
+root_directory = Path(__file__).parent.parent.parent
+DETECTION_SOURCE_NAMES_ABBREVIATION_FILE = root_directory / 'data' / 'detection_source_name_abbreviations.json'
+OUTPUT_PATH = root_directory / "web" / "static" / "charts" / "Outflow.png"
+
+with open(DETECTION_SOURCE_NAMES_ABBREVIATION_FILE, 'r') as f:
     detection_source_codes_by_name = json.load(f)
 
 
@@ -102,7 +107,7 @@ def make_chart():
     trans = transforms.blended_transform_factory(fig.transFigure, fig.transFigure)
     plt.text(0.08, 0.03, now_eastern, ha='left', va='bottom', fontsize=10, transform=trans)
 
-    fig.savefig('web/static/charts/Inflow.png')
+    fig.savefig(OUTPUT_PATH)
     plt.close(fig)
 
 
