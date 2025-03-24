@@ -30,7 +30,7 @@ with open(SECOPS_SHIFT_STAFFING_FILENAME, 'r') as f:
 def get_open_tickets():
     all_tickets = IncidentFetcher().get_tickets(query=BASE_QUERY + ' -status:closed')
     total_tickets = len(all_tickets)
-    ticket_show_count = min(total_tickets, 30)
+    ticket_show_count = min(total_tickets, 5)
     ticket_base_url = config.xsoar_ui_base_url + "/Custom/caseinfoid/"
     open_tickets = [f"[{ticket['id']}]({ticket_base_url}{ticket['id']})" for ticket in all_tickets[0:ticket_show_count]]
     diff = total_tickets - ticket_show_count
@@ -134,7 +134,7 @@ def announce_shift_change(shift_name, room_id):
     shift_data_table = list(zip(*staffing_data.values()))
     shift_data_table = tabulate(shift_data_table, headers=headers, tablefmt="simple")
 
-    with open("../data/transient/notes/management_notes.txt", "r") as file:
+    with open("../data/transient/secOps/management_notes.txt", "r") as file:
         management_notes = file.read()
 
     # Send a new shift starting message to Webex room

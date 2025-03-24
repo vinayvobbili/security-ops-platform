@@ -289,6 +289,7 @@ def run_bot():
     try:
         bot = WebexBot(
             bot_token,
+            approved_rooms=[],
             approved_users=config.soar_bot_approved_users.split(','),
             bot_name="Hello, Manager!"
         )
