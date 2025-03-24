@@ -17,7 +17,7 @@ CONFIG = get_config()
 
 # Supported image extensions
 IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".gif", ".svg")
-blocked_ips = ["10.49.70.105"]
+blocked_ips = ["10.49.70.105", "10.50.70.91"]
 
 
 @app.before_request
