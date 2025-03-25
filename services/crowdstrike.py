@@ -83,7 +83,7 @@ def fetch_all_hosts_and_write_to_xlsx(xlsx_filename: str = "all_hosts.xlsx") -> 
     print(f"Writing host data to {xlsx_filename}...")
     try:
         df = pd.DataFrame(all_host_data)
-        df.to_excel('../data/transient/tagging/' + xlsx_filename, index=False, engine='openpyxl')
+        df.to_excel('../data/transient/epp_device_tagging/' + xlsx_filename, index=False, engine='openpyxl')
         print(
             f"Successfully wrote {len(all_host_data)} host records to {xlsx_filename}"
         )
@@ -91,7 +91,7 @@ def fetch_all_hosts_and_write_to_xlsx(xlsx_filename: str = "all_hosts.xlsx") -> 
         print(f"An error occurred while writing to XLSX: {e}")
 
 
-def list_cs_hosts_without_ring_tag(input_xlsx_filename: str = "../data/transient/tagging/all_hosts.xlsx", output_xlsx_filename: str = "../data/transient/tagging/cs_hosts_without_ring_tag.xlsx") -> None:
+def list_cs_hosts_without_ring_tag(input_xlsx_filename: str = "../data/transient/epp_device_tagging/all_hosts.xlsx", output_xlsx_filename: str = "../data/transient/epp_device_tagging/cs_hosts_without_ring_tag.xlsx") -> None:
     """
     List CrowdStrike hosts that do not have a FalconGroupingTags/*Ring* tag.
     Read from all_hosts.xlsx, filter hosts, and write the results to a new XLSX file.
