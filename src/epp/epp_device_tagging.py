@@ -444,9 +444,9 @@ def get_hostnames(input_file=INPUT_FILE) -> List[str]:
 def send_report(output_filename: str, time_report) -> bool:
     """Send a report via Webex with the result file attached."""
     try:
-        webex_api = WebexAPI(config.webex_bot_access_token_moneyball)
+        webex_api = WebexAPI(config.webex_bot_access_token_jarvais)
         response = webex_api.messages.create(
-            roomId=config.webex_room_id_vinay_test_space,
+            roomId=config.webex_room_id_epp_tagging,
             markdown=f"EPP-Falcon ring epp_device_tagging results are attached.\n\n```{time_report}",
             files=[output_filename]
         )
