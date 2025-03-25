@@ -30,7 +30,7 @@ def main():
     re_stories.make_chart(),
     sla_breaches.make_chart(),
     threatcon_level.make_chart()
-    qradar_rule_efficacy.send_chart()
+    qradar_rule_efficacy.send_charts()
     phish_fort.fetch_and_report_incidents()
     '''
 
