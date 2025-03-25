@@ -163,17 +163,15 @@ class SaveThreatcon(Command):
                     "text": "ThreatCon Level Updated Successfully",
                     "weight": "Bolder",
                     "color": "Accent",
-                    "isSubtle": True,
-                    "size": "Medium",
                     "horizontalAlignment": "Center"
                 },
                 {
                     "type": "TextBlock",
-                    "text": f"ThreatCon Level: {level}",
+                    "text": f"ThreatCon Level: {level.capitalize()}",
                 },
                 {
                     "type": "TextBlock",
-                    "text": f"Reason: {reason}",
+                    "text": f"Reason: \n {reason}",
                     "wrap": True
                 }
             ],
