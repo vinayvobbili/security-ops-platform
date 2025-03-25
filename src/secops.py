@@ -26,6 +26,8 @@ SECOPS_SHIFT_STAFFING_FILENAME = root_directory / 'data' / 'cell_names_by_shift.
 with open(SECOPS_SHIFT_STAFFING_FILENAME, 'r') as f:
     cell_names_by_shift = json.load(f)
 
+MANAGEMENT_NOTES_FILE = root_directory / 'data' / 'transient' / 'secOps' / 'management_notes.txt'
+
 
 def get_open_tickets():
     all_tickets = IncidentFetcher().get_tickets(query=BASE_QUERY + ' -status:closed')
@@ -134,7 +136,7 @@ def announce_shift_change(shift_name, room_id):
     shift_data_table = list(zip(*staffing_data.values()))
     shift_data_table = tabulate(shift_data_table, headers=headers, tablefmt="simple")
 
-    with open("../data/transient/secOps/management_notes.txt", "r") as file:
+    with open(MANAGEMENT_NOTES_FILE, "r") as file:
         management_notes = file.read()
 
     # Send a new shift starting message to Webex room
