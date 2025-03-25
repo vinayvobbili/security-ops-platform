@@ -18,12 +18,15 @@ from services.service_now import ServiceNowClient
 # Load configuration
 config = get_config()
 
+root_directory = Path(__file__).parent.parent
+print(root_directory)
+
 # Constants
 DATA_DIR = Path("../../data")
 TRANSIENT_DIR = DATA_DIR / "transient"
 REGIONS_FILE = DATA_DIR / "regions_by_country.json"
 COUNTRIES_FILE = DATA_DIR / "countries_by_code.json"
-INPUT_FILE = TRANSIENT_DIR / "EPP-Falcon ring tagging.xlsx"
+INPUT_FILE = TRANSIENT_DIR / 'epp_device_tagging' / "Device Tagging input hosts.xlsx"
 
 # Ring distribution percentages
 RING_1_PERCENT = 0.1
@@ -73,7 +76,7 @@ class HostCategory(Enum):
 @dataclass
 class Host:
     """
-    Represents a host with all its relevant attributes and tagging information.
+    Represents a host with all its relevant attributes and epp_device_tagging information.
     """
     name: str
     device_id: str = ""
@@ -215,7 +218,7 @@ class Host:
 
     @staticmethod
     def needs_tagging(host: 'Host') -> bool:
-        """Check if host needs tagging (no existing ring tags)."""
+        """Check if host needs epp_device_tagging (no existing ring tags)."""
         return not any(
             tag.startswith('Falcon') and 'ring' in tag.lower()
             for tag in host.current_crowd_strike_tags
@@ -372,7 +375,7 @@ def write_results_to_file(hosts: List[Host]) -> str:
     # Get the current date and time in ET
     et_timezone = timezone('US/Eastern')
     current_time_et = datetime.now(et_timezone).strftime("%m_%d_%Y %I:%M %p %Z")
-    output_file = TRANSIENT_DIR / f'EPP-Falcon ring tagging {current_time_et}.xlsx'
+    output_file = TRANSIENT_DIR / f'EPP-Falcon ring epp_device_tagging {current_time_et}.xlsx'
 
     # Create a new workbook
     workbook = openpyxl.Workbook()
@@ -444,7 +447,7 @@ def send_report(output_filename: str, time_report) -> bool:
         webex_api = WebexAPI(config.webex_bot_access_token_moneyball)
         response = webex_api.messages.create(
             roomId=config.webex_room_id_vinay_test_space,
-            markdown=f"EPP-Falcon ring tagging results are attached.\n\n```{time_report}",
+            markdown=f"EPP-Falcon ring epp_device_tagging results are attached.\n\n```{time_report}",
             files=[output_filename]
         )
         return bool(response)

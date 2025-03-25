@@ -21,7 +21,7 @@ class CSHostsWithoutRingTag(Command):
 
     @log_jarvais_activity(bot_access_token=CONFIG.webex_bot_access_token_jarvais)
     def execute(self, message, attachment_actions, activity):
-        file_path = os.path.join(os.path.dirname(__file__), "../data/transient/tagging/cs_hosts_without_ring_tag.xlsx")
+        file_path = os.path.join(os.path.dirname(__file__), "../data/transient/epp_device_tagging/cs_hosts_without_ring_tag.xlsx")
         room_id = attachment_actions.json_data['roomId']
         try:
             # Use pandas to read the Excel file
