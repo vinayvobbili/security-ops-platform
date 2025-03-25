@@ -12,6 +12,7 @@ def get_config():
         webex_bot_access_token_soar=os.environ["WEBEX_BOT_ACCESS_TOKEN_SOAR"],
         webex_bot_access_token_toodles=os.environ["WEBEX_BOT_ACCESS_TOKEN_TOODLES"],
         webex_bot_access_token_jarvais=os.environ["WEBEX_BOT_ACCESS_TOKEN_JARVAIS"],
+        webex_bot_access_token_barnacles=os.environ["WEBEX_BOT_ACCESS_TOKEN_BARNACLES"],
         webex_room_id_aging_tickets=os.environ["WEBEX_ROOM_ID_AGING_TICKETS"],
         webex_room_id_vinay_test_space=os.environ["WEBEX_ROOM_ID_VINAY_TEST_SPACE"],
         webex_room_id_soc_shift_updates=os.environ["WEBEX_ROOM_ID_SOC_SHIFT_UPDATES"],
@@ -26,7 +27,7 @@ def get_config():
         xsoar_dev_auth_id=os.environ["XSOAR_DEV_AUTH_ID"],
         jarvais_approved_rooms=os.environ["JARVAIS_APPROVED_ROOMS"],
         money_ball_approved_rooms=os.environ["MONEY_BALL_APPROVED_ROOMS"],
-        soar_bot_approved_users=os.environ["SOAR_BOT_APPROVED_USERS"],
+        barnacles_approved_users=os.environ["BARNACLES_APPROVED_USERS"],
         ticket_type_prefix=os.environ["TICKET_TYPE_PREFIX"],
         azdo_org=os.environ["AZDO_ORGANIZATION"],
         azdo_de_project=os.environ["AZDO_DE_PROJECT"],
@@ -62,6 +63,7 @@ class Config:
     webex_bot_access_token_soar: str
     webex_bot_access_token_toodles: str
     webex_bot_access_token_jarvais: str
+    webex_bot_access_token_barnacles: str
     webex_room_id_aging_tickets: str
     webex_room_id_vinay_test_space: str
     webex_room_id_soc_shift_updates: str
@@ -77,7 +79,7 @@ class Config:
     ticket_type_prefix: str
     jarvais_approved_rooms: str
     money_ball_approved_rooms: str
-    soar_bot_approved_users: str
+    barnacles_approved_users: str
     azdo_org: str
     azdo_de_project: str
     azdo_re_project: str

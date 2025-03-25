@@ -5,10 +5,10 @@ from webex_bot.webex_bot import WebexBot
 from webexteamssdk import WebexTeamsAPI
 
 from config import get_config
-from src.helper_methods import log_soar_activity
+from src.helper_methods import log_barnacles_activity
 
 config = get_config()
-bot_token = config.webex_bot_access_token_soar
+bot_token = config.webex_bot_access_token_barnacles
 webex_api = WebexTeamsAPI(access_token=bot_token)
 
 NOTES_FILE = "../data/transient/secOps/management_notes.txt"
@@ -62,7 +62,7 @@ class ManagementNotes(Command):
     def __init__(self):
         super().__init__(command_keyword="notes", help_message="Management Notes")
 
-    @log_soar_activity(bot_access_token=bot_token)
+    @log_barnacles_activity(bot_access_token=bot_token)
     def execute(self, message, attachment_actions, activity):
         with open(NOTES_FILE, "r") as file:
             notes = file.read()
@@ -174,6 +174,7 @@ class SaveThreatcon(Command):
                 {
                     "type": "TextBlock",
                     "text": f"Reason: {reason}",
+                    "wrap": True
                 }
             ],
             "version": "1.3",
@@ -191,7 +192,7 @@ class ThreatconLevel(Command):
     def __init__(self):
         super().__init__(command_keyword="threatcon", help_message="ThreatCon Level")
 
-    @log_soar_activity(bot_access_token=bot_token)
+    @log_barnacles_activity(bot_access_token=bot_token)
     def execute(self, message, attachment_actions, activity):
         with open(THREAT_CON_FILE, "r") as file:
             threatcon_details = file.read()
@@ -290,8 +291,8 @@ def run_bot():
         bot = WebexBot(
             bot_token,
             approved_rooms=[],
-            approved_users=config.soar_bot_approved_users.split(','),
-            bot_name="Hello, Manager!"
+            approved_users=config.barnacles_approved_users.split(','),
+            bot_name="Hello, Captain!"
         )
         bot.add_command(ManagementNotes())
         bot.add_command(ThreatconLevel())
