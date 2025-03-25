@@ -76,7 +76,7 @@ def log_jarvais_activity(bot_access_token):
     return decorator
 
 
-def log_soar_activity(bot_access_token):
+def log_barnacles_activity(bot_access_token):
     """
     Decorator that logs activity, using the provided bot access token.
     """
