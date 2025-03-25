@@ -1,5 +1,6 @@
 import logging
 from datetime import datetime
+from pathlib import Path
 from typing import List, Dict, Any
 
 import matplotlib.pyplot as plt
@@ -23,6 +24,8 @@ webex_headers = {
 }
 eastern = pytz.timezone('US/Eastern')
 
+root_directory = Path(__file__).parent.parent.parent
+OUTPUT_PATH = root_directory / "web" / "static" / "charts" / "Aging Tickets.png"
 
 def get_df(tickets: List[Dict[Any, Any]]) -> pd.DataFrame:
     if not tickets:
@@ -107,7 +110,7 @@ def generate_plot(tickets):
     plt.legend(title='Phase', loc='upper right')
     plt.tight_layout()
 
-    plt.savefig('web/static/charts/Aging Tickets.png')
+    plt.savefig(OUTPUT_PATH)
     plt.close(fig)
 
 

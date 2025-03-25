@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from pathlib import Path
 
 import matplotlib.transforms as transforms
 import numpy as np
@@ -11,6 +12,9 @@ from services.xsoar import IncidentFetcher
 
 eastern = timezone('US/Eastern')
 config = get_config()
+
+root_directory = Path(__file__).parent.parent.parent
+OUTPUT_PATH = root_directory / "web" / "static" / "charts" / "SLA Breaches.png"
 
 
 @dataclass
@@ -138,7 +142,7 @@ def save_sla_breaches_chart(ticket_slas_by_periods):
     # Adjust layout to prevent label clipping
     plt.tight_layout()
 
-    plt.savefig('web/static/charts/SLA Breaches.png')
+    plt.savefig(OUTPUT_PATH)
     plt.close(fig)
 
 

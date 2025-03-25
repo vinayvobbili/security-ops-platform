@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from pathlib import Path
 
 import matplotlib.transforms as transforms
 import numpy as np
@@ -12,6 +13,8 @@ from services.xsoar import IncidentFetcher
 config = get_config()
 eastern = timezone('US/Eastern')  # Define the Eastern time zone
 
+root_directory = Path(__file__).parent.parent.parent
+OUTPUT_PATH = root_directory / "web" / "static" / "charts" / "MTTR MTTC.png"
 
 @dataclass
 class TicketSlaTimes:
@@ -170,7 +173,7 @@ def save_mttr_mttc_chart(ticket_slas_by_periods):
     # Adjust layout to prevent label clipping
     plt.tight_layout()
 
-    plt.savefig('web/static/charts/MTTR MTTC.png')
+    plt.savefig(OUTPUT_PATH)
     plt.close(fig)
 
 
