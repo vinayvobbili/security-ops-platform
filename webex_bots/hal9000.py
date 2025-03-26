@@ -1,5 +1,7 @@
 import json
 
+import webexpythonsdk.models.cards.inputs as INPUTS
+import webexpythonsdk.models.cards.options as OPTIONS
 from webex_bot.models.command import Command
 from webex_bot.webex_bot import WebexBot
 from webexpythonsdk.models.cards import (
@@ -7,11 +9,6 @@ from webexpythonsdk.models.cards import (
     Column, AdaptiveCard, ColumnSet, Image,
     HorizontalAlignment, ActionSet, ImageStyle, ActionStyle
 )
-import webexpythonsdk.models.cards.actions as ACTIONS
-import webexpythonsdk.models.cards.card_elements as CARD_ELEMENTS
-import webexpythonsdk.models.cards.inputs as INPUTS
-import webexpythonsdk.models.cards.types as TYPES
-import webexpythonsdk.models.cards.options as OPTIONS
 from webexpythonsdk.models.cards.actions import Submit
 from webexteamssdk import WebexTeamsAPI
 
@@ -19,7 +16,7 @@ from config import get_config
 from src.helper_methods import log_barnacles_activity
 
 config = get_config()
-bot_token = config.webex_bot_access_token_barnacles
+bot_token = config.webex_bot_access_token_hal9000
 webex_api = WebexTeamsAPI(access_token=bot_token)
 
 NOTES_FILE = "../data/transient/secOps/management_notes.txt"
