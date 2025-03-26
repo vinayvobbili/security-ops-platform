@@ -24,6 +24,7 @@ class SaveNotes(Command):
     def __init__(self):
         super().__init__(command_keyword="save_notes")
 
+    @log_barnacles_activity(bot_access_token=bot_token)
     def execute(self, message, attachment_actions, activity):
         with open(NOTES_FILE, "w") as file:
             file.write(attachment_actions.inputs['management_notes'])
