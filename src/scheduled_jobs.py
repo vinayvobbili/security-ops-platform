@@ -3,11 +3,11 @@ import time
 import pytz
 import schedule
 
-from src.charts import mttr_mttc, outflow, lifespan, heatmap, sla_breaches, aging_tickets, inflow, qradar_rule_efficacy, de_stories, days_since_incident, re_stories, threatcon_level
 import secops
 import verify_host_online_status
 from config import get_config
 from services import phish_fort
+from src.charts import mttr_mttc, outflow, lifespan, heatmap, sla_breaches, aging_tickets, inflow, qradar_rule_efficacy, de_stories, days_since_incident, re_stories, threatcon_level
 
 config = get_config()
 eastern = pytz.timezone('US/Eastern')
@@ -63,6 +63,7 @@ def main():
     schedule.every().day.at("19:30", eastern).do(lambda: secops.announce_shift_change('night', room_id))
     schedule.every().friday.at("08:00", eastern).do(lambda: qradar_rule_efficacy.send_charts())
     schedule.every().monday.at("08:00", eastern).do(lambda: phish_fort.fetch_and_report_incidents())
+    # schedule.every().day.at("08:00", eastern).do(thithi.notify)
 
     while True:
         schedule.run_pending()
