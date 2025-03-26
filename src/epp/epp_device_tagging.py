@@ -1,3 +1,39 @@
+"""
+    Here are 10 key points about what this code does:
+
+    1. Processes a list of host names from an enterprise system, retrieving detailed information about each host from CrowdStrike, Splunk, and other internal systems.
+
+    2. Categorizes hosts as either PCs or servers, and determines their geographic region and country based on available data sources.
+
+    3. Implements a sophisticated tagging mechanism for hosts, distributing workstations into rings (1-4) based on their region and country, and servers into rings based on their environment type.
+
+    4. Filters out hosts that lack critical information like device ID, category, or region to ensure data quality.
+
+    5. Generates new CrowdStrike tags for hosts that don't already have ring-based tags, following a specific distribution logic for workstations and servers.
+
+        For workstations, the code uses these percentage-based ring allocations:
+            Ring 1: 10% of workstations in a specific region and country
+            Ring 2: 20% of workstations in a specific region and country
+            Ring 3: 30% of workstations in a specific region and country
+            Ring 4: Remaining workstations in that region and country
+
+        For servers, the ring is determined by environment type:
+            Ring 1: Dev, POC, Lab, Integration environments
+            Ring 2: QA, Test environments
+            Ring 3: DR (Disaster Recovery) environments
+            Ring 4: Production or unknown environments
+
+    6. Creates a detailed, aligned output table showing host details including name, category, environment, region, new tag, and current tags.
+
+    7. Generates a CSV report of processed hosts and emails it to specified recipients using an internal email sender.
+
+    8. Tracks and reports on problematic hosts, including those not found in CrowdStrike, those without a device category, and those with guessed regions.
+
+    9. Measures and reports the execution time of different stages of the process, including host fetching and tag generation.
+
+    10. Handles various edge cases and potential errors, such as empty environment lists, missing device information, and parsing timestamp data.
+"""
+
 import json
 import math
 import time
@@ -518,39 +554,4 @@ Timing:
 
 
 if __name__ in ('__main__', '__builtin__', 'builtins'):
-    '''
-    Here are 10 key points about what this code does:
-
-    1. Processes a list of host names from an enterprise system, retrieving detailed information about each host from CrowdStrike, Splunk, and other internal systems.
-
-    2. Categorizes hosts as either PCs or servers, and determines their geographic region and country based on available data sources.
-
-    3. Implements a sophisticated tagging mechanism for hosts, distributing workstations into rings (1-4) based on their region and country, and servers into rings based on their environment type.
-
-    4. Filters out hosts that lack critical information like device ID, category, or region to ensure data quality.
-
-    5. Generates new CrowdStrike tags for hosts that don't already have ring-based tags, following a specific distribution logic for workstations and servers.
-
-        For workstations, the code uses these percentage-based ring allocations:
-            Ring 1: 10% of workstations in a specific region and country
-            Ring 2: 20% of workstations in a specific region and country
-            Ring 3: 30% of workstations in a specific region and country
-            Ring 4: Remaining workstations in that region and country
-
-        For servers, the ring is determined by environment type:
-            Ring 1: Dev, POC, Lab, Integration environments
-            Ring 2: QA, Test environments
-            Ring 3: DR (Disaster Recovery) environments
-            Ring 4: Production or unknown environments
-
-    6. Creates a detailed, aligned output table showing host details including name, category, environment, region, new tag, and current tags.
-
-    7. Generates a CSV report of processed hosts and emails it to specified recipients using an internal email sender.
-
-    8. Tracks and reports on problematic hosts, including those not found in CrowdStrike, those without a device category, and those with guessed regions.
-
-    9. Measures and reports the execution time of different stages of the process, including host fetching and tag generation.
-
-    10. Handles various edge cases and potential errors, such as empty environment lists, missing device information, and parsing timestamp data.
-    '''
     main()
