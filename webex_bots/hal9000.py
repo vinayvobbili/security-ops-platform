@@ -7,7 +7,7 @@ from webex_bot.webex_bot import WebexBot
 from webexpythonsdk.models.cards import (
     Colors, TextBlock, FontWeight, FontSize,
     Column, AdaptiveCard, ColumnSet, Image,
-    HorizontalAlignment, ActionSet, ImageStyle, ActionStyle
+    HorizontalAlignment, ActionSet, ImageStyle, ActionStyle, Choice
 )
 from webexpythonsdk.models.cards.actions import Submit
 from webexteamssdk import WebexTeamsAPI
@@ -92,15 +92,18 @@ class ManagementNotes(Command):
                                     wrap=True,
                                     size=FontSize.MEDIUM,
                                     weight=FontWeight.BOLDER,
-                                    color=Colors.ACCENT
+                                    color=Colors.ACCENT,
+                                    horizontalAlignment=HorizontalAlignment.CENTER,
+
                                 )
                             ],
-                            width="stretch"
+                            width="stretch",
                         )
                     ]
                 ),
                 INPUTS.Text(
                     id="management_notes",
+                    isMultiline=True,
                     value=notes,
                     placeholder="Enter notes here",
                     isRequired=True,
@@ -110,10 +113,10 @@ class ManagementNotes(Command):
                         Submit(
                             title="Update",
                             style=ActionStyle.POSITIVE,
-                            data={"callback_keyword": "save_notes"}
-                        )
+                            data={"callback_keyword": "save_notes"},
+                        ),
                     ],
-                    spacing=OPTIONS.Spacing.NONE
+                    spacing=OPTIONS.Spacing.NONE,
                 )
             ]
         )
@@ -213,10 +216,10 @@ class ThreatconLevel(Command):
                     value=level,
                     label="Level",
                     choices=[
-                        {"title": "🟢 Green", "value": "green"},
-                        {"title": "🟡 Yellow", "value": "yellow"},
-                        {"title": "🟠 Orange", "value": "orange"},
-                        {"title": "🔴 Red", "value": "red"}
+                        Choice(title="🟢 Green", value="green"),
+                        Choice(title="🟡 Yellow", value="yellow"),
+                        Choice(title="🟠 Orange", value="orange"),
+                        Choice(title="🔴 Red", value="red"),
                     ],
                     style=OPTIONS.ChoiceInputStyle.EXPANDED
                 ),
@@ -236,10 +239,12 @@ class ThreatconLevel(Command):
                             style=ActionStyle.POSITIVE,
                             data={"callback_keyword": "save_threatcon"}
                         )
-                    ]
+                    ],
                 )
             ]
         )
+
+        print(card.to_dict())
 
         webex_api.messages.create(
             toPersonEmail=activity['actor']['id'],
