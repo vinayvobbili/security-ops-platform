@@ -30,7 +30,11 @@ with open(COMPANY_LOGO_BASE64, "r") as file:
 # Command to save notes
 class SaveNotes(Command):
     def __init__(self):
-        super().__init__(command_keyword="save_notes")
+        super().__init__(
+            command_keyword="save_notes",
+            delete_previous_message=True,
+            exact_command_keyword_match=True
+        )
 
     def execute(self, message, attachment_actions, activity):
         with open(NOTES_FILE, "w") as file:
@@ -42,11 +46,13 @@ class SaveNotes(Command):
                     text="Notes Updated Successfully",
                     weight=FontWeight.BOLDER,
                     color=Colors.ACCENT,
-                    size=FontSize.SMALL
+                    size=FontSize.DEFAULT,
+                    horizontalAlignment=HorizontalAlignment.CENTER,
                 ),
                 TextBlock(
                     text=f"**New Note**: {attachment_actions.inputs['management_notes']}",
-                    wrap=True
+                    wrap=True,
+                    size=FontSize.DEFAULT
                 )
             ]
         )
@@ -61,7 +67,10 @@ class SaveNotes(Command):
 # Command to view/edit notes
 class ManagementNotes(Command):
     def __init__(self):
-        super().__init__(command_keyword="notes", help_message="Management Notes")
+        super().__init__(
+            command_keyword="notes",
+            help_message="Management Notes",
+        )
 
     @log_barnacles_activity(bot_access_token=bot_token)
     def execute(self, message, attachment_actions, activity):
@@ -131,7 +140,11 @@ class ManagementNotes(Command):
 # Command to update threatcon level
 class SaveThreatcon(Command):
     def __init__(self):
-        super().__init__(command_keyword="save_threatcon")
+        super().__init__(
+            command_keyword="save_threatcon",
+            delete_previous_message=True,
+            exact_command_keyword_match=True
+        )
 
     def execute(self, message, attachment_actions, activity):
         level = attachment_actions.inputs['threatcon_level']
@@ -172,7 +185,10 @@ class SaveThreatcon(Command):
 
 class ThreatconLevel(Command):
     def __init__(self):
-        super().__init__(command_keyword="threatcon", help_message="ThreatCon Level")
+        super().__init__(
+            command_keyword="threatcon",
+            help_message="ThreatCon Level",
+        )
 
     @log_barnacles_activity(bot_access_token=bot_token)
     def execute(self, message, attachment_actions, activity):
@@ -243,8 +259,6 @@ class ThreatconLevel(Command):
                 )
             ]
         )
-
-        print(card.to_dict())
 
         webex_api.messages.create(
             toPersonEmail=activity['actor']['id'],
