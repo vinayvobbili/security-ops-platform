@@ -26,6 +26,13 @@ COMPANY_LOGO_BASE64 = "../web/static/icons/company_logo.txt"
 with open(COMPANY_LOGO_BASE64, "r") as file:
     company_logo = file.read()
 
+ICONS_BY_COLOR = {
+    'green': '🟢',
+    'yellow': '🟡',
+    'orange': '🟠',
+    'red': '🔴'
+}
+
 
 # Command to save notes
 class SaveNotes(Command):
@@ -167,7 +174,7 @@ class SaveThreatcon(Command):
                     horizontalAlignment=HorizontalAlignment.CENTER
                 ),
                 TextBlock(
-                    text=f"ThreatCon Level: {level.capitalize()}",
+                    text=f"ThreatCon Level: {ICONS_BY_COLOR.get(level, '🟢') + ' ' + level.capitalize()}",
                 ),
                 TextBlock(
                     text=f"Reason: \n {reason}",
