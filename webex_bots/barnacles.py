@@ -17,7 +17,7 @@ from config import get_config
 from src.helper_methods import log_barnacles_activity
 
 config = get_config()
-bot_token = config.webex_bot_access_token_hal9000
+bot_token = config.webex_bot_access_token_barnacles
 webex_api = WebexTeamsAPI(access_token=bot_token)
 
 NOTES_FILE = "../data/transient/secOps/management_notes.json"
