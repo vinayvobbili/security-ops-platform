@@ -1,6 +1,7 @@
 import logging
 import sys
 from datetime import datetime, timezone
+from pathlib import Path
 
 import pytesseract
 import pytz
@@ -11,6 +12,10 @@ from services.xsoar import IncidentFetcher
 
 eastern = pytz.timezone('US/Eastern')
 config = config.get_config()
+
+ROOT_DIRECTORY = Path(__file__).parent.parent.parent
+OUTPUT_PATH = ROOT_DIRECTORY / "web" / "static" / "charts" / "Days Since Last Incident.png"
+IMAGE_PATH = ROOT_DIRECTORY / "web" / "static" / "images" / "base" / "Days Since Last Incident.jpg"
 
 
 def _setup_logger():
@@ -159,9 +164,9 @@ def make_chart():
 
     try:
         modifier.update_counter(
-            "web/static/images/base/days since last incident.jpg",
+            IMAGE_PATH,
             days_since_last_incident, last_incident_date, last_incident_id,
-            output_path="../../web/static/charts/Days Since Last Incident.jpg",
+            output_path=OUTPUT_PATH,
             font_size=50,
             font_color="green",
             background_color="#C3D3B8"  # Using hex code for lightgray
