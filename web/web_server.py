@@ -32,7 +32,7 @@ def get_image_files() -> List[str]:
         "images/Company Logo.png",
         "images/DnR Welcome.png",
         "charts/Threatcon Level.png",
-        "charts/Days Since Last Incident.jpg",
+        "charts/Days Since Last Incident.png",
         "images/IR Dashboard.png",
         "charts/Aging Tickets.png",
         "charts/Inflow.png",
