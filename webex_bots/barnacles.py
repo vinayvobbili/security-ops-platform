@@ -1,4 +1,5 @@
 import json
+from datetime import datetime, timedelta
 
 import webexpythonsdk.models.cards.inputs as INPUTS
 import webexpythonsdk.models.cards.options as OPTIONS
@@ -19,7 +20,7 @@ config = get_config()
 bot_token = config.webex_bot_access_token_hal9000
 webex_api = WebexTeamsAPI(access_token=bot_token)
 
-NOTES_FILE = "../data/transient/secOps/management_notes.txt"
+NOTES_FILE = "../data/transient/secOps/management_notes.json"
 THREAT_CON_FILE = "../data/transient/secOps/threatcon.json"
 COMPANY_LOGO_BASE64 = "../web/static/icons/company_logo.txt"
 
@@ -45,7 +46,10 @@ class SaveNotes(Command):
 
     def execute(self, message, attachment_actions, activity):
         with open(NOTES_FILE, "w") as file:
-            file.write(attachment_actions.inputs['management_notes'])
+            file.write(json.dumps({
+                "management_notes": attachment_actions.inputs['management_notes'],
+                "keep_until": attachment_actions.inputs['keep_until']
+            }, indent=4))
 
         card = AdaptiveCard(
             body=[
@@ -57,7 +61,7 @@ class SaveNotes(Command):
                     horizontalAlignment=HorizontalAlignment.CENTER,
                 ),
                 TextBlock(
-                    text=f"**New Note**: {attachment_actions.inputs['management_notes']}",
+                    text=f"**New Note**: {attachment_actions.inputs['management_notes']} **Keep Until**: {attachment_actions.inputs['keep_until']}",
                     wrap=True,
                     size=FontSize.DEFAULT
                 )
@@ -82,10 +86,14 @@ class ManagementNotes(Command):
     @log_barnacles_activity(bot_access_token=bot_token)
     def execute(self, message, attachment_actions, activity):
         with open(NOTES_FILE, "r") as file:
-            notes = file.read()
+            management_notes = file.read()
+            management_notes = json.loads(management_notes)
+            note = management_notes['management_notes']
+            keep_until = management_notes['keep_until']
 
-        with open(NOTES_FILE, "r") as file:
-            notes = file.read()
+        today = datetime.now().strftime("%Y-%m-%d")
+        next_week = (datetime.now() + timedelta(days=7)).strftime("%Y-%m-%d")
+        tomorrow = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
 
         card = AdaptiveCard(
             body=[
@@ -120,9 +128,37 @@ class ManagementNotes(Command):
                 INPUTS.Text(
                     id="management_notes",
                     isMultiline=True,
-                    value=notes,
+                    value=note,
                     placeholder="Enter notes here",
                     isRequired=True,
+                ),
+                ColumnSet(
+                    columns=[
+                        Column(
+                            items=[
+                                TextBlock(
+                                    text="Keep Until",
+                                    horizontalAlignment=HorizontalAlignment.LEFT,
+                                    color=OPTIONS.Colors.DARK
+
+                                )
+                            ],
+                            width="auto"
+                        ),
+                        Column(
+                            items=[
+                                INPUTS.Date(
+                                    id='keep_until',
+                                    max=next_week,
+                                    min=today,
+                                    value=keep_until or tomorrow,
+                                    isRequired=True,
+                                    height=OPTIONS.BlockElementHeight.AUTO
+                                )
+                            ],
+                            width="175px",
+                        )
+                    ]
                 ),
                 ActionSet(
                     actions=[

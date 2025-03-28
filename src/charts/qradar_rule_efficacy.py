@@ -239,7 +239,7 @@ def send_charts() -> None:
     files = ['QR Rule Efficacy-Quarter.png', 'QR Rule Efficacy-Month.png', 'QR Rule Efficacy-Week.png']
     try:
         for file in files:
-            webex.messages.create(toPersonEmail=recipient_email, files=[f'web/static/charts/{file}'])
+            webex.messages.create(toPersonEmail=recipient_email, files=[f'{OUTPUT_DIR / file}'])
         log.info(f"Chart sent to {recipient_email}")
     except Exception as e:
         log.error(f"Error sending chart: {e}", exc_info=True)
