@@ -3,6 +3,7 @@ import time
 from datetime import datetime, timedelta
 from pathlib import Path
 
+from dateutil.utils import today
 from openpyxl import load_workbook
 from tabulate import tabulate
 from webexpythonsdk import WebexAPI
@@ -136,8 +137,13 @@ def announce_shift_change(shift_name, room_id):
     shift_data_table = list(zip(*staffing_data.values()))
     shift_data_table = tabulate(shift_data_table, headers=headers, tablefmt="simple")
 
+    note = 'None'
     with open(MANAGEMENT_NOTES_FILE, "r") as file:
         management_notes = file.read()
+        management_notes = json.loads(management_notes)
+        keep_until = datetime.strptime(management_notes['keep_until'], '%Y-%m-%d').date()
+        if today().date() <= keep_until:
+            note = management_notes['management_notes']
 
     # Send a new shift starting message to Webex room
     webex_api.messages.create(
@@ -147,7 +153,7 @@ def announce_shift_change(shift_name, room_id):
                  f"Timings: {sheet[cell_names_by_shift['shift_timings'][shift_name]].value}\n"
                  f"Open METCIRT* tickets: {get_open_tickets()}\n"
                  f"Hosts in Containment: US123, IN456, AU789\n"
-                 f"**Management Notes**: {management_notes}\n"
+                 f"**Management Notes**: {note}\n"
                  f"Staffing:\n"
                  f"```\n{shift_data_table}\n```"
     )
