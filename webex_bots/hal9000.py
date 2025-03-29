@@ -8,7 +8,7 @@ from webex_bot.webex_bot import WebexBot
 from webexpythonsdk.models.cards import (
     Colors, TextBlock, FontWeight, FontSize,
     Column, AdaptiveCard, ColumnSet, Image,
-    HorizontalAlignment, ActionSet, ImageStyle, ActionStyle, Choice
+    HorizontalAlignment, ActionSet, ImageStyle, ActionStyle, Choice, FactSet, Fact
 )
 from webexpythonsdk.models.cards.actions import Submit
 from webexteamssdk import WebexTeamsAPI
@@ -36,7 +36,7 @@ ICONS_BY_COLOR = {
 
 
 # Command to save notes
-class SaveNotes(Command):
+class SaveManagementNotes(Command):
     def __init__(self):
         super().__init__(
             command_keyword="save_notes",
@@ -47,7 +47,7 @@ class SaveNotes(Command):
     def execute(self, message, attachment_actions, activity):
         with open(NOTES_FILE, "w") as file:
             file.write(json.dumps({
-                "management_notes": attachment_actions.inputs['management_notes'],
+                "note": attachment_actions.inputs['management_notes'],
                 "keep_until": attachment_actions.inputs['keep_until']
             }, indent=4))
 
@@ -60,10 +60,11 @@ class SaveNotes(Command):
                     size=FontSize.DEFAULT,
                     horizontalAlignment=HorizontalAlignment.CENTER,
                 ),
-                TextBlock(
-                    text=f"**New Note**: {attachment_actions.inputs['management_notes']} **Keep Until**: {attachment_actions.inputs['keep_until']}",
-                    wrap=True,
-                    size=FontSize.DEFAULT
+                FactSet(
+                    facts=[
+                        Fact(title="Note", value=attachment_actions.inputs['management_notes']),
+                        Fact(title="Keep Until", value=attachment_actions.inputs['keep_until'])
+                    ]
                 )
             ]
         )
@@ -88,7 +89,7 @@ class ManagementNotes(Command):
         with open(NOTES_FILE, "r") as file:
             management_notes = file.read()
             management_notes = json.loads(management_notes)
-            note = management_notes['management_notes']
+            note = management_notes['note']
             keep_until = management_notes['keep_until']
 
         today = datetime.now().strftime("%Y-%m-%d")
@@ -118,7 +119,6 @@ class ManagementNotes(Command):
                                     weight=FontWeight.BOLDER,
                                     color=Colors.ACCENT,
                                     horizontalAlignment=HorizontalAlignment.CENTER,
-
                                 )
                             ],
                             width="stretch",
@@ -139,8 +139,8 @@ class ManagementNotes(Command):
                                 TextBlock(
                                     text="Keep Until",
                                     horizontalAlignment=HorizontalAlignment.LEFT,
-                                    color=OPTIONS.Colors.DARK
-
+                                    color=OPTIONS.Colors.DARK,
+                                    height=OPTIONS.BlockElementHeight.STRETCH
                                 )
                             ],
                             width="auto"
@@ -320,7 +320,7 @@ def run_bot():
         )
         bot.add_command(ManagementNotes())
         bot.add_command(ThreatconLevel())
-        bot.add_command(SaveNotes())
+        bot.add_command(SaveManagementNotes())
         bot.add_command(SaveThreatcon())
         bot.run()
     except Exception as e:
