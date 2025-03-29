@@ -33,7 +33,7 @@ def get_image_files() -> List[str]:
         "images/DnR Welcome.png",
         "charts/Threatcon Level.png",
         "charts/Days Since Last Incident.png",
-        "images/IR Dashboard.png",
+        "images/DnR Metrics by Peanuts.jpg",
         "charts/Aging Tickets.png",
         "charts/Inflow.png",
         "charts/Outflow.png",
@@ -82,7 +82,7 @@ def log_web_activity(func):
     return wrapper
 
 
-@app.route("/full-slide-show")
+@app.route("/")
 @log_web_activity
 def get_ir_dashboard_slide_show():
     """Renders the HTML template with the ordered list of image files."""
