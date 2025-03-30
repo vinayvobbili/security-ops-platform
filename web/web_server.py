@@ -1,4 +1,5 @@
 import csv
+import ipaddress
 import os
 from datetime import datetime
 from functools import wraps
@@ -17,12 +18,12 @@ CONFIG = get_config()
 
 # Supported image extensions
 IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".gif", ".svg")
-blocked_ips = ["10.49.70.105", "10.50.70.91", "10.49.70.95"]
+blocked_ip_ranges = ["10.49.70.0/24", "10.50.70.0/24"]
 
 
 @app.before_request
 def block_ip():
-    if request.remote_addr in blocked_ips:
+    if any(ipaddress.ip_network(request.remote_addr).subnet_of(ipaddress.ip_network(blocked_ip_range)) for blocked_ip_range in blocked_ip_ranges):
         abort(403)  # Forbidden
 
 
