@@ -27,7 +27,7 @@ SECOPS_SHIFT_STAFFING_FILENAME = root_directory / 'data' / 'cell_names_by_shift.
 with open(SECOPS_SHIFT_STAFFING_FILENAME, 'r') as f:
     cell_names_by_shift = json.load(f)
 
-MANAGEMENT_NOTES_FILE = root_directory / 'data' / 'transient' / 'secOps' / 'management_notes.txt'
+MANAGEMENT_NOTES_FILE = root_directory / 'data' / 'transient' / 'secOps' / 'management_notes.json'
 
 
 def get_open_tickets():
