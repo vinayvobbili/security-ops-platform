@@ -143,7 +143,7 @@ def announce_shift_change(shift_name, room_id):
         management_notes = json.loads(management_notes)
         keep_until = datetime.strptime(management_notes['keep_until'], '%Y-%m-%d').date()
         if today().date() <= keep_until:
-            note = management_notes['management_notes']
+            note = management_notes['note']
 
     # Send a new shift starting message to Webex room
     webex_api.messages.create(
