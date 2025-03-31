@@ -7,6 +7,10 @@ from dateutil.utils import today
 from openpyxl import load_workbook
 from tabulate import tabulate
 from webexpythonsdk import WebexAPI
+from webexpythonsdk.models.cards import (
+    Colors, TextBlock, FontWeight, FontSize,
+    AdaptiveCard, HorizontalAlignment, FactSet, Fact
+)
 
 from config import get_config  # If you still use a CONFIG file for the path
 from services.xsoar import IncidentFetcher
@@ -106,28 +110,39 @@ def announce_previous_shift_performance(room_id, shift_name):
     total_staff_count = sum(len(staff) for staff in previous_shift_staffing_data.values())
     tickets_closed_per_analyst = len(outflow) / total_staff_count
 
-    shift_performance = {
-        'Shift Lead': previous_shift_staffing_data['SA'][0],
-        'New Tickets ack\'ed': len(inflow),
-        'Tickets closed out': f'{len(outflow)} ({tickets_closed_per_analyst:.2f}/analyst)',
-        'Resp. SLA Breaches': len(response_sla_breaches),
-        'Cont. SLA Breaches': len(containment_sla_breaches),
-        'MTTR': f"{int(mean_time_to_respond // 60)}:{int(mean_time_to_respond % 60):02d}",
-        'MTTC': f"{int(mean_time_to_contain // 60)}:{int(mean_time_to_contain % 60):02d}",
-        'IOCs blocked': '1.2.3.4, 5.6.7.8, example.com',
-        'Hosts contained': 'US123, IN456, AU789',
-        'Tuning requests submitted:': 'US321',
-    }
-    shift_performance = tabulate(shift_performance.items(), tablefmt="simple")
+    shift_performance = AdaptiveCard(
+        body=[
+            TextBlock(
+                text="Previous Shift Performance",
+                weight=FontWeight.BOLDER,
+                color=Colors.ACCENT,
+                size=FontSize.DEFAULT,
+                horizontalAlignment=HorizontalAlignment.CENTER,
+            ),
+            FactSet(
+                facts=[
+                    Fact(title="Shift Lead", value=previous_shift_staffing_data['SA'][0]),
+                    Fact(title="New Tickets ack'ed", value=str(len(inflow))),
+                    Fact(title="Tickets closed out", value=f"{len(outflow)} ({tickets_closed_per_analyst:.2f}/analyst)"),
+                    Fact(title="Resp. SLA Breaches", value=str(len(response_sla_breaches))),
+                    Fact(title="Cont. SLA Breaches", value=str(len(containment_sla_breaches))),
+                    Fact(title="MTTR (mins:secs)", value=f"{int(mean_time_to_respond // 60)}:{int(mean_time_to_respond % 60):02d}"),
+                    Fact(title="MTTC (mins:secs)", value=f"{int(mean_time_to_contain // 60)}:{int(mean_time_to_contain % 60):02d}"),
+                    Fact(title="IOCs blocked", value="1.2.3.4, 5.6.7.8, example.com"),
+                    Fact(title="Hosts contained", value="US123, IN456, AU789"),
+                    Fact(title="Tuning requests submitted", value="US321")
+                ]
+            )
+        ]
+    )
     webex_api.messages.create(
         roomId=room_id,
-        text=f"Previous Shift Performance!",
-        markdown=f"**Previous Shift Performance**:\n"
-                 f"```\n{shift_performance}\n```"
+        text="Previous Shift Performance!",
+        attachments=[{"contentType": "application/vnd.microsoft.card.adaptive", "content": shift_performance.to_dict()}]
     )
 
 
-def announce_shift_change(shift_name, room_id):
+def announce_shift_change(shift_name, room_id, sleep_time=300):
     day_name = datetime.now().strftime("%A")
     staffing_data = get_staffing_data(day_name, shift_name)
     staffing_data['SA'][0] = staffing_data['SA'][0] + ' (Lead)'
@@ -158,7 +173,7 @@ def announce_shift_change(shift_name, room_id):
                  f"```\n{shift_data_table}\n```"
     )
 
-    time.sleep(300)  # give time to digest the shift change message before sending the performance message
+    time.sleep(sleep_time)  # give time to digest the shift change message before sending the performance message
 
     announce_previous_shift_performance(shift_name=shift_name, room_id=room_id)
 
@@ -168,7 +183,7 @@ def main():
     Main function to run the scheduled jobs.
     """
     room_id = config.webex_room_id_vinay_test_space
-    announce_shift_change('night', room_id)
+    announce_shift_change('night', room_id, sleep_time=0)
     # announce_shift_change('afternoon')
     # announce_shift_change('night')
 
