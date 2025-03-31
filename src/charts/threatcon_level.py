@@ -9,7 +9,8 @@ from matplotlib.patches import FancyArrow
 
 # Define constants
 THREAT_CON_FILE = Path("../../data/transient/secOps/threatcon.json")
-OUTPUT_PATH = Path("../../web/static/charts/Threatcon Level.png")
+ROOT_DIRECTORY = Path(__file__).parent.parent.parent
+OUTPUT_PATH = ROOT_DIRECTORY / "web" / "static" / "charts" / "Threatcon Level.png"
 
 # Define color mappings for better maintenance
 COLORS = {
