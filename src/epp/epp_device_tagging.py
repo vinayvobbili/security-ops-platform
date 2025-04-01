@@ -130,7 +130,7 @@ class Host:
         """Retrieve device ID and tags from CrowdStrike."""
         try:
             host_filter = f"hostname:'{self.name}'"
-            response = falcon_hosts.query_devices_by_filter(filter=host_filter, sort_by="last_seen.desc", limit=1)
+            response = falcon_hosts.query_devices_by_filter(filter=host_filter)
 
             if response.get("status_code") != 200:
                 self.status_message = f"CrowdStrike API error: {response.get('errors', ['Unknown error'])}"
@@ -142,7 +142,7 @@ class Host:
                 self.status_message = "Host not found in CrowdStrike"
                 return
 
-            self.device_id = resources[0]
+            self.device_id = resources[-1]
 
             # Fetch device details including tags
             device_response = falcon_hosts.get_device_details(ids=self.device_id)
