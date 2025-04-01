@@ -142,7 +142,7 @@ def announce_previous_shift_performance(room_id, shift_name):
     )
 
 
-def announce_shift_change(shift_name, room_id, sleep_time=300):
+def announce_shift_change(shift_name, room_id, sleep_time=30):
     day_name = datetime.now().strftime("%A")
     staffing_data = get_staffing_data(day_name, shift_name)
     staffing_data['SA'][0] = staffing_data['SA'][0] + ' (Lead)'
