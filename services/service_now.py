@@ -266,17 +266,17 @@ if __name__ == "__main__":
         with ServiceNowClient(config.snow_base_url, config.snow_functional_account_id, config.snow_functional_account_password, config.snow_client_key) as client:
 
             # Example 2: Get host by name
-            hostname = "vm8251e1dv0002"
+            hostname = "KRMLAZMCD11"
             logger.info(f"Looking up host {hostname} in CMDB...")
             host_details = client.get_host_details(hostname)
             logger.info(f"Host details: {host_details}")
 
-            print(f"Host Name: {host_details['name']}")
-            print(f"Host IP: {host_details['ipAddress']}")
-            print(f"Host Category: {host_details['ciClass']}")
-            print(f"Host OS: {host_details['operatingSystem']}")
-            print(f"Host Country: {host_details['country']}")
-            print(f"Host Status: {host_details['state']}")
+            print(f"Host Name: {host_details.get('name')}")
+            print(f"Host IP: {host_details.get('ipAddress')}")
+            print(f"Host Category: {host_details.get('ciClass')}")
+            print(f"Host OS: {host_details.get('operatingSystem')}")
+            print(f"Host Country: {host_details.get('country')}")
+            print(f"Host Status: {host_details.get('state')}")
             print("-" * 20)
 
 
