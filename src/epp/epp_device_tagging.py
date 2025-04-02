@@ -162,14 +162,14 @@ class Host:
     def _set_host_details_from_snow(self) -> None:
         """Retrieve host details from ServiceNow."""
         try:
-            host_details = service_now.get_host_details(self.name)
+            snow_host_details = service_now.get_host_details(self.name)
 
-            if not host_details:
+            if not snow_host_details:
                 self.status_message = "Host not found in ServiceNow"
                 return
 
             # Map category
-            category = host_details.get('category', '').lower()
+            category = snow_host_details.get('category', '').lower()
             if category == 'workstation':
                 self.category = HostCategory.WORKSTATION
             elif category == 'server':
@@ -177,9 +177,11 @@ class Host:
             else:
                 self.status_message = f"Unknown host category: {category}"
 
-            self.environment = host_details.get('environment', '')
-            self.country = host_details.get('country', '')
-            self.life_cycle_status = host_details.get('lifecycleStatus', '')
+            self.environment = snow_host_details.get('environment', '')
+            self.country = snow_host_details.get('country', '')
+            if snow_host_details.get('osDomain') == 'pmli':
+                self.country = 'India PMLI'
+            self.life_cycle_status = snow_host_details.get('lifecycleStatus', '')
 
         except Exception as e:
             self.status_message = f"Error retrieving ServiceNow data: {str(e)}"

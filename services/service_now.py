@@ -266,7 +266,7 @@ if __name__ == "__main__":
         with ServiceNowClient(config.snow_base_url, config.snow_functional_account_id, config.snow_functional_account_password, config.snow_client_key) as client:
 
             # Example 2: Get host by name
-            hostname = "KRMLAZMCD11"
+            hostname = "PMLIITSVDI001"
             logger.info(f"Looking up host {hostname} in CMDB...")
             host_details = client.get_host_details(hostname)
             logger.info(f"Host details: {host_details}")
@@ -277,6 +277,7 @@ if __name__ == "__main__":
             print(f"Host OS: {host_details.get('operatingSystem')}")
             print(f"Host Country: {host_details.get('country')}")
             print(f"Host Status: {host_details.get('state')}")
+            print(f"OS Domain: {host_details.get('osDomain')}")
             print("-" * 20)
 
 
