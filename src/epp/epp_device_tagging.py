@@ -27,6 +27,7 @@ from typing import Optional, List, Union
 import openpyxl
 from falconpy import OAuth2, Hosts, RealTimeResponse
 from pytz import timezone
+from tqdm import tqdm
 from webexpythonsdk import WebexAPI
 
 from config import get_config
@@ -497,7 +498,7 @@ def main() -> None:
         print("No hostnames found in input file. Exiting.")
         return
 
-    hosts = [Host.create_and_initialize(name) for name in hostnames]
+    hosts = [Host.create_and_initialize(name) for name in tqdm(hostnames, desc="Initializing hosts")]
     fetch_end = time.time()
     fetch_duration = fetch_end - fetch_start
 
