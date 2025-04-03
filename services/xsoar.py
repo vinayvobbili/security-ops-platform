@@ -218,3 +218,8 @@ class ListFetcher:
     def __init__(self):
         self.headers = headers
         self.list_fetch_url = config.xsoar_api_base_url + '/lists'
+
+
+if __name__ == "__main__":
+    destination_ticket_number, destination_ticket_link = import_ticket('623454')
+    print(destination_ticket_number, destination_ticket_link)
