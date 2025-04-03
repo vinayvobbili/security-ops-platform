@@ -42,8 +42,7 @@ def _log_activity(bot_access_token, log_file_name):
                         writer = csv.writer(f, quoting=csv.QUOTE_MINIMAL)
                         writer.writerow([
                             activity["actor"]["displayName"],
-                            attachment_actions.json_data.get('inputs', {}).get('command_keyword')
-                            or attachment_actions.json_data['text'],
+                            attachment_actions.json_data.get('inputs', {}).get('command_keyword'),  # or attachment_actions.json_data['text']
                             get_room_name(attachment_actions.json_data['roomId'], bot_access_token),
                             now_eastern
                         ])

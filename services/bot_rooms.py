@@ -81,6 +81,7 @@ def get_room_name(room_id, bot_access_token):
     Retrieve the room name for a given room ID.
 
     :param room_id: The ID of the room
+    :param bot_access_token: The Webex API access token for the bot
     :return: The name of the room
     :raises InvalidRoomIDException: If the room ID is invalid
     """
