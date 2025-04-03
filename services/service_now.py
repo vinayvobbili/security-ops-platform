@@ -187,9 +187,6 @@ class ServiceNowComputeAPI:
             response.raise_for_status()
             response_data = response.json()
 
-            logger.info(f"Response data type: {type(response_data)}")
-            logger.info(f"Response data: {response_data}")
-
             if isinstance(response_data, dict) and 'items' in response_data:
                 return response_data['items']
             else:
