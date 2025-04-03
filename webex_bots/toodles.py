@@ -12,8 +12,19 @@ from pytz import timezone
 from webex_bot.models.command import Command
 from webex_bot.webex_bot import WebexBot
 
+from config import get_config
+from services import xsoar
+
 approved_testing_list_name: str = "METCIRT_Approved_Testing"
 approved_testing_master_list_name: str = "METCIRT_Approved_Testing_MASTER"
+
+CONFIG = get_config()
+
+headers = {
+    "authorization": CONFIG.xsoar_api_key,
+    "x-xdr-auth-id": CONFIG.xsoar_auth_id,
+    "Accept": "application/json"
+}
 
 NEW_TICKET_CARD = {
     "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
@@ -693,16 +704,11 @@ all_options_card = {
 
 
 def get_list_by_name(list_name: str):
-    response = demisto.internalHttpRequest('GET', '/lists', body=None)
-    all_lists = json.loads(response.get("body", "[]"))
-    matching_lists = [item for item in all_lists if item.get('id') == list_name]
+    url = "https://api-yourfqdn/xsoar/public/v1/lists"
 
-    if not matching_lists:
-        raise ValueError(f"No list found with the name '{list_name}'.")
-    if len(matching_lists) > 1:
-        raise ValueError(f"Multiple lists found with the name '{list_name}'.")
+    response = requests.get(url, headers=headers)
 
-    return json.loads(matching_lists[0].get('data', '{}'))
+    print(response.json())
 
 
 webex_details = get_list_by_name('METCIRT Webex')
@@ -800,7 +806,7 @@ class CreateXSOARTicket(Command):
             'details': attachment_actions.inputs['details'].strip() + f"\nSubmitted by: {activity['actor']['emailAddress']}"
         }
         new_ticket = [incident]
-        result = demisto.createIncidents(new_ticket)
+        result = xsoar.createIncidents(new_ticket)
         new_incident_id = result[0].get('id')
         incident_url = incident_base_url + new_incident_id
 
@@ -835,7 +841,7 @@ class IOCHunt(Command):
             'type': "METCIRT IOC Hunt"
         }
         new_ticket = [incident]
-        result = demisto.createIncidents(new_ticket)
+        result = xsoar.createIncidents(new_ticket)
         ticket_no = result[0].get('id')
         incident_url = incident_base_url + ticket_no
 
@@ -870,7 +876,7 @@ class ThreatHunt(Command):
             'type': "Threat Hunt"
         }
         new_ticket = [incident]
-        result = demisto.createIncidents(new_ticket)
+        result = xsoar.create_incident(new_ticket)
         ticket_no = result[0].get('id')
         ticket_title = attachment_actions.inputs['threat_hunt_title'].strip()
         incident_url = incident_base_url + ticket_no
