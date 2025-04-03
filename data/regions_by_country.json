@@ -25,6 +25,7 @@
   "Japan": "Japan",
   "Jordan": "EMEA",
   "Korea, Republic of": "Korea",
+  "Korea": "Korea",
   "Kuwait": "EMEA",
   "Lebanon": "EMEA",
   "Malaysia - AMAcme": "APAC",
@@ -46,5 +47,6 @@
   "United Kingdom": "EMEA",
   "United States": "US",
   "Uruguay": "LATAM",
-  "Vietnam": "APAC"
+  "Vietnam": "APAC",
+  "Viet nam": "APAC"
 }
