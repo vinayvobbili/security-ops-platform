@@ -45,6 +45,7 @@ def get_image_files() -> List[str]:
         "charts/QR Rule Efficacy-Month.png",
         "charts/QR Rule Efficacy-Week.png",
         "charts/Vectra Efficacy.png",
+        "charts/CrowdStrike Efficacy.png",
         "charts/Lifespan.png",
         "images/Threat Hunting Intro.png",
         "charts/DE Stories.png",
