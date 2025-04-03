@@ -404,7 +404,7 @@ def write_results_to_file(hosts: List[Host]) -> str:
     # Get the current date and time in ET
     et_timezone = timezone('US/Eastern')
     current_time_et = datetime.now(et_timezone).strftime("%m_%d_%Y %I:%M %p %Z")
-    output_file = TRANSIENT_DIR / f'EPP-Falcon ring epp_device_tagging {current_time_et}.xlsx'
+    output_file = TRANSIENT_DIR / 'epp_device_tagging' / f'EPP-Falcon ring epp_device_tagging {current_time_et}.xlsx'
 
     # Create a new workbook
     workbook = openpyxl.Workbook()
