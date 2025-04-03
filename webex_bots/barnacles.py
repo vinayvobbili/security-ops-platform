@@ -44,6 +44,7 @@ class SaveManagementNotes(Command):
             exact_command_keyword_match=True
         )
 
+    @log_barnacles_activity(bot_access_token=bot_token)
     def execute(self, message, attachment_actions, activity):
         with open(NOTES_FILE, "w") as file:
             file.write(json.dumps({
@@ -189,6 +190,7 @@ class SaveThreatcon(Command):
             exact_command_keyword_match=True
         )
 
+    @log_barnacles_activity(bot_access_token=bot_token)
     def execute(self, message, attachment_actions, activity):
         level = attachment_actions.inputs['threatcon_level']
         reason = attachment_actions.inputs['reason']
