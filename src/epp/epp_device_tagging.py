@@ -116,7 +116,7 @@ class Host:
 
     def _initialize_host_data(self) -> None:
         """Initialize all host data in one method."""
-        self._set_cs_device_id()
+        self._set_host_details_from_cs()
 
         if not self.device_id:
             self.status_message = "No CrowdStrike device ID found"
@@ -126,7 +126,7 @@ class Host:
         self._normalize_country_data()
         self._determine_region()
 
-    def _set_cs_device_id(self) -> None:
+    def _set_host_details_from_cs(self) -> None:
         """Retrieve device ID and tags from CrowdStrike."""
         try:
             host_filter = f"hostname:'{self.name}'"
@@ -155,6 +155,16 @@ class Host:
 
             if device_resources:
                 self.current_crowd_strike_tags = device_resources[0].get('tags', [])
+                category = device_resources[0].get('category', '').lower()
+                if category == 'workstation':
+                    self.category = HostCategory.WORKSTATION
+                elif category == 'server':
+                    self.category = HostCategory.SERVER
+                else:
+                    self.status_message = f"Unknown host category: {category}"
+
+            if self.name[0].isdigit():
+                self.country = 'Korea'
 
         except Exception as e:
             self.status_message = f"Error retrieving CrowdStrike data: {str(e)}"
