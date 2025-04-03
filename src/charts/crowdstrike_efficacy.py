@@ -86,6 +86,14 @@ def generate_chart(tickets):
     ax.set_xlabel('Detection Date', fontsize=10, fontweight='bold', labelpad=10)
     ax.set_ylabel('Alert Counts', fontweight='bold', fontsize=10, labelpad=10)
 
+    # add an average solid line
+    total_alerts = sum(sum(counts) for counts in impact_data_dict.values())
+    num_days = len(daily_counts['creation_date'])
+    if num_days > 0:
+        average_alerts_per_day = total_alerts / num_days
+        ax.axhline(y=average_alerts_per_day, color='red', linestyle='--', label=f'Avg: {average_alerts_per_day:.2f}')
+        ax.legend()
+
     # Customize the chart
     plt.xticks(rotation=90)
     fig.patch.set_edgecolor('black')
@@ -95,6 +103,9 @@ def generate_chart(tickets):
     now_eastern = datetime.now(eastern).strftime('%m/%d/%Y %I:%M %p %Z')
     trans = transforms.blended_transform_factory(fig.transFigure, fig.transFigure)
     plt.text(0.05, 0.01, now_eastern, ha='left', va='bottom', fontsize=10, transform=trans)
+
+    # Adjust the margins
+    plt.subplots_adjust(left=0.1, right=0.9, top=0.9, bottom=0.1)
 
     plt.tight_layout()
     plt.savefig(OUTPUT_PATH)
