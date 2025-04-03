@@ -7,7 +7,7 @@ import secops
 import verify_host_online_status
 from config import get_config
 from services import phish_fort
-from src.charts import mttr_mttc, outflow, lifespan, heatmap, sla_breaches, aging_tickets, inflow, qradar_rule_efficacy, de_stories, days_since_incident, re_stories, threatcon_level
+from src.charts import mttr_mttc, outflow, lifespan, heatmap, sla_breaches, aging_tickets, inflow, qradar_rule_efficacy, de_stories, days_since_incident, re_stories, threatcon_level, vectra_efficacy
 
 config = get_config()
 eastern = pytz.timezone('US/Eastern')
@@ -53,6 +53,7 @@ def main():
         sla_breaches.make_chart(),
         threatcon_level.make_chart(),
         qradar_rule_efficacy.make_chart(),
+        vectra_efficacy.make_chart(),
     ))
 
     schedule.every(5).minutes.do(verify_host_online_status.start)
