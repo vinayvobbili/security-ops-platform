@@ -19,6 +19,7 @@ def get_config():
         webex_room_id_soc_shift_updates=os.environ["WEBEX_ROOM_ID_SOC_SHIFT_UPDATES"],
         webex_room_id_epp_tagging=os.environ["WEBEX_ROOM_ID_EPP_TAGGING"],
         webex_room_id_metrics=os.environ["WEBEX_ROOM_ID_METRICS"],
+        webex_room_id_threatcon_collab=os.environ["WEBEX_ROOM_ID_THREATCON_COLLAB"],
         xsoar_api_base_url=os.environ["XSOAR_API_BASE_URL"],
         xsoar_ui_base_url=os.environ["XSOAR_UI_BASE_URL"],
         xsoar_dev_api_base_url=os.environ["XSOAR_DEV_API_BASE_URL"],
@@ -72,6 +73,7 @@ class Config:
     webex_room_id_soc_shift_updates: str
     webex_room_id_epp_tagging: str
     webex_room_id_metrics: str
+    webex_room_id_threatcon_collab: str
     xsoar_api_base_url: str
     xsoar_ui_base_url: str
     xsoar_dev_api_base_url: str
