@@ -7,7 +7,7 @@ import secops
 import verify_host_online_status
 from config import get_config
 from services import phish_fort
-from src.charts import mttr_mttc, outflow, lifespan, heatmap, sla_breaches, aging_tickets, inflow, qradar_rule_efficacy, de_stories, days_since_incident, re_stories, threatcon_level, vectra_efficacy, crowdstrike_efficacy
+from src.charts import mttr_mttc, outflow, lifespan, heatmap, sla_breaches, aging_tickets, inflow, qradar_rule_efficacy, de_stories, days_since_incident, re_stories, threatcon_level, vectra_volume, crowdstrike_volume
 
 config = get_config()
 eastern = pytz.timezone('US/Eastern')
