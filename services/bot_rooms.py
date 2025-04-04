@@ -2,6 +2,9 @@ import requests
 
 from config import get_config
 
+config = get_config()
+BOT_ACCESS_TOKEN = config.webex_bot_access_token_toodles
+
 
 def get_webex_bot_rooms(bot_access_token):
     """
@@ -48,10 +51,6 @@ def get_webex_bot_rooms(bot_access_token):
     except requests.RequestException as e:
         print(f"Request error: {e}")
         return []
-
-
-config = get_config()
-BOT_ACCESS_TOKEN = config.webex_bot_access_token_moneyball
 
 
 # Usage example
