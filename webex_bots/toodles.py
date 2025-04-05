@@ -1,18 +1,18 @@
 import base64
 import json
-import time
-from datetime import date, datetime, timedelta
+from datetime import datetime, timedelta
 from urllib.parse import quote
 
 import pandas
 import requests
-import schedule
 from pytz import timezone
 from webex_bot.models.command import Command
 from webex_bot.webex_bot import WebexBot
 from webexpythonsdk import WebexAPI
 
+import src.components.oncall as oncall
 from config import get_config
+from services import crowdstrike
 from services.xsoar import ListHandler, IncidentHandler
 
 approved_testing_list_name: str = "METCIRT_Approved_Testing"
@@ -1249,131 +1249,6 @@ def announce_new_approved_testing_entry(new_item) -> None:
     )
 
 
-def get_on_call_person():
-    """get on-call from XSOAR lists"""
-    today = datetime.now(timezone('EST'))
-    last_monday = today - timedelta(days=today.weekday())
-    return get_on_call_email_by_monday_date(last_monday.strftime('%Y-%m-%d'))
-
-
-def get_on_call_email_by_monday_date(monday_date):
-    """takes the Monday_date as arg"""
-    analysts, rotation = get_on_call_details()
-    on_call_name = list(
-        filter(
-            lambda x: x['Monday_date'] == str(monday_date),
-            rotation
-        )
-    )[0]['analyst_name']
-    on_call_email_address = list(
-        filter(
-            lambda x: x['name'] == on_call_name,
-            analysts
-        )
-    )[0]['email_address']
-
-    return on_call_email_address
-
-
-def get_on_call_details():
-    t3_on_call_list = list_handler.get_list_by_name('Spear_OnCall')
-    return t3_on_call_list['analysts'], t3_on_call_list['rotation']
-
-
-def announce_oncall_change():
-    """announce shift change """
-
-    headers = {
-        'Content-Type': 'application/json',
-        'Authorization': f'Bearer {WEBEX_BOT_API_TOKEN}'
-    }
-    payload_json = {
-        'roomId': ON_CALL_ANNOUNCE_ROOM_ID,
-        'markdown': f'On-call person now is <@personEmail:{get_on_call_person()}>'
-    }
-    requests.post(WEBEX_API_URL, headers=headers, json=payload_json)
-
-
-def alert_oncall_change():
-    """alert shift change """
-
-    today = date.today()
-    coming_monday = today + timedelta(days=-today.weekday(), weeks=1)
-
-    headers = {
-        'Content-Type': 'application/json',
-        'Authorization': f'Bearer {WEBEX_BOT_API_TOKEN}'
-    }
-    payload_json = {
-        'roomId': ALERT_ROOM_ID,
-        'markdown': f'Next week\'s On-call person is <@personEmail:{get_on_call_email_by_monday_date(coming_monday)}>'
-    }
-    requests.post(WEBEX_API_URL, headers=headers, json=payload_json)
-
-
-def get_rotation():
-    """get on-call rotation"""
-    rotation = get_on_call_details()[1]  # 0 index item is analysts
-    now = datetime.now()
-    last_to_last_monday = now - timedelta(days=now.weekday() + 7)
-    weeks_after_last_to_last_monday = list(
-        filter(
-            lambda week: datetime.strptime(week['Monday_date'], '%Y-%m-%d') > last_to_last_monday,
-            rotation
-        )
-    )
-    return weeks_after_last_to_last_monday
-
-
-def schedule_messages():
-    """schedule"""
-    schedule.every().friday.at("14:00", "America/New_York").do(alert_oncall_change)
-    schedule.every().monday.at("08:00", "America/New_York").do(announce_oncall_change)
-    # schedule.every(1).minutes.do(alert_shift_change)
-    while True:
-        # Check whether a scheduled task is pending to run or not
-        schedule.run_pending()
-        time.sleep(60)
-
-
-def get_access_token():
-    """get CS access token"""
-    url = 'https://api.us-2.crowdstrike.com/oauth2/token'
-    body = {
-        'client_id': cs_client_id,
-        'client_secret': cs_client_secret
-    }
-    response = requests.post(url, data=body)
-    json_data = response.json()
-    return json_data['access_token']
-
-
-def get_device_id(host_name):
-    """get CS asset ID"""
-    url = 'https://api.us-2.crowdstrike.com/devices/queries/devices/v1?filter=hostname:' + '\'' + host_name + '\''
-    headers = {
-        'Authorization': f'Bearer {get_access_token()}'
-    }
-    response = requests.get(url, headers=headers)
-    json_data = response.json()
-    return json_data['resources'][0]
-
-
-def get_device_status(host_name):
-    """get device containment status"""
-    url = 'https://api.us-2.crowdstrike.com/devices/entities/devices/v1'
-    headers = {
-        'content-type': 'application/json',
-        'Authorization': f'Bearer {get_access_token()}'
-    }
-    params = {
-        "ids": get_device_id(host_name)
-    }
-    response = requests.get(url, headers=headers, params=params)
-    json_data = response.json()
-    return json_data['resources'][0]['status']
-
-
 class Who(Command):
     """Return who the on-call person is"""
 
@@ -1385,7 +1260,7 @@ class Who(Command):
         )
 
     def execute(self, message, attachment_actions, activity):
-        return f"On-call person is <@personEmail:{get_on_call_person()}>"
+        return f"On-call person is <@personEmail:{oncall.get_on_call_person()}>"
 
 
 class Rotation(Command):
@@ -1398,7 +1273,7 @@ class Rotation(Command):
         )
 
     def execute(self, message, attachment_actions, activity):
-        rotation = get_rotation()
+        rotation = oncall.rotation()
 
         data_frame = pandas.DataFrame(rotation, columns=["Monday_date", "analyst_name"])
         data_frame.columns = ['Monday', 'Analyst']
@@ -1427,7 +1302,7 @@ class ContainmentStatusCS(Command):
             return "Please enter a host name and try again"
 
         try:
-            return f'The containment status of {host_name_cs} in CS is {get_device_status(host_name_cs)}'
+            return f'The containment status of {host_name_cs} in CS is {crowdstrike.get_device_status_api(host_name_cs)}'
         except Exception as e:
             return f'There seems to be an issue with finding the host you entered. Please make sure the host is valid. Error: {str(e)}'
 
