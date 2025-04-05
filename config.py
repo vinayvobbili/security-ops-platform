@@ -20,12 +20,12 @@ def get_config():
         webex_room_id_epp_tagging=os.environ["WEBEX_ROOM_ID_EPP_TAGGING"],
         webex_room_id_metrics=os.environ["WEBEX_ROOM_ID_METRICS"],
         webex_room_id_threatcon_collab=os.environ["WEBEX_ROOM_ID_THREATCON_COLLAB"],
-        xsoar_api_base_url=os.environ["XSOAR_API_BASE_URL"],
-        xsoar_ui_base_url=os.environ["XSOAR_UI_BASE_URL"],
+        xsoar_prod_api_base_url=os.environ["XSOAR_PROD_API_BASE_URL"],
+        xsoar_prod_ui_base_url=os.environ["XSOAR_PROD_UI_BASE_URL"],
         xsoar_dev_api_base_url=os.environ["XSOAR_DEV_API_BASE_URL"],
         xsoar_dev_ui_base_url=os.environ["XSOAR_DEV_UI_BASE_URL"],
-        xsoar_auth_token=os.environ["XSOAR_AUTH_TOKEN"],
-        xsoar_auth_id=os.environ["XSOAR_AUTH_ID"],
+        xsoar_prod_auth_key=os.environ["XSOAR_PROD_AUTH_KEY"],
+        xsoar_prod_auth_id=os.environ["XSOAR_AUTH_ID"],
         xsoar_dev_auth_token=os.environ["XSOAR_DEV_AUTH_TOKEN"],
         xsoar_dev_auth_id=os.environ["XSOAR_DEV_AUTH_ID"],
         jarvais_approved_rooms=os.environ["JARVAIS_APPROVED_ROOMS"],
@@ -74,12 +74,12 @@ class Config:
     webex_room_id_epp_tagging: str
     webex_room_id_metrics: str
     webex_room_id_threatcon_collab: str
-    xsoar_api_base_url: str
-    xsoar_ui_base_url: str
+    xsoar_prod_api_base_url: str
+    xsoar_prod_ui_base_url: str
     xsoar_dev_api_base_url: str
     xsoar_dev_ui_base_url: str
-    xsoar_auth_token: str
-    xsoar_auth_id: str
+    xsoar_prod_auth_key: str
+    xsoar_prod_auth_id: str
     xsoar_dev_auth_token: str
     xsoar_dev_auth_id: str
     ticket_type_prefix: str

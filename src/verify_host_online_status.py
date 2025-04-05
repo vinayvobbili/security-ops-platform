@@ -12,8 +12,8 @@ offline_hosts_list_name: str = 'Offline_Hosts'
 config = get_config()
 
 xsoar_headers = {
-    'Authorization': config.xsoar_auth_token,
-    'x-xdr-auth-id': config.xsoar_auth_id,
+    'Authorization': config.xsoar_prod_auth_key,
+    'x-xdr-auth-id': config.xsoar_prod_auth_id,
     'Accept': 'application/json',
     'Content-Type': 'application/json'
 }
@@ -24,7 +24,7 @@ hosts = Hosts(auth_object=falcon)
 
 
 def save(data, version):
-    api_url = config.xsoar_api_base_url + '/lists/save'
+    api_url = config.xsoar_prod_api_base_url + '/lists/save'
     requests.post(api_url, headers=xsoar_headers, json={
         "data": ','.join(data),
         "name": offline_hosts_list_name,
@@ -35,7 +35,7 @@ def save(data, version):
 
 
 def get_all_lists() -> list:
-    api_url = config.xsoar_api_base_url + '/lists'
+    api_url = config.xsoar_prod_api_base_url + '/lists'
     return requests.get(api_url, headers=xsoar_headers).json()
 
 
@@ -45,7 +45,7 @@ def get_list_by_name(all_lists, list_name):
 
 
 def send_webex_notification(host_name, ticket_id):
-    incident_url = config.xsoar_ui_base_url + "/#/Custom/caseinfoid/" + ticket_id
+    incident_url = config.xsoar_prod_ui_base_url + "/#/Custom/caseinfoid/" + ticket_id
     webex_teams_api = WebexTeamsAPI(access_token=config.webex_bot_access_token_soar)
     webex_teams_api.messages.create(
         roomId=config.webex_host_announcements_room_id,
