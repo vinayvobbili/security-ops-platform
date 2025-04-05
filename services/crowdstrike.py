@@ -142,6 +142,43 @@ def get_device_id(hostname):
 
     return None
 
+def get_access_token():
+    """get CS access token"""
+    url = 'https://api.us-2.crowdstrike.com/oauth2/token'
+    body = {
+        'client_id': cs_client_id,
+        'client_secret': cs_client_secret
+    }
+    response = requests.post(url, data=body)
+    json_data = response.json()
+    return json_data['access_token']
+
+
+def get_device_id_api(host_name):
+    """get CS asset ID"""
+    url = 'https://api.us-2.crowdstrike.com/devices/queries/devices/v1?filter=hostname:' + '\'' + host_name + '\''
+    headers = {
+        'Authorization': f'Bearer {get_access_token()}'
+    }
+    response = requests.get(url, headers=headers)
+    json_data = response.json()
+    return json_data['resources'][0]
+
+
+def get_device_status_api(host_name):
+    """get device containment status"""
+    url = 'https://api.us-2.crowdstrike.com/devices/entities/devices/v1'
+    headers = {
+        'content-type': 'application/json',
+        'Authorization': f'Bearer {get_access_token()}'
+    }
+    params = {
+        "ids": get_device_id(host_name)
+    }
+    response = requests.get(url, headers=headers, params=params)
+    json_data = response.json()
+    return json_data['resources'][0]['status']
+
 
 def main() -> None:
     # fetch_all_hosts_and_write_to_xlsx()
