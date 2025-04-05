@@ -1,6 +1,5 @@
 import base64
 import json
-import threading
 import time
 from datetime import date, datetime, timedelta
 from urllib.parse import quote
@@ -11,6 +10,7 @@ import schedule
 from pytz import timezone
 from webex_bot.models.command import Command
 from webex_bot.webex_bot import WebexBot
+from webexpythonsdk import WebexAPI
 
 from config import get_config
 from services.xsoar import ListHandler, IncidentHandler
@@ -19,6 +19,7 @@ approved_testing_list_name: str = "METCIRT_Approved_Testing"
 approved_testing_master_list_name: str = "METCIRT_Approved_Testing_MASTER"
 
 CONFIG = get_config()
+webex_api = WebexAPI(CONFIG.webex_bot_access_token_toodles)
 
 prod_headers = {
     "authorization": CONFIG.xsoar_prod_auth_key,
@@ -711,22 +712,6 @@ all_options_card = {
     ]
 }
 
-webex_details = list_handler.get_list_by_name('METCIRT Webex')
-WEBEX_BOT_API_TOKEN = webex_details.get('METCIRT_Bot_access_token')
-WEBEX_API_URL = webex_details.get('api_url')
-channel_ids = webex_details.get('channels')
-
-gosc_cirt_t2_room_id = channel_ids.get('gosc_cirt_t2')
-ON_CALL_ANNOUNCE_ROOM_ID = channel_ids.get('threat_con_collab')
-ALERT_ROOM_ID = channel_ids.get('response_engineering')
-xsoar_details = list_handler.get_list_by_name('METCIRT XSOAR')
-xsoar_api_base_url = xsoar_details.get('api_base_url')
-xsoar_api_key = xsoar_details.get('api_key')
-auth_id = xsoar_details.get('auth_id')
-cs_client_id = xsoar_details.get('cs_client_id')
-cs_client_secret = xsoar_details.get('cs_client_secret')
-incident_base_url = xsoar_details.get('ui_base_url') + "/Details/"
-
 
 def get_url_card():
     metcirt_urls = list_handler.get_list_by_name('METCIRT URLs')
@@ -808,7 +793,7 @@ class CreateXSOARTicket(Command):
         new_ticket = [incident]
         result = incident_handler.create(new_ticket)
         new_incident_id = result[0].get('id')
-        incident_url = incident_base_url + new_incident_id
+        incident_url = CONFIG.xsoar_prod_ui_base_url + new_incident_id
 
         return f"Ticket [#{new_incident_id}]({incident_url}) has been created in XSOAR."
 
@@ -843,7 +828,7 @@ class IOCHunt(Command):
         new_ticket = [incident]
         result = incident_handler.create(new_ticket)
         ticket_no = result[0].get('id')
-        incident_url = incident_base_url + ticket_no
+        incident_url = CONFIG.xsoar_prod_ui_base_url + ticket_no
 
         return f"A New IOC Hunt has been created in XSOAR. Ticket: [#{ticket_no}]({incident_url})"
 
@@ -879,7 +864,7 @@ class ThreatHunt(Command):
         result = incident_handler.create(new_ticket)
         ticket_no = result[0].get('id')
         ticket_title = attachment_actions.inputs['threat_hunt_title'].strip()
-        incident_url = incident_base_url + ticket_no
+        incident_url = CONFIG.xsoar_prod_ui_base_url + ticket_no
         person_id = attachment_actions.personId
 
         announce_new_threat_hunt(ticket_no, ticket_title, incident_url, person_id)
@@ -975,7 +960,7 @@ class AZDOWorkItem(Command):
             webex_data = list_handler.get_list_by_name('METCIRT Webex')
             headers = {
                 'Content-Type': 'application/json',
-                'Authorization': f"Bearer {WEBEX_BOT_API_TOKEN}"
+                'Authorization': f"Bearer {CONFIG.webex_bot_access_token_toodles}"
             }
             payload_json = {
                 'roomId': webex_data.get("channels").get("metcirt_automation" if project == 'platforms' else "response_engineering"),
@@ -1167,7 +1152,7 @@ def announce_new_threat_hunt(ticket_no, ticket_title, incident_url, person_id):
     webex_data = list_handler.get_list_by_name('METCIRT Webex')
     headers = {
         'Content-Type': 'application/json',
-        'Authorization': f"Bearer {WEBEX_BOT_API_TOKEN}"
+        'Authorization': f"Bearer {CONFIG.webex_bot_access_token_toodles}"
     }
     payload_json = {
         'roomId': webex_data.get("channels").get("threat_hunt"),
@@ -1177,13 +1162,8 @@ def announce_new_threat_hunt(ticket_no, ticket_title, incident_url, person_id):
 
 
 def announce_new_approved_testing_entry(new_item) -> None:
-    headers = {
-        'Content-Type': 'application/json',
-        'Authorization': f"Bearer {WEBEX_BOT_API_TOKEN}"
-    }
-
     payload = json.dumps({
-        'roomId': gosc_cirt_t2_room_id,
+        'roomId': CONFIG.webex_room_id_gosc_t2,
         "text": "New approved testing item submitted",
         "attachments": [{
             "contentType": "application/vnd.microsoft.card.adaptive",
@@ -1262,20 +1242,11 @@ def announce_new_approved_testing_entry(new_item) -> None:
             }
         }]
     })
-    requests.post(webex_details.get('api_url'), headers=headers, data=payload)
-
-
-def return_webex_private(person_id, data_to_return):
-    webex_data = list_handler.get_list_by_name('METCIRT Webex')
-    headers = {
-        'Content-Type': 'application/json',
-        'Authorization': f"Bearer {WEBEX_BOT_API_TOKEN}"
-    }
-    payload_json = {
-        'toPersonId': person_id,
-        'markdown': data_to_return
-    }
-    requests.post(webex_data.get('api_url'), headers=headers, json=payload_json)
+    webex_api.messages.create(
+        roomId=CONFIG.webex_room_id_gosc_t2,
+        text="Previous Shift Performance!",
+        attachments=[{"contentType": "application/vnd.microsoft.card.adaptive", "content": payload}]
+    )
 
 
 def get_on_call_person():
@@ -1309,10 +1280,8 @@ def get_on_call_details():
     return t3_on_call_list['analysts'], t3_on_call_list['rotation']
 
 
-def announce_shift_change():
+def announce_oncall_change():
     """announce shift change """
-    if ON_CALL_ANNOUNCE_ROOM_ID is None:
-        return
 
     headers = {
         'Content-Type': 'application/json',
@@ -1325,10 +1294,8 @@ def announce_shift_change():
     requests.post(WEBEX_API_URL, headers=headers, json=payload_json)
 
 
-def alert_shift_change():
+def alert_oncall_change():
     """alert shift change """
-    if ALERT_ROOM_ID is None:
-        return
 
     today = date.today()
     coming_monday = today + timedelta(days=-today.weekday(), weeks=1)
@@ -1360,8 +1327,8 @@ def get_rotation():
 
 def schedule_messages():
     """schedule"""
-    schedule.every().friday.at("14:00", "America/New_York").do(alert_shift_change)
-    schedule.every().monday.at("08:00", "America/New_York").do(announce_shift_change)
+    schedule.every().friday.at("14:00", "America/New_York").do(alert_oncall_change)
+    schedule.every().monday.at("08:00", "America/New_York").do(announce_oncall_change)
     # schedule.every(1).minutes.do(alert_shift_change)
     while True:
         # Check whether a scheduled task is pending to run or not
@@ -1477,14 +1444,9 @@ class GetAllOptions(Command):
         pass
 
 
-if ON_CALL_ANNOUNCE_ROOM_ID is not None or ALERT_ROOM_ID is not None:
-    # Start a new thread to handle scheduled messages asynchronously
-    threading.Thread(target=schedule_messages).start()
-
-
 def main():
     bot = WebexBot(
-        WEBEX_BOT_API_TOKEN,
+        CONFIG.webex_bot_access_token_toodles,
         bot_name="Hello from Toodles!",
         approved_domains=['company.com']
     )
