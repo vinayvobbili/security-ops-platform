@@ -13,7 +13,7 @@ from webexpythonsdk.models.cards import (
 )
 
 from config import get_config  # If you still use a CONFIG file for the path
-from services.xsoar import IncidentFetcher
+from services.xsoar import IncidentHandler
 
 config = get_config()
 webex_api = WebexAPI(config.webex_bot_access_token_soar)
@@ -35,10 +35,10 @@ MANAGEMENT_NOTES_FILE = root_directory / 'data' / 'transient' / 'secOps' / 'mana
 
 
 def get_open_tickets():
-    all_tickets = IncidentFetcher().get_tickets(query=BASE_QUERY + ' -status:closed')
+    all_tickets = IncidentHandler().get_tickets(query=BASE_QUERY + ' -status:closed')
     total_tickets = len(all_tickets)
     ticket_show_count = min(total_tickets, 5)
-    ticket_base_url = config.xsoar_ui_base_url + "/Custom/caseinfoid/"
+    ticket_base_url = config.xsoar_prod_ui_base_url + "/Custom/caseinfoid/"
     open_tickets = [f"[{ticket['id']}]({ticket_base_url}{ticket['id']})" for ticket in all_tickets[0:ticket_show_count]]
     diff = total_tickets - ticket_show_count
     return ', '.join(map(str, open_tickets)) + (f" and {diff} more" if diff > 0 else '')
@@ -62,7 +62,7 @@ def announce_previous_shift_performance(room_id, shift_name):
         "byTo": "hours",
         "toValue": 0
     }
-    incident_fetcher = IncidentFetcher()
+    incident_fetcher = IncidentHandler()
 
     inflow = incident_fetcher.get_tickets(
         query=BASE_QUERY,

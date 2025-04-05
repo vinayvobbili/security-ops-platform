@@ -13,18 +13,27 @@ from webex_bot.models.command import Command
 from webex_bot.webex_bot import WebexBot
 
 from config import get_config
-from services import xsoar
+from services.xsoar import ListHandler, IncidentHandler
 
 approved_testing_list_name: str = "METCIRT_Approved_Testing"
 approved_testing_master_list_name: str = "METCIRT_Approved_Testing_MASTER"
 
 CONFIG = get_config()
 
-headers = {
-    "authorization": CONFIG.xsoar_auth_token,
-    "x-xdr-auth-id": CONFIG.xsoar_auth_id,
+prod_headers = {
+    "authorization": CONFIG.xsoar_prod_auth_key,
+    "x-xdr-auth-id": CONFIG.xsoar_prod_auth_id,
     "Accept": "application/json"
 }
+dev_headers = {
+    "authorization": CONFIG.xsoar_dev_auth_key,
+    "x-xdr-auth-id": CONFIG.xsoar_dev_auth_id,
+    "Accept": "application/json"
+}
+headers = prod_headers
+
+incident_handler = IncidentHandler()
+list_handler = ListHandler()
 
 NEW_TICKET_CARD = {
     "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
@@ -702,16 +711,7 @@ all_options_card = {
     ]
 }
 
-
-def get_list_by_name(list_name: str):
-    url = "https://api-yourfqdn/xsoar/public/v1/lists"
-
-    response = requests.get(url, headers=headers)
-
-    print(response.json())
-
-
-webex_details = get_list_by_name('METCIRT Webex')
+webex_details = list_handler.get_list_by_name('METCIRT Webex')
 WEBEX_BOT_API_TOKEN = webex_details.get('METCIRT_Bot_access_token')
 WEBEX_API_URL = webex_details.get('api_url')
 channel_ids = webex_details.get('channels')
@@ -719,7 +719,7 @@ channel_ids = webex_details.get('channels')
 gosc_cirt_t2_room_id = channel_ids.get('gosc_cirt_t2')
 ON_CALL_ANNOUNCE_ROOM_ID = channel_ids.get('threat_con_collab')
 ALERT_ROOM_ID = channel_ids.get('response_engineering')
-xsoar_details = get_list_by_name('METCIRT XSOAR')
+xsoar_details = list_handler.get_list_by_name('METCIRT XSOAR')
 xsoar_api_base_url = xsoar_details.get('api_base_url')
 xsoar_api_key = xsoar_details.get('api_key')
 auth_id = xsoar_details.get('auth_id')
@@ -729,7 +729,7 @@ incident_base_url = xsoar_details.get('ui_base_url') + "/Details/"
 
 
 def get_url_card():
-    metcirt_urls = get_list_by_name('METCIRT URLs')
+    metcirt_urls = list_handler.get_list_by_name('METCIRT URLs')
     actions = []
 
     # Iterate through the list of URLs and create button actions
@@ -806,7 +806,7 @@ class CreateXSOARTicket(Command):
             'details': attachment_actions.inputs['details'].strip() + f"\nSubmitted by: {activity['actor']['emailAddress']}"
         }
         new_ticket = [incident]
-        result = xsoar.createIncidents(new_ticket)
+        result = incident_handler.create(new_ticket)
         new_incident_id = result[0].get('id')
         incident_url = incident_base_url + new_incident_id
 
@@ -841,7 +841,7 @@ class IOCHunt(Command):
             'type': "METCIRT IOC Hunt"
         }
         new_ticket = [incident]
-        result = xsoar.createIncidents(new_ticket)
+        result = incident_handler.create(new_ticket)
         ticket_no = result[0].get('id')
         incident_url = incident_base_url + ticket_no
 
@@ -876,7 +876,7 @@ class ThreatHunt(Command):
             'type': "Threat Hunt"
         }
         new_ticket = [incident]
-        result = xsoar.create_incident(new_ticket)
+        result = incident_handler.create(new_ticket)
         ticket_no = result[0].get('id')
         ticket_title = attachment_actions.inputs['threat_hunt_title'].strip()
         incident_url = incident_base_url + ticket_no
@@ -957,7 +957,7 @@ class AZDOWorkItem(Command):
                     "value": "1"
                 })
 
-            metcirt_xsoar = get_list_by_name('METCIRT XSOAR')
+            metcirt_xsoar = list_handler.get_list_by_name('METCIRT XSOAR')
             api_token = metcirt_xsoar['AZDO_PAT']['us-2' if project == 'gdr' else 'us']
             api_key = base64.b64encode(b':' + api_token.encode('utf-8')).decode('utf-8')
 
@@ -972,7 +972,7 @@ class AZDOWorkItem(Command):
             wit_type = wit_type.replace('%20', ' ')
             return_message = f'A new AZDO {wit_type} has been created \n [{wit_id}]({azdo_wit_url}) - {wit_title}'
 
-            webex_data = get_list_by_name('METCIRT Webex')
+            webex_data = list_handler.get_list_by_name('METCIRT Webex')
             headers = {
                 'Content-Type': 'application/json',
                 'Authorization': f"Bearer {WEBEX_BOT_API_TOKEN}"
@@ -1002,10 +1002,10 @@ class Review(Command):
         curr_date = datetime.now()
         ticket_no = attachment_actions.inputs["incident_id"]
 
-        list_dict = get_list_by_name("review").get('Tickets')
+        list_dict = list_handler.get_list_by_name("review").get('Tickets')
         add_entry_to_reviews(list_dict, ticket_no, activity['actor']['emailAddress'], curr_date.strftime("%x"), attachment_actions.inputs["review_notes"])
         reformat = {"Tickets": list_dict}
-        save(reformat, "review")
+        list_handler.save(reformat, "review")
 
         return f"Ticket {ticket_no} has been added to Reviews."
 
@@ -1030,7 +1030,7 @@ class GetCurrentApprovedTestingEntries(Command):
         )
 
     def execute(self, message, attachment_actions, activity):
-        approved_test_items = get_list_by_name(approved_testing_list_name)
+        approved_test_items = list_handler.get_list_by_name(approved_testing_list_name)
         response_text = {
             "USERNAMES": [],
             "ENDPOINTS": [],
@@ -1104,7 +1104,7 @@ class AddApprovedTestingEntry(Command):
         if attachment_actions.inputs['callback_keyword'] == 'add_approved_testing' and expiry_date == "":
             expiry_date = (datetime.now(timezone('US/Eastern')) + timedelta(days=1)).strftime("%Y-%m-%d")
 
-        approved_testing_entries = get_list_by_name(approved_testing_list_name)
+        approved_testing_entries = list_handler.get_list_by_name(approved_testing_list_name)
 
         if username:
             approved_testing_entries.get("USERNAMES").append({"data": username, "expiry_date": expiry_date, "submitter": submitter})
@@ -1113,9 +1113,9 @@ class AddApprovedTestingEntry(Command):
         if ip_address:
             approved_testing_entries.get("IP_ADDRESSES").append({"data": ip_address, "expiry_date": expiry_date, "submitter": submitter})
 
-        save(approved_testing_list_name, approved_testing_entries)
+        list_handler.save(approved_testing_list_name, approved_testing_entries)
 
-        approved_testing_master_list_entries = get_list_by_name(approved_testing_master_list_name)
+        approved_testing_master_list_entries = list_handler.get_list_by_name(approved_testing_master_list_name)
         new_testing_entry = {
             "username": username,
             "host_name": host_name,
@@ -1128,7 +1128,7 @@ class AddApprovedTestingEntry(Command):
             "expiry_date": expiry_date
         }
         approved_testing_master_list_entries.append(new_testing_entry)
-        save(approved_testing_master_list_name, approved_testing_master_list_entries)
+        list_handler.save(approved_testing_master_list_name, approved_testing_master_list_entries)
 
         announce_new_approved_testing_entry({
             "description": description,
@@ -1163,30 +1163,8 @@ def add_entry_to_reviews(dict_full, ticket_id, person, date, message):
     dict_full.append({"ticket_id": ticket_id, "by": person, "date": date, "message": message})
 
 
-def save(list_name, data):
-    response = demisto.internalHttpRequest('GET', '/lists', body=None)
-    all_lists = json.loads(response.get("body", "[]"))
-    matching_list = next((item for item in all_lists if item.get('id') == list_name), None)
-
-    if not matching_list:
-        raise ValueError(f"No list found with the name '{list_name}'.")
-
-    api_url = xsoar_api_base_url + '/lists/save'
-    headers = {'Authorization': xsoar_api_key, 'x-xdr-auth-id': auth_id}
-    result = requests.post(api_url, headers=headers, json={
-        "data": json.dumps(data, indent=4),
-        "name": list_name,
-        "type": "json",
-        "id": list_name,
-        "version": matching_list.get('version')
-    })
-
-    if result.status_code != 200:
-        raise RuntimeError(f"Failed to save list. Status code: {result.status_code}")
-
-
 def announce_new_threat_hunt(ticket_no, ticket_title, incident_url, person_id):
-    webex_data = get_list_by_name('METCIRT Webex')
+    webex_data = list_handler.get_list_by_name('METCIRT Webex')
     headers = {
         'Content-Type': 'application/json',
         'Authorization': f"Bearer {WEBEX_BOT_API_TOKEN}"
@@ -1288,7 +1266,7 @@ def announce_new_approved_testing_entry(new_item) -> None:
 
 
 def return_webex_private(person_id, data_to_return):
-    webex_data = get_list_by_name('METCIRT Webex')
+    webex_data = list_handler.get_list_by_name('METCIRT Webex')
     headers = {
         'Content-Type': 'application/json',
         'Authorization': f"Bearer {WEBEX_BOT_API_TOKEN}"
@@ -1327,7 +1305,7 @@ def get_on_call_email_by_monday_date(monday_date):
 
 
 def get_on_call_details():
-    t3_on_call_list = get_list_by_name('Spear_OnCall')
+    t3_on_call_list = list_handler.get_list_by_name('Spear_OnCall')
     return t3_on_call_list['analysts'], t3_on_call_list['rotation']
 
 
@@ -1483,8 +1461,8 @@ class ContainmentStatusCS(Command):
 
         try:
             return f'The containment status of {host_name_cs} in CS is {get_device_status(host_name_cs)}'
-        except:
-            return 'There seems to be an issue with finding the host you entered. Please make sure the host is valid.'
+        except Exception as e:
+            return f'There seems to be an issue with finding the host you entered. Please make sure the host is valid. Error: {str(e)}'
 
 
 class GetAllOptions(Command):

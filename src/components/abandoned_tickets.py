@@ -3,7 +3,7 @@ import pandas as pd
 import pytz
 from webexpythonsdk import WebexAPI
 import config
-from services.xsoar import IncidentFetcher
+from services.xsoar import IncidentHandler
 
 config = config.get_config()
 
@@ -20,7 +20,7 @@ eastern = pytz.timezone('US/Eastern')  # Define the Eastern time zone
 
 def get_last_entry_date(incident_id):
     """Fetch the last touched date (last entry date) of an incident."""
-    incident_fetcher = IncidentFetcher()
+    incident_fetcher = IncidentHandler()
     entries = incident_fetcher.get_entries(incident_id)  # Ensure `get_entries` fetches incident entries
 
     if not entries:
@@ -65,7 +65,7 @@ def send_report():
 
     query = f'-status:closed type:{config.ticket_type_prefix} -type:"{config.ticket_type_prefix} Third Party Compromise"'
     period = {"byTo": "months", "toValue": None, "byFrom": "months", "fromValue": None}
-    tickets = IncidentFetcher().get_tickets(query=query, period=period)
+    tickets = IncidentHandler().get_tickets(query=query, period=period)
 
     if not tickets:
         logger.info("No tickets found.")
