@@ -91,7 +91,8 @@ def fetch_all_hosts_and_write_to_xlsx(xlsx_filename: str = "all_hosts.xlsx") -> 
         print(f"An error occurred while writing to XLSX: {e}")
 
 
-def list_cs_hosts_without_ring_tag(input_xlsx_filename: str = "../data/transient/epp_device_tagging/all_hosts.xlsx", output_xlsx_filename: str = "../data/transient/epp_device_tagging/cs_hosts_without_ring_tag.xlsx") -> None:
+def list_cs_hosts_without_ring_tag(input_xlsx_filename: str = "../data/transient/epp_device_tagging/all_hosts.xlsx",
+                                   output_xlsx_filename: str = "../data/transient/epp_device_tagging/cs_hosts_without_ring_tag.xlsx") -> None:
     """
     List CrowdStrike hosts that do not have a FalconGroupingTags/*Ring* tag.
     Read from all_hosts.xlsx, filter hosts, and write the results to a new XLSX file.
@@ -124,6 +125,22 @@ def list_cs_hosts_without_ring_tag(input_xlsx_filename: str = "../data/transient
         print(f"Error: Input file {input_xlsx_filename} not found.")
     except Exception as e:
         print(f"An error occurred: {e}")
+
+
+def get_device_id(hostname):
+    """Retrieve the first device ID matching the filter."""
+    host_filter = f"hostname:'{hostname}'"
+    response = falcon_hosts.query_devices_by_filter(filter=host_filter)
+
+    if response.get("status_code") == 200:
+        devices = response["body"].get("resources", [])
+        if devices:
+            return devices[0]  # Return the first matching device ID
+        print(f"No devices found for filter: {host_filter}")
+    else:
+        print(f"Error getting device ID: {response.get('status_code')}, {response.get('body', {}).get('errors')}")
+
+    return None
 
 
 def main() -> None:

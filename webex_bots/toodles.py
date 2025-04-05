@@ -21,7 +21,7 @@ approved_testing_master_list_name: str = "METCIRT_Approved_Testing_MASTER"
 CONFIG = get_config()
 
 headers = {
-    "authorization": CONFIG.xsoar_api_key,
+    "authorization": CONFIG.xsoar_auth_token,
     "x-xdr-auth-id": CONFIG.xsoar_auth_id,
     "Accept": "application/json"
 }
