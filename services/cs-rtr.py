@@ -4,6 +4,7 @@ from falconpy import Hosts
 from falconpy import OAuth2, RealTimeResponse, RealTimeResponseAdmin
 
 from config import get_config
+from services.crowdstrike import get_device_id
 
 config = get_config()
 
@@ -83,22 +84,6 @@ def execute_command(device_id, script_content):
     cleanup_result = falcon_rtr.delete_session(session_id=session_id)
     if cleanup_result["status_code"] != 204:  # Expected code for successful deletion
         print(f"Failed to close session: {cleanup_result}")
-
-
-def get_device_id(hostname):
-    """Retrieve the first device ID matching the filter."""
-    host_filter = f"hostname:'{hostname}'"
-    response = falcon_hosts.query_devices_by_filter(filter=host_filter)
-
-    if response.get("status_code") == 200:
-        devices = response["body"].get("resources", [])
-        if devices:
-            return devices[0]  # Return the first matching device ID
-        print(f"No devices found for filter: {host_filter}")
-    else:
-        print(f"Error getting device ID: {response.get('status_code')}, {response.get('body', {}).get('errors')}")
-
-    return None
 
 
 def execute_script(hostnames, cloud_script_name):
