@@ -2,7 +2,7 @@ from datetime import date, datetime, timedelta
 
 from pytz import timezone
 
-from services.xsoar import ListHandler
+from services.xsoar import ListHandler, get_list_data_by_name
 
 list_handler = ListHandler()
 
@@ -16,8 +16,8 @@ def get_on_call_person():
 
 def __get_on_call_email_by_monday_date__(monday_date):
     """takes the Monday_date as arg"""
-    t3_on_call_list = list_handler.get_list_by_name('Spear_OnCall')
-    analysts, rotation = list_handler.get_list_by_name('Spear_OnCall')
+    on_call_list = get_list_data_by_name('Spear_OnCall')
+    analysts, rotation = on_call_list['analysts'], on_call_list['rotation']
     on_call_name = list(
         filter(
             lambda x: x['Monday_date'] == str(monday_date),
@@ -31,7 +31,7 @@ def __get_on_call_email_by_monday_date__(monday_date):
         )
     )[0]['email_address']
 
-    return on_call_email_address
+    return f'{on_call_name}({on_call_email_address})'
 
 
 def alert_change():
@@ -51,7 +51,7 @@ def who():
 
 def rotation():
     """get on-call rotation"""
-    rotation = list_handler.get_list_by_name('Spear_OnCall')['rotation']
+    rotation = get_list_data_by_name('Spear_OnCall')['rotation']
     now = datetime.now()
     last_to_last_monday = now - timedelta(days=now.weekday() + 7)
     weeks_after_last_to_last_monday = list(

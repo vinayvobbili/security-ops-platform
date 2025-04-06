@@ -135,7 +135,7 @@ def handle_speak_up_form_submission():
         f"Issue Type: {form.get('issueType')} \n"
         f"Description: {form.get('description')} \n"
     )
-    response = xsoar.create_incident(CONFIG.xsoar_dev_api_base_url, form, CONFIG.xsoar_dev_auth_id, CONFIG.xsoar_dev_auth_token)
+    response = xsoar.create_incident(CONFIG.xsoar_dev_api_base_url, form, CONFIG.xsoar_dev_auth_id, CONFIG.xsoar_dev_auth_key)
     # Return a JSON response
     return jsonify({
         'status': 'success',
@@ -150,7 +150,7 @@ def handle_msoc_form_submission():
     """Handles MSOC form submissions and processes the data."""
     form = request.form.to_dict()
     form['type'] = 'MSOC Site Security Device Management'
-    response = xsoar.create_incident(CONFIG.xsoar_dev_api_base_url, form, CONFIG.xsoar_dev_auth_id, CONFIG.xsoar_dev_auth_token)
+    response = xsoar.create_incident(CONFIG.xsoar_dev_api_base_url, form, CONFIG.xsoar_dev_auth_id, CONFIG.xsoar_dev_auth_key)
     # Return a JSON response
     return jsonify({
         'status': 'success',

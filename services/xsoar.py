@@ -141,7 +141,7 @@ def import_ticket(source_ticket_number):
         'url': CONFIG.xsoar_dev_api_base_url,
         'auth': {
             'auth_id': CONFIG.xsoar_dev_auth_id,
-            'auth_key': CONFIG.xsoar_dev_auth_token,
+            'auth_key': CONFIG.xsoar_dev_auth_key,
         }
     }
 
@@ -207,22 +207,33 @@ class IncidentHandler:
         print(response.json())
 
 
+def __get_all_lists__() -> list:
+    # get from all_lists.json
+    lists_filename = CONFIG.xsoar_lists_filename
+    with open(lists_filename, 'r', encoding='utf-8') as f:
+        return json.load(f)
+
+
+def get_list_data_by_name(list_name):
+    all_lists = __get_all_lists__()
+    list_contents = list(filter(lambda item: item['id'] == list_name, all_lists))[0]
+    return json.loads(list_contents['data'])
+
+
+def get_list_version_by_name(list_name):
+    all_lists = __get_all_lists__()
+    list_contents = list(filter(lambda item: item['id'] == list_name, all_lists))[0]
+    return list_contents['version']
+
+
 class ListHandler:
     def __init__(self):
         self.headers = prod_headers
         self.list_fetch_url = CONFIG.xsoar_prod_api_base_url + '/lists'
         self.save_url = f"{CONFIG.xsoar_prod_api_base_url}/lists/save"
 
-    def __get_all_lists__(self) -> list:
-        return requests.get(self.list_fetch_url, headers=prod_headers).json()
-
-    def get_list_by_name(self, list_name):
-        all_lists = self.__get_all_lists__()
-        list_contents = list(filter(lambda item: item['id'] == list_name, all_lists))[0]
-        return list_contents['data'], list_contents['version']
-
     def save(self, list_name, list_data):
-        list_version = self.get_list_by_name(list_name)[1]
+        list_version = get_list_data_by_name(list_name)[1]
         result = requests.post(self.save_url, headers=prod_headers, json={
             "data": json.dumps(list_data, indent=4),
             "name": list_name,
@@ -234,7 +245,16 @@ class ListHandler:
         if result.status_code != 200:
             raise RuntimeError(f"Failed to save list. Status code: {result.status_code}")
 
+    def refresh_cache(self):
+        all_lists = requests.get(self.list_fetch_url, headers=prod_headers).json()
+        lists_filename = CONFIG.xsoar_lists_filename
+        with open(lists_filename, 'w', encoding='utf-8') as f:
+            json.dump(all_lists, f, indent=4)
+
 
 if __name__ == "__main__":
-    destination_ticket_number, destination_ticket_link = import_ticket('623454')
-    print(destination_ticket_number, destination_ticket_link)
+    # destination_ticket_number, destination_ticket_link = import_ticket('623454')
+    # print(destination_ticket_number, destination_ticket_link)
+
+    list_handler = ListHandler()
+    list_handler.refresh_cache()
