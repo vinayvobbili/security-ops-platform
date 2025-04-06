@@ -7,7 +7,10 @@ import secops
 import verify_host_online_status
 from config import get_config
 from services import phish_fort
-from src.charts import mttr_mttc, outflow, lifespan, heatmap, sla_breaches, aging_tickets, inflow, qradar_rule_efficacy, de_stories, days_since_incident, re_stories, threatcon_level, vectra_volume, crowdstrike_volume
+from src.charts import mttr_mttc, outflow, lifespan, heatmap, sla_breaches, aging_tickets, inflow, qradar_rule_efficacy, de_stories, days_since_incident, re_stories, threatcon_level, vectra_volume, \
+    crowdstrike_volume
+from src.components import oncall, approved_security_testing
+from src.components.approved_security_testing import list_handler
 
 config = get_config()
 eastern = pytz.timezone('US/Eastern')
@@ -53,8 +56,9 @@ def main():
         sla_breaches.make_chart(),
         threatcon_level.make_chart(),
         qradar_rule_efficacy.make_chart(),
-        vectra_efficacy.make_chart(),
-        crowdstrike_efficacy.make_chart()
+        vectra_volume.make_chart(),
+        crowdstrike_volume.make_chart(),
+        list_handler.refresh_cache()
     ))
 
     schedule.every(5).minutes.do(verify_host_online_status.start)
@@ -63,7 +67,12 @@ def main():
     schedule.every().day.at("11:30", eastern).do(lambda: secops.announce_shift_change('afternoon', room_id))
     schedule.every().day.at("19:30", eastern).do(lambda: secops.announce_shift_change('night', room_id))
     schedule.every().friday.at("08:00", eastern).do(lambda: qradar_rule_efficacy.send_charts())
-    schedule.every().monday.at("08:00", eastern).do(lambda: phish_fort.fetch_and_report_incidents())
+    schedule.every().friday.at("14:00", eastern).do(lambda: oncall.alert_change())
+    schedule.every().monday.at("08:00", eastern).do(lambda: (
+        phish_fort.fetch_and_report_incidents(),
+        oncall.announce_change()
+    ))
+    schedule.every().day.at("17:00", eastern).do(approved_security_testing.refresh_list)
     # schedule.every().day.at("08:00", eastern).do(thithi.notify)
 
     while True:

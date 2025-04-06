@@ -27,8 +27,9 @@ def get_config():
         xsoar_dev_ui_base_url=os.environ["XSOAR_DEV_UI_BASE_URL"],
         xsoar_prod_auth_key=os.environ["XSOAR_PROD_AUTH_KEY"],
         xsoar_prod_auth_id=os.environ["XSOAR_PROD_AUTH_ID"],
-        xsoar_dev_auth_token=os.environ["XSOAR_DEV_AUTH_KEY"],
+        xsoar_dev_auth_key=os.environ["XSOAR_DEV_AUTH_KEY"],
         xsoar_dev_auth_id=os.environ["XSOAR_DEV_AUTH_ID"],
+        xsoar_lists_filename=os.environ["XSOAR_LISTS_FILENAME"],
         jarvais_approved_rooms=os.environ["JARVAIS_APPROVED_ROOMS"],
         money_ball_approved_rooms=os.environ["MONEY_BALL_APPROVED_ROOMS"],
         barnacles_approved_users=os.environ["BARNACLES_APPROVED_USERS"],
@@ -82,8 +83,9 @@ class Config:
     xsoar_dev_ui_base_url: str
     xsoar_prod_auth_key: str
     xsoar_prod_auth_id: str
-    xsoar_dev_auth_token: str
+    xsoar_dev_auth_key: str
     xsoar_dev_auth_id: str
+    xsoar_lists_filename: str
     ticket_type_prefix: str
     jarvais_approved_rooms: str
     money_ball_approved_rooms: str

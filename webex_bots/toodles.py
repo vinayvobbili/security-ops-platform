@@ -13,7 +13,7 @@ from webexpythonsdk import WebexAPI
 import src.components.oncall as oncall
 from config import get_config
 from services import crowdstrike
-from services.xsoar import ListHandler, IncidentHandler
+from services.xsoar import ListHandler, IncidentHandler, get_list_data_by_name
 
 approved_testing_list_name: str = "METCIRT_Approved_Testing"
 approved_testing_master_list_name: str = "METCIRT_Approved_Testing_MASTER"
@@ -714,7 +714,7 @@ all_options_card = {
 
 
 def get_url_card():
-    metcirt_urls = list_handler.get_list_by_name('METCIRT URLs')
+    metcirt_urls = get_list_data_by_name('METCIRT URLs')
     actions = []
 
     # Iterate through the list of URLs and create button actions
@@ -934,7 +934,7 @@ class AZDOWorkItem(Command):
                 payload.append({
                     "op": "add",
                     "path": "/fields/System.AreaPath",
-                    "value": "Acme-Cyber-Security\METCIRT\METCIRT Tier III"
+                    "value": r"Acme-Cyber-Security\METCIRT\METCIRT Tier III"
                 })
                 payload.append({
                     "op": "add",
@@ -942,7 +942,7 @@ class AZDOWorkItem(Command):
                     "value": "1"
                 })
 
-            metcirt_xsoar = list_handler.get_list_by_name('METCIRT XSOAR')
+            metcirt_xsoar = get_list_data_by_name('METCIRT XSOAR')
             api_token = metcirt_xsoar['AZDO_PAT']['us-2' if project == 'gdr' else 'us']
             api_key = base64.b64encode(b':' + api_token.encode('utf-8')).decode('utf-8')
 
@@ -957,7 +957,7 @@ class AZDOWorkItem(Command):
             wit_type = wit_type.replace('%20', ' ')
             return_message = f'A new AZDO {wit_type} has been created \n [{wit_id}]({azdo_wit_url}) - {wit_title}'
 
-            webex_data = list_handler.get_list_by_name('METCIRT Webex')
+            webex_data = get_list_data_by_name('METCIRT Webex')
             headers = {
                 'Content-Type': 'application/json',
                 'Authorization': f"Bearer {CONFIG.webex_bot_access_token_toodles}"
@@ -987,7 +987,7 @@ class Review(Command):
         curr_date = datetime.now()
         ticket_no = attachment_actions.inputs["incident_id"]
 
-        list_dict = list_handler.get_list_by_name("review").get('Tickets')
+        list_dict = get_list_data_by_name("review").get('Tickets')
         add_entry_to_reviews(list_dict, ticket_no, activity['actor']['emailAddress'], curr_date.strftime("%x"), attachment_actions.inputs["review_notes"])
         reformat = {"Tickets": list_dict}
         list_handler.save(reformat, "review")
@@ -1015,7 +1015,7 @@ class GetCurrentApprovedTestingEntries(Command):
         )
 
     def execute(self, message, attachment_actions, activity):
-        approved_test_items = list_handler.get_list_by_name(approved_testing_list_name)
+        approved_test_items = get_list_data_by_name(approved_testing_list_name)
         response_text = {
             "USERNAMES": [],
             "ENDPOINTS": [],
@@ -1089,7 +1089,7 @@ class AddApprovedTestingEntry(Command):
         if attachment_actions.inputs['callback_keyword'] == 'add_approved_testing' and expiry_date == "":
             expiry_date = (datetime.now(timezone('US/Eastern')) + timedelta(days=1)).strftime("%Y-%m-%d")
 
-        approved_testing_entries = list_handler.get_list_by_name(approved_testing_list_name)
+        approved_testing_entries = get_list_data_by_name(approved_testing_list_name)
 
         if username:
             approved_testing_entries.get("USERNAMES").append({"data": username, "expiry_date": expiry_date, "submitter": submitter})
@@ -1100,7 +1100,7 @@ class AddApprovedTestingEntry(Command):
 
         list_handler.save(approved_testing_list_name, approved_testing_entries)
 
-        approved_testing_master_list_entries = list_handler.get_list_by_name(approved_testing_master_list_name)
+        approved_testing_master_list_entries = get_list_data_by_name(approved_testing_master_list_name)
         new_testing_entry = {
             "username": username,
             "host_name": host_name,
@@ -1149,7 +1149,7 @@ def add_entry_to_reviews(dict_full, ticket_id, person, date, message):
 
 
 def announce_new_threat_hunt(ticket_no, ticket_title, incident_url, person_id):
-    webex_data = list_handler.get_list_by_name('METCIRT Webex')
+    webex_data = get_list_data_by_name('METCIRT Webex')
     headers = {
         'Content-Type': 'application/json',
         'Authorization': f"Bearer {CONFIG.webex_bot_access_token_toodles}"
@@ -1260,7 +1260,7 @@ class Who(Command):
         )
 
     def execute(self, message, attachment_actions, activity):
-        return f"On-call person is <@personEmail:{oncall.get_on_call_person()}>"
+        return f"On-call person is {oncall.get_on_call_person()}"
 
 
 class Rotation(Command):
