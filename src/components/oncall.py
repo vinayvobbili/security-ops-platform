@@ -49,8 +49,9 @@ def who():
     pass
 
 
-def rotation():
+def get_rotation():
     """get on-call rotation"""
+    list_handler.refresh_cache()
     rotation = get_list_data_by_name('Spear_OnCall')['rotation']
     now = datetime.now()
     last_to_last_monday = now - timedelta(days=now.weekday() + 7)

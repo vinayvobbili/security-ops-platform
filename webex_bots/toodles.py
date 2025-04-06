@@ -1273,7 +1273,7 @@ class Rotation(Command):
         )
 
     def execute(self, message, attachment_actions, activity):
-        rotation = oncall.rotation()
+        rotation = oncall.get_rotation()
 
         data_frame = pandas.DataFrame(rotation, columns=["Monday_date", "analyst_name"])
         data_frame.columns = ['Monday', 'Analyst']
