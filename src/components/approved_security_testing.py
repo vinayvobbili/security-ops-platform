@@ -6,17 +6,6 @@ from services.xsoar import ListHandler, get_list_data_by_name
 approved_testing_list_name = "METCIRT_Approved_Testing"
 list_handler = ListHandler()
 
-xsoar_details = get_list_data_by_name('METCIRT XSOAR')
-
-
-def get_api_headers():
-    """Helper function to create headers for API requests."""
-    return {
-        'Authorization': xsoar_details.get('api_key'),
-        'x-xdr-auth-id': xsoar_details.get('auth_id'),
-        'Content-Type': 'application/json'
-    }
-
 
 def refresh_list():
     """Cleans expired entries from the approved testing list."""

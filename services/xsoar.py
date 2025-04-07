@@ -1,5 +1,6 @@
 import json
 import logging
+from pathlib import Path
 
 import requests
 
@@ -10,24 +11,27 @@ CONFIG = get_config()
 # Configure logging
 log = logging.getLogger(__name__)
 
+ROOT_DIRECTORY = Path(__file__).parent.parent
+
 prod_headers = {
     'Authorization': CONFIG.xsoar_prod_auth_key,
     'x-xdr-auth-id': CONFIG.xsoar_prod_auth_id,
     'Content-Type': 'application/json'
 }
+
+dev_headers = {
+    'Authorization': CONFIG.xsoar_dev_auth_key,
+    'x-xdr-auth-id': CONFIG.xsoar_dev_auth_id,
+    'Content-Type': 'application/json'
+}
 headers = prod_headers
 
 
-def __get_incident__(base_url, incident_id, auth_id, auth_key):
+def get_incident(incident_id):
     """Fetch incident details from source environment"""
-    headers = {
-        'Authorization': auth_key,
-        'x-xdr-auth-id': auth_id,
-        'Content-Type': 'application/json'
-    }
 
     try:
-        incident_url = f"{base_url}/incident/load/{incident_id}"
+        incident_url = f"{CONFIG.xsoar_prod_api_base_url}/incident/load/{incident_id}"
         response = requests.get(
             incident_url,
             headers=headers,
@@ -40,6 +44,7 @@ def __get_incident__(base_url, incident_id, auth_id, auth_key):
         raise Exception(f"Network error while fetching incident: {str(e)}")
 
 
+# TODO delete this method
 def __create_incident__(base_url, incident_data, auth_id, auth_token):
     """Create incident in target environment"""
     headers = {
@@ -91,70 +96,19 @@ def __create_incident__(base_url, incident_data, auth_id, auth_token):
     except requests.exceptions.RequestException as e:
         raise Exception(f"Network error while creating incident: {str(e)}")
     except ValueError as e:
-        raise Exception(f"Payload error: {str(e)}")
-
-
-def __transfer_incident__(source_url, target_url, incident_id, source_auth, target_auth):
-    """Main function to transfer incident between environments"""
-    try:
-        # Get incident from source
-        incident_data = __get_incident__(
-            source_url,
-            incident_id,
-            auth_id=source_auth['auth_id'],
-            auth_key=source_auth['auth_key']
-        )
-
-        # Create incident in target
-        new_incident = __create_incident__(
-            target_url,
-            incident_data,
-            auth_id=target_auth['auth_id'],
-            auth_token=target_auth['auth_key']
-        )
-
-        return {
-            'status': 'success',
-            'source_incident_id': incident_id,
-            'target_incident_id': new_incident.get('id'),
-            'message': 'Incident transferred successfully'
-        }
-    except Exception as e:
-        return {
-            'status': 'error',
-            'error_type': 'UNEXPECTED_ERROR',
-            'message': f"Unexpected error: {str(e)}"
-        }
+        raise Exception(f"Payload error: {str(e)}")  #
 
 
 def import_ticket(source_ticket_number):
-    # Configuration
-    source_env = {
-        'url': CONFIG.xsoar_prod_api_base_url,
-        'auth': {
-            'auth_id': CONFIG.xsoar_prod_auth_id,
-            'auth_key': CONFIG.xsoar_prod_auth_key,
-        }
-    }
+    incident_handler = IncidentHandler()
 
-    target_env = {
-        'url': CONFIG.xsoar_dev_api_base_url,
-        'auth': {
-            'auth_id': CONFIG.xsoar_dev_auth_id,
-            'auth_key': CONFIG.xsoar_dev_auth_key,
-        }
-    }
+    # Get incident from prod
+    incident_data = get_incident(source_ticket_number)
 
-    result = __transfer_incident__(
-        source_env['url'],
-        target_env['url'],
-        source_ticket_number,
-        source_env['auth'],
-        target_env['auth']
-    )
+    # Create incident in target
+    new_incident = incident_handler.create_in_dev(incident_data)
 
-    destination_ticket_number = result.get('target_incident_id')
-    return destination_ticket_number, f'{CONFIG.xsoar_dev_ui_base_url}/Custom/caseinfoid/{destination_ticket_number}'
+    return new_incident['id'], f'{CONFIG.xsoar_dev_ui_base_url} / Custom / caseinfoid / {new_incident['id']}'
 
 
 class IncidentHandler:
@@ -163,6 +117,7 @@ class IncidentHandler:
         self.incident_search_url = CONFIG.xsoar_prod_api_base_url + '/incidents/search'
         self.incident_entries_url = CONFIG.xsoar_prod_api_base_url + '/incidents/{incident_id}/entries'  # Endpoint for entries
         self.incident_create_url = CONFIG.xsoar_prod_api_base_url + '/incident/json'
+        self.incident_create_url_dev = CONFIG.xsoar_dev_api_base_url + '/incident/json'
 
     def get_tickets(self, query, period=None, size=10000) -> list:
         """Fetches security incidents from XSOAR."""
@@ -204,13 +159,20 @@ class IncidentHandler:
     def create(self, payload):
         """Creates a new incident in XSOAR."""
         response = requests.post(self.incident_create_url, headers=self.headers, json=payload)
-        print(response.json())
+        response.raise_for_status()
+        return response.json()
+
+    def create_in_dev(self, payload):
+        """Creates a new incident in XSOAR."""
+        response = requests.post(self.incident_create_url_dev, headers=dev_headers, json=payload)
+        response.raise_for_status()
+        return response.json()
 
 
 def __get_all_lists__() -> list:
     # get from all_lists.json
     lists_filename = CONFIG.xsoar_lists_filename
-    with open(lists_filename, 'r', encoding='utf-8') as f:
+    with open(ROOT_DIRECTORY / lists_filename, 'r', encoding='utf-8') as f:
         return json.load(f)
 
 
