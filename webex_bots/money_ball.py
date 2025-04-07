@@ -1,5 +1,6 @@
 import os
 import unittest
+from datetime import datetime
 from unittest.mock import patch
 
 from webex_bot.models.command import Command
@@ -19,10 +20,11 @@ webex_api = WebexTeamsAPI(access_token=config.webex_bot_access_token_moneyball)
 # Define a common function to send chart images
 def send_chart(room_id, display_name, chart_name, chart_filename):
     """Sends a chart image to a Webex room."""
+    today_date = datetime.now().strftime('%m-%d-%Y')
     webex_api.messages.create(
         roomId=room_id,
         text=f"{display_name}, here's the latest {chart_name} chart!",
-        files=[os.path.join(os.path.dirname(__file__), '../web/static/charts', chart_filename)]
+        files=[os.path.join(os.path.dirname(__file__), f'../web/static/charts/{today_date}', chart_filename)]
     )
 
 
