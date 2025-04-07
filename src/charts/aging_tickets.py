@@ -25,7 +25,9 @@ webex_headers = {
 eastern = pytz.timezone('US/Eastern')
 
 root_directory = Path(__file__).parent.parent.parent
-OUTPUT_PATH = root_directory / "web" / "static" / "charts" / "Aging Tickets.png"
+today_date = datetime.now().strftime('%m-%d-%Y')
+OUTPUT_PATH = root_directory / "web" / "static" / "charts" / today_date / "Aging Tickets.png"
+
 
 def get_df(tickets: List[Dict[Any, Any]]) -> pd.DataFrame:
     if not tickets:

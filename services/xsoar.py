@@ -233,7 +233,7 @@ class ListHandler:
         self.save_url = f"{CONFIG.xsoar_prod_api_base_url}/lists/save"
 
     def save(self, list_name, list_data):
-        list_version = get_list_data_by_name(list_name)[1]
+        list_version = get_list_version_by_name(list_name)
         result = requests.post(self.save_url, headers=prod_headers, json={
             "data": json.dumps(list_data, indent=4),
             "name": list_name,

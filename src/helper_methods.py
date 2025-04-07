@@ -1,4 +1,5 @@
 import csv
+import os
 from datetime import datetime
 from functools import wraps
 from pathlib import Path
@@ -14,6 +15,7 @@ config = get_config()
 
 root_directory = Path(__file__).parent.parent
 LOG_FILE_DIR = root_directory / 'data' / 'transient' / 'logs'
+CHARTS_DIR_PATH = root_directory / 'web' / 'static' / 'charts'
 
 
 def _log_activity(bot_access_token, log_file_name):
@@ -93,3 +95,9 @@ def log_barnacles_activity(bot_access_token):
         Decorator for logging Barnacles bot activity
     """
     return _log_activity(bot_access_token, 'barnacles_activity_log.csv')
+
+
+def make_dir_for_todays_charts():
+    today_date = datetime.now().strftime('%m-%d-%Y')
+    charts_dir = os.path.join(CHARTS_DIR_PATH, today_date)
+    os.makedirs(charts_dir, exist_ok=True)
