@@ -27,6 +27,7 @@ def refresh_list():
             updated_approved_test_items[category] = valid_items
 
         list_handler.save(approved_testing_list_name, updated_approved_test_items)
+        list_handler.refresh_cache()
     except Exception as e:
         logging.error(f"Error during clean operation: {str(e)}")
 
