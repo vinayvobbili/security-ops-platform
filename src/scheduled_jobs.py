@@ -7,6 +7,7 @@ import secops
 import verify_host_online_status
 from config import get_config
 from services import phish_fort
+from src import helper_methods
 from src.charts import mttr_mttc, outflow, lifespan, heatmap, sla_breaches, aging_tickets, inflow, qradar_rule_efficacy, de_stories, days_since_incident, re_stories, threatcon_level, vectra_volume, \
     crowdstrike_volume
 from src.components import oncall, approved_security_testing
@@ -21,6 +22,7 @@ def main():
     Main function to run the scheduled jobs.
     """
     # run once
+    helper_methods.make_dir_for_todays_charts(),
     aging_tickets.make_chart(),
     days_since_incident.make_chart(),
     de_stories.make_chart(),
@@ -44,6 +46,7 @@ def main():
     ))
 
     schedule.every().day.at("00:01", eastern).do(lambda: (
+        helper_methods.make_dir_for_todays_charts(),
         aging_tickets.make_chart(),
         days_since_incident.make_chart(),
         de_stories.make_chart(),
