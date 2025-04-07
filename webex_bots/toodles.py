@@ -1127,6 +1127,7 @@ class AddApprovedTestingEntry(Command):
             "ip_address": ip_address,
             "host_name": host_name
         })
+        list_handler.refresh_cache()
 
         return f"{activity['actor']['displayName']}, your entry has been added to the Approved Testing list."
 
