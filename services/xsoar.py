@@ -208,8 +208,8 @@ class ListHandler:
             raise RuntimeError(f"Failed to save list. Status code: {result.status_code}")
 
     def refresh_cache(self):
-        all_lists = requests.get(self.list_fetch_url, headers=prod_headers).json()
-        lists_filename = CONFIG.xsoar_lists_filename
+        all_lists = requests.get(self.list_fetch_url, headers=headers).json()
+        lists_filename = ROOT_DIRECTORY / CONFIG.xsoar_lists_filename
         with open(lists_filename, 'w', encoding='utf-8') as f:
             json.dump(all_lists, f, indent=4)
 

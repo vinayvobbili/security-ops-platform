@@ -35,6 +35,7 @@ headers = prod_headers
 
 incident_handler = IncidentHandler()
 list_handler = ListHandler()
+list_handler.refresh_cache()
 
 NEW_TICKET_CARD = {
     "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
@@ -1321,8 +1322,6 @@ class GetAllOptions(Command):
 
 
 def main():
-    list_handler.refresh_cache()
-
     bot = WebexBot(
         CONFIG.webex_bot_access_token_toodles,
         bot_name="Hello from Toodles!",
