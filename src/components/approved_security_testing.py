@@ -1,12 +1,12 @@
 import logging
 from datetime import datetime
 
-from services.xsoar import ListHandler
+from services.xsoar import ListHandler, get_list_data_by_name
 
 approved_testing_list_name = "METCIRT_Approved_Testing"
 list_handler = ListHandler()
 
-xsoar_details = get_list_by_name('METCIRT XSOAR')
+xsoar_details = get_list_data_by_name('METCIRT XSOAR')
 
 
 def get_api_headers():
@@ -21,7 +21,7 @@ def get_api_headers():
 def refresh_list():
     """Cleans expired entries from the approved testing list."""
     try:
-        approved_test_items = get_list_by_name(approved_testing_list_name)
+        approved_test_items = get_list_data_by_name(approved_testing_list_name)
         today = datetime.now()
 
         updated_approved_test_items = {}
