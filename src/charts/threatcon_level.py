@@ -9,7 +9,8 @@ from matplotlib.patches import FancyArrow
 
 # Define constants
 ROOT_DIRECTORY = Path(__file__).parent.parent.parent
-OUTPUT_PATH = ROOT_DIRECTORY / "web" / "static" / "charts" / "Threatcon Level.png"
+today_date = datetime.now().strftime('%m-%d-%Y')
+OUTPUT_PATH = ROOT_DIRECTORY / "web" / "static" / "charts" / today_date / "Threatcon Level.png"
 THREAT_CON_FILE = ROOT_DIRECTORY / "data" / "transient" / "secOps" / "threatcon.json"
 
 # Define color mappings for better maintenance

@@ -14,7 +14,8 @@ eastern = pytz.timezone('US/Eastern')
 CONFIG = get_config()
 
 ROOT_DIRECTORY = Path(__file__).parent.parent.parent
-OUTPUT_PATH = ROOT_DIRECTORY / "web" / "static" / "charts" / "CrowdStrike Volume.png"
+today_date = datetime.now().strftime('%m-%d-%Y')
+OUTPUT_PATH = ROOT_DIRECTORY / "web" / "static" / "charts" / today_date / "CrowdStrike Volume.png"
 
 
 def generate_chart(tickets):

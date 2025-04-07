@@ -14,8 +14,9 @@ eastern = pytz.timezone('US/Eastern')
 config = config.get_config()
 
 ROOT_DIRECTORY = Path(__file__).parent.parent.parent
-OUTPUT_PATH = ROOT_DIRECTORY / "web" / "static" / "charts" / "Days Since Last Incident.png"
-IMAGE_PATH = ROOT_DIRECTORY / "web" / "static" / "images" / "base" / "Days Since Last Incident.jpg"
+today_date = datetime.now().strftime('%m-%d-%Y')
+OUTPUT_PATH = ROOT_DIRECTORY / "web" / "static" / "charts" / today_date / "Days Since Last Incident.png"
+BASE_IMAGE_PATH = ROOT_DIRECTORY / "web" / "static" / "images" / "base" / "Days Since Last Incident.jpg"
 
 
 def _setup_logger():
@@ -164,7 +165,7 @@ def make_chart():
 
     try:
         modifier.update_counter(
-            IMAGE_PATH,
+            BASE_IMAGE_PATH,
             days_since_last_incident, last_incident_date, last_incident_id,
             output_path=OUTPUT_PATH,
             font_size=50,

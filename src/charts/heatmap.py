@@ -23,8 +23,8 @@ PERIOD = {"byFrom": "days", "fromValue": 30}
 
 ROOT_DIRECTORY = Path(__file__).parent.parent.parent
 DATA_DIR = ROOT_DIRECTORY / 'data'
-
-OUTPUT_PATH = ROOT_DIRECTORY / "web" / "static" / "charts" / "Heat Map.png"
+today_date = datetime.now().strftime('%m-%d-%Y')
+OUTPUT_PATH = ROOT_DIRECTORY / "web" / "static" / "charts" / today_date / "Heat Map.png"
 
 
 def create_choropleth_map():

@@ -14,7 +14,8 @@ eastern = timezone('US/Eastern')
 config = get_config()
 
 root_directory = Path(__file__).parent.parent.parent
-OUTPUT_PATH = root_directory / "web" / "static" / "charts" / "SLA Breaches.png"
+today_date = datetime.now().strftime('%m-%d-%Y')
+OUTPUT_PATH = root_directory / "web" / "static" / "charts" / today_date / "SLA Breaches.png"
 
 
 @dataclass

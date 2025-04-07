@@ -14,7 +14,8 @@ config = get_config()
 eastern = pytz.timezone('US/Eastern')
 
 root_directory = Path(__file__).parent.parent.parent
-OUTPUT_PATH = root_directory / "web" / "static" / "charts" / "RE Stories.png"
+today_date = datetime.now().strftime('%m-%d-%Y')
+OUTPUT_PATH = root_directory / "web" / "static" / "charts" / today_date / "RE Stories.png"
 
 
 class ADOWorkItemRetriever:

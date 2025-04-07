@@ -14,7 +14,9 @@ config = get_config()
 eastern = timezone('US/Eastern')  # Define the Eastern time zone
 
 root_directory = Path(__file__).parent.parent.parent
-OUTPUT_PATH = root_directory / "web" / "static" / "charts" / "MTTR MTTC.png"
+today_date = datetime.now().strftime('%m-%d-%Y')
+OUTPUT_PATH = root_directory / "web" / "static" / "charts" / today_date / "MTTR MTTC.png"
+
 
 @dataclass
 class TicketSlaTimes:
