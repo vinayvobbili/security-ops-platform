@@ -126,8 +126,8 @@ def announce_previous_shift_performance(room_id, shift_name):
                     Fact(title="Tickets closed out", value=f"{len(outflow)} ({tickets_closed_per_analyst:.2f}/analyst)"),
                     Fact(title="Resp. SLA Breaches", value=str(len(response_sla_breaches))),
                     Fact(title="Cont. SLA Breaches", value=str(len(containment_sla_breaches))),
-                    Fact(title="MTTR (mins:secs)", value=f"{int(mean_time_to_respond // 60)}:{int(mean_time_to_respond % 60):02d}"),
-                    Fact(title="MTTC (mins:secs)", value=f"{int(mean_time_to_contain // 60)}:{int(mean_time_to_contain % 60):02d}"),
+                    Fact(title="MTTR (min:sec)", value=f"{int(mean_time_to_respond // 60)}:{int(mean_time_to_respond % 60):02d}"),
+                    Fact(title="MTTC (min:sec)", value=f"{int(mean_time_to_contain // 60)}:{int(mean_time_to_contain % 60):02d}"),
                     Fact(title="IOCs blocked", value="1.2.3.4, 5.6.7.8, example.com"),
                     Fact(title="Hosts contained", value="US123, IN456, AU789"),
                     Fact(title="Tuning requests submitted", value="US321")
