@@ -201,21 +201,8 @@ class ListHandler:
         if result.status_code != 200:
             raise RuntimeError(f"Failed to save list. Status code: {result.status_code}")
 
-    def refresh_cache(self):
-        try:
-            all_lists = requests.get(self.list_fetch_url, headers=headers).json()
-            lists_filename = ROOT_DIRECTORY / CONFIG.xsoar_lists_filename
-            with open(lists_filename, 'w', encoding='utf-8') as f:
-                json.dump(all_lists, f, indent=4)
-        except requests.exceptions.RequestException as e:
-            log.error(f"Error refreshing cache: {e}")
-        except IOError as e:
-            log.error(f"File operation error: {e}")
-
 
 if __name__ == "__main__":
     # destination_ticket_number, destination_ticket_link = import_ticket('623454')
     # print(destination_ticket_number, destination_ticket_link)
-
     list_handler = ListHandler()
-    list_handler.refresh_cache()

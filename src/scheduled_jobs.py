@@ -26,6 +26,8 @@ def main():
     list_handler.refresh_cache(),
     aging_tickets.make_chart(),
     days_since_incident.make_chart(),
+    crowdstrike_volume.make_chart(),
+    vectra_volume.make_chart(),
     de_stories.make_chart(),
     heatmap.create_choropleth_map(),
     inflow.make_chart(),
@@ -50,6 +52,8 @@ def main():
         helper_methods.make_dir_for_todays_charts(),
         aging_tickets.make_chart(),
         days_since_incident.make_chart(),
+        crowdstrike_volume.make_chart(),
+        vectra_volume.make_chart(),
         de_stories.make_chart(),
         heatmap.create_choropleth_map(),
         inflow.make_chart(),
@@ -61,8 +65,7 @@ def main():
         threatcon_level.make_chart(),
         qradar_rule_efficacy.make_chart(),
         vectra_volume.make_chart(),
-        crowdstrike_volume.make_chart(),
-        list_handler.refresh_cache()
+        crowdstrike_volume.make_chart()
     ))
 
     schedule.every(5).minutes.do(verify_host_online_status.start)
