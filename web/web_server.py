@@ -1,16 +1,17 @@
-import csv
 import ipaddress
 import os
 from datetime import datetime
-from functools import wraps
 from typing import List
 
 import pytz
-from flask import Flask, render_template, request, abort
+from flask import Flask, request, abort
 from flask import jsonify
+from flask import render_template
 
 from config import get_config
 from services import xsoar
+from services.xsoar import ListHandler
+from src.helper_methods import log_web_activity
 
 app = Flask(__name__, static_folder='static', static_url_path='/static', template_folder='templates')
 eastern = pytz.timezone('US/Eastern')
@@ -69,22 +70,6 @@ def get_image_files() -> List[str]:
                 print(f"File not found: {full_path}")
 
     return image_files
-
-
-def log_web_activity(func):
-    """Logs web activity to a CSV file."""
-
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        if request:
-            client_ip = request.remote_addr
-            if client_ip not in ['192.168.1.100', '127.0.0.1', '192.168.1.102']:  # don't log the activity for my IP address
-                now_eastern = datetime.now(eastern).strftime('%m/%d/%Y %I:%M:%S %p %Z')
-                with open('../data/transient/logs/web_server_activity_log.csv', 'a', newline='\n') as csvfile:
-                    csv.writer(csvfile).writerow([request.path, client_ip, now_eastern])
-        return func(*args, **kwargs)
-
-    return wrapper
 
 
 @app.route("/")
@@ -176,6 +161,30 @@ def import_xsoar_ticket():
         'destination_ticket_number': destination_ticket_number,
         'destination_ticket_link': destination_ticket_link
     })
+
+
+@app.route("/approved-testing", methods=['GET'])
+@log_web_activity
+def get_approved_testing_records():
+    """Fetches approved testing records and displays them in separate HTML tables."""
+    list_handler = ListHandler()
+    approved_testing_records = list_handler.get_list_data_by_name('METCIRT_Approved_Testing')
+
+    if not approved_testing_records:
+        return "<h2>No Approved Testing Records Found</h2>"
+
+    # Organize data for the template
+    endpoints = approved_testing_records.get("ENDPOINTS", [])
+    usernames = approved_testing_records.get("USERNAMES", [])
+    ip_addresses = approved_testing_records.get("IP_ADDRESSES", [])
+
+    # Render the template with the data
+    return render_template(
+        'approved_testing.html',
+        ENDPOINTS=endpoints,
+        USERNAMES=usernames,
+        IP_ADDRESSES=ip_addresses
+    )
 
 
 @app.route('/favicon.ico')

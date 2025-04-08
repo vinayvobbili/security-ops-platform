@@ -4,6 +4,7 @@ from datetime import datetime
 from functools import wraps
 from pathlib import Path
 
+from flask import request
 from pytz import timezone
 
 from config import get_config
@@ -101,3 +102,19 @@ def make_dir_for_todays_charts():
     today_date = datetime.now().strftime('%m-%d-%Y')
     charts_dir = os.path.join(CHARTS_DIR_PATH, today_date)
     os.makedirs(charts_dir, exist_ok=True)
+
+
+def log_web_activity(func):
+    """Logs web activity to a CSV file."""
+
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        if request:
+            client_ip = request.remote_addr
+            if client_ip not in ['192.168.1.100', '127.0.0.1', '192.168.1.102']:  # don't log the activity for my IP address
+                now_eastern = datetime.now(eastern).strftime('%m/%d/%Y %I:%M:%S %p %Z')
+                with open('../data/transient/logs/web_server_activity_log.csv', 'a', newline='\n') as csvfile:
+                    csv.writer(csvfile).writerow([request.path, client_ip, now_eastern])
+        return func(*args, **kwargs)
+
+    return wrapper
