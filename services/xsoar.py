@@ -169,33 +169,27 @@ class IncidentHandler:
         return response.json()
 
 
-def __get_all_lists__() -> list:
-    # get from all_lists.json
-    lists_filename = CONFIG.xsoar_lists_filename
-    with open(ROOT_DIRECTORY / lists_filename, 'r', encoding='utf-8') as f:
-        return json.load(f)
-
-
-def get_list_data_by_name(list_name):
-    all_lists = __get_all_lists__()
-    list_contents = list(filter(lambda item: item['id'] == list_name, all_lists))[0]
-    return json.loads(list_contents['data'])
-
-
-def get_list_version_by_name(list_name):
-    all_lists = __get_all_lists__()
-    list_contents = list(filter(lambda item: item['id'] == list_name, all_lists))[0]
-    return list_contents['version']
-
-
 class ListHandler:
     def __init__(self):
         self.headers = prod_headers
         self.list_fetch_url = CONFIG.xsoar_prod_api_base_url + '/lists'
         self.save_url = f"{CONFIG.xsoar_prod_api_base_url}/lists/save"
 
+    def __get_all_lists__(self) -> list:
+        return requests.get(self.list_fetch_url, headers=headers).json()
+
+    def get_list_data_by_name(self, list_name):
+        all_lists = self.__get_all_lists__()
+        list_contents = list(filter(lambda item: item['id'] == list_name, all_lists))[0]
+        return json.loads(list_contents['data'])
+
+    def get_list_version_by_name(self, list_name):
+        all_lists = self.__get_all_lists__()
+        list_contents = list(filter(lambda item: item['id'] == list_name, all_lists))[0]
+        return list_contents['version']
+
     def save(self, list_name, list_data):
-        list_version = get_list_version_by_name(list_name)
+        list_version = self.get_list_version_by_name(list_name)
         result = requests.post(self.save_url, headers=prod_headers, json={
             "data": json.dumps(list_data, indent=4),
             "name": list_name,
@@ -208,10 +202,15 @@ class ListHandler:
             raise RuntimeError(f"Failed to save list. Status code: {result.status_code}")
 
     def refresh_cache(self):
-        all_lists = requests.get(self.list_fetch_url, headers=headers).json()
-        lists_filename = ROOT_DIRECTORY / CONFIG.xsoar_lists_filename
-        with open(lists_filename, 'w', encoding='utf-8') as f:
-            json.dump(all_lists, f, indent=4)
+        try:
+            all_lists = requests.get(self.list_fetch_url, headers=headers).json()
+            lists_filename = ROOT_DIRECTORY / CONFIG.xsoar_lists_filename
+            with open(lists_filename, 'w', encoding='utf-8') as f:
+                json.dump(all_lists, f, indent=4)
+        except requests.exceptions.RequestException as e:
+            log.error(f"Error refreshing cache: {e}")
+        except IOError as e:
+            log.error(f"File operation error: {e}")
 
 
 if __name__ == "__main__":
