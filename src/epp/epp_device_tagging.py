@@ -54,7 +54,7 @@ RING_3_PERCENT = 0.3
 # Ring 4 is the remainder
 
 # Server environment mappings
-RING_1_ENVS = {"dev", "poc", "lab", "integration", "development"} # All values must in lower case
+RING_1_ENVS = {"dev", "poc", "lab", "integration", "development"}  # All values must in lower case
 RING_2_ENVS = {"qa", "test"}
 RING_3_ENVS = {"dr"}
 # Ring 4 is for production or unknown environments
@@ -176,6 +176,9 @@ class Host:
             if snow_host_details.get('osDomain') == 'pmli':
                 self.country = 'India PMLI'
             self.life_cycle_status = snow_host_details.get('lifecycleStatus', '')
+
+            if not self.country and self.country.lower().startswith('vmvdi'):
+                self.country = 'United States'
 
         except Exception as e:
             self.status_message = f"Error retrieving ServiceNow data: {str(e)}"
