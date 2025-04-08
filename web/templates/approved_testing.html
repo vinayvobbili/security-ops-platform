@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Approved Security Testing Records</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/approved_testing.css') }}">
+</head>
+<body>
+<div class="container">
+    <h1>Approved Security Testing Records</h1>
+
+    <section>
+        <h2>Endpoints</h2>
+        {% if ENDPOINTS %}
+        <table>
+            <thead>
+            <tr>
+                <th>Data</th>
+                <th>Expiry Date</th>
+                <th>Submitter</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for record in ENDPOINTS %}
+            <tr>
+                <td>{{ record.data }}</td>
+                <td>{{ record.expiry_date }}</td>
+                <td>{{ record.submitter }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p>No endpoint records found.</p>
+        {% endif %}
+    </section>
+
+    <section>
+        <h2>Usernames</h2>
+        {% if USERNAMES %}
+        <table>
+            <thead>
+            <tr>
+                <th>Data</th>
+                <th>Expiry Date</th>
+                <th>Submitter</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for record in USERNAMES %}
+            <tr>
+                <td>{{ record.data }}</td>
+                <td>{{ record.expiry_date }}</td>
+                <td>{{ record.submitter }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p>No username records found.</p>
+        {% endif %}
+    </section>
+
+    <section>
+        <h2>IP Addresses</h2>
+        {% if IP_ADDRESSES %}
+        <table>
+            <thead>
+            <tr>
+                <th>Data</th>
+                <th>Expiry Date</th>
+                <th>Submitter</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for record in IP_ADDRESSES %}
+            <tr>
+                <td>{{ record.data }}</td>
+                <td>{{ record.expiry_date }}</td>
+                <td>{{ record.submitter }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p>No IP address records found.</p>
+        {% endif %}
+    </section>
+</div>
+</body>
+</html>
