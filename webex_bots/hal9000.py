@@ -357,7 +357,8 @@ APPROVED_TESTING_CARD = {
                     "items": [
                         {
                             "type": "Input.Text",
-                            "id": "username"
+                            "id": "usernames",
+                            "placeholder": "Use , as seperator"
                         }
                     ]
                 }
@@ -384,7 +385,8 @@ APPROVED_TESTING_CARD = {
                     "items": [
                         {
                             "type": "Input.Text",
-                            "id": "host_name"
+                            "id": "host_names",
+                            "placeholder": "Use , as seperator"
                         }
                     ]
                 }
@@ -411,7 +413,8 @@ APPROVED_TESTING_CARD = {
                     "items": [
                         {
                             "type": "Input.Text",
-                            "id": "ip_address",
+                            "id": "ip_addresses",
+                            "placeholder": "Use , as seperator",
                             "isMultiline": True
                         }
                     ]
@@ -523,13 +526,6 @@ APPROVED_TESTING_CARD = {
                     ]
                 }
             ],
-        },
-        {
-            "type": "Input.Toggle",
-            "id": "should_create_snow_ticket",
-            "title": "Create a SNOW Ticket for this activity?",
-            "valueOn": "true",
-            "valueOff": "false"
         },
         {
             "type": "ActionSet",
@@ -1179,11 +1175,10 @@ class AddApprovedTestingEntry(Command):
         ip_addresses = attachment_actions.inputs['ip_addresses'].strip()
 
         if usernames == "" and host_names == "" and ip_addresses == "":
-            return "One of username, host name, or IP address needs to be filled in. Please try again"
+            return "One of username, host name, or IP address fields must be filled in. Please try again!"
 
         description = attachment_actions.inputs['description'].strip()
         scope = attachment_actions.inputs['scope'].strip()
-        should_create_snow_ticket = attachment_actions.inputs['should_create_snow_ticket']
         submitter = activity['actor']['emailAddress']
         expiry_date = attachment_actions.inputs['expiry_date']
         if attachment_actions.inputs['callback_keyword'] == 'add_approved_testing' and expiry_date == "":
@@ -1201,7 +1196,6 @@ class AddApprovedTestingEntry(Command):
                     "username": username,
                     "description": description,
                     "scope": scope,
-                    "should_create_snow_ticket": should_create_snow_ticket,
                     "submitter": submitter,
                     "submit_date": datetime.now().strftime("%m/%d/%Y"),
                     "expiry_date": expiry_date
@@ -1216,7 +1210,6 @@ class AddApprovedTestingEntry(Command):
                     "host_name": host_name,
                     "description": description,
                     "scope": scope,
-                    "should_create_snow_ticket": should_create_snow_ticket,
                     "submitter": submitter,
                     "submit_date": datetime.now().strftime("%m/%d/%Y"),
                     "expiry_date": expiry_date
@@ -1231,7 +1224,6 @@ class AddApprovedTestingEntry(Command):
                     "ip_address": ip_address,
                     "description": description,
                     "scope": scope,
-                    "should_create_snow_ticket": should_create_snow_ticket,
                     "submitter": submitter,
                     "submit_date": datetime.now().strftime("%m/%d/%Y"),
                     "expiry_date": expiry_date
@@ -1244,7 +1236,6 @@ class AddApprovedTestingEntry(Command):
         announce_new_approved_testing_entry({
             "description": description,
             "scope": scope,
-            "should_create_snow_ticket": should_create_snow_ticket,
             "submitter": submitter,
             "submit_date": datetime.now().strftime("%m/%d/%Y"),
             "expiry_date": expiry_date,
