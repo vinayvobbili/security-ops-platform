@@ -357,7 +357,8 @@ APPROVED_TESTING_CARD = {
                         }
                     ]
                 }
-            ]
+            ],
+            "horizontalAlignment": "left"
         },
         {
             "type": "ColumnSet",
@@ -380,8 +381,7 @@ APPROVED_TESTING_CARD = {
                         }
                     ]
                 }
-            ],
-            "spacing": "small"
+            ]
         },
         {
             "type": "ColumnSet",
@@ -405,8 +405,7 @@ APPROVED_TESTING_CARD = {
                         }
                     ]
                 }
-            ],
-            "spacing": "small"
+            ]
         },
         {
             "type": "ColumnSet",
@@ -430,8 +429,7 @@ APPROVED_TESTING_CARD = {
                         }
                     ]
                 }
-            ],
-            "spacing": "small"
+            ]
         },
         {
             "type": "ColumnSet",
@@ -455,8 +453,7 @@ APPROVED_TESTING_CARD = {
                         }
                     ]
                 }
-            ],
-            "spacing": "small"
+            ]
         },
         {
             "type": "ColumnSet",
@@ -493,14 +490,14 @@ APPROVED_TESTING_CARD = {
                                             "type": "TextBlock",
                                             "text": "5 PM ET"
                                         }
-                                    ]
+                                    ],
+                                    "verticalContentAlignment": "Center"
                                 }
                             ]
                         }
                     ]
                 }
             ],
-            "spacing": "small"
         },
         {
             "type": "Input.Toggle",
