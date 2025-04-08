@@ -31,6 +31,7 @@ from tqdm import tqdm
 from webexpythonsdk import WebexAPI
 
 from config import get_config
+from services import crowdstrike
 from services.service_now import ServiceNowClient
 
 # Load configuration
@@ -53,7 +54,7 @@ RING_3_PERCENT = 0.3
 # Ring 4 is the remainder
 
 # Server environment mappings
-RING_1_ENVS = {"dev", "poc", "lab", "integration"}
+RING_1_ENVS = {"dev", "poc", "lab", "integration", "development"} # All values must in lower case
 RING_2_ENVS = {"qa", "test"}
 RING_3_ENVS = {"dr"}
 # Ring 4 is for production or unknown environments
@@ -130,20 +131,11 @@ class Host:
     def _set_host_details_from_cs(self) -> None:
         """Retrieve device ID and tags from CrowdStrike."""
         try:
-            host_filter = f"hostname:'{self.name}'"
-            response = falcon_hosts.query_devices_by_filter(filter=host_filter)
+            self.device_id = crowdstrike.get_device_id(self.name)
 
-            if response.get("status_code") != 200:
-                self.status_message = f"CrowdStrike API error: {response.get('errors', ['Unknown error'])}"
+            if self.device_id is None:
+                self.status_message = f"Error retrieving CrowdStrike Device ID for {self.name}"
                 return
-
-            resources = response["body"].get("resources", [])
-
-            if not resources:
-                self.status_message = "Host not found in CrowdStrike"
-                return
-
-            self.device_id = resources[-1]
 
             # Fetch device details including tags
             device_response = falcon_hosts.get_device_details(ids=self.device_id)
@@ -156,7 +148,7 @@ class Host:
 
             if device_resources:
                 self.current_crowd_strike_tags = device_resources[0].get('tags', [])
-                category = device_resources[0].get('category', '').lower()
+                category = device_resources[0].get('product_type_desc', '').lower()
                 if category == 'workstation':
                     self.category = HostCategory.WORKSTATION
                 elif category == 'server':
@@ -178,15 +170,6 @@ class Host:
             if not snow_host_details:
                 self.status_message = "Host not found in ServiceNow"
                 return
-
-            # Map category
-            category = snow_host_details.get('category', '').lower()
-            if category == 'workstation':
-                self.category = HostCategory.WORKSTATION
-            elif category == 'server':
-                self.category = HostCategory.SERVER
-            else:
-                self.status_message = f"Unknown host category: {category}"
 
             self.environment = snow_host_details.get('environment', '')
             self.country = snow_host_details.get('country', '')
@@ -476,7 +459,7 @@ def send_report(output_filename: str, time_report) -> bool:
     try:
         webex_api = WebexAPI(config.webex_bot_access_token_jarvais)
         response = webex_api.messages.create(
-            roomId=config.webex_room_id_epp_tagging,
+            roomId=config.webex_room_id_vinay_test_space,
             markdown=f"EPP-Falcon ring epp_device_tagging results are attached.\n\n```{time_report}",
             files=[output_filename]
         )
