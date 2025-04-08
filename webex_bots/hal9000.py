@@ -13,7 +13,7 @@ from webexpythonsdk import WebexAPI
 import src.components.oncall as oncall
 from config import get_config
 from services import crowdstrike
-from services.xsoar import ListHandler, IncidentHandler, get_list_data_by_name
+from services.xsoar import ListHandler, IncidentHandler
 
 approved_testing_list_name: str = "METCIRT_Approved_Testing"
 approved_testing_master_list_name: str = "METCIRT_Approved_Testing_MASTER"
@@ -35,7 +35,6 @@ headers = prod_headers
 
 incident_handler = IncidentHandler()
 list_handler = ListHandler()
-list_handler.refresh_cache()
 
 NEW_TICKET_CARD = {
     "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
@@ -731,7 +730,7 @@ all_options_card = {
 
 
 def get_url_card():
-    metcirt_urls = get_list_data_by_name('METCIRT URLs')
+    metcirt_urls = list_handler.get_list_data_by_name('METCIRT URLs')
     actions = []
 
     # Iterate through the list of URLs and create button actions
@@ -959,7 +958,7 @@ class AZDOWorkItem(Command):
                     "value": "1"
                 })
 
-            metcirt_xsoar = get_list_data_by_name('METCIRT XSOAR')
+            metcirt_xsoar = list_handler.get_list_data_by_name('METCIRT XSOAR')
             api_token = metcirt_xsoar['AZDO_PAT']['us-2' if project == 'gdr' else 'us']
             api_key = base64.b64encode(b':' + api_token.encode('utf-8')).decode('utf-8')
 
@@ -974,7 +973,7 @@ class AZDOWorkItem(Command):
             wit_type = wit_type.replace('%20', ' ')
             return_message = f'A new AZDO {wit_type} has been created \n [{wit_id}]({azdo_wit_url}) - {wit_title}'
 
-            webex_data = get_list_data_by_name('METCIRT Webex')
+            webex_data = list_handler.get_list_data_by_name('METCIRT Webex')
             headers = {
                 'Content-Type': 'application/json',
                 'Authorization': f"Bearer {CONFIG.webex_bot_access_token_toodles}"
@@ -1004,7 +1003,7 @@ class Review(Command):
         curr_date = datetime.now()
         ticket_no = attachment_actions.inputs["incident_id"]
 
-        list_dict = get_list_data_by_name("review").get('Tickets')
+        list_dict = list_handler.get_list_data_by_name("review").get('Tickets')
         add_entry_to_reviews(list_dict, ticket_no, activity['actor']['emailAddress'], curr_date.strftime("%x"), attachment_actions.inputs["review_notes"])
         reformat = {"Tickets": list_dict}
         list_handler.save(reformat, "review")
@@ -1032,7 +1031,7 @@ class GetCurrentApprovedTestingEntries(Command):
         )
 
     def execute(self, message, attachment_actions, activity):
-        approved_test_items = get_list_data_by_name(approved_testing_list_name)
+        approved_test_items = list_handler.get_list_data_by_name(approved_testing_list_name)
         response_text = {
             "USERNAMES": [],
             "ENDPOINTS": [],
@@ -1158,7 +1157,6 @@ def announce_new_approved_testing_entry(new_item) -> None:
         text="New Approved Testing!",
         attachments=[{"contentType": "application/vnd.microsoft.card.adaptive", "content": payload}]
     )
-    list_handler.refresh_cache()
 
 
 class AddApprovedTestingEntry(Command):
@@ -1183,8 +1181,8 @@ class AddApprovedTestingEntry(Command):
         if attachment_actions.inputs['callback_keyword'] == 'add_approved_testing' and expiry_date == "":
             expiry_date = (datetime.now(timezone('US/Eastern')) + timedelta(days=1)).strftime("%Y-%m-%d")
 
-        current_entries = get_list_data_by_name(approved_testing_list_name)
-        master_entries = get_list_data_by_name(approved_testing_master_list_name)
+        current_entries = list_handler.get_list_data_by_name(approved_testing_list_name)
+        master_entries = list_handler.get_list_data_by_name(approved_testing_master_list_name)
 
         if usernames:
             usernames = usernames.split(',')
@@ -1242,7 +1240,6 @@ class AddApprovedTestingEntry(Command):
             "host_names": ', '.join(host_names) if host_names else '',
             "ip_addresses": ', '.join(ip_addresses) if ip_addresses else ''
         })
-        list_handler.refresh_cache()
 
         return f"{activity['actor']['displayName']}, your entry has been added to the Approved Testing list."
 
@@ -1266,7 +1263,7 @@ def add_entry_to_reviews(dict_full, ticket_id, person, date, message):
 
 
 def announce_new_threat_hunt(ticket_no, ticket_title, incident_url, person_id):
-    webex_data = get_list_data_by_name('METCIRT Webex')
+    webex_data = list_handler.get_list_data_by_name('METCIRT Webex')
     headers = {
         'Content-Type': 'application/json',
         'Authorization': f"Bearer {CONFIG.webex_bot_access_token_toodles}"
