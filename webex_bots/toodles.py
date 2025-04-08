@@ -333,22 +333,23 @@ APPROVED_TESTING_CARD = {
             "text": "Approved Testing",
             "horizontalAlignment": "center",
             "weight": "bolder",
-            "size": "medium"
+            "size": "medium",
+            "color": "accent"
         },
         {
             "type": "ColumnSet",
             "columns": [
                 {
                     "type": "Column",
-                    "width": "1",
+                    "width": 1,
                     "items": [
                         {
                             "type": "TextBlock",
-                            "text": "Usernames",
-                            "wrap": True,
+                            "text": "Username(s)",
                             "horizontalAlignment": "right"
                         }
-                    ]
+                    ],
+                    "verticalContentAlignment": "Center"
                 },
                 {
                     "type": "Column",
@@ -356,7 +357,36 @@ APPROVED_TESTING_CARD = {
                     "items": [
                         {
                             "type": "Input.Text",
-                            "id": "username"
+                            "id": "usernames",
+                            "placeholder": "Use , as seperator"
+                        }
+                    ]
+                }
+            ],
+        },
+        {
+            "type": "ColumnSet",
+            "columns": [
+                {
+                    "type": "Column",
+                    "width": 1,
+                    "items": [
+                        {
+                            "type": "TextBlock",
+                            "text": "Hostname(s)",
+                            "horizontalAlignment": "right"
+                        }
+                    ],
+                    "verticalContentAlignment": "Center"
+                },
+                {
+                    "type": "Column",
+                    "width": 3,
+                    "items": [
+                        {
+                            "type": "Input.Text",
+                            "id": "host_names",
+                            "placeholder": "Use , as seperator"
                         }
                     ]
                 }
@@ -367,15 +397,15 @@ APPROVED_TESTING_CARD = {
             "columns": [
                 {
                     "type": "Column",
-                    "width": "1",
+                    "width": 1,
                     "items": [
                         {
                             "type": "TextBlock",
-                            "text": "Host Names",
-                            "wrap": True,
+                            "text": "IP(s)",
                             "horizontalAlignment": "right"
                         }
-                    ]
+                    ],
+                    "verticalContentAlignment": "Center"
                 },
                 {
                     "type": "Column",
@@ -383,55 +413,28 @@ APPROVED_TESTING_CARD = {
                     "items": [
                         {
                             "type": "Input.Text",
-                            "id": "host_name"
+                            "id": "ip_addresses",
+                            "placeholder": "Use , as seperator",
+                            "isMultiline": True
                         }
                     ]
                 }
-            ],
-            "spacing": "small"
+            ]
         },
         {
             "type": "ColumnSet",
             "columns": [
                 {
                     "type": "Column",
-                    "width": "1",
-                    "items": [
-                        {
-                            "type": "TextBlock",
-                            "text": "IP Addresses",
-                            "wrap": True,
-                            "horizontalAlignment": "right"
-                        }
-                    ]
-                },
-                {
-                    "type": "Column",
-                    "width": 3,
-                    "items": [
-                        {
-                            "type": "Input.Text",
-                            "id": "ip_address"
-                        }
-                    ]
-                }
-            ],
-            "spacing": "small"
-        },
-        {
-            "type": "ColumnSet",
-            "columns": [
-                {
-                    "type": "Column",
-                    "width": "1",
+                    "width": 1,
                     "items": [
                         {
                             "type": "TextBlock",
                             "text": "Description",
-                            "wrap": True,
                             "horizontalAlignment": "right"
                         }
-                    ]
+                    ],
+                    "verticalContentAlignment": "Center"
                 },
                 {
                     "type": "Column",
@@ -444,15 +447,14 @@ APPROVED_TESTING_CARD = {
                         }
                     ]
                 }
-            ],
-            "spacing": "small"
+            ]
         },
         {
             "type": "ColumnSet",
             "columns": [
                 {
                     "type": "Column",
-                    "width": "1",
+                    "width": 1,
                     "items": [
                         {
                             "type": "TextBlock",
@@ -460,7 +462,8 @@ APPROVED_TESTING_CARD = {
                             "wrap": True,
                             "horizontalAlignment": "right"
                         }
-                    ]
+                    ],
+                    "verticalContentAlignment": "Center"
                 },
                 {
                     "type": "Column",
@@ -472,44 +475,57 @@ APPROVED_TESTING_CARD = {
                         }
                     ]
                 }
-            ],
-            "spacing": "small"
+            ]
         },
         {
             "type": "ColumnSet",
             "columns": [
                 {
                     "type": "Column",
-                    "width": "1",
+                    "width": 1,
                     "items": [
                         {
                             "type": "TextBlock",
-                            "text": "Keep until:",
-                            "wrap": True,
+                            "text": "Keep until",
                             "horizontalAlignment": "right"
                         }
-                    ]
+                    ],
+                    "verticalContentAlignment": "Center"
                 },
                 {
                     "type": "Column",
                     "width": 3,
                     "items": [
                         {
-                            "type": "Input.Date",
-                            "id": "expiry_date",
-                            "placeholder": "Enter a date"
+                            "type": "ColumnSet",
+                            "columns": [
+                                {
+                                    "type": "Column",
+                                    "width": 2,
+                                    "items": [
+                                        {
+                                            "type": "Input.Date",
+                                            "id": "expiry_date",
+                                            "placeholder": "Enter a date"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "type": "Column",
+                                    "width": 1,
+                                    "items": [
+                                        {
+                                            "type": "TextBlock",
+                                            "text": "5 PM ET"
+                                        }
+                                    ],
+                                    "verticalContentAlignment": "Center"
+                                }
+                            ]
                         }
                     ]
                 }
             ],
-            "spacing": "small"
-        },
-        {
-            "type": "Input.Toggle",
-            "id": "should_create_snow_ticket",
-            "title": "Create a SNOW Ticket for this activity?",
-            "valueOn": "true",
-            "valueOff": "false"
         },
         {
             "type": "ActionSet",
@@ -1067,6 +1083,84 @@ class GetCurrentApprovedTestingEntries(Command):
         return table
 
 
+def announce_new_approved_testing_entry(new_item) -> None:
+    payload = {
+        "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+        "type": "AdaptiveCard",
+        "version": "1.3",
+        "body": [
+            {
+                "type": "TextBlock",
+                "text": "New Approved Testing",
+                "style": "heading",
+                "size": "Large",
+                "weight": "Bolder",
+                "color": "Attention"
+            },
+            {
+                "type": "FactSet",
+                "facts": [
+                    {
+                        "title": "Submitter",
+                        "value": new_item.get('submitter')
+                    },
+                    {
+                        "title": "Description",
+                        "wrap": True,
+                        "value": new_item.get('description')
+                    },
+                    {
+                        "title": "Username(s)",
+                        "wrap": True,
+                        "value": new_item.get('usernames')
+                    },
+                    {
+                        "title": "Hostname(s)",
+                        "wrap": True,
+                        "value": new_item.get('host_names')
+                    },
+                    {
+                        "title": "IP address(es)",
+                        "wrap": True,
+                        "value": new_item.get('ip_addresses')
+                    },
+                    {
+                        "title": "Scope",
+                        "wrap": True,
+                        "value": new_item.get('scope')
+                    },
+                    {
+                        "title": "Keep until",
+                        "value": new_item.get('expiry_date')
+                    }
+                ],
+                "height": "stretch",
+                "style": "accent"
+            },
+            {
+                "type": "ActionSet",
+                "spacing": "small",
+                "actions": [
+                    {
+                        "type": "Action.Submit",
+                        "title": "Get Current List",
+                        "data": {
+                            "callback_keyword": "current_approved_testing"
+                        }
+                    }
+                ],
+                "horizontalAlignment": "right"
+            }
+        ]
+    }
+    webex_api.messages.create(
+        roomId=CONFIG.webex_room_id_vinay_test_space,
+        text="New Approved Testing!",
+        attachments=[{"contentType": "application/vnd.microsoft.card.adaptive", "content": payload}]
+    )
+    list_handler.refresh_cache()
+
+
 class AddApprovedTestingEntry(Command):
     def __init__(self):
         super().__init__(
@@ -1075,57 +1169,78 @@ class AddApprovedTestingEntry(Command):
         )
 
     def execute(self, message, attachment_actions, activity):
-        username = attachment_actions.inputs['username'].strip()
-        host_name = attachment_actions.inputs['host_name'].strip()
-        ip_address = attachment_actions.inputs['ip_address'].strip()
+        usernames = attachment_actions.inputs['usernames'].strip()
+        host_names = attachment_actions.inputs['host_names'].strip()
+        ip_addresses = attachment_actions.inputs['ip_addresses'].strip()
 
-        if username == "" and host_name == "" and ip_address == "":
-            return "One of username, host name, or IP address needs to be filled in. Please try again"
+        if usernames == "" and host_names == "" and ip_addresses == "":
+            return "One of username, host name, or IP address fields must be filled in. Please try again!"
 
         description = attachment_actions.inputs['description'].strip()
         scope = attachment_actions.inputs['scope'].strip()
-        should_create_snow_ticket = attachment_actions.inputs['should_create_snow_ticket']
         submitter = activity['actor']['emailAddress']
         expiry_date = attachment_actions.inputs['expiry_date']
         if attachment_actions.inputs['callback_keyword'] == 'add_approved_testing' and expiry_date == "":
             expiry_date = (datetime.now(timezone('US/Eastern')) + timedelta(days=1)).strftime("%Y-%m-%d")
 
-        approved_testing_entries = get_list_data_by_name(approved_testing_list_name)
+        current_entries = get_list_data_by_name(approved_testing_list_name)
+        master_entries = get_list_data_by_name(approved_testing_master_list_name)
 
-        if username:
-            approved_testing_entries.get("USERNAMES").append({"data": username, "expiry_date": expiry_date, "submitter": submitter})
-        if host_name:
-            approved_testing_entries.get("ENDPOINTS").append({"data": host_name, "expiry_date": expiry_date, "submitter": submitter})
-        if ip_address:
-            approved_testing_entries.get("IP_ADDRESSES").append({"data": ip_address, "expiry_date": expiry_date, "submitter": submitter})
+        if usernames:
+            usernames = usernames.split(',')
+            for username in usernames:
+                current_entries.get("USERNAMES").append({"data": username.strip(), "expiry_date": expiry_date, "submitter": submitter})
 
-        list_handler.save(approved_testing_list_name, approved_testing_entries)
+                new_testing_entry = {
+                    "username": username,
+                    "description": description,
+                    "scope": scope,
+                    "submitter": submitter,
+                    "submit_date": datetime.now().strftime("%m/%d/%Y"),
+                    "expiry_date": expiry_date
+                }
+                master_entries.append(new_testing_entry)
 
-        approved_testing_master_list_entries = get_list_data_by_name(approved_testing_master_list_name)
-        new_testing_entry = {
-            "username": username,
-            "host_name": host_name,
-            "ip_address": ip_address,
-            "description": description,
-            "scope": scope,
-            "should_create_snow_ticket": should_create_snow_ticket,
-            "submitter": submitter,
-            "submit_date": datetime.now().strftime("%m/%d/%Y"),
-            "expiry_date": expiry_date
-        }
-        approved_testing_master_list_entries.append(new_testing_entry)
-        list_handler.save(approved_testing_master_list_name, approved_testing_master_list_entries)
+        if host_names:
+            host_names = host_names.split(',')
+            for host_name in host_names:
+                current_entries.get("ENDPOINTS").append({"data": host_name.strip(), "expiry_date": expiry_date, "submitter": submitter})
+                new_testing_entry = {
+                    "host_name": host_name,
+                    "description": description,
+                    "scope": scope,
+                    "submitter": submitter,
+                    "submit_date": datetime.now().strftime("%m/%d/%Y"),
+                    "expiry_date": expiry_date
+                }
+                master_entries.append(new_testing_entry)
+
+        if ip_addresses:
+            ip_addresses = ip_addresses.split(',')
+            for ip_address in ip_addresses:
+                current_entries.get("IP_ADDRESSES").append({"data": ip_address.strip(), "expiry_date": expiry_date, "submitter": submitter})
+                new_testing_entry = {
+                    "ip_address": ip_address,
+                    "description": description,
+                    "scope": scope,
+                    "submitter": submitter,
+                    "submit_date": datetime.now().strftime("%m/%d/%Y"),
+                    "expiry_date": expiry_date
+                }
+                master_entries.append(new_testing_entry)
+
+        list_handler.save(approved_testing_list_name, current_entries)
+        list_handler.save(approved_testing_master_list_name, master_entries)
 
         announce_new_approved_testing_entry({
             "description": description,
             "scope": scope,
-            "should_create_snow_ticket": should_create_snow_ticket,
             "submitter": submitter,
             "submit_date": datetime.now().strftime("%m/%d/%Y"),
             "expiry_date": expiry_date,
-            "username": username,
-            "ip_address": ip_address,
-            "host_name": host_name
+            "usernames": ', '.join(usernames) if usernames else "",
+            "host_names": ', '.join(host_names) if host_names else '',
+            "ip_addresses": ', '.join(ip_addresses) if ip_addresses else ''
         })
         list_handler.refresh_cache()
 
@@ -1161,95 +1276,6 @@ def announce_new_threat_hunt(ticket_no, ticket_title, incident_url, person_id):
         'markdown': f"<@personId:{person_id}> created a new Threat Hunt in XSOAR. Ticket: [#{ticket_no}]({incident_url}) - {ticket_title}"
     }
     requests.post(webex_data.get('api_url'), headers=headers, json=payload_json)
-
-
-def announce_new_approved_testing_entry(new_item) -> None:
-    payload = json.dumps({
-        'roomId': CONFIG.webex_room_id_gosc_t2,
-        "text": "New approved testing item submitted",
-        "attachments": [{
-            "contentType": "application/vnd.microsoft.card.adaptive",
-            "content": {
-                "type": "AdaptiveCard",
-                "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
-                "version": "1.3",
-                "body": [
-                    {
-                        "type": "TextBlock",
-                        "text": "New Approved Testing",
-                        "style": "heading",
-                        "size": "Large",
-                        "weight": "Bolder",
-                        "color": "Attention"
-                    },
-                    {
-                        "type": "FactSet",
-                        "facts": [
-                            {
-                                "title": "Submitter",
-                                "value": new_item.get('submitter')
-                            },
-                            {
-                                "title": "Description",
-                                "wrap": True,
-                                "value": new_item.get('description')
-                            },
-                            {
-                                "title": "Username",
-                                "wrap": True,
-                                "value": new_item.get('username')
-                            },
-                            {
-                                "title": "Hostname",
-                                "wrap": True,
-                                "value": new_item.get('host_name')
-                            },
-                            {
-                                "title": "IP address",
-                                "wrap": True,
-                                "value": new_item.get('ip_address')
-                            },
-                            {
-                                "title": "Scope",
-                                "wrap": True,
-                                "value": new_item.get('scope')
-                            },
-                            {
-                                "title": "Keep until",
-                                "value": new_item.get('expiry_date')
-                            },
-                            {
-                                "title": "SNOW ticket",
-                                "value": new_item.get('should_create_snow_ticket', 'No')
-                            }
-                        ],
-                        "height": "stretch",
-                        "style": "accent"
-                    },
-                    {
-                        "type": "ActionSet",
-                        "spacing": "small",
-                        "actions": [
-                            {
-                                "type": "Action.Submit",
-                                "title": "Get Current List",
-                                "data": {
-                                    "callback_keyword": "current_approved_testing"
-                                }
-                            }
-                        ],
-                        "horizontalAlignment": "right"
-                    }
-                ]
-            }
-        }]
-    })
-    webex_api.messages.create(
-        # roomId=CONFIG.webex_room_id_gosc_t2, TODO
-        roomId=CONFIG.webex_room_id_vinay_test_space,
-        text="Previous Shift Performance!",
-        attachments=[{"contentType": "application/vnd.microsoft.card.adaptive", "content": payload}]
-    )
 
 
 class Who(Command):
