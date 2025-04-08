@@ -341,19 +341,15 @@ APPROVED_TESTING_CARD = {
             "columns": [
                 {
                     "type": "Column",
-                    "width": "1",
                     "items": [
                         {
                             "type": "TextBlock",
-                            "text": "Username(s)",
-                            "wrap": True,
-                            "horizontalAlignment": "right"
+                            "text": "Username(s)"
                         }
                     ]
                 },
                 {
                     "type": "Column",
-                    "width": 3,
                     "items": [
                         {
                             "type": "Input.Text",
@@ -368,19 +364,15 @@ APPROVED_TESTING_CARD = {
             "columns": [
                 {
                     "type": "Column",
-                    "width": "1",
                     "items": [
                         {
                             "type": "TextBlock",
-                            "text": "Hostname(s)",
-                            "wrap": True,
-                            "horizontalAlignment": "right"
+                            "text": "Hostname(s)"
                         }
                     ]
                 },
                 {
                     "type": "Column",
-                    "width": 3,
                     "items": [
                         {
                             "type": "Input.Text",
@@ -396,19 +388,15 @@ APPROVED_TESTING_CARD = {
             "columns": [
                 {
                     "type": "Column",
-                    "width": "1",
                     "items": [
                         {
                             "type": "TextBlock",
-                            "text": "IP(s)",
-                            "wrap": True,
-                            "horizontalAlignment": "right"
+                            "text": "IP(s)"
                         }
                     ]
                 },
                 {
                     "type": "Column",
-                    "width": 3,
                     "items": [
                         {
                             "type": "Input.Text",
@@ -425,19 +413,15 @@ APPROVED_TESTING_CARD = {
             "columns": [
                 {
                     "type": "Column",
-                    "width": "1",
                     "items": [
                         {
                             "type": "TextBlock",
-                            "text": "Description",
-                            "wrap": True,
-                            "horizontalAlignment": "right"
+                            "text": "Description"
                         }
                     ]
                 },
                 {
                     "type": "Column",
-                    "width": 3,
                     "items": [
                         {
                             "type": "Input.Text",
@@ -454,19 +438,16 @@ APPROVED_TESTING_CARD = {
             "columns": [
                 {
                     "type": "Column",
-                    "width": "1",
                     "items": [
                         {
                             "type": "TextBlock",
                             "text": "Scope",
-                            "wrap": True,
-                            "horizontalAlignment": "right"
+                            "wrap": True
                         }
                     ]
                 },
                 {
                     "type": "Column",
-                    "width": 3,
                     "items": [
                         {
                             "type": "Input.Text",
@@ -482,24 +463,39 @@ APPROVED_TESTING_CARD = {
             "columns": [
                 {
                     "type": "Column",
-                    "width": "1",
                     "items": [
                         {
                             "type": "TextBlock",
-                            "text": "Keep until:",
-                            "wrap": True,
-                            "horizontalAlignment": "right"
+                            "text": "Keep until:"
                         }
                     ]
                 },
                 {
                     "type": "Column",
-                    "width": 3,
                     "items": [
                         {
-                            "type": "Input.Date",
-                            "id": "expiry_date",
-                            "placeholder": "Enter a date"
+                            "type": "ColumnSet",
+                            "columns": [
+                                {
+                                    "type": "Column",
+                                    "items": [
+                                        {
+                                            "type": "Input.Date",
+                                            "id": "expiry_date",
+                                            "placeholder": "Enter a date"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "type": "Column",
+                                    "items": [
+                                        {
+                                            "type": "TextBlock",
+                                            "text": "5 PM ET"
+                                        }
+                                    ]
+                                }
+                            ]
                         }
                     ]
                 }
