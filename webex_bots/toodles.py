@@ -344,7 +344,7 @@ APPROVED_TESTING_CARD = {
                     "items": [
                         {
                             "type": "TextBlock",
-                            "text": "Username",
+                            "text": "Usernames",
                             "wrap": True,
                             "horizontalAlignment": "right"
                         }
@@ -371,7 +371,7 @@ APPROVED_TESTING_CARD = {
                     "items": [
                         {
                             "type": "TextBlock",
-                            "text": "Host Name",
+                            "text": "Host Names",
                             "wrap": True,
                             "horizontalAlignment": "right"
                         }
@@ -399,7 +399,7 @@ APPROVED_TESTING_CARD = {
                     "items": [
                         {
                             "type": "TextBlock",
-                            "text": "IP Address",
+                            "text": "IP Addresses",
                             "wrap": True,
                             "horizontalAlignment": "right"
                         }
