@@ -2,6 +2,7 @@ import time
 from typing import List, Dict
 
 import pandas as pd
+import requests
 from falconpy import Hosts
 from falconpy import OAuth2
 
@@ -9,8 +10,8 @@ from config import get_config
 
 CONFIG = get_config()
 falcon_auth = OAuth2(
-    client_id=CONFIG.cs_rtr_client_id,
-    client_secret=CONFIG.cs_rtr_client_secret,
+    client_id=CONFIG.cs_ro_client_id,
+    client_secret=CONFIG.cs_ro_client_secret,
     base_url="api.us-2.crowdstrike.com",
     ssl_verify=False,
 )
@@ -142,12 +143,18 @@ def get_device_id(hostname):
 
     return None
 
+
+def get_device_details(device_id):
+    """Retrieve device details."""
+    return falcon_hosts.get_device_details(ids=device_id)
+
+
 def get_access_token():
     """get CS access token"""
     url = 'https://api.us-2.crowdstrike.com/oauth2/token'
     body = {
-        'client_id': cs_client_id,
-        'client_secret': cs_client_secret
+        'client_id': CONFIG.cs_ro_client_id,
+        'client_secret': CONFIG.cs_ro_client_secret
     }
     response = requests.post(url, data=body)
     json_data = response.json()
@@ -160,7 +167,7 @@ def get_device_id_api(host_name):
     headers = {
         'Authorization': f'Bearer {get_access_token()}'
     }
-    response = requests.get(url, headers=headers)
+    response = requests.get(url, headers=headers, verify=False)
     json_data = response.json()
     return json_data['resources'][0]
 
@@ -186,4 +193,8 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    device_id = '36582a45c7bd4400bf4f51de8c99408b'
+    device_response = get_device_details(device_id)
+    device_resources = device_response["body"].get("resources", [])
+    category = device_resources[0].get('product_type_desc', '').lower()
+    print(category)
