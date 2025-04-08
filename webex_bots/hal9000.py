@@ -1085,6 +1085,9 @@ class GetCurrentApprovedTestingEntries(Command):
 
 def announce_new_approved_testing_entry(new_item) -> None:
     payload = {
+        "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+        "type": "AdaptiveCard",
+        "version": "1.3",
         "body": [
             {
                 "type": "TextBlock",
@@ -1129,10 +1132,6 @@ def announce_new_approved_testing_entry(new_item) -> None:
                     {
                         "title": "Keep until",
                         "value": new_item.get('expiry_date')
-                    },
-                    {
-                        "title": "SNOW ticket",
-                        "value": new_item.get('should_create_snow_ticket', 'No')
                     }
                 ],
                 "height": "stretch",
@@ -1190,7 +1189,7 @@ class AddApprovedTestingEntry(Command):
         if usernames:
             usernames = usernames.split(',')
             for username in usernames:
-                current_entries.get("USERNAMES").append({"data": username, "expiry_date": expiry_date, "submitter": submitter})
+                current_entries.get("USERNAMES").append({"data": username.strip(), "expiry_date": expiry_date, "submitter": submitter})
 
                 new_testing_entry = {
                     "username": username,
@@ -1205,7 +1204,7 @@ class AddApprovedTestingEntry(Command):
         if host_names:
             host_names = host_names.split(',')
             for host_name in host_names:
-                current_entries.get("ENDPOINTS").append({"data": host_name, "expiry_date": expiry_date, "submitter": submitter})
+                current_entries.get("ENDPOINTS").append({"data": host_name.strip(), "expiry_date": expiry_date, "submitter": submitter})
                 new_testing_entry = {
                     "host_name": host_name,
                     "description": description,
@@ -1219,7 +1218,7 @@ class AddApprovedTestingEntry(Command):
         if ip_addresses:
             ip_addresses = ip_addresses.split(',')
             for ip_address in ip_addresses:
-                current_entries.get("IP_ADDRESSES").append({"data": ip_address, "expiry_date": expiry_date, "submitter": submitter})
+                current_entries.get("IP_ADDRESSES").append({"data": ip_address.strip(), "expiry_date": expiry_date, "submitter": submitter})
                 new_testing_entry = {
                     "ip_address": ip_address,
                     "description": description,
@@ -1239,9 +1238,9 @@ class AddApprovedTestingEntry(Command):
             "submitter": submitter,
             "submit_date": datetime.now().strftime("%m/%d/%Y"),
             "expiry_date": expiry_date,
-            "usernames": usernames,
-            "host_names": host_names,
-            "ip_addresses": ip_addresses
+            "usernames": ', '.join(usernames) if usernames else "",
+            "host_names": ', '.join(host_names) if host_names else '',
+            "ip_addresses": ', '.join(ip_addresses) if ip_addresses else ''
         })
         list_handler.refresh_cache()
 
