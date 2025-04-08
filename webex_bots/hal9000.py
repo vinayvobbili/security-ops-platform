@@ -341,15 +341,19 @@ APPROVED_TESTING_CARD = {
             "columns": [
                 {
                     "type": "Column",
+                    "width": 1,
                     "items": [
                         {
                             "type": "TextBlock",
-                            "text": "Username(s)"
+                            "text": "Username(s)",
+                            "horizontalAlignment": "right"
                         }
-                    ]
+                    ],
+                    "verticalContentAlignment": "Center"
                 },
                 {
                     "type": "Column",
+                    "width": 3,
                     "items": [
                         {
                             "type": "Input.Text",
@@ -358,22 +362,25 @@ APPROVED_TESTING_CARD = {
                     ]
                 }
             ],
-            "horizontalAlignment": "left"
         },
         {
             "type": "ColumnSet",
             "columns": [
                 {
                     "type": "Column",
+                    "width": 1,
                     "items": [
                         {
                             "type": "TextBlock",
-                            "text": "Hostname(s)"
+                            "text": "Hostname(s)",
+                            "horizontalAlignment": "right"
                         }
-                    ]
+                    ],
+                    "verticalContentAlignment": "Center"
                 },
                 {
                     "type": "Column",
+                    "width": 3,
                     "items": [
                         {
                             "type": "Input.Text",
@@ -388,15 +395,19 @@ APPROVED_TESTING_CARD = {
             "columns": [
                 {
                     "type": "Column",
+                    "width": 1,
                     "items": [
                         {
                             "type": "TextBlock",
-                            "text": "IP(s)"
+                            "text": "IP(s)",
+                            "horizontalAlignment": "right"
                         }
-                    ]
+                    ],
+                    "verticalContentAlignment": "Center"
                 },
                 {
                     "type": "Column",
+                    "width": 3,
                     "items": [
                         {
                             "type": "Input.Text",
@@ -412,15 +423,19 @@ APPROVED_TESTING_CARD = {
             "columns": [
                 {
                     "type": "Column",
+                    "width": 1,
                     "items": [
                         {
                             "type": "TextBlock",
-                            "text": "Description"
+                            "text": "Description",
+                            "horizontalAlignment": "right"
                         }
-                    ]
+                    ],
+                    "verticalContentAlignment": "Center"
                 },
                 {
                     "type": "Column",
+                    "width": 3,
                     "items": [
                         {
                             "type": "Input.Text",
@@ -436,16 +451,20 @@ APPROVED_TESTING_CARD = {
             "columns": [
                 {
                     "type": "Column",
+                    "width": 1,
                     "items": [
                         {
                             "type": "TextBlock",
                             "text": "Scope",
-                            "wrap": True
+                            "wrap": True,
+                            "horizontalAlignment": "right"
                         }
-                    ]
+                    ],
+                    "verticalContentAlignment": "Center"
                 },
                 {
                     "type": "Column",
+                    "width": 3,
                     "items": [
                         {
                             "type": "Input.Text",
@@ -460,21 +479,26 @@ APPROVED_TESTING_CARD = {
             "columns": [
                 {
                     "type": "Column",
+                    "width": 1,
                     "items": [
                         {
                             "type": "TextBlock",
-                            "text": "Keep until:"
+                            "text": "Keep until",
+                            "horizontalAlignment": "right"
                         }
-                    ]
+                    ],
+                    "verticalContentAlignment": "Center"
                 },
                 {
                     "type": "Column",
+                    "width": 3,
                     "items": [
                         {
                             "type": "ColumnSet",
                             "columns": [
                                 {
                                     "type": "Column",
+                                    "width": 2,
                                     "items": [
                                         {
                                             "type": "Input.Date",
@@ -485,6 +509,7 @@ APPROVED_TESTING_CARD = {
                                 },
                                 {
                                     "type": "Column",
+                                    "width": 1,
                                     "items": [
                                         {
                                             "type": "TextBlock",
