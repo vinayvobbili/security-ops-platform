@@ -15,8 +15,6 @@ CONFIG = get_config()
 
 ROOT_DIRECTORY = Path(__file__).parent.parent.parent
 
-python
-
 
 def generate_chart(tickets):
     """

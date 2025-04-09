@@ -11,7 +11,6 @@ from src import helper_methods
 from src.charts import mttr_mttc, outflow, lifespan, heatmap, sla_breaches, aging_tickets, inflow, qradar_rule_efficacy, de_stories, days_since_incident, re_stories, threatcon_level, vectra_volume, \
     crowdstrike_volume
 from src.components import oncall, approved_security_testing
-from src.components.approved_security_testing import list_handler
 
 config = get_config()
 eastern = pytz.timezone('US/Eastern')
