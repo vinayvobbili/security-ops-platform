@@ -177,7 +177,7 @@ class Host:
                 self.country = 'India PMLI'
             self.life_cycle_status = snow_host_details.get('lifecycleStatus', '')
 
-            if not self.country and (self.country.lower().startswith('vmvdi') or self.name.lower().startswith(config.ticket_type_prefix)):
+            if not self.country and (self.name.lower().startswith('vmvdi') or self.name.lower().startswith(config.ticket_type_prefix)):
                 self.country = 'United States'
 
         except Exception as e:
