@@ -98,42 +98,6 @@ def fetch_all_hosts_and_write_to_xlsx(xlsx_filename: str = "all_cs_hosts.xlsx") 
         print(f"An error occurred while writing to XLSX: {e}")
 
 
-def list_cs_hosts_without_ring_tag(input_xlsx_filename: str = "../data/transient/epp_device_tagging/all_cs_hosts.xlsx",
-                                   output_xlsx_filename: str = "../data/transient/epp_device_tagging/cs_hosts_without_ring_tag.xlsx") -> None:
-    """
-    List CrowdStrike hosts that do not have a FalconGroupingTags/*Ring* tag.
-    Read from all_hosts.xlsx, filter hosts, and write the results to a new XLSX file.
-    """
-    hosts_without_ring_tag: List[Dict[str, str]] = []
-
-    try:
-        df = pd.read_excel(input_xlsx_filename, engine='openpyxl')
-        for index, row in df.iterrows():
-            current_tags = row["current_tags"]
-            if isinstance(current_tags, str):
-                tags = current_tags.split(", ")
-            else:
-                tags = []
-            has_ring_tag = False
-            for tag in tags:
-                if tag.startswith("FalconGroupingTags/") and "Ring" in tag:
-                    has_ring_tag = True
-                    break
-            if not has_ring_tag:
-                hosts_without_ring_tag.append(row.to_dict())
-
-        output_df = pd.DataFrame(hosts_without_ring_tag)
-        output_df.to_excel(output_xlsx_filename, index=False, engine='openpyxl')
-
-        print(f"Found {len(hosts_without_ring_tag)} hosts without a Ring tag.")
-        print(f"Wrote results to {output_xlsx_filename}")
-
-    except FileNotFoundError:
-        print(f"Error: Input file {input_xlsx_filename} not found.")
-    except Exception as e:
-        print(f"An error occurred: {e}")
-
-
 def get_device_id(hostname):
     """Retrieve the first device ID matching the filter."""
     host_filter = f"hostname:'{hostname}'"
@@ -195,25 +159,9 @@ def get_device_status_api(host_name):
 
 def main() -> None:
     # fetch_all_hosts_and_write_to_xlsx()
-    list_cs_hosts_without_ring_tag()
-
-
-def send_report():
-    """
-    Sends a file to a Webex room.
-    """
-    host_count = len(pd.read_excel("../data/transient/epp_device_tagging/cs_hosts_without_ring_tag.xlsx", engine="openpyxl"))
-    webex_api.messages.create(
-        roomId=CONFIG.webex_room_id_epp_tagging,
-        text=f"CS hosts without a Ring tag. Count={host_count}!",
-        files=[
-            '/Users/user/PycharmProjects/IR/data/transient/epp_device_tagging/cs_hosts_without_ring_tag.xlsx'
-        ]
-    )
+    # list_cs_hosts_without_ring_tag()
+    pass
 
 
 if __name__ == "__main__":
-    # fetch_all_hosts_and_write_to_xlsx()
-    # list_cs_hosts_without_ring_tag()
-    # send_report()
-    pass
+    main()

@@ -35,7 +35,6 @@ headers = prod_headers
 
 incident_handler = IncidentHandler()
 list_handler = ListHandler()
-list_handler.refresh_cache()
 
 NEW_TICKET_CARD = {
     "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
@@ -1157,7 +1156,6 @@ def announce_new_approved_testing_entry(new_item) -> None:
         text="New Approved Testing!",
         attachments=[{"contentType": "application/vnd.microsoft.card.adaptive", "content": payload}]
     )
-    list_handler.refresh_cache()
 
 
 class AddApprovedTestingEntry(Command):
@@ -1243,7 +1241,6 @@ class AddApprovedTestingEntry(Command):
             "host_names": ', '.join(host_names) if host_names else '',
             "ip_addresses": ', '.join(ip_addresses) if ip_addresses else ''
         })
-        list_handler.refresh_cache()
 
         return f"{activity['actor']['displayName']}, your entry has been added to the Approved Testing list."
 
