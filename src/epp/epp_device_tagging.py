@@ -38,7 +38,6 @@ from services.service_now import ServiceNowClient
 config = get_config()
 
 root_directory = Path(__file__).parent.parent
-print(root_directory)
 
 # Constants
 DATA_DIR = Path("../../data")
@@ -47,14 +46,14 @@ REGIONS_FILE = DATA_DIR / "regions_by_country.json"
 COUNTRIES_FILE = DATA_DIR / "countries_by_code.json"
 INPUT_FILE = TRANSIENT_DIR / 'epp_device_tagging' / "Device Tagging input hosts.xlsx"
 
-# Ring distribution percentages
+# Workstation ring distribution percentages
 RING_1_PERCENT = 0.1
 RING_2_PERCENT = 0.2
 RING_3_PERCENT = 0.3
 # Ring 4 is the remainder
 
 # Server environment mappings
-RING_1_ENVS = {"dev", "poc", "lab", "integration", "development"}  # All values must in lower case
+RING_1_ENVS = {"dev", "poc", "lab", "integration", "development"}  # All values must be in lower case
 RING_2_ENVS = {"qa", "test"}
 RING_3_ENVS = {"dr"}
 # Ring 4 is for production or unknown environments
