@@ -842,8 +842,7 @@ class IOCHunt(Command):
             'details': attachment_actions.inputs['ioc_hunt_iocs'].strip(),
             'type': "METCIRT IOC Hunt"
         }
-        new_ticket = [incident]
-        result = incident_handler.create(new_ticket)
+        result = incident_handler.create(incident)
         ticket_no = result[0].get('id')
         incident_url = CONFIG.xsoar_prod_ui_base_url + ticket_no
 

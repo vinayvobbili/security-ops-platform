@@ -1,0 +1,214 @@
+body {
+    font-family: Arial, sans-serif;
+    max-width: 800px;
+    margin: 2rem auto;
+    padding: 0 1rem;
+    min-height: 100vh;
+    background: linear-gradient(
+            135deg,
+            rgb(147, 197, 193) 0%,
+            rgb(128, 182, 178) 100%
+    );
+    position: relative;
+    overflow: hidden;
+}
+
+/* Wavy background decoration */
+body::before,
+body::after {
+    content: '';
+    position: absolute;
+    width: 200%;
+    height: 200%;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 50%;
+    transform: rotate(-3deg);
+    z-index: -1;
+}
+
+body::before {
+    top: -100%;
+    left: -50%;
+}
+
+body::after {
+    bottom: -100%;
+    right: -50%;
+    transform: rotate(7deg);
+}
+
+.form-container {
+    background: linear-gradient(to bottom, #f5f9fa, #edf3f4);
+    padding: 2rem;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+h1 {
+    color: #333;
+    margin-bottom: 1.5rem;
+}
+
+.form-group {
+    margin-bottom: 1.5rem;
+}
+
+label {
+    display: block;
+    margin-bottom: 0.5rem;
+    color: #333;
+}
+
+.required {
+    color: red;
+    margin-left: 4px;
+}
+
+.date-label-container {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 1rem;
+}
+
+input[type="date"],
+textarea {
+    width: 90%;
+    padding: 0.5rem;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 1rem;
+    background-color: white;
+}
+
+textarea {
+    min-height: 100px;
+    resize: vertical;
+    width: 100%;
+}
+
+.radio-group {
+    margin-top: 0.5rem;
+}
+
+.radio-option {
+    margin-bottom: 0.5rem;
+}
+
+.helper-text {
+    font-size: 0.9rem;
+    color: #666;
+    margin-top: 0.25rem;
+}
+
+button {
+    background-color: #007bff;
+    color: white;
+    padding: 0.75rem 1.5rem;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 1rem;
+    display: block;
+    margin-left: auto;
+
+}
+
+button:hover {
+    background-color: #0056b3;
+}
+
+/* Additional styles for radio buttons */
+.radio-option input[type="radio"] {
+    margin-right: 8px;
+}
+
+.radio-option label {
+    display: inline-block;
+}
+
+/* Basic modal styles - you can customize these */
+/* Modal container */
+.modal {
+    display: none; /* Hidden by default */
+    position: fixed;
+    z-index: 1;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    background-color: rgba(0, 0, 0, 0.6); /* Darker overlay for better contrast */
+}
+
+/* Show class with proper positioning */
+.show {
+    display: flex !important;
+    justify-content: center;
+    align-items: center;
+}
+
+/* Modal content styling */
+.modal-content {
+    background: linear-gradient(to bottom, #ffffff, #f5f9fa); /* Gradient background like the form */
+    margin: 10% auto;
+    padding: 30px;
+    border-radius: 8px; /* Rounded corners to match form styling */
+    border: none;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2); /* More pronounced shadow */
+    width: 60%; /* Slightly narrower for better focus */
+    max-width: 600px;
+    position: relative;
+    animation: modalAppear 0.3s ease-out; /* Smooth appearance animation */
+}
+
+/* Add animation for modal appearance */
+@keyframes modalAppear {
+    from {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Close button styling */
+.close {
+    color: #666;
+    float: right;
+    font-size: 28px;
+    font-weight: bold;
+    position: absolute;
+    top: 10px;
+    right: 15px;
+    transition: color 0.2s;
+}
+
+.close:hover,
+.close:focus {
+    color: #333;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+/* Response content styling */
+#response {
+    text-align: center;
+}
+
+#response h3 {
+    color: #007bff; /* Match with your submit button color */
+    margin-bottom: 20px;
+}
+
+#response a {
+    color: #007bff;
+    text-decoration: none;
+    font-weight: bold;
+}
+
+#response a:hover {
+    text-decoration: underline;
+}
