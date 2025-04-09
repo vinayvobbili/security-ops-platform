@@ -23,7 +23,6 @@ def main():
     """
     # run once
     helper_methods.make_dir_for_todays_charts(),
-    list_handler.refresh_cache(),
     aging_tickets.make_chart(),
     days_since_incident.make_chart(),
     crowdstrike_volume.make_chart(),
