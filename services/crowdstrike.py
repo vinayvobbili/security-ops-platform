@@ -5,6 +5,7 @@ import pandas as pd
 import requests
 from falconpy import Hosts
 from falconpy import OAuth2
+from webexteamssdk import WebexTeamsAPI
 
 from config import get_config
 
@@ -17,13 +18,15 @@ falcon_auth = OAuth2(
 )
 falcon_hosts = Hosts(auth_object=falcon_auth)
 
+webex_api = WebexTeamsAPI(access_token=CONFIG.webex_bot_access_token_jarvais)
 
-def fetch_all_hosts_and_write_to_xlsx(xlsx_filename: str = "all_hosts.xlsx") -> None:
+
+def fetch_all_hosts_and_write_to_xlsx(xlsx_filename: str = "all_cs_hosts.xlsx") -> None:
     """
     Fetches all hosts from CrowdStrike Falcon and writes their details (hostname, host ID, current tags) to an XLSX file.
 
     Args:
-        xlsx_filename (str): The name of the XLSX file to write to. Defaults to "all_hosts.xlsx".
+        xlsx_filename (str): The name of the XLSX file to write to. Defaults to "all_cs_hosts.xlsx".
     """
 
     all_host_data: List[Dict[str, str]] = []
@@ -54,6 +57,9 @@ def fetch_all_hosts_and_write_to_xlsx(xlsx_filename: str = "all_hosts.xlsx") -> 
                                 "hostname": host.get("hostname"),
                                 "host_id": host.get("device_id"),
                                 "current_tags": ", ".join(host.get("tags", [])),
+                                "last_seen": host.get("last_seen"),
+                                "status": host.get("status"),
+                                "chassis_type_desc": host.get("chassis_type_desc"),
                             }
                         )
                 else:
@@ -92,7 +98,7 @@ def fetch_all_hosts_and_write_to_xlsx(xlsx_filename: str = "all_hosts.xlsx") -> 
         print(f"An error occurred while writing to XLSX: {e}")
 
 
-def list_cs_hosts_without_ring_tag(input_xlsx_filename: str = "../data/transient/epp_device_tagging/all_hosts.xlsx",
+def list_cs_hosts_without_ring_tag(input_xlsx_filename: str = "../data/transient/epp_device_tagging/all_cs_hosts.xlsx",
                                    output_xlsx_filename: str = "../data/transient/epp_device_tagging/cs_hosts_without_ring_tag.xlsx") -> None:
     """
     List CrowdStrike hosts that do not have a FalconGroupingTags/*Ring* tag.
@@ -192,9 +198,22 @@ def main() -> None:
     list_cs_hosts_without_ring_tag()
 
 
+def send_report():
+    """
+    Sends a file to a Webex room.
+    """
+    host_count = len(pd.read_excel("../data/transient/epp_device_tagging/cs_hosts_without_ring_tag.xlsx", engine="openpyxl"))
+    webex_api.messages.create(
+        roomId=CONFIG.webex_room_id_epp_tagging,
+        text=f"CS hosts without a Ring tag. Count={host_count}!",
+        files=[
+            '/Users/user/PycharmProjects/IR/data/transient/epp_device_tagging/cs_hosts_without_ring_tag.xlsx'
+        ]
+    )
+
+
 if __name__ == "__main__":
-    device_id = '36582a45c7bd4400bf4f51de8c99408b'
-    device_response = get_device_details(device_id)
-    device_resources = device_response["body"].get("resources", [])
-    category = device_resources[0].get('product_type_desc', '').lower()
-    print(category)
+    # fetch_all_hosts_and_write_to_xlsx()
+    # list_cs_hosts_without_ring_tag()
+    # send_report()
+    pass
