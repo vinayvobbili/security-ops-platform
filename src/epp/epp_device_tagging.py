@@ -37,7 +37,7 @@ from services.service_now import ServiceNowClient
 # Load configuration
 config = get_config()
 
-root_directory = Path(__file__).parent.parent
+ROOT_DIRECTORY = Path(__file__).parent.parent
 
 # Constants
 DATA_DIR = Path("../../data")
@@ -462,7 +462,7 @@ def send_report(output_filename: str, time_report) -> bool:
     try:
         webex_api = WebexAPI(config.webex_bot_access_token_jarvais)
         response = webex_api.messages.create(
-            roomId=config.webex_room_id_epp_tagging,
+            roomId=config.webex_room_id_vinay_test_space,
             markdown=f"EPP-Falcon ring epp_device_tagging results are attached.\n\n```{time_report}",
             files=[output_filename]
         )
@@ -504,6 +504,8 @@ def main() -> None:
 
     # Apply tags
     apply_tag_start = time.time()
+    # successfully_tagged_hosts = apply_tags(hosts)
+    # print(successfully_tagged)
     apply_tag_end = time.time()
     apply_tag_duration = apply_tag_end - apply_tag_start
 
