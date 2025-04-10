@@ -70,8 +70,8 @@ with open(COUNTRIES_FILE, 'r') as f:
 
 # Initialize API clients
 falcon_auth = OAuth2(
-    client_id=config.cs_rtr_client_id,
-    client_secret=config.cs_rtr_client_secret,
+    client_id=config.cs_host_write_client_id,
+    client_secret=config.cs_host_write_client_secret,
     base_url="api.us-2.crowdstrike.com",
     ssl_verify=False
 )
@@ -504,8 +504,8 @@ def main() -> None:
 
     # Apply tags
     apply_tag_start = time.time()
-    # successfully_tagged_hosts = apply_tags(hosts)
-    # print(successfully_tagged)
+    successfully_tagged_hosts = apply_tags(hosts)
+    print(successfully_tagged_hosts)
     apply_tag_end = time.time()
     apply_tag_duration = apply_tag_end - apply_tag_start
 
