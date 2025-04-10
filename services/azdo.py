@@ -3,7 +3,6 @@ import time
 
 from azure.devops.connection import Connection
 from azure.devops.exceptions import AzureDevOpsClientRequestError
-from azure.devops.v7_0.core.models import TeamProjectReference
 from azure.devops.v7_0.work_item_tracking.models import Wiql
 from msrest.authentication import BasicAuthentication
 
@@ -18,74 +17,81 @@ credentials = BasicAuthentication('', personal_access_token)
 connection = Connection(base_url=organization_url, creds=credentials)
 
 
-def get_projects_from_org():
-    # Get a client (the "core" client provides access to projects, teams, etc.)
-    core_client = connection.clients.get_core_client()
+def fetch_work_items(query: str):
+    """
+    Fetch work items based on a WIQL query.
 
-    # Get the first page of projects
-    get_projects_response = core_client.get_projects()
-    index = 0
+    Args:
+        query (str): The WIQL query string.
 
-    # Check if the response is a list or a paged response
-    if isinstance(get_projects_response, list):
-        # Handle the case where the response is a list directly
-        for project in get_projects_response:
-            if isinstance(project, TeamProjectReference):
-                pprint.pprint("[" + str(index) + "] " + project.name)
-                index += 1
-            else:
-                print(f"Unexpected project type: {type(project)}")
-    else:
-        # Handle the case where the response is a paged response
-        while get_projects_response is not None:
-            if hasattr(get_projects_response, 'value'):
-                for project in get_projects_response.value:
-                    pprint.pprint("[" + str(index) + "] " + project.name)
-                    index += 1
-            else:
-                print("Response does not have a 'value' attribute.")
-                break
-            if hasattr(get_projects_response, 'continuation_token') and get_projects_response.continuation_token is not None and get_projects_response.continuation_token != "":
-                # Get the next page of projects
-                get_projects_response = core_client.get_projects(continuation_token=get_projects_response.continuation_token)
-            else:
-                # All projects have been retrieved
-                get_projects_response = None
-
-
-def get_stories_from_area_path():
-    # Query work items from the area path "Detection-Engineering\\DE Rules\\Threat Hunting"
-    query = Wiql(
-        query="""
-        SELECT [System.Id], [System.Title], [System.State]
-        FROM WorkItems
-        WHERE [System.AreaPath] = "Detection-Engineering\\DE Rules\\Threat Hunting"
-        AND [System.WorkItemType] = 'User Story'
-        """
-    )
-
+    Returns:
+        List of work items or a message if no work items are found.
+    """
     work_item_tracking_client = connection.clients.get_work_item_tracking_client()
-    query_result = work_item_tracking_client.query_by_wiql(query).work_items
+    query_result = work_item_tracking_client.query_by_wiql(Wiql(query=query)).work_items
 
     if query_result:
         work_item_ids = [item.id for item in query_result]
         batch_size = 50  # Process IDs in batches of 50
+        all_work_items = []
         for i in range(0, len(work_item_ids), batch_size):
             batch_ids = work_item_ids[i:i + batch_size]
             try:
                 work_items = work_item_tracking_client.get_work_items(ids=batch_ids)
                 for work_item in work_items:
                     pprint.pprint(f"ID: {work_item.id}, Title: {work_item.fields['System.Title']}, State: {work_item.fields['System.State']}")
-                return work_items
+                all_work_items.extend(work_items)
             except AzureDevOpsClientRequestError as e:
                 print(f"Error fetching work items for batch {batch_ids}: {e}")
                 time.sleep(5)  # Wait before retrying
+        return all_work_items
     else:
-        return f"No work items found in the area path: {area_path}"
+        return "No work items found."
+
+
+def get_stories_from_area_path(area_path):
+    """
+    Get user stories from a specific area path.
+
+    Args:
+        area_path (str): The area path to query.
+
+    Returns:
+        List of work items or a message if no work items are found.
+    """
+    query = f"""
+    SELECT [System.Id], [System.Title], [System.State], [System.CreatedDate]
+    FROM WorkItems
+    WHERE [System.AreaPath] = "Detection-Engineering\\DE Rules\\Threat Hunting"
+    AND [System.WorkItemType] = 'User Story'
+    """
+    return fetch_work_items(query)
+
+
+def get_tuning_requests_submitted_by_last_shift():
+    """
+    Get tuning requests submitted by the last shift.
+
+    Returns:
+        List of work items or a message if no work items are found.
+    """
+    query = """
+    SELECT [System.Id], [System.Title], [System.State], [System.CreatedDate]
+    FROM WorkItems
+    WHERE [System.AreaPath] = "Detection-Engineering\\Detection Engineering\\Tuning"
+    AND [System.WorkItemType] = 'User Story'
+    AND [System.CreatedDate] >= @Now-0.33
+    """
+    work_items = fetch_work_items(query)
+    if isinstance(work_items, str):  # Check if it's the "No work items found" message
+        return []
+    return [work_item.id for work_item in work_items]
 
 
 def main():
-    get_stories_from_area_path()
+    # Example usage
+    # get_stories_from_area_path("Detection-Engineering\\DE Rules\\Threat Hunting")
+    get_tuning_requests_submitted_by_last_shift()
 
 
 if __name__ in ('__main__', '__builtin__', 'builtins'):
