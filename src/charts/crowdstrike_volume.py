@@ -31,9 +31,10 @@ def generate_chart(tickets):
     # Data Preparation
     try:
         df = pd.DataFrame(tickets)
-        # Corrected line: Handle milliseconds in the timestamp
-        df['creation_date'] = pd.to_datetime(df['created'], format='ISO8601')
+        # Use ISO8601 format to handle varying timestamp formats
+        df['creation_date'] = pd.to_datetime(df['created'], format='ISO8601').dt.date  # Convert to date-only format
         daily_counts = df.groupby('creation_date').size().reset_index(name='Ticket Count')
+        daily_counts = daily_counts.sort_values('creation_date')  # Ensure chronological order
         df['impact'] = df['CustomFields'].apply(lambda x: x.get('impact'))
         impact_counts = df.groupby(['creation_date', 'impact']).size().reset_index(name='count')
     except (KeyError, ValueError) as e:
@@ -77,7 +78,7 @@ def generate_chart(tickets):
         bars = ax.bar(daily_counts['creation_date'], counts, bottom=bottom, label=impact, color=impact_colors.get(impact, "#808080"), edgecolor="black", linewidth=0.3)
         for i, count in enumerate(counts):
             if count > 0:
-                x_pos = daily_counts['creation_date'][i]
+                x_pos = daily_counts['creation_date'].iloc[i]
                 y_pos = bottom[i] + count / 2
                 ax.text(x_pos, y_pos, str(count), ha='center', va='center', color='black' if impact in ("Ignore", "Testing", "False Positive") else 'white', fontsize=10, fontweight='bold')
         bottom = [b + c for b, c in zip(bottom, counts)]
@@ -87,7 +88,7 @@ def generate_chart(tickets):
     ax.set_xlabel('Detection Date', fontsize=10, fontweight='bold', labelpad=10)
     ax.set_ylabel('Alert Counts', fontweight='bold', fontsize=10, labelpad=10)
 
-    # add an average solid line
+    # Add an average solid line
     total_alerts = sum(sum(counts) for counts in impact_data_dict.values())
     num_days = len(daily_counts['creation_date'])
     if num_days > 0:
@@ -95,25 +96,24 @@ def generate_chart(tickets):
         ax.axhline(y=average_alerts_per_day, color='red', linestyle='--', label=f'Avg: {average_alerts_per_day:.2f}')
         ax.legend()
 
-    # Customize the chart
+    # Format x-axis as dates
     ax.xaxis.set_major_formatter(mdates.DateFormatter('%m/%d/%Y'))
     plt.xticks(rotation=90)
-    fig.patch.set_edgecolor('black')
-    fig.patch.set_linewidth(5)
 
     # Add the current time
     now_eastern = datetime.now(eastern).strftime('%m/%d/%Y %I:%M %p %Z')
     trans = transforms.blended_transform_factory(fig.transFigure, fig.transFigure)
     plt.text(0.05, 0.01, now_eastern, ha='left', va='bottom', fontsize=10, transform=trans)
 
-    # Adjust the margins
-    plt.subplots_adjust(left=0.1, right=0.9, top=0.9, bottom=0.1)
-
+    # Customize the chart
+    fig.patch.set_edgecolor('black')
+    fig.patch.set_linewidth(5)
     plt.tight_layout()
 
     today_date = datetime.now().strftime('%m-%d-%Y')
     OUTPUT_PATH = ROOT_DIRECTORY / "web" / "static" / "charts" / today_date / "CrowdStrike Volume.png"
-    plt.savefig(OUTPUT_PATH)
+    OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)  # Ensure the directory exists
+    plt.savefig(OUTPUT_PATH, format='png', bbox_inches='tight', pad_inches=0.2, dpi=300)
     plt.close()
 
 

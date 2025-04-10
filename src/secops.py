@@ -13,11 +13,11 @@ from webexpythonsdk.models.cards import (
 )
 
 from config import get_config  # If you still use a CONFIG file for the path
-from services.xsoar import IncidentHandler
+from services.xsoar import IncidentHandler, ListHandler
 
 config = get_config()
 webex_api = WebexAPI(config.webex_bot_access_token_soar)
-
+list_handler = ListHandler()
 BASE_QUERY = f'type:{config.ticket_type_prefix} -owner:""'
 root_directory = Path(__file__).parent.parent
 
@@ -160,6 +160,8 @@ def announce_shift_change(shift_name, room_id, sleep_time=30):
         if today().date() <= keep_until:
             note = management_notes['note']
 
+    hosts_in_containment = list_handler.get_list_data_by_name('METCIRT Contained Hosts')
+    hosts_in_containment = [item["hostname"] for item in hosts_in_containment]
     # Send a new shift starting message to Webex room
     webex_api.messages.create(
         roomId=room_id,
@@ -167,7 +169,7 @@ def announce_shift_change(shift_name, room_id, sleep_time=30):
         markdown=f"Good **{shift_name.upper()}**! A new shift's starting now!\n"
                  f"Timings: {sheet[cell_names_by_shift['shift_timings'][shift_name]].value}\n"
                  f"Open METCIRT* tickets: {get_open_tickets()}\n"
-                 f"Hosts in Containment: US123, IN456, AU789\n"
+                 f"Hosts in Containment: {', '.join(hosts_in_containment)}\n"
                  f"**Management Notes**: {note}\n"
                  f"Staffing:\n"
                  f"```\n{shift_data_table}\n```"

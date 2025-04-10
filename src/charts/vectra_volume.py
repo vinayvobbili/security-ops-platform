@@ -30,7 +30,7 @@ def generate_chart(tickets):
     # Data Preparation
     try:
         df = pd.DataFrame(tickets)
-        df['creation_date'] = pd.to_datetime(df['created'])  # Keep as datetime
+        df['creation_date'] = pd.to_datetime(df['created']).dt.date  # Convert to date only
         daily_counts = df.groupby('creation_date').size().reset_index(name='Ticket Count')
         df['impact'] = df['CustomFields'].apply(lambda x: x.get('impact'))
         impact_counts = df.groupby(['creation_date', 'impact']).size().reset_index(name='count')
@@ -75,7 +75,7 @@ def generate_chart(tickets):
         bars = ax.bar(daily_counts['creation_date'], counts, bottom=bottom, label=impact, color=impact_colors.get(impact, "#808080"), edgecolor="black", linewidth=0.3)
         for i, count in enumerate(counts):
             if count > 0:
-                x_pos = daily_counts['creation_date'][i]
+                x_pos = daily_counts['creation_date'].iloc[i]
                 y_pos = bottom[i] + count / 2
                 ax.text(x_pos, y_pos, str(count), ha='center', va='center', color='black' if impact in ("Ignore", "Testing", "False Positive") else 'white', fontsize=10, fontweight='bold')
         bottom = [b + c for b, c in zip(bottom, counts)]
@@ -109,6 +109,7 @@ def generate_chart(tickets):
 
     today_date = datetime.now().strftime('%m-%d-%Y')
     OUTPUT_PATH = ROOT_DIRECTORY / "web" / "static" / "charts" / today_date / "Vectra Volume.png"
+    OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)  # Ensure the directory exists
     plt.savefig(OUTPUT_PATH, format='png', bbox_inches='tight', pad_inches=0.2, dpi=300)
     plt.close()
 

@@ -40,6 +40,8 @@ def get_config():
         azdo_pat=os.environ["AZDO_PERSONAL_ACCESS_TOKEN"],
         cs_ro_client_id=os.environ["CROWD_STRIKE_RO_CLIENT_ID"],
         cs_ro_client_secret=os.environ["CROWD_STRIKE_RO_CLIENT_SECRET"],
+        cs_host_write_client_id=os.environ["CROWD_STRIKE_HOST_WRITE_CLIENT_ID"],
+        cs_host_write_client_secret=os.environ["CROWD_STRIKE_HOST_WRITE_CLIENT_SECRET"],
         cs_rtr_client_id=os.environ["CROWD_STRIKE_RTR_CLIENT_ID"],
         cs_rtr_client_secret=os.environ["CROWD_STRIKE_RTR_CLIENT_SECRET"],
         webex_host_announcements_room_id=os.environ["WEBEX_HOST_ANNOUNCEMENTS_ROOM_ID"],
@@ -96,6 +98,8 @@ class Config:
     azdo_pat: str
     cs_ro_client_id: str
     cs_ro_client_secret: str
+    cs_host_write_client_id: str
+    cs_host_write_client_secret: str
     cs_rtr_client_id: str
     cs_rtr_client_secret: str
     webex_host_announcements_room_id: str
