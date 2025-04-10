@@ -99,10 +99,10 @@ def enrich_host_report():
         device_details.append(service_now.get_host_details(hostname))
 
     # create a new df with device details
-    device_details_df = pd.DataFrame(device_details)
+    device_details_df = pd.json_normalize(device_details)
 
     # merge the two dataframes
-    merged_df = pd.merge(unique_hosts_df, device_details_df, left_on='host_id', right_on='device_id', how='left')
+    merged_df = pd.merge(unique_hosts_df, device_details_df, left_on='hostname', right_on='name', how='left')
 
     # save the merged df
     merged_df.to_excel(f"{ROOT_DIRECTORY}/data/transient/epp_device_tagging/enriched_unique_hosts.xlsx", index=False, engine="openpyxl")
