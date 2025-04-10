@@ -110,13 +110,21 @@ def announce_previous_shift_performance(room_id, shift_name):
     total_staff_count = sum(len(staff) for staff in previous_shift_staffing_data.values())
     tickets_closed_per_analyst = len(outflow) / total_staff_count
 
-    from datetime import datetime, timedelta
-
     domains_blocked = [
-        domain for domain in list_handler.get_list_data_by_name('METCIRT Blocked Domains')
-        if datetime.strptime(domain['blocked_at'], '%m/%d/%Y %I:%M:%S %p %Z') >= datetime.now() - timedelta(hours=8)
+        item['domain'] for item in list_handler.get_list_data_by_name('METCIRT Blocked Domains')
+        if datetime.strptime(item['blocked_at'], '%m/%d/%Y %I:%M:%S %p %Z') >= datetime.now() - timedelta(hours=8)
     ]
-    ip_addresses_blocked = list_handler.get_list_data_by_name('METCIRT Blocked IP Addresses')
+    ip_addresses_blocked = [
+        item['ip_address'] for item in list_handler.get_list_data_by_name('METCIRT Blocked IP Addresses')
+        if datetime.strptime(item['blocked_at'], '%m/%d/%Y %I:%M:%S %p %Z') >= datetime.now() - timedelta(hours=8)
+    ]
+
+    iocs_blocked = ', '.join(domains_blocked + ip_addresses_blocked)
+
+    hosts_contained = ', '.join([
+        item['hostname'] for item in list_handler.get_list_data_by_name('METCIRT Contained Hosts')
+        if datetime.strptime(item['contained_at'], '%m/%d/%Y %I:%M:%S %p %Z') >= datetime.now() - timedelta(hours=8)
+    ])
 
     shift_performance = AdaptiveCard(
         body=[
@@ -136,8 +144,8 @@ def announce_previous_shift_performance(room_id, shift_name):
                     Fact(title="Cont. SLA Breaches", value=str(len(containment_sla_breaches))),
                     Fact(title="MTTR (min:sec)", value=f"{int(mean_time_to_respond // 60)}:{int(mean_time_to_respond % 60):02d}"),
                     Fact(title="MTTC (min:sec)", value=f"{int(mean_time_to_contain // 60)}:{int(mean_time_to_contain % 60):02d}"),
-                    Fact(title="IOCs blocked", value="1.2.3.4, 5.6.7.8, example.com"),
-                    Fact(title="Hosts contained", value="US123, IN456, AU789"),
+                    Fact(title="IOCs blocked", value=iocs_blocked),
+                    Fact(title="Hosts contained", value=hosts_contained),
                     Fact(title="Tuning requests submitted", value="US321")
                 ]
             )
