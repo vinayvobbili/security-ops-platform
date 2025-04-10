@@ -13,6 +13,7 @@ from webexpythonsdk.models.cards import (
 )
 
 from config import get_config  # If you still use a CONFIG file for the path
+from services import azdo
 from services.xsoar import IncidentHandler, ListHandler
 
 config = get_config()
@@ -126,6 +127,8 @@ def announce_previous_shift_performance(room_id, shift_name):
         if datetime.strptime(item['contained_at'], '%m/%d/%Y %I:%M:%S %p %Z') >= datetime.now() - timedelta(hours=8)
     ])
 
+    tuning_requests_submitted = azdo.get_tuning_requests_submitted_by_last_shift()
+
     shift_performance = AdaptiveCard(
         body=[
             TextBlock(
@@ -146,7 +149,7 @@ def announce_previous_shift_performance(room_id, shift_name):
                     Fact(title="MTTC (min:sec)", value=f"{int(mean_time_to_contain // 60)}:{int(mean_time_to_contain % 60):02d}"),
                     Fact(title="IOCs blocked", value=iocs_blocked),
                     Fact(title="Hosts contained", value=hosts_contained),
-                    Fact(title="Tuning requests submitted", value="US321")
+                    Fact(title="Tuning requests submitted", value=', '.join(tuning_requests_submitted))
                 ]
             )
         ]
