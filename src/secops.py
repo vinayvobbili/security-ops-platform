@@ -110,6 +110,14 @@ def announce_previous_shift_performance(room_id, shift_name):
     total_staff_count = sum(len(staff) for staff in previous_shift_staffing_data.values())
     tickets_closed_per_analyst = len(outflow) / total_staff_count
 
+    from datetime import datetime, timedelta
+
+    domains_blocked = [
+        domain for domain in list_handler.get_list_data_by_name('METCIRT Blocked Domains')
+        if datetime.strptime(domain['blocked_at'], '%m/%d/%Y %I:%M:%S %p %Z') >= datetime.now() - timedelta(hours=8)
+    ]
+    ip_addresses_blocked = list_handler.get_list_data_by_name('METCIRT Blocked IP Addresses')
+
     shift_performance = AdaptiveCard(
         body=[
             TextBlock(
