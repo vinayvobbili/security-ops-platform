@@ -1093,7 +1093,8 @@ def announce_new_approved_testing_entry(new_item) -> None:
                 "style": "heading",
                 "size": "Large",
                 "weight": "Bolder",
-                "color": "Attention"
+                "color": "Attention",
+                "horizontalAlignment": "center"
             },
             {
                 "type": "FactSet",
