@@ -1,6 +1,7 @@
-import logging
+import datetime
 import pprint
 import time
+from datetime import datetime, timedelta
 
 from azure.devops.connection import Connection
 from azure.devops.exceptions import AzureDevOpsClientRequestError
@@ -19,39 +20,35 @@ connection = Connection(base_url=organization_url, creds=credentials)
 
 
 def fetch_work_items(query: str):
-    try:
-        """
-        Fetch work items based on a WIQL query.
+    """
+    Fetch work items based on a WIQL query.
 
-        Args:
-            query (str): The WIQL query string.
+    Args:
+        query (str): The WIQL query string.
 
-        Returns:
-            List of work items or a message if no work items are found.
-        """
-        work_item_tracking_client = connection.clients.get_work_item_tracking_client()
-        query_result = work_item_tracking_client.query_by_wiql(Wiql(query=query)).work_items
+    Returns:
+        List of work items or a message if no work items are found.
+    """
+    work_item_tracking_client = connection.clients.get_work_item_tracking_client()
+    query_result = work_item_tracking_client.query_by_wiql(Wiql(query=query)).work_items
 
-        if query_result:
-            work_item_ids = [item.id for item in query_result]
-            batch_size = 50  # Process IDs in batches of 50
-            all_work_items = []
-            for i in range(0, len(work_item_ids), batch_size):
-                batch_ids = work_item_ids[i:i + batch_size]
-                try:
-                    work_items = work_item_tracking_client.get_work_items(ids=batch_ids)
-                    for work_item in work_items:
-                        pprint.pprint(f"ID: {work_item.id}, Title: {work_item.fields['System.Title']}, State: {work_item.fields['System.State']}")
-                    all_work_items.extend(work_items)
-                except AzureDevOpsClientRequestError as e:
-                    print(f"Error fetching work items for batch {batch_ids}: {e}")
-                    time.sleep(5)  # Wait before retrying
-            return all_work_items
-        else:
-            return "No work items found."
-    except Exception as e:
-        print(f"An error occurred while fetching work items: {e}")
-        return "Error occurred while fetching work items."
+    if query_result:
+        work_item_ids = [item.id for item in query_result]
+        batch_size = 50  # Process IDs in batches of 50
+        all_work_items = []
+        for i in range(0, len(work_item_ids), batch_size):
+            batch_ids = work_item_ids[i:i + batch_size]
+            try:
+                work_items = work_item_tracking_client.get_work_items(ids=batch_ids)
+                for work_item in work_items:
+                    pprint.pprint(f"ID: {work_item.id}, Title: {work_item.fields['System.Title']}, State: {work_item.fields['System.State']}")
+                all_work_items.extend(work_items)
+            except AzureDevOpsClientRequestError as e:
+                print(f"Error fetching work items for batch {batch_ids}: {e}")
+                time.sleep(5)  # Wait before retrying
+        return all_work_items
+    else:
+        return "No work items found."
 
 
 def get_stories_from_area_path(area_path):
@@ -67,7 +64,7 @@ def get_stories_from_area_path(area_path):
     query = f"""
     SELECT [System.Id], [System.Title], [System.State], [System.CreatedDate]
     FROM WorkItems
-    WHERE [System.AreaPath] = "Detection-Engineering\\DE Rules\\Threat Hunting"
+    WHERE [System.AreaPath] = '{area_path}'
     AND [System.WorkItemType] = 'User Story'
     """
     return fetch_work_items(query)
@@ -75,44 +72,39 @@ def get_stories_from_area_path(area_path):
 
 def get_tuning_requests_submitted_by_last_shift():
     """
-    Get tuning requests (User Stories) submitted within the last 8 hours.
+    Get tuning requests submitted by the last shift.
 
     Returns:
-        List[int]: A list of work item IDs. Returns an empty list if none are found
-                   or if an error occurs.
+        List of work items or a message if no work items are found.
     """
-    try:
-        query = f"""
-        SELECT [System.Id]
-        FROM WorkItems
-        WHERE [System.AreaPath] = 'Detection-Engineering\\Detection Engineering\\Tuning'
-        AND [System.WorkItemType] = 'User Story'
-        AND [System.CreatedDate] >= @today - 0.3
-        ORDER BY [System.CreatedDate] DESC
-        """
-        # Note: Selecting only System.Id might be slightly more efficient if you only need the IDs later.
-        # If you need Title/State, keep them in SELECT and adjust processing below.
+    # Get items from today and yesterday
+    query = """
+    SELECT [System.Id], [System.Title], [System.State], [System.CreatedDate]
+    FROM WorkItems
+    WHERE [System.AreaPath] = "Detection-Engineering\\Detection Engineering\\Tuning"
+    AND [System.WorkItemType] = 'User Story'
+    AND [System.CreatedDate] >= @Today-1
+    """
 
-        logging.info(f"Executing WIQL query for recent tuning requests:\n{query}")
-        work_items = fetch_work_items(query)  # Assuming fetch_work_items returns a list of work items or empty list/error string
+    all_items = fetch_work_items(query)
 
-        # 4. Process the results
-        if isinstance(work_items, str):  # Handle potential error messages from fetch_work_items
-            logging.warning(f"Could not fetch tuning requests: {work_items}")
-            return []
-        elif not work_items:
-            logging.info("No tuning requests found submitted in the last 8 hours.")
-            return []
-        else:
-            # Extract IDs from the returned WorkItem objects
-            work_item_ids = [item.id for item in work_items if item and hasattr(item, 'id')]
-            logging.info(f"Found {len(work_item_ids)} tuning requests submitted in the last 8 hours.")
-            return work_item_ids
+    if isinstance(all_items, str):  # "No work items found" message
+        return all_items
 
-    except Exception as e:
-        # Catch any unexpected errors during query construction or processing
-        logging.error(f"An error occurred in get_tuning_requests_submitted_by_last_shift: {e}", exc_info=True)
-        return []  # Return empty list on error
+    # Filter in Python for the last 8 hours
+    eight_hours_ago = datetime.now() - timedelta(hours=8)
+
+    # Filter the items
+    recent_items = []
+    for item in all_items:
+        created_date = datetime.fromisoformat(item.fields["System.CreatedDate"].replace("Z", "+00:00"))
+        if created_date >= eight_hours_ago:
+            recent_items.append(item)
+
+    if not recent_items:
+        return "No work items found in the last 8 hours."
+
+    return recent_items
 
 
 def main():

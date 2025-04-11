@@ -143,7 +143,7 @@ def generate_threat_hunt_report(hunt_details, output_file='weekly_threat_hunts_l
 
 if __name__ == "__main__":
     # Get hunt details from Azure DevOps
-    hunt_details = azdo.get_stories_from_area_path()
+    hunt_details = azdo.get_stories_from_area_path("Detection-Engineering\\DE Rules\\Threat Hunting")
 
     # Generate the report
     generate_threat_hunt_report(hunt_details)
