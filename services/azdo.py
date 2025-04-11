@@ -48,7 +48,7 @@ def fetch_work_items(query: str):
                 time.sleep(5)  # Wait before retrying
         return all_work_items
     else:
-        return "No work items found."
+        return []
 
 
 def get_stories_from_area_path(area_path):
