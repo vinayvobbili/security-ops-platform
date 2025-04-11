@@ -68,9 +68,9 @@ def main():
 
     schedule.every(5).minutes.do(verify_host_online_status.start)
     room_id = config.webex_room_id_soc_shift_updates
-    schedule.every().day.at("03:30", eastern).do(lambda: secops.announce_shift_change('morning', room_id))
-    schedule.every().day.at("11:30", eastern).do(lambda: secops.announce_shift_change('afternoon', room_id))
-    schedule.every().day.at("19:30", eastern).do(lambda: secops.announce_shift_change('night', room_id))
+    schedule.every().day.at("04:30", eastern).do(lambda: secops.announce_shift_change('morning', room_id))
+    schedule.every().day.at("12:30", eastern).do(lambda: secops.announce_shift_change('afternoon', room_id))
+    schedule.every().day.at("20:30", eastern).do(lambda: secops.announce_shift_change('night', room_id))
     schedule.every().friday.at("08:00", eastern).do(lambda: qradar_rule_efficacy.send_charts())
     schedule.every().friday.at("14:00", eastern).do(lambda: oncall.alert_change())
     schedule.every().monday.at("08:00", eastern).do(lambda: (
