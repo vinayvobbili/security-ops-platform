@@ -101,9 +101,6 @@ def get_tuning_requests_submitted_by_last_shift():
         if created_date >= eight_hours_ago:
             recent_items.append(item)
 
-    if not recent_items:
-        return "No work items found in the last 8 hours."
-
     return recent_items
 
 
