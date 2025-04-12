@@ -1,32 +1,40 @@
-<form id="xsoarTicketImportForm" method="POST" action="/import-xsoar-ticket">
-    <label for="source_ticket_number">Source Ticket Number:</label><br>
-    <input type="text" id="source_ticket_number" name="source_ticket_number"><br><br>
-    <button type="submit">Submit</button>
-</form>
-<div id="response"></div>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fancy XSOAR Ticket Import</title>
+    <link rel="stylesheet" href="/static/css/ticket_import.css">
+</head>
+<body>
+<div class="container">
+    <div class="card">
+        <div class="glossy-effect"></div>
+        <div class="card-header">
+            <h2 class="card-title">
+                <span class="icon">📥</span>
+                XSOAR Ticket Import
+            </h2>
+        </div>
+        <div class="card-body">
+            <form id="xsoarTicketImportForm" method="POST" action="/import-xsoar-ticket">
+                <div class="form-group">
+                    <label for="source_ticket_number">Source Ticket Number</label>
+                    <input type="text" class="form-control" id="source_ticket_number" name="source_ticket_number" placeholder="Enter ticket number">
+                </div>
+                <button type="submit" class="btn btn-primary btn-block">Import Ticket</button>
+            </form>
 
-<script>
-    document.getElementById('xsoarTicketImportForm').addEventListener('submit', function (event) {
-        event.preventDefault(); // Prevent the default form submission
+            <div class="loading" id="loading">
+                <div class="loading-spinner"></div>
+                <p>Processing your request...</p>
+            </div>
+        </div>
+    </div>
 
-        const formData = new FormData(this);
+    <div id="response"></div>
+</div>
 
-        fetch('/import-xsoar-ticket', {
-            method: 'POST',
-            body: formData
-        })
-            .then(response => response.json())
-            .then(data => {
-                // Update the response div with the new incident details
-                document.getElementById('response').innerHTML = `
-            <h1>Ticket imported successfully!</h1>
-            <p>Source Ticket#: ${data.source_ticket_number}</p>
-            <p>Destination Ticket#: ${data.destination_ticket_number}</p>
-            <p>Destination Ticket Link: <a href="${data.destination_ticket_link}" target="_blank">${data.destination_ticket_link}</a></p>
-        `;
-            })
-            .catch(error => {
-                console.error('Error:', error);
-            });
-    });
-</script>
+<script src="/static/js/ticket_import.js"></script>
+</body>
+</html>

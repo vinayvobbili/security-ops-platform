@@ -44,7 +44,6 @@ def get_incident(incident_id):
         raise Exception(f"Network error while fetching incident: {str(e)}")
 
 
-# TODO delete this method
 def __create_incident__(base_url, incident_data, auth_id, auth_token):
     """Create incident in target environment"""
     headers = {
@@ -75,7 +74,6 @@ def __create_incident__(base_url, incident_data, auth_id, auth_token):
             },
             "all": True,
             "createInvestigation": True,
-            "data": incident_data,
             "force": True,
         }
 
@@ -108,7 +106,7 @@ def import_ticket(source_ticket_number):
     # Create incident in target
     new_incident = incident_handler.create_in_dev(incident_data)
 
-    return new_incident['id'], f'{CONFIG.xsoar_dev_ui_base_url} / Custom / caseinfoid / {new_incident['id']}'
+    return new_incident['id'], f'{CONFIG.xsoar_dev_ui_base_url}/Custom/caseinfoid/{new_incident['id']}'
 
 
 class IncidentHandler:
@@ -163,8 +161,12 @@ class IncidentHandler:
         return response.json()
 
     def create_in_dev(self, payload):
-        """Creates a new incident in XSOAR."""
+        """Creates a new incident in XSOAR Dev."""
+        payload.pop('id', None)
+        payload.pop('phase', None)
+        payload.update({"all": True, "createInvestigation": True, "force": True})
         response = requests.post(self.incident_create_url_dev, headers=dev_headers, json=payload)
+        # response = __create_incident__(self.incident_create_url_dev, payload, CONFIG.xsoar_dev_auth_id, CONFIG.xsoar_dev_auth_key)
         response.raise_for_status()
         return response.json()
 
