@@ -114,8 +114,8 @@ class IncidentHandler:
         self.headers = headers
         self.incident_search_url = CONFIG.xsoar_prod_api_base_url + '/incidents/search'
         self.incident_entries_url = CONFIG.xsoar_prod_api_base_url + '/incidents/{incident_id}/entries'  # Endpoint for entries
-        self.incident_create_url = CONFIG.xsoar_prod_api_base_url + '/incident/json'
-        self.incident_create_url_dev = CONFIG.xsoar_dev_api_base_url + '/incident/json'
+        self.incident_create_url = CONFIG.xsoar_prod_api_base_url + '/incident'
+        self.incident_create_url_dev = CONFIG.xsoar_dev_api_base_url + '/incident'
 
     def get_tickets(self, query, period=None, size=10000) -> list:
         """Fetches security incidents from XSOAR."""
@@ -164,6 +164,7 @@ class IncidentHandler:
         """Creates a new incident in XSOAR Dev."""
         payload.pop('id', None)
         payload.pop('phase', None)
+        payload.pop('status', None)
         payload.update({"all": True, "createInvestigation": True, "force": True})
         response = requests.post(self.incident_create_url_dev, headers=dev_headers, json=payload)
         # response = __create_incident__(self.incident_create_url_dev, payload, CONFIG.xsoar_dev_auth_id, CONFIG.xsoar_dev_auth_key)
