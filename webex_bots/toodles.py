@@ -806,8 +806,7 @@ class CreateXSOARTicket(Command):
             'name': attachment_actions.inputs['title'].strip(),
             'details': attachment_actions.inputs['details'].strip() + f"\nSubmitted by: {activity['actor']['emailAddress']}"
         }
-        new_ticket = [incident]
-        result = incident_handler.create(new_ticket)
+        result = incident_handler.create(incident)
         new_incident_id = result[0].get('id')
         incident_url = CONFIG.xsoar_prod_ui_base_url + new_incident_id
 
@@ -875,8 +874,7 @@ class ThreatHunt(Command):
             'details': attachment_actions.inputs['threat_hunt_desc'].strip() + f"\nSubmitted by: {activity['actor']['emailAddress']}",
             'type': "Threat Hunt"
         }
-        new_ticket = [incident]
-        result = incident_handler.create(new_ticket)
+        result = incident_handler.create(incident)
         ticket_no = result[0].get('id')
         ticket_title = attachment_actions.inputs['threat_hunt_title'].strip()
         incident_url = CONFIG.xsoar_prod_ui_base_url + ticket_no

@@ -806,8 +806,7 @@ class CreateXSOARTicket(Command):
             'name': attachment_actions.inputs['title'].strip(),
             'details': attachment_actions.inputs['details'].strip() + f"\nSubmitted by: {activity['actor']['emailAddress']}"
         }
-        new_ticket = [incident]
-        result = incident_handler.create(new_ticket)
+        result = incident_handler.create(incident)
         new_incident_id = result[0].get('id')
         incident_url = CONFIG.xsoar_prod_ui_base_url + new_incident_id
 
@@ -841,8 +840,7 @@ class IOCHunt(Command):
             'details': attachment_actions.inputs['ioc_hunt_iocs'].strip(),
             'type': "METCIRT IOC Hunt"
         }
-        new_ticket = [incident]
-        result = incident_handler.create(new_ticket)
+        result = incident_handler.create(incident)
         ticket_no = result[0].get('id')
         incident_url = CONFIG.xsoar_prod_ui_base_url + ticket_no
 
@@ -876,8 +874,7 @@ class ThreatHunt(Command):
             'details': attachment_actions.inputs['threat_hunt_desc'].strip() + f"\nSubmitted by: {activity['actor']['emailAddress']}",
             'type': "Threat Hunt"
         }
-        new_ticket = [incident]
-        result = incident_handler.create(new_ticket)
+        result = incident_handler.create(incident)
         ticket_no = result[0].get('id')
         ticket_title = attachment_actions.inputs['threat_hunt_title'].strip()
         incident_url = CONFIG.xsoar_prod_ui_base_url + ticket_no
@@ -1094,7 +1091,8 @@ def announce_new_approved_testing_entry(new_item) -> None:
                 "style": "heading",
                 "size": "Large",
                 "weight": "Bolder",
-                "color": "Attention"
+                "color": "Attention",
+                "horizontalAlignment": "center"
             },
             {
                 "type": "FactSet",
@@ -1153,7 +1151,7 @@ def announce_new_approved_testing_entry(new_item) -> None:
         ]
     }
     webex_api.messages.create(
-        roomId=CONFIG.webex_room_id_vinay_test_space,
+        roomId=CONFIG.webex_room_id_gosc_t2,
         text="New Approved Testing!",
         attachments=[{"contentType": "application/vnd.microsoft.card.adaptive", "content": payload}]
     )
@@ -1187,45 +1185,47 @@ class AddApprovedTestingEntry(Command):
         if usernames:
             usernames = usernames.split(',')
             for username in usernames:
-                current_entries.get("USERNAMES").append({"data": username.strip(), "expiry_date": expiry_date, "submitter": submitter})
-
-                new_testing_entry = {
-                    "username": username,
-                    "description": description,
-                    "scope": scope,
-                    "submitter": submitter,
-                    "submit_date": datetime.now().strftime("%m/%d/%Y"),
-                    "expiry_date": expiry_date
-                }
-                master_entries.append(new_testing_entry)
+                if username:
+                    current_entries.get("USERNAMES").append({"data": username.strip(), "expiry_date": expiry_date, "submitter": submitter})
+                    new_testing_entry = {
+                        "username": username,
+                        "description": description,
+                        "scope": scope,
+                        "submitter": submitter,
+                        "submit_date": datetime.now().strftime("%m/%d/%Y"),
+                        "expiry_date": expiry_date
+                    }
+                    master_entries.append(new_testing_entry)
 
         if host_names:
             host_names = host_names.split(',')
             for host_name in host_names:
-                current_entries.get("ENDPOINTS").append({"data": host_name.strip(), "expiry_date": expiry_date, "submitter": submitter})
-                new_testing_entry = {
-                    "host_name": host_name,
-                    "description": description,
-                    "scope": scope,
-                    "submitter": submitter,
-                    "submit_date": datetime.now().strftime("%m/%d/%Y"),
-                    "expiry_date": expiry_date
-                }
-                master_entries.append(new_testing_entry)
+                if host_name:
+                    current_entries.get("ENDPOINTS").append({"data": host_name.strip(), "expiry_date": expiry_date, "submitter": submitter})
+                    new_testing_entry = {
+                        "host_name": host_name,
+                        "description": description,
+                        "scope": scope,
+                        "submitter": submitter,
+                        "submit_date": datetime.now().strftime("%m/%d/%Y"),
+                        "expiry_date": expiry_date
+                    }
+                    master_entries.append(new_testing_entry)
 
         if ip_addresses:
             ip_addresses = ip_addresses.split(',')
             for ip_address in ip_addresses:
-                current_entries.get("IP_ADDRESSES").append({"data": ip_address.strip(), "expiry_date": expiry_date, "submitter": submitter})
-                new_testing_entry = {
-                    "ip_address": ip_address,
-                    "description": description,
-                    "scope": scope,
-                    "submitter": submitter,
-                    "submit_date": datetime.now().strftime("%m/%d/%Y"),
-                    "expiry_date": expiry_date
-                }
-                master_entries.append(new_testing_entry)
+                if ip_address:
+                    current_entries.get("IP_ADDRESSES").append({"data": ip_address.strip(), "expiry_date": expiry_date, "submitter": submitter})
+                    new_testing_entry = {
+                        "ip_address": ip_address,
+                        "description": description,
+                        "scope": scope,
+                        "submitter": submitter,
+                        "submit_date": datetime.now().strftime("%m/%d/%Y"),
+                        "expiry_date": expiry_date
+                    }
+                    master_entries.append(new_testing_entry)
 
         list_handler.save(approved_testing_list_name, current_entries)
         list_handler.save(approved_testing_master_list_name, master_entries)
