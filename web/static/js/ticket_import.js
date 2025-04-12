@@ -38,12 +38,43 @@ document.getElementById('xsoarTicketImportForm').addEventListener('submit', func
         </div>
         <div class="info-row">
           <div class="info-label">Destination Link:</div>
-          <div class="info-value">
+          <div class="info-value url-container">
             <a href="${data.destination_ticket_link}" target="_blank">${data.destination_ticket_link}</a>
+            <button class="copy-btn" data-clipboard="${data.destination_ticket_link}">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+              </svg>
+            </button>
           </div>
         </div>
       </div>
     `;
+
+            // Add copy button functionality
+            document.querySelectorAll('.copy-btn').forEach(button => {
+                button.addEventListener('click', function () {
+                    const textToCopy = this.getAttribute('data-clipboard');
+                    navigator.clipboard.writeText(textToCopy).then(() => {
+                        // Change button appearance temporarily to show success
+                        const originalHTML = this.innerHTML;
+                        this.innerHTML = `
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+          `;
+                        this.classList.add('copied');
+
+                        // Reset after 2 seconds
+                        setTimeout(() => {
+                            this.innerHTML = originalHTML;
+                            this.classList.remove('copied');
+                        }, 2000);
+                    }).catch(err => {
+                        console.error('Could not copy text: ', err);
+                    });
+                });
+            });
 
             // Add show class for animation
             setTimeout(() => {
