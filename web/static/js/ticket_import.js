@@ -1,3 +1,8 @@
+document.addEventListener("DOMContentLoaded", function () {
+    document.getElementById("source_ticket_number").focus();
+});
+
+
 document.getElementById('xsoarTicketImportForm').addEventListener('submit', function (event) {
     event.preventDefault(); // Prevent the default form submission
 
