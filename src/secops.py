@@ -85,7 +85,7 @@ def announce_previous_shift_performance(room_id, shift_name):
     total_time_to_contain = 0
     for ticket in inflow:
         total_time_to_respond += ticket['CustomFields']['responsesla']['totalDuration']
-    mean_time_to_respond = total_time_to_respond / len(inflow)
+    mean_time_to_respond = total_time_to_respond / len(inflow) if len(inflow) > 0 else 0
 
     inflow_tickets_with_host = [ticket for ticket in inflow if ticket.get('CustomFields', {}).get('hostname')]
     for ticket in inflow_tickets_with_host:
@@ -162,41 +162,44 @@ def announce_previous_shift_performance(room_id, shift_name):
 
 
 def announce_shift_change(shift_name, room_id, sleep_time=30):
-    day_name = datetime.now().strftime("%A")
-    staffing_data = get_staffing_data(day_name, shift_name)
-    staffing_data['SA'][0] = staffing_data['SA'][0] + ' (Lead)'
+    try:
+        day_name = datetime.now().strftime("%A")
+        staffing_data = get_staffing_data(day_name, shift_name)
+        staffing_data['SA'][0] = staffing_data['SA'][0] + ' (Lead)'
 
-    # Convert staffing_data to a table with the first column as headers
-    headers = list(staffing_data.keys())
-    shift_data_table = list(zip(*staffing_data.values()))
-    shift_data_table = tabulate(shift_data_table, headers=headers, tablefmt="simple")
+        # Convert staffing_data to a table with the first column as headers
+        headers = list(staffing_data.keys())
+        shift_data_table = list(zip(*staffing_data.values()))
+        shift_data_table = tabulate(shift_data_table, headers=headers, tablefmt="simple")
 
-    note = 'None'
-    with open(MANAGEMENT_NOTES_FILE, "r") as file:
-        management_notes = file.read()
-        management_notes = json.loads(management_notes)
-        keep_until = datetime.strptime(management_notes['keep_until'], '%Y-%m-%d').date()
-        if today().date() <= keep_until:
-            note = management_notes['note']
+        note = 'None'
+        with open(MANAGEMENT_NOTES_FILE, "r") as file:
+            management_notes = file.read()
+            management_notes = json.loads(management_notes)
+            keep_until = datetime.strptime(management_notes['keep_until'], '%Y-%m-%d').date()
+            if today().date() <= keep_until:
+                note = management_notes['note']
 
-    hosts_in_containment = list_handler.get_list_data_by_name('METCIRT Contained Hosts')
-    hosts_in_containment = [item["hostname"] for item in hosts_in_containment]
-    # Send a new shift starting message to Webex room
-    webex_api.messages.create(
-        roomId=room_id,
-        text=f"Shift Change Notice!",
-        markdown=f"Good **{shift_name.upper()}**! A new shift's starting now!\n"
-                 f"Timings: {sheet[cell_names_by_shift['shift_timings'][shift_name]].value}\n"
-                 f"Open METCIRT* tickets: {get_open_tickets()}\n"
-                 f"Hosts in Containment: {', '.join(hosts_in_containment)}\n"
-                 f"**Management Notes**: {note}\n"
-                 f"Staffing:\n"
-                 f"```\n{shift_data_table}\n```"
-    )
+        hosts_in_containment = list_handler.get_list_data_by_name('METCIRT Contained Hosts')
+        hosts_in_containment = [item["hostname"] for item in hosts_in_containment]
+        # Send a new shift starting message to Webex room
+        webex_api.messages.create(
+            roomId=room_id,
+            text=f"Shift Change Notice!",
+            markdown=f"Good **{shift_name.upper()}**! A new shift's starting now!\n"
+                     f"Timings: {sheet[cell_names_by_shift['shift_timings'][shift_name]].value}\n"
+                     f"Open METCIRT* tickets: {get_open_tickets()}\n"
+                     f"Hosts in Containment: {', '.join(hosts_in_containment)}\n"
+                     f"**Management Notes**: {note}\n"
+                     f"Staffing:\n"
+                     f"```\n{shift_data_table}\n```"
+        )
 
-    time.sleep(sleep_time)  # give time to digest the shift change message before sending the performance message
+        time.sleep(sleep_time)  # give time to digest the shift change message before sending the performance message
 
-    announce_previous_shift_performance(shift_name=shift_name, room_id=room_id)
+        announce_previous_shift_performance(shift_name=shift_name, room_id=room_id)
+    except Exception as e:
+        print(f"Error in announce_shift_change: {e}")
 
 
 def main():

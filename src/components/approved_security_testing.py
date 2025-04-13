@@ -7,7 +7,7 @@ approved_testing_list_name = "METCIRT_Approved_Testing"
 list_handler = ListHandler()
 
 
-def refresh_list():
+def removed_expired_entries():
     """Cleans expired entries from the approved testing list."""
     try:
         approved_test_items = list_handler.get_list_data_by_name(approved_testing_list_name)
@@ -32,4 +32,4 @@ def refresh_list():
 
 
 if __name__ in ('__main__', '__builtin__', 'builtins'):
-    refresh_list()
+    removed_expired_entries()
