@@ -5,14 +5,19 @@ from urllib.parse import quote
 
 import pandas
 import requests
+import webexpythonsdk.models.cards.inputs as INPUTS
 from pytz import timezone
 from webex_bot.models.command import Command
 from webex_bot.webex_bot import WebexBot
 from webexpythonsdk import WebexAPI
+from webexpythonsdk.models.cards import (
+    TextBlock, Column, AdaptiveCard, ColumnSet, HorizontalAlignment, ActionSet, ActionStyle
+)
+from webexpythonsdk.models.cards.actions import Submit
 
 import src.components.oncall as oncall
 from config import get_config
-from services import crowdstrike
+from services import crowdstrike, xsoar
 from services.xsoar import ListHandler, IncidentHandler
 
 approved_testing_list_name: str = "METCIRT_Approved_Testing"
@@ -559,6 +564,44 @@ APPROVED_TESTING_CARD = {
     ]
 }
 
+TICKET_IMPORT_CARD = AdaptiveCard(
+    body=[
+        ColumnSet(
+            columns=[
+                Column(
+                    items=[
+                        TextBlock(
+                            text="Prod ticket#",
+                            horizontalAlignment=HorizontalAlignment.RIGHT,
+                            wrap=True
+                        )
+                    ],
+                    width="auto"
+                ),
+                Column(
+                    items=[
+                        INPUTS.Text(
+                            id="prod_ticket_number",
+                            placeholder="Enter prod ticket number",
+                            isRequired=True
+                        )
+                    ],
+                    width="stretch"
+                )
+            ]
+        ),
+        ActionSet(
+            actions=[
+                Submit(
+                    title="Submit",
+                    style=ActionStyle.POSITIVE,
+                    data={"callback_keyword": "import"}
+                )
+            ],
+        )
+    ]
+)
+
 all_options_card = {
     "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
     "type": "AdaptiveCard",
@@ -697,6 +740,11 @@ all_options_card = {
                                 "type": "Action.ShowCard",
                                 "title": "Threat Hunt",
                                 "card": THREAT_HUNT
+                            },
+                            {
+                                "type": "Action.ShowCard",
+                                "title": "Import Ticket",
+                                "card": TICKET_IMPORT_CARD.to_dict()
                             }
                         ]
                     }
@@ -1345,6 +1393,19 @@ class GetAllOptions(Command):
         pass
 
 
+class ImportTicket(Command):
+    def __init__(self):
+        super().__init__(
+            command_keyword="import",
+            card=TICKET_IMPORT_CARD.to_dict(),
+        )
+
+    def execute(self, message, attachment_actions, activity):
+        prod_ticket_number = attachment_actions.inputs['prod_ticket_number']
+        destination_ticket_number, destination_ticket_link = xsoar.import_ticket(prod_ticket_number)
+        return f'The Prod ticket has been copied to XD [{destination_ticket_number}]({destination_ticket_link})'
+
+
 def main():
     bot = WebexBot(
         CONFIG.webex_bot_access_token_toodles,
@@ -1369,6 +1430,7 @@ def main():
     bot.add_command(ThreatHunt())
     bot.add_command(AZDOWorkItem())
     bot.add_command(GetAllOptions())
+    bot.add_command(ImportTicket())
 
     bot.run()
 
