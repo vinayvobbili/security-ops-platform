@@ -156,6 +156,7 @@ class IncidentHandler:
 
     def create(self, payload):
         """Creates a new incident in XSOAR."""
+        payload.update({"all": True, "createInvestigation": True, "force": True})
         response = requests.post(self.incident_create_url, headers=self.headers, json=payload)
         response.raise_for_status()
         return response.json()
