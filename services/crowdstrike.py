@@ -18,7 +18,7 @@ falcon_auth = OAuth2(
 )
 falcon_hosts = Hosts(auth_object=falcon_auth)
 
-webex_api = WebexTeamsAPI(access_token=CONFIG.webex_bot_access_token_jarvais)
+# webex_api = WebexTeamsAPI(access_token=CONFIG.webex_bot_access_token_jarvais)
 
 
 def fetch_all_hosts_and_write_to_xlsx(xlsx_filename: str = "all_cs_hosts.xlsx") -> None:
