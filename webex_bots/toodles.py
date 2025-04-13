@@ -48,6 +48,14 @@ NEW_TICKET_CARD = {
     "version": "1.3",
     "body": [
         {
+            "type": "TextBlock",
+            "text": "New X Ticket",
+            "color": "Accent",
+            "weight": "Bolder",
+            "size": "Medium",
+            "horizontalAlignment": "Center"
+        },
+        {
             "type": "ColumnSet",
             "columns": [
                 {
@@ -64,12 +72,12 @@ NEW_TICKET_CARD = {
                 },
                 {
                     "type": "Column",
-                    "width": 3,
+                    "width": 6,
                     "items": [
                         {
                             "type": "Input.Text",
                             "id": "title",
-                            "placeholder": "New Incident"
+                            "placeholder": ""
                         }
                     ]
                 }
@@ -92,14 +100,159 @@ NEW_TICKET_CARD = {
                 },
                 {
                     "type": "Column",
-                    "width": 3,
+                    "width": 6,
                     "items": [
                         {
                             "type": "Input.Text",
                             "id": "details",
-                            "placeholder": "Something happened here",
+                            "placeholder": "",
                             "isMultiline": True
                         }
+                    ]
+                }
+            ],
+            "spacing": "None"
+        },
+        {
+            "type": "ColumnSet",
+            "columns": [
+                {
+                    "type": "Column",
+                    "width": 1,
+                    "items": [
+                        {
+                            "type": "TextBlock",
+                            "text": "Detection Source",
+                            "wrap": True,
+                            "horizontalAlignment": "left"
+                        }
+                    ]
+                },
+                {
+                    "type": "Column",
+                    "width": 2,
+                    "items": [
+                        {
+                            "type": "Input.ChoiceSet",
+                            "id": "detection_source",
+                            "choices": [
+                                {
+                                    "title": "Abnormal Security",
+                                    "value": "Abnormal Security"
+                                },
+                                {
+                                    "title": "Akamai",
+                                    "value": "Akamai"
+                                },
+                                {
+                                    "title": "AppDynamics",
+                                    "value": "AppDynamics"
+                                },
+                                {
+                                    "title": "Area1",
+                                    "value": "Area1"
+                                },
+                                {
+                                    "title": "Cisco AMP",
+                                    "value": "Cisco AMP"
+                                },
+                                {
+                                    "title": "CrowdStrike Falcon",
+                                    "value": "CrowdStrike Falcon"
+                                },
+                                {
+                                    "title": "CrowdStrike Falcon IDP",
+                                    "value": "CrowdStrike Falcon IDP"
+                                },
+                                {
+                                    "title": "Customer Reported",
+                                    "value": "Customer Reported"
+                                },
+                                {
+                                    "title": "Cyberbit",
+                                    "value": "Cyberbit"
+                                },
+                                {
+                                    "title": "Employee Reported",
+                                    "value": "Employee Reported"
+                                },
+                                {
+                                    "title": "Flashpoint",
+                                    "value": "Flashpoint"
+                                },
+                                {
+                                    "title": "ForcePoint",
+                                    "value": "ForcePoint"
+                                },
+                                {
+                                    "title": "Illusive",
+                                    "value": "Illusive"
+                                },
+                                {
+                                    "title": "Infoblox",
+                                    "value": "Infoblox"
+                                },
+                                {
+                                    "title": "Intel471",
+                                    "value": "Intel471"
+                                },
+                                {
+                                    "title": "IronPort",
+                                    "value": "IronPort"
+                                },
+                                {
+                                    "title": "Lumen",
+                                    "value": "Lumen"
+                                },
+                                {
+                                    "title": "PaloAlto",
+                                    "value": "PaloAlto"
+                                },
+                                {
+                                    "title": "Prisma Cloud",
+                                    "value": "Prisma Cloud"
+                                },
+                                {
+                                    "title": "Recorded Future",
+                                    "value": "Recorded Future"
+                                },
+                                {
+                                    "title": "Rubrik",
+                                    "value": "Rubrik"
+                                },
+                                {
+                                    "title": "Tanium",
+                                    "value": "Tanium"
+                                },
+                                {
+                                    "title": "Third Party",
+                                    "value": "Third Party"
+                                },
+                                {
+                                    "title": "Threat Hunt",
+                                    "value": "Threat Hunt"
+                                },
+                                {
+                                    "title": "Vectra MDR",
+                                    "value": "Vectra MDR"
+                                },
+                                {
+                                    "title": "ZeroFox",
+                                    "value": "ZeroFox"
+                                },
+                                {
+                                    "title": "ZScaler",
+                                    "value": "ZScaler"
+                                },
+                                {
+                                    "title": "Other",
+                                    "value": "Other"
+                                }
+                            ],
+                            "placeholder": "Select an option",
+                            "isRequired": True,
+                            "errorMessage": "Required"
+                        },
                     ]
                 }
             ],
@@ -855,13 +1008,18 @@ class CreateXSOARTicket(Command):
 
         incident = {
             'name': attachment_actions.inputs['title'].strip(),
-            'details': attachment_actions.inputs['details'].strip() + f"\nSubmitted by: {activity['actor']['emailAddress']}"
+            'details': attachment_actions.inputs['details'].strip() + f"\nSubmitted by: {activity['actor']['emailAddress']}",
+            'CustomFields': {
+                'detectionsource': attachment_actions.inputs['detection_source'],
+                'isusercontacted': False,
+                'securitycategory': 'CAT-5: Scans/Probes/Attempted Access'
+            }
         }
         result = incident_handler.create(incident)
-        new_incident_id = result[0].get('id')
-        incident_url = CONFIG.xsoar_prod_ui_base_url + new_incident_id
+        new_incident_id = result.get('id')
+        incident_url = CONFIG.xsoar_prod_ui_base_url + '/Custom/caseinfoid/' + new_incident_id
 
-        return f"Ticket [#{new_incident_id}]({incident_url}) has been created in XSOAR."
+        return f"Ticket [#{new_incident_id}]({incident_url}) has been created in XSOAR Prod."
 
 
 class IOC(Command):
