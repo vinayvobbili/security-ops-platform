@@ -6,6 +6,7 @@ from urllib.parse import quote
 import pandas
 import requests
 import webexpythonsdk.models.cards.inputs as INPUTS
+import webexpythonsdk.models.cards.options as OPTIONS
 from pytz import timezone
 from webex_bot.models.command import Command
 from webex_bot.webex_bot import WebexBot
@@ -573,7 +574,6 @@ TICKET_IMPORT_CARD = AdaptiveCard(
                         TextBlock(
                             text="Prod ticket#",
                             horizontalAlignment=HorizontalAlignment.RIGHT,
-                            wrap=True
                         )
                     ],
                     width="auto"
@@ -583,10 +583,12 @@ TICKET_IMPORT_CARD = AdaptiveCard(
                         INPUTS.Text(
                             id="prod_ticket_number",
                             placeholder="Enter prod ticket number",
-                            isRequired=True
+                            isRequired=True,
+                            errorMessage='Required'
                         )
                     ],
-                    width="stretch"
+                    width="stretch",
+                    verticalContentAlignment=OPTIONS.VerticalContentAlignment.CENTER
                 )
             ]
         ),
@@ -597,7 +599,7 @@ TICKET_IMPORT_CARD = AdaptiveCard(
                     style=ActionStyle.POSITIVE,
                     data={"callback_keyword": "import"}
                 )
-            ],
+            ]
         )
     ]
 )
