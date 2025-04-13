@@ -1,9 +1,11 @@
+import logging
 from datetime import date, datetime, timedelta
 
 from pytz import timezone
 
 from services.xsoar import ListHandler
 
+log = logging.getLogger(__name__)
 list_handler = ListHandler()
 
 
@@ -35,10 +37,13 @@ def __get_on_call_email_by_monday_date__(monday_date):
 
 
 def alert_change():
-    today = date.today()
-    coming_monday = today + timedelta(days=-today.weekday(), weeks=1)
+    try:
+        today = date.today()
+        coming_monday = today + timedelta(days=-today.weekday(), weeks=1)
 
-    message = f'Next week\'s On-call person is <@personEmail:{__get_on_call_email_by_monday_date__(coming_monday)}>'
+        message = f'Next week\'s On-call person is <@personEmail:{__get_on_call_email_by_monday_date__(coming_monday)}>'
+    except Exception as e:
+        log.error(f'Failed to generate alert change: {str(e)}')
 
 
 def announce_change():

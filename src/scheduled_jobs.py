@@ -77,7 +77,7 @@ def main():
         phish_fort.fetch_and_report_incidents(),
         oncall.announce_change()
     ))
-    schedule.every().day.at("17:00", eastern).do(approved_security_testing.refresh_list)
+    schedule.every().day.at("17:00", eastern).do(approved_security_testing.removed_expired_entries)
     # schedule.every().day.at("08:00", eastern).do(thithi.notify)
 
     while True:
