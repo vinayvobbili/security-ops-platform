@@ -15,7 +15,7 @@ body {
     padding: 0;
     display: flex;
     justify-content: center;
-    align-items: center;
+    align-items: flex-start;
     min-height: 100vh;
     color: var(--dark);
 }
@@ -301,52 +301,52 @@ label {
 
 /* Container for URL and copy button */
 .url-container {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  width: 100%;
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    width: 100%;
 }
 
 .url-container a {
-  flex: 1;
-  min-width: 0; /* Allows proper text truncation */
-  word-break: break-all;
-  overflow-wrap: break-word;
+    flex: 1;
+    min-width: 0; /* Allows proper text truncation */
+    word-break: break-all;
+    overflow-wrap: break-word;
 }
 
 /* Copy button styling */
 .copy-btn {
-  background: #f0f3f9;
-  border: none;
-  border-radius: 6px;
-  width: 32px;
-  height: 32px;
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  color: #4a6cf7;
-  transition: all 0.2s ease;
-  margin-left: 4px;
+    background: #f0f3f9;
+    border: none;
+    border-radius: 6px;
+    width: 32px;
+    height: 32px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: #4a6cf7;
+    transition: all 0.2s ease;
+    margin-left: 4px;
 }
 
 .copy-btn:hover {
-  background: #e1e6f5;
+    background: #e1e6f5;
 }
 
 .copy-btn:active {
-  transform: scale(0.95);
+    transform: scale(0.95);
 }
 
 /* Animation for successful copy */
 .copy-btn.copied {
-  background: #0cbc87;
-  color: white;
+    background: #0cbc87;
+    color: white;
 }
 
 /* Make sure icons in the copy button look good */
 .copy-btn svg {
-  width: 16px;
-  height: 16px;
+    width: 16px;
+    height: 16px;
 }
