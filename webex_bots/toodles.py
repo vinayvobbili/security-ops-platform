@@ -576,7 +576,8 @@ TICKET_IMPORT_CARD = AdaptiveCard(
                             horizontalAlignment=HorizontalAlignment.RIGHT,
                         )
                     ],
-                    width="auto"
+                    width="auto",
+                    verticalContentAlignment=OPTIONS.VerticalContentAlignment.CENTER
                 ),
                 Column(
                     items=[
@@ -1405,7 +1406,7 @@ class ImportTicket(Command):
     def execute(self, message, attachment_actions, activity):
         prod_ticket_number = attachment_actions.inputs['prod_ticket_number']
         destination_ticket_number, destination_ticket_link = xsoar.import_ticket(prod_ticket_number)
-        return f'The Prod ticket has been copied to XD [{destination_ticket_number}]({destination_ticket_link})'
+        return f'The Prod ticket has been copied to Dev [X#{destination_ticket_number}]({destination_ticket_link})'
 
 
 def main():
