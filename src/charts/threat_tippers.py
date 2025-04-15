@@ -97,9 +97,9 @@ def plot_stacked_bar(fig, summary_data, colors, priority_counts):
                           ha='center', va='center', fontweight='bold')
 
     # Add labels and title
-    chart_ax.set_title('Threat Hunts by Priority', fontsize=16, fontweight='bold', pad=20)
-    chart_ax.set_xlabel('Last 30 days', fontsize=12)
-    chart_ax.set_ylabel('Number of Threat Hunts', fontsize=12)
+    chart_ax.set_title('Threat Tippers', fontsize=16, fontweight='bold', pad=20)
+    chart_ax.set_xlabel('Last 30 days', fontsize=10, fontweight='bold', labelpad=10)
+    chart_ax.set_ylabel('Counts', fontsize=10, fontweight='bold')
     chart_ax.yaxis.set_major_locator(plt.MaxNLocator(integer=True))
     chart_ax.grid(axis='y', linestyle='-', alpha=0.2)
 
@@ -109,7 +109,7 @@ def plot_stacked_bar(fig, summary_data, colors, priority_counts):
     chart_ax.set_xticklabels([date.strftime('%m/%d/%y') for date in valid_x_ticks], rotation=45, ha='right')
 
     # Add legend in upper left with updated labels
-    chart_ax.legend(handles, labels, title='Priority', loc='upper left')
+    chart_ax.legend(handles, labels, title='Priority', loc='upper left', title_fontproperties={'weight': 'bold'})
 
     # Add some padding at the top for the total labels
     y_max = max(summary_data['Total'].max() * 1.15, 4)  # At least 4, or 15% above max
@@ -154,7 +154,7 @@ def generate_threat_hunt_report(hunt_details):
     today_date = datetime.now().strftime('%m-%d-%Y')
     OUTPUT_PATH = ROOT_DIRECTORY / "web" / "static" / "charts" / today_date
     os.makedirs(OUTPUT_PATH, exist_ok=True)
-    plt.savefig(OUTPUT_PATH / 'Threat Hunts.png', dpi=300, bbox_inches='tight')
+    plt.savefig(OUTPUT_PATH / 'Threat Tippers.png', dpi=300, bbox_inches='tight')
 
 
 def make_chart():
