@@ -50,7 +50,7 @@ def get_image_files() -> List[str]:
         f"charts/{today_date}/CrowdStrike Volume.png",
         f"charts/{today_date}/Lifespan.png",
         "images/Threat Hunting Intro.png",
-        f"charts/{today_date}/Threat Hunts.png",
+        f"charts/{today_date}/Threat Tippers.png",
         f"charts/{today_date}/DE Stories.png",
         f"charts/{today_date}/RE Stories.png",
         "images/End of presentation.jpg",
