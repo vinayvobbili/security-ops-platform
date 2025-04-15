@@ -1,5 +1,4 @@
 import datetime
-import pprint
 import time
 from datetime import datetime, timedelta
 
@@ -40,8 +39,6 @@ def fetch_work_items(query: str):
             batch_ids = work_item_ids[i:i + batch_size]
             try:
                 work_items = work_item_tracking_client.get_work_items(ids=batch_ids)
-                for work_item in work_items:
-                    pprint.pprint(f"ID: {work_item.id}, Title: {work_item.fields['System.Title']}, State: {work_item.fields['System.State']}")
                 all_work_items.extend(work_items)
             except AzureDevOpsClientRequestError as e:
                 print(f"Error fetching work items for batch {batch_ids}: {e}")
@@ -66,6 +63,7 @@ def get_stories_from_area_path(area_path):
     FROM WorkItems
     WHERE [System.AreaPath] = '{area_path}'
     AND [System.WorkItemType] = 'User Story'
+    AND [System.CreatedDate] >= @Today-30
     """
     return fetch_work_items(query)
 
