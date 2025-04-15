@@ -1,4 +1,6 @@
+import os
 from datetime import datetime
+from pathlib import Path
 
 import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
@@ -10,6 +12,7 @@ from matplotlib import transforms
 import services.azdo as azdo
 
 eastern = pytz.timezone('US/Eastern')
+ROOT_DIRECTORY = Path(__file__).parent.parent.parent
 
 
 def process_hunt_data(hunt_details):
@@ -17,7 +20,10 @@ def process_hunt_data(hunt_details):
     processed_data = []
 
     for hunt in hunt_details:
-        created_date = datetime.strptime(hunt.fields['System.CreatedDate'], '%Y-%m-%dT%H:%M:%S.%fZ')
+        try:
+            created_date = datetime.strptime(hunt.fields['System.CreatedDate'], '%Y-%m-%dT%H:%M:%S.%fZ')
+        except ValueError:
+            created_date = datetime.strptime(hunt.fields['System.CreatedDate'], '%Y-%m-%dT%H:%M:%SZ')
         week = created_date.strftime('%m/%d/%y')
         priority = hunt.fields['Microsoft.VSTS.Common.Priority']
 
@@ -90,10 +96,16 @@ def plot_stacked_bar(fig, summary_data, colors, priority_counts):
                           ha='center', va='center', fontweight='bold')
 
     # Add labels and title
-    chart_ax.set_title('Weekly Threat Hunts by Priority', fontsize=16, fontweight='bold', pad=20)
-    chart_ax.set_xlabel('Week', fontsize=12)
+    chart_ax.set_title('Threat Hunts by Priority', fontsize=16, fontweight='bold', pad=20)
+    chart_ax.set_xlabel('Last 30 days', fontsize=12)
     chart_ax.set_ylabel('Number of Threat Hunts', fontsize=12)
+    chart_ax.yaxis.set_major_locator(plt.MaxNLocator(integer=True))
     chart_ax.grid(axis='y', linestyle='-', alpha=0.2)
+
+    # Show x-ticks only where there are y-values
+    valid_x_ticks = summary_data.index[summary_data['Total'] > 0]
+    chart_ax.set_xticks(valid_x_ticks)
+    chart_ax.set_xticklabels([date.strftime('%m/%d/%y') for date in valid_x_ticks], rotation=45, ha='right')
 
     # Add legend in upper left with updated labels
     chart_ax.legend(handles, labels, title='Priority', loc='upper left')
@@ -105,7 +117,7 @@ def plot_stacked_bar(fig, summary_data, colors, priority_counts):
     return chart_ax
 
 
-def generate_threat_hunt_report(hunt_details, output_file='weekly_threat_hunts_legend_counts.png'):
+def generate_threat_hunt_report(hunt_details):
     """Main function to generate the threat hunt report with counts in the legend."""
     # Define priority colors to match the example
     colors = {
@@ -138,7 +150,10 @@ def generate_threat_hunt_report(hunt_details, output_file='weekly_threat_hunts_l
     plt.text(0.02, -0.1, now_eastern, ha='left', va='bottom', fontsize=10, transform=trans)
 
     # Save with tight layout and display
-    plt.savefig(output_file, dpi=300, bbox_inches='tight')
+    today_date = datetime.now().strftime('%m-%d-%Y')
+    OUTPUT_PATH = ROOT_DIRECTORY / "web" / "static" / "charts" / today_date
+    os.makedirs(OUTPUT_PATH, exist_ok=True)
+    plt.savefig(OUTPUT_PATH / 'weekly_threat_hunts_legend_counts.png', dpi=300, bbox_inches='tight')
 
 
 if __name__ == "__main__":

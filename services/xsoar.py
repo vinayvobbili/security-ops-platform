@@ -44,59 +44,6 @@ def get_incident(incident_id):
         raise Exception(f"Network error while fetching incident: {str(e)}")
 
 
-def __create_incident__(base_url, incident_data, auth_id, auth_token):
-    """Create incident in target environment"""
-    headers = {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-        'x-xdr-auth-id': auth_id,
-        'authorization': auth_token,
-    }
-
-    try:
-        create_url = f"{base_url}/incident"
-        payload = {
-            "details": incident_data.get('details', 'Details not found'),
-            "name": incident_data.get('name', 'Name not found'),
-            "severity": int(incident_data.get('severity', 1)),
-            "type": incident_data.get('type', f'{CONFIG.ticket_type_prefix} Case'),
-            "closeNotes": incident_data.get('closeNotes', 'Close notes not found'),
-            "closeReason": incident_data.get('closeReason', 'Close reason not found'),
-            "email": incident_data.get('email', 'Email not found'),
-            "emailbodyhtml": incident_data.get('emailbodyhtml', 'Email body HTML not found'),
-            "CustomFields": {
-                'detectionsource': incident_data.get('CustomFields', {}).get('detectionsource', 'Unknown'),
-                'securitycategory': incident_data.get('CustomFields', {}).get('securitycategory', 'Unknown'),
-                'qradareventid': incident_data.get('CustomFields', {}).get('qradareventid', 'Unknown'),
-                'impact': incident_data.get('CustomFields', {}).get('impact', 'Unknown'),
-                'rootcause': incident_data.get('CustomFields', {}).get('rootcause', 'Unknown'),
-                'securitysubcategory': incident_data.get('CustomFields', {}).get('securitysubcategory', 'Unknown')
-            },
-            "all": True,
-            "createInvestigation": True,
-            "force": True,
-        }
-
-        # Validate payload
-        if not isinstance(payload, dict):
-            raise ValueError("Payload must be a dictionary")
-
-        response = requests.post(
-            create_url,
-            headers=headers,
-            json=payload,
-            verify=False,
-            timeout=30
-        )
-        response.raise_for_status()  # Raise an error for bad status codes
-        return response.json()
-
-    except requests.exceptions.RequestException as e:
-        raise Exception(f"Network error while creating incident: {str(e)}")
-    except ValueError as e:
-        raise Exception(f"Payload error: {str(e)}")  #
-
-
 def import_ticket(source_ticket_number):
     incident_handler = IncidentHandler()
 
@@ -168,7 +115,6 @@ class IncidentHandler:
         payload.pop('status', None)
         payload.update({"all": True, "createInvestigation": True, "force": True})
         response = requests.post(self.incident_create_url_dev, headers=dev_headers, json=payload)
-        # response = __create_incident__(self.incident_create_url_dev, payload, CONFIG.xsoar_dev_auth_id, CONFIG.xsoar_dev_auth_key)
         response.raise_for_status()
         return response.json()
 
