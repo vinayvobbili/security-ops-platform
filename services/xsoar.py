@@ -82,7 +82,7 @@ class IncidentHandler:
             response = requests.post(self.incident_search_url, headers=self.headers, json=payload, timeout=120)
             response.raise_for_status()
             tickets = response.json()
-            log.info(f'Retrieved {tickets.get("total", 0)} incidents')
+
             return tickets.get('data', [])  # Ensure only incident data is returned
         except requests.exceptions.RequestException as e:
             log.error(f"Error fetching incidents: {e}")

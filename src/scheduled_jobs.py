@@ -64,7 +64,7 @@ def main():
         qradar_rule_efficacy.make_chart(),
         vectra_volume.make_chart(),
         crowdstrike_volume.make_chart(),
-        threat_hunting.make_chart()
+        threat_tippers.make_chart()
     ))
 
     schedule.every(5).minutes.do(verify_host_online_status.start)
