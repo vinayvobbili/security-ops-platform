@@ -262,8 +262,8 @@ if __name__ == "__main__":
         # Create a client instance
         with ServiceNowClient(config.snow_base_url, config.snow_functional_account_id, config.snow_functional_account_password, config.snow_client_key) as client:
 
-            # Example 2: Get host by name
-            hostname = "VMVDI19104"
+            # Example 2: Get details by host name
+            hostname = "00040170JA00634"
             logger.info(f"Looking up host {hostname} in CMDB...")
             host_details = client.get_host_details(hostname)
             logger.info(f"Host details: {host_details}")
