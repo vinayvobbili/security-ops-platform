@@ -99,7 +99,7 @@ def fetch_all_hosts_and_write_to_xlsx(xlsx_filename: str = "all_cs_hosts.xlsx") 
 
 
 def get_device_id(hostname):
-    """Retrieve the first device ID matching the filter."""
+    """Retrieve the device ID matching the filter."""
     host_filter = f"hostname:'{hostname}'"
     response = falcon_hosts.query_devices_by_filter(filter=host_filter, sort='last_seen.desc', limit=1)
 
