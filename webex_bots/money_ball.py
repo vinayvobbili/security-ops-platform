@@ -107,7 +107,7 @@ class Inflow(Command):
     @log_moneyball_activity(bot_access_token=config.webex_bot_access_token_moneyball)
     def execute(self, message, attachment_actions, activity):
         send_chart(attachment_actions.json_data["roomId"], activity['actor']['displayName'], "Inflow Yesterday", "Inflow Yesterday.png")
-        send_chart(attachment_actions.json_data["roomId"], activity['actor']['displayName'], "Inflow 60 Days", "Inflow 60 Days.png")
+        send_chart(attachment_actions.json_data["roomId"], activity['actor']['displayName'], "Inflow Past 60 Days", "Inflow Past 60 Days.png")
 
 
 class HeatMap(Command):

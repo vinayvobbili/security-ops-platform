@@ -38,7 +38,7 @@ def get_image_files() -> List[str]:
         f"charts/{today_date}/Days Since Last Incident.png",
         "images/DnR Metrics by Peanuts.jpg",
         f"charts/{today_date}/Aging Tickets.png",
-        f"charts/{today_date}/Inflow 60 Days.png",
+        f"charts/{today_date}/Inflow Past 60 Days.png",
         f"charts/{today_date}/Inflow Yesterday.png",
         f"charts/{today_date}/Outflow.png",
         f"charts/{today_date}/SLA Breaches.png",
