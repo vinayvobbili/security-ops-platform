@@ -35,7 +35,7 @@ def main():
     re_stories.make_chart()
     sla_breaches.make_chart()
     threatcon_level.make_chart()
-    secops.announce_shift_change('night', config.webex_room_id_vinay_test_space)
+    secops.announce_shift_change('afternoon', config.webex_room_id_vinay_test_space)
     # qradar_rule_efficacy.send_charts()
     # phish_fort.fetch_and_report_incidents()
     # thithi.notify()

@@ -6,13 +6,13 @@ from config import get_config
 config = get_config()
 
 # Initialize Webex API client
-webex_api = WebexTeamsAPI(access_token=config.webex_bot_access_token_jarvais)
+webex_api = WebexTeamsAPI(access_token=config.webex_bot_access_token_toodles)
 
 """Sends a file to a Webex room."""
 webex_api.messages.create(
-    roomId=config.webex_room_id_epp_tagging,
-    text=f"A complete list of UNIQUE CS hosts without a Ring tag, along with their SNOW details, is attached!",
+    roomId=config.webex_room_id_threatcon_collab,
+    text=f"A new chart!",
     files=[
-        '/Users/user/PycharmProjects/IR/data/transient/epp_device_tagging/enriched_unique_hosts.xlsx'
+        '/Users/user/PycharmProjects/IR/web/static/charts/04-17-2025/Inflow Past 60 Days.png'
     ]
 )

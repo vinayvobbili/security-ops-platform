@@ -21,10 +21,19 @@ webex_api = WebexTeamsAPI(access_token=config.webex_bot_access_token_moneyball)
 def send_chart(room_id, display_name, chart_name, chart_filename):
     """Sends a chart image to a Webex room."""
     today_date = datetime.now().strftime('%m-%d-%Y')
+    chart_path = os.path.join(os.path.dirname(__file__), f'../web/static/charts/{today_date}', chart_filename)
+
+    if not os.path.exists(chart_path):
+        webex_api.messages.create(
+            roomId=room_id,
+            text=f"Sorry {display_name}, the {chart_name} chart is not available."
+        )
+        return
+
     webex_api.messages.create(
         roomId=room_id,
         text=f"{display_name}, here's the latest {chart_name} chart!",
-        files=[os.path.join(os.path.dirname(__file__), f'../web/static/charts/{today_date}', chart_filename)]
+        files=[chart_path]
     )
 
 
@@ -98,6 +107,7 @@ class Inflow(Command):
     @log_moneyball_activity(bot_access_token=config.webex_bot_access_token_moneyball)
     def execute(self, message, attachment_actions, activity):
         send_chart(attachment_actions.json_data["roomId"], activity['actor']['displayName'], "Inflow Yesterday", "Inflow Yesterday.png")
+        send_chart(attachment_actions.json_data["roomId"], activity['actor']['displayName'], "Inflow 60 Days", "Inflow 60 Days.png")
 
 
 class HeatMap(Command):
