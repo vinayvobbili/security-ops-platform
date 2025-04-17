@@ -1,9 +1,9 @@
 import json
 import time
+from datetime import date
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from dateutil.utils import today
 from openpyxl import load_workbook
 from tabulate import tabulate
 from webexpythonsdk import WebexAPI
@@ -177,7 +177,7 @@ def announce_shift_change(shift_name, room_id, sleep_time=30):
             management_notes = file.read()
             management_notes = json.loads(management_notes)
             keep_until = datetime.strptime(management_notes['keep_until'], '%Y-%m-%d').date()
-            if today().date() <= keep_until:
+            if date.today() <= keep_until:
                 note = management_notes['note']
 
         hosts_in_containment = list_handler.get_list_data_by_name('METCIRT Contained Hosts')
