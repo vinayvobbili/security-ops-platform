@@ -21,20 +21,21 @@ def main():
     Main function to run the scheduled jobs.
     """
     # run once
-    helper_methods.make_dir_for_todays_charts(),
-    aging_tickets.make_chart(),
-    days_since_incident.make_chart(),
-    crowdstrike_volume.make_chart(),
-    vectra_volume.make_chart(),
-    de_stories.make_chart(),
-    heatmap.create_choropleth_map(),
-    inflow.make_chart(),
-    lifespan.make_chart(),
-    mttr_mttc.make_chart(),
-    outflow.make_chart(),
-    re_stories.make_chart(),
-    sla_breaches.make_chart(),
+    helper_methods.make_dir_for_todays_charts()
+    aging_tickets.make_chart()
+    days_since_incident.make_chart()
+    crowdstrike_volume.make_chart()
+    vectra_volume.make_chart()
+    de_stories.make_chart()
+    heatmap.create_choropleth_map()
+    inflow.make_chart()
+    lifespan.make_chart()
+    mttr_mttc.make_chart()
+    outflow.make_chart()
+    re_stories.make_chart()
+    sla_breaches.make_chart()
     threatcon_level.make_chart()
+    secops.announce_shift_change('night', config.webex_room_id_vinay_test_space)
     # qradar_rule_efficacy.send_charts()
     # phish_fort.fetch_and_report_incidents()
     # thithi.notify()

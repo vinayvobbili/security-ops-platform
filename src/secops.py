@@ -113,11 +113,11 @@ def announce_previous_shift_performance(room_id, shift_name):
 
     domains_blocked = [
         item['domain'] for item in list_handler.get_list_data_by_name('METCIRT Blocked Domains')
-        if datetime.strptime(item['blocked_at'], '%m/%d/%Y %I:%M:%S %p %Z') >= datetime.now() - timedelta(hours=8)
+        if datetime.strptime(item['blocked_at'], '%m/%d/%Y %I:%M:%S %p %Z').replace(tzinfo=None) >= datetime.now() - timedelta(hours=8)
     ]
     ip_addresses_blocked = [
         item['ip_address'] for item in list_handler.get_list_data_by_name('METCIRT Blocked IP Addresses')
-        if datetime.strptime(item['blocked_at'], '%m/%d/%Y %I:%M:%S %p %Z') >= datetime.now() - timedelta(hours=8)
+        if datetime.strptime(item['blocked_at'], '%m/%d/%Y %I:%M:%S %p %Z').replace(tzinfo=None) >= datetime.now() - timedelta(hours=8)
     ]
 
     iocs_blocked = ', '.join(domains_blocked + ip_addresses_blocked)
