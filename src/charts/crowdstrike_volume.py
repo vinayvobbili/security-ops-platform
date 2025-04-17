@@ -67,7 +67,7 @@ def generate_chart(tickets):
         impact_data_dict[impact] = counts
 
     # Create the figure and subplots
-    fig, ax = plt.subplots(1, 1, figsize=(14, 12), sharex=True)
+    fig, ax = plt.subplots(1, 1, figsize=(20, 12), sharex=True)
     fig.suptitle(f'CrowdStrike', fontweight='bold', fontsize=14)
     ax.set_title(f'{len(tickets)} Tickets from past 3 months', fontsize=12)
 
@@ -87,6 +87,7 @@ def generate_chart(tickets):
     legend.get_title().set_fontweight('bold')
     ax.set_xlabel('Detection Date', fontsize=10, fontweight='bold', labelpad=10)
     ax.set_ylabel('Alert Counts', fontweight='bold', fontsize=10, labelpad=10)
+    ax.set_yticks(list(ax.get_yticks()))
 
     # Add an average solid line
     total_alerts = sum(sum(counts) for counts in impact_data_dict.values())
