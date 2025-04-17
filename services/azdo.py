@@ -111,8 +111,8 @@ def get_tuning_requests_submitted_by_last_shift():
 
 def main():
     # Example usage
-    # get_stories_from_area_path("Detection-Engineering\\DE Rules\\Threat Hunting")
-    get_tuning_requests_submitted_by_last_shift()
+    get_stories_from_area_path("Detection-Engineering\\DE Rules\\Threat Hunting")
+    # get_tuning_requests_submitted_by_last_shift()
 
 
 if __name__ in ('__main__', '__builtin__', 'builtins'):
