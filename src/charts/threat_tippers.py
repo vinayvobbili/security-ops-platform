@@ -28,9 +28,9 @@ def process_hunt_data(hunt_details):
         week = created_date.strftime('%m/%d/%y')
         priority = hunt.fields['Microsoft.VSTS.Common.Priority']
 
-        # Map numeric priority to text labels
-        priority_labels = {1: 'Critical', 2: 'High', 3: 'Medium', 4: 'Low'}
-        priority_text = priority_labels.get(priority, 'Unknown')
+        tags = hunt.fields.get('System.Tags', '')
+        priority_labels = ['Critical', 'High', 'Medium', 'Low', 'Info']
+        priority_text = next((tag for tag in priority_labels if tag in tags), 'Unknown')
 
         processed_data.append({
             'Week': week,
@@ -54,7 +54,7 @@ def create_summary_data(df):
     summary = summary.sort_index()
 
     # Ensure all priority columns exist
-    for priority in ['Critical', 'High', 'Medium', 'Low']:
+    for priority in ['Critical', 'High', 'Medium', 'Low', 'Info']:
         if priority not in summary.columns:
             summary[priority] = 0
 
@@ -86,20 +86,10 @@ def plot_stacked_bar(fig, summary_data, colors, priority_counts):
     chart_ax.xaxis.set_major_formatter(mdates.DateFormatter('%m/%d/%y'))
     plt.setp(chart_ax.get_xticklabels(), rotation=45, ha='right')
 
-    # Add data labels for total counts in the middle of the bars
-    for i, (date, row) in enumerate(summary_data.iterrows()):
-        total_height = 0
-        for priority in ['Low', 'Medium', 'High', 'Critical']:
-            if priority in summary_data.columns and row[priority] > 0:
-                total_height += row[priority]
-        if row['Total'] > 0:
-            chart_ax.text(mdates.date2num(date), total_height / 2, str(int(row['Total'])),
-                          ha='center', va='center', fontweight='bold')
-
     # Add labels and title
-    chart_ax.set_title('Threat Tippers', fontsize=16, fontweight='bold', pad=20)
+    chart_ax.set_title('Threat Tippers', fontsize=14, fontweight='bold', pad=20)
     chart_ax.set_xlabel('Last 30 days', fontsize=10, fontweight='bold', labelpad=10)
-    chart_ax.set_ylabel('Counts', fontsize=10, fontweight='bold')
+    chart_ax.set_ylabel('Counts', fontsize=10, fontweight='bold', labelpad=10)
     chart_ax.yaxis.set_major_locator(plt.MaxNLocator(integer=True))
     chart_ax.grid(axis='y', linestyle='-', alpha=0.2)
 
@@ -119,13 +109,12 @@ def plot_stacked_bar(fig, summary_data, colors, priority_counts):
 
 
 def generate_threat_hunt_report(hunt_details):
-    """Main function to generate the threat hunt report with counts in the legend."""
-    # Define priority colors to match the example
     colors = {
         'Critical': '#ef4444',  # Red
         'High': '#f97316',  # Orange
         'Medium': '#fbbf24',  # Yellow
-        'Low': '#60a5fa'  # Blue
+        'Low': '#60a5fa',  # Blue
+        'Info': '#999999'
     }
 
     # Process data
