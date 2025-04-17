@@ -170,7 +170,6 @@ class QRadarEfficacyChart:
         plt.tight_layout()
         plt.savefig(output_path)
         plt.close(fig)  # Close the figure explicitly
-        log.info(f"Chart saved to: {output_path}")
 
     @staticmethod
     def _add_bar_labels(ax, df: pd.DataFrame) -> None:
@@ -228,7 +227,6 @@ class QRadarEfficacyChart:
 
         # Generate charts for each configuration
         for config in chart_configs:
-            log.info(f"Generating chart for {config['time_period_label']}...")
             self.generate_chart_for_period(**config)
 
         log.info(f"Successfully generated {len(chart_configs)} charts")

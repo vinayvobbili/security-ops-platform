@@ -114,8 +114,11 @@ def plot_yesterday():
 
 
 def plot_past_60_days():
-    query = f'type:{config.ticket_type_prefix}'
-    period = {"byTo": "day", "toValue": None, "byFrom": "day", "fromValue": 60}
+    query = f'type:{config.ticket_type_prefix} -owner:""'
+    period = {
+        "by": "day",
+        "fromValue": 60
+    }
     tickets = IncidentHandler().get_tickets(query=query, period=period)
 
     if not tickets:
@@ -178,8 +181,12 @@ def plot_past_60_days():
         ax.bar(x, values, bottom=bottom, label=impact, color=impact_colors.get(impact, '#000000'))
         bottom += values
 
+    # Plot a horizontal line for the daily average
+    daily_average = date_impact_counts.groupby('created_date')['count'].sum().mean()
+    ax.axhline(daily_average, color='blue', linestyle='--', linewidth=1.5, label=f'Daily Average ({int(daily_average)})')
     # Set x-ticks at the correct positions
     ax.set_xticks(x)
+    ax.set_ylim(0, bottom.max() * 1.1)  # Add 10% extra space above the tallest bar
 
     # Show only every nth label to prevent crowding
     n = 5  # Show every 5th label
@@ -195,11 +202,17 @@ def plot_past_60_days():
     ax.set_ylabel("Number of Tickets", fontweight='bold', fontsize=10)
     ax.set_title("Ticket Inflow Over the Past 60 Days", fontweight='bold', fontsize=12)
 
-    # Add grid lines for better readability
-    ax.grid(axis='y', linestyle='--', alpha=0.7)
-
     # Add legend
-    ax.legend(title='impact')
+    ax.legend(title='Impact', title_fontproperties={'weight': 'bold'})
+
+    # Add a thin black border around the figure
+    fig.patch.set_edgecolor('black')
+    fig.patch.set_linewidth(5)
+
+    # Add the current time to the chart
+    now_eastern = datetime.now(eastern).strftime('%m/%d/%Y %I:%M %p %Z')
+    trans = transforms.blended_transform_factory(fig.transFigure, fig.transFigure)
+    plt.text(0.05, 0.01, now_eastern, ha='left', va='bottom', fontsize=10, transform=trans)
 
     # Save the chart
     today_date = datetime.now().strftime('%m-%d-%Y')
@@ -216,7 +229,7 @@ def plot_past_60_days():
 def make_chart():
     try:
         plot_yesterday()
-        # plot_past_60_days()
+        plot_past_60_days()
     except Exception as e:
         print(f"An error occurred while generating charts: {e}")
 
