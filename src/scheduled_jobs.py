@@ -20,7 +20,7 @@ def main():
     """
     Main function to run the scheduled jobs.
     """
-    # run once
+    # run once to test
     helper_methods.make_dir_for_todays_charts()
     aging_tickets.make_chart()
     days_since_incident.make_chart()
