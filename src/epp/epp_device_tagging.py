@@ -330,6 +330,7 @@ class Host:
                 return ""
             elif len(environment) >= 1:
                 return environment[0].lower().strip()
+            return None
         else:
             return environment.lower().strip()
 
