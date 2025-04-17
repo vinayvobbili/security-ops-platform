@@ -73,7 +73,7 @@ def get_tuning_requests_submitted_by_last_shift():
     Get tuning requests submitted by the last shift.
 
     Returns:
-        List of work items or a message if no work items are found.
+        List of work item strings (formatted as "ID: Title") or a message if no work items are found.
     """
     # Get items from today and yesterday
     query = """
@@ -87,19 +87,26 @@ def get_tuning_requests_submitted_by_last_shift():
     all_items = fetch_work_items(query)
 
     if isinstance(all_items, str):  # "No work items found" message
-        return all_items
+        return []  # Return empty list instead of the message
 
     # Filter in Python for the last 8 hours
-    eight_hours_ago = datetime.now() - timedelta(hours=8)
+    eight_hours_ago = datetime.now()  # This is a naive datetime
 
-    # Filter the items
-    recent_items = []
+    # Filter the items and convert to strings
+    recent_item_strings = []
     for item in all_items:
-        created_date = datetime.fromisoformat(item.fields["System.CreatedDate"].replace("Z", "+00:00"))
-        if created_date >= eight_hours_ago:
-            recent_items.append(item)
+        # Parse the ISO format string to datetime, then make it naive by removing the timezone
+        created_date_str = item.fields["System.CreatedDate"]
+        created_date = datetime.fromisoformat(created_date_str.replace("Z", "+00:00"))
+        created_date_naive = created_date.replace(tzinfo=None)
 
-    return recent_items
+        # Now compare naive to naive
+        if created_date_naive >= eight_hours_ago - timedelta(hours=8):
+            # Convert WorkItem to string format
+            item_str = f"{item.id}: {item.fields.get('System.Title', 'No Title')}"
+            recent_item_strings.append(item_str)
+
+    return recent_item_strings
 
 
 def main():
