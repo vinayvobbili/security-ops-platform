@@ -216,10 +216,10 @@ def plot_past_60_days():
 def make_chart():
     try:
         plot_yesterday()
-        plot_past_60_days()
+        # plot_past_60_days()
     except Exception as e:
         print(f"An error occurred while generating charts: {e}")
 
 
 if __name__ == '__main__':
-    make_chart()
+    plot_past_60_days()

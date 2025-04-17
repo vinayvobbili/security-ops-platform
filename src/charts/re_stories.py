@@ -52,7 +52,7 @@ class ADOWorkItemRetriever:
 
         try:
             response = requests.post(wiql_endpoint, headers=self.headers, json=query_body)
-            print(response.text)
+            # print(response.text)
             response.raise_for_status()
 
             # Extract work item IDs
