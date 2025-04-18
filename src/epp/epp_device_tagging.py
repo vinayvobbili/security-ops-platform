@@ -190,12 +190,11 @@ class Host:
             if self.country:
                 self.was_country_guessed = True
                 self.status_message = f"Country guessed from first two letters of hostname: {self.country}"
-            if not self.country:
+            else:
                 if self.name[0].isdigit():
                     self.country = 'Korea'
+                    self.was_country_guessed = True
                     self.status_message = f"Country guessed from leading digits in hostname: {self.country}"
-            else:
-                self.status_message = "Country unknown and couldn't be guessed"
 
     def _determine_region(self) -> None:
         """Determine the region based on country with special case handling."""
