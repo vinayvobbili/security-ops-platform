@@ -33,7 +33,7 @@ def __get_on_call_email_by_monday_date__(monday_date):
         )
     )[0]['email_address']
 
-    return f'{on_call_name}({on_call_email_address})'
+    return f'**{on_call_name}** ({on_call_email_address})'
 
 
 def alert_change():
