@@ -18,11 +18,11 @@ def send_report():
     """
     Sends a file to a Webex room.
     """
-    file_to_send = '/Users/user/PycharmProjects/IR/data/transient/epp_device_tagging/unique_hosts_without_ring_tag.xlsx'
+    file_to_send = '/Users/user/PycharmProjects/IR/data/transient/epp_device_tagging/enriched_unique_hosts_without_ring_tag.xlsx'
     host_count = len(pd.read_excel(file_to_send, engine="openpyxl"))
     webex_api.messages.create(
         roomId=CONFIG.webex_room_id_epp_tagging,
-        text=f"UNIQUE CS hosts without a Ring tag. Count={host_count}!",
+        text=f"UNIQUE CS hosts without a Ring tag, enriched with SNOW details. Count={host_count}!",
         files=[file_to_send]
     )
 
@@ -114,7 +114,8 @@ def main():
     # enrich_host_report()
     # list_cs_hosts_without_ring_tag()
     # get_unique_hosts_without_ring_tag()
-    enrich_host_report()
+    # enrich_host_report()
+    send_report()
 
 
 if __name__ in ('__main__', '__builtin__', 'builtins'):
