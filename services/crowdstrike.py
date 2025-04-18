@@ -5,7 +5,6 @@ import pandas as pd
 import requests
 from falconpy import Hosts
 from falconpy import OAuth2
-from webexteamssdk import WebexTeamsAPI
 
 from config import get_config
 
@@ -17,6 +16,7 @@ falcon_auth = OAuth2(
     ssl_verify=False,
 )
 falcon_hosts = Hosts(auth_object=falcon_auth)
+
 
 # webex_api = WebexTeamsAPI(access_token=CONFIG.webex_bot_access_token_jarvais)
 
@@ -131,17 +131,6 @@ def get_access_token():
     return json_data['access_token']
 
 
-def get_device_id_api(host_name):
-    """get CS asset ID"""
-    url = 'https://api.us-2.crowdstrike.com/devices/queries/devices/v1?filter=hostname:' + '\'' + host_name + '\''
-    headers = {
-        'Authorization': f'Bearer {get_access_token()}'
-    }
-    response = requests.get(url, headers=headers, verify=False)
-    json_data = response.json()
-    return json_data['resources'][0]
-
-
 def get_device_status_api(host_name):
     """get device containment status"""
     url = 'https://api.us-2.crowdstrike.com/devices/entities/devices/v1'
@@ -158,7 +147,8 @@ def get_device_status_api(host_name):
 
 
 def main() -> None:
-    print(get_device_id('EGCAI1METJMP01'))
+    # print(get_device_id('EGCAI1METJMP01'))
+    fetch_all_hosts_and_write_to_xlsx()
 
 
 if __name__ == "__main__":
