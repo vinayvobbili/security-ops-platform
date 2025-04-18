@@ -18,6 +18,7 @@ The script also includes utility functions for parsing timestamps, formatting du
 import json
 import math
 import time
+from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
@@ -120,7 +121,7 @@ class Host:
         self._set_host_details_from_cs()
 
         if not self.device_id:
-            self.status_message = "No CrowdStrike device ID found"
+            self.status_message += " No CrowdStrike device ID found."
             return
 
         self._set_host_details_from_snow()
@@ -133,14 +134,14 @@ class Host:
             self.device_id = crowdstrike.get_device_id(self.name)
 
             if self.device_id is None:
-                self.status_message = f"Error retrieving CrowdStrike Device ID for {self.name}"
+                self.status_message += f" Error retrieving CrowdStrike Device ID for {self.name}."
                 return
 
             # Fetch device details including tags
             device_response = falcon_hosts.get_device_details(ids=self.device_id)
 
             if device_response.get("status_code") != 200:
-                self.status_message = f"Error fetching device details: {device_response.get('errors', ['Unknown error'])}"
+                self.status_message += f" Error fetching device details: {device_response.get('errors', ['Unknown error'])}."
                 return
 
             device_resources = device_response["body"].get("resources", [])
@@ -153,10 +154,10 @@ class Host:
                 elif category == 'server':
                     self.category = HostCategory.SERVER
                 else:
-                    self.status_message = f"Unknown host category: {category}"
+                    self.status_message += f" Unknown host category: {category}."
 
         except Exception as e:
-            self.status_message = f"Error retrieving CrowdStrike data: {str(e)}"
+            self.status_message += f" Error retrieving CrowdStrike data: {str(e)}."
 
     def _set_host_details_from_snow(self) -> None:
         """Retrieve host details from ServiceNow."""
@@ -164,20 +165,24 @@ class Host:
             snow_host_details = service_now.get_host_details(self.name)
 
             if not snow_host_details:
-                self.status_message = "Host not found in ServiceNow"
+                self.status_message += " Host not found in ServiceNow."
                 return
 
             self.environment = snow_host_details.get('environment', '')
             self.country = snow_host_details.get('country', '')
             if snow_host_details.get('osDomain') == 'pmli':
                 self.country = 'India PMLI'
+                self.was_country_guessed = True
+                self.status_message += f" Country guessed from os-domain=pmli in SNOW: {self.country}."
             self.life_cycle_status = snow_host_details.get('lifecycleStatus', '')
 
             if not self.country and (self.name.lower().startswith('vmvdi') or self.name.lower().startswith(config.ticket_type_prefix.lower())):
                 self.country = 'United States'
+                self.was_country_guessed = True
+                self.status_message += f" Country guessed from VMVDI/METCIRT in the hostname: {self.country}."
 
         except Exception as e:
-            self.status_message = f"Error retrieving ServiceNow data: {str(e)}"
+            self.status_message += f" Error retrieving ServiceNow data: {str(e)}."
 
     def _normalize_country_data(self) -> None:
         """Normalize country data"""
@@ -189,12 +194,12 @@ class Host:
 
             if self.country:
                 self.was_country_guessed = True
-                self.status_message = f"Country guessed from first two letters of hostname: {self.country}"
+                self.status_message += f" Country guessed from first two letters of hostname: {self.country}."
             else:
                 if self.name[0].isdigit():
                     self.country = 'Korea'
                     self.was_country_guessed = True
-                    self.status_message = f"Country guessed from leading digits in hostname: {self.country}"
+                    self.status_message += f" Country guessed from leading digits in hostname: {self.country}."
 
     def _determine_region(self) -> None:
         """Determine the region based on country with special case handling."""
@@ -207,7 +212,7 @@ class Host:
             self.region = 'Japan'
 
         if not self.region:
-            self.status_message = "Region could not be determined"
+            self.status_message += " Region could not be determined."
 
     def add_tag_to_crowd_strike(self) -> bool:
         """Add the generated tag to CrowdStrike."""
@@ -224,11 +229,11 @@ class Host:
             if response.get("status_code") == 200:
                 return True
             else:
-                self.status_message = f"Failed to add tag: {response.get('errors', ['Unknown error'])}"
+                self.status_message += f" Failed to add tag: {response.get('errors', ['Unknown error'])}."
                 return False
 
         except Exception as e:
-            self.status_message = f"Error adding tag: {str(e)}"
+            self.status_message += f"Error adding tag: {str(e)}."
             return False
 
     @staticmethod
@@ -317,7 +322,7 @@ class Host:
             else:  # production or unknown
                 ring = 4
                 if not env:
-                    server.status_message = "No environment data, assigned to Ring 4"
+                    server.status_message += " No environment data, assigned to Ring 4."
 
             server.new_crowd_strike_tag = f"{server.region}SRVRing{ring}"
 
@@ -347,15 +352,31 @@ def parse_timestamp(date_str: Optional[str]) -> Optional[datetime]:
 def apply_tags(hosts: List[Host]) -> List[Host]:
     """Apply tags to hosts and update their status."""
     successfully_tagged = []
+    tag_groups = defaultdict(list)  # Initialize tag_groups as a defaultdict for cleaner code
 
+    # Group hosts by their new CrowdStrike tag
     for host in hosts:
         if host.new_crowd_strike_tag:
-            success = host.add_tag_to_crowd_strike()
-            if success:
-                host.status_message = f"Successfully tagged with {host.new_crowd_strike_tag}"
-                successfully_tagged.append(host)
-            else:
-                host.status_message = f"Failed to tag with {host.new_crowd_strike_tag}"
+            tag_groups[host.new_crowd_strike_tag].append(host.device_id)
+
+    # Apply tags to each group of devices
+    for tag, device_ids in tag_groups.items():
+        response = falcon_hosts.update_device_tags(
+            action_name='add',
+            ids=device_ids,
+            tags=[tag]
+        )
+        if response.get("status_code") == 200:
+            # Mark hosts as successfully tagged
+            successfully_tagged.extend(
+                host for host in hosts if host.device_id in device_ids
+            )
+        else:
+            # Update status message for failed hosts
+            error_message = response.get('errors', ['Unknown error'])
+            for host in hosts:
+                if host.device_id in device_ids:
+                    host.status_message += f"Failed to add tag: {error_message}."
 
     return successfully_tagged
 
