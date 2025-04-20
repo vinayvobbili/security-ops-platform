@@ -88,11 +88,11 @@ def announce_previous_shift_performance(room_id, shift_name):
             period=period
         )
         response_sla_breaches = incident_fetcher.get_tickets(
-            query=BASE_QUERY + ' responsesla.slaStatus:late',
+            query=BASE_QUERY + ' timetorespond.slaStatus:late',
             period=period
         )
         containment_sla_breaches = incident_fetcher.get_tickets(
-            query=BASE_QUERY + ' containmentsla.slaStatus:late',
+            query=BASE_QUERY + ' timetocontain.slaStatus:late',
             period=period
         )
         total_time_to_respond = 0
@@ -242,7 +242,7 @@ def main():
     Main function to run the scheduled jobs.
     """
     room_id = config.webex_room_id_vinay_test_space
-    announce_shift_change('morning', room_id, sleep_time=0)
+    announce_shift_change('night', room_id, sleep_time=0)
     # announce_shift_change('afternoon')
     # announce_shift_change('night')
 
