@@ -98,12 +98,12 @@ def announce_previous_shift_performance(room_id, shift_name):
         total_time_to_respond = 0
         total_time_to_contain = 0
         for ticket in inflow:
-            total_time_to_respond += ticket['CustomFields']['responsesla']['totalDuration']
+            total_time_to_respond += ticket['CustomFields']['timetorespond']['totalDuration']
         mean_time_to_respond = total_time_to_respond / len(inflow) if len(inflow) > 0 else 0
 
         inflow_tickets_with_host = [ticket for ticket in inflow if ticket.get('CustomFields', {}).get('hostname')]
         for ticket in inflow_tickets_with_host:
-            total_time_to_contain += ticket['CustomFields']['containmentsla']['totalDuration']
+            total_time_to_contain += ticket['CustomFields']['timetocontain']['totalDuration']
         mean_time_to_contain = 0
         if inflow_tickets_with_host:
             mean_time_to_contain = total_time_to_contain / len(inflow_tickets_with_host)
@@ -172,8 +172,8 @@ def announce_previous_shift_performance(room_id, shift_name):
                 FactSet(
                     facts=[
                         Fact(title="Shift Lead", value=previous_shift_staffing_data['SA'][0]),
-                        Fact(title="New Tickets ack'ed", value=str(len(inflow))),
-                        Fact(title="Tickets closed out", value=f"{len(outflow)} ({tickets_closed_per_analyst:.2f}/analyst)"),
+                        Fact(title="Tickets ack'ed", value=str(len(inflow))),
+                        Fact(title="Tickets closed", value=f"{len(outflow)} ({tickets_closed_per_analyst:.2f}/analyst)"),
                         Fact(title="Resp. SLA Breaches", value=str(len(response_sla_breaches))),
                         Fact(title="Cont. SLA Breaches", value=str(len(containment_sla_breaches))),
                         Fact(title="MTTR (min:sec)", value=f"{int(mean_time_to_respond // 60)}:{int(mean_time_to_respond % 60):02d}"),
@@ -242,7 +242,7 @@ def main():
     Main function to run the scheduled jobs.
     """
     room_id = config.webex_room_id_vinay_test_space
-    announce_shift_change('afternoon', room_id, sleep_time=0)
+    announce_shift_change('morning', room_id, sleep_time=0)
     # announce_shift_change('afternoon')
     # announce_shift_change('night')
 
