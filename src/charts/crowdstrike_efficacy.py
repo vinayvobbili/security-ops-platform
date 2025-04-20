@@ -30,10 +30,7 @@ def process_tickets(tickets: List[Dict[str, Any]]) -> pd.DataFrame:
     technique_counts = {}
 
     for ticket in tickets:
-        technique = next(
-            (label['value'] for label in ticket.get('labels', []) if isinstance(label, dict) and label.get('type') == 'technique'),
-            None
-        )
+        technique = ticket['CustomFields'].get('technique')[0]
         impact = ticket['CustomFields'].get('impact', 'Unknown')
 
         if technique not in technique_counts:
