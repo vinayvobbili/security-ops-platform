@@ -65,11 +65,8 @@ def write_excel_file(df: pd.DataFrame, file_path: Path) -> None:
         raise
 
 
-def send_report() -> bool:
+def send_report():
     """Sends the enriched hosts report to a Webex room.
-
-    Returns:
-        bool: True if report was sent successfully, False otherwise
     """
     try:
         host_count = len(read_excel_file(ENRICHED_HOSTS_FILE))
@@ -78,10 +75,8 @@ def send_report() -> bool:
             text=f"UNIQUE CS hosts without a Ring tag, enriched with SNOW details. Count={host_count}!",
             files=[str(ENRICHED_HOSTS_FILE)]
         )
-        return True
     except Exception as e:
         logger.error(f"Failed to send report: {e}")
-        return False
 
 
 def get_unique_hosts_without_ring_tag() -> None:
@@ -170,11 +165,7 @@ def main() -> None:
         list_cs_hosts_without_ring_tag()
         get_unique_hosts_without_ring_tag()
         enrich_host_report()
-
-        if send_report():
-            logger.info("Report successfully sent to Webex")
-        else:
-            logger.error("Failed to send report to Webex")
+        send_report()
 
         logger.info("Completed CrowdStrike host ring tag analysis")
     except Exception as e:
