@@ -48,7 +48,7 @@ def get_tickets_by_periods(tickets):
             '%Y-%m-%dT%H:%M:%S.%fZ' if '.' in ticket['created'] else '%Y-%m-%dT%H:%M:%SZ'
         ).date()
 
-        response_duration = custom_fields['timetorespond']['totalDuration']
+        response_duration = custom_fields.get('timetorespond', {}).get('totalDuration', custom_fields.get('responsesla', {}).get('totalDuration', 0))
 
         # Update metrics for each time period
         if incident_date == yesterday:
@@ -72,7 +72,7 @@ def get_tickets_by_periods(tickets):
             '%Y-%m-%dT%H:%M:%S.%fZ' if '.' in ticket['created'] else '%Y-%m-%dT%H:%M:%SZ'
         ).date()
 
-        containment_duration = custom_fields['timetocontain']['totalDuration']
+        containment_duration = custom_fields.get('timetocontain', {}).get('totalDuration', custom_fields.get('containmentsla', {}).get('totalDuration', 0))
 
         # Update metrics for each time period
         if incident_date == yesterday:
