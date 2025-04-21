@@ -1,5 +1,6 @@
+import logging
 from pathlib import Path
-from typing import List, Dict
+from typing import List, Dict, Any
 
 import pandas as pd
 from tqdm import tqdm
@@ -8,33 +9,86 @@ from webexteamssdk import WebexTeamsAPI
 from config import get_config
 from services.service_now import ServiceNowClient
 
-CONFIG = get_config()
-ROOT_DIRECTORY = Path(__file__).parent.parent.parent
+# Setup logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
+# Constants
+ROOT_DIRECTORY = Path(__file__).parent.parent.parent
+DATA_DIR = ROOT_DIRECTORY / "data/transient/epp_device_tagging"
+INPUT_FILE = DATA_DIR / "all_cs_hosts.xlsx"
+HOSTS_WITHOUT_TAG_FILE = DATA_DIR / "cs_hosts_without_ring_tag.xlsx"
+UNIQUE_HOSTS_FILE = DATA_DIR / "unique_hosts_without_ring_tag.xlsx"
+ENRICHED_HOSTS_FILE = DATA_DIR / "enriched_unique_hosts_without_ring_tag.xlsx"
+
+# Configuration
+CONFIG = get_config()
 webex_api = WebexTeamsAPI(access_token=CONFIG.webex_bot_access_token_jarvais)
 
 
-def send_report():
-    """
-    Sends a file to a Webex room.
-    """
-    file_to_send = '/Users/user/PycharmProjects/IR/data/transient/epp_device_tagging/enriched_unique_hosts_without_ring_tag.xlsx'
-    host_count = len(pd.read_excel(file_to_send, engine="openpyxl"))
-    webex_api.messages.create(
-        roomId=CONFIG.webex_room_id_epp_tagging,
-        text=f"UNIQUE CS hosts without a Ring tag, enriched with SNOW details. Count={host_count}!",
-        files=[file_to_send]
-    )
+def read_excel_file(file_path: Path) -> pd.DataFrame:
+    """Read data from an Excel file.
 
+    Args:
+        file_path: Path to the Excel file
 
-def get_unique_hosts_without_ring_tag():
-    """
-    Group the records by hostname, get the record with the latest last_seen for each group,
-    and write these results to a new file unique_hosts.xlsx.
+    Returns:
+        DataFrame containing the Excel data
+
+    Raises:
+        FileNotFoundError: If the file doesn't exist
     """
     try:
+        return pd.read_excel(file_path, engine="openpyxl")
+    except FileNotFoundError:
+        logger.error(f"File not found: {file_path}")
+        raise
+    except Exception as e:
+        logger.error(f"Error reading file {file_path}: {e}")
+        raise
+
+
+def write_excel_file(df: pd.DataFrame, file_path: Path) -> None:
+    """Write DataFrame to an Excel file.
+
+    Args:
+        df: DataFrame to write
+        file_path: Path where the file will be saved
+    """
+    try:
+        # Ensure directory exists
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+        df.to_excel(file_path, index=False, engine="openpyxl")
+        logger.info(f"Successfully wrote {len(df)} records to {file_path}")
+    except Exception as e:
+        logger.error(f"Error writing to {file_path}: {e}")
+        raise
+
+
+def send_report() -> bool:
+    """Sends the enriched hosts report to a Webex room.
+
+    Returns:
+        bool: True if report was sent successfully, False otherwise
+    """
+    try:
+        host_count = len(read_excel_file(ENRICHED_HOSTS_FILE))
+        webex_api.messages.create(
+            roomId=CONFIG.webex_room_id_epp_tagging,
+            text=f"UNIQUE CS hosts without a Ring tag, enriched with SNOW details. Count={host_count}!",
+            files=[str(ENRICHED_HOSTS_FILE)]
+        )
+        return True
+    except Exception as e:
+        logger.error(f"Failed to send report: {e}")
+        return False
+
+
+def get_unique_hosts_without_ring_tag() -> None:
+    """Group hosts by hostname and get the record with the latest last_seen for each."""
+    try:
         # Read the input file
-        df = pd.read_excel(ROOT_DIRECTORY / "data/transient/epp_device_tagging/cs_hosts_without_ring_tag.xlsx", engine="openpyxl")
+        df = read_excel_file(HOSTS_WITHOUT_TAG_FILE)
 
         # Convert last_seen to datetime for proper sorting
         df["last_seen"] = pd.to_datetime(df["last_seen"]).dt.tz_localize(None)
@@ -43,79 +97,88 @@ def get_unique_hosts_without_ring_tag():
         unique_hosts = df.loc[df.groupby("hostname")["last_seen"].idxmax()]
 
         # Write the results to a new file
-        unique_hosts.to_excel(ROOT_DIRECTORY / "data/transient/epp_device_tagging/unique_hosts_without_ring_tag.xlsx", index=False, engine="openpyxl")
-
-        print(f"Successfully wrote {len(unique_hosts)} unique hosts to unique_hosts_without_ring_tag.xlsx")
-    except FileNotFoundError:
-        print("Error: Input file not found.")
+        write_excel_file(unique_hosts, UNIQUE_HOSTS_FILE)
     except Exception as e:
-        print(f"An error occurred: {e}")
+        logger.error(f"Error processing unique hosts: {e}")
 
 
-def list_cs_hosts_without_ring_tag(input_xlsx_filename: str = ROOT_DIRECTORY / "data/transient/epp_device_tagging/all_cs_hosts.xlsx",
-                                   output_xlsx_filename: str = ROOT_DIRECTORY / "data/transient/epp_device_tagging/cs_hosts_without_ring_tag.xlsx") -> None:
-    """
-    List CrowdStrike hosts that do not have a FalconGroupingTags/*Ring* tag.
-    Read from all_cs_hosts.xlsx, filter hosts, and write the results to a new XLSX file.
-    """
-    hosts_without_ring_tag: List[Dict[str, str]] = []
+def list_cs_hosts_without_ring_tag() -> None:
+    """List CrowdStrike hosts that don't have a FalconGroupingTags/*Ring* tag."""
+    hosts_without_ring_tag: List[Dict[str, Any]] = []
 
     try:
-        df = pd.read_excel(input_xlsx_filename, engine='openpyxl')
-        for index, row in df.iterrows():
+        df = read_excel_file(INPUT_FILE)
+        for _, row in df.iterrows():
             current_tags = row["current_tags"]
             if isinstance(current_tags, str):
                 tags = current_tags.split(", ")
             else:
                 tags = []
-            has_ring_tag = False
-            for tag in tags:
-                if tag.startswith("FalconGroupingTags/") and "Ring" in tag:
-                    has_ring_tag = True
-                    break
+
+            has_ring_tag = any(tag.startswith("FalconGroupingTags/") and "Ring" in tag
+                               for tag in tags)
+
             if not has_ring_tag:
                 hosts_without_ring_tag.append(row.to_dict())
 
         output_df = pd.DataFrame(hosts_without_ring_tag)
-        output_df.to_excel(output_xlsx_filename, index=False, engine='openpyxl')
+        write_excel_file(output_df, HOSTS_WITHOUT_TAG_FILE)
+        logger.info(f"Found {len(hosts_without_ring_tag)} hosts without a Ring tag.")
 
-        print(f"Found {len(hosts_without_ring_tag)} hosts without a Ring tag.")
-        print(f"Wrote results to {output_xlsx_filename}")
-
-    except FileNotFoundError:
-        print(f"Error: Input file {input_xlsx_filename} not found.")
     except Exception as e:
-        print(f"An error occurred: {e}")
+        logger.error(f"Error listing hosts without ring tag: {e}")
 
 
-def enrich_host_report():
-    # get hosts from unique_hosts.xlsx
-    unique_hosts_df = pd.read_excel(f"{ROOT_DIRECTORY}/data/transient/epp_device_tagging/unique_hosts_without_ring_tag.xlsx", engine="openpyxl")
-    service_now = ServiceNowClient(CONFIG.snow_base_url, CONFIG.snow_functional_account_id, CONFIG.snow_functional_account_password, CONFIG.snow_client_key)
-    # get device details from SNOW
-    hostnames = unique_hosts_df['hostname'].tolist()
-    device_details = []
-    for hostname in tqdm(hostnames, desc="Enriching hosts..."):
-        device_details.append(service_now.get_host_details(hostname))
+def enrich_host_report() -> None:
+    """Enrich host data with ServiceNow details."""
+    try:
+        # Get hosts from unique_hosts file
+        unique_hosts_df = read_excel_file(UNIQUE_HOSTS_FILE)
 
-    # create a new df with device details
-    device_details_df = pd.json_normalize(device_details)
+        # Initialize ServiceNow client
+        service_now = ServiceNowClient(
+            CONFIG.snow_base_url,
+            CONFIG.snow_functional_account_id,
+            CONFIG.snow_functional_account_password,
+            CONFIG.snow_client_key
+        )
 
-    # merge the two dataframes
-    merged_df = pd.merge(unique_hosts_df, device_details_df, left_on='hostname', right_on='name', how='left')
+        # Get device details from SNOW
+        hostnames = unique_hosts_df['hostname'].tolist()
+        device_details = []
 
-    # save the merged df
-    merged_df.to_excel(f"{ROOT_DIRECTORY}/data/transient/epp_device_tagging/enriched_unique_hosts_without_ring_tag.xlsx", index=False, engine="openpyxl")
+        for hostname in tqdm(hostnames, desc="Enriching hosts..."):
+            device_details.append(service_now.get_host_details(hostname))
 
-    print(f"Successfully wrote {len(merged_df)} enriched unique hosts to enriched_unique_hosts.xlsx")
+        # Create a new df with device details
+        device_details_df = pd.json_normalize(device_details)
+
+        # Merge the two dataframes
+        merged_df = pd.merge(unique_hosts_df, device_details_df,
+                             left_on='hostname', right_on='name', how='left')
+
+        # Save the merged df
+        write_excel_file(merged_df, ENRICHED_HOSTS_FILE)
+    except Exception as e:
+        logger.error(f"Error enriching host report: {e}")
 
 
-def main():
-    # enrich_host_report()
-    # list_cs_hosts_without_ring_tag()
-    # get_unique_hosts_without_ring_tag()
-    # enrich_host_report()
-    send_report()
+def main() -> None:
+    """Main function to run the complete workflow."""
+    try:
+        logger.info("Starting CrowdStrike host ring tag analysis")
+        list_cs_hosts_without_ring_tag()
+        get_unique_hosts_without_ring_tag()
+        enrich_host_report()
+
+        if send_report():
+            logger.info("Report successfully sent to Webex")
+        else:
+            logger.error("Failed to send report to Webex")
+
+        logger.info("Completed CrowdStrike host ring tag analysis")
+    except Exception as e:
+        logger.error(f"Error in main workflow: {e}")
 
 
 if __name__ in ('__main__', '__builtin__', 'builtins'):
