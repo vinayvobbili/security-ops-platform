@@ -185,21 +185,28 @@ class Host:
             self.status_message += f" Error retrieving ServiceNow data: {str(e)}."
 
     def _normalize_country_data(self) -> None:
-        """Normalize country data"""
-
+        """Normalize country data based on available information."""
         if not self.country:
-            # Try to infer country from hostname prefix
+            # Infer country from hostname prefix
             country_code = self.name[:2].upper()
             self.country = COUNTRY_NAMES_BY_ABBREVIATION.get(country_code, '')
 
             if self.country:
-                self.was_country_guessed = True
-                self.status_message += f" Country guessed from first two letters of hostname: {self.country}."
-            else:
-                if self.name[0].isdigit():
-                    self.country = 'Korea'
-                    self.was_country_guessed = True
-                    self.status_message += f" Country guessed from leading digits in hostname: {self.country}."
+                self._mark_country_as_guessed(f"Country guessed from first two letters of hostname: {self.country}.")
+            elif self.name[0].isdigit():
+                self._assign_country('Korea', "Country guessed from leading digits in hostname.")
+            elif self.name.lower().startswith('vm') and 'SensorGroupingTags/US' in self.current_crowd_strike_tags:
+                self._assign_country('US', "Country guessed from leading characters VM in hostname and SensorGroupingTags/US.")
+
+    def _mark_country_as_guessed(self, message: str) -> None:
+        """Mark the country as guessed and update the status message."""
+        self.was_country_guessed = True
+        self.status_message += message
+
+    def _assign_country(self, country: str, message: str) -> None:
+        """Assign a country and mark it as guessed with a message."""
+        self.country = country
+        self._mark_country_as_guessed(message)
 
     def _determine_region(self) -> None:
         """Determine the region based on country with special case handling."""
@@ -352,7 +359,7 @@ def parse_timestamp(date_str: Optional[str]) -> Optional[datetime]:
 def apply_tags(hosts: List[Host]) -> List[Host]:
     """Apply tags to hosts and update their status."""
     successfully_tagged = []
-    tag_groups = defaultdict(list)  # Initialize tag_groups as a defaultdict for cleaner code
+    tag_groups = defaultdict(list)  # Initialize tag_groups as a default dict for cleaner code
 
     # Group hosts by their new CrowdStrike tag
     for host in hosts:
