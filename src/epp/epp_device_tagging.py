@@ -23,7 +23,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Optional, List, Union
+from typing import Optional, List, Union, Dict, Set
 
 import openpyxl
 from falconpy import OAuth2, Hosts, RealTimeResponse
@@ -95,7 +95,7 @@ class HostCategory(Enum):
 @dataclass
 class Host:
     """
-    Represents a host with all its relevant attributes and epp_device_tagging information.
+    Represents a host with all its relevant attributes and tagging information.
     """
     name: str
     device_id: str = ""
@@ -109,15 +109,8 @@ class Host:
     life_cycle_status: str = ""
     status_message: str = ""
 
-    @classmethod
-    def create_and_initialize(cls, name: str) -> 'Host':
-        """Factory method to create and initialize a host with its data."""
-        host = cls(name)
-        host._initialize_host_data()
-        return host
-
-    def _initialize_host_data(self) -> None:
-        """Initialize all host data in one method."""
+    def initialize(self) -> None:
+        """Initialize all host data."""
         self._set_host_details_from_cs()
 
         if not self.device_id:
@@ -221,41 +214,22 @@ class Host:
         if not self.region:
             self.status_message += " Region could not be determined."
 
-    def add_tag_to_crowd_strike(self) -> bool:
-        """Add the generated tag to CrowdStrike."""
-        try:
-            if not self.new_crowd_strike_tag or not self.device_id:
-                return False
-
-            response = falcon_hosts.update_device_tags(
-                action_name='add',
-                ids=self.device_id,
-                tags=[self.new_crowd_strike_tag]
-            )
-
-            if response.get("status_code") == 200:
-                return True
-            else:
-                self.status_message += f" Failed to add tag: {response.get('errors', ['Unknown error'])}."
-                return False
-
-        except Exception as e:
-            self.status_message += f"Error adding tag: {str(e)}."
-            return False
-
-    @staticmethod
-    def needs_tagging(host: 'Host') -> bool:
-        """Check if host needs epp_device_tagging (no existing ring tags)."""
+    def needs_tagging(self) -> bool:
+        """Check if host needs tagging (no existing ring tags)."""
         return not any(
             tag.startswith('Falcon') and 'ring' in tag.lower()
-            for tag in host.current_crowd_strike_tags
+            for tag in self.current_crowd_strike_tags
         )
 
+
+class TagManager:
+    """Manager class for handling host tags."""
+
     @staticmethod
-    def generate_tags(hosts: List['Host']) -> None:
+    def generate_tags(hosts: List[Host]) -> None:
         """Assign rings to hosts based on predefined distribution."""
         # Filter hosts to only include those without existing ring tags
-        hosts_to_tag = [host for host in hosts if Host.needs_tagging(host)]
+        hosts_to_tag = [host for host in hosts if host.needs_tagging()]
 
         # Skip hosts with missing critical data
         valid_hosts = [
@@ -272,13 +246,13 @@ class Host:
         countries = {host.country for host in valid_hosts if host.country}
 
         # Process workstations
-        Host._process_workstations(workstations, regions, countries)
+        TagManager._process_workstations(workstations, regions, countries)
 
         # Process servers
-        Host._process_servers(servers)
+        TagManager._process_servers(servers)
 
     @staticmethod
-    def _process_workstations(workstations: List['Host'], regions: set, countries: set) -> None:
+    def _process_workstations(workstations: List[Host], regions: Set[str], countries: Set[str]) -> None:
         """Process workstations and assign ring tags based on distribution."""
         for region in regions:
             for country in countries:
@@ -313,11 +287,11 @@ class Host:
                             current_index += 1
 
     @staticmethod
-    def _process_servers(servers: List['Host']) -> None:
+    def _process_servers(servers: List[Host]) -> None:
         """Process servers and assign ring tags based on environment."""
         for server in servers:
             # Normalize environment data
-            env = Host._normalize_environment(server.environment)
+            env = TagManager._normalize_environment(server.environment)
 
             # Determine ring based on environment
             if env in RING_1_ENVS:
@@ -334,16 +308,184 @@ class Host:
             server.new_crowd_strike_tag = f"{server.region}SRVRing{ring}"
 
     @staticmethod
-    def _normalize_environment(environment: Union[str, List[str]]) -> str | None:
+    def _normalize_environment(environment: Union[str, List[str]]) -> str:
         """Normalize environment data to a single string value."""
         if isinstance(environment, list):
             if not environment:
                 return ""
             elif len(environment) >= 1:
                 return environment[0].lower().strip()
-            return None
+            return ""
         else:
             return environment.lower().strip()
+
+    @staticmethod
+    def apply_tags(hosts: List[Host]) -> List[Host]:
+        """Apply tags to hosts and update their status."""
+        successfully_tagged = []
+        tag_groups = defaultdict(list)
+
+        # Group hosts by their new CrowdStrike tag
+        for host in hosts:
+            if host.new_crowd_strike_tag:
+                tag_groups[host.new_crowd_strike_tag].append(host.device_id)
+
+        # Apply tags to each group of devices
+        for tag, device_ids in tag_groups.items():
+            response = falcon_hosts.update_device_tags(
+                action_name='add',
+                ids=device_ids,
+                tags=[tag]
+            )
+            if response.get("status_code") == 200:
+                # Mark hosts as successfully tagged
+                successfully_tagged.extend(
+                    host for host in hosts if host.device_id in device_ids
+                )
+            else:
+                # Update status message for failed hosts
+                error_message = response.get('errors', ['Unknown error'])
+                for host in hosts:
+                    if host.device_id in device_ids:
+                        host.status_message += f"Failed to add tag: {error_message}."
+
+        return successfully_tagged
+
+
+class FileHandler:
+    """Class for handling file operations."""
+
+    @staticmethod
+    def get_hostnames(input_file=INPUT_FILE) -> List[str]:
+        """
+        Retrieves hostnames from an Excel file.
+
+        Args:
+            input_file: The path to the Excel file containing hostnames.
+
+        Returns:
+            List of hostnames, or an empty list if the file is not found.
+        """
+        try:
+            workbook = openpyxl.load_workbook(input_file)
+            sheet = workbook.active
+            hostnames = [row[0].value for row in sheet.iter_rows(min_row=2) if row[0].value]
+            print(f'Found {len(hostnames)} hostnames in input file')
+            return hostnames
+        except FileNotFoundError:
+            print(f"Error: Input file '{input_file}' not found.")
+            return []
+        except Exception as e:
+            print(f"Error reading input file: {e}")
+            return []
+
+    @staticmethod
+    def write_results_to_file(hosts: List[Host]) -> str:
+        """
+        Writes the results to a new Excel sheet with timestamps.
+
+        Args:
+            hosts: List of Host objects to write to the sheet.
+
+        Returns:
+            str: Path to the output file
+        """
+        # Get the current date and time in ET
+        et_timezone = timezone('US/Eastern')
+        current_time_et = datetime.now(et_timezone).strftime("%m_%d_%Y %I:%M %p %Z")
+        output_file = TRANSIENT_DIR / 'epp_device_tagging' / f'EPP-Falcon ring tagging {current_time_et}.xlsx'
+
+        # Create a new workbook
+        workbook = openpyxl.Workbook()
+        sheet = workbook.active
+
+        # Add headers
+        headers = [
+            "Name", "CS Device ID", "Category", "Environment", "Life Cycle Status",
+            "Country", "Region", "Was Country Guessed", "Current CS Tags",
+            "Generated CS Tag", "Status"
+        ]
+        sheet.append(headers)
+
+        # Write the results to the sheet
+        for host in hosts:
+            sheet.append([
+                host.name,
+                host.device_id,
+                host.category.value if host.category else '',
+                host.environment if isinstance(host.environment, str) else ', '.join(host.environment),
+                host.life_cycle_status,
+                host.country,
+                host.region,
+                'Yes' if host.was_country_guessed else 'No',
+                ', '.join(host.current_crowd_strike_tags),
+                host.new_crowd_strike_tag,
+                host.status_message or ('Ring tag generated' if host.new_crowd_strike_tag else 'No tag needed'),
+            ])
+
+        # Save the workbook
+        try:
+            output_file.parent.mkdir(parents=True, exist_ok=True)
+            workbook.save(output_file)
+            print(f"Results written to new file: {output_file}")
+        except Exception as e:
+            print(f"An error occurred while saving the workbook: {e}")
+            return ""
+
+        return str(output_file)
+
+
+class ReportHandler:
+    """Class for handling report generation and sending."""
+
+    @staticmethod
+    def format_duration(seconds: float) -> str:
+        """Format seconds into a human-readable duration string."""
+        minutes, seconds = divmod(seconds, 60)
+        hours, minutes = divmod(minutes, 60)
+
+        seconds = math.ceil(seconds)  # Round up seconds
+
+        parts = []
+        if hours > 0:
+            parts.append(f"{int(hours)} hour{'s' if hours != 1 else ''}")
+        if minutes > 0:
+            parts.append(f"{int(minutes)} minute{'s' if minutes != 1 else ''}")
+        if seconds > 0 or not parts:
+            parts.append(f"{int(seconds)} second{'s' if seconds != 1 else ''}")
+
+        return " ".join(parts)
+
+    @staticmethod
+    def generate_time_report(timings: Dict[str, float], stats: Dict[str, int]) -> str:
+        """Generate a timing and statistics report."""
+        return f"""
+Summary:
+- Total hosts processed: {stats.get('total_hosts', 0)}
+- Hosts found in CrowdStrike: {stats.get('hosts_with_device_id', 0)}
+- Hosts tagged: {stats.get('hosts_with_tags', 0)}
+
+Timing:
+- Fetching and initializing hosts: {ReportHandler.format_duration(timings.get('fetch_duration', 0))}
+- Generating tags: {ReportHandler.format_duration(timings.get('generate_tag_duration', 0))}
+- Applying tags: {ReportHandler.format_duration(timings.get('apply_tag_duration', 0))}
+- Total execution time: {ReportHandler.format_duration(timings.get('total_duration', 0))}
+        """
+
+    @staticmethod
+    def send_report(output_filename: str, time_report: str) -> bool:
+        """Send a report via Webex with the result file attached."""
+        try:
+            webex_api = WebexAPI(config.webex_bot_access_token_jarvais)
+            response = webex_api.messages.create(
+                roomId=config.webex_room_id_epp_tagging,
+                markdown=f"EPP-Falcon ring tagging results are attached.\n\n```{time_report}",
+                files=[output_filename]
+            )
+            return bool(response)
+        except Exception as e:
+            print(f"Error sending report: {e}")
+            return False
 
 
 def parse_timestamp(date_str: Optional[str]) -> Optional[datetime]:
@@ -356,205 +498,56 @@ def parse_timestamp(date_str: Optional[str]) -> Optional[datetime]:
         return None
 
 
-def apply_tags(hosts: List[Host]) -> List[Host]:
-    """Apply tags to hosts and update their status."""
-    successfully_tagged = []
-    tag_groups = defaultdict(list)  # Initialize tag_groups as a default dict for cleaner code
-
-    # Group hosts by their new CrowdStrike tag
-    for host in hosts:
-        if host.new_crowd_strike_tag:
-            tag_groups[host.new_crowd_strike_tag].append(host.device_id)
-
-    # Apply tags to each group of devices
-    for tag, device_ids in tag_groups.items():
-        response = falcon_hosts.update_device_tags(
-            action_name='add',
-            ids=device_ids,
-            tags=[tag]
-        )
-        if response.get("status_code") == 200:
-            # Mark hosts as successfully tagged
-            successfully_tagged.extend(
-                host for host in hosts if host.device_id in device_ids
-            )
-        else:
-            # Update status message for failed hosts
-            error_message = response.get('errors', ['Unknown error'])
-            for host in hosts:
-                if host.device_id in device_ids:
-                    host.status_message += f"Failed to add tag: {error_message}."
-
-    return successfully_tagged
-
-
-def format_duration(seconds: float) -> str:
-    """Format seconds into a human-readable duration string."""
-    minutes, seconds = divmod(seconds, 60)
-    hours, minutes = divmod(minutes, 60)
-
-    seconds = math.ceil(seconds)  # Round up seconds
-
-    parts = []
-    if hours > 0:
-        parts.append(f"{int(hours)} hour{'s' if hours != 1 else ''}")
-    if minutes > 0:
-        parts.append(f"{int(minutes)} minute{'s' if minutes != 1 else ''}")
-    if seconds > 0 or not parts:
-        parts.append(f"{int(seconds)} second{'s' if seconds != 1 else ''}")
-
-    return " ".join(parts)
-
-
-def write_results_to_file(hosts: List[Host]) -> str:
-    """
-    Writes the results to a new Excel sheet with timestamps.
-
-    Args:
-        hosts: List of Host objects to write to the sheet.
-
-    Returns:
-        str: Path to the output file
-    """
-    # Get the current date and time in ET
-    et_timezone = timezone('US/Eastern')
-    current_time_et = datetime.now(et_timezone).strftime("%m_%d_%Y %I:%M %p %Z")
-    output_file = TRANSIENT_DIR / 'epp_device_tagging' / f'EPP-Falcon ring epp_device_tagging {current_time_et}.xlsx'
-
-    # Create a new workbook
-    workbook = openpyxl.Workbook()
-    sheet = workbook.active
-
-    # Add headers
-    headers = [
-        "Name", "CS Device ID", "Category", "Environment", "Life Cycle Status",
-        "Country", "Region", "Was Country Guessed", "Current CS Tags",
-        "Generated CS Tag", "Status"
-    ]
-    sheet.append(headers)
-
-    # Write the results to the sheet
-    for host in hosts:
-        sheet.append([
-            host.name,
-            host.device_id,
-            host.category.value if host.category else '',
-            host.environment if isinstance(host.environment, str) else ', '.join(host.environment),
-            host.life_cycle_status,
-            host.country,
-            host.region,
-            'Yes' if host.was_country_guessed else 'No',
-            ', '.join(host.current_crowd_strike_tags),
-            host.new_crowd_strike_tag,
-            host.status_message or ('Ring tag generated' if host.new_crowd_strike_tag else 'No tag needed'),
-        ])
-
-    # Save the workbook
-    try:
-        output_file.parent.mkdir(parents=True, exist_ok=True)
-        workbook.save(output_file)
-        print(f"Results written to new file: {output_file}")
-    except Exception as e:
-        print(f"An error occurred while saving the workbook: {e}")
-        return ""
-
-    return str(output_file)
-
-
-def get_hostnames(input_file=INPUT_FILE) -> List[str]:
-    """
-    Retrieves hostnames from an Excel file.
-
-    Args:
-        input_file: The path to the Excel file containing hostnames.
-
-    Returns:
-        List of hostnames, or an empty list if the file is not found.
-    """
-    try:
-        workbook = openpyxl.load_workbook(input_file)
-        sheet = workbook.active
-        hostnames = [row[0].value for row in sheet.iter_rows(min_row=2) if row[0].value]
-        print(f'Found {len(hostnames)} hostnames in input file')
-        return hostnames
-    except FileNotFoundError:
-        print(f"Error: Input file '{input_file}' not found.")
-        return []
-    except Exception as e:
-        print(f"Error reading input file: {e}")
-        return []
-
-
-def send_report(output_filename: str, time_report) -> bool:
-    """Send a report via Webex with the result file attached."""
-    try:
-        webex_api = WebexAPI(config.webex_bot_access_token_jarvais)
-        response = webex_api.messages.create(
-            roomId=config.webex_room_id_epp_tagging,
-            markdown=f"EPP-Falcon ring epp_device_tagging results are attached.\n\n```{time_report}",
-            files=[output_filename]
-        )
-        return bool(response)
-    except Exception as e:
-        print(f"Error sending report: {e}")
-        return False
-
-
 def main() -> None:
     """Main execution function."""
     start_time = time.time()
+    timings = {}
+    stats = {}
 
     # Fetch and initialize hosts
     fetch_start = time.time()
-    hostnames = get_hostnames()
+    hostnames = FileHandler.get_hostnames()
 
     if not hostnames:
         print("No hostnames found in input file. Exiting.")
         return
 
-    hosts = [Host.create_and_initialize(name) for name in tqdm(hostnames, desc="Initializing hosts")]
+    hosts = []
+    for hostname in tqdm(hostnames, desc="Initializing hosts"):
+        host = Host(hostname)
+        host.initialize()
+        hosts.append(host)
+
     fetch_end = time.time()
-    fetch_duration = fetch_end - fetch_start
+    timings['fetch_duration'] = fetch_end - fetch_start
 
     # Generate tags
     generate_tag_start = time.time()
-    Host.generate_tags(hosts)
+    TagManager.generate_tags(hosts)
     generate_tag_end = time.time()
-    generate_tag_duration = generate_tag_end - generate_tag_start
+    timings['generate_tag_duration'] = generate_tag_end - generate_tag_start
 
     # Filter statistics
-    total_hosts = len(hosts)
-    hosts_with_device_id = sum(1 for host in hosts if host.device_id)
-    hosts_with_tags = sum(1 for host in hosts if host.new_crowd_strike_tag)
+    stats['total_hosts'] = len(hosts)
+    stats['hosts_with_device_id'] = sum(1 for host in hosts if host.device_id)
+    stats['hosts_with_tags'] = sum(1 for host in hosts if host.new_crowd_strike_tag)
 
     # Write results before applying tags (for documentation)
-    output_filename = write_results_to_file(hosts)
+    output_filename = FileHandler.write_results_to_file(hosts)
 
     # Apply tags
     apply_tag_start = time.time()
-    successfully_tagged_hosts = apply_tags(hosts)
-    print(successfully_tagged_hosts)
+    successfully_tagged_hosts = TagManager.apply_tags(hosts)
     apply_tag_end = time.time()
-    apply_tag_duration = apply_tag_end - apply_tag_start
+    timings['apply_tag_duration'] = apply_tag_end - apply_tag_start
 
     # Generate a timing report
     end_time = time.time()
-    total_duration = end_time - start_time
+    timings['total_duration'] = end_time - start_time
 
-    time_report = f"""
-Summary:
-- Total hosts processed: {total_hosts}
-- Hosts found in CrowdStrike: {hosts_with_device_id}
-- Hosts tagged: {hosts_with_tags}
+    time_report = ReportHandler.generate_time_report(timings, stats)
 
-Timing:
-- Fetching and initializing hosts: {format_duration(fetch_duration)}
-- Generating tags: {format_duration(generate_tag_duration)}
-- Applying tags: {format_duration(apply_tag_duration)}
-- Total execution time: {format_duration(total_duration)}
-        """
-
-    send_report_success = send_report(output_filename, time_report)
+    send_report_success = ReportHandler.send_report(output_filename, time_report)
     if send_report_success:
         print(f"Report successfully sent to Webex")
     else:
