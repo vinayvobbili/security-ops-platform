@@ -27,7 +27,7 @@ PRIORITY_COLORS = {
 ACTION_COLORS = {
     'Detection Opportunity': '#0284c7',  # Distinct blue shade
     'Hunt Opportunity': '#059669',  # Green that stands out from blues
-    'None': '#4b5563'  # Distinct dark gray
+    'None': '#FFFFE0'  # Lighter cream, closer to white
 }
 
 

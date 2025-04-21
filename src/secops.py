@@ -174,8 +174,8 @@ def announce_previous_shift_performance(room_id, shift_name):
                         Fact(title="Shift Lead", value=previous_shift_staffing_data['SA'][0]),
                         Fact(title="Tickets ack'ed", value=str(len(inflow))),
                         Fact(title="Tickets closed", value=f"{len(outflow)} ({tickets_closed_per_analyst:.2f}/analyst)"),
-                        Fact(title="SLA Breaches", value=f"Resp: {len(response_sla_breaches)} Contain: {len(containment_sla_breaches)}"),
-                        Fact(title="MTT (min:sec)", value=f"Resp: {int(mean_time_to_respond // 60)}:{int(mean_time_to_respond % 60):02d} Contain: {int(mean_time_to_contain // 60)}:{int(mean_time_to_contain % 60):02d}"),
+                        Fact(title="SLA Breaches", value=f"Response- {len(response_sla_breaches)} Containment- {len(containment_sla_breaches)}"),
+                        Fact(title="MTT (min:sec)", value=f"Respond- {int(mean_time_to_respond // 60)}:{int(mean_time_to_respond % 60):02d} Contain- {int(mean_time_to_contain // 60)}:{int(mean_time_to_contain % 60):02d}"),
                         Fact(title="IOCs blocked", value=iocs_blocked or "None"),
                         Fact(title="Hosts contained", value=hosts_contained or "None"),
                         Fact(title="Tuning requests submitted", value=', '.join(tuning_requests_submitted) or "None")
