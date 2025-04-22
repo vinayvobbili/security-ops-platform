@@ -2,6 +2,7 @@ import datetime
 import time
 from datetime import datetime, timedelta
 
+import pytz
 from azure.devops.connection import Connection
 from azure.devops.exceptions import AzureDevOpsClientRequestError
 from azure.devops.v7_0.work_item_tracking.models import Wiql
@@ -77,12 +78,12 @@ def get_tuning_requests_submitted_by_last_shift():
     """
     # Get items from today and yesterday
     query = """
-    SELECT [System.Id], [System.Title], [System.State], [System.CreatedDate]
-    FROM WorkItems
-    WHERE [System.AreaPath] = "Detection-Engineering\\Detection Engineering\\Tuning"
-    AND [System.WorkItemType] = 'User Story'
-    AND [System.CreatedDate] >= @Today-1
-    """
+            SELECT [System.Id], [System.Title], [System.State], [System.CreatedDate]
+            FROM WorkItems
+            WHERE [System.AreaPath] = "Detection-Engineering\\Detection Engineering\\Tuning"
+              AND [System.WorkItemType] = 'User Story'
+              AND [System.CreatedDate] >= @Today-1 \
+            """
 
     all_items = fetch_work_items(query)
 
@@ -97,7 +98,7 @@ def get_tuning_requests_submitted_by_last_shift():
     for item in all_items:
         # Parse the ISO format string to datetime, then make it naive by removing the timezone
         created_date_str = item.fields["System.CreatedDate"]
-        created_date = datetime.fromisoformat(created_date_str.replace("Z", "+00:00"))
+        created_date = datetime.fromisoformat(created_date_str.replace("Z", "+00:00")).astimezone(pytz.timezone("US/Eastern"))
         created_date_naive = created_date.replace(tzinfo=None)
 
         # Now compare naive to naive
