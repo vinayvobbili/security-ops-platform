@@ -224,20 +224,6 @@ class CrowdStrikeClient:
             print(f"An error occurred while writing to XLSX: {e}")
 
 
-def get_device_id(hostname: str) -> Optional[str]:
-    """
-    Wrapper function to get a device ID for a hostname using CrowdStrikeClient.
-
-    Args:
-        hostname: The hostname to search for
-
-    Returns:
-        The device ID if found, None otherwise
-    """
-    client = CrowdStrikeClient()
-    return client.get_device_id(hostname)
-
-
 def main() -> None:
     client = CrowdStrikeClient()
     client.fetch_all_hosts_and_write_to_xlsx()

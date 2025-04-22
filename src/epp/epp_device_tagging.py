@@ -32,7 +32,7 @@ from tqdm import tqdm
 from webexpythonsdk import WebexAPI
 
 from config import get_config
-from services import crowdstrike
+from services.crowdstrike import CrowdStrikeClient
 from services.service_now import ServiceNowClient
 
 # Load configuration
@@ -84,6 +84,8 @@ service_now = ServiceNowClient(
     config.snow_functional_account_password,
     config.snow_client_key
 )
+
+crowdstrike = CrowdStrikeClient()
 
 
 class HostCategory(Enum):
