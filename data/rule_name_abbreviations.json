@@ -106,5 +106,6 @@
   ".*Azure AD: Existing Policy Deleted.*": "Azure AD: Existing Policy Deleted",
   ".*SMB Used For Potential Network Share Enumeration.*": "SMB Used For Potential Network Share Enumeration",
   ".*Escalation Events on Vulnerable VMWare.*": "Escalation Events on Vulnerable VMWare",
-  ".*CS Low Sev Followed by Detection in CS or Tanium.*": "CS Low Sev Followed by Detection in CS or Tanium"
+  ".*CS Low Sev Followed by Detection in CS or Tanium.*": "CS Low Sev Followed by Detection in CS or Tanium",
+  ".*User Access from Restricted Location.*": "User Access from Restricted Location"
 }
