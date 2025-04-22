@@ -187,7 +187,7 @@ def announce_previous_shift_performance(room_id, shift_name):
                                    f"Contain- {int(mean_time_to_contain // 60)}:{int(mean_time_to_contain % 60):02d}"),
                         Fact(title="IOCs blocked", value=iocs_blocked or "None"),
                         Fact(title="Hosts contained", value=hosts_contained or "None"),
-                        Fact(title="Tuning requests submitted", value=', '.join(tuning_requests_submitted) or "None")
+                        Fact(title="Tuning requests", value=', '.join(tuning_requests_submitted) or "None")
                     ]
                 )
             ]
