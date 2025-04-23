@@ -238,17 +238,52 @@ def plot_past_60_days():
 
 
 def plot_past_12_months():
+    tickets = []
     """Creates a chart for ticket inflow over the past 12 months, grouped by month."""
     period = {
         "byFrom": "months",
         "fromValue": 12,
         "byTo": "months",
+        "toValue": 10
+    }
+    query = f'type:{config.ticket_type_prefix} -owner:""'
+    quarter_tickets = IncidentHandler().get_tickets(query=query, period=period, size=10000)
+    tickets.extend(quarter_tickets)
+
+    period = {
+        "byFrom": "months",
+        "fromValue": 9,
+        "byTo": "months",
+        "toValue": 7
+    }
+    query = f'type:{config.ticket_type_prefix} -owner:""'
+    quarter_tickets = IncidentHandler().get_tickets(query=query, period=period, size=10000)
+    tickets.extend(quarter_tickets)
+
+    period = {
+        "byFrom": "months",
+        "fromValue": 6,
+        "byTo": "months",
+        "toValue": 4
+    }
+    query = f'type:{config.ticket_type_prefix} -owner:""'
+    quarter_tickets = IncidentHandler().get_tickets(query=query, period=period, size=10000)
+    tickets.extend(quarter_tickets)
+
+    period = {
+        "byFrom": "months",
+        "fromValue": 3,
+        "byTo": "months",
         "toValue": 0
     }
     query = f'type:{config.ticket_type_prefix} -owner:""'
-    tickets = IncidentHandler().get_tickets(query=query, period=period, size=10000)
+    quarter_tickets = IncidentHandler().get_tickets(query=query, period=period, size=10000)
+    tickets.extend(quarter_tickets)
 
+    # Deduplicate tickets
+    tickets = list({t['id']: t for t in tickets}.values())
     print(f"Total tickets retrieved: {len(tickets)}")
+
     if tickets:
         created_dates = [pd.to_datetime(t['created'], format='ISO8601', errors='coerce') for t in tickets]
         min_date = min(created_dates).strftime('%Y-%m-%d')
@@ -291,8 +326,7 @@ def plot_past_12_months():
     expected_months = [current_month - i for i in range(11, -1, -1)]
 
     # Ensure impacts follow the custom order
-    month_impact_counts['impact'] = pd.Categorical(month_impact_counts['impact'],
-                                                   categories=CUSTOM_IMPACT_ORDER, ordered=True)
+    month_impact_counts['impact'] = pd.Categorical(month_impact_counts['impact'], categories=CUSTOM_IMPACT_ORDER, ordered=True)
 
     # Use expected months for visualization
     unique_months = expected_months
