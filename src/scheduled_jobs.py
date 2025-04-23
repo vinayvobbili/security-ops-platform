@@ -4,7 +4,6 @@ import pytz
 import schedule
 
 import secops
-import verify_host_online_status
 from config import get_config
 from services import phish_fort
 from src import helper_methods
@@ -71,7 +70,7 @@ def main():
         threat_tippers.make_chart()
     ))
 
-    schedule.every(5).minutes.do(verify_host_online_status.start)
+    # schedule.every(5).minutes.do(verify_host_online_status.start)
     room_id = config.webex_room_id_soc_shift_updates
     schedule.every().day.at("04:30", eastern).do(lambda: secops.announce_shift_change('morning', room_id))
     schedule.every().day.at("12:30", eastern).do(lambda: secops.announce_shift_change('afternoon', room_id))
