@@ -1,11 +1,8 @@
-import time
-
-import requests
-import schedule
 from falconpy import OAuth2, Hosts
 from webexteamssdk import WebexTeamsAPI
 
 from config import get_config
+from services.xsoar import ListHandler
 
 offline_hosts_list_name: str = 'Offline_Hosts'
 
@@ -22,26 +19,7 @@ xsoar_headers = {
 falcon = OAuth2(client_id=config.cs_ro_client_id, client_secret=config.cs_ro_client_secret)
 hosts = Hosts(auth_object=falcon)
 
-
-def save(data, version):
-    api_url = config.xsoar_prod_api_base_url + '/lists/save'
-    requests.post(api_url, headers=xsoar_headers, json={
-        "data": ','.join(data),
-        "name": offline_hosts_list_name,
-        "type": "plain_text",
-        "id": offline_hosts_list_name,
-        "version": version
-    })
-
-
-def get_all_lists() -> list:
-    api_url = config.xsoar_prod_api_base_url + '/lists'
-    return requests.get(api_url, headers=xsoar_headers).json()
-
-
-def get_list_by_name(all_lists, list_name):
-    list_contents = list(filter(lambda item: item['id'] == list_name, all_lists))[0]
-    return list_contents['data'], list_contents['version']
+list_handler = ListHandler()
 
 
 def send_webex_notification(host_name, ticket_id):
@@ -70,9 +48,8 @@ def get_device_online_status(host_name):
 
 def start():
     try:
-        all_lists: list = get_all_lists()
         online_hosts = []
-        offline_hosts_data, offline_hosts_list_version = get_list_by_name(all_lists, offline_hosts_list_name)
+        offline_hosts_data = list_handler.get_list_data_by_name(offline_hosts_list_name)
         offline_hosts = offline_hosts_data.split(',')
         for host_name_ticket_id in offline_hosts:
             if '-' in host_name_ticket_id:
@@ -85,17 +62,14 @@ def start():
                     online_hosts.append(host_name_ticket_id)
 
         if len(online_hosts) > 0:
-            save(list(set(offline_hosts).difference(online_hosts)), offline_hosts_list_version)
+            list_handler.save(offline_hosts_list_name, list(set(offline_hosts).difference(online_hosts)))
 
     except Exception as ex:
         print(f"There was an issue in the VerifyHostOnlineStatus integration. Error: {str(ex)}")
 
 
 def main():
-    schedule.every(5).minutes.do(start)
-    while True:
-        schedule.run_pending()
-        time.sleep(1)
+    start()
 
 
 if __name__ in ('__main__', '__builtin__', 'builtins'):
