@@ -426,10 +426,10 @@ def plot_past_12_months():
     # Format months for display
     month_labels = [month.strftime('%b %Y') for month in expected_months]
 
-    # Setup the positions for bars
-    group_width = 0.8  # Width of each month's group
+    # Set up the positions for bars
+    group_width = 0.6  # Width of each month's group
     bar_width = group_width / 2  # Width of each bar (type and impact)
-    spacing = 0.1  # Space between months
+    spacing = 0.4  # Space between months
 
     # Calculate x positions
     x = np.arange(len(month_labels)) * (group_width + spacing)
@@ -499,23 +499,38 @@ def plot_past_12_months():
     # Create separate legends for ticket types and impacts
     handles, labels = ax.get_legend_handles_labels()
 
-    # Separate the handles and labels
+    # Calculate total counts for each ticket type and impact
+    ticket_type_totals = {ticket_type: values.sum() for ticket_type, values in ticket_pivot_data.items()}
+    impact_totals = {impact: pivot_data[impact].sum() for impact in CUSTOM_IMPACT_ORDER}
+
+    # Separate handles and labels as before
     type_handles = [h for h, l in zip(handles, labels) if "Monthly" not in l and l not in CUSTOM_IMPACT_ORDER]
     type_labels = [l for l in labels if "Monthly" not in l and l not in CUSTOM_IMPACT_ORDER]
 
     impact_handles = [h for h, l in zip(handles, labels) if "Monthly" in l or l in CUSTOM_IMPACT_ORDER]
     impact_labels = [l for l in labels if "Monthly" in l or l in CUSTOM_IMPACT_ORDER]
 
-    # Position legends in opposite corners - ticket types in left top, impact in right top
-    type_legend = ax.legend(type_handles, type_labels,
+    # Add counts to type labels
+    type_labels_with_counts = [f"{l} ({int(ticket_type_totals[l])})" for l in type_labels]
+
+    # Add counts to impact labels (but not to Monthly Average/Volume)
+    impact_labels_with_counts = []
+    for l in impact_labels:
+        if l in CUSTOM_IMPACT_ORDER:
+            impact_labels_with_counts.append(f"{l} ({int(impact_totals[l])})")
+        else:
+            impact_labels_with_counts.append(l)  # Preserve labels like "Monthly Average"
+
+    # Create legends with count-enhanced labels
+    type_legend = ax.legend(type_handles, type_labels_with_counts,
                             title="Ticket Types",
                             title_fontproperties={'weight': 'bold', 'size': 12},
                             loc='upper left',
                             fontsize=10)
 
-    # Add second legend in top right
+    # Add second legend in top right with counts
     ax.add_artist(type_legend)
-    ax.legend(impact_handles, impact_labels,
+    ax.legend(impact_handles, impact_labels_with_counts,
               title="Impact",
               title_fontproperties={'weight': 'bold', 'size': 12},
               loc='upper right',
