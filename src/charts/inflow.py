@@ -112,6 +112,7 @@ def plot_yesterday():
 
     today_date = datetime.now().strftime('%m-%d-%Y')
     OUTPUT_PATH = root_directory / "web" / "static" / "charts" / today_date / "Inflow Yesterday.png"
+    OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(OUTPUT_PATH)
     plt.close(fig)
 
@@ -329,18 +330,54 @@ def plot_past_12_months():
 
     df = pd.DataFrame(tickets)
 
-    # Extract 'created_date' as month-year and 'impact' fields
+    # Extract 'created_month' and 'ticket_type' fields
     df['created_month'] = pd.to_datetime(df['created'], format='ISO8601', errors='coerce').dt.tz_convert('UTC').dt.to_period('M')
+    df['ticket_type'] = df['type']  # Assuming 'type' field represents ticket type
+
+    # Handle missing or empty ticket types
+    df['ticket_type'] = df['ticket_type'].fillna('Unknown').replace('', 'Unknown')
+
+    # Remove METCIRT from ticket type names
+    df['ticket_type'] = df['ticket_type'].str.replace(config.ticket_type_prefix, '').str.strip()
+
+    # Group by month and ticket type, then count occurrences
+    month_ticket_counts = df.groupby(['created_month', 'ticket_type'], observed=True).size().reset_index(name='count')
+
+    # Generate expected months (past 12 months)
+    current_month = pd.Period(datetime.now(), freq='M')
+    expected_months = [current_month - i for i in range(11, -1, -1)]
+
+    # Create pivot data structure for ticket types
+    ticket_types = sorted(df['ticket_type'].unique())
+    ticket_pivot_data = {ticket_type: np.zeros(len(expected_months)) for ticket_type in ticket_types}
+
+    # Define explicit colors for ticket types
+    colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd',
+              '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf',
+              '#aec7e8', '#ffbb78', '#98df8a', '#ff9896', '#c5b0d5']
+    # Extend colors if needed
+    while len(colors) < len(ticket_types):
+        colors.extend(colors)
+    ticket_type_color_map = {ticket_type: colors[i % len(colors)] for i, ticket_type in enumerate(ticket_types)}
+
+    # Fill in ticket type values
+    for _, row in month_ticket_counts.iterrows():
+        if row['created_month'] in expected_months:
+            month_idx = expected_months.index(row['created_month'])
+            ticket_type = row['ticket_type']
+            count = row['count']
+            ticket_pivot_data[ticket_type][month_idx] += count
+
+    # Debug info - print to see if there's data
+    print(f"Ticket types: {ticket_types}")
+    for ticket_type, values in ticket_pivot_data.items():
+        print(f"Ticket type {ticket_type} values: {values.sum()}")
+
+    # Extract 'created_month' as month-year and 'impact' fields
     df['impact'] = df['CustomFields'].apply(lambda x: x.get('impact', 'Unknown'))
 
     # Set missing or empty impact values to 'Unknown'
     df['impact'] = df['impact'].fillna('Unknown').replace('', 'Unknown')
-
-    # Log the months in the data
-    month_counts = df['created_month'].value_counts().sort_index()
-    print("Monthly ticket counts in raw data:")
-    for month, count in month_counts.items():
-        print(f"{month}: {count}")
 
     # Define custom order and colors - add 'Unknown' category
     CUSTOM_IMPACT_ORDER = ["Significant", "Confirmed", "Detected", "Prevented", "Ignore", "Testing", "False Positive", "Unknown"]
@@ -364,121 +401,132 @@ def plot_past_12_months():
     # Ensure impacts follow the custom order
     month_impact_counts['impact'] = pd.Categorical(month_impact_counts['impact'], categories=CUSTOM_IMPACT_ORDER, ordered=True)
 
-    # Generate expected months (past 12 months)
-    current_month = pd.Period(datetime.now(), freq='M')
-    expected_months = [current_month - i for i in range(11, -1, -1)]
-
-    # First, count all tickets by month to ensure accuracy
-    month_counts = df.groupby(['created_month']).size()
-
-    # Use expected months for visualization
-    unique_months = expected_months
-
     # Create pivot data structure with zeros for all expected months
-    pivot_data = {impact: np.zeros(len(unique_months)) for impact in CUSTOM_IMPACT_ORDER}
-    monthly_totals = np.zeros(len(unique_months))
-
-    # Initialize monthly_totals from actual counts where available
-    for i, month in enumerate(expected_months):
-        if month in month_counts.index:
-            monthly_totals[i] = month_counts[month]
+    pivot_data = {impact: np.zeros(len(expected_months)) for impact in CUSTOM_IMPACT_ORDER}
+    monthly_totals = np.zeros(len(expected_months))
 
     # Fill in values where we have data
     for _, row in month_impact_counts.iterrows():
-        if row['created_month'] in unique_months:
-            month_idx = unique_months.index(row['created_month'])
+        if row['created_month'] in expected_months:
+            month_idx = expected_months.index(row['created_month'])
             impact = row['impact']
             count = row['count']
             if impact in pivot_data:
                 pivot_data[impact][month_idx] += count
+                monthly_totals[month_idx] += count  # Update monthly totals here
 
     # Verify totals match
     total_in_viz = sum(monthly_totals)
     if total_in_viz != len(tickets):
         print(f"Warning: Visualization shows {total_in_viz} tickets but dataset has {len(tickets)} tickets")
 
-    # Create figure
-    fig, ax = plt.subplots(figsize=(20, 12))
+    # Create single figure - increase figure size for better readability
+    fig, ax = plt.subplots(figsize=(22, 14))
 
     # Format months for display
-    month_labels = [month.strftime('%b %Y') for month in unique_months]
-    x = np.arange(len(month_labels))
+    month_labels = [month.strftime('%b %Y') for month in expected_months]
 
-    # Calculate total counts per impact category
-    impact_totals = {impact: sum(pivot_data[impact]) for impact in CUSTOM_IMPACT_ORDER}
+    # Setup the positions for bars
+    group_width = 0.8  # Width of each month's group
+    bar_width = group_width / 2  # Width of each bar (type and impact)
+    spacing = 0.1  # Space between months
 
-    # Plot each impact category as a separate bar component
-    bottom = np.zeros(len(month_labels))
-    bar_width = 0.5  # Narrower bars
+    # Calculate x positions
+    x = np.arange(len(month_labels)) * (group_width + spacing)
 
+    # Position for type bars (left) and impact bars (right)
+    type_x = x - bar_width / 2
+    impact_x = x + bar_width / 2
+
+    # Plot ticket type bars (left side)
+    type_bottom = np.zeros(len(expected_months))
+    for ticket_type, values in ticket_pivot_data.items():
+        if values.sum() > 0:  # Only show ticket types with data
+            ax.bar(type_x, values, bottom=type_bottom, width=bar_width,
+                   label=f"{ticket_type}", color=ticket_type_color_map[ticket_type],
+                   edgecolor='black', linewidth=0.5)
+            type_bottom += values
+
+    # Plot impact bars (right side)
+    impact_bottom = np.zeros(len(expected_months))
     for impact in CUSTOM_IMPACT_ORDER:
         values = pivot_data[impact]
-        total = impact_totals[impact]
-        # Include count in legend label
-        label = f"{impact} ({int(total)})"
-        bars = ax.bar(x, values, bottom=bottom, width=bar_width,
-                      label=label, color=impact_colors.get(impact, '#000000'))
-
-        # Only show count label for "Ignore" category
-        if impact == "Ignore":
-            for i, bar in enumerate(bars):
-                height = bar.get_height()
-                if height > 0 and height > 50:  # Only show if significant
-                    ax.text(bar.get_x() + bar.get_width() / 2,
-                            bar.get_y() + height / 2,
-                            f'{int(height)}',
-                            ha='center', va='center',
-                            fontsize=9, fontweight='bold',
-                            color='white')  # White text for better visibility on gray
-
-        bottom += values
-
-    # Add total count labels at the top of each bar with background
-    for i in range(len(x)):
-        total = monthly_totals[i]
-        if total > 0:
-            # Position label above bar with background
-            ax.text(x[i], float(total) + 5,
-                    f'{int(total)}',
-                    ha='center', va='bottom',
-                    fontsize=10, fontweight='bold',
-                    bbox=dict(facecolor='white', alpha=0.9, edgecolor='none', pad=2))
+        if values.sum() > 0:  # Only add to legend if there are values
+            ax.bar(impact_x, values, bottom=impact_bottom, width=bar_width,
+                   label=f"{impact}", color=impact_colors[impact])
+            impact_bottom += values
 
     # Plot horizontal line for monthly average
-    monthly_average = monthly_totals[monthly_totals > 0].mean() if any(monthly_totals > 0) else 0
-    ax.axhline(monthly_average, color='blue', linestyle='--', linewidth=1.5,
+    monthly_average = monthly_totals.mean() if monthly_totals.size > 0 else 0
+    ax.axhline(monthly_average, color='blue', linestyle='--', linewidth=2,
                label=f'Monthly Average ({int(monthly_average)})')
 
-    # Add trend line to show volume changes
-    trend_line = ax.plot(x, monthly_totals, color='red', marker='o', linewidth=2,
-                         label='Monthly Volume', zorder=10)
+    # Add trend line to show volume changes - increased marker size
+    trend_line = ax.plot(x, monthly_totals, color='red', marker='o', markersize=8,
+                         linewidth=2.5, label='Monthly Volume', zorder=10)
 
-    # Set x-ticks and other formatting
+    # Add count labels above the trend line dots
+    for i in range(len(x)):
+        if monthly_totals[i] > 0:
+            ax.text(x[i], monthly_totals[i] + 20,  # Position above the trend line dot
+                    f'{int(monthly_totals[i])}',
+                    ha='center', va='bottom',
+                    fontsize=12, fontweight='bold',
+                    bbox=dict(facecolor='white', alpha=0.9, edgecolor='none', pad=2),
+                    zorder=20)  # Ensure labels are drawn on top
+
+    # Set x-ticks and other formatting - increased tick size
     ax.set_xticks(x)
-    y_max = max(bottom.max(), monthly_totals.max(), 100)
-    ax.set_ylim(0, y_max * 1.15)
-    ax.set_xticklabels(month_labels, rotation=45, ha='right', fontsize=10)
+    y_max = max(max(type_bottom), max(impact_bottom), 100) * 1.15
+    ax.set_ylim(0, y_max)
+    ax.set_xticklabels(month_labels, rotation=45, ha='right', fontsize=12)  # Increased fontsize
+
+    # Increase y-tick font size
+    ax.tick_params(axis='y', labelsize=12)
 
     # Add note about data limit
     if len(tickets) == 10000:
         ax.text(0.5, 0.97, "Note: Data limited to 10,000 records",
                 ha='center', va='top', transform=ax.transAxes,
-                fontsize=9, fontstyle='italic', color='red')
+                fontsize=10, fontstyle='italic', color='red')
 
-    # Add labels and title with total count subtitle
-    ax.set_xlabel("Month", fontweight='bold', fontsize=10)
-    ax.set_ylabel("Number of Tickets", fontweight='bold', fontsize=10)
-    ax.set_title(f"Inflow Over the Past 12 Months\nTotal: {len(tickets)} tickets", fontweight='bold', fontsize=12)
+    # Add labels and title - increased font sizes
+    ax.set_xlabel("Month", fontweight='bold', fontsize=12)
+    ax.set_ylabel("Number of Tickets", fontweight='bold', fontsize=12)
+    ax.set_title(f"Inflow Over the Past 12 Months\nTotal: {len(tickets)} tickets",
+                 fontweight='bold', fontsize=16)
 
-    # Add legend
-    ax.legend(title='Impact', title_fontproperties={'weight': 'bold'})
+    # Create separate legends for ticket types and impacts
+    handles, labels = ax.get_legend_handles_labels()
+
+    # Separate the handles and labels
+    type_handles = [h for h, l in zip(handles, labels) if "Monthly" not in l and l not in CUSTOM_IMPACT_ORDER]
+    type_labels = [l for l in labels if "Monthly" not in l and l not in CUSTOM_IMPACT_ORDER]
+
+    impact_handles = [h for h, l in zip(handles, labels) if "Monthly" in l or l in CUSTOM_IMPACT_ORDER]
+    impact_labels = [l for l in labels if "Monthly" in l or l in CUSTOM_IMPACT_ORDER]
+
+    # Position legends in opposite corners - ticket types in left top, impact in right top
+    type_legend = ax.legend(type_handles, type_labels,
+                            title="Ticket Types",
+                            title_fontproperties={'weight': 'bold', 'size': 12},
+                            loc='upper left',
+                            fontsize=10)
+
+    # Add second legend in top right
+    ax.add_artist(type_legend)
+    ax.legend(impact_handles, impact_labels,
+              title="Impact",
+              title_fontproperties={'weight': 'bold', 'size': 12},
+              loc='upper right',
+              fontsize=10)
 
     # Add border and timestamp
     fig.patch.set_edgecolor('black')
     fig.patch.set_linewidth(5)
     now_eastern = datetime.now(eastern).strftime('%m/%d/%Y %I:%M %p %Z')
     trans = transforms.blended_transform_factory(fig.transFigure, fig.transFigure)
-    plt.text(0.05, 0.01, now_eastern, ha='left', va='bottom', fontsize=10, transform=trans)
+    plt.text(0.05, 0.01, now_eastern, ha='left', va='bottom', fontsize=11, transform=trans)
 
     # Save the chart
     today_date = datetime.now().strftime('%m-%d-%Y')
@@ -519,4 +567,4 @@ def make_chart():
 
 
 if __name__ == '__main__':
-    make_chart()
+    plot_past_12_months()
