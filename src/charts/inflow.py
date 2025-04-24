@@ -1,5 +1,6 @@
 import json
 import re
+import time
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -27,7 +28,7 @@ with open(DETECTION_SOURCE_NAMES_ABBREVIATION_FILE, 'r') as f:
 
 def create_stacked_bar_chart(df, x_label, y_label, title):
     """Creates a stacked bar chart from a pandas DataFrame."""
-    fig, ax = plt.subplots(figsize=(10, 6))
+    fig, ax = plt.subplots(figsize=(20, 12))
 
     # Pivot the DataFrame to get the counts of each severity per source
     df_pivot = df.pivot_table(index='source', columns='severity', values='count', fill_value=0)
@@ -60,6 +61,7 @@ def create_stacked_bar_chart(df, x_label, y_label, title):
 
 def plot_yesterday():
     """Plots the ticket inflow by source."""
+    start_time = time.time()
 
     # Calculate fresh values EACH TIME the command is run
     et = pytz.timezone("US/Eastern")
@@ -74,7 +76,8 @@ def plot_yesterday():
     # Create a DataFrame from the tickets
     if not tickets:
         print('No tickets found matching the current query')
-        return
+        execution_time = time.time() - start_time
+        return execution_time
 
     df = pd.DataFrame(tickets)
 
@@ -112,6 +115,9 @@ def plot_yesterday():
     fig.savefig(OUTPUT_PATH)
     plt.close(fig)
 
+    execution_time = time.time() - start_time
+    return execution_time
+
 
 def plot_period(period_config, title, output_filename):
     """
@@ -122,12 +128,15 @@ def plot_period(period_config, title, output_filename):
         title: Chart title
         output_filename: Output file name
     """
+    start_time = time.time()
+
     query = f'type:{config.ticket_type_prefix} -owner:""'
     tickets = IncidentHandler().get_tickets(query=query, period=period_config)
 
     if not tickets:
         print(f"No tickets found for {title}.")
-        return
+        execution_time = time.time() - start_time
+        return execution_time
 
     df = pd.DataFrame(tickets)
 
@@ -135,11 +144,11 @@ def plot_period(period_config, title, output_filename):
     df['created_date'] = pd.to_datetime(df['created'], format='ISO8601', errors='coerce').dt.date
     df['impact'] = df['CustomFields'].apply(lambda x: x.get('impact', 'Unknown'))
 
-    # Group by 'created_date' and 'impact', then count occurrences
-    date_impact_counts = df.groupby(['created_date', 'impact'], observed=True).size().reset_index(name='count')
+    # Set missing or empty impact values to 'Unknown'
+    df['impact'] = df['impact'].fillna('Unknown').replace('', 'Unknown')
 
-    # Define custom order and colors
-    CUSTOM_IMPACT_ORDER = ["Significant", "Confirmed", "Detected", "Prevented", "Ignore", "Testing", "False Positive"]
+    # Define custom order and colors - add 'Unknown' category
+    CUSTOM_IMPACT_ORDER = ["Significant", "Confirmed", "Detected", "Prevented", "Ignore", "Testing", "False Positive", "Unknown"]
     impact_colors = {
         "Significant": "#ff0000",  # Red
         "Confirmed": "#ffa500",  # Orange
@@ -148,25 +157,38 @@ def plot_period(period_config, title, output_filename):
         "Ignore": "#808080",  # Gray
         "Testing": "#add8e6",  # Light Blue
         "False Positive": "#90ee90",  # Light green
+        "Unknown": "#d3d3d3",  # Light gray
     }
+
+    # Ensure all impacts are in our predefined list
+    df['impact'] = df['impact'].apply(lambda x: x if x in CUSTOM_IMPACT_ORDER else 'Unknown')
+
+    # Group by 'created_date' and 'impact', then count occurrences
+    date_impact_counts = df.groupby(['created_date', 'impact'], observed=True).size().reset_index(name='count')
 
     # Ensure impacts follow the custom order
     date_impact_counts['impact'] = pd.Categorical(date_impact_counts['impact'], categories=CUSTOM_IMPACT_ORDER, ordered=True)
 
     # Create pivot data structure
-    unique_dates = sorted(date_impact_counts['created_date'].unique())
+    unique_dates = sorted(df['created_date'].unique())
     pivot_data = {impact: np.zeros(len(unique_dates)) for impact in CUSTOM_IMPACT_ORDER}
+    daily_totals = np.zeros(len(unique_dates))
 
     # Fill in the values
     for _, row in date_impact_counts.iterrows():
         date_idx = list(unique_dates).index(row['created_date'])
         impact = row['impact']
         count = row['count']
-        if impact in pivot_data:
-            pivot_data[impact][date_idx] += count
+        pivot_data[impact][date_idx] += count
+        daily_totals[date_idx] += count
+
+    # Verify all tickets are accounted for
+    total_in_chart = sum(daily_totals)
+    if total_in_chart != len(tickets):
+        print(f"Warning: Chart shows {total_in_chart} tickets but dataset has {len(tickets)} tickets")
 
     # Create a figure with proper size
-    fig, ax = plt.subplots(figsize=(16, 8))
+    fig, ax = plt.subplots(figsize=(20, 12))
 
     # Format dates for display
     dates = [date.strftime('%m/%d') for date in unique_dates]
@@ -196,10 +218,10 @@ def plot_period(period_config, title, output_filename):
 
     ax.set_xticklabels(date_labels, rotation=45, ha='right', fontsize=8)
 
-    # Add labels and title
+    # Add labels and title with total count subtitle
     ax.set_xlabel("Created Date", fontweight='bold', fontsize=10)
     ax.set_ylabel("Number of Tickets", fontweight='bold', fontsize=10)
-    ax.set_title(title, fontweight='bold', fontsize=12)
+    ax.set_title(f"{title}\nTotal: {len(tickets)} tickets", fontweight='bold', fontsize=12)
 
     # Add legend
     ax.legend(title='Impact', title_fontproperties={'weight': 'bold'})
@@ -224,59 +246,69 @@ def plot_period(period_config, title, output_filename):
     fig.savefig(OUTPUT_PATH)
     plt.close(fig)
 
+    execution_time = time.time() - start_time
+    return execution_time
+
 
 def plot_past_60_days():
+    start_time = time.time()
     period = {
         "by": "day",
         "fromValue": 60
     }
-    plot_period(
+    exec_time = plot_period(
         period_config=period,
         title="Inflow Over the Past 60 Days",
         output_filename="Inflow Past 60 Days.png"
     )
 
+    # If plot_period returned a time, use it; otherwise calculate from our start time
+    if exec_time is not None:
+        return exec_time
+    else:
+        return time.time() - start_time
+
 
 def plot_past_12_months():
-    tickets = []
     """Creates a chart for ticket inflow over the past 12 months, grouped by month."""
+    start_time = time.time()
+
+    query = f'type:{config.ticket_type_prefix} -owner:""'
+    tickets = []
+
     period = {
         "byFrom": "months",
         "fromValue": 12,
         "byTo": "months",
         "toValue": 10
     }
-    query = f'type:{config.ticket_type_prefix} -owner:""'
     quarter_tickets = IncidentHandler().get_tickets(query=query, period=period, size=10000)
     tickets.extend(quarter_tickets)
 
     period = {
         "byFrom": "months",
-        "fromValue": 9,
+        "fromValue": 10,
         "byTo": "months",
         "toValue": 7
     }
-    query = f'type:{config.ticket_type_prefix} -owner:""'
     quarter_tickets = IncidentHandler().get_tickets(query=query, period=period, size=10000)
     tickets.extend(quarter_tickets)
 
     period = {
         "byFrom": "months",
-        "fromValue": 6,
+        "fromValue": 7,
         "byTo": "months",
         "toValue": 4
     }
-    query = f'type:{config.ticket_type_prefix} -owner:""'
     quarter_tickets = IncidentHandler().get_tickets(query=query, period=period, size=10000)
     tickets.extend(quarter_tickets)
 
     period = {
         "byFrom": "months",
-        "fromValue": 3,
+        "fromValue": 4,
         "byTo": "months",
         "toValue": 0
     }
-    query = f'type:{config.ticket_type_prefix} -owner:""'
     quarter_tickets = IncidentHandler().get_tickets(query=query, period=period, size=10000)
     tickets.extend(quarter_tickets)
 
@@ -292,7 +324,8 @@ def plot_past_12_months():
 
     if not tickets:
         print("No tickets found for Past 12 Months.")
-        return
+        execution_time = time.time() - start_time
+        return execution_time
 
     df = pd.DataFrame(tickets)
 
@@ -300,17 +333,17 @@ def plot_past_12_months():
     df['created_month'] = pd.to_datetime(df['created'], format='ISO8601', errors='coerce').dt.tz_convert('UTC').dt.to_period('M')
     df['impact'] = df['CustomFields'].apply(lambda x: x.get('impact', 'Unknown'))
 
+    # Set missing or empty impact values to 'Unknown'
+    df['impact'] = df['impact'].fillna('Unknown').replace('', 'Unknown')
+
     # Log the months in the data
     month_counts = df['created_month'].value_counts().sort_index()
     print("Monthly ticket counts in raw data:")
     for month, count in month_counts.items():
         print(f"{month}: {count}")
 
-    # Group by month and impact, then count occurrences
-    month_impact_counts = df.groupby(['created_month', 'impact'], observed=True).size().reset_index(name='count')
-
-    # Define custom order and colors
-    CUSTOM_IMPACT_ORDER = ["Significant", "Confirmed", "Detected", "Prevented", "Ignore", "Testing", "False Positive"]
+    # Define custom order and colors - add 'Unknown' category
+    CUSTOM_IMPACT_ORDER = ["Significant", "Confirmed", "Detected", "Prevented", "Ignore", "Testing", "False Positive", "Unknown"]
     impact_colors = {
         "Significant": "#ff0000",  # Red
         "Confirmed": "#ffa500",  # Orange
@@ -319,14 +352,24 @@ def plot_past_12_months():
         "Ignore": "#808080",  # Gray
         "Testing": "#add8e6",  # Light Blue
         "False Positive": "#90ee90",  # Light green
+        "Unknown": "#d3d3d3",  # Light gray
     }
+
+    # Ensure all impacts are in our predefined list
+    df['impact'] = df['impact'].apply(lambda x: x if x in CUSTOM_IMPACT_ORDER else 'Unknown')
+
+    # Group by month and impact, then count occurrences
+    month_impact_counts = df.groupby(['created_month', 'impact'], observed=True).size().reset_index(name='count')
+
+    # Ensure impacts follow the custom order
+    month_impact_counts['impact'] = pd.Categorical(month_impact_counts['impact'], categories=CUSTOM_IMPACT_ORDER, ordered=True)
 
     # Generate expected months (past 12 months)
     current_month = pd.Period(datetime.now(), freq='M')
     expected_months = [current_month - i for i in range(11, -1, -1)]
 
-    # Ensure impacts follow the custom order
-    month_impact_counts['impact'] = pd.Categorical(month_impact_counts['impact'], categories=CUSTOM_IMPACT_ORDER, ordered=True)
+    # First, count all tickets by month to ensure accuracy
+    month_counts = df.groupby(['created_month']).size()
 
     # Use expected months for visualization
     unique_months = expected_months
@@ -334,6 +377,11 @@ def plot_past_12_months():
     # Create pivot data structure with zeros for all expected months
     pivot_data = {impact: np.zeros(len(unique_months)) for impact in CUSTOM_IMPACT_ORDER}
     monthly_totals = np.zeros(len(unique_months))
+
+    # Initialize monthly_totals from actual counts where available
+    for i, month in enumerate(expected_months):
+        if month in month_counts.index:
+            monthly_totals[i] = month_counts[month]
 
     # Fill in values where we have data
     for _, row in month_impact_counts.iterrows():
@@ -343,14 +391,21 @@ def plot_past_12_months():
             count = row['count']
             if impact in pivot_data:
                 pivot_data[impact][month_idx] += count
-                monthly_totals[month_idx] += count
+
+    # Verify totals match
+    total_in_viz = sum(monthly_totals)
+    if total_in_viz != len(tickets):
+        print(f"Warning: Visualization shows {total_in_viz} tickets but dataset has {len(tickets)} tickets")
 
     # Create figure
-    fig, ax = plt.subplots(figsize=(16, 8))
+    fig, ax = plt.subplots(figsize=(20, 12))
 
     # Format months for display
     month_labels = [month.strftime('%b %Y') for month in unique_months]
     x = np.arange(len(month_labels))
+
+    # Calculate total counts per impact category
+    impact_totals = {impact: sum(pivot_data[impact]) for impact in CUSTOM_IMPACT_ORDER}
 
     # Plot each impact category as a separate bar component
     bottom = np.zeros(len(month_labels))
@@ -358,8 +413,11 @@ def plot_past_12_months():
 
     for impact in CUSTOM_IMPACT_ORDER:
         values = pivot_data[impact]
+        total = impact_totals[impact]
+        # Include count in legend label
+        label = f"{impact} ({int(total)})"
         bars = ax.bar(x, values, bottom=bottom, width=bar_width,
-                      label=impact, color=impact_colors.get(impact, '#000000'))
+                      label=label, color=impact_colors.get(impact, '#000000'))
 
         # Only show count label for "Ignore" category
         if impact == "Ignore":
@@ -407,10 +465,10 @@ def plot_past_12_months():
                 ha='center', va='top', transform=ax.transAxes,
                 fontsize=9, fontstyle='italic', color='red')
 
-    # Add labels and title
+    # Add labels and title with total count subtitle
     ax.set_xlabel("Month", fontweight='bold', fontsize=10)
     ax.set_ylabel("Number of Tickets", fontweight='bold', fontsize=10)
-    ax.set_title("Inflow Over the Past 12 Months", fontweight='bold', fontsize=12)
+    ax.set_title(f"Inflow Over the Past 12 Months\nTotal: {len(tickets)} tickets", fontweight='bold', fontsize=12)
 
     # Add legend
     ax.legend(title='Impact', title_fontproperties={'weight': 'bold'})
@@ -431,15 +489,37 @@ def plot_past_12_months():
     fig.savefig(OUTPUT_PATH)
     plt.close(fig)
 
+    execution_time = time.time() - start_time
+    return execution_time
+
 
 def make_chart():
     try:
-        plot_yesterday()
-        plot_past_60_days()
-        plot_past_12_months()
+        print(f"Starting chart generation at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+
+        start_time = time.time()
+
+        print("Generating 'Yesterday' chart...")
+        yesterday_time = plot_yesterday()
+        print(f"  - Completed in {yesterday_time:.2f} seconds")
+
+        print("Generating 'Past 60 Days' chart...")
+        days60_time = plot_past_60_days()
+        print(f"  - Completed in {days60_time:.2f} seconds")
+
+        print("Generating 'Past 12 Months' chart...")
+        months12_time = plot_past_12_months()
+        print(f"  - Completed in {months12_time:.2f} seconds")
+
+        total_time = time.time() - start_time
+        print(f"All charts generated. Total time: {total_time:.2f} seconds")
+
     except Exception as e:
         print(f"An error occurred while generating charts: {e}")
 
 
 if __name__ == '__main__':
+    start_time = time.time()
     plot_past_12_months()
+    execution_time = time.time() - start_time
+    print(f"Script executed in {execution_time:.2f} seconds")
