@@ -21,3 +21,15 @@ impact_colors = {
     "Testing": "#add8e6",  # light blue
     "False Positive": "#90ee90",  # light green
 }
+azdo_projects = {
+    'platforms': 'Acme-Cyber-Platforms',
+    're': 'Acme-Cyber-Security',
+    'de': 'Detection-Engineering',
+    'gdr': 'Global Detection and Response Shared'
+}
+azdo_orgs = {
+    'platforms': 'Acme-US',
+    're': 'Acme-US',
+    'de': 'Acme-US',
+    'gdr': 'Acme-US-2'
+}
