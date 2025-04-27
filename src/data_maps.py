@@ -21,3 +21,15 @@ impact_colors = {
     "Testing": "#add8e6",  # light blue
     "False Positive": "#90ee90",  # light green
 }
+azdo_projects = {
+    'platforms': 'MetLife-Cyber-Platforms',
+    're': 'MetLife-Cyber-Security',
+    'de': 'Detection-Engineering',
+    'gdr': 'Global Detection and Response Shared'
+}
+azdo_orgs = {
+    'platforms': 'MetLife-US',
+    're': 'MetLife-US',
+    'de': 'MetLife-US',
+    'gdr': 'MetLife-US-2'
+}
