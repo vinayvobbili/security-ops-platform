@@ -12,8 +12,8 @@ from azure.devops.v7_0.work_item_tracking.models import Wiql
 from msrest.authentication import BasicAuthentication
 
 from config import get_config
+from data.transient.data_maps import azdo_projects, azdo_orgs
 from services.xsoar import ListHandler, CONFIG
-from src.data_maps import azdo_projects, azdo_orgs
 
 config = get_config()
 personal_access_token = config.azdo_pat
@@ -117,12 +117,12 @@ def get_tuning_requests_submitted_by_last_shift():
     return recent_item_strings
 
 
-def create_wit(title, type, description, project, submitter) -> str:
+def create_wit(title, item_type, description, project, submitter, area_path=None, iteration=None, assignee=None, parent_url=None) -> str:
     org = azdo_orgs[project]
     project_name = azdo_projects.get(project)
     description += f'<br><br>Submitted by <strong>{submitter}</strong>'
 
-    url = f"https://dev.azure.com/{org}/{project_name}/_apis/wit/workitems/${type}?api-version=7.0"
+    url = f"https://dev.azure.com/{org}/{project_name}/_apis/wit/workitems/${item_type}?api-version=7.0"
 
     payload = [
         {
@@ -132,35 +132,47 @@ def create_wit(title, type, description, project, submitter) -> str:
         },
         {
             "op": "add",
-            "path": "/fields/Microsoft.VSTS.TCM.ReproSteps" if type == 'Bug' else "/fields/System.Description",
+            "path": "/fields/Microsoft.VSTS.TCM.ReproSteps" if item_type == 'Bug' else "/fields/System.Description",
             "value": description
+        },
+        {
+            "op": "add",
+            "path": "/fields/Microsoft.VSTS.Common.StackRank",
+            "value": "1"
         }
     ]
 
-    if project == 'platforms':
-        payload.append({
-            "op": "add",
-            "path": "/fields/System.AssignedTo",
-            "value": "VVobbilichetty@company.com"
-        })
+    if area_path is not None and area_path != '':
+        payload.append(
+            {
+                'op': 'add',
+                'path': '/fields/System.AreaPath',
+                'value': f'{project}\{area_path}'
+            }
+        )
+
+    if iteration is not None and iteration != '':
+        payload.append(
+            {
+                'op': 'add',
+                'path': '/fields/System.IterationPath',
+                'value': iteration
+            }
+        )
+    if parent_url is not None and parent_url != '':
         payload.append({
             "op": "add",
             "path": "/relations/-",
             "value": {
                 "rel": "System.LinkTypes.Hierarchy-Reverse",
-                "url": "https://dev.azure.com/Acme-US/Acme-Cyber-Platforms/_workitems/edit/203352"
+                "url": parent_url
             }
         })
-    elif project == 're':
+    if assignee is not None and assignee != '':
         payload.append({
             "op": "add",
-            "path": "/fields/System.AreaPath",
-            "value": r"Acme-Cyber-Security\METCIRT\METCIRT Tier III"
-        })
-        payload.append({
-            "op": "add",
-            "path": "/fields/Microsoft.VSTS.Common.StackRank",
-            "value": "1"
+            "path": "/fields/System.AssignedTo",
+            "value": assignee
         })
 
     api_token = CONFIG.azdo_pat
@@ -181,7 +193,7 @@ def main():
     # get_tuning_requests_submitted_by_last_shift()
     print(create_wit(
         title="Sample Work Item",
-        type="Task",
+        item_type="Task",
         description="This is a sample description for testing.",
         project="platforms",
         submitter="Test User"
