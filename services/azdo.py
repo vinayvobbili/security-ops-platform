@@ -1,14 +1,19 @@
+import base64
 import datetime
+import json
 import time
 from datetime import datetime, timedelta
 
 import pytz
+import requests
 from azure.devops.connection import Connection
 from azure.devops.exceptions import AzureDevOpsClientRequestError
 from azure.devops.v7_0.work_item_tracking.models import Wiql
 from msrest.authentication import BasicAuthentication
 
 from config import get_config
+from services.xsoar import ListHandler, CONFIG
+from src.data_maps import azdo_projects, azdo_orgs
 
 config = get_config()
 personal_access_token = config.azdo_pat
@@ -17,6 +22,8 @@ organization_url = f'https://dev.azure.com/{config.azdo_org}'
 # Create a connection to the org
 credentials = BasicAuthentication('', personal_access_token)
 connection = Connection(base_url=organization_url, creds=credentials)
+
+list_handler = ListHandler()
 
 
 def fetch_work_items(query: str):
@@ -110,10 +117,75 @@ def get_tuning_requests_submitted_by_last_shift():
     return recent_item_strings
 
 
+def create_wit(title, type, description, project, submitter) -> str:
+    org = azdo_orgs[project]
+    project_name = azdo_projects.get(project)
+    description += f'<br><br>Submitted by <strong>{submitter}</strong>'
+
+    url = f"https://dev.azure.com/{org}/{project_name}/_apis/wit/workitems/${type}?api-version=7.0"
+
+    payload = [
+        {
+            "op": "add",
+            "path": "/fields/System.Title",
+            "value": title
+        },
+        {
+            "op": "add",
+            "path": "/fields/Microsoft.VSTS.TCM.ReproSteps" if type == 'Bug' else "/fields/System.Description",
+            "value": description
+        }
+    ]
+
+    if project == 'platforms':
+        payload.append({
+            "op": "add",
+            "path": "/fields/System.AssignedTo",
+            "value": "VVobbilichetty@company.com"
+        })
+        payload.append({
+            "op": "add",
+            "path": "/relations/-",
+            "value": {
+                "rel": "System.LinkTypes.Hierarchy-Reverse",
+                "url": "https://dev.azure.com/Acme-US/Acme-Cyber-Platforms/_workitems/edit/203352"
+            }
+        })
+    elif project == 're':
+        payload.append({
+            "op": "add",
+            "path": "/fields/System.AreaPath",
+            "value": r"Acme-Cyber-Security\METCIRT\METCIRT Tier III"
+        })
+        payload.append({
+            "op": "add",
+            "path": "/fields/Microsoft.VSTS.Common.StackRank",
+            "value": "1"
+        })
+
+    api_token = CONFIG.azdo_pat
+    api_key = base64.b64encode(b':' + api_token.encode('utf-8')).decode('utf-8')
+
+    headers = {
+        'Content-Type': 'application/json-patch+json',
+        'Authorization': f'Basic {api_key}'
+    }
+
+    response = requests.request("POST", url, headers=headers, json=payload)
+    return json.loads(response.text).get('id')
+
+
 def main():
     # Example usage
-    get_stories_from_area_path("Detection-Engineering\\DE Rules\\Threat Hunting")
+    # get_stories_from_area_path("Detection-Engineering\\DE Rules\\Threat Hunting")
     # get_tuning_requests_submitted_by_last_shift()
+    print(create_wit(
+        title="Sample Work Item",
+        type="Task",
+        description="This is a sample description for testing.",
+        project="platforms",
+        submitter="Test User"
+    ))
 
 
 if __name__ in ('__main__', '__builtin__', 'builtins'):
