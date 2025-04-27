@@ -38,6 +38,7 @@ def get_config():
         azdo_org=os.environ["AZDO_ORGANIZATION"],
         azdo_de_project=os.environ["AZDO_DE_PROJECT"],
         azdo_re_project=os.environ["AZDO_RE_PROJECT"],
+        azdo_platforms_parent_url=os.environ["AZDO_PLATFORMS_PARENT_URL"],
         azdo_pat=os.environ["AZDO_PERSONAL_ACCESS_TOKEN"],
         cs_ro_client_id=os.environ["CROWD_STRIKE_RO_CLIENT_ID"],
         cs_ro_client_secret=os.environ["CROWD_STRIKE_RO_CLIENT_SECRET"],
@@ -61,6 +62,7 @@ def get_config():
         qradar_efficacy_chart_receiver=os.environ["QRADAR_EFFICACY_CHART_RECEIVER"],
         phish_fort_api_key=os.environ["PHISH_FORT_API_KEY"],
         phish_fort_room_id=os.environ["PHISH_FORT_ROOM_ID"],
+        my_email_address=os.environ["MY_EMAIL_ADDRESS"],
     )
 
 
@@ -97,6 +99,7 @@ class Config:
     azdo_org: str
     azdo_de_project: str
     azdo_re_project: str
+    azdo_platforms_parent_url: str
     azdo_pat: str
     cs_ro_client_id: str
     cs_ro_client_secret: str
@@ -120,5 +123,6 @@ class Config:
     qradar_efficacy_chart_receiver: str
     phish_fort_api_key: str
     phish_fort_room_id: str
+    my_email_address: str
 
     webex_api_url: str = "https://webexapis.com/v1/messages"
