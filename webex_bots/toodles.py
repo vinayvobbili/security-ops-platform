@@ -10,16 +10,16 @@ from webex_bot.models.command import Command
 from webex_bot.webex_bot import WebexBot
 from webexpythonsdk import WebexAPI
 from webexpythonsdk.models.cards import (
-    TextBlock, Column, AdaptiveCard, ColumnSet, HorizontalAlignment, ActionSet, ActionStyle
+    Colors, TextBlock, FontWeight, Column, AdaptiveCard, ColumnSet, HorizontalAlignment, ActionSet, ActionStyle
 )
 from webexpythonsdk.models.cards.actions import Submit
 
 import src.components.oncall as oncall
 from config import get_config
+from data.transient.data_maps import azdo_projects, azdo_orgs, azdo_area_paths
 from services import xsoar, azdo
 from services.crowdstrike import CrowdStrikeClient
 from services.xsoar import ListHandler, IncidentHandler
-from src.data_maps import azdo_projects, azdo_orgs
 
 approved_testing_list_name: str = "METCIRT_Approved_Testing"
 approved_testing_master_list_name: str = "METCIRT_Approved_Testing_MASTER"
@@ -760,6 +760,56 @@ TICKET_IMPORT_CARD = AdaptiveCard(
     ]
 )
 
+TUNING_REQUEST_CARD = AdaptiveCard(
+    body=[
+        TextBlock(
+            text="New Tuning Request",
+            wrap=True,
+            horizontalAlignment=HorizontalAlignment.CENTER,
+            weight=FontWeight.BOLDER,
+            color=Colors.ACCENT,
+        ),
+        INPUTS.Text(
+            id="title",
+            placeholder="Placeholder text",
+            label="Title",
+            isRequired=True,
+            errorMessage="Required"
+        ),
+        INPUTS.Text(
+            id="description",
+            placeholder="Placeholder text",
+            label="Description",
+            isMultiline=True,
+            isRequired=True,
+            errorMessage="Required"
+        ),
+        INPUTS.Text(
+            id="tickets",
+            placeholder="Placeholder text",
+            label="X ticket(s)",
+            isRequired=True,
+            errorMessage="Required"
+        ),
+        INPUTS.Text(
+            id="ticket_volume",
+            placeholder="Placeholder text",
+            label="Approx. ticket volume/week",
+            isRequired=True,
+            errorMessage="Required"
+        ),
+        ActionSet(
+            actions=[
+                Submit(
+                    title="Submit",
+                    style=ActionStyle.POSITIVE,
+                    data={"callback_keyword": "tuning_request"}
+                )
+            ],
+        )
+    ]
+)
+
 all_options_card = {
     "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
     "type": "AdaptiveCard",
@@ -883,13 +933,6 @@ all_options_card = {
                         "spacing": "None",
                         "actions": [
                             {
-                                "type": "Action.Submit",
-                                "title": "Show Metrics",
-                                "data": {
-                                    "callback_keyword": "metrics"
-                                }
-                            },
-                            {
                                 "type": "Action.ShowCard",
                                 "title": "IOC Hunt",
                                 "card": IOC_HUNT
@@ -903,6 +946,11 @@ all_options_card = {
                                 "type": "Action.ShowCard",
                                 "title": "Import Ticket",
                                 "card": TICKET_IMPORT_CARD.to_dict()
+                            },
+                            {
+                                "type": "Action.ShowCard",
+                                "title": "Tuning Request",
+                                "card": TUNING_REQUEST_CARD.to_dict()
                             }
                         ]
                     }
@@ -1106,14 +1154,32 @@ class AZDOWorkItem(Command):
     def execute(self, message, attachment_actions, activity):
 
         try:
+            parent_url = None
+            assignee = None
+            area_path = None
             inputs = attachment_actions.inputs
             wit_title = inputs['wit_title']
             wit_type = inputs['wit_type']
             submitter_display_name = activity['actor']['displayName']
-            wit_description = inputs['wit_description'] + f'<br><br>Submitted by <strong>{submitter_display_name}</strong>'
+            wit_description = inputs['wit_description']
             project = inputs['project']
 
-            wit_id = azdo.create_wit(title=wit_title, description=wit_description, type=wit_type, project=project, submitter=submitter_display_name)
+            if project == 'platforms':
+                assignee = CONFIG.my_email_address
+                parent_url = CONFIG.azdo_platforms_parent_url
+            elif project == 're':
+                area_path = azdo_area_paths['re']
+
+            wit_id = azdo.create_wit(
+                title=wit_title,
+                description=wit_description,
+                item_type=wit_type,
+                project=project,
+                submitter=submitter_display_name,
+                assignee=assignee,
+                parent_url=parent_url,
+                area_path=area_path
+            )
             azdo_wit_url = f'https://dev.azure.com/{azdo_orgs.get(project)}/{quote(azdo_projects.get(project))}/_workitems/edit/{wit_id}'
             wit_type = wit_type.replace('%20', ' ')
             return_message = f'A new AZDO {wit_type} has been created \n [{wit_id}]({azdo_wit_url}) - {wit_title}'
@@ -1500,6 +1566,28 @@ class ImportTicket(Command):
         return f'The Prod ticket has been copied to Dev [X#{destination_ticket_number}]({destination_ticket_link})'
 
 
+class CreateTuningRequest(Command):
+    def __init__(self):
+        super().__init__(
+            command_keyword="tuning_request",
+            card=None,
+        )
+
+    def execute(self, message, attachment_actions, activity):
+        title = attachment_actions.inputs['title']
+        description = attachment_actions.inputs['description']
+        tickets = attachment_actions.inputs['tickets']
+        ticket_volume = attachment_actions.inputs['ticket_volume']
+        description += f'<br><br>Sample tickets: {tickets}<br>Approx. ticket volume/week: {ticket_volume}'
+        submitter_display_name = activity['actor']['displayName']
+        project = 'de'
+        area_path = azdo_area_paths['tuning_request']
+
+        tuning_request_id = azdo.create_wit(title=title, description=description, item_type='User Story', project=project, area_path=area_path, submitter=submitter_display_name)
+        tuning_request_url = f'https://dev.azure.com/{azdo_orgs.get(project)}/{quote(azdo_projects.get(project))}/_workitems/edit/{tuning_request_id}'
+        return f"Your tuning request has been submitted! \n [{tuning_request_id}]({tuning_request_url}) - {title}"
+
+
 def main():
     bot = WebexBot(
         CONFIG.webex_bot_access_token_toodles,
@@ -1525,6 +1613,7 @@ def main():
     bot.add_command(AZDOWorkItem())
     bot.add_command(GetAllOptions())
     bot.add_command(ImportTicket())
+    bot.add_command(CreateTuningRequest())
 
     bot.run()
 

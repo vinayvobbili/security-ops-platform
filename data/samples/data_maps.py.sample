@@ -22,14 +22,18 @@ impact_colors = {
     "False Positive": "#90ee90",  # light green
 }
 azdo_projects = {
-    'platforms': 'MetLife-Cyber-Platforms',
-    're': 'MetLife-Cyber-Security',
-    'de': 'Detection-Engineering',
-    'gdr': 'Global Detection and Response Shared'
+    'platforms': '',
+    're': '',
+    'de': '',
+    'gdr': ''
 }
 azdo_orgs = {
-    'platforms': 'MetLife-US',
-    're': 'MetLife-US',
-    'de': 'MetLife-US',
-    'gdr': 'MetLife-US-2'
+    'platforms': '',
+    're': '',
+    'de': '',
+    'gdr': ''
+}
+azdo_area_paths = {
+    're': '',
+    'tuning_request': ''
 }

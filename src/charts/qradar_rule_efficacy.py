@@ -14,7 +14,7 @@ from webexpythonsdk import WebexAPI
 
 from config import get_config
 from services.xsoar import IncidentHandler
-from src.data_maps import impact_colors
+from data.transient.data_maps import impact_colors
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
