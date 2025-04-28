@@ -119,7 +119,7 @@ class Host:
             # Create hosts first
             host_objects = [Host(hostname) for hostname in hostnames]
             # Initialize in parallel with progress tracking
-            for host in tqdm(executor.map(lambda host: host.initialize() or host, host_objects), total=len(host_objects), desc="Initializing hosts..."):
+            for host in tqdm(executor.map(lambda host: host.initialize() or host, host_objects), total=len(host_objects), desc="Initializing hosts"):
                 yield host
 
     def initialize(self) -> None:
