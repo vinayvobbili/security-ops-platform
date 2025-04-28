@@ -1,18 +1,24 @@
-import base64
-import json
 from datetime import datetime, timedelta
 from urllib.parse import quote
 
 import pandas
 import requests
+import webexpythonsdk.models.cards.inputs as INPUTS
+import webexpythonsdk.models.cards.options as OPTIONS
 from pytz import timezone
 from webex_bot.models.command import Command
 from webex_bot.webex_bot import WebexBot
 from webexpythonsdk import WebexAPI
+from webexpythonsdk.models.cards import (
+    Colors, TextBlock, FontWeight, Column, AdaptiveCard, ColumnSet, HorizontalAlignment, ActionSet, ActionStyle
+)
+from webexpythonsdk.models.cards.actions import Submit
 
 import src.components.oncall as oncall
 from config import get_config
-from services import crowdstrike
+from data.transient.data_maps import azdo_projects, azdo_orgs, azdo_area_paths
+from services import xsoar, azdo
+from services.crowdstrike import CrowdStrikeClient
 from services.xsoar import ListHandler, IncidentHandler
 
 approved_testing_list_name: str = "METCIRT_Approved_Testing"
@@ -20,6 +26,8 @@ approved_testing_master_list_name: str = "METCIRT_Approved_Testing_MASTER"
 
 CONFIG = get_config()
 webex_api = WebexAPI(CONFIG.webex_bot_access_token_toodles)
+
+crowdstrike = CrowdStrikeClient()
 
 prod_headers = {
     "authorization": CONFIG.xsoar_prod_auth_key,
@@ -42,6 +50,14 @@ NEW_TICKET_CARD = {
     "version": "1.3",
     "body": [
         {
+            "type": "TextBlock",
+            "text": "New X Ticket",
+            "color": "Accent",
+            "weight": "Bolder",
+            "size": "Medium",
+            "horizontalAlignment": "Center"
+        },
+        {
             "type": "ColumnSet",
             "columns": [
                 {
@@ -58,12 +74,12 @@ NEW_TICKET_CARD = {
                 },
                 {
                     "type": "Column",
-                    "width": 3,
+                    "width": 6,
                     "items": [
                         {
                             "type": "Input.Text",
                             "id": "title",
-                            "placeholder": "New Incident"
+                            "placeholder": ""
                         }
                     ]
                 }
@@ -86,14 +102,159 @@ NEW_TICKET_CARD = {
                 },
                 {
                     "type": "Column",
-                    "width": 3,
+                    "width": 6,
                     "items": [
                         {
                             "type": "Input.Text",
                             "id": "details",
-                            "placeholder": "Something happened here",
+                            "placeholder": "",
                             "isMultiline": True
                         }
+                    ]
+                }
+            ],
+            "spacing": "None"
+        },
+        {
+            "type": "ColumnSet",
+            "columns": [
+                {
+                    "type": "Column",
+                    "width": 1,
+                    "items": [
+                        {
+                            "type": "TextBlock",
+                            "text": "Detection Source",
+                            "wrap": True,
+                            "horizontalAlignment": "left"
+                        }
+                    ]
+                },
+                {
+                    "type": "Column",
+                    "width": 2,
+                    "items": [
+                        {
+                            "type": "Input.ChoiceSet",
+                            "id": "detection_source",
+                            "choices": [
+                                {
+                                    "title": "Abnormal Security",
+                                    "value": "Abnormal Security"
+                                },
+                                {
+                                    "title": "Akamai",
+                                    "value": "Akamai"
+                                },
+                                {
+                                    "title": "AppDynamics",
+                                    "value": "AppDynamics"
+                                },
+                                {
+                                    "title": "Area1",
+                                    "value": "Area1"
+                                },
+                                {
+                                    "title": "Cisco AMP",
+                                    "value": "Cisco AMP"
+                                },
+                                {
+                                    "title": "CrowdStrike Falcon",
+                                    "value": "CrowdStrike Falcon"
+                                },
+                                {
+                                    "title": "CrowdStrike Falcon IDP",
+                                    "value": "CrowdStrike Falcon IDP"
+                                },
+                                {
+                                    "title": "Customer Reported",
+                                    "value": "Customer Reported"
+                                },
+                                {
+                                    "title": "Cyberbit",
+                                    "value": "Cyberbit"
+                                },
+                                {
+                                    "title": "Employee Reported",
+                                    "value": "Employee Reported"
+                                },
+                                {
+                                    "title": "Flashpoint",
+                                    "value": "Flashpoint"
+                                },
+                                {
+                                    "title": "ForcePoint",
+                                    "value": "ForcePoint"
+                                },
+                                {
+                                    "title": "Illusive",
+                                    "value": "Illusive"
+                                },
+                                {
+                                    "title": "Infoblox",
+                                    "value": "Infoblox"
+                                },
+                                {
+                                    "title": "Intel471",
+                                    "value": "Intel471"
+                                },
+                                {
+                                    "title": "IronPort",
+                                    "value": "IronPort"
+                                },
+                                {
+                                    "title": "Lumen",
+                                    "value": "Lumen"
+                                },
+                                {
+                                    "title": "PaloAlto",
+                                    "value": "PaloAlto"
+                                },
+                                {
+                                    "title": "Prisma Cloud",
+                                    "value": "Prisma Cloud"
+                                },
+                                {
+                                    "title": "Recorded Future",
+                                    "value": "Recorded Future"
+                                },
+                                {
+                                    "title": "Rubrik",
+                                    "value": "Rubrik"
+                                },
+                                {
+                                    "title": "Tanium",
+                                    "value": "Tanium"
+                                },
+                                {
+                                    "title": "Third Party",
+                                    "value": "Third Party"
+                                },
+                                {
+                                    "title": "Threat Hunt",
+                                    "value": "Threat Hunt"
+                                },
+                                {
+                                    "title": "Vectra MDR",
+                                    "value": "Vectra MDR"
+                                },
+                                {
+                                    "title": "ZeroFox",
+                                    "value": "ZeroFox"
+                                },
+                                {
+                                    "title": "ZScaler",
+                                    "value": "ZScaler"
+                                },
+                                {
+                                    "title": "Other",
+                                    "value": "Other"
+                                }
+                            ],
+                            "placeholder": "Select an option",
+                            "isRequired": True,
+                            "errorMessage": "Required"
+                        },
                     ]
                 }
             ],
@@ -559,6 +720,96 @@ APPROVED_TESTING_CARD = {
     ]
 }
 
+TICKET_IMPORT_CARD = AdaptiveCard(
+    body=[
+        ColumnSet(
+            columns=[
+                Column(
+                    items=[
+                        TextBlock(
+                            text="Prod ticket#",
+                            horizontalAlignment=HorizontalAlignment.RIGHT,
+                        )
+                    ],
+                    width="auto",
+                    verticalContentAlignment=OPTIONS.VerticalContentAlignment.CENTER
+                ),
+                Column(
+                    items=[
+                        INPUTS.Text(
+                            id="prod_ticket_number",
+                            placeholder="Enter prod ticket number",
+                            isRequired=True,
+                            errorMessage='Required'
+                        )
+                    ],
+                    width="stretch",
+                    verticalContentAlignment=OPTIONS.VerticalContentAlignment.CENTER
+                )
+            ]
+        ),
+        ActionSet(
+            actions=[
+                Submit(
+                    title="Submit",
+                    style=ActionStyle.POSITIVE,
+                    data={"callback_keyword": "import"}
+                )
+            ]
+        )
+    ]
+)
+
+TUNING_REQUEST_CARD = AdaptiveCard(
+    body=[
+        TextBlock(
+            text="New Tuning Request",
+            wrap=True,
+            horizontalAlignment=HorizontalAlignment.CENTER,
+            weight=FontWeight.BOLDER,
+            color=Colors.ACCENT,
+        ),
+        INPUTS.Text(
+            id="title",
+            placeholder="Placeholder text",
+            label="Title",
+            isRequired=True,
+            errorMessage="Required"
+        ),
+        INPUTS.Text(
+            id="description",
+            placeholder="Placeholder text",
+            label="Description",
+            isMultiline=True,
+            isRequired=True,
+            errorMessage="Required"
+        ),
+        INPUTS.Text(
+            id="tickets",
+            placeholder="Placeholder text",
+            label="X ticket(s)",
+            isRequired=True,
+            errorMessage="Required"
+        ),
+        INPUTS.Text(
+            id="ticket_volume",
+            placeholder="Placeholder text",
+            label="Approx. ticket volume/week",
+            isRequired=True,
+            errorMessage="Required"
+        ),
+        ActionSet(
+            actions=[
+                Submit(
+                    title="Submit",
+                    style=ActionStyle.POSITIVE,
+                    data={"callback_keyword": "tuning_request"}
+                )
+            ],
+        )
+    ]
+)
+
 all_options_card = {
     "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
     "type": "AdaptiveCard",
@@ -682,13 +933,6 @@ all_options_card = {
                         "spacing": "None",
                         "actions": [
                             {
-                                "type": "Action.Submit",
-                                "title": "Show Metrics",
-                                "data": {
-                                    "callback_keyword": "metrics"
-                                }
-                            },
-                            {
                                 "type": "Action.ShowCard",
                                 "title": "IOC Hunt",
                                 "card": IOC_HUNT
@@ -697,6 +941,16 @@ all_options_card = {
                                 "type": "Action.ShowCard",
                                 "title": "Threat Hunt",
                                 "card": THREAT_HUNT
+                            },
+                            {
+                                "type": "Action.ShowCard",
+                                "title": "Import Ticket",
+                                "card": TICKET_IMPORT_CARD.to_dict()
+                            },
+                            {
+                                "type": "Action.ShowCard",
+                                "title": "Tuning Request",
+                                "card": TUNING_REQUEST_CARD.to_dict()
                             }
                         ]
                     }
@@ -804,13 +1058,18 @@ class CreateXSOARTicket(Command):
 
         incident = {
             'name': attachment_actions.inputs['title'].strip(),
-            'details': attachment_actions.inputs['details'].strip() + f"\nSubmitted by: {activity['actor']['emailAddress']}"
+            'details': attachment_actions.inputs['details'].strip() + f"\nSubmitted by: {activity['actor']['emailAddress']}",
+            'CustomFields': {
+                'detectionsource': attachment_actions.inputs['detection_source'],
+                'isusercontacted': False,
+                'securitycategory': 'CAT-5: Scans/Probes/Attempted Access'
+            }
         }
         result = incident_handler.create(incident)
-        new_incident_id = result[0].get('id')
-        incident_url = CONFIG.xsoar_prod_ui_base_url + new_incident_id
+        new_incident_id = result.get('id')
+        incident_url = CONFIG.xsoar_prod_ui_base_url + '/Custom/caseinfoid/' + new_incident_id
 
-        return f"Ticket [#{new_incident_id}]({incident_url}) has been created in XSOAR."
+        return f"Ticket [#{new_incident_id}]({incident_url}) has been created in XSOAR Prod."
 
 
 class IOC(Command):
@@ -881,9 +1140,10 @@ class ThreatHunt(Command):
         person_id = attachment_actions.personId
 
         announce_new_threat_hunt(ticket_no, ticket_title, incident_url, person_id)
+        return None
 
 
-class AZDOWorkItem(Command):
+class CreateAZDOWorkItem(Command):
     def __init__(self):
         super().__init__(
             command_keyword="azdo_wit",
@@ -892,94 +1152,42 @@ class AZDOWorkItem(Command):
         )
 
     def execute(self, message, attachment_actions, activity):
-        azdo_projects = {
-            'platforms': 'Acme-Cyber-Platforms',
-            're': 'Acme-Cyber-Security',
-            'de': 'Detection-Engineering',
-            'gdr': 'Global Detection and Response Shared'
-        }
-        azdo_orgs = {
-            'platforms': 'Acme-US',
-            're': 'Acme-US',
-            'de': 'Acme-US',
-            'gdr': 'Acme-US-2'
-        }
+
         try:
+            parent_url = None
+            assignee = None
+            area_path = None
             inputs = attachment_actions.inputs
             wit_title = inputs['wit_title']
             wit_type = inputs['wit_type']
             submitter_display_name = activity['actor']['displayName']
-            wit_description = inputs['wit_description'] + f'<br><br>Submitted by <strong>{submitter_display_name}</strong>'
+            wit_description = inputs['wit_description']
             project = inputs['project']
 
-            org = azdo_orgs[project]
-            project_name = azdo_projects.get(project)
-            url = f"https://dev.azure.com/{org}/{project_name}/_apis/wit/workitems/${wit_type}?api-version=7.0"
-
-            payload = [
-                {
-                    "op": "add",
-                    "path": "/fields/System.Title",
-                    "value": wit_title
-                },
-                {
-                    "op": "add",
-                    "path": "/fields/Microsoft.VSTS.TCM.ReproSteps" if wit_type == 'Bug' else "/fields/System.Description",
-                    "value": wit_description
-                }
-            ]
-
             if project == 'platforms':
-                payload.append({
-                    "op": "add",
-                    "path": "/fields/System.AssignedTo",
-                    "value": "Vinay Vobbilichetty"
-                })
-                payload.append({
-                    "op": "add",
-                    "path": "/relations/-",
-                    "value": {
-                        "rel": "System.LinkTypes.Hierarchy-Reverse",
-                        "url": "https://dev.azure.com/Acme-US/Acme-Cyber-Platforms/_workitems/edit/203352"
-                    }
-                })
+                assignee = CONFIG.my_email_address
+                parent_url = CONFIG.azdo_platforms_parent_url
             elif project == 're':
-                payload.append({
-                    "op": "add",
-                    "path": "/fields/System.AreaPath",
-                    "value": r"Acme-Cyber-Security\METCIRT\METCIRT Tier III"
-                })
-                payload.append({
-                    "op": "add",
-                    "path": "/fields/Microsoft.VSTS.Common.StackRank",
-                    "value": "1"
-                })
+                area_path = azdo_area_paths['re']
 
-            metcirt_xsoar = list_handler.get_list_data_by_name('METCIRT XSOAR')
-            api_token = metcirt_xsoar['AZDO_PAT']['us-2' if project == 'gdr' else 'us']
-            api_key = base64.b64encode(b':' + api_token.encode('utf-8')).decode('utf-8')
-
-            headers = {
-                'Content-Type': 'application/json-patch+json',
-                'Authorization': f'Basic {api_key}'
-            }
-
-            response = requests.request("POST", url, headers=headers, json=payload)
-            wit_id = json.loads(response.text).get('id')
+            wit_id = azdo.create_wit(
+                title=wit_title,
+                description=wit_description,
+                item_type=wit_type,
+                project=project,
+                submitter=submitter_display_name,
+                assignee=assignee,
+                parent_url=parent_url,
+                area_path=area_path
+            )
             azdo_wit_url = f'https://dev.azure.com/{azdo_orgs.get(project)}/{quote(azdo_projects.get(project))}/_workitems/edit/{wit_id}'
             wit_type = wit_type.replace('%20', ' ')
             return_message = f'A new AZDO {wit_type} has been created \n [{wit_id}]({azdo_wit_url}) - {wit_title}'
 
-            webex_data = list_handler.get_list_data_by_name('METCIRT Webex')
-            headers = {
-                'Content-Type': 'application/json',
-                'Authorization': f"Bearer {CONFIG.webex_bot_access_token_toodles}"
-            }
-            payload_json = {
-                'roomId': webex_data.get("channels").get("metcirt_automation" if project == 'platforms' else "response_engineering"),
-                'markdown': f"{submitter_display_name} has created a new AZDO {wit_type} \n [{wit_id}]({azdo_wit_url}) - {wit_title}"
-            }
-            requests.post(webex_data.get('api_url'), headers=headers, json=payload_json)
+            webex_api.messages.create(
+                roomId=CONFIG.webex_room_id_automation_engineering,
+                markdown=f"{submitter_display_name} has created a new AZDO {wit_type} \n [{wit_id}]({azdo_wit_url}) - {wit_title}"
+            )
 
             return return_message
         except Exception as e:
@@ -1328,7 +1536,7 @@ class ContainmentStatusCS(Command):
             return "Please enter a host name and try again"
 
         try:
-            return f'The containment status of {host_name_cs} in CS is {crowdstrike.get_device_status_api(host_name_cs)}'
+            return f'The containment status of {host_name_cs} in CS is {crowdstrike.get_device_status(host_name_cs)}'
         except Exception as e:
             return f'There seems to be an issue with finding the host you entered. Please make sure the host is valid. Error: {str(e)}'
 
@@ -1343,6 +1551,41 @@ class GetAllOptions(Command):
 
     def execute(self, message, attachment_actions, activity):
         pass
+
+
+class ImportTicket(Command):
+    def __init__(self):
+        super().__init__(
+            command_keyword="import",
+            card=TICKET_IMPORT_CARD.to_dict(),
+        )
+
+    def execute(self, message, attachment_actions, activity):
+        prod_ticket_number = attachment_actions.inputs['prod_ticket_number']
+        destination_ticket_number, destination_ticket_link = xsoar.import_ticket(prod_ticket_number)
+        return f'The Prod ticket has been copied to Dev [X#{destination_ticket_number}]({destination_ticket_link})'
+
+
+class CreateTuningRequest(Command):
+    def __init__(self):
+        super().__init__(
+            command_keyword="tuning_request",
+            card=TUNING_REQUEST_CARD.to_dict(),
+        )
+
+    def execute(self, message, attachment_actions, activity):
+        title = attachment_actions.inputs['title']
+        description = attachment_actions.inputs['description']
+        tickets = attachment_actions.inputs['tickets']
+        ticket_volume = attachment_actions.inputs['ticket_volume']
+        description += f'<br><br>Sample tickets: {tickets}<br>Approx. ticket volume/week: {ticket_volume}'
+        submitter_display_name = activity['actor']['displayName']
+        project = 'de'
+        area_path = azdo_area_paths['tuning_request']
+
+        tuning_request_id = azdo.create_wit(title=title, description=description, item_type='User Story', project=project, area_path=area_path, submitter=submitter_display_name)
+        tuning_request_url = f'https://dev.azure.com/{azdo_orgs.get(project)}/{quote(azdo_projects.get(project))}/_workitems/edit/{tuning_request_id}'
+        return f"Your tuning request has been submitted! \n [{tuning_request_id}]({tuning_request_url}) - {title}"
 
 
 def main():
@@ -1367,8 +1610,10 @@ def main():
     bot.add_command(URLs())
     bot.add_command(ThreatHuntCard())
     bot.add_command(ThreatHunt())
-    bot.add_command(AZDOWorkItem())
+    bot.add_command(CreateAZDOWorkItem())
     bot.add_command(GetAllOptions())
+    bot.add_command(ImportTicket())
+    bot.add_command(CreateTuningRequest())
 
     bot.run()
 

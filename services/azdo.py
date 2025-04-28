@@ -147,7 +147,7 @@ def create_wit(title, item_type, description, project, submitter, area_path=None
             {
                 'op': 'add',
                 'path': '/fields/System.AreaPath',
-                'value': f'{project}\{area_path}'
+                'value': area_path
             }
         )
 
@@ -184,6 +184,8 @@ def create_wit(title, item_type, description, project, submitter, area_path=None
     }
 
     response = requests.request("POST", url, headers=headers, json=payload)
+    response.raise_for_status()
+    print(response.text)
     return json.loads(response.text).get('id')
 
 
