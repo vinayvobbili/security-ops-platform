@@ -771,14 +771,12 @@ TUNING_REQUEST_CARD = AdaptiveCard(
         ),
         INPUTS.Text(
             id="title",
-            placeholder="Placeholder text",
             label="Title",
             isRequired=True,
             errorMessage="Required"
         ),
         INPUTS.Text(
             id="description",
-            placeholder="Placeholder text",
             label="Description",
             isMultiline=True,
             isRequired=True,
@@ -786,15 +784,15 @@ TUNING_REQUEST_CARD = AdaptiveCard(
         ),
         INPUTS.Text(
             id="tickets",
-            placeholder="Placeholder text",
+            placeholder="A few recent X tix created by this rule!",
             label="X ticket(s)",
             isRequired=True,
             errorMessage="Required"
         ),
         INPUTS.Text(
             id="ticket_volume",
-            placeholder="Placeholder text",
-            label="Approx. ticket volume/week",
+            placeholder="Example: 10 tickets/week",
+            label="Approx. Ticket Volume",
             isRequired=True,
             errorMessage="Required"
         ),
@@ -946,11 +944,6 @@ all_options_card = {
                                 "type": "Action.ShowCard",
                                 "title": "Import Ticket",
                                 "card": TICKET_IMPORT_CARD.to_dict()
-                            },
-                            {
-                                "type": "Action.ShowCard",
-                                "title": "Tuning Request",
-                                "card": TUNING_REQUEST_CARD.to_dict()
                             }
                         ]
                     }
@@ -1143,7 +1136,7 @@ class ThreatHunt(Command):
         return None
 
 
-class AZDOWorkItem(Command):
+class CreateAZDOWorkItem(Command):
     def __init__(self):
         super().__init__(
             command_keyword="azdo_wit",
@@ -1569,8 +1562,9 @@ class ImportTicket(Command):
 class CreateTuningRequest(Command):
     def __init__(self):
         super().__init__(
+            help_message="Create Tuning Request",
             command_keyword="tuning_request",
-            card=None,
+            card=TUNING_REQUEST_CARD.to_dict(),
         )
 
     def execute(self, message, attachment_actions, activity):
@@ -1578,7 +1572,7 @@ class CreateTuningRequest(Command):
         description = attachment_actions.inputs['description']
         tickets = attachment_actions.inputs['tickets']
         ticket_volume = attachment_actions.inputs['ticket_volume']
-        description += f'<br><br>Sample tickets: {tickets}<br>Approx. ticket volume/week: {ticket_volume}'
+        description += f'<br><br>Sample tickets: {tickets}<br>Approx. ticket volume: {ticket_volume}'
         submitter_display_name = activity['actor']['displayName']
         project = 'de'
         area_path = azdo_area_paths['tuning_request']
@@ -1610,7 +1604,7 @@ def main():
     bot.add_command(URLs())
     bot.add_command(ThreatHuntCard())
     bot.add_command(ThreatHunt())
-    bot.add_command(AZDOWorkItem())
+    bot.add_command(CreateAZDOWorkItem())
     bot.add_command(GetAllOptions())
     bot.add_command(ImportTicket())
     bot.add_command(CreateTuningRequest())
