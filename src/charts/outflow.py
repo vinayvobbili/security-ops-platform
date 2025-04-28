@@ -193,11 +193,10 @@ def create_graph(tickets):
 
 def make_chart() -> None:
     # Calculate fresh values EACH TIME the command is run
-    et = pytz.timezone("US/Eastern")
-    yesterday_start = datetime.now(et).replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=1)
+    yesterday_start = datetime.now(eastern).replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=1)
     yesterday_end = yesterday_start + timedelta(days=1)
-    yesterday_start_utc = yesterday_start.astimezone(pytz.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
-    yesterday_end_utc = yesterday_end.astimezone(pytz.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+    yesterday_start_utc = yesterday_start.astimezone(eastern).strftime('%Y-%m-%dT%H:%M:%SZ')
+    yesterday_end_utc = yesterday_end.astimezone(eastern).strftime('%Y-%m-%dT%H:%M:%SZ')
 
     query = QUERY_TEMPLATE.format(ticket_type_prefix=config.ticket_type_prefix, start=yesterday_start_utc, end=yesterday_end_utc)
     tickets = IncidentHandler().get_tickets(query=query)

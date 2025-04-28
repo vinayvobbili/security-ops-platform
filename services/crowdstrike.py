@@ -42,6 +42,48 @@ class CrowdStrikeClient:
             print(f"Error getting access token: {e}")
             return ""
 
+    def get_device_ids_batch(self, hostnames, batch_size=100):
+        """
+        Get device IDs for multiple hostnames in batches to reduce API calls.
+
+        Args:
+            hostnames: List of hostnames to query
+            batch_size: Number of hostnames to include in each API call
+
+        Returns:
+            Dictionary mapping hostnames to their device IDs
+        """
+        results = {}
+        for i in range(0, len(hostnames), batch_size):
+            batch = hostnames[i:i + batch_size]
+            # Create filter with all hostnames in this batch
+            host_filter = f"hostname:['{'', ''.join(batch)}']"
+
+            try:
+                response = self.hosts_client.query_devices_by_filter(
+                    filter=host_filter,
+                    limit=len(batch)
+                )
+
+                if response.get("status_code") == 200:
+                    device_ids = response["body"].get("resources", [])
+
+                    # Get full details to map IDs to hostnames
+                    if device_ids:
+                        details = self.hosts_client.get_device_details(ids=device_ids)
+                        if details.get("status_code") == 200:
+                            for device in details["body"].get("resources", []):
+                                hostname = device.get("hostname")
+                                device_id = device.get("device_id")
+                                if hostname and device_id:
+                                    results[hostname] = device_id
+                else:
+                    print(f"Error in batch query: {response.get('body', {}).get('errors')}")
+            except Exception as e:
+                print(f"Exception in batch query: {e}")
+
+        return results
+
     def get_device_id(self, hostname: str) -> Optional[str]:
         """
         Retrieve the device ID for a given hostname.
