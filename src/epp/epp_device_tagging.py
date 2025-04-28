@@ -100,9 +100,6 @@ class Host:
     """
     Represents a host with all its relevant attributes and tagging information.
     """
-    __slots__ = ('name', 'device_id', 'country', 'region', 'category', 'environment',
-                 'current_crowd_strike_tags', 'new_crowd_strike_tag', 'was_country_guessed',
-                 'life_cycle_status', 'status_message')
     name: str
     device_id: str = ""
     country: str = ""
@@ -553,6 +550,7 @@ def main() -> None:
     successfully_tagged_hosts = TagManager.apply_tags(hosts)
     apply_tag_end = time.time()
     timings['apply_tag_duration'] = apply_tag_end - apply_tag_start
+    print(f'{successfully_tagged_hosts=}')
 
     # Generate a timing report
     end_time = time.time()
