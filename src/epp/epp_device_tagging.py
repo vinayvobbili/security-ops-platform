@@ -19,6 +19,7 @@ import json
 import math
 import time
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
@@ -99,6 +100,9 @@ class Host:
     """
     Represents a host with all its relevant attributes and tagging information.
     """
+    __slots__ = ('name', 'device_id', 'country', 'region', 'category', 'environment',
+                 'current_crowd_strike_tags', 'new_crowd_strike_tag', 'was_country_guessed',
+                 'life_cycle_status', 'status_message')
     name: str
     device_id: str = ""
     country: str = ""
@@ -110,6 +114,16 @@ class Host:
     was_country_guessed: bool = False
     life_cycle_status: str = ""
     status_message: str = ""
+
+    @staticmethod
+    def initialize_hosts_parallel(hostnames, max_workers=10):
+        """Initialize hosts in parallel and yield them one by one."""
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            # Create hosts first
+            host_objects = [Host(hostname) for hostname in hostnames]
+            # Initialize in parallel with progress tracking
+            for host in tqdm(executor.map(lambda host: host.initialize() or host, host_objects), total=len(host_objects), desc="Initializing hosts..."):
+                yield host
 
     def initialize(self) -> None:
         """Initialize all host data."""
@@ -146,7 +160,7 @@ class Host:
                 category = device_resources[0].get('product_type_desc', '').lower()
                 if category == 'workstation':
                     self.category = HostCategory.WORKSTATION
-                elif category == 'server':
+                elif category in ('server', 'domain controller'):
                     self.category = HostCategory.SERVER
                 else:
                     self.status_message += f" Unknown host category: {category}."
@@ -514,11 +528,8 @@ def main() -> None:
         print("No hostnames found in input file. Exiting.")
         return
 
-    hosts = []
-    for hostname in tqdm(hostnames, desc="Initializing hosts"):
-        host = Host(hostname)
-        host.initialize()
-        hosts.append(host)
+    # Use parallel initialization
+    hosts = list(Host.initialize_hosts_parallel(hostnames))
 
     fetch_end = time.time()
     timings['fetch_duration'] = fetch_end - fetch_start
