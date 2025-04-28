@@ -170,7 +170,7 @@ def add_trend_line(ax, all_dates, summary_priority):
         ax.plot(trend_x, moving_avg, 'k--', alpha=0.6, label='Trend (3-day avg)')
 
 
-def generate_threat_tipper_chart(tippers):
+def generate_tuning_requests_chart(tippers):
     # Process data
     df = process_tipper_data(tippers)
 
@@ -309,8 +309,8 @@ def generate_threat_tipper_chart(tippers):
 
 def make_chart():
     try:
-        threat_tippers = azdo.get_stories_from_area_path(azdo_area_paths['threat_hunting'])  # the area path is correct even though it says Threat Hunting
-        generate_threat_tipper_chart(threat_tippers)
+        tuning_requests = azdo.get_stories_from_area_path(azdo_area_paths['tuning_requests'])  # the area path is correct even though it says Threat Hunting
+        generate_tuning_requests_chart(tuning_requests)
     except Exception as e:
         logging.error(f"An error occurred while generating the chart: {e}")
 

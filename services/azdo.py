@@ -192,7 +192,9 @@ def create_wit(title, item_type, description, project, submitter, area_path=None
 def main():
     # Example usage
     # get_stories_from_area_path("Detection-Engineering\\DE Rules\\Threat Hunting")
+    stories = get_stories_from_area_path("Detection-Engineering\\Detection Engineering\\Tuning")
     # get_tuning_requests_submitted_by_last_shift()
+    '''
     print(create_wit(
         title="Sample Work Item",
         item_type="Task",
@@ -200,6 +202,8 @@ def main():
         project="platforms",
         submitter="Test User"
     ))
+    '''
+    print(stories)
 
 
 if __name__ in ('__main__', '__builtin__', 'builtins'):
