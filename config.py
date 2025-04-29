@@ -46,6 +46,8 @@ def get_config():
         cs_host_write_client_secret=os.environ["CROWD_STRIKE_HOST_WRITE_CLIENT_SECRET"],
         cs_rtr_client_id=os.environ["CROWD_STRIKE_RTR_CLIENT_ID"],
         cs_rtr_client_secret=os.environ["CROWD_STRIKE_RTR_CLIENT_SECRET"],
+        cisco_amp_client_id=os.environ["CISCO_AMP_CLIENT_ID"],
+        cisco_amp_client_secret=os.environ["CISCO_AMP_CLIENT_SECRET"],
         webex_host_announcements_room_id=os.environ["WEBEX_HOST_ANNOUNCEMENTS_ROOM_ID"],
         triage_timer=os.environ["TRIAGE_TIMER"],
         lessons_learned_time=os.environ["LESSONS_LEARNED_TIME"],
@@ -107,6 +109,8 @@ class Config:
     cs_host_write_client_secret: str
     cs_rtr_client_id: str
     cs_rtr_client_secret: str
+    cisco_amp_client_id: str
+    cisco_amp_client_secret: str
     webex_host_announcements_room_id: str
     triage_timer: str
     lessons_learned_time: str
