@@ -3,10 +3,6 @@ from typing import Optional, Dict, Any
 
 import requests
 
-from config import get_config
-
-CONFIG = get_config()
-
 
 class CiscoSecureEndpointClient:
     def __init__(self, client_id: str, api_key: str, base_url: str = "https://api.amp.cisco.com/v1", token_url: str = "https://api.amp.cisco.com/v3/access_token"):
@@ -27,7 +23,19 @@ class CiscoSecureEndpointClient:
             "Accept": "application/json",
             "Content-Type": "application/json"
         }
+        self._log_public_ip()
         self._authenticate()
+
+    def _log_public_ip(self) -> None:
+        """
+        Log the current public IP address for debugging.
+        """
+        try:
+            response = requests.get("https://api.ipify.org")
+            response.raise_for_status()
+            print(f"Current public IP: {response.text}")
+        except requests.exceptions.RequestException as err:
+            print(f"Failed to get public IP: {err}")
 
     def _authenticate(self) -> None:
         """
@@ -52,6 +60,11 @@ class CiscoSecureEndpointClient:
             "Accept": "application/json"
         }
         data = {"grant_type": "client_credentials"}
+
+        print(f"Requesting token from: {self.token_url}")
+        print(f"Headers: {headers}")
+        print(f"Data: {data}")
+        print(f"Auth: ({self.client_id}, [redacted])")
 
         try:
             response = requests.post(self.token_url, headers=headers, auth=auth, data=data)
@@ -122,16 +135,17 @@ class CiscoSecureEndpointClient:
 
 def main():
     # Replace with your actual Client ID and API Key
-    CLIENT_ID = CONFIG.cisco_amp_client_id
-    API_KEY = CONFIG.cisco_amp_client_secret
+    CLIENT_ID = "your_client_id_here"
+    API_KEY = "your_api_key_here"
 
     # Initialize the client
     try:
         client = CiscoSecureEndpointClient(
             client_id=CLIENT_ID,
             api_key=API_KEY,
-            token_url="https://visibility.amp.cisco.com/iroh/oauth2/token"  # Use for SecureX
-            # token_url="https://api.amp.cisco.com/v3/access_token"  # Uncomment for Secure Endpoint
+            token_url="https://visibility.amp.cisco.com/iroh/oauth2/token",  # Use for SecureX
+            # token_url="https://api.amp.cisco.com/v3/access_token",  # Uncomment for Secure Endpoint
+            # base_url="https://api.eu.amp.cisco.com/v1"  # Example for EU region
         )
     except ValueError as e:
         print(e)
