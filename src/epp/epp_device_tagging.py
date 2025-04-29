@@ -15,8 +15,13 @@ Key functionalities:
 The script also includes utility functions for parsing timestamps, formatting durations, writing results to an Excel file, and sending reports via Webex.
 """
 
+import argparse
+import cProfile
+import functools
+import io
 import json
 import math
+import pstats
 import time
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
@@ -24,7 +29,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Optional, List, Union, Dict, Set
+from typing import Optional, List, Union, Dict, Set, Callable, TypeVar, cast, Any
 
 import openpyxl
 from falconpy import OAuth2, Hosts, RealTimeResponse
@@ -40,6 +45,7 @@ from services.service_now import ServiceNowClient
 config = get_config()
 
 ROOT_DIRECTORY = Path(__file__).parent.parent
+PROFILE_OUTPUT_DIR = ROOT_DIRECTORY / "profiles"
 
 # Constants
 DATA_DIR = Path("../../data")
@@ -47,6 +53,9 @@ TRANSIENT_DIR = DATA_DIR / "transient"
 REGIONS_FILE = DATA_DIR / "regions_by_country.json"
 COUNTRIES_FILE = DATA_DIR / "countries_by_code.json"
 INPUT_FILE = TRANSIENT_DIR / 'epp_device_tagging' / "Device Tagging input hosts.xlsx"
+
+# Type variable for decorator
+F = TypeVar('F', bound=Callable[..., Any])
 
 # Workstation ring distribution percentages
 RING_1_PERCENT = 0.1
@@ -89,6 +98,45 @@ service_now = ServiceNowClient(
 crowdstrike = CrowdStrikeClient()
 
 
+def benchmark(func: F) -> F:
+    """Decorator to measure function execution time."""
+
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        start_time = time.time()
+        result = func(*args, **kwargs)
+        end_time = time.time()
+        elapsed_time = end_time - start_time
+        print(f"BENCHMARK: {func.__name__} executed in {elapsed_time:.4f} seconds")
+        return result
+
+    return cast(F, wrapper)
+
+
+def run_profiler(func: Callable, *args, **kwargs) -> Any:
+    """Run the cProfile profiler on a function and save results."""
+    PROFILE_OUTPUT_DIR.mkdir(exist_ok=True, parents=True)
+    profile_path = PROFILE_OUTPUT_DIR / f"{func.__name__}_{int(time.time())}.prof"
+
+    # Run the profiler
+    profiler = cProfile.Profile()
+    profiler.enable()
+    result = func(*args, **kwargs)
+    profiler.disable()
+
+    # Save full profile to file
+    profiler.dump_stats(str(profile_path))
+    print(f"Saved profile to {profile_path}")
+
+    # Print summary to console
+    s = io.StringIO()
+    ps = pstats.Stats(profiler, stream=s).sort_stats('cumulative')
+    ps.print_stats(20)  # Print top 20 time-consuming functions
+    print(f"Profile summary for {func.__name__}:\n{s.getvalue()}")
+
+    return result
+
+
 class HostCategory(Enum):
     """Enumeration of possible host categories."""
     WORKSTATION = "Workstation"
@@ -113,6 +161,7 @@ class Host:
     status_message: str = ""
 
     @staticmethod
+    @benchmark
     def initialize_hosts_parallel(hostnames, max_workers=10):
         """Initialize hosts in parallel and yield them one by one."""
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
@@ -239,6 +288,7 @@ class TagManager:
     """Manager class for handling host tags."""
 
     @staticmethod
+    @benchmark
     def generate_tags(hosts: List[Host]) -> None:
         """Assign rings to hosts based on predefined distribution."""
         # Filter hosts to only include those without existing ring tags
@@ -333,6 +383,7 @@ class TagManager:
             return environment.lower().strip()
 
     @staticmethod
+    @benchmark
     def apply_tags(hosts: List[Host]) -> List[Host]:
         """Apply tags to hosts and update their status."""
         successfully_tagged = []
@@ -369,6 +420,7 @@ class FileHandler:
     """Class for handling file operations."""
 
     @staticmethod
+    @benchmark
     def get_hostnames(input_file=INPUT_FILE) -> List[str]:
         """
         Retrieves hostnames from an Excel file.
@@ -393,6 +445,7 @@ class FileHandler:
             return []
 
     @staticmethod
+    @benchmark
     def write_results_to_file(hosts: List[Host]) -> str:
         """
         Writes the results to a new Excel sheet with timestamps.
@@ -486,6 +539,7 @@ Timing:
         """
 
     @staticmethod
+    @benchmark
     def send_report(output_filename: str, time_report: str) -> bool:
         """Send a report via Webex with the result file attached."""
         try:
@@ -511,12 +565,22 @@ def parse_timestamp(date_str: Optional[str]) -> Optional[datetime]:
         return None
 
 
-def main() -> None:
-    """Main execution function."""
-    start_time = time.time()
-    timings = {}
-    stats = {}
+def parse_args():
+    """Parse command-line arguments for profiling options."""
+    parser = argparse.ArgumentParser(description="EPP Device Tagging")
+    parser.add_argument("--profile", action="store_true", help="Enable profiling")
+    parser.add_argument("--profile-function", type=str, choices=[
+        "initialize_hosts_parallel",
+        "generate_tags",
+        "apply_tags",
+        "all"
+    ], default="all", help="Function to profile")
+    return parser.parse_args()
 
+
+@benchmark
+def run_workflow():
+    """Main execution workflow without profiling."""
     # Fetch and initialize hosts
     fetch_start = time.time()
     hostnames = FileHandler.get_hostnames()
@@ -529,7 +593,7 @@ def main() -> None:
     hosts = list(Host.initialize_hosts_parallel(hostnames))
 
     fetch_end = time.time()
-    timings['fetch_duration'] = fetch_end - fetch_start
+    timings = {'fetch_duration': fetch_end - fetch_start}
 
     # Generate tags
     generate_tag_start = time.time()
@@ -538,9 +602,11 @@ def main() -> None:
     timings['generate_tag_duration'] = generate_tag_end - generate_tag_start
 
     # Filter statistics
-    stats['total_hosts'] = len(hosts)
-    stats['hosts_with_device_id'] = sum(1 for host in hosts if host.device_id)
-    stats['hosts_with_tags'] = sum(1 for host in hosts if host.new_crowd_strike_tag)
+    stats = {
+        'total_hosts': len(hosts),
+        'hosts_with_device_id': sum(1 for host in hosts if host.device_id),
+        'hosts_with_tags': sum(1 for host in hosts if host.new_crowd_strike_tag)
+    }
 
     # Write results before applying tags (for documentation)
     output_filename = FileHandler.write_results_to_file(hosts)
@@ -550,12 +616,10 @@ def main() -> None:
     successfully_tagged_hosts = TagManager.apply_tags(hosts)
     apply_tag_end = time.time()
     timings['apply_tag_duration'] = apply_tag_end - apply_tag_start
-    print(f'{successfully_tagged_hosts=}')
+    print(f'Successfully tagged {len(successfully_tagged_hosts)} hosts')
 
     # Generate a timing report
-    end_time = time.time()
-    timings['total_duration'] = end_time - start_time
-
+    timings['total_duration'] = time.time() - fetch_start
     time_report = ReportHandler.generate_time_report(timings, stats)
 
     send_report_success = ReportHandler.send_report(output_filename, time_report)
@@ -565,6 +629,40 @@ def main() -> None:
         print("Failed to send report to Webex")
 
     print(time_report)
+
+
+def main() -> None:
+    """Main execution function with profiling options."""
+    try:
+        print("Starting EPP Device Tagging")
+        args = parse_args()
+
+        # Map functions to their callable objects for profiling
+        function_map = {
+            "initialize_hosts_parallel": lambda: list(Host.initialize_hosts_parallel(FileHandler.get_hostnames())),
+            "generate_tags": lambda: TagManager.generate_tags(list(Host.initialize_hosts_parallel(FileHandler.get_hostnames()))),
+            "apply_tags": lambda: run_workflow(),  # This will run the full workflow as apply_tags needs the full context
+        }
+
+        if args.profile:
+            print("Running with profiling enabled")
+            if args.profile_function == "all":
+                # Profile the entire workflow
+                run_profiler(run_workflow)
+            else:
+                # Profile specific function
+                func = function_map.get(args.profile_function)
+                if func:
+                    run_profiler(func)
+                else:
+                    print(f"Unknown function: {args.profile_function}")
+        else:
+            # Run normally without profiling
+            run_workflow()
+
+        print("Completed EPP Device Tagging")
+    except Exception as e:
+        print(f"Error in main workflow: {e}")
 
 
 if __name__ in ('__main__', '__builtin__', 'builtins'):
