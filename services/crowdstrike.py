@@ -1,6 +1,9 @@
+import concurrent.futures
+import threading
 import time
 from pathlib import Path
-from typing import List, Dict, Optional, Any
+from typing import Dict, Optional, Any
+from typing import List
 
 import pandas as pd
 import requests
@@ -169,101 +172,120 @@ class CrowdStrikeClient:
 
     def fetch_all_hosts_and_write_to_xlsx(self, xlsx_filename: str = "all_cs_hosts.xlsx") -> None:
         """
-        Fetches all hosts from CrowdStrike Falcon and writes their details to an XLSX file.
+        Fetches all hosts from CrowdStrike Falcon using multithreading for details fetching.
         """
-        all_host_data: List[Dict[str, str]] = []
-        # Use a set to track unique device IDs
+        all_host_data = []
         unique_device_ids = set()
-        offset: Optional[str] = None
-        limit: int = 5000  # Maximum allowed by the API
+        data_lock = threading.Lock()  # For thread-safe access to shared data
+        offset = None
+        limit = 5000
 
-        print("Fetching ALL host data...")
+        print("Fetching ALL host data with multithreading...")
         start_time = time.time()
         total_fetched = 0
         batch_count = 0
 
-        try:
-            while True:
-                # Refresh token periodically without resetting offset
-                if batch_count > 0 and batch_count % 10 == 0:
-                    print(f"Refreshing authentication token after {total_fetched} records...")
-                    self.auth = OAuth2(
-                        client_id=self.config.cs_ro_client_id,
-                        client_secret=self.config.cs_ro_client_secret,
-                        base_url=self.base_url,
-                        ssl_verify=False,
-                    )
-                    self.hosts_client = Hosts(auth_object=self.auth)
-                    # Do NOT reset offset here - this keeps pagination going
-
-                response = self.hosts_client.query_devices_by_filter_scroll(
-                    limit=limit, offset=offset
-                )
-
-                if response["status_code"] != 200:
-                    print(f"Error retrieving host IDs: {response}")
-                    break
-
-                host_ids = response["body"].get("resources", [])
-                if not host_ids:
-                    print("No more hosts to fetch - reached end of data")
-                    break
-
-                details_response = self.hosts_client.get_device_details(ids=host_ids)
+        def process_host_details(host_ids_batch: List[str]) -> None:
+            """Thread worker to process a batch of host IDs"""
+            try:
+                details_response = self.hosts_client.get_device_details(ids=host_ids_batch)
                 if details_response["status_code"] != 200:
-                    print(f"Error retrieving details for host IDs: {details_response}")
-                    break
+                    print(f"Error retrieving details for host IDs batch: {details_response}")
+                    return
 
-                # Count new unique hosts in this batch
-                new_hosts = 0
                 host_details = details_response["body"].get("resources", [])
+                new_hosts_data = []
+                new_hosts = 0
+
                 for host in host_details:
                     device_id = host.get("device_id")
-                    # Only add if we haven't seen this device before
-                    if device_id and device_id not in unique_device_ids:
-                        unique_device_ids.add(device_id)
-                        new_hosts += 1
-                        all_host_data.append({
-                            "hostname": host.get("hostname"),
-                            "host_id": device_id,
-                            "current_tags": ", ".join(host.get("tags", [])),
-                            "last_seen": host.get("last_seen"),
-                            "status": host.get("status"),
-                            "chassis_type_desc": host.get("chassis_type_desc"),
-                        })
+                    if not device_id:
+                        continue
 
-                batch_size = len(host_ids)
-                total_fetched += batch_size
-                batch_count += 1
+                    # Prepare data for this host
+                    host_data = {
+                        "hostname": host.get("hostname"),
+                        "host_id": device_id,
+                        "current_tags": ", ".join(host.get("tags", [])),
+                        "last_seen": host.get("last_seen"),
+                        "status": host.get("status"),
+                        "chassis_type_desc": host.get("chassis_type_desc"),
+                    }
+                    new_hosts_data.append((device_id, host_data))
+                    new_hosts += 1
 
-                print(f"Batch {batch_count}: Retrieved {batch_size}, new unique: {new_hosts}, total unique: {len(unique_device_ids)}")
+                # Use lock when accessing shared data structures
+                with data_lock:
+                    for device_id, host_data in new_hosts_data:
+                        if device_id not in unique_device_ids:
+                            unique_device_ids.add(device_id)
+                            all_host_data.append(host_data)
 
-                # Get next offset for pagination
-                offset = response["body"].get("meta", {}).get("pagination", {}).get("offset")
-                if not offset:
-                    print("No offset returned - reached end of pagination")
-                    break
+                print(f"Processed batch with {new_hosts} hosts")
+            except Exception as e:
+                print(f"Error in thread processing host details: {e}")
 
-                time.sleep(0.5)  # Small delay between requests
+        try:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+                while True:
+                    # Refresh token periodically
+                    if batch_count > 0 and batch_count % 10 == 0:
+                        print(f"Refreshing authentication token after {total_fetched} records...")
+                        self.auth = OAuth2(
+                            client_id=self.config.cs_ro_client_id,
+                            client_secret=self.config.cs_ro_client_secret,
+                            base_url=self.base_url,
+                            ssl_verify=False,
+                        )
+                        self.hosts_client = Hosts(auth_object=self.auth)
+
+                    # Get batch of host IDs (this remains sequential)
+                    response = self.hosts_client.query_devices_by_filter_scroll(
+                        limit=limit, offset=offset
+                    )
+
+                    if response["status_code"] != 200:
+                        print(f"Error retrieving host IDs: {response}")
+                        break
+
+                    host_ids = response["body"].get("resources", [])
+                    if not host_ids:
+                        print("No more hosts to fetch - reached end of data")
+                        break
+
+                    # Split host IDs into smaller batches for parallel processing
+                    batch_size = min(500, len(host_ids))  # Process in smaller chunks
+                    host_id_batches = [host_ids[i:i + batch_size] for i in range(0, len(host_ids), batch_size)]
+
+                    # Submit each batch for parallel processing
+                    futures = [executor.submit(process_host_details, id_batch) for id_batch in host_id_batches]
+                    concurrent.futures.wait(futures)  # Wait for all batches to complete
+
+                    total_fetched += len(host_ids)
+                    batch_count += 1
+
+                    # Get next offset for pagination
+                    offset = response["body"].get("meta", {}).get("pagination", {}).get("offset")
+                    if not offset:
+                        print("No offset returned - reached end of pagination")
+                        break
+
+                    time.sleep(0.5)  # Small delay between pagination requests
 
         except Exception as e:
             print(f"An error occurred fetching host data: {e}")
 
-        end_time = time.time()
-        elapsed_time = end_time - start_time
-        print(f"Finished fetching host data in {elapsed_time:.2f} seconds.")
-        print(f"Total unique hosts retrieved: {len(unique_device_ids)}")
-
+        # Write results to Excel
         output_path = self.output_dir / xlsx_filename
-        print(f"Writing host data to {output_path}...")
+        print(f"Writing {len(all_host_data)} host records to {output_path}...")
 
         try:
             output_path.parent.mkdir(parents=True, exist_ok=True)
             df = pd.DataFrame(all_host_data)
             df.to_excel(output_path, index=False, engine='openpyxl')
-            print(f"Successfully wrote {len(all_host_data)} unique host records to {xlsx_filename}")
+            print(f"Successfully wrote {len(all_host_data)} unique host records")
         except Exception as e:
-            print(f"An error occurred while writing to XLSX: {e}")
+            print(f"Error writing to XLSX: {e}")
 
 
 def main() -> None:
