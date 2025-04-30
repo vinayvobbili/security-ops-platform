@@ -1,13 +1,13 @@
-import concurrent.futures
+import argparse
 import cProfile
+import concurrent.futures
 import functools
 import io
 import logging
 import pstats
 import time
-import argparse
 from pathlib import Path
-from typing import Dict, Any, Callable, TypeVar, cast, Optional
+from typing import Dict, Any, Callable, TypeVar, cast
 
 import pandas as pd
 from tqdm import tqdm
@@ -39,6 +39,7 @@ webex_api = WebexTeamsAPI(access_token=CONFIG.webex_bot_access_token_jarvais)
 
 def benchmark(func: F) -> F:
     """Decorator to measure function execution time."""
+
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
         start_time = time.time()
@@ -47,6 +48,7 @@ def benchmark(func: F) -> F:
         elapsed_time = end_time - start_time
         logger.info(f"BENCHMARK: {func.__name__} executed in {elapsed_time:.4f} seconds")
         return result
+
     return cast(F, wrapper)
 
 
