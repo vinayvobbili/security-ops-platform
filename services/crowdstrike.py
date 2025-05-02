@@ -128,7 +128,7 @@ class CrowdStrikeClient:
             Dictionary with device details or empty dict if not found
         """
         try:
-            response = self.hosts_client.get_device_details(ids=device_id)
+            response = self.hosts_client.get_device_details_v2(ids=device_id)
             if response.get("status_code") == 200:
                 resources = response["body"].get("resources", [])
                 if resources:
@@ -141,7 +141,7 @@ class CrowdStrikeClient:
 
         return {}
 
-    def get_device_status(self, hostname: str) -> Optional[str]:
+    def get_device_containment_status(self, hostname: str) -> Optional[str]:
         """
         Get containment status for a device using hostname.
 
@@ -155,20 +155,8 @@ class CrowdStrikeClient:
         if not device_id:
             return None
 
-        url = f'https://{self.base_url}/devices/entities/devices/v1'
-        headers = {
-            'content-type': 'application/json',
-            'Authorization': f'Bearer {self.get_access_token()}'
-        }
-        params = {"ids": device_id}
-
-        try:
-            response = requests.get(url, headers=headers, params=params)
-            response.raise_for_status()
-            return response.json()['resources'][0]['status']
-        except Exception as e:
-            print(f"Error getting device status: {e}")
-            return None
+        device_details = self.get_device_details(device_id)
+        return device_details.get("filesystem_containment_status")
 
     def fetch_all_hosts_and_write_to_xlsx(self, xlsx_filename: str = "all_cs_hosts.xlsx") -> None:
         """
@@ -291,7 +279,8 @@ class CrowdStrikeClient:
 
 def main() -> None:
     client = CrowdStrikeClient()
-    client.fetch_all_hosts_and_write_to_xlsx()
+    # client.fetch_all_hosts_and_write_to_xlsx()
+    print(client.get_device_containment_status('C02G7C7LMD6R'))
 
 
 if __name__ == "__main__":
