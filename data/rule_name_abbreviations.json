@@ -8,8 +8,6 @@
   ".*Outbound Traffic at Risky Port\\(s\\).*": "Outbound Traffic at Risky Port(s)",
   ".*Multiple Users Browsing to Same Malicious Destinations.*": "Multiple Users Browsing to Same Malicious Destinations",
   ".*Cups-Browsed Usage Observed.*": "Cups-Browsed Usage Observed",
-  "180466": "180466",
-  "Unknown": "Unknown",
   ".*Host Querying to Malicious Domains.*": "Host Querying to Malicious Domains",
   ".*Large Number of Hosts Connecting to Same Malicious Site.*": "Large Number of Hosts Connecting to Same Malicious Site",
   ".*Connecting to Malicious URLs.*": "Connecting to Malicious URLs",
@@ -107,5 +105,6 @@
   ".*SMB Used For Potential Network Share Enumeration.*": "SMB Used For Potential Network Share Enumeration",
   ".*Escalation Events on Vulnerable VMWare.*": "Escalation Events on Vulnerable VMWare",
   ".*CS Low Sev Followed by Detection in CS or Tanium.*": "CS Low Sev Followed by Detection in CS or Tanium",
-  ".*User Access from Restricted Location.*": "User Access from Restricted Location"
+  ".*User Access from Restricted Location.*": "User Access from Restricted Location",
+  ".*Host Sending Emails to Multiple Other Internal Hosts.*": "Host Sending Emails to Multiple Other Internal Hosts"
 }
