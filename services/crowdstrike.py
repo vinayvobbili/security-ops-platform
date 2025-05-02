@@ -156,7 +156,7 @@ class CrowdStrikeClient:
             return None
 
         device_details = self.get_device_details(device_id)
-        return device_details.get("filesystem_containment_status")
+        return device_details.get("status")
 
     def fetch_all_hosts_and_write_to_xlsx(self, xlsx_filename: str = "all_cs_hosts.xlsx") -> None:
         """

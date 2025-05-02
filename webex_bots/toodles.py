@@ -1529,7 +1529,7 @@ class ContainmentStatusCS(Command):
             return "Please enter a host name and try again"
 
         try:
-            return f'The containment status of {host_name_cs} in CS is {crowdstrike.get_device_containment_status(host_name_cs)}'
+            return f'The network containment status of {host_name_cs} in CS is {crowdstrike.get_device_containment_status(host_name_cs)}'
         except Exception as e:
             return f'There seems to be an issue with finding the host you entered. Please make sure the host is valid. Error: {str(e)}'
 
