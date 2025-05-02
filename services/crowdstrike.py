@@ -209,6 +209,7 @@ class CrowdStrikeClient:
                         "current_tags": ", ".join(host.get("tags", [])),
                         "last_seen": host.get("last_seen"),
                         "status": host.get("status"),
+                        "cs_host_category": host.get("product_type_desc"),
                         "chassis_type_desc": host.get("chassis_type_desc"),
                     }
                     new_hosts_data.append((device_id, host_data))
