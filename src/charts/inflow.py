@@ -627,24 +627,9 @@ def create_ticket_type_chart(expected_months, month_labels, x, ticket_types, tic
 
 def make_chart():
     try:
-        print(f"Starting chart generation at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-
-        start_time = time.time()
-
-        print("Generating 'Yesterday' chart...")
-        yesterday_time = plot_yesterday()
-        print(f"  - Completed in {yesterday_time:.2f} seconds")
-
-        print("Generating 'Past 60 Days' chart...")
-        days60_time = plot_past_60_days()
-        print(f"  - Completed in {days60_time:.2f} seconds")
-
-        print("Generating 'Past 12 Months' chart...")
-        months12_time = plot_past_12_months()
-        print(f"  - Completed in {months12_time:.2f} seconds")
-
-        total_time = time.time() - start_time
-        print(f"All charts generated. Total time: {total_time:.2f} seconds")
+        plot_yesterday()
+        plot_past_60_days()
+        plot_past_12_months()
 
     except Exception as e:
         print(f"An error occurred while generating charts: {e}")
