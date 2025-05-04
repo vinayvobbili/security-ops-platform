@@ -202,6 +202,11 @@ def plot_period(period_config, title, output_filename):
         ax.bar(x, values, bottom=bottom, label=impact, color=impact_colors.get(impact, '#000000'))
         bottom += values
 
+    # Show daily totals at the top of each bar
+    for i, total in enumerate(daily_totals):
+        if total > 0:
+            ax.text((x[i]), total + 2, f'{int(total)}', ha='center', va='center', fontsize=10, fontweight='bold')
+
     # Plot a horizontal line for the daily average
     daily_average = date_impact_counts.groupby('created_date')['count'].sum().mean()
     ax.axhline(daily_average, color='blue', linestyle='--', linewidth=1.5, label=f'Daily Average ({int(daily_average)})')
@@ -220,9 +225,10 @@ def plot_period(period_config, title, output_filename):
     ax.set_xticklabels(date_labels, rotation=45, ha='right', fontsize=8)
 
     # Add labels and title with total count subtitle
-    ax.set_xlabel("Created Date", fontweight='bold', fontsize=10)
+    ax.set_xlabel("Created Date", fontweight='bold', fontsize=12, labelpad=10)
     ax.set_ylabel("Number of Tickets", fontweight='bold', fontsize=10)
-    ax.set_title(f"{title}\nTotal: {len(tickets)} tickets", fontweight='bold', fontsize=12)
+    fig.suptitle(f"{title}", fontweight='bold', fontsize=14, ha='center', x=0.5)
+    ax.set_title(f"Total: {len(tickets)} tickets", fontsize=12, ha='center', x=0.5)
 
     # Add legend
     ax.legend(title='Impact', title_fontproperties={'weight': 'bold'})
@@ -438,8 +444,8 @@ def create_combined_chart(expected_months, month_labels, x, ticket_types, ticket
     # Titles and labels
     ax.set_xlabel("Month", fontweight='bold', fontsize=12)
     ax.set_ylabel("Number of Tickets", fontweight='bold', fontsize=12)
-    fig.suptitle(f'Inflow Over the Past 12 Months', fontweight='bold', fontsize=14)
-    ax.set_title(f"Total: {len(tickets)} tickets", fontsize=12)
+    fig.suptitle(f'Inflow Over the Past 12 Months', fontweight='bold', fontsize=14, x=0.5)
+    ax.set_title(f"Total: {len(tickets)} tickets", fontsize=12, x=0.5)
 
     # Create separate legends
     handles, labels = ax.get_legend_handles_labels()
@@ -523,8 +529,8 @@ def create_impact_chart(expected_months, month_labels, x, CUSTOM_IMPACT_ORDER, i
     # Titles and labels
     ax.set_xlabel("Month", fontweight='bold', fontsize=12)
     ax.set_ylabel("Number of Tickets", fontweight='bold', fontsize=12)
-    fig.suptitle(f'Impact Distribution Over the Past 12 Months', fontweight='bold', fontsize=14)
-    ax.set_title(f"Total: {len(tickets)} tickets", fontsize=12)
+    fig.suptitle(f'Impact Distribution Over the Past 12 Months', fontweight='bold', fontsize=14, x=0.5)
+    ax.set_title(f"Total: {len(tickets)} tickets", fontsize=12, x=0.5)
 
     # Create legend with counts
     handles, labels = ax.get_legend_handles_labels()
@@ -595,8 +601,8 @@ def create_ticket_type_chart(expected_months, month_labels, x, ticket_types, tic
     # Titles and labels
     ax.set_xlabel("Month", fontweight='bold', fontsize=12)
     ax.set_ylabel("Number of Tickets", fontweight='bold', fontsize=12)
-    fig.suptitle(f'Ticket Type Distribution Over the Past 12 Months', fontweight='bold', fontsize=14)
-    ax.set_title(f"Total: {len(tickets)} tickets", fontsize=12)
+    fig.suptitle(f'Ticket Type Distribution Over the Past 12 Months', fontweight='bold', fontsize=14, x=0.5)
+    ax.set_title(f"Total: {len(tickets)} tickets", fontsize=12, x=0.5)
 
     # Create legend with counts
     ticket_type_totals = {ticket_type: values.sum() for ticket_type, values in ticket_pivot_data.items()}
@@ -618,7 +624,7 @@ def create_ticket_type_chart(expected_months, month_labels, x, ticket_types, tic
     fig.patch.set_linewidth(5)
     now_eastern = datetime.now(eastern).strftime('%m/%d/%Y %I:%M %p %Z')
     trans = transforms.blended_transform_factory(fig.transFigure, fig.transFigure)
-    plt.text(0.05, 0.01, now_eastern, ha='left', va='bottom', fontsize=11, transform=trans)
+    plt.text(0.05, 0.01, now_eastern, ha='left', va='bottom', fontsize=10, transform=trans)
 
     plt.tight_layout()
     fig.savefig(output_dir / "Inflow Past 12 Months - Ticket Type Only.png")
@@ -636,4 +642,4 @@ def make_chart():
 
 
 if __name__ == '__main__':
-    make_chart()
+    plot_past_60_days()
