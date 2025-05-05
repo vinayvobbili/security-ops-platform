@@ -22,7 +22,7 @@ def get_config():
         webex_room_id_threatcon_collab=os.environ["WEBEX_ROOM_ID_THREATCON_COLLAB"],
         webex_room_id_gosc_t2=os.environ["WEBEX_ROOM_ID_GOSC_T2"],
         webex_room_id_automation_engineering=os.environ["WEBEX_ROOM_ID_AUTOMATION_ENGINEERING"],
-        webex_room_id_response_engineering=os.environ["WEBEX_ROOM_ID_RESPNSE_ENGINEERING"],
+        webex_room_id_response_engineering=os.environ["WEBEX_ROOM_ID_RESPONSE_ENGINEERING"],
         xsoar_prod_api_base_url=os.environ["XSOAR_PROD_API_BASE_URL"],
         xsoar_prod_ui_base_url=os.environ["XSOAR_PROD_UI_BASE_URL"],
         xsoar_dev_api_base_url=os.environ["XSOAR_DEV_API_BASE_URL"],
