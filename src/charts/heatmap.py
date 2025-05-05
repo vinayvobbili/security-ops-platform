@@ -22,13 +22,13 @@ QUERY_TEMPLATE = f'status:closed type:{config.ticket_type_prefix} -owner:""'
 PERIOD = {"byFrom": "days", "fromValue": 30}
 
 ROOT_DIRECTORY = Path(__file__).parent.parent.parent
-DATA_DIR = ROOT_DIRECTORY / 'data'
+DATA_DIR = ROOT_DIRECTORY / 'data' / 'transient' / 'metrics'
 
 
 def create_choropleth_map():
     """Create a world choropleth map using Cartopy."""
 
-    with open(DATA_DIR / 'transient' / 'host_counts_by_country.json', 'r') as f:
+    with open(DATA_DIR / 'host_counts_by_country.json', 'r') as f:
         host_counts_by_country = json.load(f)
 
     with open(DATA_DIR / 'country_name_abbreviations.json', 'r') as f:

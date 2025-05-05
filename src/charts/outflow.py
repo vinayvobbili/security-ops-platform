@@ -20,7 +20,7 @@ eastern = pytz.timezone('US/Eastern')
 config = get_config()
 
 ROOT_DIRECTORY = Path(__file__).parent.parent.parent
-DETECTION_SOURCE_NAMES_ABBREVIATION_FILE = ROOT_DIRECTORY / 'data' / 'detection_source_name_abbreviations.json'
+DETECTION_SOURCE_NAMES_ABBREVIATION_FILE = ROOT_DIRECTORY / 'data' / 'transient' / 'metrics' / 'detection_source_name_abbreviations.json'
 
 with open(DETECTION_SOURCE_NAMES_ABBREVIATION_FILE, 'r') as f:
     detection_source_codes_by_name = json.load(f)

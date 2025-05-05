@@ -13,8 +13,8 @@ from matplotlib import transforms
 from webexpythonsdk import WebexAPI
 
 from config import get_config
-from services.xsoar import IncidentHandler
 from data.transient.data_maps import impact_colors
+from services.xsoar import IncidentHandler
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -31,7 +31,7 @@ webex = WebexAPI(access_token=CONFIG.webex_bot_access_token_moneyball)
 
 # Load rule name abbreviations
 root_directory = Path(__file__).parent.parent.parent
-QR_RULE_NAMES_ABBREVIATION_FILE = root_directory / 'data' / 'rule_name_abbreviations.json'
+QR_RULE_NAMES_ABBREVIATION_FILE = root_directory / 'data' / 'transient' / 'metrics' / 'qr_rule_name_abbreviations.json'
 
 with open(QR_RULE_NAMES_ABBREVIATION_FILE, 'r') as f:
     rule_name_abbreviations = json.load(f)
@@ -83,9 +83,10 @@ class QRadarEfficacyChart:
 
         # Log unabbreviated rule names
         unabbreviated_rules = self._find_unabbreviated_rules(list(correlation_rule_counts.keys()))
-        log.info("Unabbreviated Rule Names:")
-        for rule in unabbreviated_rules:
-            log.info(rule)
+        if unabbreviated_rules:
+            log.info("Unabbreviated Rule Names:")
+            for rule in unabbreviated_rules:
+                log.info(rule)
 
         # Create and process DataFrame
         df = pd.DataFrame.from_dict(correlation_rule_counts, orient='index').fillna(0)
