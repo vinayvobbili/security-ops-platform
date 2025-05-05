@@ -63,6 +63,7 @@ def get_config():
         snow_functional_account_password=os.environ["SNOW_FUNCTIONAL_ACCOUNT_PASSWORD"],
         snow_base_url=os.environ["SNOW_BASE_URL"],
         my_name=os.environ["MY_NAME"],
+        my_web_domain=os.environ["MY_WEB_DOMAIN"],
         qradar_efficacy_chart_receiver=os.environ["QRADAR_EFFICACY_CHART_RECEIVER"],
         phish_fort_api_key=os.environ["PHISH_FORT_API_KEY"],
         my_email_address=os.environ["MY_EMAIL_ADDRESS"],
@@ -127,6 +128,7 @@ class Config:
     snow_functional_account_password: str
     snow_base_url: str
     my_name: str
+    my_web_domain: str
     qradar_efficacy_chart_receiver: str
     phish_fort_api_key: str
     my_email_address: str
