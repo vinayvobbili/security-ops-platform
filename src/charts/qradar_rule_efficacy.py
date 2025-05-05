@@ -229,8 +229,6 @@ class QRadarEfficacyChart:
         for config in chart_configs:
             self.generate_chart_for_period(**config)
 
-        log.info(f"Successfully generated {len(chart_configs)} charts")
-
 
 def send_charts() -> None:
     """Send chart via Webex."""

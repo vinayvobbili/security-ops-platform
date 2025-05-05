@@ -10,8 +10,8 @@ import pytz
 from matplotlib import transforms
 
 from config import get_config
-from services.xsoar import IncidentHandler
 from data.transient.data_maps import impact_colors
+from services.xsoar import IncidentHandler
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -177,8 +177,6 @@ class CrowdstrikeEfficacyChart:
 
         for config in chart_configs:
             self.generate_chart_for_period(**config)
-
-        log.info(f"Successfully generated {len(chart_configs)} charts")
 
 
 def make_chart() -> None:
