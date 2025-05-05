@@ -1090,10 +1090,13 @@ class IOCHunt(Command):
         incident = {
             'name': attachment_actions.inputs['ioc_hunt_title'].strip(),
             'details': attachment_actions.inputs['ioc_hunt_iocs'].strip(),
-            'type': "METCIRT IOC Hunt"
+            'type': "METCIRT IOC Hunt",
+            'CustomFields': {
+                'huntsource': 'Other'
+            }
         }
         result = incident_handler.create(incident)
-        ticket_no = result[0].get('id')
+        ticket_no = result.get('id')
         incident_url = CONFIG.xsoar_prod_ui_base_url + ticket_no
 
         return f"A New IOC Hunt has been created in XSOAR. Ticket: [#{ticket_no}]({incident_url})"
