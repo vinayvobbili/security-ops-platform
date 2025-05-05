@@ -23,6 +23,7 @@ def get_config():
         webex_room_id_gosc_t2=os.environ["WEBEX_ROOM_ID_GOSC_T2"],
         webex_room_id_automation_engineering=os.environ["WEBEX_ROOM_ID_AUTOMATION_ENGINEERING"],
         webex_room_id_response_engineering=os.environ["WEBEX_ROOM_ID_RESPONSE_ENGINEERING"],
+        webex_room_id_phish_fort=os.environ["WEBEX_ROOM_ID_PHISH_FORT"],
         xsoar_prod_api_base_url=os.environ["XSOAR_PROD_API_BASE_URL"],
         xsoar_prod_ui_base_url=os.environ["XSOAR_PROD_UI_BASE_URL"],
         xsoar_dev_api_base_url=os.environ["XSOAR_DEV_API_BASE_URL"],
@@ -64,7 +65,6 @@ def get_config():
         my_name=os.environ["MY_NAME"],
         qradar_efficacy_chart_receiver=os.environ["QRADAR_EFFICACY_CHART_RECEIVER"],
         phish_fort_api_key=os.environ["PHISH_FORT_API_KEY"],
-        phish_fort_room_id=os.environ["PHISH_FORT_ROOM_ID"],
         my_email_address=os.environ["MY_EMAIL_ADDRESS"],
     )
 
@@ -87,6 +87,7 @@ class Config:
     webex_room_id_gosc_t2: str
     webex_room_id_automation_engineering: str
     webex_room_id_response_engineering: str
+    webex_room_id_phish_fort: str
     xsoar_prod_api_base_url: str
     xsoar_prod_ui_base_url: str
     xsoar_dev_api_base_url: str
@@ -128,7 +129,6 @@ class Config:
     my_name: str
     qradar_efficacy_chart_receiver: str
     phish_fort_api_key: str
-    phish_fort_room_id: str
     my_email_address: str
 
     webex_api_url: str = "https://webexapis.com/v1/messages"
