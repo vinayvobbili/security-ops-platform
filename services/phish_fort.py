@@ -147,7 +147,7 @@ def send_webex_notification_in_batches(message: str, batch_size: int = WEBEX_MES
 
         for attempt in range(3):  # Retry up to 3 times
             try:
-                response = webex_api.messages.create(**payload)
+                webex_api.messages.create(**payload)
                 logger.info(f"Webex notification part {i // batch_size + 1} sent successfully")
                 break  # Exit retry loop on success
             except Exception as e:
@@ -226,7 +226,7 @@ def format_phishfort_data(status: str) -> Optional[pd.DataFrame]:
             return None
 
         # Create a consolidated subject column that prioritizes subject, domain, and URL
-        if not set(['subject', 'domain', 'url']).isdisjoint(df.columns):
+        if not {'subject', 'domain', 'url'}.isdisjoint(df.columns):
             # Fill NaN values to empty strings for consolidation
             for col in ['subject', 'domain', 'url']:
                 if col in df.columns:
@@ -272,7 +272,7 @@ def format_phishfort_data(status: str) -> Optional[pd.DataFrame]:
 
         # Remove email domain from reporter names if column exists
         if 'reportedBy' in formatted_df.columns:
-            formatted_df['reportedBy'] = formatted_df['reportedBy'].fillna('').str.replace('@company.com', '')
+            formatted_df['reportedBy'] = formatted_df['reportedBy'].fillna('').str.replace(f'@{CONFIG.my_web_domain}', '')
 
         # Update column mappings with the consolidated subject
         column_mappings_updated = COLUMN_MAPPINGS.copy()
