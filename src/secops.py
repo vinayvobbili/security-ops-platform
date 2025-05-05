@@ -25,12 +25,12 @@ BASE_QUERY = f'type:{config.ticket_type_prefix} -owner:""'
 root_directory = Path(__file__).parent.parent
 
 # Load the workbook
-wb = load_workbook(root_directory / 'data' / 'transient' / config.secops_shift_staffing_filename)
+wb = load_workbook(root_directory / 'data' / 'transient' / 'secOps' / config.secops_shift_staffing_filename)
 # Select the sheet
 sheet = wb['May-June 2025']
 
 # get the cell names by shift from the sheet
-SECOPS_SHIFT_STAFFING_FILENAME = root_directory / 'data' / 'cell_names_by_shift.json'
+SECOPS_SHIFT_STAFFING_FILENAME = root_directory / 'data' / 'transient' / 'secOps' / 'cell_names_by_shift.json'
 with open(SECOPS_SHIFT_STAFFING_FILENAME, 'r') as f:
     cell_names_by_shift = json.load(f)
 
