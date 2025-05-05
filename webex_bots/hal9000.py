@@ -766,9 +766,9 @@ class ThreatHunt(Command):
 
     @log_moneyball_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles)
     def execute(self, message, attachment_actions, activity):
-        """Executes the ThreatHunt command."""
+        """Executes the CreateThreatHunt command."""
         if not attachment_actions or not hasattr(attachment_actions, 'inputs') or not hasattr(attachment_actions, 'personId'):
-            logger.warning("ThreatHunt executed without attachment actions, inputs, or personId.")
+            logger.warning("CreateThreatHunt executed without attachment actions, inputs, or personId.")
             return "Error: Could not process Threat Hunt creation due to missing form data or submitter ID."
 
         try:
@@ -780,7 +780,7 @@ class ThreatHunt(Command):
 
             if not title or not description:
                 missing = [field for field, value in [("Title", title), ("Description", description)] if not value]
-                logger.warning(f"ThreatHunt submission missing fields: {missing}")
+                logger.warning(f"CreateThreatHunt submission missing fields: {missing}")
                 return f"Error: Please fill in the required fields: {', '.join(missing)}."
 
             incident_payload = {
@@ -830,7 +830,7 @@ class ThreatHunt(Command):
             return f"Threat Hunt ticket {incident_url_md} created successfully."
 
         except (KeyError, IndexError) as e:
-            logger.error(f"Missing expected input/data or index error in ThreatHunt: {e}", exc_info=True)
+            logger.error(f"Missing expected input/data or index error in CreateThreatHunt: {e}", exc_info=True)
             return f"Error: Missing required form field or invalid response structure ('{e}'). Please try again."
         except Exception as e:
             logger.error(f"Error creating Threat Hunt ticket: {e}", exc_info=True)

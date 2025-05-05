@@ -1097,7 +1097,7 @@ class IOCHunt(Command):
         }
         result = incident_handler.create(incident)
         ticket_no = result.get('id')
-        incident_url = CONFIG.xsoar_prod_ui_base_url + ticket_no
+        incident_url = CONFIG.xsoar_prod_ui_base_url + '/Custom/caseinfoid/' + ticket_no
 
         return f"A New IOC Hunt has been created in XSOAR. Ticket: [#{ticket_no}]({incident_url})"
 
@@ -1113,7 +1113,7 @@ class ThreatHuntCard(Command):
         pass
 
 
-class ThreatHunt(Command):
+class CreateThreatHunt(Command):
     def __init__(self):
         super().__init__(
             command_keyword="threat_hunt",
@@ -1130,9 +1130,9 @@ class ThreatHunt(Command):
             'type': "Threat Hunt"
         }
         result = incident_handler.create(incident)
-        ticket_no = result[0].get('id')
+        ticket_no = result.get('id')
         ticket_title = attachment_actions.inputs['threat_hunt_title'].strip()
-        incident_url = CONFIG.xsoar_prod_ui_base_url + ticket_no
+        incident_url = CONFIG.xsoar_prod_ui_base_url + '/Custom/caseinfoid/' + ticket_no
         person_id = attachment_actions.personId
 
         announce_new_threat_hunt(ticket_no, ticket_title, incident_url, person_id)
@@ -1606,7 +1606,7 @@ def main():
     bot.add_command(IOCHunt())
     bot.add_command(URLs())
     bot.add_command(ThreatHuntCard())
-    bot.add_command(ThreatHunt())
+    bot.add_command(CreateThreatHunt())
     bot.add_command(CreateAZDOWorkItem())
     bot.add_command(GetAllOptions())
     bot.add_command(ImportTicket())
