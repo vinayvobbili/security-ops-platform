@@ -197,6 +197,62 @@ def get_approved_testing_records():
     )
 
 
+@app.route("/upcoming-travel", methods=['GET'])
+@log_web_activity
+def get_upcoming_travel():
+    """Fetches upcoming travel records and displays them."""
+    upcoming_travel_records = list_handler.get_list_data_by_name('DnR_Upcoming_Travel')
+
+    if not upcoming_travel_records:
+        return "<h2>No Upcoming Travel Records Found</h2>"
+
+    # Render the template with the data
+    return render_template(
+        'upcoming_travel.html',
+        travel_records=upcoming_travel_records
+    )
+
+
+@app.route("/travel-form")
+@log_web_activity
+def display_travel_form():
+    """Displays the Upcoming Travel Notification form."""
+    return render_template("upcoming_travel_notification_form.html")
+
+
+@app.route("/submit-travel-form", methods=['POST'])
+@log_web_activity
+def handle_travel_form_submission():
+    """Handles the Upcoming Travel Notification form submissions and processes the data."""
+    form = request.form.to_dict()
+
+    # Convert the will_work_during_vacation string to boolean
+    form['will_work_during_vacation'] = form.get('will_work_during_vacation') == 'true'
+
+    form['name'] = 'Upcoming Travel Notification'
+    form['type'] = 'DnR_Upcoming_Travel'
+    form['details'] = (
+        f"Submitted By: {form.get('submitted_by_email_address')} \n"
+        f"Submitted For: {form.get('submitted_for_email_address')} \n"
+        f"Work Location: {form.get('usual_work_location')} \n"
+        f"Vacation Location: {form.get('vacation_location')} \n"
+        f"Start Date: {form.get('vacation_start_date')} \n"
+        f"End Date: {form.get('vacation_end_date')} \n"
+        f"Working During Vacation: {'Yes' if form.get('will_work_during_vacation') else 'No'} \n"
+        f"Comments: {form.get('comments', '')} \n"
+    )
+
+    # Submit to list_handler instead of incident_handler
+    response = list_handler.add_item_to_list('DnR_Upcoming_Travel', form)
+
+    # Return a JSON response
+    return jsonify({
+        'status': 'success',
+        'new_incident_id': response.get('id', 'N/A'),
+        'new_incident_link': f"{CONFIG.xsoar_dev_ui_base_url}/Custom/caseinfoid/{response.get('id', '')}"
+    })
+
+
 @app.route('/favicon.ico')
 def favicon():
     return app.send_static_file('icons/favicon.ico')

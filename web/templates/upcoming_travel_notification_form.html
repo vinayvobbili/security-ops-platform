@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upcoming Travel Notification Form</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/upcoming_travel_notification_form.css') }}">
+</head>
+<body>
+<div class="form-container">
+    <h1>Upcoming Travel Notification Form</h1>
+
+    <form id="travelForm">
+
+        <div class="form-group">
+            <label for="submittedForEmail">Traveling Person's Email Address*</label>
+            <input type="email" id="submittedForEmail" name="submitted_for_email_address" required>
+        </div>
+
+        <div class="form-group">
+            <label for="workLocation">Usual Work Location*</label>
+            <input type="text" id="workLocation" name="usual_work_location" required>
+        </div>
+
+        <div class="form-group">
+            <label for="vacationLocation">Vacation Location*</label>
+            <input type="text" id="vacationLocation" name="vacation_location" required>
+        </div>
+
+        <!-- Replace the separate date form groups with this code -->
+        <div class="form-group date-range-container">
+            <div class="date-field">
+                <label for="startDate">Vacation Start Date*</label>
+                <input type="date" id="startDate" name="vacation_start_date" required>
+            </div>
+            <div class="date-field">
+                <label for="endDate">Vacation End Date*</label>
+                <input type="date" id="endDate" name="vacation_end_date" required>
+            </div>
+        </div>
+
+        <div class="form-group toggle-container">
+            <div class="toggle-question-row">
+                <label for="workDuringVacation" class="toggle-label">Will you work during the vacation?</label>
+                <div class="toggle-slider-container">
+                    <span class="toggle-option">No</span>
+                    <label class="switch">
+                        <input type="checkbox" id="workDuringVacation" name="will_work_during_vacation">
+                        <span class="slider round"></span>
+                    </label>
+                    <span class="toggle-option">Yes</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label for="comments">Comments</label>
+            <textarea id="comments" name="comments" rows="4"></textarea>
+        </div>
+
+        <button type="submit">Submit Travel Notification</button>
+    </form>
+
+</div>
+</body>
+<script src="{{ url_for('static', filename='js/upcoming_travel_notification_form.js') }}"></script>
+</html>
