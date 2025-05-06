@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upcoming Travel Records</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/upcoming_travel.css') }}">
+</head>
+<body>
+<div class="container">
+    <h1>Upcoming Travel Records</h1>
+
+    {% if travel_records %}
+    <section>
+        {% if travel_records|length > 0 %}
+        <table>
+            <thead>
+            <tr>
+                <th>Submitted By</th>
+                <th>Submitted For</th>
+                <th>Work Location</th>
+                <th>Vacation Location</th>
+                <th>Start Date</th>
+                <th>End Date</th>
+                <th>Working During Vacation?</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for record in travel_records %}
+            <tr>
+                <td>{{ record.submitted_by_email_address }}</td>
+                <td>{{ record.submitted_for_email_address }}</td>
+                <td>{{ record.usual_work_location }}</td>
+                <td>{{ record.vacation_location }}</td>
+                <td>{{ record.vacation_start_date }}</td>
+                <td>{{ record.vacation_end_date }}</td>
+                <td>{{ "Yes" if record.will_work_during_vacation else "No" }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p>No upcoming travel records available.</p>
+        {% endif %}
+    </section>
+    {% else %}
+    <p>No upcoming travel records found.</p>
+    {% endif %}
+</div>
+</body>
+</html>
