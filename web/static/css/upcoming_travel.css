@@ -1,0 +1,205 @@
+/* Modern color scheme */
+:root {
+    --primary-color: #3498db;
+    --primary-dark: #2980b9;
+    --accent-color: #e74c3c;
+    --light-bg: #f8f9fa;
+    --dark-text: #2c3e50;
+    --light-text: #ecf0f1;
+    --border-color: #dfe6e9;
+    --hover-color: #edf2f7;
+    --card-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+body {
+    font-family: 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    margin: 0;
+    padding: 20px;
+    background-color: var(--light-bg);
+    color: var(--dark-text);
+    line-height: 1.6;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 10px;
+}
+
+h1 {
+    text-align: center;
+    color: var(--primary-dark);
+    font-size: 2.2em;
+    margin-bottom: 30px;
+    position: relative;
+    padding-bottom: 15px;
+    width: 100%; /* Match parent section width */
+
+}
+
+h1:after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 100px;
+    height: 4px;
+    background: linear-gradient(to right, var(--primary-color), var(--accent-color));
+    border-radius: 2px;
+}
+
+/* Matching width for section headers and tables */
+section {
+    width: 100%;
+}
+
+h2 {
+    color: var(--primary-color);
+    margin-top: 40px;
+    padding: 10px 15px;
+    background-color: white;
+    border-left: 5px solid var(--accent-color);
+    border-radius: 0 5px 5px 0;
+    box-shadow: var(--card-shadow);
+    font-size: 1.5em;
+    width: 100%; /* Match parent section width */
+    box-sizing: border-box;
+    margin-bottom: 15px;
+}
+
+table {
+    width: 100%; /* Ensure full width */
+    border-collapse: separate;
+    border-spacing: 0;
+    margin-top: 15px;
+    margin-bottom: 40px;
+    table-layout: fixed; /* Fixed layout helps with column width control */
+    box-shadow: var(--card-shadow);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+/* Update column widths for all 7 columns */
+th:nth-child(1), td:nth-child(1) {
+    width: 15%;
+}
+
+/* Submitted By */
+th:nth-child(2), td:nth-child(2) {
+    width: 15%;
+}
+
+/* Submitted For */
+th:nth-child(3), td:nth-child(3) {
+    width: 15%;
+}
+
+/* Work Location */
+th:nth-child(4), td:nth-child(4) {
+    width: 15%;
+}
+
+/* Vacation Location */
+th:nth-child(5), td:nth-child(5) {
+    width: 12%;
+}
+
+/* Start Date */
+th:nth-child(6), td:nth-child(6) {
+    width: 12%;
+}
+
+/* End Date */
+th:nth-child(7), td:nth-child(7) {
+    width: 16%;
+}
+
+/* Working During Vacation? */
+
+thead {
+    background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
+    color: var(--light-text);
+}
+
+th {
+    padding: 8px 10px;
+    text-align: left;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    font-size: 0.85em;
+    border: none;
+}
+
+td {
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--border-color);
+    background-color: white;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Column widths */
+th:nth-child(1), td:nth-child(1) {
+    width: 25%;
+}
+
+th:nth-child(2), td:nth-child(2) {
+    width: 25%;
+}
+
+th:nth-child(3), td:nth-child(3) {
+    width: 40%;
+}
+
+tr:last-child td {
+    border-bottom: none;
+}
+
+tr:hover td {
+    background-color: var(--hover-color);
+}
+
+/* Alternating row colors */
+tr:nth-child(even) td {
+    background-color: rgba(236, 240, 241, 0.5);
+}
+
+/* No records message styling */
+p {
+    padding: 15px;
+    background-color: white;
+    border-radius: 5px;
+    box-shadow: var(--card-shadow);
+    border-left: 5px solid var(--primary-color);
+    margin-bottom: 30px;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+    .container {
+        padding: 5px;
+    }
+
+    section {
+        width: 100%;
+    }
+
+    table {
+        font-size: 0.9em;
+    }
+
+    h1 {
+        font-size: 1.8em;
+    }
+
+    h2 {
+        font-size: 1.3em;
+    }
+
+    th, td {
+        padding: 6px 6px;
+    }
+}
