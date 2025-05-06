@@ -10,7 +10,7 @@ from flask import render_template
 
 from config import get_config
 from services import xsoar
-from services.xsoar import ListHandler
+from services.xsoar import ListHandler, IncidentHandler
 from src.helper_methods import log_web_activity
 
 app = Flask(__name__, static_folder='static', static_url_path='/static', template_folder='templates')
@@ -20,6 +20,9 @@ CONFIG = get_config()
 # Supported image extensions
 IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".gif", ".svg")
 blocked_ip_ranges = ["10.49.70.0/24", "10.50.70.0/24"]
+
+list_handler = ListHandler()
+incident_handler = IncidentHandler()
 
 
 @app.before_request
@@ -129,7 +132,7 @@ def handle_speak_up_form_submission():
         f"Issue Type: {form.get('issueType')} \n"
         f"Description: {form.get('description')} \n"
     )
-    response = xsoar.create_incident(CONFIG.xsoar_dev_api_base_url, form, CONFIG.xsoar_dev_auth_id, CONFIG.xsoar_dev_auth_key)
+    response = incident_handler.create(form)
     # Return a JSON response
     return jsonify({
         'status': 'success',
@@ -144,7 +147,7 @@ def handle_msoc_form_submission():
     """Handles MSOC form submissions and processes the data."""
     form = request.form.to_dict()
     form['type'] = 'MSOC Site Security Device Management'
-    response = xsoar.create_incident(CONFIG.xsoar_dev_api_base_url, form, CONFIG.xsoar_dev_auth_id, CONFIG.xsoar_dev_auth_key)
+    response = incident_handler.create_in_dev(form)
     # Return a JSON response
     return jsonify({
         'status': 'success',
@@ -175,7 +178,6 @@ def import_xsoar_ticket():
 @log_web_activity
 def get_approved_testing_records():
     """Fetches approved testing records and displays them in separate HTML tables."""
-    list_handler = ListHandler()
     approved_testing_records = list_handler.get_list_data_by_name('METCIRT_Approved_Testing')
 
     if not approved_testing_records:
