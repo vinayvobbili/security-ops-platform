@@ -318,6 +318,7 @@ def make_chart():
         # Save the figure
         today_date = datetime.now().strftime('%m-%d-%Y')
         OUTPUT_PATH = ROOT_DIRECTORY / "web" / "static" / "charts" / today_date / "Threatcon Level.png"
+        OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
         fig.savefig(OUTPUT_PATH, format='png', bbox_inches='tight', pad_inches=0.2, dpi=300)
         plt.close()
 
