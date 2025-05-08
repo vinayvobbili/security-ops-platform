@@ -226,30 +226,23 @@ def handle_travel_form_submission():
     """Handles the Upcoming Travel Notification form submissions and processes the data."""
     form = request.form.to_dict()
 
-    # Convert the will_work_during_vacation string to boolean
-    form['will_work_during_vacation'] = form.get('will_work_during_vacation') == 'true'
-
-    form['name'] = 'Upcoming Travel Notification'
-    form['type'] = 'DnR_Upcoming_Travel'
-    form['details'] = (
-        f"Submitted By: {form.get('submitted_by_email_address')} \n"
-        f"Submitted For: {form.get('submitted_for_email_address')} \n"
-        f"Work Location: {form.get('usual_work_location')} \n"
-        f"Vacation Location: {form.get('vacation_location')} \n"
-        f"Start Date: {form.get('vacation_start_date')} \n"
-        f"End Date: {form.get('vacation_end_date')} \n"
-        f"Working During Vacation: {'Yes' if form.get('will_work_during_vacation') else 'No'} \n"
-        f"Comments: {form.get('comments', '')} \n"
-    )
-
     # Submit to list_handler instead of incident_handler
-    response = list_handler.add_item_to_list('DnR_Upcoming_Travel', form)
+    response = list_handler.add_item_to_list('DnR_Upcoming_Travel',
+                                             {
+                                                 "submitted_by": form.get('submitted_by_email_address'),
+                                                 "submitted_for": form.get('submitted_for_email_address'),
+                                                 "work_location": form.get('usual_work_location'),
+                                                 "vacation_location": form.get('vacation_location'),
+                                                 "vacation_start_date": form.get('vacation_start_date'),
+                                                 "vacation_end_date": form.get('vacation_end_date'),
+                                                 "is_working_during_vacation": form.get('will_work_during_vacation'),
+                                                 "comments": form.get('comments'),
+                                                 "submitted_at": datetime.now(eastern).strftime("%m/%d/%Y %H:%M:%S ET"),
+                                                 "submitted_by_ip_address": request.remote_addr
+                                             })
 
-    # Return a JSON response
     return jsonify({
-        'status': 'success',
-        'new_incident_id': response.get('id', 'N/A'),
-        'new_incident_link': f"{CONFIG.xsoar_dev_ui_base_url}/Custom/caseinfoid/{response.get('id', '')}"
+        'status': 'success'
     })
 
 
