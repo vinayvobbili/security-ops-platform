@@ -15,6 +15,7 @@ from webexteamssdk import WebexTeamsAPI
 
 from config import get_config
 from services.service_now import ServiceNowClient
+from src.epp.epp_device_tagging import ReportHandler
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -125,7 +126,7 @@ def send_report(step_times: Dict[str, float]) -> None:
         report_text = (
                 f"UNIQUE CS hosts without a Ring tag, enriched with SNOW details. Count={host_count}!\n\n"
                 "Step execution times:\n" +
-                "\n".join([f"{step}: {time:.4f} seconds" for step, time in step_times.items()])
+                "\n".join([f"{step}: {ReportHandler.format_duration(time)}" for step, time in step_times.items()])
         )
         webex_api.messages.create(
             roomId=CONFIG.webex_room_id_epp_tagging,
