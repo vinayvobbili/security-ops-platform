@@ -155,6 +155,11 @@ class ListHandler:
         if result.status_code != 200:
             raise RuntimeError(f"Failed to save list. Status code: {result.status_code}")
 
+    def add_item_to_list(self, list_name, new_entry):
+        list_data = self.get_list_data_by_name(list_name)
+        list_data.append(new_entry)
+        self.save(list_name, list_data)
+
 
 if __name__ == "__main__":
     # destination_ticket_number, destination_ticket_link = import_ticket('621684')
