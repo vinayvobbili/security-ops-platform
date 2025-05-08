@@ -201,12 +201,11 @@ def get_approved_testing_records():
 @log_web_activity
 def get_upcoming_travel():
     """Fetches upcoming travel records and displays them."""
-    upcoming_travel_records = list_handler.get_list_data_by_name('DnR_Upcoming_Travel')
+    upcoming_travel_records = [
+        record for record in list_handler.get_list_data_by_name('DnR_Upcoming_Travel')
+        if datetime.strptime(record['vacation_end_date'], '%Y-%m-%d') >= datetime.now()
+    ]
 
-    if not upcoming_travel_records:
-        return "<h2>No Upcoming Travel Records Found</h2>"
-
-    # Render the template with the data
     return render_template(
         'upcoming_travel.html',
         travel_records=upcoming_travel_records
@@ -227,19 +226,17 @@ def handle_travel_form_submission():
     form = request.form.to_dict()
 
     # Submit to list_handler instead of incident_handler
-    response = list_handler.add_item_to_list('DnR_Upcoming_Travel',
-                                             {
-                                                 "submitted_by": form.get('submitted_by_email_address'),
-                                                 "submitted_for": form.get('submitted_for_email_address'),
-                                                 "work_location": form.get('usual_work_location'),
-                                                 "vacation_location": form.get('vacation_location'),
-                                                 "vacation_start_date": form.get('vacation_start_date'),
-                                                 "vacation_end_date": form.get('vacation_end_date'),
-                                                 "is_working_during_vacation": form.get('will_work_during_vacation'),
-                                                 "comments": form.get('comments'),
-                                                 "submitted_at": datetime.now(eastern).strftime("%m/%d/%Y %H:%M:%S ET"),
-                                                 "submitted_by_ip_address": request.remote_addr
-                                             })
+    response = list_handler.add_item_to_list('DnR_Upcoming_Travel', {
+        "traveller_email_address": form.get('traveller_email_address'),
+        "work_location": form.get('work_location'),
+        "vacation_location": form.get('vacation_location'),
+        "vacation_start_date": form.get('vacation_start_date'),
+        "vacation_end_date": form.get('vacation_end_date'),
+        "is_working_during_vacation": form.get('will_work_during_vacation'),
+        "comments": form.get('comments'),
+        "submitted_at": datetime.now(eastern).strftime("%m/%d/%Y %I:%M %p %Z"),
+        "submitted_by_ip_address": request.remote_addr
+    })
 
     return jsonify({
         'status': 'success'
