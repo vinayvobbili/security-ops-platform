@@ -1,5 +1,6 @@
 import ipaddress
 import os
+from datetime import date
 from datetime import datetime
 from typing import List
 
@@ -197,13 +198,23 @@ def get_approved_testing_records():
     )
 
 
+def parse_date(date_str):
+    """Parses a date string in multiple formats and returns a datetime object."""
+    for fmt in ('%Y-%m-%d', '%m/%d/%Y'):
+        try:
+            return datetime.strptime(date_str, fmt)
+        except ValueError:
+            continue
+    raise ValueError(f"Date format not recognized: {date_str}")
+
+
 @app.route("/upcoming-travel", methods=['GET'])
 @log_web_activity
 def get_upcoming_travel():
     """Fetches upcoming travel records and displays them."""
     upcoming_travel_records = [
         record for record in list_handler.get_list_data_by_name('DnR_Upcoming_Travel')
-        if datetime.strptime(record['vacation_end_date'], '%Y-%m-%d') >= datetime.now()
+        if parse_date(record['vacation_end_date']) >= datetime.now()
     ]
 
     return render_template(
@@ -216,7 +227,8 @@ def get_upcoming_travel():
 @log_web_activity
 def display_travel_form():
     """Displays the Upcoming Travel Notification form."""
-    return render_template("upcoming_travel_notification_form.html")
+    today = date.today().isoformat()  # Get today's date in 'YYYY-MM-DD' format
+    return render_template("upcoming_travel_notification_form.html", today=today)
 
 
 @app.route("/submit-travel-form", methods=['POST'])
