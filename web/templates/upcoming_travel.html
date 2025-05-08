@@ -8,11 +8,9 @@
 </head>
 <body>
 <div class="container">
-    <h1>Upcoming Travel Records</h1>
+    <h1>Upcoming-Travel Records</h1>
 
-    {% if travel_records %}
     <section>
-        {% if travel_records|length > 0 %}
         <table>
             <thead>
             <tr>
@@ -43,13 +41,8 @@
             {% endfor %}
             </tbody>
         </table>
-        {% else %}
-        <p>No upcoming travel records available.</p>
-        {% endif %}
     </section>
-    {% else %}
-    <p>No records found.</p>
-    {% endif %}
+
 </div>
 </body>
 </html>
