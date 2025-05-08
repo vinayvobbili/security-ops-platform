@@ -29,7 +29,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Optional, List, Union, Dict, Set, Callable, TypeVar, cast, Any
+from typing import Optional, List, Union, Dict, Callable, TypeVar, cast, Any
 
 import openpyxl
 from falconpy import OAuth2, Hosts, RealTimeResponse
@@ -304,19 +304,19 @@ class TagManager:
         workstations = [host for host in valid_hosts if host.category == HostCategory.WORKSTATION]
         servers = [host for host in valid_hosts if host.category == HostCategory.SERVER]
 
-        # Get unique regions and countries
-        regions = {host.region for host in valid_hosts if host.region}
-        countries = {host.country for host in valid_hosts if host.country}
-
         # Process workstations
-        TagManager._process_workstations(workstations, regions, countries)
+        TagManager._process_workstations(workstations)
 
         # Process servers
         TagManager._process_servers(servers)
 
     @staticmethod
-    def _process_workstations(workstations: List[Host], regions: Set[str], countries: Set[str]) -> None:
+    def _process_workstations(workstations: List[Host]) -> None:
         """Process workstations and assign ring tags based on distribution."""
+        # Get unique regions and countries
+        regions = {workstation.region for workstation in workstations if workstation.region}
+        countries = {workstation.country for workstation in workstations if workstation.country}
+
         for region in regions:
             for country in countries:
                 # Filter workstations by region and country
