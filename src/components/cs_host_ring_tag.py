@@ -118,14 +118,18 @@ def write_excel_file(df: pd.DataFrame, file_path: Path) -> None:
 
 
 @benchmark
-def send_report():
-    """Sends the enriched hosts report to a Webex room.
-    """
+def send_report(step_times: Dict[str, float]) -> None:
+    """Sends the enriched hosts report to a Webex room, including step run times."""
     try:
         host_count = len(read_excel_file(ENRICHED_HOSTS_FILE))
+        report_text = (
+                f"UNIQUE CS hosts without a Ring tag, enriched with SNOW details. Count={host_count}!\n\n"
+                "Step execution times:\n" +
+                "\n".join([f"{step}: {time:.4f} seconds" for step, time in step_times.items()])
+        )
         webex_api.messages.create(
             roomId=CONFIG.webex_room_id_epp_tagging,
-            text=f"UNIQUE CS hosts without a Ring tag, enriched with SNOW details. Count={host_count}!",
+            text=report_text,
             files=[str(ENRICHED_HOSTS_FILE)]
         )
     except Exception as e:
@@ -285,10 +289,18 @@ def main() -> None:
 
 def run_workflow():
     """Run the complete workflow without profiling."""
-    list_cs_hosts_without_ring_tag()
-    get_unique_hosts_without_ring_tag()
-    enrich_host_report()
-    send_report()
+    step_times = {}
+
+    for step_name, step_func in [
+        ("List CS Hosts Without Ring Tag", list_cs_hosts_without_ring_tag),
+        ("Get Unique Hosts Without Ring Tag", get_unique_hosts_without_ring_tag),
+        ("Enrich Host Report", enrich_host_report),
+    ]:
+        start_time = time.time()
+        step_func()
+        step_times[step_name] = time.time() - start_time
+
+    send_report(step_times)
 
 
 if __name__ in ('__main__', '__builtin__', 'builtins'):
