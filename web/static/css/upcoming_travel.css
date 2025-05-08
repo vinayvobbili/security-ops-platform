@@ -21,7 +21,7 @@ body {
 }
 
 .container {
-    max-width: 1200px;
+    max-width: 1800px;
     margin: 0 auto;
     padding: 10px;
 }
@@ -34,7 +34,6 @@ h1 {
     position: relative;
     padding-bottom: 15px;
     width: 100%; /* Match parent section width */
-
 }
 
 h1:after {
@@ -80,43 +79,6 @@ table {
     overflow: hidden;
 }
 
-/* Update column widths for all 7 columns */
-th:nth-child(1), td:nth-child(1) {
-    width: 15%;
-}
-
-/* Submitted By */
-th:nth-child(2), td:nth-child(2) {
-    width: 15%;
-}
-
-/* Submitted For */
-th:nth-child(3), td:nth-child(3) {
-    width: 15%;
-}
-
-/* Work Location */
-th:nth-child(4), td:nth-child(4) {
-    width: 15%;
-}
-
-/* Vacation Location */
-th:nth-child(5), td:nth-child(5) {
-    width: 12%;
-}
-
-/* Start Date */
-th:nth-child(6), td:nth-child(6) {
-    width: 12%;
-}
-
-/* End Date */
-th:nth-child(7), td:nth-child(7) {
-    width: 16%;
-}
-
-/* Working During Vacation? */
-
 thead {
     background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
     color: var(--light-text);
@@ -141,17 +103,50 @@ td {
     white-space: nowrap;
 }
 
-/* Column widths */
+/* Column width definitions for all 9 columns */
+/* Traveller Email Address */
 th:nth-child(1), td:nth-child(1) {
-    width: 25%;
+    width: 15%;
 }
 
+/* Work Location */
 th:nth-child(2), td:nth-child(2) {
-    width: 25%;
+    width: 9%;
 }
 
+/* Vacation Location */
 th:nth-child(3), td:nth-child(3) {
-    width: 40%;
+    width: 10%;
+}
+
+/* Start Date */
+th:nth-child(4), td:nth-child(4) {
+    width: 7%;
+}
+
+/* End Date */
+th:nth-child(5), td:nth-child(5) {
+    width: 7%;
+}
+
+/* Working During Vacation? */
+th:nth-child(6), td:nth-child(6) {
+    width: 10%;
+}
+
+/* Comments */
+th:nth-child(7), td:nth-child(7) {
+    width: 15%;
+}
+
+/* Submitted At */
+th:nth-child(8), td:nth-child(8) {
+    width: 15%;
+}
+
+/* Submitted By IP Address */
+th:nth-child(9), td:nth-child(9) {
+    width: 8%;
 }
 
 tr:last-child td {
@@ -202,4 +197,12 @@ p {
     th, td {
         padding: 6px 6px;
     }
+}
+
+.truncate-text {
+    max-width: 200px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: block;
 }

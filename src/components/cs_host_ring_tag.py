@@ -14,6 +14,7 @@ from tqdm import tqdm
 from webexteamssdk import WebexTeamsAPI
 
 from config import get_config
+from services.crowdstrike import CrowdStrikeClient
 from services.service_now import ServiceNowClient
 from src.epp.epp_device_tagging import ReportHandler
 
@@ -291,11 +292,13 @@ def main() -> None:
 def run_workflow():
     """Run the complete workflow without profiling."""
     step_times = {}
+    client = CrowdStrikeClient()
 
     for step_name, step_func in [
+        ('Fetch all hosts from CS', client.fetch_all_hosts_and_write_to_xlsx),
         ("List CS Hosts Without Ring Tag", list_cs_hosts_without_ring_tag),
         ("Get Unique Hosts Without Ring Tag", get_unique_hosts_without_ring_tag),
-        ("Enrich Host Report", enrich_host_report),
+        ("Enrich Host Report with SNOW details", enrich_host_report),
     ]:
         start_time = time.time()
         step_func()

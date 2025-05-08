@@ -279,7 +279,6 @@ class CrowdStrikeClient:
 
 def main() -> None:
     client = CrowdStrikeClient()
-    # client.fetch_all_hosts_and_write_to_xlsx()
     print(client.get_device_containment_status('C02G7C7LMD6R'))
 
 
