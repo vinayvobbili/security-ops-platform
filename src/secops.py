@@ -30,7 +30,7 @@ wb = load_workbook(root_directory / 'data' / 'transient' / 'secOps' / config.sec
 sheet = wb['May-June 2025']
 
 # get the cell names by shift from the sheet
-SECOPS_SHIFT_STAFFING_FILENAME = root_directory / 'data' / 'transient' / 'secOps' / 'cell_names_by_shift.json'
+SECOPS_SHIFT_STAFFING_FILENAME = root_directory / 'data' / 'secOps' / 'cell_names_by_shift.json'
 with open(SECOPS_SHIFT_STAFFING_FILENAME, 'r') as f:
     cell_names_by_shift = json.load(f)
 
