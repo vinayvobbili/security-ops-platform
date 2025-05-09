@@ -16,7 +16,7 @@ from webex_bot.webex_bot import WebexBot
 from webexpythonsdk import WebexAPI
 from webexpythonsdk.models.cards import (
     ActionSet, ActionStyle, AdaptiveCard, Colors, Column, ColumnSet,
-    FontWeight, HorizontalAlignment, TextBlock
+    FontWeight, HorizontalAlignment, TextBlock, Choice, ShowCard
 )
 from webexpythonsdk.models.cards.actions import Submit
 
@@ -114,14 +114,36 @@ NEW_TICKET_CARD = {
             Column(width=2, items=[
                 INPUTS.ChoiceSet(
                     id="detection_source",
-                    choices=[OPTIONS.Choice(title=src, value=src) for src in [
-                        "Abnormal Security", "Akamai", "AppDynamics", "Area1", "Cisco AMP",
-                        "CrowdStrike Falcon", "CrowdStrike Falcon IDP", "Customer Reported",
-                        "Cyberbit", "Employee Reported", "Flashpoint", "ForcePoint", "Illusive",
-                        "Infoblox", "Intel471", "IronPort", "Lumen", "PaloAlto", "Prisma Cloud",
-                        "Recorded Future", "Rubrik", "Tanium", "Third Party", "Threat Hunt",
-                        "Vectra MDR", "ZeroFox", "ZScaler", "Other"
-                    ]],
+                    choices=[
+                        Choice(title="Abnormal Security", value="Abnormal Security"),
+                        Choice(title="Akamai", value="Akamai"),
+                        Choice(title="AppDynamics", value="AppDynamics"),
+                        Choice(title="Area1", value="Area1"),
+                        Choice(title="Cisco AMP", value="Cisco AMP"),
+                        Choice(title="CrowdStrike Falcon", value="CrowdStrike Falcon"),
+                        Choice(title="CrowdStrike Falcon IDP", value="CrowdStrike Falcon IDP"),
+                        Choice(title="Customer Reported", value="Customer Reported"),
+                        Choice(title="Cyberbit", value="Cyberbit"),
+                        Choice(title="Employee Reported", value="Employee Reported"),
+                        Choice(title="Flashpoint", value="Flashpoint"),
+                        Choice(title="ForcePoint", value="ForcePoint"),
+                        Choice(title="Illusive", value="Illusive"),
+                        Choice(title="Infoblox", value="Infoblox"),
+                        Choice(title="Intel471", value="Intel471"),
+                        Choice(title="IronPort", value="IronPort"),
+                        Choice(title="Lumen", value="Lumen"),
+                        Choice(title="PaloAlto", value="PaloAlto"),
+                        Choice(title="Prisma Cloud", value="Prisma Cloud"),
+                        Choice(title="Recorded Future", value="Recorded Future"),
+                        Choice(title="Rubrik", value="Rubrik"),
+                        Choice(title="Tanium", value="Tanium"),
+                        Choice(title="Third Party", value="Third Party"),
+                        Choice(title="Threat Hunt", value="Threat Hunt"),
+                        Choice(title="Vectra MDR", value="Vectra MDR"),
+                        Choice(title="ZeroFox", value="ZeroFox"),
+                        Choice(title="ZScaler", value="ZScaler"),
+                        Choice(title="Other", value="Other")
+                    ],
                     placeholder="Select a source", isRequired=True, errorMessage="Detection Source is required"
                 )
             ])
@@ -129,7 +151,6 @@ NEW_TICKET_CARD = {
         ActionSet(
             spacing=OPTIONS.Spacing.SMALL,  # Keep spacing as originally defined if preferred
             actions=[Submit(title="Submit", data={"callback_keyword": "create_x_ticket"}, style=ActionStyle.POSITIVE)],
-            horizontalAlignment=HorizontalAlignment.RIGHT
         ).to_dict()
     ]
 }
@@ -142,16 +163,16 @@ IOC_HUNT = {
     "body": [
         TextBlock(text="New IOC Hunt", color=Colors.ACCENT, weight=FontWeight.BOLDER, size=OPTIONS.FontSize.MEDIUM, horizontalAlignment=HorizontalAlignment.CENTER).to_dict(),
         TextBlock(text="Title:", wrap=True).to_dict(),
-        INPUTS.Text(id="ioc_hunt_title", wrap=True, isRequired=True, errorMessage="Title is required").to_dict(),
+        INPUTS.Text(id="ioc_hunt_title", isRequired=True, errorMessage="Title is required").to_dict(),
         TextBlock(text="IOCs:", wrap=True).to_dict(),
         INPUTS.Text(
             id="ioc_hunt_iocs", placeholder="Domains, Emails, Hashes, IPs (comma or newline separated)",
-            wrap=True, isMultiline=True, isRequired=True, errorMessage="IOCs are required"
+            isMultiline=True, isRequired=True, errorMessage="IOCs are required"
         ).to_dict(),
         ActionSet(
             spacing=OPTIONS.Spacing.DEFAULT,  # Use default spacing unless 'none' is specifically needed
             actions=[Submit(title="Submit Hunt", data={"callback_keyword": "ioc_hunt"}, style=ActionStyle.POSITIVE)],
-            horizontalAlignment=HorizontalAlignment.RIGHT
+
         ).to_dict()
     ]
 }
@@ -164,13 +185,12 @@ THREAT_HUNT = {
     "body": [
         TextBlock(text="New Threat Hunt Request", color=Colors.ACCENT, weight=FontWeight.BOLDER, size=OPTIONS.FontSize.MEDIUM, horizontalAlignment=HorizontalAlignment.CENTER).to_dict(),
         TextBlock(text="Hunt Title:", wrap=True).to_dict(),
-        INPUTS.Text(id="threat_hunt_title", wrap=True, isRequired=True, errorMessage="Title is required").to_dict(),
+        INPUTS.Text(id="threat_hunt_title", isRequired=True, errorMessage="Title is required").to_dict(),
         TextBlock(text="Hunt Description / Hypothesis:", wrap=True).to_dict(),
-        INPUTS.Text(id="threat_hunt_desc", wrap=True, isMultiline=True, isRequired=True, errorMessage="Description is required").to_dict(),
+        INPUTS.Text(id="threat_hunt_desc", isMultiline=True, isRequired=True, errorMessage="Description is required").to_dict(),
         ActionSet(
             spacing=OPTIONS.Spacing.DEFAULT,  # Use default spacing
             actions=[Submit(title="Submit Request", data={"callback_keyword": "threat_hunt"}, style=ActionStyle.POSITIVE)],
-            horizontalAlignment=HorizontalAlignment.RIGHT
         ).to_dict()
     ]
 }
@@ -183,18 +203,18 @@ AZDO_CARD = {
     "body": [
         TextBlock(text="New Azure DevOps Work Item", color=Colors.ACCENT, weight=FontWeight.BOLDER, size=OPTIONS.FontSize.MEDIUM, horizontalAlignment=HorizontalAlignment.CENTER).to_dict(),
         TextBlock(text="Title", color=Colors.DEFAULT).to_dict(),  # Use default color for better contrast
-        INPUTS.Text(wrap=True, id="wit_title", isRequired=True, errorMessage="Title is required").to_dict(),
+        INPUTS.Text(id="wit_title", isRequired=True, errorMessage="Title is required").to_dict(),
         TextBlock(text="Description", color=Colors.DEFAULT).to_dict(),  # Use default color
-        INPUTS.Text(wrap=True, id="wit_description", isMultiline=True, isRequired=True, errorMessage="Description is required").to_dict(),
+        INPUTS.Text(id="wit_description", isMultiline=True, isRequired=True, errorMessage="Description is required").to_dict(),
         ColumnSet(columns=[
             Column(items=[
                 TextBlock(text="Type", color=Colors.DEFAULT),  # Use default color
                 INPUTS.ChoiceSet(
                     wrap=True, id="wit_type", value="User%20Story",  # Default value
                     choices=[
-                        OPTIONS.Choice(title="User Story", value="User%20Story"),
-                        OPTIONS.Choice(title="Bug", value="Bug"),
-                        OPTIONS.Choice(title="Task", value="Task")
+                        Choice(title="User Story", value="User%20Story"),
+                        Choice(title="Bug", value="Bug"),
+                        Choice(title="Task", value="Task")
                     ], isRequired=True, errorMessage="Type is required"
                 )
             ]),
@@ -203,16 +223,16 @@ AZDO_CARD = {
                 INPUTS.ChoiceSet(
                     wrap=True, id="project", value="re",  # Default value
                     choices=[
-                        OPTIONS.Choice(title="Cyber Platforms", value="platforms"),
-                        OPTIONS.Choice(title="Response Engineering", value="re"),
-                        OPTIONS.Choice(title="Detection Engineering", value="de"),
-                        OPTIONS.Choice(title="GDR Shared", value="gdr")  # Shortened title
+                        Choice(title="Cyber Platforms", value="platforms"),
+                        Choice(title="Response Engineering", value="re"),
+                        Choice(title="Detection Engineering", value="de"),
+                        Choice(title="GDR Shared", value="gdr")
                     ], isRequired=True, errorMessage="Project is required"
                 )
             ]),
             Column(items=[
                 ActionSet(actions=[Submit(title="Create Item", data={"callback_keyword": "azdo_wit"}, style=ActionStyle.POSITIVE)])
-            ], verticalContentAlignment=OPTIONS.VerticalContentAlignment.BOTTOM, horizontalAlignment=HorizontalAlignment.RIGHT)
+            ], verticalContentAlignment=OPTIONS.VerticalContentAlignment.BOTTOM)
         ]).to_dict()
     ]
 }
@@ -263,7 +283,6 @@ APPROVED_TESTING_CARD = {
                 Submit(title="Remove", data={"callback_keyword": "remove_approved_testing"}, style=ActionStyle.DESTRUCTIVE),  # Corrected style
                 Submit(title="Add", data={"callback_keyword": "add_approved_testing"}, style=ActionStyle.POSITIVE)  # Corrected style
             ],
-            horizontalAlignment=HorizontalAlignment.RIGHT
         ).to_dict()
     ]
 }
@@ -298,7 +317,8 @@ TUNING_REQUEST_CARD = AdaptiveCard(
         ),
         INPUTS.Text(id="title", label="Rule/Detection Title", isRequired=True, errorMessage="Title is required"),  # Updated label
         INPUTS.Text(id="description", label="Reason for Tuning / False Positive Details", isMultiline=True, isRequired=True, errorMessage="Description is required"),  # Updated label
-        INPUTS.Text(id="tickets", placeholder="Comma-separated (e.g., 123, 456)", label="Recent Example XSOAR Ticket(s)", isRequired=True, errorMessage="At least one ticket number is required"),  # Updated placeholder/label
+        INPUTS.Text(id="tickets", placeholder="Comma-separated (e.g., 123, 456)", label="Recent Example XSOAR Ticket(s)", isRequired=True, errorMessage="At least one ticket number is required"),
+        # Updated placeholder/label
         INPUTS.Text(id="ticket_volume", placeholder="Example: ~5 tickets/day", label="Approx. Ticket Volume", isRequired=True, errorMessage="Volume estimate is required"),  # Updated placeholder
         ActionSet(actions=[Submit(title="Submit Tuning Request", style=ActionStyle.POSITIVE, data={"callback_keyword": "tuning_request"})])  # Changed title
     ]
@@ -333,7 +353,8 @@ all_options_card = {
             "body": [
                 TextBlock(text="CS Host Containment", size=OPTIONS.FontSize.MEDIUM, weight=FontWeight.BOLDER, horizontalAlignment=HorizontalAlignment.CENTER, wrap=True).to_dict(),
                 ColumnSet(columns=[
-                    Column(width="auto", items=[TextBlock(text="Hostname:", wrap=True, horizontalAlignment=HorizontalAlignment.RIGHT)], verticalContentAlignment=OPTIONS.VerticalContentAlignment.CENTER),
+                    Column(width="auto", items=[TextBlock(text="Hostname:", wrap=True, horizontalAlignment=HorizontalAlignment.RIGHT)],
+                           verticalContentAlignment=OPTIONS.VerticalContentAlignment.CENTER),
                     Column(width="stretch", items=[INPUTS.Text(id="host_name_cs", placeholder="Enter exact hostname")])
                 ]).to_dict(),
                 ActionSet(spacing=OPTIONS.Spacing.DEFAULT, actions=[
@@ -341,7 +362,7 @@ all_options_card = {
                     # Assuming 'uncontain' and 'contain' commands exist and handle the host_name_cs input
                     Submit(title="Uncontain", data={"callback_keyword": "uncontain"}, style=ActionStyle.POSITIVE),
                     Submit(title="Contain", data={"callback_keyword": "contain"}, style=ActionStyle.DESTRUCTIVE)
-                ], horizontalAlignment=HorizontalAlignment.RIGHT).to_dict()
+                ]).to_dict()
             ]
         }},
         {"type": "Action.ShowCard", "title": "XSOAR", "card": {
@@ -349,10 +370,10 @@ all_options_card = {
             "body": [
                 TextBlock(text="XSOAR Actions", weight=FontWeight.BOLDER, horizontalAlignment=HorizontalAlignment.CENTER).to_dict(),
                 ActionSet(spacing=OPTIONS.Spacing.DEFAULT, actions=[
-                    {"type": "Action.ShowCard", "title": "New Ticket", "card": NEW_TICKET_CARD},
-                    {"type": "Action.ShowCard", "title": "IOC Hunt", "card": IOC_HUNT},
-                    {"type": "Action.ShowCard", "title": "Threat Hunt", "card": THREAT_HUNT},
-                    {"type": "Action.ShowCard", "title": "Import Ticket", "card": TICKET_IMPORT_CARD.to_dict()}
+                    ShowCard(title="New Ticket", card=NEW_TICKET_CARD),
+                    ShowCard(title="IOC Hunt", card=IOC_HUNT),
+                    ShowCard(title="Threat Hunt", card=THREAT_HUNT),
+                    ShowCard(title="Import Ticket", card=TICKET_IMPORT_CARD.to_dict())
                 ]).to_dict()
             ]
         }},
@@ -389,7 +410,6 @@ def get_url_card() -> dict:
 
     actions = []
     body_items = [TextBlock(text="Favorite URLs & Contacts", weight=FontWeight.BOLDER, horizontalAlignment=HorizontalAlignment.CENTER)]
-    has_content = False
 
     for item in metcirt_urls:
         if not isinstance(item, dict):
@@ -403,22 +423,13 @@ def get_url_card() -> dict:
         if name and url:
             # Use Action.OpenUrl for URLs
             actions.append({"type": "Action.OpenUrl", "title": name, "url": url, "style": "default"})  # Use default style
-            has_content = True
+
         elif name and phone:
             # Display phone numbers as simple text blocks in the body
             body_items.append(TextBlock(text=f"**{name}:** {phone}", wrap=True, spacing=OPTIONS.Spacing.SMALL))
-            has_content = True
+
         else:
             logger.warning(f"Skipping item with missing name/url/phone in '{URL_LIST_NAME}' list: {item}")
-
-    if not has_content:
-        logger.info(f"No valid URLs or phone numbers found in '{URL_LIST_NAME}' list after processing.")
-        # Return a simple card indicating no content, rather than an empty card
-        body_items.append(TextBlock(text=f"No valid URLs or phone numbers found in the '{URL_LIST_NAME}' list.", wrap=True))
-        # No ActionSet needed if no actions
-    elif actions:
-        # Add ActionSet only if there are URL actions
-        body_items.append(ActionSet(actions=actions))
 
     logger.debug(f"Generated URL card with {len(body_items)} body items and {len(actions)} actions.")
     return AdaptiveCard(body=body_items).to_dict()
@@ -475,7 +486,7 @@ def announce_new_approved_testing_entry(new_item: dict) -> None:
         "version": "1.3",
         "body": [
             TextBlock(
-                text="New Approved Testing Entry", style="heading", size="Large", weight="Bolder",
+                text="New Approved Testing Entry", size=OPTIONS.FontSize.MEDIUM, weight=OPTIONS.FontWeight.BOLDER,
                 color=Colors.ATTENTION, horizontalAlignment=HorizontalAlignment.CENTER
             ).to_dict(),
             {  # Using FactSet for structured display
@@ -494,7 +505,6 @@ def announce_new_approved_testing_entry(new_item: dict) -> None:
             ActionSet(
                 spacing=OPTIONS.Spacing.DEFAULT,
                 actions=[Submit(title="Get Current List", data={"callback_keyword": "current_approved_testing"})],
-                horizontalAlignment=HorizontalAlignment.RIGHT
             ).to_dict()
         ]
     }
@@ -853,7 +863,7 @@ class CreateAZDOWorkItem(Command):
         # If attachment_actions is None, user typed command -> show card (handled by framework)
         if attachment_actions is None:
             logger.debug(f"Executing CreateAZDOWorkItem command (showing card) for user {activity.get('actor', {}).get('emailAddress')}")
-            return  # Let the framework show the card
+            return None
 
         # If attachment_actions is not None, user submitted the card -> process it
         logger.debug(f"Processing CreateAZDOWorkItem card submission by user {activity.get('actor', {}).get('emailAddress')}")
@@ -964,11 +974,12 @@ class Review(Command):
             logger.warning("Review command executed without attachment actions or inputs.")
             return "This command requires input from a card submission (e.g., from a ticket details card)."
 
+        inputs = attachment_actions.inputs
+        review_notes = inputs.get("review_notes", "").strip()
+        ticket_no = inputs.get("incident_id", "").strip()
+        submitter_email = activity.get('actor', {}).get('emailAddress', 'Unknown User')
+
         try:
-            inputs = attachment_actions.inputs
-            review_notes = inputs.get("review_notes", "").strip()
-            ticket_no = inputs.get("incident_id", "").strip()
-            submitter_email = activity.get('actor', {}).get('emailAddress', 'Unknown User')
 
             if not review_notes:
                 logger.warning(f"Review submission failed for ticket {ticket_no} by {submitter_email}: No review notes provided.")
@@ -1129,9 +1140,10 @@ class GetCurrentApprovedTestingEntries(Command):
 
             # Footer and final message
             footer = f"*Entries expire at {DEFAULT_EXPIRY_TIME_DESC} on the date shown."
-            # Combine message parts with markdown code block for table
+            # Combine message parts with Markdown code block for table
             full_message = (
                 f"{submitter_name}, here are the current Approved Security Testing entries:\n"
+                f"```\n{table_rows}\n{footer}\n```"
             )
 
             logger.info(f"Successfully retrieved and formatted {max_rows} approved testing entries for {submitter_name}.")
@@ -1512,9 +1524,11 @@ class ImportTicket(Command):
             return None
 
         logger.debug(f"Processing ImportTicket card submission by user {activity.get('actor', {}).get('emailAddress')}")
+
+        prod_ticket_number = attachment_actions.inputs.get('prod_ticket_number', '').strip()
+        submitter_name = activity.get('actor', {}).get('displayName', 'User')
+
         try:
-            prod_ticket_number = attachment_actions.inputs.get('prod_ticket_number', '').strip()
-            submitter_name = activity.get('actor', {}).get('displayName', 'User')
 
             if not prod_ticket_number:
                 logger.warning(f"ImportTicket failed for {submitter_name}: Production ticket number missing.")
@@ -1578,7 +1592,7 @@ class CreateTuningRequest(Command):
         if not is_card_submission:
             # If not a card submission for *this* command, assume user typed "tuning" -> show card
             logger.debug(f"Executing CreateTuningRequest command (showing card) for user {activity.get('actor', {}).get('emailAddress')}")
-            return  # Let the framework show the card
+            return None
 
         # Process the card submission
         logger.debug(f"Processing CreateTuningRequest card submission by user {activity.get('actor', {}).get('emailAddress')}")
@@ -1645,7 +1659,7 @@ class CreateTuningRequest(Command):
             # --- Format Response ---
             tuning_request_url = f'https://dev.azure.com/{azdo_org}/{quote(azdo_project_name)}/_workitems/edit/{tuning_request_id}'
             # Provide the URL directly in the response message
-            return_message = f"Tuning request submitted successfully!\n{tuning_request_id} - {title}"
+            return_message = f"Tuning request submitted successfully!\n[{tuning_request_id}]({tuning_request_url}) - {title}"
 
             logger.info(f"Successfully created AZDO tuning request {tuning_request_id}")
 
@@ -1684,7 +1698,7 @@ def main():
     # --- Initialize Bot ---
     # Token presence already checked at top level
     bot = WebexBot(
-        CONFIG.webex_bot_access_token_toodles,
+        CONFIG.webex_bot_access_token_hal9000,
         bot_name=bot_name,
         approved_domains=approved_domains,
         include_demo_commands=False  # Disable default demo commands
@@ -1726,16 +1740,16 @@ def main():
     bot.add_command(URLs())
     bot.add_command(GetAllOptions())  # Main menu/entry point
 
-    logger.info(f"Starting bot {bot.bot_name}...")
+    logger.info(f"Starting bot {bot}...")
     try:
         # Run the bot's main loop
         bot.run()
     except KeyboardInterrupt:
-        logger.info(f"Bot {bot.bot_name} stopped by user (KeyboardInterrupt).")
+        logger.info(f"Bot {bot} stopped by user (KeyboardInterrupt).")
     except Exception as run_e:
-        logger.critical(f"Bot {bot.bot_name} run failed unexpectedly: {run_e}", exc_info=True)
+        logger.critical(f"Bot {bot} run failed unexpectedly: {run_e}", exc_info=True)
     finally:
-        logger.info(f"Bot {bot.bot_name} has stopped.")
+        logger.info(f"Bot {bot} has stopped.")
 
 
 if __name__ == '__main__':  # Standard check for script execution
