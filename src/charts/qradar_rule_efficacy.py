@@ -31,7 +31,7 @@ webex = WebexAPI(access_token=CONFIG.webex_bot_access_token_moneyball)
 
 # Load rule name abbreviations
 root_directory = Path(__file__).parent.parent.parent
-QR_RULE_NAMES_ABBREVIATION_FILE = root_directory / 'data' / 'transient' / 'metrics' / 'qr_rule_name_abbreviations.json'
+QR_RULE_NAMES_ABBREVIATION_FILE = root_directory / 'data' / 'metrics' / 'qr_rule_name_abbreviations.json'
 
 with open(QR_RULE_NAMES_ABBREVIATION_FILE, 'r') as f:
     rule_name_abbreviations = json.load(f)

@@ -22,7 +22,7 @@ QUERY_TEMPLATE = f'status:closed type:{config.ticket_type_prefix} -owner:""'
 PERIOD = {"byFrom": "days", "fromValue": 30}
 
 ROOT_DIRECTORY = Path(__file__).parent.parent.parent
-DATA_DIR = ROOT_DIRECTORY / 'data' / 'transient' / 'metrics'
+DATA_DIR = ROOT_DIRECTORY / 'data' / 'metrics'
 
 
 def create_choropleth_map():
