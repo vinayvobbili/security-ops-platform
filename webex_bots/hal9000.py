@@ -92,90 +92,133 @@ except Exception as init_e:
 # --- Adaptive Card Definitions ---
 
 # Card for creating a new XSOAR ticket
-NEW_TICKET_CARD = {
-    "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
-    "type": "AdaptiveCard",
-    "version": "1.3",
-    "body": [
+NEW_TICKET_CARD = AdaptiveCard(
+    body=[
         TextBlock(
-            text="New XSOAR Ticket", color=Colors.ACCENT, weight=FontWeight.BOLDER,
-            size=OPTIONS.FontSize.MEDIUM, horizontalAlignment=HorizontalAlignment.CENTER
-        ).to_dict(),
+            text="New XSOAR Ticket",
+            color=Colors.ACCENT,
+            weight=FontWeight.BOLDER,
+            size=OPTIONS.FontSize.MEDIUM,
+            horizontalAlignment=HorizontalAlignment.CENTER
+        ),
         ColumnSet(columns=[
-            Column(width=1, items=[TextBlock(text="Title", wrap=True, horizontalAlignment=HorizontalAlignment.RIGHT)]),
-            Column(width=6, items=[INPUTS.Text(id="title", placeholder="Enter ticket title", isRequired=True, errorMessage="Title is required")])
-        ]).to_dict(),
+            Column(
+                width=1,
+                items=[
+                    TextBlock(
+                        text="Title",
+                        wrap=True,
+                        horizontalAlignment=HorizontalAlignment.RIGHT
+                    )
+                ]
+            ),
+            Column(
+                width=6,
+                items=[
+                    INPUTS.Text(
+                        id="title",
+                        placeholder="Enter ticket title",
+                        isRequired=True,
+                        errorMessage="Title is required"
+                    )
+                ]
+            )
+        ]),
         ColumnSet(columns=[
-            Column(width=1, items=[TextBlock(text="Details", wrap=True, horizontalAlignment=HorizontalAlignment.RIGHT)]),
-            Column(width=6, items=[INPUTS.Text(id="details", placeholder="Enter ticket details", isMultiline=True, isRequired=True, errorMessage="Details are required")])
-        ], spacing=OPTIONS.Spacing.NONE).to_dict(),
-        ColumnSet(columns=[
-            Column(width=1, items=[TextBlock(text="Detection Source", wrap=True, horizontalAlignment=HorizontalAlignment.LEFT)]),
-            Column(width=2, items=[
-                INPUTS.ChoiceSet(
-                    id="detection_source",
-                    choices=[
-                        Choice(title="Abnormal Security", value="Abnormal Security"),
-                        Choice(title="Akamai", value="Akamai"),
-                        Choice(title="AppDynamics", value="AppDynamics"),
-                        Choice(title="Area1", value="Area1"),
-                        Choice(title="Cisco AMP", value="Cisco AMP"),
-                        Choice(title="CrowdStrike Falcon", value="CrowdStrike Falcon"),
-                        Choice(title="CrowdStrike Falcon IDP", value="CrowdStrike Falcon IDP"),
-                        Choice(title="Customer Reported", value="Customer Reported"),
-                        Choice(title="Cyberbit", value="Cyberbit"),
-                        Choice(title="Employee Reported", value="Employee Reported"),
-                        Choice(title="Flashpoint", value="Flashpoint"),
-                        Choice(title="ForcePoint", value="ForcePoint"),
-                        Choice(title="Illusive", value="Illusive"),
-                        Choice(title="Infoblox", value="Infoblox"),
-                        Choice(title="Intel471", value="Intel471"),
-                        Choice(title="IronPort", value="IronPort"),
-                        Choice(title="Lumen", value="Lumen"),
-                        Choice(title="PaloAlto", value="PaloAlto"),
-                        Choice(title="Prisma Cloud", value="Prisma Cloud"),
-                        Choice(title="Recorded Future", value="Recorded Future"),
-                        Choice(title="Rubrik", value="Rubrik"),
-                        Choice(title="Tanium", value="Tanium"),
-                        Choice(title="Third Party", value="Third Party"),
-                        Choice(title="Threat Hunt", value="Threat Hunt"),
-                        Choice(title="Vectra MDR", value="Vectra MDR"),
-                        Choice(title="ZeroFox", value="ZeroFox"),
-                        Choice(title="ZScaler", value="ZScaler"),
-                        Choice(title="Other", value="Other")
-                    ],
-                    placeholder="Select a source", isRequired=True, errorMessage="Detection Source is required"
-                )
-            ])
-        ], spacing=OPTIONS.Spacing.NONE).to_dict(),
-        ActionSet(
-            spacing=OPTIONS.Spacing.SMALL,  # Keep spacing as originally defined if preferred
-            actions=[Submit(title="Submit", data={"callback_keyword": "create_x_ticket"}, style=ActionStyle.POSITIVE)],
-        ).to_dict()
+            Column(
+                width=1,
+                items=[
+                    TextBlock(
+                        text="Details",
+                        wrap=True,
+                        horizontalAlignment=HorizontalAlignment.RIGHT
+                    )
+                ]
+            ),
+            Column(
+                width=6,
+                items=[
+                    INPUTS.Text(
+                        id="details",
+                        placeholder="Enter ticket details",
+                        isMultiline=True,
+                        isRequired=True,
+                        errorMessage="Details are required"
+                    )
+                ]
+            )
+        ], spacing=OPTIONS.Spacing.NONE)
     ]
-}
+)
 
 # Card for submitting an IOC Hunt
-IOC_HUNT = {
-    "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
-    "version": "1.3",
-    "type": "AdaptiveCard",
-    "body": [
-        TextBlock(text="New IOC Hunt", color=Colors.ACCENT, weight=FontWeight.BOLDER, size=OPTIONS.FontSize.MEDIUM, horizontalAlignment=HorizontalAlignment.CENTER).to_dict(),
-        TextBlock(text="Title:", wrap=True).to_dict(),
-        INPUTS.Text(id="ioc_hunt_title", isRequired=True, errorMessage="Title is required").to_dict(),
-        TextBlock(text="IOCs:", wrap=True).to_dict(),
-        INPUTS.Text(
-            id="ioc_hunt_iocs", placeholder="Domains, Emails, Hashes, IPs (comma or newline separated)",
-            isMultiline=True, isRequired=True, errorMessage="IOCs are required"
-        ).to_dict(),
+IOC_HUNT = AdaptiveCard(
+    body=[
+        TextBlock(
+            text="New IOC Hunt",
+            color=Colors.ACCENT,
+            weight=FontWeight.BOLDER,
+            size=OPTIONS.FontSize.MEDIUM,
+            horizontalAlignment=HorizontalAlignment.CENTER
+        ),
+        ColumnSet(columns=[
+            Column(
+                width=1,
+                items=[
+                    TextBlock(
+                        text="Title:",
+                        wrap=True,
+                        horizontalAlignment=HorizontalAlignment.RIGHT
+                    )
+                ]
+            ),
+            Column(
+                width=6,
+                items=[
+                    INPUTS.Text(
+                        id="ioc_hunt_title",
+                        placeholder="Enter hunt title",
+                        isRequired=True,
+                        errorMessage="Title is required"
+                    )
+                ]
+            )
+        ]),
+        ColumnSet(columns=[
+            Column(
+                width=1,
+                items=[
+                    TextBlock(
+                        text="IOCs:",
+                        wrap=True,
+                        horizontalAlignment=HorizontalAlignment.RIGHT
+                    )
+                ]
+            ),
+            Column(
+                width=6,
+                items=[
+                    INPUTS.Text(
+                        id="ioc_hunt_iocs",
+                        placeholder="Domains, Emails, Hashes, IPs (comma or newline separated)",
+                        isMultiline=True,
+                        isRequired=True,
+                        errorMessage="IOCs are required"
+                    )
+                ]
+            )
+        ]),
         ActionSet(
-            spacing=OPTIONS.Spacing.DEFAULT,  # Use default spacing unless 'none' is specifically needed
-            actions=[Submit(title="Submit Hunt", data={"callback_keyword": "ioc_hunt"}, style=ActionStyle.POSITIVE)],
-
-        ).to_dict()
+            actions=[
+                Submit(
+                    title="Submit Hunt",
+                    data={"callback_keyword": "ioc_hunt"},
+                    style=ActionStyle.POSITIVE
+                )
+            ]
+        )
     ]
-}
+)
 
 # Card for submitting a Threat Hunt
 THREAT_HUNT = {
@@ -196,96 +239,118 @@ THREAT_HUNT = {
 }
 
 # Card for creating an AZDO Work Item
-AZDO_CARD = {
-    "type": "AdaptiveCard",
-    "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
-    "version": "1.3",
-    "body": [
-        TextBlock(text="New Azure DevOps Work Item", color=Colors.ACCENT, weight=FontWeight.BOLDER, size=OPTIONS.FontSize.MEDIUM, horizontalAlignment=HorizontalAlignment.CENTER).to_dict(),
-        TextBlock(text="Title", color=Colors.DEFAULT).to_dict(),  # Use default color for better contrast
-        INPUTS.Text(id="wit_title", isRequired=True, errorMessage="Title is required").to_dict(),
-        TextBlock(text="Description", color=Colors.DEFAULT).to_dict(),  # Use default color
-        INPUTS.Text(id="wit_description", isMultiline=True, isRequired=True, errorMessage="Description is required").to_dict(),
-        ColumnSet(columns=[
-            Column(items=[
-                TextBlock(text="Type", color=Colors.DEFAULT),  # Use default color
-                INPUTS.ChoiceSet(
-                    wrap=True, id="wit_type", value="User%20Story",  # Default value
-                    choices=[
-                        Choice(title="User Story", value="User%20Story"),
-                        Choice(title="Bug", value="Bug"),
-                        Choice(title="Task", value="Task")
-                    ], isRequired=True, errorMessage="Type is required"
-                )
-            ]),
-            Column(items=[
-                TextBlock(text="Project", color=Colors.DEFAULT),  # Use default color
-                INPUTS.ChoiceSet(
-                    wrap=True, id="project", value="re",  # Default value
-                    choices=[
-                        Choice(title="Cyber Platforms", value="platforms"),
-                        Choice(title="Response Engineering", value="re"),
-                        Choice(title="Detection Engineering", value="de"),
-                        Choice(title="GDR Shared", value="gdr")
-                    ], isRequired=True, errorMessage="Project is required"
-                )
-            ]),
-            Column(items=[
-                ActionSet(actions=[Submit(title="Create Item", data={"callback_keyword": "azdo_wit"}, style=ActionStyle.POSITIVE)])
-            ], verticalContentAlignment=OPTIONS.VerticalContentAlignment.BOTTOM)
-        ]).to_dict()
-    ]
-}
-
-# Card for managing Approved Testing entries
-APPROVED_TESTING_CARD = {
-    "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
-    "type": "AdaptiveCard",
-    "version": "1.3",
-    "body": [
+AZDO_CARD = AdaptiveCard(
+    body=[
         TextBlock(
-            text="Approved Security Testing", horizontalAlignment=HorizontalAlignment.CENTER,
-            weight=FontWeight.BOLDER, size=OPTIONS.FontSize.MEDIUM, color=Colors.ACCENT
-        ).to_dict(),
-        ColumnSet(columns=[
-            Column(width=1, items=[TextBlock(text="Username(s)", horizontalAlignment=HorizontalAlignment.RIGHT)], verticalContentAlignment=OPTIONS.VerticalContentAlignment.CENTER),
-            Column(width=3, items=[INPUTS.Text(id="usernames", placeholder="comma separated")])  # Simplified placeholder
-        ]).to_dict(),
-        ColumnSet(columns=[
-            Column(width=1, items=[TextBlock(text="Hostname(s)", horizontalAlignment=HorizontalAlignment.RIGHT)], verticalContentAlignment=OPTIONS.VerticalContentAlignment.CENTER),
-            Column(width=3, items=[INPUTS.Text(id="host_names", placeholder="comma separated")])
-        ]).to_dict(),
-        ColumnSet(columns=[
-            Column(width=1, items=[TextBlock(text="IP(s)", horizontalAlignment=HorizontalAlignment.RIGHT)], verticalContentAlignment=OPTIONS.VerticalContentAlignment.CENTER),
-            Column(width=3, items=[INPUTS.Text(id="ip_addresses", placeholder="comma separated", isMultiline=True)])
-        ]).to_dict(),
-        ColumnSet(columns=[
-            Column(width=1, items=[TextBlock(text="Description", horizontalAlignment=HorizontalAlignment.RIGHT)], verticalContentAlignment=OPTIONS.VerticalContentAlignment.CENTER),
-            Column(width=3, items=[INPUTS.Text(id="description", isMultiline=True, isRequired=True, errorMessage="Description is required")])
-        ]).to_dict(),
-        ColumnSet(columns=[
-            Column(width=1, items=[TextBlock(text="Scope", wrap=True, horizontalAlignment=HorizontalAlignment.RIGHT)], verticalContentAlignment=OPTIONS.VerticalContentAlignment.CENTER),
-            Column(width=3, items=[INPUTS.Text(id="scope", isRequired=True, errorMessage="Scope is required")])
-        ]).to_dict(),
-        ColumnSet(columns=[
-            Column(width=1, items=[TextBlock(text="Keep until", horizontalAlignment=HorizontalAlignment.RIGHT)], verticalContentAlignment=OPTIONS.VerticalContentAlignment.CENTER),
-            Column(width=3, items=[
-                ColumnSet(columns=[
-                    Column(width=2, items=[INPUTS.Date(id="expiry_date", placeholder="Defaults to tomorrow")]),
-                    Column(width=1, items=[TextBlock(text=DEFAULT_EXPIRY_TIME_DESC)], verticalContentAlignment=OPTIONS.VerticalContentAlignment.CENTER)
-                ])
-            ])
-        ]).to_dict(),
-        ActionSet(
-            spacing=OPTIONS.Spacing.DEFAULT,  # Use default spacing
-            actions=[
-                Submit(title="Get List", data={"callback_keyword": "current_approved_testing"}),  # Changed title
-                Submit(title="Remove", data={"callback_keyword": "remove_approved_testing"}, style=ActionStyle.DESTRUCTIVE),  # Corrected style
-                Submit(title="Add", data={"callback_keyword": "add_approved_testing"}, style=ActionStyle.POSITIVE)  # Corrected style
-            ],
-        ).to_dict()
+            text="New Azure DevOps Work Item",
+            color=Colors.ACCENT,
+            weight=FontWeight.BOLDER,
+            size=OPTIONS.FontSize.MEDIUM,
+            horizontalAlignment=HorizontalAlignment.CENTER
+        ),
+        TextBlock(
+            text="Title",
+            color=Colors.DEFAULT
+        ),
+        INPUTS.Text(
+            id="wit_title",
+            isRequired=True,
+            errorMessage="Title is required"
+        ),
+        TextBlock(
+            text="Description",
+            color=Colors.DEFAULT
+        ),
+        INPUTS.Text(
+            id="wit_description",
+            isMultiline=True,
+            isRequired=True,
+            errorMessage="Description is required"
+        ),
+        ColumnSet(
+            columns=[
+                Column(
+                    items=[
+                        TextBlock(
+                            text="Type",
+                            color=Colors.DEFAULT
+                        ),
+                        INPUTS.ChoiceSet(
+                            wrap=True,
+                            id="wit_type",
+                            value="User%20Story",
+                            choices=[
+                                Choice(title="User Story", value="User%20Story"),
+                                Choice(title="Bug", value="Bug"),
+                                Choice(title="Task", value="Task")
+                            ],
+                            isRequired=True,
+                            errorMessage="Type is required"
+                        )
+                    ]
+                )
+            ]
+        )
     ]
-}
+)
+
+RED_TEAM_TESTING_CARD = AdaptiveCard(
+    body=[
+        TextBlock(
+            text="Red Team Testing",
+            horizontalAlignment=HorizontalAlignment.CENTER,
+            weight=FontWeight.BOLDER,
+            size=OPTIONS.FontSize.MEDIUM,
+            color=Colors.ACCENT
+        ),
+        ColumnSet(
+            columns=[
+                Column(
+                    width=1,
+                    items=[
+                        TextBlock(
+                            text="Username(s)",
+                            horizontalAlignment=HorizontalAlignment.RIGHT
+                        )
+                    ],
+                    verticalContentAlignment=OPTIONS.VerticalContentAlignment.CENTER
+                ),
+                Column(
+                    width=3,
+                    items=[
+                        INPUTS.Text(
+                            id="usernames",
+                            placeholder="comma separated"
+                        )
+                    ]
+                )
+            ]
+        ),
+        ColumnSet(
+            columns=[
+                Column(
+                    width=1,
+                    items=[
+                        TextBlock(
+                            text="Hostname(s)",
+                            horizontalAlignment=HorizontalAlignment.RIGHT
+                        )
+                    ],
+                    verticalContentAlignment=OPTIONS.VerticalContentAlignment.CENTER
+                ),
+                Column(
+                    width=3,
+                    items=[
+                        INPUTS.Text(
+                            id="host_names",
+                            placeholder="comma separated"
+                        )
+                    ]
+                )
+            ]
+        )
+    ]
+)
 
 # Card for importing a Prod ticket to Dev
 TICKET_IMPORT_CARD = AdaptiveCard(
@@ -326,70 +391,42 @@ TUNING_REQUEST_CARD = AdaptiveCard(
 
 # --- All Options Card (Consolidated Actions) ---
 # This card uses Action.ShowCard to present other cards as sub-menus
-all_options_card = {
-    "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
-    "type": "AdaptiveCard",
-    "version": "1.3",
-    "body": [
+all_options_card = AdaptiveCard(
+    body=[
         TextBlock(
-            text=f"{DEFAULT_BOT_NAME} Options", weight=FontWeight.BOLDER, size=OPTIONS.FontSize.MEDIUM,
-            horizontalAlignment=HorizontalAlignment.CENTER, color=Colors.ACCENT
-        ).to_dict()
+            text=f"{DEFAULT_BOT_NAME} Options",
+            weight=FontWeight.BOLDER,
+            size=OPTIONS.FontSize.MEDIUM,
+            horizontalAlignment=HorizontalAlignment.CENTER,
+            color=Colors.ACCENT
+        )
     ],
-    "actions": [
-        {"type": "Action.ShowCard", "title": "Approved Testing", "card": APPROVED_TESTING_CARD},
-        {"type": "Action.ShowCard", "title": "On Call", "card": {
-            "type": "AdaptiveCard", "version": "1.3",
-            "body": [
-                TextBlock(text="Get On-Call Information", weight=FontWeight.BOLDER, horizontalAlignment=HorizontalAlignment.CENTER).to_dict(),
-                ActionSet(spacing=OPTIONS.Spacing.DEFAULT, actions=[
-                    Submit(title="Who is On Call?", data={"callback_keyword": "who"}),
-                    Submit(title="Show Rotation", data={"callback_keyword": "rotation"})
-                ]).to_dict()
-            ]
-        }},
-        {"type": "Action.ShowCard", "title": "CrowdStrike", "card": {
-            "type": "AdaptiveCard", "version": "1.3",
-            "body": [
-                TextBlock(text="CS Host Containment", size=OPTIONS.FontSize.MEDIUM, weight=FontWeight.BOLDER, horizontalAlignment=HorizontalAlignment.CENTER, wrap=True).to_dict(),
-                ColumnSet(columns=[
-                    Column(width="auto", items=[TextBlock(text="Hostname:", wrap=True, horizontalAlignment=HorizontalAlignment.RIGHT)],
-                           verticalContentAlignment=OPTIONS.VerticalContentAlignment.CENTER),
-                    Column(width="stretch", items=[INPUTS.Text(id="host_name_cs", placeholder="Enter exact hostname")])
-                ]).to_dict(),
-                ActionSet(spacing=OPTIONS.Spacing.DEFAULT, actions=[
-                    Submit(title="Check Status", data={"callback_keyword": "status"}),
-                    # Assuming 'uncontain' and 'contain' commands exist and handle the host_name_cs input
-                    Submit(title="Uncontain", data={"callback_keyword": "uncontain"}, style=ActionStyle.POSITIVE),
-                    Submit(title="Contain", data={"callback_keyword": "contain"}, style=ActionStyle.DESTRUCTIVE)
-                ]).to_dict()
-            ]
-        }},
-        {"type": "Action.ShowCard", "title": "XSOAR", "card": {
-            "type": "AdaptiveCard", "version": "1.3",
-            "body": [
-                TextBlock(text="XSOAR Actions", weight=FontWeight.BOLDER, horizontalAlignment=HorizontalAlignment.CENTER).to_dict(),
-                ActionSet(spacing=OPTIONS.Spacing.DEFAULT, actions=[
-                    ShowCard(title="New Ticket", card=NEW_TICKET_CARD),
-                    ShowCard(title="IOC Hunt", card=IOC_HUNT),
-                    ShowCard(title="Threat Hunt", card=THREAT_HUNT),
-                    ShowCard(title="Import Ticket", card=TICKET_IMPORT_CARD.to_dict())
-                ]).to_dict()
-            ]
-        }},
-        {"type": "Action.ShowCard", "title": "AZDO", "card": AZDO_CARD},
-        {"type": "Action.ShowCard", "title": "Tuning Request", "card": TUNING_REQUEST_CARD.to_dict()},
-        {"type": "Action.ShowCard", "title": "Misc", "card": {
-            "type": "AdaptiveCard", "version": "1.3",
-            "body": [
-                TextBlock(text="Miscellaneous", weight=FontWeight.BOLDER, horizontalAlignment=HorizontalAlignment.CENTER).to_dict(),
-                ActionSet(spacing=OPTIONS.Spacing.DEFAULT, actions=[
-                    Submit(title="Favorite URLs", data={"callback_keyword": "urls"})
-                ]).to_dict()
-            ]
-        }}
+    actions=[
+        ShowCard(
+            title="Approved Testing",
+            card=RED_TEAM_TESTING_CARD
+        ),
+        ShowCard(
+            title="On Call",
+            card=AdaptiveCard(
+                body=[
+                    TextBlock(
+                        text="Get On-Call Information",
+                        weight=FontWeight.BOLDER,
+                        horizontalAlignment=HorizontalAlignment.CENTER
+                    ),
+                    ActionSet(
+                        spacing=OPTIONS.Spacing.DEFAULT,
+                        actions=[
+                            Submit(title="Who is On Call?", data={"callback_keyword": "who"}),
+                            Submit(title="Show Rotation", data={"callback_keyword": "rotation"})
+                        ]
+                    )
+                ]
+            )
+        )
     ]
-}
+)
 
 
 # --- Helper Functions ---
@@ -1041,8 +1078,8 @@ class GetApprovedTestingCard(Command):
     def __init__(self):
         super().__init__(
             command_keyword="testing",
-            help_message="Manage Approved Security Testing entries",
-            card=APPROVED_TESTING_CARD,
+            help_message="Red Team Testing",
+            card=RED_TEAM_TESTING_CARD,
         )
 
     @log_moneyball_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles)
