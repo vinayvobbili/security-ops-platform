@@ -1,0 +1,13 @@
+{
+  ".*CrowdStrike.*": "CrowdStrike",
+  ".*Zscaler.*": "ZScaler",
+  ".*Tanium.*": "Tanium",
+  ".*Azure.*": "Azure",
+  ".*Employee Reported.*": "Emp. Report",
+  ".*Vectra.*": "Vectra",
+  ".*Prisma.*": "Prisma",
+  ".*Qradar.*": "Qradar",
+  ".*Akamai.*": "Akamai",
+  ".*Area1.*": "Area1",
+  ".*PaSeries.*": "PaSeries"
+}
