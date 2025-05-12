@@ -6,8 +6,9 @@ import io
 import logging
 import pstats
 import time
+from datetime import datetime
 from pathlib import Path
-from typing import Dict, Any, Callable, TypeVar, cast
+from typing import Dict, Any, Callable, TypeVar, cast, Optional
 
 import pandas as pd
 from tqdm import tqdm
@@ -25,18 +26,32 @@ logger = logging.getLogger(__name__)
 # Type variable for decorator
 F = TypeVar('F', bound=Callable[..., Any])
 
-# Constants
+# Constants - consolidated
 ROOT_DIRECTORY = Path(__file__).parent.parent.parent
-DATA_DIR = ROOT_DIRECTORY / "data/transient/epp_device_tagging"
-INPUT_FILE = DATA_DIR / "all_cs_hosts.xlsx"
-HOSTS_WITHOUT_TAG_FILE = DATA_DIR / "cs_hosts_without_ring_tag.xlsx"
-UNIQUE_HOSTS_FILE = DATA_DIR / "unique_hosts_without_ring_tag.xlsx"
-ENRICHED_HOSTS_FILE = DATA_DIR / "enriched_unique_hosts_without_ring_tag.xlsx"
-PROFILE_OUTPUT_DIR = ROOT_DIRECTORY / "profiles"
+DATA_DIR = ROOT_DIRECTORY / "data" / "transient" / "epp_device_tagging"
+
+# Default configuration values
+DEFAULT_CHUNK_SIZE = 500
+DEFAULT_MAX_WORKERS = 10
 
 # Configuration
 CONFIG = get_config()
 webex_api = WebexTeamsAPI(access_token=CONFIG.webex_bot_access_token_jarvais)
+
+
+def get_dated_path(base_dir: Path, filename: str) -> Path:
+    """
+    Create a path with today's date directory.
+
+    Args:
+        base_dir: Base directory path
+        filename: Name of the file
+
+    Returns:
+        Path with date directory
+    """
+    today_date = datetime.now().strftime('%m-%d-%Y')
+    return base_dir / today_date / filename
 
 
 def benchmark(func: F) -> F:
@@ -54,10 +69,11 @@ def benchmark(func: F) -> F:
     return cast(F, wrapper)
 
 
-def run_profiler(func: Callable, *args, **kwargs) -> None:
+def run_profiler(func: Callable, *args, **kwargs) -> Any:
     """Run the cProfile profiler on a function and save results."""
-    PROFILE_OUTPUT_DIR.mkdir(exist_ok=True, parents=True)
-    profile_path = PROFILE_OUTPUT_DIR / f"{func.__name__}_{int(time.time())}.prof"
+    profile_output_dir = get_dated_path(ROOT_DIRECTORY, "profiles")
+    profile_output_dir.mkdir(exist_ok=True, parents=True)
+    profile_path = profile_output_dir / f"{func.__name__}_{int(time.time())}.prof"
 
     # Run the profiler
     profiler = cProfile.Profile()
@@ -80,21 +96,14 @@ def run_profiler(func: Callable, *args, **kwargs) -> None:
 
 @benchmark
 def read_excel_file(file_path: Path) -> pd.DataFrame:
-    """Read data from an Excel file.
-
-    Args:
-        file_path: Path to the Excel file
-
-    Returns:
-        DataFrame containing the Excel data
-
-    Raises:
-        FileNotFoundError: If the file doesn't exist
-    """
+    """Read data from an Excel file."""
     try:
         return pd.read_excel(file_path, engine="openpyxl")
     except FileNotFoundError:
         logger.error(f"File not found: {file_path}")
+        raise
+    except PermissionError:
+        logger.error(f"Permission denied for file: {file_path}")
         raise
     except Exception as e:
         logger.error(f"Error reading file {file_path}: {e}")
@@ -103,39 +112,60 @@ def read_excel_file(file_path: Path) -> pd.DataFrame:
 
 @benchmark
 def write_excel_file(df: pd.DataFrame, file_path: Path) -> None:
-    """Write DataFrame to an Excel file.
-
-    Args:
-        df: DataFrame to write
-        file_path: Path where the file will be saved
-    """
+    """Write DataFrame to an Excel file."""
     try:
         # Ensure directory exists
         file_path.parent.mkdir(parents=True, exist_ok=True)
         df.to_excel(file_path, index=False, engine="openpyxl")
         logger.info(f"Successfully wrote {len(df)} records to {file_path}")
+    except PermissionError:
+        logger.error(f"Permission denied when writing to {file_path}")
+        raise
+    except OSError as e:
+        logger.error(f"OS error when writing to {file_path}: {e}")
+        raise
     except Exception as e:
         logger.error(f"Error writing to {file_path}: {e}")
         raise
 
 
 @benchmark
-def send_report(step_times: Dict[str, float]) -> None:
+def send_report(step_times: Dict[str, float], hosts_count: int = 0) -> None:
     """Sends the enriched hosts report to a Webex room, including step run times."""
+    enriched_hosts_file = get_dated_path(DATA_DIR, "enriched_unique_hosts_without_ring_tag.xlsx")
     try:
-        host_count = len(read_excel_file(ENRICHED_HOSTS_FILE))
+
         report_text = (
-                f"UNIQUE CS hosts without a Ring tag, enriched with SNOW details. Count={host_count}!\n\n"
+                f"UNIQUE CS hosts without a Ring tag, enriched with SNOW details. Count={hosts_count}!\n\n"
                 "Step execution times:\n" +
                 "\n".join([f"{step}: {ReportHandler.format_duration(time)}" for step, time in step_times.items()])
         )
         webex_api.messages.create(
             roomId=CONFIG.webex_room_id_epp_tagging,
             text=report_text,
-            files=[str(ENRICHED_HOSTS_FILE)]
+            files=[str(enriched_hosts_file)]
         )
+    except FileNotFoundError:
+        logger.error(f"Report file not found at {enriched_hosts_file}")
     except Exception as e:
         logger.error(f"Failed to send report: {e}")
+
+
+def process_unique_hosts(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Process dataframe to get unique hosts with latest last_seen.
+
+    Args:
+        df: DataFrame with host data
+
+    Returns:
+        DataFrame with unique hosts (latest entry per hostname)
+    """
+    # Convert last_seen to datetime for proper sorting - only once
+    df["last_seen"] = pd.to_datetime(df["last_seen"], errors='coerce').dt.tz_localize(None)
+
+    # Group by hostname and get the record with the latest last_seen
+    return df.loc[df.groupby("hostname")["last_seen"].idxmax()]
 
 
 @benchmark
@@ -143,49 +173,103 @@ def get_unique_hosts_without_ring_tag() -> None:
     """Group hosts by hostname and get the record with the latest last_seen for each."""
     try:
         # Read the input file
-        df = read_excel_file(HOSTS_WITHOUT_TAG_FILE)
+        hosts_without_tag_file = get_dated_path(DATA_DIR, "cs_hosts_without_ring_tag.xlsx")
+        df = read_excel_file(hosts_without_tag_file)
 
-        # Convert last_seen to datetime for proper sorting - only once
-        df["last_seen"] = pd.to_datetime(df["last_seen"], errors='coerce').dt.tz_localize(None)
-
-        # Group by hostname and get the record with the latest last_seen
-        unique_hosts = df.loc[df.groupby("hostname")["last_seen"].idxmax()]
+        # Process the data to get unique hosts
+        unique_hosts = process_unique_hosts(df)
 
         # Write the results to a new file
-        write_excel_file(unique_hosts, UNIQUE_HOSTS_FILE)
+        unique_hosts_file = get_dated_path(DATA_DIR, "unique_hosts_without_ring_tag.xlsx")
+        write_excel_file(unique_hosts, unique_hosts_file)
+    except FileNotFoundError as e:
+        logger.error(f"Input file not found: {e}")
+        raise
     except Exception as e:
         logger.error(f"Error processing unique hosts: {e}")
+        raise
+
+
+def filter_hosts_without_ring_tag(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Filter hosts that don't have a Ring tag.
+
+    Args:
+        df: DataFrame with host data including tags
+
+    Returns:
+        DataFrame with filtered hosts
+    """
+    # Convert tags to strings and handle NaN values
+    df["current_tags"] = df["current_tags"].astype(str).replace('nan', '')
+
+    # Vectorized filtering for hosts without ring tags
+    has_ring_tag = df["current_tags"].str.contains("FalconGroupingTags/.*Ring", regex=True, case=False, na=False)
+    return df[~has_ring_tag]
 
 
 @benchmark
 def list_cs_hosts_without_ring_tag() -> None:
     """List CrowdStrike hosts that don't have a FalconGroupingTags/*Ring* tag."""
+    input_file = get_dated_path(DATA_DIR, "all_cs_hosts.xlsx")
     try:
-        df = read_excel_file(INPUT_FILE)
+        df = read_excel_file(input_file)
 
-        # Convert tags to strings and handle NaN values
-        df["current_tags"] = df["current_tags"].astype(str).replace('nan', '')
+        # Filter hosts without ring tags
+        output_df = filter_hosts_without_ring_tag(df)
 
-        # Vectorized filtering for hosts without ring tags
-        has_ring_tag = df["current_tags"].str.contains("FalconGroupingTags/.*Ring",
-                                                       regex=True, case=False, na=False)
-        output_df = df[~has_ring_tag]
-
-        write_excel_file(output_df, HOSTS_WITHOUT_TAG_FILE)
+        hosts_without_tag_file = get_dated_path(DATA_DIR, "cs_hosts_without_ring_tag.xlsx")
+        write_excel_file(output_df, hosts_without_tag_file)
         logger.info(f"Found {len(output_df)} hosts without a Ring tag.")
+    except FileNotFoundError:
+        logger.error(f"Input file not found at {input_file}")
+        raise
     except Exception as e:
         logger.error(f"Error listing hosts without ring tag: {e}")
+        raise
+
+
+def fetch_host_details(hostname: str, service_now_client: ServiceNowClient) -> Dict[str, Any]:
+    """
+    Fetch host details from ServiceNow.
+
+    Args:
+        hostname: The hostname to look up
+        service_now_client: Initialized ServiceNowClient
+
+    Returns:
+        Dictionary with host details
+    """
+    try:
+        return service_now_client.get_host_details(hostname)
+    except ConnectionError as e:
+        logger.error(f"Connection error for {hostname}: {e}")
+        return {"name": hostname, "error": "Connection error", "error_details": str(e)}
+    except TimeoutError as e:
+        logger.error(f"Timeout error for {hostname}: {e}")
+        return {"name": hostname, "error": "Timeout error", "error_details": str(e)}
+    except Exception as e:
+        logger.error(f"Error fetching details for {hostname}: {e}")
+        return {"name": hostname, "error": str(e)}
 
 
 @benchmark
-def enrich_host_report() -> None:
-    """Enrich host data with ServiceNow details using multithreading."""
+def enrich_host_report(chunk_size: int = DEFAULT_CHUNK_SIZE,
+                       service_now_client: Optional[ServiceNowClient] = None):
+    """
+    Enrich host data with ServiceNow details using multithreading.
+
+    Args:
+        chunk_size: Size of batches for processing
+        service_now_client: Optional pre-initialized ServiceNowClient (for testing)
+    """
     try:
         # Get hosts from unique_hosts file
-        unique_hosts_df = read_excel_file(UNIQUE_HOSTS_FILE)
+        unique_hosts_file = get_dated_path(DATA_DIR, "unique_hosts_without_ring_tag.xlsx")
+        unique_hosts_df = read_excel_file(unique_hosts_file)
 
-        # Initialize ServiceNow client
-        service_now = ServiceNowClient(
+        # Initialize ServiceNow client if not provided
+        snow_client = service_now_client or ServiceNowClient(
             CONFIG.snow_base_url,
             CONFIG.snow_functional_account_id,
             CONFIG.snow_functional_account_password,
@@ -196,27 +280,21 @@ def enrich_host_report() -> None:
         hostnames = unique_hosts_df['hostname'].tolist()
         all_device_details = []
 
-        # Process in chunks of 500 hosts at a time
-        chunk_size = 500
+        # Process in chunks
         for i in range(0, len(hostnames), chunk_size):
             chunk_hostnames = hostnames[i:i + chunk_size]
             chunk_details = []
 
-            def fetch_host_details(hostname: str) -> Dict[str, Any]:
-                try:
-                    return service_now.get_host_details(hostname)
-                except Exception as e:
-                    logger.error(f"Error fetching details for {hostname}: {e}")
-                    return {"name": hostname, "error": str(e)}
-
             # Adjust number of workers based on dataset size
             # More workers for larger datasets, fewer for smaller ones
-            max_workers = min(20, max(5, len(hostnames) // 100))
+            max_workers = min(20, max(5, len(chunk_hostnames) // 100))
 
             # Use ThreadPoolExecutor for this chunk
             with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-                future_to_hostname = {executor.submit(fetch_host_details, hostname): hostname
-                                      for hostname in chunk_hostnames}
+                future_to_hostname = {
+                    executor.submit(fetch_host_details, hostname, snow_client): hostname
+                    for hostname in chunk_hostnames
+                }
 
                 for future in tqdm(concurrent.futures.as_completed(future_to_hostname),
                                    total=len(chunk_hostnames),
@@ -236,10 +314,17 @@ def enrich_host_report() -> None:
         merged_df = pd.merge(unique_hosts_df, device_details_df,
                              left_on='hostname', right_on='name', how='left')
 
-        write_excel_file(merged_df, ENRICHED_HOSTS_FILE)
+        enriched_hosts_file = get_dated_path(DATA_DIR, "enriched_unique_hosts_without_ring_tag.xlsx")
+        write_excel_file(merged_df, enriched_hosts_file)
         logger.info(f"Successfully enriched {len(all_device_details)} host records")
+
+        return len(all_device_details)
+    except FileNotFoundError as e:
+        logger.error(f"Required file not found: {e}")
+        raise
     except Exception as e:
         logger.error(f"Error enriching host report: {e}")
+        raise
 
 
 def parse_args():
@@ -252,6 +337,8 @@ def parse_args():
         "enrich_host_report",
         "all"
     ], default="all", help="Function to profile")
+    parser.add_argument("--chunk-size", type=int, default=DEFAULT_CHUNK_SIZE,
+                        help="Chunk size for batch processing")
     return parser.parse_args()
 
 
@@ -265,14 +352,14 @@ def main() -> None:
         function_map = {
             "list_cs_hosts_without_ring_tag": list_cs_hosts_without_ring_tag,
             "get_unique_hosts_without_ring_tag": get_unique_hosts_without_ring_tag,
-            "enrich_host_report": enrich_host_report
+            "enrich_host_report": lambda: enrich_host_report(chunk_size=args.chunk_size)
         }
 
         if args.profile:
             logger.info("Running with profiling enabled")
             if args.profile_function == "all":
                 # Profile the entire workflow
-                run_profiler(lambda: run_workflow())
+                run_profiler(lambda: run_workflow(chunk_size=args.chunk_size))
             else:
                 # Profile specific function
                 func = function_map.get(args.profile_function)
@@ -289,22 +376,34 @@ def main() -> None:
         logger.error(f"Error in main workflow: {e}")
 
 
-def run_workflow():
-    """Run the complete workflow without profiling."""
+def run_workflow(chunk_size: int = DEFAULT_CHUNK_SIZE) -> None:
+    """
+    Run the complete workflow without profiling.
+
+    Args:
+        chunk_size: Size of batches for processing
+    """
     step_times = {}
     client = CrowdStrikeClient()
 
-    for step_name, step_func in [
+    steps = [
         ('Fetch all hosts from CS', client.fetch_all_hosts_and_write_to_xlsx),
         ("List CS Hosts Without Ring Tag", list_cs_hosts_without_ring_tag),
         ("Get Unique Hosts Without Ring Tag", get_unique_hosts_without_ring_tag),
-        ("Enrich Host Report with SNOW details", enrich_host_report),
-    ]:
+    ]
+
+    # Run standard steps
+    for step_name, step_func in steps:
         start_time = time.time()
         step_func()
         step_times[step_name] = time.time() - start_time
 
-    send_report(step_times)
+    # Run enrichment step with chunk_size parameter
+    start_time = time.time()
+    enriched_count = enrich_host_report(chunk_size=chunk_size)
+    step_times["Enrich Host Report with SNOW details"] = time.time() - start_time
+
+    send_report(step_times, enriched_count)
 
 
 if __name__ in ('__main__', '__builtin__', 'builtins'):
