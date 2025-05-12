@@ -1,6 +1,8 @@
 import concurrent.futures
+import os
 import threading
 import time
+from datetime import datetime
 from pathlib import Path
 from typing import Dict, Optional, Any
 from typing import List
@@ -12,6 +14,8 @@ from falconpy import OAuth2
 
 from config import get_config
 
+ROOT_DIRECTORY = Path(__file__).parent.parent
+
 
 class CrowdStrikeClient:
     """Client for interacting with the CrowdStrike Falcon API."""
@@ -19,7 +23,7 @@ class CrowdStrikeClient:
     def __init__(self):
         self.config = get_config()
         self.base_url = "api.us-2.crowdstrike.com"
-        self.output_dir = Path('../data/transient/epp_device_tagging')
+        self.output_dir = ROOT_DIRECTORY / "data" / "transient" / "epp_device_tagging"
 
         # Initialize authentication
         self.auth = OAuth2(
@@ -265,13 +269,14 @@ class CrowdStrikeClient:
             print(f"An error occurred fetching host data: {e}")
 
         # Write results to Excel
-        output_path = self.output_dir / xlsx_filename
+        today_date = datetime.now().strftime('%m-%d-%Y')
+        output_path = self.output_dir / today_date
+        os.makedirs(output_path, exist_ok=True)
         print(f"Writing {len(all_host_data)} host records to {output_path}...")
 
         try:
-            output_path.parent.mkdir(parents=True, exist_ok=True)
             df = pd.DataFrame(all_host_data)
-            df.to_excel(output_path, index=False, engine='openpyxl')
+            df.to_excel(output_path / xlsx_filename, index=False, engine='openpyxl')
             print(f"Successfully wrote {len(all_host_data)} unique host records")
         except Exception as e:
             print(f"Error writing to XLSX: {e}")
