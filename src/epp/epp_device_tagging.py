@@ -486,7 +486,7 @@ class FileHandler:
                 'Yes' if host.was_country_guessed else 'No',
                 ', '.join(host.current_crowd_strike_tags),
                 host.new_crowd_strike_tag,
-                host.status_message or ('Ring tag generated' if host.new_crowd_strike_tag else 'No tag needed'),
+                host.status_message or ('Ring tag generated' if host.new_crowd_strike_tag else 'No tag generated'),
             ])
 
         # Save the workbook
@@ -635,32 +635,9 @@ def main() -> None:
     """Main execution function with profiling options."""
     try:
         print("Starting EPP Device Tagging")
-        args = parse_args()
-
-        # Map functions to their callable objects for profiling
-        function_map = {
-            "initialize_hosts_parallel": lambda: list(Host.initialize_hosts_parallel(FileHandler.get_hostnames())),
-            "generate_tags": lambda: TagManager.generate_tags(list(Host.initialize_hosts_parallel(FileHandler.get_hostnames()))),
-            "apply_tags": lambda: run_workflow(),  # This will run the full workflow as apply_tags needs the full context
-        }
-
-        if args.profile:
-            print("Running with profiling enabled")
-            if args.profile_function == "all":
-                # Profile the entire workflow
-                run_profiler(run_workflow)
-            else:
-                # Profile specific function
-                func = function_map.get(args.profile_function)
-                if func:
-                    run_profiler(func)
-                else:
-                    print(f"Unknown function: {args.profile_function}")
-        else:
-            # Run normally without profiling
-            run_workflow()
-
+        run_workflow()
         print("Completed EPP Device Tagging")
+
     except Exception as e:
         print(f"Error in main workflow: {e}")
 
