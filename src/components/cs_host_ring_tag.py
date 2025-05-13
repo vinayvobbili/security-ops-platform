@@ -169,18 +169,18 @@ def process_unique_hosts(df: pd.DataFrame) -> pd.DataFrame:
 
 
 @benchmark
-def get_unique_hosts_without_ring_tag() -> None:
+def get_unique_hosts() -> None:
     """Group hosts by hostname and get the record with the latest last_seen for each."""
     try:
         # Read the input file
-        hosts_without_tag_file = get_dated_path(DATA_DIR, "cs_hosts_without_ring_tag.xlsx")
+        hosts_without_tag_file = get_dated_path(DATA_DIR, "all_cs_hosts.xlsx")
         df = read_excel_file(hosts_without_tag_file)
 
         # Process the data to get unique hosts
         unique_hosts = process_unique_hosts(df)
 
         # Write the results to a new file
-        unique_hosts_file = get_dated_path(DATA_DIR, "unique_hosts_without_ring_tag.xlsx")
+        unique_hosts_file = get_dated_path(DATA_DIR, "unique_cs_hosts.xlsx")
         write_excel_file(unique_hosts, unique_hosts_file)
     except FileNotFoundError as e:
         logger.error(f"Input file not found: {e}")
@@ -211,14 +211,14 @@ def filter_hosts_without_ring_tag(df: pd.DataFrame) -> pd.DataFrame:
 @benchmark
 def list_cs_hosts_without_ring_tag() -> None:
     """List CrowdStrike hosts that don't have a FalconGroupingTags/*Ring* tag."""
-    input_file = get_dated_path(DATA_DIR, "all_cs_hosts.xlsx")
+    input_file = get_dated_path(DATA_DIR, "unique_cs_hosts.xlsx")
     try:
         df = read_excel_file(input_file)
 
         # Filter hosts without ring tags
         output_df = filter_hosts_without_ring_tag(df)
 
-        hosts_without_tag_file = get_dated_path(DATA_DIR, "cs_hosts_without_ring_tag.xlsx")
+        hosts_without_tag_file = get_dated_path(DATA_DIR, "cs_hosts_last_seen_without_ring_tag.xlsx")
         write_excel_file(output_df, hosts_without_tag_file)
         logger.info(f"Found {len(output_df)} hosts without a Ring tag.")
     except FileNotFoundError:
@@ -265,7 +265,7 @@ def enrich_host_report(chunk_size: int = DEFAULT_CHUNK_SIZE,
     """
     try:
         # Get hosts from unique_hosts file
-        unique_hosts_file = get_dated_path(DATA_DIR, "unique_hosts_without_ring_tag.xlsx")
+        unique_hosts_file = get_dated_path(DATA_DIR, "cs_hosts_last_seen_without_ring_tag.xlsx")
         unique_hosts_df = read_excel_file(unique_hosts_file)
 
         # Initialize ServiceNow client if not provided
@@ -346,31 +346,7 @@ def main() -> None:
     """Main function to run the complete workflow."""
     try:
         logger.info("Starting CrowdStrike host ring tag analysis")
-        args = parse_args()
-
-        # Map functions to their names for easier profiling
-        function_map = {
-            "list_cs_hosts_without_ring_tag": list_cs_hosts_without_ring_tag,
-            "get_unique_hosts_without_ring_tag": get_unique_hosts_without_ring_tag,
-            "enrich_host_report": lambda: enrich_host_report(chunk_size=args.chunk_size)
-        }
-
-        if args.profile:
-            logger.info("Running with profiling enabled")
-            if args.profile_function == "all":
-                # Profile the entire workflow
-                run_profiler(lambda: run_workflow(chunk_size=args.chunk_size))
-            else:
-                # Profile specific function
-                func = function_map.get(args.profile_function)
-                if func:
-                    run_profiler(func)
-                else:
-                    logger.error(f"Unknown function: {args.profile_function}")
-        else:
-            # Run normally without profiling
-            run_workflow()
-
+        run_workflow()
         logger.info("Completed CrowdStrike host ring tag analysis")
     except Exception as e:
         logger.error(f"Error in main workflow: {e}")
@@ -388,8 +364,8 @@ def run_workflow(chunk_size: int = DEFAULT_CHUNK_SIZE) -> None:
 
     steps = [
         ('Fetch all hosts from CS', client.fetch_all_hosts_and_write_to_xlsx),
+        ("Get Unique Hosts Without Ring Tag", get_unique_hosts),
         ("List CS Hosts Without Ring Tag", list_cs_hosts_without_ring_tag),
-        ("Get Unique Hosts Without Ring Tag", get_unique_hosts_without_ring_tag),
     ]
 
     # Run standard steps
@@ -400,7 +376,7 @@ def run_workflow(chunk_size: int = DEFAULT_CHUNK_SIZE) -> None:
 
     # Run enrichment step with chunk_size parameter
     start_time = time.time()
-    enriched_count = enrich_host_report(chunk_size=chunk_size)
+    enriched_count = enrich_host_report()
     step_times["Enrich Host Report with SNOW details"] = time.time() - start_time
 
     send_report(step_times, enriched_count)

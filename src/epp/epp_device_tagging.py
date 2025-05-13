@@ -459,7 +459,8 @@ class FileHandler:
         # Get the current date and time in ET
         et_timezone = timezone('US/Eastern')
         current_time_et = datetime.now(et_timezone).strftime("%m_%d_%Y %I:%M %p %Z")
-        output_file = TRANSIENT_DIR / 'epp_device_tagging' / f'EPP-Falcon ring tagging {current_time_et}.xlsx'
+        today_date = datetime.now().strftime('%m-%d-%Y')
+        output_file = TRANSIENT_DIR / 'epp_device_tagging' / today_date / f'EPP-Falcon ring tagging {current_time_et}.xlsx'
 
         # Create a new workbook
         workbook = openpyxl.Workbook()
