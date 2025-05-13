@@ -1,3 +1,4 @@
+import ipaddress
 from datetime import datetime, timedelta
 from urllib.parse import quote
 
@@ -533,7 +534,8 @@ APPROVED_TESTING_CARD = {
                     "items": [
                         {
                             "type": "TextBlock",
-                            "text": "Hostname(s)",
+                            "text": "IP(s), Hostname(s) of Tester",
+                            "wrap": True,
                             "horizontalAlignment": "right"
                         }
                     ],
@@ -545,8 +547,9 @@ APPROVED_TESTING_CARD = {
                     "items": [
                         {
                             "type": "Input.Text",
-                            "id": "host_names",
-                            "placeholder": "Use , as seperator"
+                            "id": "ip_addresses_and_host_names_of_tester",
+                            "placeholder": "Use , as seperator",
+                            "isMultiline": True
                         }
                     ]
                 }
@@ -561,7 +564,8 @@ APPROVED_TESTING_CARD = {
                     "items": [
                         {
                             "type": "TextBlock",
-                            "text": "IP(s)",
+                            "text": "IP(s), Hostname(s) to be tested",
+                            "wrap": True,
                             "horizontalAlignment": "right"
                         }
                     ],
@@ -573,7 +577,7 @@ APPROVED_TESTING_CARD = {
                     "items": [
                         {
                             "type": "Input.Text",
-                            "id": "ip_addresses",
+                            "id": "ip_addresses_and_host_names_to_be_tested",
                             "placeholder": "Use , as seperator",
                             "isMultiline": True
                         }
@@ -1361,6 +1365,14 @@ def announce_new_approved_testing_entry(new_item) -> None:
     )
 
 
+def is_valid_ip(address: str) -> bool:
+    try:
+        ipaddress.ip_address(address)
+        return True
+    except ValueError:
+        return False
+
+
 class AddApprovedTestingEntry(Command):
     def __init__(self):
         super().__init__(
@@ -1370,12 +1382,13 @@ class AddApprovedTestingEntry(Command):
 
     def execute(self, message, attachment_actions, activity):
         usernames = attachment_actions.inputs['usernames'].strip()
-        host_names = attachment_actions.inputs['host_names'].strip()
-        ip_addresses = attachment_actions.inputs['ip_addresses'].strip()
+        items_of_tester = attachment_actions.inputs['ip_addresses_and_host_names_of_tester'].strip()
+        items_to_be_tested = attachment_actions.inputs['ip_addresses_and_host_names_to_be_tested'].strip()
 
-        if usernames == "" and host_names == "" and ip_addresses == "":
+        if usernames == "" and items_of_tester == "" and items_to_be_tested == "":
             return "One of username, host name, or IP address fields must be filled in. Please try again!"
 
+        all_items = items_of_tester + ', ' + items_to_be_tested
         description = attachment_actions.inputs['description'].strip()
         scope = attachment_actions.inputs['scope'].strip()
         submitter = activity['actor']['emailAddress']
@@ -1401,35 +1414,33 @@ class AddApprovedTestingEntry(Command):
                     }
                     master_entries.append(new_testing_entry)
 
-        if host_names:
-            host_names = host_names.split(',')
-            for host_name in host_names:
-                if host_name:
-                    current_entries.get("ENDPOINTS").append({"data": host_name.strip(), "expiry_date": expiry_date, "submitter": submitter})
-                    new_testing_entry = {
-                        "host_name": host_name,
-                        "description": description,
-                        "scope": scope,
-                        "submitter": submitter,
-                        "submit_date": datetime.now().strftime("%m/%d/%Y"),
-                        "expiry_date": expiry_date
-                    }
-                    master_entries.append(new_testing_entry)
-
-        if ip_addresses:
-            ip_addresses = ip_addresses.split(',')
-            for ip_address in ip_addresses:
-                if ip_address:
-                    current_entries.get("IP_ADDRESSES").append({"data": ip_address.strip(), "expiry_date": expiry_date, "submitter": submitter})
-                    new_testing_entry = {
-                        "ip_address": ip_address,
-                        "description": description,
-                        "scope": scope,
-                        "submitter": submitter,
-                        "submit_date": datetime.now().strftime("%m/%d/%Y"),
-                        "expiry_date": expiry_date
-                    }
-                    master_entries.append(new_testing_entry)
+        if all_items:
+            items = all_items.split(',')
+            for item in items:
+                if item:
+                    item = item.strip()
+                    if is_valid_ip(item):
+                        current_entries.get("IP_ADDRESSES").append({"data": item, "expiry_date": expiry_date, "submitter": submitter})
+                        new_testing_entry = {
+                            "ip_address": item,
+                            "description": description,
+                            "scope": scope,
+                            "submitter": submitter,
+                            "submit_date": datetime.now().strftime("%m/%d/%Y"),
+                            "expiry_date": expiry_date
+                        }
+                        master_entries.append(new_testing_entry)
+                    else:
+                        current_entries.get("ENDPOINTS").append({"data": item, "expiry_date": expiry_date, "submitter": submitter})
+                        new_testing_entry = {
+                            "host_name": item,
+                            "description": description,
+                            "scope": scope,
+                            "submitter": submitter,
+                            "submit_date": datetime.now().strftime("%m/%d/%Y"),
+                            "expiry_date": expiry_date
+                        }
+                        master_entries.append(new_testing_entry)
 
         list_handler.save(approved_testing_list_name, current_entries)
         list_handler.save(approved_testing_master_list_name, master_entries)
@@ -1441,8 +1452,8 @@ class AddApprovedTestingEntry(Command):
             "submit_date": datetime.now().strftime("%m/%d/%Y"),
             "expiry_date": expiry_date,
             "usernames": ', '.join(usernames) if usernames else "",
-            "host_names": ', '.join(host_names) if host_names else '',
-            "ip_addresses": ', '.join(ip_addresses) if ip_addresses else ''
+            "IPs/Hostnames of Tester": items_of_tester,
+            "IPs/Hostnames to be tested": items_to_be_tested
         })
 
         return f"{activity['actor']['displayName']}, your entry has been added to the Approved Testing list."
