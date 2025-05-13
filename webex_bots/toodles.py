@@ -618,7 +618,7 @@ APPROVED_TESTING_CARD = {
                     "items": [
                         {
                             "type": "TextBlock",
-                            "text": "Scope",
+                            "text": "Notes/Scope",
                             "wrap": True,
                             "horizontalAlignment": "right"
                         }
