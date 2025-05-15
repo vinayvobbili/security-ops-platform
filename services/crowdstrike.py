@@ -277,7 +277,7 @@ class CrowdStrikeClient:
         try:
             df = pd.DataFrame(all_host_data)
             df.to_excel(output_path / xlsx_filename, index=False, engine='openpyxl')
-            print(f"Successfully wrote {len(all_host_data)} unique host records")
+            print(f"Successfully wrote {len(all_host_data)} host records")
         except Exception as e:
             print(f"Error writing to XLSX: {e}")
 
