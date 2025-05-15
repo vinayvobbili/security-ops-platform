@@ -48,11 +48,11 @@ ROOT_DIRECTORY = Path(__file__).parent.parent
 PROFILE_OUTPUT_DIR = ROOT_DIRECTORY / "profiles"
 
 # Constants
-DATA_DIR = Path("../../data")
+ROOT_DIRECTORY = Path(__file__).parent.parent.parent
+DATA_DIR = ROOT_DIRECTORY / "data"
 TRANSIENT_DIR = DATA_DIR / "transient"
 REGIONS_FILE = DATA_DIR / "regions_by_country.json"
 COUNTRIES_FILE = DATA_DIR / "countries_by_code.json"
-INPUT_FILE = TRANSIENT_DIR / 'epp_device_tagging' / "Device Tagging input hosts.xlsx"
 
 # Type variable for decorator
 F = TypeVar('F', bound=Callable[..., Any])
@@ -421,16 +421,17 @@ class FileHandler:
 
     @staticmethod
     @benchmark
-    def get_hostnames(input_file=INPUT_FILE) -> List[str]:
+    def get_hostnames() -> List[str]:
         """
         Retrieves hostnames from an Excel file.
 
         Args:
-            input_file: The path to the Excel file containing hostnames.
 
         Returns:
             List of hostnames, or an empty list if the file is not found.
         """
+        today_date = datetime.now().strftime('%m-%d-%Y')
+        input_file = TRANSIENT_DIR / 'epp_device_tagging' / today_date / "cs_hosts_last_seen_without_ring_tag.xlsx"
         try:
             workbook = openpyxl.load_workbook(input_file)
             sheet = workbook.active
