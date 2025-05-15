@@ -317,7 +317,7 @@ def run_workflow(chunk_size: int = DEFAULT_CHUNK_SIZE) -> None:
 
     steps = [
         ('Fetch all hosts from CS', client.fetch_all_hosts_and_write_to_xlsx),
-        ("Get Unique Hosts Without Ring Tag", get_unique_hosts),
+        ("Get Unique Hosts by last seen date", get_unique_hosts),
         ("List CS Hosts Without Ring Tag", list_cs_hosts_without_ring_tag),
     ]
 
