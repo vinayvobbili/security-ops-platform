@@ -1,14 +1,10 @@
 import argparse
-import cProfile
 import concurrent.futures
-import functools
-import io
 import logging
-import pstats
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Any, Callable, TypeVar, cast, Optional
+from typing import Dict, Any, Callable, TypeVar, Optional
 
 import pandas as pd
 from tqdm import tqdm
@@ -54,47 +50,6 @@ def get_dated_path(base_dir: Path, filename: str) -> Path:
     return base_dir / today_date / filename
 
 
-def benchmark(func: F) -> F:
-    """Decorator to measure function execution time."""
-
-    @functools.wraps(func)
-    def wrapper(*args, **kwargs):
-        start_time = time.time()
-        result = func(*args, **kwargs)
-        end_time = time.time()
-        elapsed_time = end_time - start_time
-        logger.info(f"BENCHMARK: {func.__name__} executed in {elapsed_time:.4f} seconds")
-        return result
-
-    return cast(F, wrapper)
-
-
-def run_profiler(func: Callable, *args, **kwargs) -> Any:
-    """Run the cProfile profiler on a function and save results."""
-    profile_output_dir = get_dated_path(ROOT_DIRECTORY, "profiles")
-    profile_output_dir.mkdir(exist_ok=True, parents=True)
-    profile_path = profile_output_dir / f"{func.__name__}_{int(time.time())}.prof"
-
-    # Run the profiler
-    profiler = cProfile.Profile()
-    profiler.enable()
-    result = func(*args, **kwargs)
-    profiler.disable()
-
-    # Save full profile to file
-    profiler.dump_stats(str(profile_path))
-    logger.info(f"Saved profile to {profile_path}")
-
-    # Print summary to console
-    s = io.StringIO()
-    ps = pstats.Stats(profiler, stream=s).sort_stats('cumulative')
-    ps.print_stats(20)  # Print top 20 time-consuming functions
-    logger.info(f"Profile summary for {func.__name__}:\n{s.getvalue()}")
-
-    return result
-
-
-@benchmark
 def read_excel_file(file_path: Path) -> pd.DataFrame:
     """Read data from an Excel file."""
     try:
@@ -110,7 +65,6 @@ def read_excel_file(file_path: Path) -> pd.DataFrame:
         raise
 
 
-@benchmark
 def write_excel_file(df: pd.DataFrame, file_path: Path) -> None:
     """Write DataFrame to an Excel file."""
     try:
@@ -129,14 +83,15 @@ def write_excel_file(df: pd.DataFrame, file_path: Path) -> None:
         raise
 
 
-@benchmark
-def send_report(step_times: Dict[str, float], hosts_count: int = 0) -> None:
+def send_report(step_times: Dict[str, float]) -> None:
     """Sends the enriched hosts report to a Webex room, including step run times."""
-    enriched_hosts_file = get_dated_path(DATA_DIR, "enriched_unique_hosts_without_ring_tag.xlsx")
+    enriched_hosts_file = get_dated_path(DATA_DIR, "cs_hosts_last_seen_without_ring_tag.xlsx")
+    hosts_count = len(pd.read_excel(enriched_hosts_file))
+
     try:
 
         report_text = (
-                f"UNIQUE CS hosts without a Ring tag, enriched with SNOW details. Count={hosts_count}!\n\n"
+                f"UNIQUE CS hosts without a Ring tag. Count={hosts_count}!\n\n"
                 "Step execution times:\n" +
                 "\n".join([f"{step}: {ReportHandler.format_duration(time)}" for step, time in step_times.items()])
         )
@@ -168,7 +123,6 @@ def process_unique_hosts(df: pd.DataFrame) -> pd.DataFrame:
     return df.loc[df.groupby("hostname")["last_seen"].idxmax()]
 
 
-@benchmark
 def get_unique_hosts() -> None:
     """Group hosts by hostname and get the record with the latest last_seen for each."""
     try:
@@ -182,6 +136,7 @@ def get_unique_hosts() -> None:
         # Write the results to a new file
         unique_hosts_file = get_dated_path(DATA_DIR, "unique_cs_hosts.xlsx")
         write_excel_file(unique_hosts, unique_hosts_file)
+        logger.info(f"Found {len(unique_hosts)} unique hosts.")
     except FileNotFoundError as e:
         logger.error(f"Input file not found: {e}")
         raise
@@ -208,7 +163,6 @@ def filter_hosts_without_ring_tag(df: pd.DataFrame) -> pd.DataFrame:
     return df[~has_ring_tag]
 
 
-@benchmark
 def list_cs_hosts_without_ring_tag() -> None:
     """List CrowdStrike hosts that don't have a FalconGroupingTags/*Ring* tag."""
     input_file = get_dated_path(DATA_DIR, "unique_cs_hosts.xlsx")
@@ -253,7 +207,6 @@ def fetch_host_details(hostname: str, service_now_client: ServiceNowClient) -> D
         return {"name": hostname, "error": str(e)}
 
 
-@benchmark
 def enrich_host_report(chunk_size: int = DEFAULT_CHUNK_SIZE,
                        service_now_client: Optional[ServiceNowClient] = None):
     """
@@ -374,12 +327,14 @@ def run_workflow(chunk_size: int = DEFAULT_CHUNK_SIZE) -> None:
         step_func()
         step_times[step_name] = time.time() - start_time
 
-    # Run enrichment step with chunk_size parameter
+    '''
+    # Run enrichment step
     start_time = time.time()
-    enriched_count = enrich_host_report()
+    enrich_host_report()
     step_times["Enrich Host Report with SNOW details"] = time.time() - start_time
+    '''
 
-    send_report(step_times, enriched_count)
+    send_report(step_times)
 
 
 if __name__ in ('__main__', '__builtin__', 'builtins'):
