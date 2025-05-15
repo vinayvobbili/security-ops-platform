@@ -1,4 +1,4 @@
-import os
+from pathlib import Path
 
 import fasteners
 from webex_bot.models.command import Command
@@ -10,7 +10,7 @@ from src.epp import cs_hosts_without_ring_tag, ring_tag_cs_hosts
 from src.helper_methods import log_jarvais_activity
 
 CONFIG = get_config()
-
+ROOT_DIRECTORY = Path(__file__).parent.parent
 webex_api = WebexTeamsAPI(access_token=CONFIG.webex_bot_access_token_jarvais)
 
 
@@ -20,7 +20,11 @@ class CSHostsWithoutRingTag(Command):
 
     @log_jarvais_activity(bot_access_token=CONFIG.webex_bot_access_token_jarvais)
     def execute(self, message, attachment_actions, activity):
-        lock_path = os.path.join("src", "epp", "cs_hosts_without_ring_tag.lock")
+        webex_api.messages.create(
+            roomId=CONFIG.webex_room_id_epp_tagging,
+            markdown=f"Hello {activity['actor']['displayName']}! I've started the report generation process. It is running in the background and will complete in about 5 mins."
+        )
+        lock_path = ROOT_DIRECTORY / "src" / "epp" / "cs_hosts_without_ring_tag.lock"
         with fasteners.InterProcessLock(lock_path):
             cs_hosts_without_ring_tag.run_workflow()
 
@@ -31,10 +35,6 @@ class RingTagCSHosts(Command):
 
     @log_jarvais_activity(bot_access_token=CONFIG.webex_bot_access_token_jarvais)
     def execute(self, message, attachment_actions, activity):
-        webex_api.messages.create(
-            roomId=CONFIG.webex_room_id_epp_tagging,
-            markdown=f"Hello {activity['actor']['displayName']}! I've started the report generation process. It is running in the background and will complete in about 5 mins."
-        )
         ring_tag_cs_hosts.run_workflow()
 
 
