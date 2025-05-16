@@ -8,18 +8,11 @@ from typing import Dict, Any, Callable, TypeVar, Optional
 
 import pandas as pd
 from tqdm import tqdm
-from webexpythonsdk.models.cards import (
-    AdaptiveCard, Column, ColumnSet,
-    TextBlock
-)
-from webexpythonsdk.models.cards.actions import Submit
 from webexteamssdk import WebexTeamsAPI
-from webexteamssdk.models.cards import AdaptiveCard, TextBlock, ColumnSet, Column, Image
 
 from config import get_config
 from services.crowdstrike import CrowdStrikeClient
 from services.service_now import ServiceNowClient
-from src.epp.ring_tag_cs_hosts import ReportHandler
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -87,29 +80,6 @@ def write_excel_file(df: pd.DataFrame, file_path: Path) -> None:
     except Exception as e:
         logger.error(f"Error writing to {file_path}: {e}")
         raise
-
-
-def send_report(step_times: Dict[str, float]) -> None:
-    """Sends the enriched hosts report to a Webex room, including step run times."""
-    enriched_hosts_file = get_dated_path(DATA_DIR, "cs_hosts_last_seen_without_ring_tag.xlsx")
-    hosts_count = len(pd.read_excel(enriched_hosts_file))
-
-    try:
-
-        report_text = (
-                f"UNIQUE CS hosts without a Ring tag. Count={hosts_count}!\n\n"
-                "Step execution times:\n" +
-                "\n".join([f"{step}: {ReportHandler.format_duration(time)}" for step, time in step_times.items()])
-        )
-        webex_api.messages.create(
-            roomId=CONFIG.webex_room_id_epp_tagging,
-            text=report_text,
-            files=[str(enriched_hosts_file)]
-        )
-    except FileNotFoundError:
-        logger.error(f"Report file not found at {enriched_hosts_file}")
-    except Exception as e:
-        logger.error(f"Failed to send report: {e}")
 
 
 def process_unique_hosts(df: pd.DataFrame) -> pd.DataFrame:
@@ -305,60 +275,13 @@ def main() -> None:
     """Main function to run the complete workflow."""
     try:
         logger.info("Starting CrowdStrike host ring tag analysis")
-        run_workflow()
+        generate_report()
         logger.info("Completed CrowdStrike host ring tag analysis")
     except Exception as e:
         logger.error(f"Error in main workflow: {e}")
 
 
-def seek_approval_to_ring_tag():
-    # send a webex adaptive card with title 'Tag Approval', question = Do you want these hosts to be tagged?, answer buttons = No, 'Put a Ring On It'
-
-    def create_adaptive_card():
-        card = AdaptiveCard(
-            body=[
-                TextBlock(text="Tag Approval", size="large", weight="bolder", horizontalAlignment="center"),
-                ColumnSet(
-                    columns=[
-                        Column(
-                            width="auto",
-                            items=[
-                                Image(
-                                    url="https://media.tenor.com/images/5982952969588069379433098557646d/tenor.gif",
-                                )
-                            ],
-                            verticalContentAlignment="center"
-                        ),
-                        Column(
-                            width="stretch",
-                            items=[
-                                TextBlock(text="Do you want these hosts to be tagged?", wrap=True)
-                            ],
-                            verticalContentAlignment="center"
-                        )
-                    ]
-                )
-            ],
-            actions=[
-                Submit(title="No", data={"action": "no"}),
-                Submit(title="Put a Ring On It", data={"callback_keyword": "current_approved_testing"})
-            ]
-        )
-        return card.to_dict()
-
-    card_json = create_adaptive_card()
-
-    try:
-        webex_api.messages.create(
-            roomId=CONFIG.webex_room_id_epp_tagging,
-            text="Please approve the tagging action.",
-            attachments=[{"contentType": "application/vnd.microsoft.card.adaptive", "content": card_json}]
-        )
-    except Exception as e:
-        logger.error(f"Failed to send approval card: {e}")
-
-
-def run_workflow(chunk_size: int = DEFAULT_CHUNK_SIZE) -> None:
+def generate_report(chunk_size: int = DEFAULT_CHUNK_SIZE) -> Dict[str, float]:
     """
     Run the complete workflow without profiling.
 
@@ -386,9 +309,7 @@ def run_workflow(chunk_size: int = DEFAULT_CHUNK_SIZE) -> None:
     enrich_host_report()
     step_times["Enrich Host Report with SNOW details"] = time.time() - start_time
     '''
-
-    send_report(step_times)
-    seek_approval_to_ring_tag()
+    return step_times
 
 
 if __name__ in ('__main__', '__builtin__', 'builtins'):

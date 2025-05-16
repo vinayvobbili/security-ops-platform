@@ -214,7 +214,7 @@ class CrowdStrikeClient:
                             unique_device_ids.add(device_id)
                             all_host_data.append(host_data)
 
-                print(f"Processed batch with {new_hosts} hosts")
+                # print(f"Processed batch with {new_hosts} hosts")
             except Exception as e:
                 print(f"Error in thread processing host details: {e}")
 

@@ -1,41 +1,133 @@
+import logging
+from datetime import datetime
 from pathlib import Path
+from typing import Dict
 
 import fasteners
+import pandas as pd
 from webex_bot.models.command import Command
 from webex_bot.webex_bot import WebexBot
+from webexpythonsdk.models.cards import (
+    AdaptiveCard, Column, ColumnSet,
+    TextBlock, options, HorizontalAlignment, VerticalContentAlignment
+)
+from webexpythonsdk.models.cards.actions import Submit
 from webexteamssdk import WebexTeamsAPI
 
 from config import get_config
-from src.epp import cs_hosts_without_ring_tag, ring_tag_cs_hosts
+from src.epp import ring_tag_cs_hosts, cs_hosts_without_ring_tag
+from src.epp.ring_tag_cs_hosts import ReportHandler
 from src.helper_methods import log_jarvais_activity
+
+# Setup logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 CONFIG = get_config()
 ROOT_DIRECTORY = Path(__file__).parent.parent
+DATA_DIR = ROOT_DIRECTORY / "data" / "transient" / "epp_device_tagging"
 webex_api = WebexTeamsAPI(access_token=CONFIG.webex_bot_access_token_jarvais)
+
+
+def send_report(room_id, step_times: Dict[str, float]) -> None:
+    """Sends the enriched hosts report to a Webex room, including step run times."""
+    today_date = datetime.now().strftime('%m-%d-%Y')
+    cs_hosts_without_ring_tag_file = DATA_DIR / today_date / "cs_hosts_last_seen_without_ring_tag.xlsx"
+    hosts_count = len(pd.read_excel(cs_hosts_without_ring_tag_file))
+
+    try:
+        report_text = (
+                f"UNIQUE CS hosts without a Ring tag. Count={hosts_count}!\n\n"
+                "Step execution times:\n" +
+                "\n".join([f"{step}: {ReportHandler.format_duration(time)}" for step, time in step_times.items()])
+        )
+        webex_api.messages.create(
+            roomId=room_id,
+            text=report_text,
+            files=[str(cs_hosts_without_ring_tag_file)]
+        )
+    except FileNotFoundError:
+        logger.error(f"Report file not found at {cs_hosts_without_ring_tag_file}")
+    except Exception as e:
+        logger.error(f"Failed to send report: {e}")
+
+
+def seek_approval_to_ring_tag(room_id):
+    card = AdaptiveCard(
+        body=[
+            TextBlock(
+                text="Ring Tagging Approval",
+                color=options.Colors.ACCENT,
+                size=options.FontSize.LARGE,
+                weight=options.FontWeight.BOLDER,
+                horizontalAlignment=HorizontalAlignment.CENTER),
+            ColumnSet(
+                columns=[
+                    Column(
+                        width="stretch",
+                        items=[
+                            TextBlock(text="Do you want these hosts to be Ring tagged?", wrap=True)
+                        ],
+                        verticalContentAlignment=VerticalContentAlignment.CENTER
+                    )
+                ]
+            )
+        ],
+        actions=[
+            Submit(title="No!", data={"action": "no"}, style=options.ActionStyle.DESTRUCTIVE),
+            Submit(title="Yes! Put a Ring On It!", data={"callback_keyword": "ring_tag_cs_hosts"}, style=options.ActionStyle.POSITIVE)
+        ]
+    )
+
+    try:
+        webex_api.messages.create(
+            roomId=room_id,
+            text="Please approve the tagging action.",
+            attachments=[{"contentType": "application/vnd.microsoft.card.adaptive", "content": card.to_dict()}]
+        )
+    except Exception as e:
+        logger.error(f"Failed to send approval card: {e}")
 
 
 class CSHostsWithoutRingTag(Command):
     def __init__(self):
-        super().__init__(command_keyword="cs_no_ring_tag", help_message="Get CS Hosts without Ring Tag")
+        super().__init__(
+            command_keyword="cs_no_ring_tag",
+            help_message="Get CS Hosts without Ring Tag",
+            delete_previous_message=True,
+        )
 
     @log_jarvais_activity(bot_access_token=CONFIG.webex_bot_access_token_jarvais)
     def execute(self, message, attachment_actions, activity):
+        room_id = attachment_actions.roomId
         webex_api.messages.create(
-            roomId=CONFIG.webex_room_id_epp_tagging,
+            roomId=room_id,
             markdown=f"Hello {activity['actor']['displayName']}! I've started the report generation process. It is running in the background and will complete in about 5 mins."
         )
         lock_path = ROOT_DIRECTORY / "src" / "epp" / "cs_hosts_without_ring_tag.lock"
         with fasteners.InterProcessLock(lock_path):
-            cs_hosts_without_ring_tag.run_workflow()
+            step_times = {}
+            step_times = cs_hosts_without_ring_tag.generate_report()
+            send_report(room_id, step_times)
+            seek_approval_to_ring_tag(room_id)
 
 
 class RingTagCSHosts(Command):
     def __init__(self):
-        super().__init__(command_keyword="ring_tag_cs_hosts")
+        super().__init__(
+            command_keyword="ring_tag_cs_hosts",
+            delete_previous_message=True,
+        )
 
     @log_jarvais_activity(bot_access_token=CONFIG.webex_bot_access_token_jarvais)
     def execute(self, message, attachment_actions, activity):
-        ring_tag_cs_hosts.run_workflow()
+        webex_api.messages.create(
+            roomId=attachment_actions.roomId,
+            markdown=f"Hello {activity['actor']['displayName']}! I've started the tagging process. It is running in the background and will complete in about 15 mins."
+        )
+        lock_path = ROOT_DIRECTORY / "src" / "epp" / "ring_tag_cs_hosts.lock"
+        with fasteners.InterProcessLock(lock_path):
+            ring_tag_cs_hosts.run_workflow()
 
 
 def main():
@@ -43,7 +135,7 @@ def main():
 
     bot = WebexBot(
         CONFIG.webex_bot_access_token_jarvais,
-        approved_rooms=CONFIG.jarvais_approved_rooms.split(','),
+        approved_rooms=[CONFIG.webex_room_id_epp_tagging, CONFIG.webex_room_id_vinay_test_space],
         bot_name="Hello, Tagger!"
     )
 
