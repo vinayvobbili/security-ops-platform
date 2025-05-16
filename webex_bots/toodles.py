@@ -1320,14 +1320,14 @@ def announce_new_approved_testing_entry(new_item) -> None:
                         "value": new_item.get('usernames')
                     },
                     {
-                        "title": "Hostname(s)",
+                        "title": "IPs/Hostnames of Tester",
                         "wrap": True,
-                        "value": new_item.get('host_names')
+                        "value": new_item.get('items_of_tester')
                     },
                     {
-                        "title": "IP address(es)",
+                        "title": "IPs/Hostnames to be tested",
                         "wrap": True,
-                        "value": new_item.get('ip_addresses')
+                        "value": new_item.get('items_to_be_tested')
                     },
                     {
                         "title": "Scope",
@@ -1359,7 +1359,7 @@ def announce_new_approved_testing_entry(new_item) -> None:
         ]
     }
     webex_api.messages.create(
-        roomId=CONFIG.webex_room_id_gosc_t2,
+        roomId=CONFIG.webex_room_id_vinay_test_space,
         text="New Approved Testing!",
         attachments=[{"contentType": "application/vnd.microsoft.card.adaptive", "content": payload}]
     )
@@ -1452,8 +1452,8 @@ class AddApprovedTestingEntry(Command):
             "submit_date": datetime.now().strftime("%m/%d/%Y"),
             "expiry_date": expiry_date,
             "usernames": ', '.join(usernames) if usernames else "",
-            "IPs/Hostnames of Tester": items_of_tester,
-            "IPs/Hostnames to be tested": items_to_be_tested
+            "items_of_tester": items_of_tester,
+            "items_to_be_tested": items_to_be_tested
         })
 
         return f"{activity['actor']['displayName']}, your entry has been added to the Approved Testing list."
