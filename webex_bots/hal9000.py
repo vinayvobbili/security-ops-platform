@@ -42,8 +42,6 @@ URL_LIST_NAME: str = "METCIRT URLs"
 WEBEX_CONFIG_LIST_NAME: str = "METCIRT Webex"
 DEFAULT_TIMEZONE: str = "US/Eastern"
 DEFAULT_EXPIRY_TIME_DESC: str = "5 PM ET"
-DEFAULT_BOT_NAME: str = "Toodles"
-DEFAULT_APPROVED_DOMAINS: list[str] = ['company.com']
 
 # --- Load Configuration ---
 try:
@@ -391,10 +389,10 @@ TUNING_REQUEST_CARD = AdaptiveCard(
 
 # --- All Options Card (Consolidated Actions) ---
 # This card uses Action.ShowCard to present other cards as sub-menus
-all_options_card = AdaptiveCard(
+all_commands_card = AdaptiveCard(
     body=[
         TextBlock(
-            text=f"{DEFAULT_BOT_NAME} Options",
+            text=f"All Commands",
             weight=FontWeight.BOLDER,
             size=OPTIONS.FontSize.MEDIUM,
             horizontalAlignment=HorizontalAlignment.CENTER,
@@ -403,7 +401,7 @@ all_options_card = AdaptiveCard(
     ],
     actions=[
         ShowCard(
-            title="Approved Testing",
+            title="Ream Team Testing",
             card=RED_TEAM_TESTING_CARD
         ),
         ShowCard(
@@ -418,8 +416,8 @@ all_options_card = AdaptiveCard(
                     ActionSet(
                         spacing=OPTIONS.Spacing.DEFAULT,
                         actions=[
-                            Submit(title="Who is On Call?", data={"callback_keyword": "who"}),
-                            Submit(title="Show Rotation", data={"callback_keyword": "rotation"})
+                            Submit(title="Who", data={"callback_keyword": "who"}),
+                            Submit(title="Rotation", data={"callback_keyword": "rotation"})
                         ]
                     )
                 ]
@@ -1484,7 +1482,7 @@ class ContainmentStatusCS(Command):
         if not host_name_cs and message:
             cleaned_message = message.strip()
             # Use configured bot name or default
-            bot_mention = f"@{getattr(CONFIG, 'bot_name', DEFAULT_BOT_NAME)}"
+            bot_mention = f"@{getattr(CONFIG, 'bot_name')}"
 
             # Try removing mention + command: "@Bot status hostname"
             if cleaned_message.lower().startswith(f"{bot_mention.lower()} {self.command_keyword}"):
@@ -1533,7 +1531,7 @@ class GetAllOptions(Command):
         super().__init__(
             command_keyword="options",
             help_message="Show all available bot command categories",
-            card=all_options_card,
+            card=all_commands_card,
         )
 
     @log_moneyball_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles)
@@ -1724,19 +1722,15 @@ class CreateTuningRequest(Command):
 
 def main():
     """Initializes and runs the Webex Bot."""
-    # Use configured bot name or a default
-    bot_name = getattr(CONFIG, 'bot_name', DEFAULT_BOT_NAME)
-    logger.info(f"Initializing bot: {bot_name}")
 
     # Approved domains from config or default
-    approved_domains = getattr(CONFIG, 'approved_domains', DEFAULT_APPROVED_DOMAINS)
+    approved_domains = getattr(CONFIG, 'approved_domains')
     logger.info(f"Approved domains: {approved_domains}")
 
     # --- Initialize Bot ---
     # Token presence already checked at top level
     bot = WebexBot(
         CONFIG.webex_bot_access_token_hal9000,
-        bot_name=bot_name,
         approved_domains=approved_domains,
         include_demo_commands=False  # Disable default demo commands
     )
