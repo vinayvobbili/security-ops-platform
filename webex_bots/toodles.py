@@ -140,6 +140,26 @@ NEW_TICKET_CARD = {
                             "id": "detection_source",
                             "choices": [
                                 {
+                                    "title": "Threat Hunt",
+                                    "value": "Threat Hunt"
+                                },
+                                {
+                                    "title": "CrowdStrike Falcon",
+                                    "value": "CrowdStrike Falcon"
+                                },
+                                {
+                                    "title": "Employee Reported",
+                                    "value": "Employee Reported"
+                                },
+                                {
+                                    "title": "Recorded Future",
+                                    "value": "Recorded Future"
+                                },
+                                {
+                                    "title": "Third Party",
+                                    "value": "Third Party"
+                                },
+                                {
                                     "title": "Abnormal Security",
                                     "value": "Abnormal Security"
                                 },
@@ -160,10 +180,6 @@ NEW_TICKET_CARD = {
                                     "value": "Cisco AMP"
                                 },
                                 {
-                                    "title": "CrowdStrike Falcon",
-                                    "value": "CrowdStrike Falcon"
-                                },
-                                {
                                     "title": "CrowdStrike Falcon IDP",
                                     "value": "CrowdStrike Falcon IDP"
                                 },
@@ -174,10 +190,6 @@ NEW_TICKET_CARD = {
                                 {
                                     "title": "Cyberbit",
                                     "value": "Cyberbit"
-                                },
-                                {
-                                    "title": "Employee Reported",
-                                    "value": "Employee Reported"
                                 },
                                 {
                                     "title": "Flashpoint",
@@ -216,24 +228,12 @@ NEW_TICKET_CARD = {
                                     "value": "Prisma Cloud"
                                 },
                                 {
-                                    "title": "Recorded Future",
-                                    "value": "Recorded Future"
-                                },
-                                {
                                     "title": "Rubrik",
                                     "value": "Rubrik"
                                 },
                                 {
                                     "title": "Tanium",
                                     "value": "Tanium"
-                                },
-                                {
-                                    "title": "Third Party",
-                                    "value": "Third Party"
-                                },
-                                {
-                                    "title": "Threat Hunt",
-                                    "value": "Threat Hunt"
                                 },
                                 {
                                     "title": "Vectra MDR",
