@@ -166,7 +166,7 @@ def main():
 
     bot = WebexBot(
         config.webex_bot_access_token_moneyball,
-        approved_rooms=config.money_ball_approved_rooms.split(','),
+        approved_rooms=[config.webex_room_id_vinay_test_space, config.webex_room_id_metrics],
         bot_name="Hello, Metricmeister!"
     )
 
