@@ -542,12 +542,12 @@ Timing:
 
     @staticmethod
     @benchmark
-    def send_report(output_filename: str, time_report: str) -> bool:
+    def send_report(output_filename: str, time_report: str, room_id) -> bool:
         """Send a report via Webex with the result file attached."""
         try:
             webex_api = WebexAPI(config.webex_bot_access_token_jarvais)
             response = webex_api.messages.create(
-                roomId=config.webex_room_id_epp_tagging,
+                roomId=room_id,
                 markdown=f"EPP-Falcon ring tagging results are attached.\n\n```{time_report}",
                 files=[output_filename]
             )
@@ -581,7 +581,7 @@ def parse_args():
 
 
 @benchmark
-def run_workflow():
+def run_workflow(room_id):
     """Main execution workflow without profiling."""
     # Fetch and initialize hosts
     fetch_start = time.time()
@@ -624,7 +624,7 @@ def run_workflow():
     timings['total_duration'] = time.time() - fetch_start
     time_report = ReportHandler.generate_time_report(timings, stats)
 
-    send_report_success = ReportHandler.send_report(output_filename, time_report)
+    send_report_success = ReportHandler.send_report(output_filename, time_report, room_id)
     if send_report_success:
         print(f"Report successfully sent to Webex")
     else:

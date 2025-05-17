@@ -121,13 +121,14 @@ class RingTagCSHosts(Command):
 
     @log_jarvais_activity(bot_access_token=CONFIG.webex_bot_access_token_jarvais)
     def execute(self, message, attachment_actions, activity):
+        room_id = attachment_actions.roomId
         webex_api.messages.create(
-            roomId=attachment_actions.roomId,
+            roomId=room_id,
             markdown=f"Hello {activity['actor']['displayName']}! I've started the tagging process. It is running in the background and will complete in about 15 mins."
         )
         lock_path = ROOT_DIRECTORY / "src" / "epp" / "ring_tag_cs_hosts.lock"
         with fasteners.InterProcessLock(lock_path):
-            ring_tag_cs_hosts.run_workflow()
+            ring_tag_cs_hosts.run_workflow(room_id)
 
 
 def main():
