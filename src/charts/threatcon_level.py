@@ -288,7 +288,7 @@ def gauge(threatcon_details):
     # Configure plot
     ax.set_aspect('equal')
     ax.set_ylim(bottom=0)
-    ax.set_xlim([-1.1, 1.1])
+    ax.set_xlim(-1.1, 1.1)
     ax.axis('off')
     plt.tight_layout()
 
