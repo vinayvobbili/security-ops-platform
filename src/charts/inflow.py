@@ -70,7 +70,7 @@ def plot_yesterday():
     yesterday_start_utc = yesterday_start.astimezone(pytz.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
     yesterday_end_utc = yesterday_end.astimezone(pytz.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
 
-    query = QUERY_TEMPLATE.format(ticket_type_prefix=config.ticket_type_prefix, start=yesterday_start_utc, end=yesterday_end_utc)
+    query = QUERY_TEMPLATE.format(ticket_type_prefix=config.team_name, start=yesterday_start_utc, end=yesterday_end_utc)
     tickets = IncidentHandler().get_tickets(query=query)
 
     # Create a DataFrame from the tickets
@@ -131,7 +131,7 @@ def plot_period(period_config, title, output_filename):
     """
     start_time = time.time()
 
-    query = f'type:{config.ticket_type_prefix} -owner:""'
+    query = f'type:{config.team_name} -owner:""'
     tickets = IncidentHandler().get_tickets(query=query, period=period_config)
 
     if not tickets:
@@ -280,7 +280,7 @@ def plot_past_12_months():
     """Creates charts for ticket inflow over the past 12 months, grouped by month."""
     start_time = time.time()
 
-    query = f'type:{config.ticket_type_prefix} -owner:""'
+    query = f'type:{config.team_name} -owner:""'
     tickets = []
 
     # Fetch data in chunks to handle potential volume
@@ -316,7 +316,7 @@ def plot_past_12_months():
 
     # Process ticket type data
     df['ticket_type'] = df['type'].fillna('Unknown').replace('', 'Unknown')
-    df['ticket_type'] = df['ticket_type'].str.replace(config.ticket_type_prefix, '').str.strip()
+    df['ticket_type'] = df['ticket_type'].str.replace(config.team_name, '').str.strip()
     ticket_types = sorted(df['ticket_type'].unique())
     month_ticket_counts = df.groupby(['created_month', 'ticket_type'], observed=True).size().reset_index(name='count')
 

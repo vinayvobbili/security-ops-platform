@@ -120,7 +120,7 @@ def make_chart(months_back=3):
         months_back (int): Number of months to look back for data.
     """
     try:
-        query = f'type:"{CONFIG.ticket_type_prefix} CrowdStrike Falcon Detection" -owner:""'
+        query = f'type:"{CONFIG.team_name} CrowdStrike Falcon Detection" -owner:""'
         period = {"byTo": "months", "toValue": None, "byFrom": "months", "fromValue": months_back}
 
         incident_fetcher = IncidentHandler()

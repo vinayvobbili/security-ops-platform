@@ -67,7 +67,7 @@ def create_graph(tickets):
         df['source'] = df['source'].str.replace(pattern, replacement, regex=True, flags=re.IGNORECASE)
 
     df['source'] = df.apply(lambda row: row['type']
-                            .replace(config.ticket_type_prefix, '').strip()
+                            .replace(config.team_name, '').strip()
                             .replace('CrowdStrike Falcon Detection', 'CS Detection').strip()
                             .replace('CrowdStrike Falcon Incident', 'CS Incident').strip()
                                         + ' - ' + row['source'], axis=1)
@@ -198,7 +198,7 @@ def make_chart() -> None:
     yesterday_start_utc = yesterday_start.astimezone(eastern).strftime('%Y-%m-%dT%H:%M:%SZ')
     yesterday_end_utc = yesterday_end.astimezone(eastern).strftime('%Y-%m-%dT%H:%M:%SZ')
 
-    query = QUERY_TEMPLATE.format(ticket_type_prefix=config.ticket_type_prefix, start=yesterday_start_utc, end=yesterday_end_utc)
+    query = QUERY_TEMPLATE.format(ticket_type_prefix=config.team_name, start=yesterday_start_utc, end=yesterday_end_utc)
     tickets = IncidentHandler().get_tickets(query=query)
     create_graph(tickets)
 

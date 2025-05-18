@@ -46,7 +46,7 @@ class QRadarEfficacyChart:
 
     def get_tickets(self, period: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Fetch tickets for the specified period."""
-        query = f'type:"{CONFIG.ticket_type_prefix} Qradar Alert" -owner:""'
+        query = f'type:"{CONFIG.team_name} Qradar Alert" -owner:""'
         tickets = self.incident_fetcher.get_tickets(query=query, period=period)
 
         if not tickets:

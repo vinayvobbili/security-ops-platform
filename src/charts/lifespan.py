@@ -26,7 +26,7 @@ with open(DETECTION_SOURCE_NAMES_ABBREVIATION_FILE, 'r') as f:
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-QUERY = f'type:{config.ticket_type_prefix} -owner:"" status:closed'
+QUERY = f'type:{config.team_name} -owner:"" status:closed'
 PERIOD = {
     "byFrom": "months",
     "fromValue": 1
@@ -46,7 +46,7 @@ def get_lifespan_chart(tickets):
     for ticket in tickets:
         custom_fields = ticket.get('CustomFields', {})
         data.append({
-            'type': ticket.get('type').replace(f'{config.ticket_type_prefix} ', ''),
+            'type': ticket.get('type').replace(f'{config.team_name} ', ''),
             'triage': custom_fields.get(config.triage_timer, {}).get('totalDuration', 0) / 3600,
             'lessons': custom_fields.get(config.lessons_learned_time, {}).get('totalDuration', 0) / 3600,
             'investigate': custom_fields.get(config.investigation_time, {}).get('totalDuration', 0) / 3600,

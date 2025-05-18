@@ -73,7 +73,7 @@ class CrowdstrikeEfficacyChart:
 
     def get_tickets(self, period: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Fetch tickets for the specified period."""
-        query = f'(type:"{CONFIG.ticket_type_prefix} CrowdStrike Falcon Detection" or type:"{CONFIG.ticket_type_prefix} CrowdStrike Falcon Incident") -owner:""'
+        query = f'(type:"{CONFIG.team_name} CrowdStrike Falcon Detection" or type:"{CONFIG.team_name} CrowdStrike Falcon Incident") -owner:""'
         try:
             tickets = self.incident_fetcher.get_tickets(query=query, period=period)
             if not tickets:

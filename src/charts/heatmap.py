@@ -18,7 +18,7 @@ config = get_config()
 
 eastern = timezone('US/Eastern')
 
-QUERY_TEMPLATE = f'status:closed type:{config.ticket_type_prefix} -owner:""'
+QUERY_TEMPLATE = f'status:closed type:{config.team_name} -owner:""'
 PERIOD = {"byFrom": "days", "fromValue": 30}
 
 ROOT_DIRECTORY = Path(__file__).parent.parent.parent
@@ -37,7 +37,7 @@ def create_choropleth_map():
     with open(DATA_DIR / 'x_cartopy_country_name_mapping.json', 'r') as f:
         x_cartopy_country_name_mapping = json.load(f)
 
-    query = QUERY_TEMPLATE.format(ticket_type_prefix=config.ticket_type_prefix)
+    query = QUERY_TEMPLATE.format(ticket_type_prefix=config.team_name)
     tickets = IncidentHandler().get_tickets(query=query, period=PERIOD)
     ticket_counts_by_country = {}
 
