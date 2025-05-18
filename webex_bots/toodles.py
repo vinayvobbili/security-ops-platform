@@ -7,6 +7,7 @@ import requests
 import webexpythonsdk.models.cards.inputs as INPUTS
 import webexpythonsdk.models.cards.options as OPTIONS
 from pytz import timezone
+from tabulate import tabulate
 from webex_bot.models.command import Command
 from webex_bot.webex_bot import WebexBot
 from webexpythonsdk import WebexAPI
@@ -1228,6 +1229,48 @@ class GetApprovedTestingCard(Command):
         pass
 
 
+# Helper function to convert date format from YYYY-MM-DD to MM/DD/YYYY
+def reformat_date(date_str):
+    try:
+        return datetime.strptime(date_str, "%Y-%m-%d").strftime("%m/%d/%Y")
+    except ValueError:
+        return date_str  # If there's an issue with the date format, return it as-is
+
+
+def get_approved_testing_entries_table():
+    approved_test_items = list_handler.get_list_data_by_name(approved_testing_list_name)
+
+    # Prepare data for tabulation
+    table_data = []
+    categories = ["USERNAMES", "ENDPOINTS", "IP_ADDRESSES"]
+    column_headers = ["USERNAMES", "HOST NAMES", "IP ADDRESSES"]
+
+    # Find out how many rows we need
+    max_items = max(len(approved_test_items.get(category, [])) for category in categories)
+
+    # Create data rows with formatted dates
+    for i in range(max_items):
+        row = []
+        for category in categories:
+            items = approved_test_items.get(category, [])
+            if i < len(items):
+                item = items[i]
+                expiry_date = reformat_date(item.get('expiry_date'))
+                row.append(f"{item.get('data')} ({expiry_date})")
+            else:
+                row.append("")
+        table_data.append(row)
+
+    # Create the table using tabulate
+    table = tabulate(
+        table_data,
+        headers=column_headers,
+        tablefmt="pipe",  # Use pipe format to match the original markdown-style table
+        stralign="left"
+    )
+    return table
+
+
 class GetCurrentApprovedTestingEntries(Command):
     def __init__(self):
         super().__init__(
@@ -1236,55 +1279,18 @@ class GetCurrentApprovedTestingEntries(Command):
         )
 
     def execute(self, message, attachment_actions, activity):
-        approved_test_items = list_handler.get_list_data_by_name(approved_testing_list_name)
-        response_text = {
-            "USERNAMES": [],
-            "ENDPOINTS": [],
-            "IP_ADDRESSES": []
-        }
+        approved_testing_items_table = get_approved_testing_entries_table()
 
-        # Helper function to convert date format from YYYY-MM-DD to MM/DD/YYYY
-        def reformat_date(date_str):
-            try:
-                return datetime.strptime(date_str, "%Y-%m-%d").strftime("%m/%d/%Y")
-            except ValueError:
-                return date_str  # If there's an issue with the date format, return it as-is
-
-        # Populate response_text with data and reformat the expiry date
-        for category in approved_test_items:
-            for item in approved_test_items.get(category):
-                expiry_date = reformat_date(item.get('expiry_date'))
-                response_text.get(category).append(f"{item.get('data')} ({expiry_date})")
-
-        # Dynamically calculate the max column width based on the longest item in each category
-        username_col_width = max(len(item) for item in response_text['USERNAMES'] + ['USERNAMES'])
-        endpoint_col_width = max(len(item) for item in response_text['ENDPOINTS'] + ['HOST NAMES'])
-        ip_col_width = max(len(item) for item in response_text['IP_ADDRESSES'] + ['IP ADDRESSES'])
-
-        # Create the header with dynamically calculated widths
-        table = (
+        # Construct the final output
+        result = (
             f"{activity['actor']['displayName']}, here are the current Approved Security Testing entries\n"
             "```\n"
-            f"|{'-' * (username_col_width + 2)}|{'-' * (endpoint_col_width + 2)}|{'-' * (ip_col_width + 2)}|\n"
-            f"| {'USERNAMES'.ljust(username_col_width)} | {'HOST NAMES'.ljust(endpoint_col_width)} | {'IP ADDRESSES'.ljust(ip_col_width)} |\n"
-            f"|{'-' * (username_col_width + 2)}|{'-' * (endpoint_col_width + 2)}|{'-' * (ip_col_width + 2)}|\n"
+            f"{approved_testing_items_table}\n"
+            "```\n"
+            "\n*Entries expire at 5 PM ET on the date shown"
         )
 
-        # Find the maximum number of items in any category
-        max_items = max(len(response_text.get('USERNAMES')), len(response_text.get('ENDPOINTS')), len(response_text.get('IP_ADDRESSES')))
-
-        # Pad each category list to the same length
-        for category in response_text:
-            response_text[category].extend([""] * (max_items - len(response_text[category])))
-
-        # Construct table rows with dynamically calculated column widths
-        for i in range(max_items):
-            table += f"| {response_text['USERNAMES'][i].ljust(username_col_width)} | {response_text['ENDPOINTS'][i].ljust(endpoint_col_width)} | {response_text['IP_ADDRESSES'][i].ljust(ip_col_width)} |\n"
-
-        table += f"|{'-' * (username_col_width + 2)}-{'-' * (endpoint_col_width + 2)}-{'-' * (ip_col_width + 2)}|\n"
-        table += "\n*Entries expire at 5 PM ET on the date shown"
-
-        return table
+        return result
 
 
 def announce_new_approved_testing_entry(new_item) -> None:
@@ -1456,7 +1462,15 @@ class AddApprovedTestingEntry(Command):
             "items_to_be_tested": items_to_be_tested
         })
 
-        return f"{activity['actor']['displayName']}, your entry has been added to the Approved Testing list."
+        approved_testing_items_table = get_approved_testing_entries_table()
+
+        return (
+            f"{activity['actor']['displayName']}, your entry has been added to the Approved Testing list. Here's the current list\n"
+            "```\n"
+            f"{approved_testing_items_table}\n"
+            "```\n"
+            "\n*Entries expire at 5 PM ET on the date shown"
+        )
 
 
 class RemoveApprovedTestingEntry(Command):
