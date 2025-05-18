@@ -24,3 +24,4 @@ streamlit~=1.45.1
 fasteners~=0.19
 beautifulsoup4~=4.13.4
 altair~=5.5.0
+twilio~=9.6.1
