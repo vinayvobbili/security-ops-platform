@@ -1,5 +1,6 @@
 import json
 from datetime import datetime, timedelta
+from pathlib import Path
 
 import webexpythonsdk.models.cards.inputs as INPUTS
 import webexpythonsdk.models.cards.options as OPTIONS
@@ -14,7 +15,10 @@ from webexpythonsdk.models.cards.actions import Submit
 from webexteamssdk import WebexTeamsAPI
 
 from config import get_config
+from src.charts import threatcon_level
 from src.helper_methods import log_barnacles_activity
+
+ROOT_DIRECTORY = Path(__file__).parent.parent
 
 config = get_config()
 bot_token = config.webex_bot_access_token_barnacles
@@ -217,6 +221,15 @@ class SaveThreatcon(Command):
                 TextBlock(
                     text=f"Reason: \n {reason}",
                     wrap=True
+                ),
+                ActionSet(
+                    actions=[
+                        Submit(
+                            title="Announce",
+                            style=ActionStyle.POSITIVE,
+                            data={"callback_keyword": "announce_threatcon"}
+                        )
+                    ]
                 )
             ]
         )
@@ -312,6 +325,49 @@ class ThreatconLevel(Command):
         )
 
 
+class AnnounceThreatcon(Command):
+    def __init__(self):
+        super().__init__(
+            command_keyword="announce_threatcon",
+            delete_previous_message=True,
+            exact_command_keyword_match=True
+        )
+
+    @log_barnacles_activity(bot_access_token=bot_token)
+    def execute(self, message, attachment_actions, activity):
+        threatcon_level.make_chart()
+
+        today_date = datetime.now().strftime('%m-%d-%Y')
+        FILE_PATH = ROOT_DIRECTORY / "web" / "static" / "charts" / today_date / "Threatcon Level.png"
+        webex_api.messages.create(
+            roomId=config.webex_room_id_threatcon_collab,
+            text=f"New ThreatCon Level",
+            files=[FILE_PATH]
+        )
+
+        # Confirm to user
+        confirmation_card = AdaptiveCard(
+            body=[
+                TextBlock(
+                    text="ThreatCon Announcement Sent",
+                    weight=FontWeight.BOLDER,
+                    color=Colors.GOOD,
+                    horizontalAlignment=HorizontalAlignment.CENTER
+                ),
+                TextBlock(
+                    text=f"The ThreatCon Level change has been announced.",
+                    wrap=True
+                )
+            ]
+        )
+
+        webex_api.messages.create(
+            toPersonEmail=activity['actor']['id'],
+            text='ThreatCon Announcement Sent',
+            attachments=[{"contentType": "application/vnd.microsoft.card.adaptive", "content": confirmation_card.to_dict()}]
+        )
+
+
 def run_bot():
     try:
         bot = WebexBot(
@@ -324,6 +380,7 @@ def run_bot():
         bot.add_command(ThreatconLevel())
         bot.add_command(SaveManagementNotes())
         bot.add_command(SaveThreatcon())
+        bot.add_command(AnnounceThreatcon())
         bot.run()
     except Exception as e:
         print(f"Bot failed to start: {e}")
