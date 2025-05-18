@@ -24,7 +24,7 @@ def make_pie(tickets, title) -> str:
             plt.close(fig)
         return filepath
 
-    df['type'] = df['type'].str.replace(config.ticket_type_prefix, '', regex=False)
+    df['type'] = df['type'].str.replace(config.team_name, '', regex=False)
     # Calculate counts for outer pie (type)
     type_counts = df['type'].value_counts()
 
