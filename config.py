@@ -65,6 +65,11 @@ def get_config():
         qradar_efficacy_chart_receiver=os.environ["QRADAR_EFFICACY_CHART_RECEIVER"],
         phish_fort_api_key=os.environ["PHISH_FORT_API_KEY"],
         my_email_address=os.environ["MY_EMAIL_ADDRESS"],
+        twilio_account_sid=os.environ["TWILIO_ACCOUNT_SID"],
+        twilio_auth_token=os.environ["TWILIO_AUTH_TOKEN"],
+        twilio_whatsapp_number=os.environ["TWILIO_WHATSAPP_NUMBER"],
+        my_whatsapp_number=os.environ["MY_WHATSAPP_NUMBER"],
+        whatsapp_receiver_numbers=os.environ["WHATSAPP_RECEIVER_NUMBERS"],
     )
 
 
@@ -128,5 +133,10 @@ class Config:
     qradar_efficacy_chart_receiver: str
     phish_fort_api_key: str
     my_email_address: str
+    twilio_account_sid: str
+    twilio_auth_token: str
+    twilio_whatsapp_number: str
+    my_whatsapp_number: str
+    whatsapp_receiver_numbers: str
 
     webex_api_url: str = "https://webexapis.com/v1/messages"

@@ -9,7 +9,7 @@ from services import phish_fort
 from src import helper_methods
 from src.charts import mttr_mttc, outflow, lifespan, heatmap, sla_breaches, aging_tickets, inflow, qradar_rule_efficacy, de_stories, days_since_incident, re_stories, threatcon_level, vectra_volume, \
     crowdstrike_volume, threat_tippers, crowdstrike_efficacy
-from src.components import oncall, approved_security_testing
+from src.components import oncall, approved_security_testing, thithi
 
 config = get_config()
 eastern = pytz.timezone('US/Eastern')
@@ -83,7 +83,7 @@ def main():
         oncall.announce_change()
     ))
     schedule.every().day.at("17:00", eastern).do(approved_security_testing.removed_expired_entries)
-    # schedule.every().day.at("08:00", eastern).do(thithi.notify)
+    schedule.every().day.at("08:00", eastern).do(thithi.main)
 
     while True:
         schedule.run_pending()
