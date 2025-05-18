@@ -231,10 +231,10 @@ class Host:
                 self.status_message += f" Country guessed from os-domain=pmli in SNOW: {self.country}."
             self.life_cycle_status = snow_host_details.get('lifecycleStatus', '')
 
-            if not self.country and (self.name.lower().startswith('vmvdi') or self.name.lower().startswith(config.ticket_type_prefix.lower())):
+            if not self.country and (self.name.lower().startswith('vmvdi') or self.name.lower().startswith(config.team_name.lower())):
                 self.country = 'United States'
                 self.was_country_guessed = True
-                self.status_message += f" Country guessed from VMVDI/METCIRT in the hostname: {self.country}."
+                self.status_message += f" Country guessed from VMVDI/{config.team_name} in the hostname: {self.country}."
 
         except Exception as e:
             self.status_message += f" Error retrieving ServiceNow data: {str(e)}."

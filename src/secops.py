@@ -21,7 +21,7 @@ from services.xsoar import IncidentHandler, ListHandler
 config = get_config()
 webex_api = WebexAPI(config.webex_bot_access_token_soar)
 list_handler = ListHandler()
-BASE_QUERY = f'type:{config.ticket_type_prefix} -owner:""'
+BASE_QUERY = f'type:{config.team_name} -owner:""'
 root_directory = Path(__file__).parent.parent
 
 # Load the workbook
@@ -135,7 +135,7 @@ def announce_previous_shift_performance(room_id, shift_name):
         eight_hours_ago = datetime.now() - timedelta(hours=8)
 
         # Process domains blocked
-        all_domains = list_handler.get_list_data_by_name('METCIRT Blocked Domains')
+        all_domains = list_handler.get_list_data_by_name(f'{config.team_name} Blocked Domains')
         domains_blocked = []
         for item in all_domains:
             if 'blocked_at' in item:
@@ -144,7 +144,7 @@ def announce_previous_shift_performance(room_id, shift_name):
                     domains_blocked.append(item['domain'])
 
         # Process IP addresses blocked
-        all_ips = list_handler.get_list_data_by_name('METCIRT Blocked IP Addresses')
+        all_ips = list_handler.get_list_data_by_name(f'{config.team_name} Blocked IP Addresses')
         ip_addresses_blocked = []
         for item in all_ips:
             if 'blocked_at' in item:
@@ -153,7 +153,7 @@ def announce_previous_shift_performance(room_id, shift_name):
                     ip_addresses_blocked.append(item['ip_address'])
 
         # Process hosts contained
-        all_hosts = list_handler.get_list_data_by_name('METCIRT Contained Hosts')
+        all_hosts = list_handler.get_list_data_by_name(f'{config.team_name} Contained Hosts')
         hosts_contained_list = []
         for item in all_hosts:
             if 'contained_at' in item:
@@ -220,7 +220,7 @@ def announce_shift_change(shift_name, room_id, sleep_time=30):
             if date.today() <= keep_until:
                 note = management_notes['note']
 
-        hosts_in_containment = list_handler.get_list_data_by_name('METCIRT Contained Hosts')
+        hosts_in_containment = list_handler.get_list_data_by_name(f'{config.team_name} Contained Hosts')
         hosts_in_containment = [item["hostname"] for item in hosts_in_containment]
 
         # Send a new shift starting message to Webex room
@@ -229,7 +229,7 @@ def announce_shift_change(shift_name, room_id, sleep_time=30):
             text=f"Shift Change Notice!",
             markdown=f"Good **{shift_name.upper()}**! A new shift's starting now!\n"
                      f"Timings: {sheet[cell_names_by_shift['shift_timings'][shift_name]].value}\n"
-                     f"Open METCIRT* tickets: {get_open_tickets()}\n"
+                     f"Open {config.team_name}* tickets: {get_open_tickets()}\n"
                      f"Hosts in Containment: {', '.join(hosts_in_containment) if hosts_in_containment else 'None'}\n"
                      f"**Management Notes**: {note}\n"
                      f"Staffing:\n"

@@ -127,7 +127,7 @@ def handle_speak_up_form_submission():
         formatted_date = ""
 
     form['name'] = 'Speak Up Report'
-    form['type'] = 'METCIRT Employee Reported Incident'
+    form['type'] = f'{CONFIG.team_name} Employee Reported Incident'
     form['details'] = (
         f"Date Occurred: {formatted_date} \n"
         f"Issue Type: {form.get('issueType')} \n"
@@ -179,7 +179,7 @@ def import_xsoar_ticket():
 @log_web_activity
 def get_approved_testing_records():
     """Fetches approved testing records and displays them in separate HTML tables."""
-    approved_testing_records = list_handler.get_list_data_by_name('METCIRT_Approved_Testing')
+    approved_testing_records = list_handler.get_list_data_by_name(f'{CONFIG.team_name}_Approved_Testing')
 
     if not approved_testing_records:
         return "<h2>No Approved Testing Records Found</h2>"

@@ -66,7 +66,7 @@ class IncidentHandler:
 
     def get_tickets(self, query, period=None, size=10000) -> list:
         """Fetches security incidents from XSOAR."""
-        query = query + f' -category:job -type:"{CONFIG.ticket_type_prefix} Ticket QA" -type:"{CONFIG.ticket_type_prefix} SNOW Whitelist Request"'
+        query = query + f' -category:job -type:"{CONFIG.team_name} Ticket QA" -type:"{CONFIG.team_name} SNOW Whitelist Request"'
         payload = {
             "filter": {
                 "query": query,

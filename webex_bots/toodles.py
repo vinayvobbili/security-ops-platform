@@ -23,11 +23,11 @@ from services import xsoar, azdo
 from services.crowdstrike import CrowdStrikeClient
 from services.xsoar import ListHandler, IncidentHandler
 
-approved_testing_list_name: str = "METCIRT_Approved_Testing"
-approved_testing_master_list_name: str = "METCIRT_Approved_Testing_MASTER"
-
 CONFIG = get_config()
 webex_api = WebexAPI(CONFIG.webex_bot_access_token_toodles)
+
+approved_testing_list_name: str = f"{CONFIG.team_name}_Approved_Testing"
+approved_testing_master_list_name: str = f"{CONFIG.team_name}_Approved_Testing_MASTER"
 
 crowdstrike = CrowdStrikeClient()
 
