@@ -56,7 +56,7 @@ def fetch_webpage(url):
             'Sec-Fetch-Mode': 'navigate',
             'Sec-Fetch-Site': 'cross-site',
         }
-        response = requests.get(url, headers=headers, timeout=REQUEST_TIMEOUT)
+        response = requests.get(url, headers=headers, timeout=REQUEST_TIMEOUT, verify=False)
         response.raise_for_status()  # Raise exception for HTTP errors
         return response.content
     except requests.RequestException as e:
