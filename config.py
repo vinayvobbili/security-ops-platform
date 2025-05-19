@@ -24,6 +24,7 @@ def get_config():
         webex_room_id_automation_engineering=os.environ["WEBEX_ROOM_ID_AUTOMATION_ENGINEERING"],
         webex_room_id_response_engineering=os.environ["WEBEX_ROOM_ID_RESPONSE_ENGINEERING"],
         webex_room_id_phish_fort=os.environ["WEBEX_ROOM_ID_PHISH_FORT"],
+        webex_room_id_host_announcements=os.environ["WEBEX_ROOM_ID_HOST_ANNOUNCEMENTS"],
         xsoar_prod_api_base_url=os.environ["XSOAR_PROD_API_BASE_URL"],
         xsoar_prod_ui_base_url=os.environ["XSOAR_PROD_UI_BASE_URL"],
         xsoar_dev_api_base_url=os.environ["XSOAR_DEV_API_BASE_URL"],
@@ -48,7 +49,6 @@ def get_config():
         cs_rtr_client_secret=os.environ["CROWD_STRIKE_RTR_CLIENT_SECRET"],
         cisco_amp_client_id=os.environ["CISCO_AMP_CLIENT_ID"],
         cisco_amp_client_secret=os.environ["CISCO_AMP_CLIENT_SECRET"],
-        webex_host_announcements_room_id=os.environ["WEBEX_HOST_ANNOUNCEMENTS_ROOM_ID"],
         triage_timer=os.environ["TRIAGE_TIMER"],
         lessons_learned_time=os.environ["LESSONS_LEARNED_TIME"],
         investigation_time=os.environ["INVESTIGATION_TIME"],
@@ -92,6 +92,7 @@ class Config:
     webex_room_id_automation_engineering: str
     webex_room_id_response_engineering: str
     webex_room_id_phish_fort: str
+    webex_room_id_host_announcements: str
     xsoar_prod_api_base_url: str
     xsoar_prod_ui_base_url: str
     xsoar_dev_api_base_url: str
@@ -116,7 +117,6 @@ class Config:
     cs_rtr_client_secret: str
     cisco_amp_client_id: str
     cisco_amp_client_secret: str
-    webex_host_announcements_room_id: str
     triage_timer: str
     lessons_learned_time: str
     investigation_time: str
