@@ -26,7 +26,7 @@ def send_webex_notification(host_name, ticket_id):
     incident_url = config.xsoar_prod_ui_base_url + "/#/Custom/caseinfoid/" + ticket_id
     webex_teams_api = WebexTeamsAPI(access_token=config.webex_bot_access_token_soar)
     webex_teams_api.messages.create(
-        roomId=config.webex_host_announcements_room_id,
+        roomId=config.webex_room_id_vinay_test_space,
         markdown=f'Host {host_name} associated with ticket [#{ticket_id}]({incident_url}) is now online'
     )
 
