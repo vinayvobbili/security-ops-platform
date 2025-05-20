@@ -152,28 +152,31 @@ def generate_daily_summary(tickets) -> str | None:
 
 
 def send_report(room_id):
-    webex_api = WebexAPI(access_token=config.webex_bot_access_token_soar)
+    try:
+        webex_api = WebexAPI(access_token=config.webex_bot_access_token_soar)
 
-    query = f'-status:closed type:{config.team_name} -type:"{config.team_name} Third Party Compromise"'
-    period = {"byTo": "months", "toValue": 1, "byFrom": "months", "fromValue": None}
-    tickets = IncidentHandler().get_tickets(query=query, period=period)
+        query = f'-status:closed type:{config.team_name} -type:"{config.team_name} Third Party Compromise"'
+        period = {"byTo": "months", "toValue": 1, "byFrom": "months", "fromValue": None}
+        tickets = IncidentHandler().get_tickets(query=query, period=period)
 
-    webex_api.messages.create(
-        roomId=room_id,
-        text=f"Aging Tickets Summary!",
-        markdown=f'Summary (Type={config.team_name}* - TP, Created=1+ months ago)\n ``` \n {generate_daily_summary(tickets)}'
-    )
-
-    query = f'-status:closed type:"{config.team_name} Third Party Compromise"'
-    period = {"byTo": "months", "toValue": 3, "byFrom": "months", "fromValue": None}
-    tickets = IncidentHandler().get_tickets(query=query, period=period)
-
-    if tickets:
         webex_api.messages.create(
             roomId=room_id,
             text=f"Aging Tickets Summary!",
-            markdown=f'Summary (Type=Third Party Compromise, Created=3+ months ago)\n ``` \n {generate_daily_summary(tickets)}'
+            markdown=f'Summary (Type={config.team_name}* - TP, Created=1+ months ago)\n ``` \n {generate_daily_summary(tickets)}'
         )
+
+        query = f'-status:closed type:"{config.team_name} Third Party Compromise"'
+        period = {"byTo": "months", "toValue": 3, "byFrom": "months", "fromValue": None}
+        tickets = IncidentHandler().get_tickets(query=query, period=period)
+
+        if tickets:
+            webex_api.messages.create(
+                roomId=room_id,
+                text=f"Aging Tickets Summary!",
+                markdown=f'Summary (Type=Third Party Compromise, Created=3+ months ago)\n ``` \n {generate_daily_summary(tickets)}'
+            )
+    except Exception as e:
+        logger.error(f"Error sending report: {e}")
 
 
 def main():
