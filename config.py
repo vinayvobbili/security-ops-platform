@@ -62,6 +62,8 @@ def get_config():
         snow_base_url=os.environ["SNOW_BASE_URL"],
         my_name=os.environ["MY_NAME"],
         my_web_domain=os.environ["MY_WEB_DOMAIN"],
+        resp_eng_auto_lead=os.environ["RESP_ENG_AUTO_LEAD"],
+        resp_eng_ops_lead=os.environ["RESP_ENG_OPS_LEAD"],
         qradar_efficacy_chart_receiver=os.environ["QRADAR_EFFICACY_CHART_RECEIVER"],
         phish_fort_api_key=os.environ["PHISH_FORT_API_KEY"],
         my_email_address=os.environ["MY_EMAIL_ADDRESS"],
@@ -70,6 +72,7 @@ def get_config():
         twilio_whatsapp_number=os.environ["TWILIO_WHATSAPP_NUMBER"],
         my_whatsapp_number=os.environ["MY_WHATSAPP_NUMBER"],
         whatsapp_receiver_numbers=os.environ["WHATSAPP_RECEIVER_NUMBERS"],
+        webex_api_url=os.environ["WEBEX_API_URL"]
     )
 
 
@@ -130,6 +133,8 @@ class Config:
     snow_base_url: str
     my_name: str
     my_web_domain: str
+    resp_eng_auto_lead: str
+    resp_eng_ops_lead: str
     qradar_efficacy_chart_receiver: str
     phish_fort_api_key: str
     my_email_address: str
@@ -138,5 +143,4 @@ class Config:
     twilio_whatsapp_number: str
     my_whatsapp_number: str
     whatsapp_receiver_numbers: str
-
-    webex_api_url: str = "https://webexapis.com/v1/messages"
+    webex_api_url: str
