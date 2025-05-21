@@ -22,6 +22,7 @@ from data.transient.data_maps import azdo_projects, azdo_orgs, azdo_area_paths
 from services import xsoar, azdo
 from services.crowdstrike import CrowdStrikeClient
 from services.xsoar import ListHandler, IncidentHandler
+from src.helper_methods import log_toodles_activity
 
 CONFIG = get_config()
 webex_api = WebexAPI(CONFIG.webex_bot_access_token_toodles)
@@ -445,8 +446,12 @@ AZDO_CARD = {
                                     "value": "platforms"
                                 },
                                 {
-                                    "title": "Response Engineering",
-                                    "value": "re"
+                                    "title": "Response Engineering Automation",
+                                    "value": "rea"
+                                },
+                                {
+                                    "title": "Response Engineering Operations",
+                                    "value": "reo"
                                 },
                                 {
                                     "title": "Detection Engineering",
@@ -1025,8 +1030,10 @@ class URLs(Command):
         super().__init__(
             command_keyword="urls",
             card=URL_CARD,
+            delete_previous_message=True
         )
 
+    @log_toodles_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles)
     def execute(self, message, attachment_actions, activity):
         pass
 
@@ -1037,8 +1044,10 @@ class GetNewXTicketForm(Command):
             card=NEW_TICKET_CARD,
             command_keyword="get_x_ticket_form",
             help_message="Create X Ticket",
+            delete_previous_message=True
         )
 
+    @log_toodles_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles)
     def execute(self, message, attachment_actions, activity):
         pass
 
@@ -1048,8 +1057,10 @@ class CreateXSOARTicket(Command):
         super().__init__(
             command_keyword="create_x_ticket",
             card=None,
+            delete_previous_message=True
         )
 
+    @log_toodles_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles)
     def execute(self, message, attachment_actions, activity):
         if attachment_actions.inputs['title'].strip() == "" or attachment_actions.inputs['details'].strip() == "":
             return "Please fill in both fields to create a new ticket."
@@ -1067,7 +1078,7 @@ class CreateXSOARTicket(Command):
         new_incident_id = result.get('id')
         incident_url = CONFIG.xsoar_prod_ui_base_url + '/Custom/caseinfoid/' + new_incident_id
 
-        return f"Ticket [#{new_incident_id}]({incident_url}) has been created in XSOAR Prod."
+        return f"{activity['actor']['displayName']}, Ticket [#{new_incident_id}]({incident_url}) has been created in XSOAR Prod."
 
 
 class IOC(Command):
@@ -1075,8 +1086,10 @@ class IOC(Command):
         super().__init__(
             command_keyword="ioc",
             card=IOC_HUNT,
+            delete_previous_message=True
         )
 
+    @log_toodles_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles)
     def execute(self, message, attachment_actions, activity):
         pass
 
@@ -1086,8 +1099,10 @@ class IOCHunt(Command):
         super().__init__(
             command_keyword="ioc_hunt",
             card=None,
+            delete_previous_message=True
         )
 
+    @log_toodles_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles)
     def execute(self, message, attachment_actions, activity):
         if attachment_actions.inputs['ioc_hunt_title'].strip() == "" or attachment_actions.inputs['ioc_hunt_iocs'].strip() == "":
             return "Please fill in both fields to create a new ticket."
@@ -1104,7 +1119,7 @@ class IOCHunt(Command):
         ticket_no = result.get('id')
         incident_url = CONFIG.xsoar_prod_ui_base_url + '/Custom/caseinfoid/' + ticket_no
 
-        return f"A New IOC Hunt has been created in XSOAR. Ticket: [#{ticket_no}]({incident_url})"
+        return f"{activity['actor']['displayName']}, A New IOC Hunt has been created in XSOAR. Ticket: [#{ticket_no}]({incident_url})"
 
 
 class ThreatHuntCard(Command):
@@ -1112,6 +1127,7 @@ class ThreatHuntCard(Command):
         super().__init__(
             command_keyword="threat",
             card=THREAT_HUNT,
+            delete_previous_message=True
         )
 
     def execute(self, message, attachment_actions, activity):
@@ -1123,8 +1139,10 @@ class CreateThreatHunt(Command):
         super().__init__(
             command_keyword="threat_hunt",
             card=None,
+            delete_previous_message=True
         )
 
+    @log_toodles_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles)
     def execute(self, message, attachment_actions, activity):
         if attachment_actions.inputs['threat_hunt_title'].strip() == "" or attachment_actions.inputs['threat_hunt_desc'].strip() == "":
             return "Please fill in both fields to create a new ticket."
@@ -1150,8 +1168,10 @@ class CreateAZDOWorkItem(Command):
             command_keyword="azdo_wit",
             help_message="Create AZDO Work Item",
             card=AZDO_CARD,
+            delete_previous_message=True
         )
 
+    @log_toodles_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles)
     def execute(self, message, attachment_actions, activity):
 
         try:
@@ -1168,7 +1188,11 @@ class CreateAZDOWorkItem(Command):
             if project == 'platforms':
                 assignee = CONFIG.my_email_address
                 parent_url = CONFIG.azdo_platforms_parent_url
-            elif project == 're':
+            elif project == 'rea':
+                assignee = CONFIG.resp_eng_auto_lead
+                area_path = azdo_area_paths['re']
+            elif project == 're0':
+                assignee = CONFIG.resp_eng_ops_lead
                 area_path = azdo_area_paths['re']
 
             wit_id = azdo.create_wit(
@@ -1183,7 +1207,7 @@ class CreateAZDOWorkItem(Command):
             )
             azdo_wit_url = f'https://dev.azure.com/{azdo_orgs.get(project)}/{quote(azdo_projects.get(project))}/_workitems/edit/{wit_id}'
             wit_type = wit_type.replace('%20', ' ')
-            return_message = f'A new AZDO {wit_type} has been created \n [{wit_id}]({azdo_wit_url}) - {wit_title}'
+            return_message = f'{activity['actor']['displayName']}, A new AZDO {wit_type} has been created \n [{wit_id}]({azdo_wit_url}) - {wit_title}'
 
             webex_api.messages.create(
                 roomId=CONFIG.webex_room_id_automation_engineering,
@@ -1200,8 +1224,10 @@ class Review(Command):
         super().__init__(
             command_keyword="review",
             card=None,
+            delete_previous_message=True
         )
 
+    @log_toodles_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles)
     def execute(self, message, attachment_actions, activity):
         if attachment_actions.inputs["review_notes"] == "":
             return "Please add a comment to submit this ticket for review."
@@ -1223,8 +1249,10 @@ class GetApprovedTestingCard(Command):
             command_keyword="testing",
             help_message="Submit Approved Testing",
             card=APPROVED_TESTING_CARD,
+            delete_previous_message=True
         )
 
+    @log_toodles_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles)
     def execute(self, message, attachment_actions, activity):
         pass
 
@@ -1276,8 +1304,10 @@ class GetCurrentApprovedTestingEntries(Command):
         super().__init__(
             command_keyword="current_approved_testing",
             card=None,
+            delete_previous_message=True
         )
 
+    @log_toodles_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles)
     def execute(self, message, attachment_actions, activity):
         approved_testing_items_table = get_approved_testing_entries_table()
 
@@ -1384,8 +1414,10 @@ class AddApprovedTestingEntry(Command):
         super().__init__(
             command_keyword="add_approved_testing",
             card=None,
+            delete_previous_message=True
         )
 
+    @log_toodles_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles)
     def execute(self, message, attachment_actions, activity):
         usernames = attachment_actions.inputs['usernames'].strip()
         items_of_tester = attachment_actions.inputs['ip_addresses_and_host_names_of_tester'].strip()
@@ -1478,6 +1510,7 @@ class RemoveApprovedTestingEntry(Command):
         super().__init__(
             command_keyword="remove_approved_testing",
             card=None,
+            delete_previous_message=True
         )
 
     def execute(self, message, attachment_actions, activity):
@@ -1512,10 +1545,12 @@ class Who(Command):
             command_keyword="who",
             help_message="On-Call",
             card=None,
+            delete_previous_message=True
         )
 
+    @log_toodles_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles)
     def execute(self, message, attachment_actions, activity):
-        return f"On-call person is {oncall.get_on_call_person()}"
+        return f"{activity['actor']['displayName']}, the DnR On-call person is {oncall.get_on_call_person()}"
 
 
 class Rotation(Command):
@@ -1525,8 +1560,10 @@ class Rotation(Command):
         super().__init__(
             command_keyword="rotation",
             card=None,
+            delete_previous_message=True
         )
 
+    @log_toodles_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles)
     def execute(self, message, attachment_actions, activity):
         rotation = oncall.get_rotation()
 
@@ -1543,8 +1580,10 @@ class ContainmentStatusCS(Command):
         super().__init__(
             command_keyword="status",
             card=None,
+            delete_previous_message=True
         )
 
+    @log_toodles_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles)
     def execute(self, message, attachment_actions, activity):
 
         if message.strip() != "":
@@ -1557,7 +1596,7 @@ class ContainmentStatusCS(Command):
             return "Please enter a host name and try again"
 
         try:
-            return f'The network containment status of {host_name_cs} in CS is {crowdstrike.get_device_containment_status(host_name_cs)}'
+            return f'{activity['actor']['displayName']}, The network containment status of {host_name_cs} in CS is {crowdstrike.get_device_containment_status(host_name_cs)}'
         except Exception as e:
             return f'There seems to be an issue with finding the host you entered. Please make sure the host is valid. Error: {str(e)}'
 
@@ -1568,6 +1607,7 @@ class GetAllOptions(Command):
             command_keyword="options",
             help_message="More Commands",
             card=all_options_card,
+            delete_previous_message=True
         )
 
     def execute(self, message, attachment_actions, activity):
@@ -1579,12 +1619,14 @@ class ImportTicket(Command):
         super().__init__(
             command_keyword="import",
             card=TICKET_IMPORT_CARD.to_dict(),
+            delete_previous_message=True
         )
 
+    @log_toodles_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles)
     def execute(self, message, attachment_actions, activity):
         prod_ticket_number = attachment_actions.inputs['prod_ticket_number']
         destination_ticket_number, destination_ticket_link = xsoar.import_ticket(prod_ticket_number)
-        return f'The Prod ticket has been copied to Dev [X#{destination_ticket_number}]({destination_ticket_link})'
+        return f'{activity['actor']['displayName']}, the Prod ticket has been copied to Dev [X#{destination_ticket_number}]({destination_ticket_link})'
 
 
 class CreateTuningRequest(Command):
@@ -1593,8 +1635,10 @@ class CreateTuningRequest(Command):
             help_message="Create Tuning Request",
             command_keyword="tuning_request",
             card=TUNING_REQUEST_CARD.to_dict(),
+            delete_previous_message=True
         )
 
+    @log_toodles_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles)
     def execute(self, message, attachment_actions, activity):
         title = attachment_actions.inputs['title']
         description = attachment_actions.inputs['description']
@@ -1607,7 +1651,7 @@ class CreateTuningRequest(Command):
 
         tuning_request_id = azdo.create_wit(title=title, description=description, item_type='User Story', project=project, area_path=area_path, submitter=submitter_display_name)
         tuning_request_url = f'https://dev.azure.com/{azdo_orgs.get(project)}/{quote(azdo_projects.get(project))}/_workitems/edit/{tuning_request_id}'
-        return f"Your tuning request has been submitted! \n [{tuning_request_id}]({tuning_request_url}) - {title}"
+        return f"{activity['actor']['displayName']}, Your tuning request has been submitted! \n [{tuning_request_id}]({tuning_request_url}) - {title}"
 
 
 def main():

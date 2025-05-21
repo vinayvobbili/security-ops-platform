@@ -98,6 +98,19 @@ def log_barnacles_activity(bot_access_token):
     return _log_activity(bot_access_token, 'barnacles_activity_log.csv')
 
 
+def log_toodles_activity(bot_access_token):
+    """
+    Decorator that logs Toodles bot activity.
+
+    Args:
+        bot_access_token (str): Access token for bot API
+
+    Returns:
+        Decorator for logging Barnacles bot activity
+    """
+    return _log_activity(bot_access_token, 'toodles_activity_log.csv')
+
+
 def make_dir_for_todays_charts():
     today_date = datetime.now().strftime('%m-%d-%Y')
     charts_dir = os.path.join(CHARTS_DIR_PATH, today_date)
