@@ -1654,6 +1654,64 @@ class CreateTuningRequest(Command):
         return f"{activity['actor']['displayName']}, Your tuning request has been submitted! \n [{tuning_request_id}]({tuning_request_url}) - {title}"
 
 
+SEARCH_X_CARD = AdaptiveCard(
+    body=[
+        TextBlock(
+            text="Search X",
+            wrap=True,
+            horizontalAlignment=HorizontalAlignment.CENTER,
+            weight=FontWeight.BOLDER,
+            color=Colors.ACCENT,
+        ),
+        INPUTS.Text(
+            id="username",
+            label="Username",
+            placeholder="Enter username"
+        ),
+        INPUTS.Text(
+            id="email",
+            label="Email Address",
+            placeholder="Enter email address"
+        ),
+        INPUTS.Text(
+            id="hostname",
+            label="Hostname",
+            placeholder="Enter hostname"
+        ),
+        ActionSet(
+            actions=[
+                Submit(
+                    title="Search",
+                    style=ActionStyle.POSITIVE,
+                    data={"callback_keyword": "search_x"}
+                )
+            ],
+        )
+    ]
+)
+
+
+class SearchXSOAR(Command):
+    def __init__(self):
+        super().__init__(
+            help_message="Search X",
+            command_keyword="search_xsoar",
+            card=SEARCH_X_CARD.to_dict(),
+            delete_previous_message=True
+        )
+
+    @log_toodles_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles)
+    def execute(self, message, attachment_actions, activity):
+        username = attachment_actions.inputs['username']
+        email = attachment_actions.inputs['email']
+        hostname = attachment_actions.inputs['hostname']
+
+        query = ''
+        query += f"username:{username}" if username else ''
+        query += f" email:{email}" if email else ''
+        query += f" hostname:{hostname}" if hostname else ''
+
+
 def main():
     bot = WebexBot(
         CONFIG.webex_bot_access_token_toodles,
@@ -1680,6 +1738,7 @@ def main():
     bot.add_command(GetAllOptions())
     bot.add_command(ImportTicket())
     bot.add_command(CreateTuningRequest())
+    bot.add_command(SearchXSOAR())
 
     bot.run()
 
