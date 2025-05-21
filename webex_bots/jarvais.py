@@ -74,7 +74,7 @@ def seek_approval_to_ring_tag(room_id):
             )
         ],
         actions=[
-            Submit(title="No!", data={"action": "no"}, style=options.ActionStyle.DESTRUCTIVE),
+            Submit(title="No!", data={"callback_keyword": "dont_ring_tag_cs_hosts"}, style=options.ActionStyle.DESTRUCTIVE),
             Submit(title="Yes! Put a Ring On It!", data={"callback_keyword": "ring_tag_cs_hosts"}, style=options.ActionStyle.POSITIVE)
         ]
     )
@@ -131,6 +131,18 @@ class RingTagCSHosts(Command):
             ring_tag_cs_hosts.run_workflow(room_id)
 
 
+class DontRingTagCSHosts(Command):
+    def __init__(self):
+        super().__init__(
+            command_keyword="dont_ring_tag_cs_hosts",
+            delete_previous_message=True,
+        )
+
+    @log_jarvais_activity(bot_access_token=CONFIG.webex_bot_access_token_jarvais)
+    def execute(self, message, attachment_actions, activity):
+        return f"Alright {activity['actor']['displayName']}! I won't tag no more. Until next time!👋🏾"
+
+
 def main():
     """Initialize and run the Webex bot."""
 
@@ -143,6 +155,7 @@ def main():
     # Add commands to the bot
     bot.add_command(CSHostsWithoutRingTag())
     bot.add_command(RingTagCSHosts())
+    bot.add_command(DontRingTagCSHosts())
 
     # Start the bot
     bot.run()

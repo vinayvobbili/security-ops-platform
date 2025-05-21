@@ -11,7 +11,7 @@ from flask import render_template
 
 from config import get_config
 from services import xsoar
-from services.xsoar import ListHandler, IncidentHandler
+from services.xsoar import ListHandler, TicketHandler
 from src.helper_methods import log_web_activity
 
 app = Flask(__name__, static_folder='static', static_url_path='/static', template_folder='templates')
@@ -23,7 +23,7 @@ IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".gif", ".svg")
 blocked_ip_ranges = ["10.49.70.0/24", "10.50.70.0/24"]
 
 list_handler = ListHandler()
-incident_handler = IncidentHandler()
+incident_handler = TicketHandler()
 
 
 @app.before_request

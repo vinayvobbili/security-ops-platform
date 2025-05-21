@@ -27,7 +27,7 @@ from config import get_config
 from data.transient.data_maps import azdo_area_paths, azdo_orgs, azdo_projects
 from services import azdo, xsoar
 from services.crowdstrike import CrowdStrikeClient
-from services.xsoar import IncidentHandler, ListHandler
+from services.xsoar import TicketHandler, ListHandler
 from src.helper_methods import log_moneyball_activity
 
 # --- Configuration and Setup ---
@@ -80,7 +80,7 @@ try:
         exit(1)
 
     crowdstrike = CrowdStrikeClient()  # Consider adding error handling/validation if init can fail
-    incident_handler = IncidentHandler()  # Consider adding error handling/validation
+    incident_handler = TicketHandler()  # Consider adding error handling/validation
     list_handler = ListHandler()  # Consider adding error handling/validation
 
 except Exception as init_e:
