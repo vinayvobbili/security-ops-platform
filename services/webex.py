@@ -13,6 +13,6 @@ webex_api.messages.create(
     roomId=config.webex_room_id_threatcon_collab,
     text=f"Chart for today's FP review meeting",
     files=[
-        '/Users/user/PycharmProjects/IR/web/static/charts/04-30-2025/CS Detection Efficacy-Month.png'
+        '/Users/user/PycharmProjects/IR/web/static/charts/05-21-2025/CrowdStrike Detection Efficacy-Month.png'
     ]
 )
