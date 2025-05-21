@@ -446,11 +446,11 @@ AZDO_CARD = {
                                     "value": "platforms"
                                 },
                                 {
-                                    "title": "Response Engineering Automation",
+                                    "title": "Resp Engg Automation",
                                     "value": "rea"
                                 },
                                 {
-                                    "title": "Response Engineering Operations",
+                                    "title": "Resp Engg Operations",
                                     "value": "reo"
                                 },
                                 {
@@ -1191,7 +1191,7 @@ class CreateAZDOWorkItem(Command):
             elif project == 'rea':
                 assignee = CONFIG.resp_eng_auto_lead
                 area_path = azdo_area_paths['re']
-            elif project == 're0':
+            elif project == 'reo':
                 assignee = CONFIG.resp_eng_ops_lead
                 area_path = azdo_area_paths['re']
 
