@@ -45,18 +45,18 @@ def get_incident(incident_id):
 
 
 def import_ticket(source_ticket_number):
-    incident_handler = IncidentHandler()
+    ticket_handler = TicketHandler()
 
-    # Get incident from prod
+    # Get ticket from prod
     incident_data = get_incident(source_ticket_number)
 
-    # Create incident in target
-    new_incident = incident_handler.create_in_dev(incident_data)
+    # Create ticket in dev
+    new_ticket = ticket_handler.create_in_dev(incident_data)
 
-    return new_incident['id'], f'{CONFIG.xsoar_dev_ui_base_url}/Custom/caseinfoid/{new_incident['id']}'
+    return new_ticket['id'], f'{CONFIG.xsoar_dev_ui_base_url}/Custom/caseinfoid/{new_ticket['id']}'
 
 
-class IncidentHandler:
+class TicketHandler:
     def __init__(self):
         self.headers = headers
         self.incident_search_url = CONFIG.xsoar_prod_api_base_url + '/incidents/search'
@@ -165,3 +165,5 @@ if __name__ == "__main__":
     # destination_ticket_number, destination_ticket_link = import_ticket('621684')
     # print(destination_ticket_number, destination_ticket_link)
     list_handler = ListHandler()
+    ticket_handler = TicketHandler()
+    # print(ticket_handler.get_tickets("hostname:US9F20TZ3"))

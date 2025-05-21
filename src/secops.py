@@ -16,7 +16,7 @@ from webexpythonsdk.models.cards import (
 
 from config import get_config
 from services import azdo
-from services.xsoar import IncidentHandler, ListHandler
+from services.xsoar import TicketHandler, ListHandler
 
 config = get_config()
 webex_api = WebexAPI(config.webex_bot_access_token_soar)
@@ -38,7 +38,7 @@ MANAGEMENT_NOTES_FILE = root_directory / 'data' / 'transient' / 'secOps' / 'mana
 
 
 def get_open_tickets():
-    all_tickets = IncidentHandler().get_tickets(query=BASE_QUERY + ' -status:closed')
+    all_tickets = TicketHandler().get_tickets(query=BASE_QUERY + ' -status:closed')
     total_tickets = len(all_tickets)
     ticket_show_count = min(total_tickets, 5)
     ticket_base_url = config.xsoar_prod_ui_base_url + "/Custom/caseinfoid/"
@@ -77,7 +77,7 @@ def announce_previous_shift_performance(room_id, shift_name):
             "byTo": "hours",
             "toValue": 0
         }
-        incident_fetcher = IncidentHandler()
+        incident_fetcher = TicketHandler()
 
         inflow = incident_fetcher.get_tickets(
             query=BASE_QUERY,

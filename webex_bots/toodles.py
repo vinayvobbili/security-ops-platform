@@ -21,7 +21,7 @@ from config import get_config
 from data.transient.data_maps import azdo_projects, azdo_orgs, azdo_area_paths
 from services import xsoar, azdo
 from services.crowdstrike import CrowdStrikeClient
-from services.xsoar import ListHandler, IncidentHandler
+from services.xsoar import ListHandler, TicketHandler
 from src.helper_methods import log_toodles_activity
 
 CONFIG = get_config()
@@ -44,7 +44,7 @@ dev_headers = {
 }
 headers = prod_headers
 
-incident_handler = IncidentHandler()
+incident_handler = TicketHandler()
 list_handler = ListHandler()
 
 NEW_TICKET_CARD = {
