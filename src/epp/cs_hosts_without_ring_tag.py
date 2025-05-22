@@ -1,13 +1,10 @@
-import argparse
-import concurrent.futures
 import logging
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Any, Callable, TypeVar, Optional
+from typing import Dict, Any, Callable, TypeVar
 
 import pandas as pd
-from tqdm import tqdm
 from webexteamssdk import WebexTeamsAPI
 
 from config import get_config
@@ -24,10 +21,6 @@ F = TypeVar('F', bound=Callable[..., Any])
 # Constants - consolidated
 ROOT_DIRECTORY = Path(__file__).parent.parent.parent
 DATA_DIR = ROOT_DIRECTORY / "data" / "transient" / "epp_device_tagging"
-
-# Default configuration values
-DEFAULT_CHUNK_SIZE = 500
-DEFAULT_MAX_WORKERS = 10
 
 # Configuration
 CONFIG = get_config()
@@ -183,94 +176,6 @@ def fetch_host_details(hostname: str, service_now_client: ServiceNowClient) -> D
         return {"name": hostname, "error": str(e)}
 
 
-def enrich_host_report(chunk_size: int = DEFAULT_CHUNK_SIZE,
-                       service_now_client: Optional[ServiceNowClient] = None):
-    """
-    Enrich host data with ServiceNow details using multithreading.
-
-    Args:
-        chunk_size: Size of batches for processing
-        service_now_client: Optional pre-initialized ServiceNowClient (for testing)
-    """
-    try:
-        # Get hosts from unique_hosts file
-        unique_hosts_file = get_dated_path(DATA_DIR, "cs_hosts_last_seen_without_ring_tag.xlsx")
-        unique_hosts_df = read_excel_file(unique_hosts_file)
-
-        # Initialize ServiceNow client if not provided
-        snow_client = service_now_client or ServiceNowClient(
-            CONFIG.snow_base_url,
-            CONFIG.snow_functional_account_id,
-            CONFIG.snow_functional_account_password,
-            CONFIG.snow_client_key
-        )
-
-        # Get device details from SNOW
-        hostnames = unique_hosts_df['hostname'].tolist()
-        all_device_details = []
-
-        # Process in chunks
-        for i in range(0, len(hostnames), chunk_size):
-            chunk_hostnames = hostnames[i:i + chunk_size]
-            chunk_details = []
-
-            # Adjust number of workers based on dataset size
-            # More workers for larger datasets, fewer for smaller ones
-            max_workers = min(20, max(5, len(chunk_hostnames) // 100))
-
-            # Use ThreadPoolExecutor for this chunk
-            with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-                future_to_hostname = {
-                    executor.submit(fetch_host_details, hostname, snow_client): hostname
-                    for hostname in chunk_hostnames
-                }
-
-                for future in tqdm(concurrent.futures.as_completed(future_to_hostname),
-                                   total=len(chunk_hostnames),
-                                   desc=f"Enriching hosts {i + 1}-{min(i + chunk_size, len(hostnames))}..."):
-                    hostname = future_to_hostname[future]
-                    try:
-                        result = future.result()
-                        chunk_details.append(result)
-                    except Exception as e:
-                        logger.error(f"Task failed for {hostname}: {e}")
-                        chunk_details.append({"name": hostname, "error": str(e)})
-
-            all_device_details.extend(chunk_details)
-
-        # Create dataframe and merge
-        device_details_df = pd.json_normalize(all_device_details)
-        merged_df = pd.merge(unique_hosts_df, device_details_df,
-                             left_on='hostname', right_on='name', how='left')
-
-        enriched_hosts_file = get_dated_path(DATA_DIR, "enriched_unique_hosts_without_ring_tag.xlsx")
-        write_excel_file(merged_df, enriched_hosts_file)
-        logger.info(f"Successfully enriched {len(all_device_details)} host records")
-
-        return len(all_device_details)
-    except FileNotFoundError as e:
-        logger.error(f"Required file not found: {e}")
-        raise
-    except Exception as e:
-        logger.error(f"Error enriching host report: {e}")
-        raise
-
-
-def parse_args():
-    """Parse command-line arguments for profiling options."""
-    parser = argparse.ArgumentParser(description="CrowdStrike host ring tag analysis")
-    parser.add_argument("--profile", action="store_true", help="Enable profiling")
-    parser.add_argument("--profile-function", type=str, choices=[
-        "list_cs_hosts_without_ring_tag",
-        "get_unique_hosts_without_ring_tag",
-        "enrich_host_report",
-        "all"
-    ], default="all", help="Function to profile")
-    parser.add_argument("--chunk-size", type=int, default=DEFAULT_CHUNK_SIZE,
-                        help="Chunk size for batch processing")
-    return parser.parse_args()
-
-
 def main() -> None:
     """Main function to run the complete workflow."""
     try:
@@ -303,12 +208,6 @@ def generate_report(chunk_size: int = DEFAULT_CHUNK_SIZE) -> Dict[str, float]:
         step_func()
         step_times[step_name] = time.time() - start_time
 
-    '''
-    # Run enrichment step
-    start_time = time.time()
-    enrich_host_report()
-    step_times["Enrich Host Report with SNOW details"] = time.time() - start_time
-    '''
     return step_times
 
 

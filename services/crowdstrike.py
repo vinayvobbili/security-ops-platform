@@ -284,7 +284,8 @@ class CrowdStrikeClient:
 
 def main() -> None:
     client = CrowdStrikeClient()
-    print(client.get_device_containment_status('C02G7C7LMD6R'))
+    device_id = client.get_device_id('AUSYD1METV0051')
+    print(client.get_device_details(device_id))
 
 
 if __name__ == "__main__":
