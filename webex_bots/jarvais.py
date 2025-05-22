@@ -140,7 +140,7 @@ class DontRingTagCSHosts(Command):
 
     @log_jarvais_activity(bot_access_token=CONFIG.webex_bot_access_token_jarvais)
     def execute(self, message, attachment_actions, activity):
-        return f"Alright {activity['actor']['displayName']}! I won't tag no more. Until next time!👋🏾"
+        return f"Alright {activity['actor']['displayName']}, I won't tag no more. Until next time!👋🏾"
 
 
 def main():
