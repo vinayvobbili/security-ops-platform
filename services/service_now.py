@@ -1,12 +1,17 @@
 import base64
+import concurrent.futures
 import json
 import logging
 import os
 import time
 import typing
 from datetime import datetime
+from pathlib import Path
+from typing import Optional
 
+import pandas as pd
 import requests
+from tqdm import tqdm
 
 from config import get_config
 
@@ -16,7 +21,12 @@ logger = logging.getLogger(__name__)
 
 config = get_config()
 
+DEFAULT_CHUNK_SIZE = 500
+DEFAULT_MAX_WORKERS = 10
 SNOW_ACCESS_TOKEN_FILE = os.path.join(os.path.dirname(__file__), '../data/transient/service_now_access_token.json')
+
+ROOT_DIRECTORY = Path(__file__).parent.parent.parent
+DATA_DIR = ROOT_DIRECTORY / "data" / "transient" / "epp_device_tagging"
 
 
 class ServiceNowTokenManager:
@@ -254,6 +264,74 @@ class ServiceNowClient:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         pass
+
+
+def enrich_host_report(input_file):
+    """
+    Enrich host data with ServiceNow details using multithreading.
+    """
+    try:
+        # Initialize ServiceNow client if not provided
+        snow_client = ServiceNowClient(
+            config.snow_base_url,
+            config.snow_functional_account_id,
+            config.snow_functional_account_password,
+            config.snow_client_key
+        )
+
+        # Get device details from SNOW
+        input_file_df = pd.read_excel(input_file, engine="openpyxl")
+        hostnames = input_file_df['hostname'].tolist()
+        all_device_details = []
+
+        service_now_client: Optional[ServiceNowClient] = None
+        # Process in chunks
+        for i in range(0, len(hostnames), DEFAULT_CHUNK_SIZE):
+            chunk_hostnames = hostnames[i:i + DEFAULT_CHUNK_SIZE]
+            chunk_details = []
+
+            # Adjust number of workers based on dataset size
+            # More workers for larger datasets, fewer for smaller ones
+            max_workers = min(20, max(5, len(chunk_hostnames) // 100))
+
+            # Use ThreadPoolExecutor for this chunk
+            with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+                future_to_hostname = {
+                    executor.submit(snow_client.get_host_details, hostname): hostname
+                    for hostname in chunk_hostnames
+                }
+
+                for future in tqdm(concurrent.futures.as_completed(future_to_hostname),
+                                   total=len(chunk_hostnames),
+                                   desc=f"Enriching hosts {i + 1}-{min(i + DEFAULT_CHUNK_SIZE, len(hostnames))}..."):
+                    hostname = future_to_hostname[future]
+                    try:
+                        result = future.result()
+                        chunk_details.append(result)
+                    except Exception as e:
+                        logger.error(f"Task failed for {hostname}: {e}")
+                        chunk_details.append({"name": hostname, "error": str(e)})
+
+            all_device_details.extend(chunk_details)
+
+        # Create dataframe and merge
+        device_details_df = pd.json_normalize(all_device_details)
+        merged_df = pd.merge(input_file_df, device_details_df, left_on='hostname', right_on='name', how='left')
+
+        today_date = datetime.now().strftime('%m-%d-%Y')
+        input_file_name = Path(input_file).name
+        enriched_hosts_file = DATA_DIR / today_date / f"enriched_{input_file_name}"
+        enriched_hosts_file.parent.mkdir(parents=True, exist_ok=True)
+        input_file_df.to_excel(enriched_hosts_file, index=False, engine="openpyxl")
+        logger.info(f"Successfully enriched {len(all_device_details)} host records")
+
+        return len(all_device_details)
+    except FileNotFoundError as e:
+        logger.error(f"Required file not found: {e}")
+        raise
+    except Exception as e:
+        logger.error(f"Error enriching host report: {e}")
+        raise
 
 
 if __name__ == "__main__":
