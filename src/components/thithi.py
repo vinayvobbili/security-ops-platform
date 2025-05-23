@@ -235,12 +235,11 @@ def main():
         if thithi and paksha:
             message = f'Thithi: {thithi}, {paksha}'
             broadcast_to_webex(message, webex_api)
+            broadcast_to_whatsapp(message)
         else:
             message = "Could not retrieve thithi and paksha information"
             logger.warning(message)
 
-        broadcast_to_webex(message, webex_api)
-        broadcast_to_whatsapp(message)
     except Exception as e:
         logger.error(f"Error in main function: {e}")
 
