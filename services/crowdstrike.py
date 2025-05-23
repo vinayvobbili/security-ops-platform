@@ -42,9 +42,16 @@ class CrowdStrikeClient:
             'client_secret': self.config.cs_ro_client_secret
         }
         try:
+            print(f"Requesting token from: {url}")
+            print(f"Using client_id: {self.config.cs_ro_client_id[:5]}...")  # Print first 5 chars for security
             response = requests.post(url, data=body)
+            print(f"Token response status: {response.status_code}")
+            if response.status_code != 200:
+                print(f"Error response: {response.text}")
             response.raise_for_status()
-            return response.json()['access_token']
+            token = response.json()['access_token']
+            print(f"Token acquired successfully: {token[:5]}...")
+            return token
         except Exception as e:
             print(f"Error getting access token: {e}")
             return ""
@@ -115,7 +122,8 @@ class CrowdStrikeClient:
                     return devices[0]  # Return the first matching device ID
                 print(f"No devices found for hostname: {hostname}")
             else:
-                print(f"Error getting device ID: {response.get('status_code')}, {response.get('body', {}).get('errors')}")
+                print(
+                    f"Error getting device ID: {response.get('status_code')}, {response.get('body', {}).get('errors')}")
         except Exception as e:
             print(f"Exception when getting device ID: {e}")
 
@@ -139,7 +147,8 @@ class CrowdStrikeClient:
                     return resources[0]
                 print(f"No details found for device ID: {device_id}")
             else:
-                print(f"Error getting device details: {response.get('status_code')}, {response.get('body', {}).get('errors')}")
+                print(
+                    f"Error getting device details: {response.get('status_code')}, {response.get('body', {}).get('errors')}")
         except Exception as e:
             print(f"Exception when getting device details: {e}")
 
@@ -284,8 +293,20 @@ class CrowdStrikeClient:
 
 def main() -> None:
     client = CrowdStrikeClient()
+    # First explicitly get and print the token status
+    token = client.get_access_token()
+    if not token:
+        print("Failed to obtain access token")
+        return
+
+    # Continue with your operations
+    print("Testing API with obtained token...")
     device_id = client.get_device_id('AUSYD1METV0051')
-    print(client.get_device_details(device_id))
+    if device_id:
+        print(f"Successfully retrieved device ID: {device_id}")
+        print(client.get_device_details(device_id))
+    else:
+        print("Failed to retrieve device ID")
 
 
 if __name__ == "__main__":
