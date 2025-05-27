@@ -15,7 +15,7 @@ from webexpythonsdk.models.cards.actions import Submit
 from webexteamssdk import WebexTeamsAPI
 
 from config import get_config
-from src.epp import ring_tag_cs_hosts, cs_hosts_without_ring_tag
+from src.epp import ring_tag_cs_hosts, cs_hosts_without_ring_tag, cs_hosts_with_invalid_ring_tags
 from src.epp.ring_tag_cs_hosts import ReportHandler
 from src.helper_methods import log_jarvais_activity
 
@@ -95,7 +95,7 @@ def seek_approval_to_delete_invalid_ring_tags(room_id):
     card = AdaptiveCard(
         body=[
             TextBlock(
-                text="Ring Tag Removal Approval",
+                text="Invalid Ring Tag Removal Approval",
                 color=options.Colors.ACCENT,
                 size=options.FontSize.LARGE,
                 weight=options.FontWeight.BOLDER,
@@ -201,9 +201,9 @@ class CSHostsWithInvalidRingTags(Command):
         )
         lock_path = ROOT_DIRECTORY / "src" / "epp" / "cs_hosts_with_invalid_ring_tags.lock"
         with fasteners.InterProcessLock(lock_path):
-            step_times = cs_hosts_without_ring_tag.generate_report()
+            step_times = cs_hosts_with_invalid_ring_tags.generate_report()
             send_report(room_id, step_times)
-            seek_approval_to_ring_tag(room_id)
+            seek_approval_to_delete_invalid_ring_tags(room_id)
 
 
 class DontDropInvalidRings(Command):
