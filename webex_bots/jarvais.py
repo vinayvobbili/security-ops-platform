@@ -74,8 +74,49 @@ def seek_approval_to_ring_tag(room_id):
             )
         ],
         actions=[
-            Submit(title="No!", data={"callback_keyword": "dont_ring_tag_cs_hosts"}, style=options.ActionStyle.DESTRUCTIVE),
-            Submit(title="Yes! Put a Ring On It!", data={"callback_keyword": "ring_tag_cs_hosts"}, style=options.ActionStyle.POSITIVE)
+            Submit(title="No!", data={"callback_keyword": "dont_ring_tag_cs_hosts"},
+                   style=options.ActionStyle.DESTRUCTIVE),
+            Submit(title="Yes! Put a Ring On It!", data={"callback_keyword": "ring_tag_cs_hosts"},
+                   style=options.ActionStyle.POSITIVE)
+        ]
+    )
+
+    try:
+        webex_api.messages.create(
+            roomId=room_id,
+            text="Please approve the tagging action.",
+            attachments=[{"contentType": "application/vnd.microsoft.card.adaptive", "content": card.to_dict()}]
+        )
+    except Exception as e:
+        logger.error(f"Failed to send approval card: {e}")
+
+
+def seek_approval_to_delete_invalid_ring_tags(room_id):
+    card = AdaptiveCard(
+        body=[
+            TextBlock(
+                text="Ring Tag Removal Approval",
+                color=options.Colors.ACCENT,
+                size=options.FontSize.LARGE,
+                weight=options.FontWeight.BOLDER,
+                horizontalAlignment=HorizontalAlignment.CENTER),
+            ColumnSet(
+                columns=[
+                    Column(
+                        width="stretch",
+                        items=[
+                            TextBlock(text="Do you want these invalid Ring tags to be dropped?", wrap=True)
+                        ],
+                        verticalContentAlignment=VerticalContentAlignment.CENTER
+                    )
+                ]
+            )
+        ],
+        actions=[
+            Submit(title="No!", data={"callback_keyword": "dont_drop_invalid_ring_tags"},
+                   style=options.ActionStyle.DESTRUCTIVE),
+            Submit(title="Yes! Drop the invalid Ring tags!", data={"callback_keyword": "drop_invalid_ring_tags"},
+                   style=options.ActionStyle.POSITIVE)
         ]
     )
 
@@ -143,6 +184,41 @@ class DontRingTagCSHosts(Command):
         return f"Alright {activity['actor']['displayName']}, I won't tag no more. Until next time!👋🏾"
 
 
+class CSHostsWithInvalidRingTags:
+    def __init__(self):
+        super().__init__(
+            command_keyword="cs_no_ring_tag",
+            help_message="Get CS Hosts with Invalid Ring Tags",
+            delete_previous_message=True,
+        )
+
+    @log_jarvais_activity(bot_access_token=CONFIG.webex_bot_access_token_jarvais)
+    def execute(self, message, attachment_actions, activity):
+        room_id = attachment_actions.roomId
+        webex_api.messages.create(
+            roomId=room_id,
+            markdown=f"Hello {activity['actor']['displayName']}! I've started the report generation process. It is running in the background and will complete in about 5 mins."
+        )
+        lock_path = ROOT_DIRECTORY / "src" / "epp" / "cs_hosts_with_invalid_ring_tags.lock"
+        with fasteners.InterProcessLock(lock_path):
+            step_times = {}
+            step_times = cs_hosts_without_ring_tag.generate_report()
+            send_report(room_id, step_times)
+            seek_approval_to_ring_tag(room_id)
+
+
+class DontDropInvalidRings:
+    def __init__(self):
+        super().__init__(
+            command_keyword="dont_ring_tag_cs_hosts",
+            delete_previous_message=True,
+        )
+
+    @log_jarvais_activity(bot_access_token=CONFIG.webex_bot_access_token_jarvais)
+    def execute(self, message, attachment_actions, activity):
+        return f"Alright {activity['actor']['displayName']}, I won't drop no invalid Rings. Until next time!👋🏾"
+
+
 def main():
     """Initialize and run the Webex bot."""
 
@@ -156,6 +232,8 @@ def main():
     bot.add_command(CSHostsWithoutRingTag())
     bot.add_command(RingTagCSHosts())
     bot.add_command(DontRingTagCSHosts())
+    bot.add_command(CSHostsWithInvalidRingTags())
+    bot.add_command(DontDropInvalidRings())
 
     # Start the bot
     bot.run()

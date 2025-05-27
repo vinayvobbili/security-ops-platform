@@ -1067,7 +1067,8 @@ class CreateXSOARTicket(Command):
 
         incident = {
             'name': attachment_actions.inputs['title'].strip(),
-            'details': attachment_actions.inputs['details'].strip() + f"\nSubmitted by: {activity['actor']['emailAddress']}",
+            'details': attachment_actions.inputs[
+                           'details'].strip() + f"\nSubmitted by: {activity['actor']['emailAddress']}",
             'CustomFields': {
                 'detectionsource': attachment_actions.inputs['detection_source'],
                 'isusercontacted': False,
@@ -1104,7 +1105,8 @@ class IOCHunt(Command):
 
     @log_toodles_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles)
     def execute(self, message, attachment_actions, activity):
-        if attachment_actions.inputs['ioc_hunt_title'].strip() == "" or attachment_actions.inputs['ioc_hunt_iocs'].strip() == "":
+        if attachment_actions.inputs['ioc_hunt_title'].strip() == "" or attachment_actions.inputs[
+            'ioc_hunt_iocs'].strip() == "":
             return "Please fill in both fields to create a new ticket."
 
         incident = {
@@ -1144,12 +1146,14 @@ class CreateThreatHunt(Command):
 
     @log_toodles_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles)
     def execute(self, message, attachment_actions, activity):
-        if attachment_actions.inputs['threat_hunt_title'].strip() == "" or attachment_actions.inputs['threat_hunt_desc'].strip() == "":
+        if attachment_actions.inputs['threat_hunt_title'].strip() == "" or attachment_actions.inputs[
+            'threat_hunt_desc'].strip() == "":
             return "Please fill in both fields to create a new ticket."
 
         incident = {
             'name': attachment_actions.inputs['threat_hunt_title'].strip(),
-            'details': attachment_actions.inputs['threat_hunt_desc'].strip() + f"\nSubmitted by: {activity['actor']['emailAddress']}",
+            'details': attachment_actions.inputs[
+                           'threat_hunt_desc'].strip() + f"\nSubmitted by: {activity['actor']['emailAddress']}",
             'type': "Threat Hunt"
         }
         result = incident_handler.create(incident)
@@ -1236,7 +1240,8 @@ class Review(Command):
         ticket_no = attachment_actions.inputs["incident_id"]
 
         list_dict = list_handler.get_list_data_by_name("review").get('Tickets')
-        add_entry_to_reviews(list_dict, ticket_no, activity['actor']['emailAddress'], curr_date.strftime("%x"), attachment_actions.inputs["review_notes"])
+        add_entry_to_reviews(list_dict, ticket_no, activity['actor']['emailAddress'], curr_date.strftime("%x"),
+                             attachment_actions.inputs["review_notes"])
         reformat = {"Tickets": list_dict}
         list_handler.save(reformat, "review")
 
@@ -1303,8 +1308,7 @@ class GetCurrentApprovedTestingEntries(Command):
     def __init__(self):
         super().__init__(
             command_keyword="current_approved_testing",
-            card=None,
-            delete_previous_message=True
+            card=None
         )
 
     @log_toodles_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles)
@@ -1441,7 +1445,8 @@ class AddApprovedTestingEntry(Command):
             usernames = usernames.split(',')
             for username in usernames:
                 if username:
-                    current_entries.get("USERNAMES").append({"data": username.strip(), "expiry_date": expiry_date, "submitter": submitter})
+                    current_entries.get("USERNAMES").append(
+                        {"data": username.strip(), "expiry_date": expiry_date, "submitter": submitter})
                     new_testing_entry = {
                         "username": username,
                         "description": description,
@@ -1458,7 +1463,8 @@ class AddApprovedTestingEntry(Command):
                 if item:
                     item = item.strip()
                     if is_valid_ip(item):
-                        current_entries.get("IP_ADDRESSES").append({"data": item, "expiry_date": expiry_date, "submitter": submitter})
+                        current_entries.get("IP_ADDRESSES").append(
+                            {"data": item, "expiry_date": expiry_date, "submitter": submitter})
                         new_testing_entry = {
                             "ip_address": item,
                             "description": description,
@@ -1469,7 +1475,8 @@ class AddApprovedTestingEntry(Command):
                         }
                         master_entries.append(new_testing_entry)
                     else:
-                        current_entries.get("ENDPOINTS").append({"data": item, "expiry_date": expiry_date, "submitter": submitter})
+                        current_entries.get("ENDPOINTS").append(
+                            {"data": item, "expiry_date": expiry_date, "submitter": submitter})
                         new_testing_entry = {
                             "host_name": item,
                             "description": description,
@@ -1649,7 +1656,8 @@ class CreateTuningRequest(Command):
         project = 'de'
         area_path = azdo_area_paths['tuning_request']
 
-        tuning_request_id = azdo.create_wit(title=title, description=description, item_type='User Story', project=project, area_path=area_path, submitter=submitter_display_name)
+        tuning_request_id = azdo.create_wit(title=title, description=description, item_type='User Story',
+                                            project=project, area_path=area_path, submitter=submitter_display_name)
         tuning_request_url = f'https://dev.azure.com/{azdo_orgs.get(project)}/{quote(azdo_projects.get(project))}/_workitems/edit/{tuning_request_id}'
         return f"{activity['actor']['displayName']}, Your tuning request has been submitted! \n [{tuning_request_id}]({tuning_request_url}) - {title}"
 
