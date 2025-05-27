@@ -377,6 +377,14 @@ AZDO_CARD = {
     "body": [
         {
             "type": "TextBlock",
+            "text": "New AZDO Work Item",
+            "horizontalAlignment": "center",
+            "weight": "bolder",
+            "size": "medium",
+            "color": "accent"
+        },
+        {
+            "type": "TextBlock",
             "text": "Title",
             "color": "Accent"
         },
