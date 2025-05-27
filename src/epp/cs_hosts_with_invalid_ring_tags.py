@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pandas as pd
 
+from services import service_now
 from src.epp.cs_hosts_without_ring_tag import get_dated_path
-from src.epp.ring_tag_cs_hosts import service_now
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
