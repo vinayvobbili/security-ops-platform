@@ -26,6 +26,8 @@ DATA_DIR = ROOT_DIRECTORY / "data" / "transient" / "epp_device_tagging"
 CONFIG = get_config()
 webex_api = WebexTeamsAPI(access_token=CONFIG.webex_bot_access_token_jarvais)
 
+DEFAULT_CHUNK_SIZE = 500
+
 
 def get_dated_path(base_dir: Path, filename: str) -> Path:
     """

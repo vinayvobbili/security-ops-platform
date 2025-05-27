@@ -134,7 +134,7 @@ class CSHostsWithoutRingTag(Command):
     def __init__(self):
         super().__init__(
             command_keyword="cs_no_ring_tag",
-            help_message="Get CS Hosts without Ring Tag",
+            help_message="Get CS Hosts without a Ring Tag",
             delete_previous_message=True,
         )
 
@@ -184,10 +184,10 @@ class DontRingTagCSHosts(Command):
         return f"Alright {activity['actor']['displayName']}, I won't tag no more. Until next time!👋🏾"
 
 
-class CSHostsWithInvalidRingTags:
+class CSHostsWithInvalidRingTags(Command):
     def __init__(self):
         super().__init__(
-            command_keyword="cs_no_ring_tag",
+            command_keyword="cs_invalid_ring_tag",
             help_message="Get CS Hosts with Invalid Ring Tags",
             delete_previous_message=True,
         )
@@ -201,16 +201,15 @@ class CSHostsWithInvalidRingTags:
         )
         lock_path = ROOT_DIRECTORY / "src" / "epp" / "cs_hosts_with_invalid_ring_tags.lock"
         with fasteners.InterProcessLock(lock_path):
-            step_times = {}
             step_times = cs_hosts_without_ring_tag.generate_report()
             send_report(room_id, step_times)
             seek_approval_to_ring_tag(room_id)
 
 
-class DontDropInvalidRings:
+class DontDropInvalidRings(Command):
     def __init__(self):
         super().__init__(
-            command_keyword="dont_ring_tag_cs_hosts",
+            command_keyword="dont_drop_invalid_ring_tag_cs_hosts",
             delete_previous_message=True,
         )
 

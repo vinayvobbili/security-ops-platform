@@ -20,7 +20,7 @@ CONFIG = get_config()
 
 # Supported image extensions
 IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".gif", ".svg")
-blocked_ip_ranges = ["10.49.70.0/24", "10.50.70.0/24"]
+blocked_ip_ranges = []  # ["10.49.70.0/24", "10.50.70.0/24"]
 
 list_handler = ListHandler()
 incident_handler = TicketHandler()
@@ -99,6 +99,21 @@ def display_msoc_form():
     return render_template("msoc_form.html")
 
 
+@app.route("/submit-msoc-form", methods=['POST'])
+@log_web_activity
+def handle_msoc_form_submission():
+    """Handles MSOC form submissions and processes the data."""
+    form = request.form.to_dict()
+    form['type'] = 'MSOC Site Security Device Management'
+    response = incident_handler.create_in_dev(form)
+    # Return a JSON response
+    return jsonify({
+        'status': 'success',
+        'new_incident_id': response['id'],
+        'new_incident_link': f"{CONFIG.xsoar_dev_ui_base_url}/Custom/caseinfoid/{response['id']}"
+    })
+
+
 @app.route("/speak-up-form")
 @log_web_activity
 def display_speak_up_form():
@@ -142,21 +157,6 @@ def handle_speak_up_form_submission():
     })
 
 
-@app.route("/submit-msoc-form", methods=['POST'])
-@log_web_activity
-def handle_msoc_form_submission():
-    """Handles MSOC form submissions and processes the data."""
-    form = request.form.to_dict()
-    form['type'] = 'MSOC Site Security Device Management'
-    response = incident_handler.create_in_dev(form)
-    # Return a JSON response
-    return jsonify({
-        'status': 'success',
-        'new_incident_id': response['id'],
-        'new_incident_link': f"{CONFIG.xsoar_dev_ui_base_url}/Custom/caseinfoid/{response['id']}"
-    })
-
-
 @app.route('/xsoar-ticket-import-form', methods=['GET'])
 @log_web_activity
 def xsoar_ticket_import_form():
@@ -175,9 +175,9 @@ def import_xsoar_ticket():
     })
 
 
-@app.route("/approved-testing", methods=['GET'])
+@app.route("/get-approved-testing-entries", methods=['GET'])
 @log_web_activity
-def get_approved_testing_records():
+def get_approved_testing_entries():
     """Fetches approved testing records and displays them in separate HTML tables."""
     approved_testing_records = list_handler.get_list_data_by_name(f'{CONFIG.team_name}_Approved_Testing')
 
@@ -208,7 +208,7 @@ def parse_date(date_str):
     raise ValueError(f"Date format not recognized: {date_str}")
 
 
-@app.route("/upcoming-travel", methods=['GET'])
+@app.route("/get-current-upcoming-travel-records", methods=['GET'])
 @log_web_activity
 def get_upcoming_travel():
     """Fetches upcoming travel records and displays them."""
@@ -263,7 +263,7 @@ def favicon():
 def main():
     charts_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../charts'))
     app.config['CHARTS_DIR'] = charts_dir
-    app.run(debug=True, host='0.0.0.0', port=8000, threaded=True)
+    app.run(debug=True, host='0.0.0.0', port=80, threaded=True)
 
 
 if __name__ == "__main__":
