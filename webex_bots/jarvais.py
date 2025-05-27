@@ -194,16 +194,26 @@ class CSHostsWithInvalidRingTags(Command):
 
     @log_jarvais_activity(bot_access_token=CONFIG.webex_bot_access_token_jarvais)
     def execute(self, message, attachment_actions, activity):
-        room_id = attachment_actions.roomId
-        webex_api.messages.create(
-            roomId=room_id,
-            markdown=f"Hello {activity['actor']['displayName']}! I've started the report generation process. It is running in the background and will complete in about 5 mins."
-        )
-        lock_path = ROOT_DIRECTORY / "src" / "epp" / "cs_hosts_with_invalid_ring_tags.lock"
-        with fasteners.InterProcessLock(lock_path):
-            step_times = cs_hosts_with_invalid_ring_tags.generate_report()
-            send_report(room_id, step_times)
-            seek_approval_to_delete_invalid_ring_tags(room_id)
+        try:
+            room_id = attachment_actions.roomId
+            webex_api.messages.create(
+                roomId=room_id,
+                markdown=f"Hello {activity['actor']['displayName']}! I've started the report generation process. It is running in the background and will complete in about 5 mins."
+            )
+            lock_path = ROOT_DIRECTORY / "src" / "epp" / "cs_hosts_with_invalid_ring_tags.lock"
+            with fasteners.InterProcessLock(lock_path):
+                step_times = cs_hosts_with_invalid_ring_tags.generate_report()
+                send_report(room_id, step_times)
+                seek_approval_to_delete_invalid_ring_tags(room_id)
+        except Exception as e:
+            logger.error(f"Error in CSHostsWithInvalidRingTags execute: {e}")
+            try:
+                webex_api.messages.create(
+                    roomId=attachment_actions.roomId,
+                    markdown=f"Sorry, an error occurred while generating the report: {str(e)}"
+                )
+            except Exception as msg_error:
+                logger.error(f"Failed to send error message: {msg_error}")
 
 
 class DontDropInvalidRings(Command):
