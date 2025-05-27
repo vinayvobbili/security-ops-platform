@@ -218,6 +218,25 @@ class DontDropInvalidRings(Command):
         return f"Alright {activity['actor']['displayName']}, I won't drop no invalid Rings. Until next time!👋🏾"
 
 
+class DropInvalidRings(Command):
+    def __init__(self):
+        super().__init__(
+            command_keyword="drop_invalid_ring_tags",
+            delete_previous_message=True,
+        )
+
+    @log_jarvais_activity(bot_access_token=CONFIG.webex_bot_access_token_jarvais)
+    def execute(self, message, attachment_actions, activity):
+        room_id = attachment_actions.roomId
+        webex_api.messages.create(
+            roomId=room_id,
+            markdown=f"Hello {activity['actor']['displayName']}! This is still work in progress!."
+        )
+        lock_path = ROOT_DIRECTORY / "src" / "epp" / "drop_invalid_ring_tag_cs_hosts.lock"
+        with fasteners.InterProcessLock(lock_path):
+            pass
+
+
 def main():
     """Initialize and run the Webex bot."""
 
@@ -232,6 +251,7 @@ def main():
     bot.add_command(RingTagCSHosts())
     bot.add_command(DontRingTagCSHosts())
     bot.add_command(CSHostsWithInvalidRingTags())
+    bot.add_command(DropInvalidRings())
     bot.add_command(DontDropInvalidRings())
 
     # Start the bot
