@@ -63,7 +63,7 @@ def generate_report():
 
             # Extract ring numbers using regex
             try:
-                ring_tags = re.findall(r'FalconGroupingTags/SrvRing(\d+)', current_tags)
+                ring_tags = re.findall(r'FalconGroupingTags/SRVRing(\d+)', current_tags, re.IGNORECASE)
                 ring_numbers = [int(tag) for tag in ring_tags if tag.isdigit()]
 
                 # Skip if no ring numbers found
