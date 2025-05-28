@@ -119,16 +119,16 @@ def generate_report():
         logger.error(f"Input file not found at {input_file_path}")
         raise
     except Exception as e:
-        logger.error(f"Error listing hosts without ring tag: {e}")
+        logger.error(f"Error listing hosts with invalid ring tags: {e}")
         raise
 
 
 def main() -> None:
     """Main function to run the complete workflow."""
     try:
-        logger.info("Starting CrowdStrike host ring tag analysis")
+        logger.info("Starting CrowdStrike host invalid ring tag analysis")
         generate_report()
-        logger.info("Completed CrowdStrike host ring tag analysis")
+        logger.info("Completed CrowdStrike host invalid ring tag analysis")
     except Exception as e:
         logger.error(f"Error in main workflow: {e}")
 
