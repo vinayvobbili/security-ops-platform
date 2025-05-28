@@ -50,20 +50,29 @@ def generate_report():
         servers_with_ring_tags.to_excel(servers_with_ring_tags_file_path, index=False, engine="openpyxl")
 
         # Enrich host report with ServiceNow data
-        service_now.enrich_host_report(servers_with_ring_tags_file_path)
+        enriched_servers_with_ring_tags = service_now.enrich_host_report(servers_with_ring_tags_file_path)
 
         # Initialize columns for marking invalid tags and comments
         df['has_invalid_ring_tag'] = False
         df['comment'] = ''
 
+        # Map environment groups to their expected ring numbers
+        ENVIRONMENT_TO_RING = {
+            "RING_1_ENVS": 1,
+            "RING_2_ENVS": 2,
+            "RING_3_ENVS": 3
+        }
+
+        enriched_servers_with_ring_tags = pd.read_excel(enriched_servers_with_ring_tags, engine="openpyxl")
         # Process servers with ring tags to check for invalid tags
-        for index, server in servers_with_ring_tags.iterrows():
-            env = server.get('env', '').lower() if server.get('env') else ''  # Convert to lowercase and handle None
+        for index, server in enriched_servers_with_ring_tags.iterrows():
+            env_value = server.get('environment', '')
+            env = str(env_value).lower() if env_value is not None else ''
             current_tags = server.get('current_tags', '')
 
             # Extract ring numbers using regex
             try:
-                ring_tags = re.findall(r'FalconGroupingTags/SRVRing(\d+)', current_tags, re.IGNORECASE)
+                ring_tags = re.findall(r'FalconGroupingTags/*.*?SRVRing(\d+)', current_tags, re.IGNORECASE)
                 ring_numbers = [int(tag) for tag in ring_tags if tag.isdigit()]
 
                 # Skip if no ring numbers found
@@ -75,31 +84,26 @@ def generate_report():
                 invalid_tag = False
                 comment = ''
 
-                if env in RING_1_ENVS:
-                    if any(number != 1 for number in ring_numbers):
-                        invalid_tag = True
-                        comment = f'{env} is NOT a Ring 1 environment'
-                elif env in RING_2_ENVS:
-                    if any(number != 2 for number in ring_numbers):
-                        invalid_tag = True
-                        comment = f'{env} is NOT a Ring 2 environment'
-                elif env in RING_3_ENVS:
-                    if any(number != 3 for number in ring_numbers):
-                        invalid_tag = True
-                        comment = f'{env} is NOT a Ring 3 environment'
-                else:  # Default to Ring 4 for production or unknown environments
-                    if any(number != 4 for number in ring_numbers):
-                        invalid_tag = True
-                        comment = f'{env} is NOT a Ring 4 environment'
+                # Determine the expected ring number for this environment
+                expected_ring = 4  # Default to Ring 4 for production/unknown
+                for env_group, ring_number in ENVIRONMENT_TO_RING.items():
+                    if env in globals()[env_group]:
+                        expected_ring = ring_number
+                        break
+
+                # Check if any ring numbers don't match the expected value
+                if any(number != expected_ring for number in ring_numbers):
+                    invalid_tag = True
+                    comment = f'{env} server should not be in Ring {ring_numbers}, expected Ring {expected_ring}'
 
                 # Update the DataFrame with the results
                 df.loc[index, 'has_invalid_ring_tag'] = invalid_tag
                 if invalid_tag:
                     df.loc[index, 'comment'] = comment
-                    logger.info(f"Invalid ring tag found for host {server.get('cs_hostname', 'Unknown')}: {comment}")
+                    logger.info(f"Invalid ring tag found for host {server.get('hostname', 'Unknown')}: {comment}")
 
             except Exception as e:
-                logger.error(f"Error processing tags for host {server.get('cs_hostname', 'Unknown')}: {e}")
+                logger.error(f"Error processing tags for host {server.get('hostname', 'Unknown')}: {e}")
                 continue
 
         # Save the final output
