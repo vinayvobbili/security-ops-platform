@@ -22,7 +22,7 @@ config = get_config()
 DEFAULT_CHUNK_SIZE = 1000
 SNOW_ACCESS_TOKEN_FILE = os.path.join(os.path.dirname(__file__), '../data/transient/service_now_access_token.json')
 
-ROOT_DIRECTORY = Path(__file__).parent.parent.parent
+ROOT_DIRECTORY = Path(__file__).parent.parent
 DATA_DIR = ROOT_DIRECTORY / "data" / "transient" / "epp_device_tagging"
 
 
@@ -278,7 +278,7 @@ def enrich_host_report(input_file):
             chunk_details = []
 
             # Use ThreadPoolExecutor for this chunk
-            with concurrent.futures.ThreadPoolExecutor(max_workers=100) as executor:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=50) as executor:
                 future_to_hostname = {
                     executor.submit(snow_client.get_host_details, hostname): hostname
                     for hostname in chunk_hostnames
@@ -299,14 +299,22 @@ def enrich_host_report(input_file):
 
         # Create dataframe and merge
         device_details_df = pd.json_normalize(all_device_details)
-        pd.merge(input_file_df, device_details_df, left_on='hostname', right_on='name', how='left')
+        # Extract the hostname part (before the first dot) for merging
+        input_file_df['hostname_short'] = input_file_df['hostname'].str.split('.').str[0]
+        # Merge using the short hostname
+        input_file_df = pd.merge(input_file_df, device_details_df, left_on='hostname_short', right_on='name', how='left')
+        # Drop the temporary column
+        input_file_df = input_file_df.drop('hostname_short', axis=1)
 
         today_date = datetime.now().strftime('%m-%d-%Y')
         input_file_name = Path(input_file).name
         enriched_hosts_file = DATA_DIR / today_date / f"enriched_{input_file_name}"
         enriched_hosts_file.parent.mkdir(parents=True, exist_ok=True)
+        logger.info(f"Saving enriched data to {enriched_hosts_file.absolute()}")
         input_file_df.to_excel(enriched_hosts_file, index=False, engine="openpyxl")
+        logger.info(f"Successfully saved enriched data to {enriched_hosts_file.absolute()}")
         logger.info(f"Successfully enriched {len(all_device_details)} host records")
+        return enriched_hosts_file
 
     except FileNotFoundError as e:
         logger.error(f"Required file not found: {e}")
@@ -323,7 +331,7 @@ if __name__ == "__main__":
         with ServiceNowClient() as client:
 
             # Example 2: Get details by host name
-            hostname = "C02G7C7LMD6R"
+            hostname = "742516-splnk01.mesl.cloud"
             logger.info(f"Looking up host {hostname} in CMDB...")
             host_details = client.get_host_details(hostname)
             logger.info(f"Host details: {host_details}")

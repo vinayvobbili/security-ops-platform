@@ -185,7 +185,7 @@ class CSHostsWithInvalidRingTags(Command):
     def __init__(self):
         super().__init__(
             command_keyword="cs_invalid_ring_tag",
-            help_message="Get CS Hosts with Invalid Ring Tags",
+            help_message="Get CS Servers with Invalid Ring Tags",
             delete_previous_message=True,
         )
 
