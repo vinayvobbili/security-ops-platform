@@ -6,7 +6,6 @@ import os
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
 
 import pandas as pd
 import requests
@@ -273,9 +272,8 @@ def enrich_host_report(input_file):
         hostnames = input_file_df['hostname'].tolist()
         all_device_details = []
 
-        service_now_client: Optional[ServiceNowClient] = None
         # Process in chunks
-        for i in range(0, len(hostnames), DEFAULT_CHUNK_SIZE):
+        for i in range(0, 10, DEFAULT_CHUNK_SIZE):  # len(hostnames)
             chunk_hostnames = hostnames[i:i + DEFAULT_CHUNK_SIZE]
             chunk_details = []
 
@@ -310,7 +308,6 @@ def enrich_host_report(input_file):
         input_file_df.to_excel(enriched_hosts_file, index=False, engine="openpyxl")
         logger.info(f"Successfully enriched {len(all_device_details)} host records")
 
-        return len(all_device_details)
     except FileNotFoundError as e:
         logger.error(f"Required file not found: {e}")
         raise
