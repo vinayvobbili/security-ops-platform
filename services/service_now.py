@@ -302,7 +302,7 @@ def enrich_host_report(input_file):
         # Extract the hostname part (before the first dot) for merging
         input_file_df['hostname_short'] = input_file_df['hostname'].str.split('.').str[0]
         # Merge using the short hostname
-        input_file_df = pd.merge(input_file_df, device_details_df, left_on='hostname_short', right_on='name', how='left')
+        input_file_df = pd.merge(input_file_df, device_details_df, left_on=input_file_df['hostname_short'].str.lower(), right_on=device_details_df['name'].str.lower(), how='left')
         # Drop the temporary column
         input_file_df = input_file_df.drop('hostname_short', axis=1)
 
