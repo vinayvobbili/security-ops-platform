@@ -4,7 +4,6 @@ import json
 import logging
 import os
 import time
-import typing
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -58,8 +57,8 @@ class ServiceNowTokenManager:
             'token_expiry': self.token_expiry
         }
 
-        with open(SNOW_ACCESS_TOKEN_FILE, 'w') as file:  # type: typing.TextIO
-            json.dump(token_data, file)
+        with open(SNOW_ACCESS_TOKEN_FILE, 'w') as file:
+            json.dump(token_data, file, indent=4)
 
         logger.info("Token saved to file")
 
@@ -281,7 +280,7 @@ def enrich_host_report(input_file):
             chunk_details = []
 
             # Use ThreadPoolExecutor for this chunk
-            with concurrent.futures.ThreadPoolExecutor(max_workers=50) as executor:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=100) as executor:
                 future_to_hostname = {
                     executor.submit(snow_client.get_host_details, hostname): hostname
                     for hostname in chunk_hostnames
