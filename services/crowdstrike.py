@@ -294,9 +294,10 @@ class CrowdStrikeClient:
 
 def update_unique_hosts_from_cs() -> None:
     """Group hosts by hostname and get the record with the latest last_seen for each."""
-    cs_client = CrowdStrikeClient()
-    cs_client.fetch_all_hosts_and_write_to_xlsx()
     try:
+        cs_client = CrowdStrikeClient()
+        cs_client.fetch_all_hosts_and_write_to_xlsx()
+
         # Read the input file
         hosts_without_tag_file = get_dated_path(DATA_DIR, "all_cs_hosts.xlsx")
         df = read_excel_file(hosts_without_tag_file)
