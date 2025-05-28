@@ -273,7 +273,7 @@ def enrich_host_report(input_file):
         all_device_details = []
 
         # Process in chunks
-        for i in range(0, 10, DEFAULT_CHUNK_SIZE):  # len(hostnames)
+        for i in range(0, len(hostnames), DEFAULT_CHUNK_SIZE):
             chunk_hostnames = hostnames[i:i + DEFAULT_CHUNK_SIZE]
             chunk_details = []
 
