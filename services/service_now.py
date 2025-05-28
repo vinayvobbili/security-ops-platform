@@ -210,26 +210,22 @@ class ServiceNowComputeAPI:
 
 
 class ServiceNowClient:
-    def __init__(self, base_url, user_name, password, client_id):
+    def __init__(self):
         """
         Initialize the ServiceNow client
 
         Args:
-            base_url (str): ServiceNow base URL
-            user_name (str): ServiceNow functional account username
-            password (str): ServiceNow functional account password
-            client_id (str): ServiceNow client ID
         """
         self.token_manager = ServiceNowTokenManager(
-            instance_url=base_url,
-            username=user_name,
-            password=password,
-            client_id=client_id
+            instance_url=config.snow_base_url,
+            username=config.snow_functional_account_id,
+            password=config.snow_functional_account_password,
+            client_id=config.snow_client_key
         )
 
         self.compute_api = ServiceNowComputeAPI(
             token_manager=self.token_manager,
-            base_url=base_url
+            base_url=config.snow_base_url,
         )
 
     def get_token(self):
@@ -271,12 +267,7 @@ def enrich_host_report(input_file):
     """
     try:
         # Initialize ServiceNow client if not provided
-        snow_client = ServiceNowClient(
-            config.snow_base_url,
-            config.snow_functional_account_id,
-            config.snow_functional_account_password,
-            config.snow_client_key
-        )
+        snow_client = ServiceNowClient()
 
         # Get device details from SNOW
         input_file_df = pd.read_excel(input_file, engine="openpyxl")
@@ -290,7 +281,7 @@ def enrich_host_report(input_file):
             chunk_details = []
 
             # Use ThreadPoolExecutor for this chunk
-            with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=50) as executor:
                 future_to_hostname = {
                     executor.submit(snow_client.get_host_details, hostname): hostname
                     for hostname in chunk_hostnames
@@ -333,10 +324,10 @@ if __name__ == "__main__":
 
     try:
         # Create a client instance
-        with ServiceNowClient(config.snow_base_url, config.snow_functional_account_id, config.snow_functional_account_password, config.snow_client_key) as client:
+        with ServiceNowClient() as client:
 
             # Example 2: Get details by host name
-            hostname = "00040170JA00634"
+            hostname = "C02G7C7LMD6R"
             logger.info(f"Looking up host {hostname} in CMDB...")
             host_details = client.get_host_details(hostname)
             logger.info(f"Host details: {host_details}")

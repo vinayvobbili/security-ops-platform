@@ -88,12 +88,6 @@ falcon_auth = OAuth2(
 )
 falcon_rtr = RealTimeResponse(auth_object=falcon_auth)
 falcon_hosts = Hosts(auth_object=falcon_auth)
-service_now = ServiceNowClient(
-    config.snow_base_url,
-    config.snow_functional_account_id,
-    config.snow_functional_account_password,
-    config.snow_client_key
-)
 
 crowdstrike = CrowdStrikeClient()
 
@@ -217,6 +211,7 @@ class Host:
     def _set_host_details_from_snow(self) -> None:
         """Retrieve host details from ServiceNow."""
         try:
+            service_now = ServiceNowClient()
             snow_host_details = service_now.get_host_details(self.name)
 
             if not snow_host_details:

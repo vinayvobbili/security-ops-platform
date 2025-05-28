@@ -1,5 +1,4 @@
 import logging
-import time
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, Callable, TypeVar
@@ -169,25 +168,13 @@ def main() -> None:
         logger.error(f"Error in main workflow: {e}")
 
 
-def generate_report(chunk_size: int = DEFAULT_CHUNK_SIZE) -> Dict[str, float]:
+def generate_report():
     """
     Run the complete workflow without profiling.
 
     Args:
-        chunk_size: Size of batches for processing
     """
-    step_times = {}
-    steps = [
-        ("List CS Hosts Without Ring Tag", list_cs_hosts_without_ring_tag),
-    ]
-
-    # Run standard steps
-    for step_name, step_func in steps:
-        start_time = time.time()
-        step_func()
-        step_times[step_name] = time.time() - start_time
-
-    return step_times
+    list_cs_hosts_without_ring_tag()
 
 
 if __name__ in ('__main__', '__builtin__', 'builtins'):

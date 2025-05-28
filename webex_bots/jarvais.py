@@ -1,7 +1,6 @@
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Dict
 
 import fasteners
 import pandas as pd
@@ -16,7 +15,6 @@ from webexteamssdk import WebexTeamsAPI
 
 from config import get_config
 from src.epp import ring_tag_cs_hosts, cs_hosts_without_ring_tag, cs_hosts_with_invalid_ring_tags
-from src.epp.ring_tag_cs_hosts import ReportHandler
 from src.helper_methods import log_jarvais_activity
 
 # Setup logging
@@ -29,25 +27,23 @@ DATA_DIR = ROOT_DIRECTORY / "data" / "transient" / "epp_device_tagging"
 webex_api = WebexTeamsAPI(access_token=CONFIG.webex_bot_access_token_jarvais)
 
 
-def send_report(room_id, step_times: Dict[str, float]) -> None:
+def send_report(room_id, filename, message) -> None:
     """Sends the enriched hosts report to a Webex room, including step run times."""
     today_date = datetime.now().strftime('%m-%d-%Y')
-    cs_hosts_without_ring_tag_file = DATA_DIR / today_date / "cs_hosts_last_seen_without_ring_tag.xlsx"
-    hosts_count = len(pd.read_excel(cs_hosts_without_ring_tag_file))
+    filepath = DATA_DIR / today_date / filename
+    hosts_count = len(pd.read_excel(filepath))
 
     try:
         report_text = (
-                f"UNIQUE CS hosts without a Ring tag. Count={hosts_count}!\n\n"
-                "Step execution times:\n" +
-                "\n".join([f"{step}: {ReportHandler.format_duration(time)}" for step, time in step_times.items()])
+            f"{message}. Count={hosts_count}!"
         )
         webex_api.messages.create(
             roomId=room_id,
             text=report_text,
-            files=[str(cs_hosts_without_ring_tag_file)]
+            files=[str(filepath)]
         )
     except FileNotFoundError:
-        logger.error(f"Report file not found at {cs_hosts_without_ring_tag_file}")
+        logger.error(f"Report file not found at {filepath}")
     except Exception as e:
         logger.error(f"Failed to send report: {e}")
 
@@ -143,13 +139,14 @@ class CSHostsWithoutRingTag(Command):
         room_id = attachment_actions.roomId
         webex_api.messages.create(
             roomId=room_id,
-            markdown=f"Hello {activity['actor']['displayName']}! I've started the report generation process for CS Hosts without a Ring Tag. It is running in the background and will complete in about 5 mins."
+            markdown=f"Hello {activity['actor']['displayName']}! I've started the report generation process for CS Hosts without a Ring Tag. It is running in the background and will complete shortly."
         )
         lock_path = ROOT_DIRECTORY / "src" / "epp" / "cs_hosts_without_ring_tag.lock"
         with fasteners.InterProcessLock(lock_path):
-            step_times = {}
-            step_times = cs_hosts_without_ring_tag.generate_report()
-            send_report(room_id, step_times)
+            cs_hosts_without_ring_tag.generate_report()
+            filename = "cs_hosts_last_seen_without_ring_tag.xlsx"
+            message = 'Unique CS servers without Ring tags'
+            send_report(room_id, filename, message)
             seek_approval_to_ring_tag(room_id)
 
 
@@ -200,10 +197,12 @@ class CSHostsWithInvalidRingTags(Command):
                 roomId=room_id,
                 markdown=f"Hello {activity['actor']['displayName']}! I've started the report generation process for CS Hosts with Invalid Ring Tags. It is running in the background and will complete in about 15 mins."
             )
-            lock_path = ROOT_DIRECTORY / "src" / "epp" / "cs_hosts_with_invalid_ring_tags.lock"
+            lock_path = ROOT_DIRECTORY / "src" / "epp" / "cs_hosts_lat_seen_with_invalid_ring_tags.lock"
             with fasteners.InterProcessLock(lock_path):
-                step_times = cs_hosts_with_invalid_ring_tags.generate_report()
-                send_report(room_id, step_times)
+                cs_hosts_with_invalid_ring_tags.generate_report()
+                filename = DATA_DIR / "cs_hosts_with_invalid_ring_tags.xlsx"
+                message = 'Unique CS servers with Invalid Ring tags'
+                send_report(room_id, filename, message)
                 seek_approval_to_delete_invalid_ring_tags(room_id)
         except Exception as e:
             logger.error(f"Error in CSHostsWithInvalidRingTags execute: {e}")
