@@ -8,7 +8,7 @@ import pandas as pd
 from webexteamssdk import WebexTeamsAPI
 
 from config import get_config
-from services.crowdstrike import CrowdStrikeClient
+from services import crowdstrike
 from services.service_now import ServiceNowClient
 
 # Setup logging
@@ -94,28 +94,6 @@ def process_unique_hosts(df: pd.DataFrame) -> pd.DataFrame:
     return df.loc[df.groupby("hostname")["last_seen"].idxmax()]
 
 
-def get_unique_hosts() -> None:
-    """Group hosts by hostname and get the record with the latest last_seen for each."""
-    try:
-        # Read the input file
-        hosts_without_tag_file = get_dated_path(DATA_DIR, "all_cs_hosts.xlsx")
-        df = read_excel_file(hosts_without_tag_file)
-
-        # Process the data to get unique hosts
-        unique_hosts = process_unique_hosts(df)
-
-        # Write the results to a new file
-        unique_hosts_file = get_dated_path(DATA_DIR, "unique_cs_hosts.xlsx")
-        write_excel_file(unique_hosts, unique_hosts_file)
-        logger.info(f"Found {len(unique_hosts)} unique hosts.")
-    except FileNotFoundError as e:
-        logger.error(f"Input file not found: {e}")
-        raise
-    except Exception as e:
-        logger.error(f"Error processing unique hosts: {e}")
-        raise
-
-
 def filter_hosts_without_ring_tag(df: pd.DataFrame) -> pd.DataFrame:
     """
     Filter hosts that don't have a Ring tag.
@@ -137,6 +115,9 @@ def filter_hosts_without_ring_tag(df: pd.DataFrame) -> pd.DataFrame:
 def list_cs_hosts_without_ring_tag() -> None:
     """List CrowdStrike hosts that don't have a FalconGroupingTags/*Ring* tag."""
     input_file = get_dated_path(DATA_DIR, "unique_cs_hosts.xlsx")
+    if not input_file.exists():
+        logger.info("Unique hosts file not found. Generating it now...")
+        crowdstrike.update_unique_hosts_from_cs()
     try:
         df = read_excel_file(input_file)
 
@@ -196,11 +177,7 @@ def generate_report(chunk_size: int = DEFAULT_CHUNK_SIZE) -> Dict[str, float]:
         chunk_size: Size of batches for processing
     """
     step_times = {}
-    client = CrowdStrikeClient()
-
     steps = [
-        ('Fetch all hosts from CS', client.fetch_all_hosts_and_write_to_xlsx),
-        ("Get Unique Hosts by last seen date", get_unique_hosts),
         ("List CS Hosts Without Ring Tag", list_cs_hosts_without_ring_tag),
     ]
 
