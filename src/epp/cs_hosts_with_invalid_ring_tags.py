@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from services import service_now
+from services import service_now, crowdstrike
 from src.epp.cs_hosts_without_ring_tag import get_dated_path
 
 # Setup logging
@@ -27,6 +27,10 @@ RING_3_ENVS = {"dr"}
 def generate_report():
     today_date = datetime.now().strftime('%m-%d-%Y')
     input_file_path = get_dated_path(DATA_DIR, "unique_cs_hosts.xlsx")
+    if not input_file_path.exists():
+        logger.info("Unique hosts file not found. Generating it now...")
+        crowdstrike.update_unique_hosts_from_cs()
+
     try:
         # Read input file
         df = pd.read_excel(input_file_path, engine="openpyxl")
@@ -34,9 +38,10 @@ def generate_report():
 
         # Filter servers
         servers = df[df['cs_host_category'].str.lower().isin(['server', 'domain controller'])]
+        logger.info(f"Found {len(servers)} servers")
 
         # Filter servers with ring tags
-        servers_with_ring_tags = servers[servers["current_tags"].str.contains("FalconGroupingTags/.*WksRing", regex=True, case=False, na=False)]
+        servers_with_ring_tags = servers[servers["current_tags"].str.contains("FalconGroupingTags/.*SrvRing", regex=True, case=False, na=False)]
         logger.info(f"Found {len(servers_with_ring_tags)} servers with ring tags")
 
         # Save servers with ring tags
@@ -58,7 +63,7 @@ def generate_report():
 
             # Extract ring numbers using regex
             try:
-                ring_tags = re.findall(r'FalconGroupingTags/WksRing(\d+)', current_tags)
+                ring_tags = re.findall(r'FalconGroupingTags/SrvRing(\d+)', current_tags)
                 ring_numbers = [int(tag) for tag in ring_tags if tag.isdigit()]
 
                 # Skip if no ring numbers found

@@ -21,8 +21,7 @@ logger = logging.getLogger(__name__)
 
 config = get_config()
 
-DEFAULT_CHUNK_SIZE = 500
-DEFAULT_MAX_WORKERS = 10
+DEFAULT_CHUNK_SIZE = 1000
 SNOW_ACCESS_TOKEN_FILE = os.path.join(os.path.dirname(__file__), '../data/transient/service_now_access_token.json')
 
 ROOT_DIRECTORY = Path(__file__).parent.parent.parent
@@ -290,12 +289,8 @@ def enrich_host_report(input_file):
             chunk_hostnames = hostnames[i:i + DEFAULT_CHUNK_SIZE]
             chunk_details = []
 
-            # Adjust number of workers based on dataset size
-            # More workers for larger datasets, fewer for smaller ones
-            max_workers = min(20, max(5, len(chunk_hostnames) // 100))
-
             # Use ThreadPoolExecutor for this chunk
-            with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
                 future_to_hostname = {
                     executor.submit(snow_client.get_host_details, hostname): hostname
                     for hostname in chunk_hostnames

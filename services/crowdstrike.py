@@ -13,6 +13,7 @@ from falconpy import Hosts
 from falconpy import OAuth2
 
 from config import get_config
+from src.epp.cs_hosts_without_ring_tag import get_dated_path, DATA_DIR, read_excel_file, process_unique_hosts, write_excel_file, logger
 
 ROOT_DIRECTORY = Path(__file__).parent.parent
 
@@ -289,6 +290,30 @@ class CrowdStrikeClient:
             print(f"Successfully wrote {len(all_host_data)} host records")
         except Exception as e:
             print(f"Error writing to XLSX: {e}")
+
+
+def update_unique_hosts_from_cs() -> None:
+    """Group hosts by hostname and get the record with the latest last_seen for each."""
+    cs_client = CrowdStrikeClient()
+    cs_client.fetch_all_hosts_and_write_to_xlsx()
+    try:
+        # Read the input file
+        hosts_without_tag_file = get_dated_path(DATA_DIR, "all_cs_hosts.xlsx")
+        df = read_excel_file(hosts_without_tag_file)
+
+        # Process the data to get unique hosts
+        unique_hosts = process_unique_hosts(df)
+
+        # Write the results to a new file
+        unique_hosts_file = get_dated_path(DATA_DIR, "unique_cs_hosts.xlsx")
+        write_excel_file(unique_hosts, unique_hosts_file)
+        logger.info(f"Found {len(unique_hosts)} unique hosts.")
+    except FileNotFoundError as e:
+        logger.error(f"Input file not found: {e}")
+        raise
+    except Exception as e:
+        logger.error(f"Error processing unique hosts: {e}")
+        raise
 
 
 def main() -> None:
