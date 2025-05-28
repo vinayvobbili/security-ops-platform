@@ -316,7 +316,7 @@ def enrich_host_report(input_file):
 
         # Create dataframe and merge
         device_details_df = pd.json_normalize(all_device_details)
-        merged_df = pd.merge(input_file_df, device_details_df, left_on='hostname', right_on='name', how='left')
+        pd.merge(input_file_df, device_details_df, left_on='hostname', right_on='name', how='left')
 
         today_date = datetime.now().strftime('%m-%d-%Y')
         input_file_name = Path(input_file).name
