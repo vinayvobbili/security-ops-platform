@@ -145,7 +145,7 @@ class CSHostsWithoutRingTag(Command):
         with fasteners.InterProcessLock(lock_path):
             cs_hosts_without_ring_tag.generate_report()
             filename = "cs_hosts_last_seen_without_ring_tag.xlsx"
-            message = 'Unique CS servers without Ring tags'
+            message = 'Unique CS hosts without Ring tags'
             send_report(room_id, filename, message)
             seek_approval_to_ring_tag(room_id)
 
@@ -194,6 +194,13 @@ class CSHostsWithInvalidRingTags(Command):
         try:
             today_date = datetime.now().strftime('%m-%d-%Y')
             room_id = attachment_actions.roomId
+            message = 'Unique CS servers with Invalid Ring tags'
+            filename = DATA_DIR / today_date / "cs_servers_with_invalid_ring_tags_only.xlsx"
+            if filename.exists():
+                send_report(room_id, filename, message)
+                seek_approval_to_delete_invalid_ring_tags(room_id)
+                return
+
             webex_api.messages.create(
                 roomId=room_id,
                 markdown=f"Hello {activity['actor']['displayName']}! I've started the report generation process for CS Servers with Invalid Ring Tags. It is running in the background and will complete in about 15 mins."
@@ -201,8 +208,7 @@ class CSHostsWithInvalidRingTags(Command):
             lock_path = ROOT_DIRECTORY / "src" / "epp" / "cs_hosts_lat_seen_with_invalid_ring_tags.lock"
             with fasteners.InterProcessLock(lock_path):
                 cs_hosts_with_invalid_ring_tags.generate_report()
-                filename = DATA_DIR / today_date / "cs_servers_with_invalid_ring_tags_only.xlsx"
-                message = 'Unique CS servers with Invalid Ring tags'
+
                 send_report(room_id, filename, message)
                 seek_approval_to_delete_invalid_ring_tags(room_id)
         except Exception as e:
