@@ -8,6 +8,7 @@ from webex_bot.webex_bot import WebexBot
 from webexteamssdk import WebexTeamsAPI
 
 from config import get_config
+from src.charts import aging_tickets
 from src.helper_methods import log_moneyball_activity
 
 # Load configuration
@@ -158,6 +159,16 @@ class TestSendThreatconLevelChart(unittest.TestCase):
             )
 
 
+class GetAgingTicketsByOwnerReport(Command):
+    def __init__(self):
+        super().__init__(command_keyword="aging_tickets_by_owner_report", help_message="Aging Tickets by Owner Report", exact_command_keyword_match=True)
+
+    @log_moneyball_activity(bot_access_token=config.webex_bot_access_token_moneyball)
+    def execute(self, message, attachment_actions, activity):
+        room_id = attachment_actions.roomId
+        aging_tickets.send_report(room_id)
+
+
 def main():
     """Initialize and run the Webex bot."""
 
@@ -177,6 +188,7 @@ def main():
     bot.add_command(Inflow())
     bot.add_command(Outflow())
     bot.add_command(ThreatconLevel())
+    bot.add_command(GetAgingTicketsByOwnerReport())
 
     # Start the bot
     bot.run()

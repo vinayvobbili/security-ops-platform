@@ -1,10 +1,13 @@
 {
+  "Afghanistan": "APAC",
+  "Algeria": "EMEA",
   "Argentina": "LATAM",
   "Australia": "APAC",
   "Bahrain": "EMEA",
   "Bangladesh": "APAC",
   "Brazil": "LATAM",
   "Bulgaria": "EMEA",
+  "Cayman Islands": "EMEA",
   "Chile Provida": "LATAM",
   "Chile": "LATAM",
   "China": "APAC",
@@ -35,8 +38,10 @@
   "Mexico": "LATAM",
   "Nepal": "APAC",
   "Oman": "EMEA",
+  "Palestine, State of": "APAC",
   "Poland": "EMEA",
   "Portugal": "EMEA",
+  "Puerto Rico": "US",
   "Qatar": "EMEA",
   "Romania": "EMEA",
   "Singapore": "APAC",
@@ -49,5 +54,6 @@
   "United States": "US",
   "Uruguay": "LATAM",
   "Vietnam": "APAC",
-  "Viet nam": "APAC"
+  "Viet nam": "APAC",
+  "Viet Nam": "APAC"
 }

@@ -331,7 +331,7 @@ if __name__ == "__main__":
         with ServiceNowClient() as client:
 
             # Example 2: Get details by host name
-            hostname = "742516-splnk01.mesl.cloud"
+            hostname = "vm11923e1dv0004"
             logger.info(f"Looking up host {hostname} in CMDB...")
             host_details = client.get_host_details(hostname)
             logger.info(f"Host details: {host_details}")
