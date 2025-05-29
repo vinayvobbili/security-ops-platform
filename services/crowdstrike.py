@@ -25,7 +25,7 @@ ROOT_DIRECTORY = Path(__file__).parent.parent
 DATA_DIR = ROOT_DIRECTORY / "data" / "transient" / "epp_device_tagging"
 
 # Set this to True to route traffic via the jump server
-USE_JUMP_SERVER = False
+SHOULD_USE_JUMP_SERVER = False
 
 
 class CrowdStrikeClient:
@@ -39,7 +39,7 @@ class CrowdStrikeClient:
         self.local_port = None
 
         # Setup jump server tunnel if enabled
-        if USE_JUMP_SERVER:
+        if SHOULD_USE_JUMP_SERVER:
             self.setup_tunnel()
             api_base = f"localhost:{self.local_port}"
         else:
@@ -55,7 +55,7 @@ class CrowdStrikeClient:
         self.hosts_client = Hosts(auth_object=self.auth)
 
     def setup_tunnel(self):
-        """Set up SSH tunnel to the CrowdStrike API through a jump server"""
+        """Set up SSH tunnel to the CrowdStrike API through a jump server using password auth"""
         try:
             # Find an available local port
             sock = socket.socket()
@@ -63,12 +63,11 @@ class CrowdStrikeClient:
             self.local_port = sock.getsockname()[1]
             sock.close()
 
-            # Create the SSH tunnel
+            # Create the SSH tunnel with password authentication
             self.tunnel = sshtunnel.SSHTunnelForwarder(
                 (self.config.jump_server_host, 22),
                 ssh_username=self.config.jump_server_username,
-                ssh_pkey=self.config.jump_server_key_path,
-                # Use private key authentication
+                ssh_password=self.config.jump_server_password,  # Use password instead of key
                 remote_bind_address=(self.base_url, 443),
                 local_bind_address=('localhost', self.local_port)
             )
