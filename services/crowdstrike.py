@@ -1,5 +1,7 @@
 import concurrent.futures
+import logging
 import os
+import socket
 import threading
 import time
 from datetime import datetime
@@ -9,13 +11,21 @@ from typing import List
 
 import pandas as pd
 import requests
+import sshtunnel
 from falconpy import Hosts
 from falconpy import OAuth2
 
 from config import get_config
-from src.epp.cs_hosts_without_ring_tag import get_dated_path, DATA_DIR, read_excel_file, process_unique_hosts, write_excel_file, logger
+
+# Setup logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 ROOT_DIRECTORY = Path(__file__).parent.parent
+DATA_DIR = ROOT_DIRECTORY / "data" / "transient" / "epp_device_tagging"
+
+# Set this to True to route traffic via the jump server
+USE_JUMP_SERVER = False
 
 
 class CrowdStrikeClient:
@@ -25,19 +35,59 @@ class CrowdStrikeClient:
         self.config = get_config()
         self.base_url = "api.us-2.crowdstrike.com"
         self.output_dir = ROOT_DIRECTORY / "data" / "transient" / "epp_device_tagging"
+        self.tunnel = None
+        self.local_port = None
 
-        # Initialize authentication
+        # Setup jump server tunnel if enabled
+        if USE_JUMP_SERVER:
+            self.setup_tunnel()
+            api_base = f"localhost:{self.local_port}"
+        else:
+            api_base = self.base_url
+
+        # Initialize authentication with the appropriate base URL
         self.auth = OAuth2(
             client_id=self.config.cs_ro_client_id,
             client_secret=self.config.cs_ro_client_secret,
-            base_url=self.base_url,
+            base_url=api_base,
             ssl_verify=False,
         )
         self.hosts_client = Hosts(auth_object=self.auth)
 
+    def setup_tunnel(self):
+        """Set up SSH tunnel to the CrowdStrike API through a jump server"""
+        try:
+            # Find an available local port
+            sock = socket.socket()
+            sock.bind(('', 0))
+            self.local_port = sock.getsockname()[1]
+            sock.close()
+
+            # Create the SSH tunnel
+            self.tunnel = sshtunnel.SSHTunnelForwarder(
+                (self.config.jump_server_host, 22),
+                ssh_username=self.config.jump_server_username,
+                ssh_pkey=self.config.jump_server_key_path,
+                # Use private key authentication
+                remote_bind_address=(self.base_url, 443),
+                local_bind_address=('localhost', self.local_port)
+            )
+
+            self.tunnel.start()
+            print(f"SSH tunnel established via {self.config.jump_server_host} to {self.base_url}")
+            print(f"Forwarding localhost:{self.local_port} → {self.base_url}:443")
+        except Exception as e:
+            print(f"Error establishing SSH tunnel: {e}")
+            raise
+
     def get_access_token(self) -> str:
         """Get CrowdStrike access token using direct API call."""
-        url = f'https://{self.base_url}/oauth2/token'
+        # Choose correct URL based on whether using tunnel
+        if self.tunnel and self.tunnel.is_active:
+            url = f'https://localhost:{self.local_port}/oauth2/token'
+        else:
+            url = f'https://{self.base_url}/oauth2/token'
+
         body = {
             'client_id': self.config.cs_ro_client_id,
             'client_secret': self.config.cs_ro_client_secret
@@ -45,7 +95,7 @@ class CrowdStrikeClient:
         try:
             print(f"Requesting token from: {url}")
             print(f"Using client_id: {self.config.cs_ro_client_id[:5]}...")  # Print first 5 chars for security
-            response = requests.post(url, data=body)
+            response = requests.post(url, data=body, verify=False)
             print(f"Token response status: {response.status_code}")
             if response.status_code != 200:
                 print(f"Error response: {response.text}")
@@ -234,10 +284,15 @@ class CrowdStrikeClient:
                     # Refresh token periodically
                     if batch_count > 0 and batch_count % 10 == 0:
                         print(f"Refreshing authentication token after {total_fetched} records...")
+                        if self.tunnel and self.tunnel.is_active:
+                            api_base = f"localhost:{self.local_port}"
+                        else:
+                            api_base = self.base_url
+
                         self.auth = OAuth2(
                             client_id=self.config.cs_ro_client_id,
                             client_secret=self.config.cs_ro_client_secret,
-                            base_url=self.base_url,
+                            base_url=api_base,
                             ssl_verify=False,
                         )
                         self.hosts_client = Hosts(auth_object=self.auth)
@@ -291,6 +346,29 @@ class CrowdStrikeClient:
         except Exception as e:
             print(f"Error writing to XLSX: {e}")
 
+    def __del__(self):
+        """Clean up resources when the object is destroyed."""
+        if self.tunnel and self.tunnel.is_active:
+            print("Closing SSH tunnel")
+            self.tunnel.stop()
+
+
+def process_unique_hosts(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Process dataframe to get unique hosts with latest last_seen.
+
+    Args:
+        df: DataFrame with host data
+
+    Returns:
+        DataFrame with unique hosts (latest entry per hostname)
+    """
+    # Convert last_seen to datetime for proper sorting - only once
+    df["last_seen"] = pd.to_datetime(df["last_seen"], errors='coerce').dt.tz_localize(None)
+
+    # Group by hostname and get the record with the latest last_seen
+    return df.loc[df.groupby("hostname")["last_seen"].idxmax()]
+
 
 def update_unique_hosts_from_cs() -> None:
     """Group hosts by hostname and get the record with the latest last_seen for each."""
@@ -299,15 +377,18 @@ def update_unique_hosts_from_cs() -> None:
         cs_client.fetch_all_hosts_and_write_to_xlsx()
 
         # Read the input file
-        hosts_without_tag_file = get_dated_path(DATA_DIR, "all_cs_hosts.xlsx")
-        df = read_excel_file(hosts_without_tag_file)
+        today_date = datetime.now().strftime('%m-%d-%Y')
+        hosts_without_tag_file = DATA_DIR / today_date / "all_cs_hosts.xlsx"
+        df = pd.read_excel(hosts_without_tag_file, engine="openpyxl")
 
         # Process the data to get unique hosts
         unique_hosts = process_unique_hosts(df)
 
         # Write the results to a new file
-        unique_hosts_file = get_dated_path(DATA_DIR, "unique_cs_hosts.xlsx")
-        write_excel_file(unique_hosts, unique_hosts_file)
+        unique_hosts_file = DATA_DIR / today_date / "unique_cs_hosts.xlsx"
+        # Ensure directory exists
+        unique_hosts_file.parent.mkdir(parents=True, exist_ok=True)
+        unique_hosts.to_excel(unique_hosts_file, index=False, engine="openpyxl")
         logger.info(f"Found {len(unique_hosts)} unique hosts.")
     except FileNotFoundError as e:
         logger.error(f"Input file not found: {e}")
@@ -318,7 +399,9 @@ def update_unique_hosts_from_cs() -> None:
 
 
 def main() -> None:
+    # To use the jump server, set USE_JUMP_SERVER = True at the top of this file
     client = CrowdStrikeClient()
+
     # First explicitly get and print the token status
     token = client.get_access_token()
     if not token:
