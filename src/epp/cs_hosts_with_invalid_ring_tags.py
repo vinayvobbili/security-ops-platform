@@ -1,3 +1,19 @@
+"""
+# CS Host Invalid Ring Tag Analyzer performs the following functions:
+
+- Identifies CrowdStrike servers that have incorrect ring tags based on their environment
+- Analyzes host data to find mismatches between environment type and assigned ring tag
+- Maps environments to expected rings:
+  - Ring 1: dev, poc, lab, integration, development environments
+  - Ring 2: qa, test environments
+  - Ring 3: dr (disaster recovery) environments
+  - Ring 4: production or unknown environments
+- Creates two reports:
+  - Complete dataset of all servers with ring tags
+  - Filtered report showing only servers with invalid ring tags
+- Integrates with a Webex bot to send reports to users through the bot interface
+"""
+
 import logging
 import re
 from datetime import datetime
@@ -107,7 +123,7 @@ def generate_report():
                 continue
 
         # Save the final output
-        hosts_with_invalid_ring_tags_file_path = DATA_DIR / today_date / "cs_hosts_last_seen_with_invalid_ring_tags.xlsx"
+        hosts_with_invalid_ring_tags_file_path = DATA_DIR / today_date / "cs_servers_last_seen_with_invalid_ring_tags.xlsx"
         hosts_with_invalid_ring_tags_file_path.parent.mkdir(parents=True, exist_ok=True)
 
         # Create a filtered version for easier review
@@ -118,7 +134,7 @@ def generate_report():
 
         # Save filtered version if there are any invalid tags
         if not hosts_with_invalid_ring_tags.empty:
-            filtered_file_path = DATA_DIR / today_date / "cs_hosts_with_invalid_ring_tags_only.xlsx"
+            filtered_file_path = DATA_DIR / today_date / "cs_servers_with_invalid_ring_tags_only.xlsx"
             hosts_with_invalid_ring_tags.to_excel(filtered_file_path, index=False, engine="openpyxl")
             logger.info(f"Found {len(hosts_with_invalid_ring_tags)} hosts with invalid ring tags")
 

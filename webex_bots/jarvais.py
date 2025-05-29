@@ -192,15 +192,16 @@ class CSHostsWithInvalidRingTags(Command):
     @log_jarvais_activity(bot_access_token=CONFIG.webex_bot_access_token_jarvais)
     def execute(self, message, attachment_actions, activity):
         try:
+            today_date = datetime.now().strftime('%m-%d-%Y')
             room_id = attachment_actions.roomId
             webex_api.messages.create(
                 roomId=room_id,
-                markdown=f"Hello {activity['actor']['displayName']}! I've started the report generation process for CS Hosts with Invalid Ring Tags. It is running in the background and will complete in about 15 mins."
+                markdown=f"Hello {activity['actor']['displayName']}! I've started the report generation process for CS Servers with Invalid Ring Tags. It is running in the background and will complete in about 15 mins."
             )
             lock_path = ROOT_DIRECTORY / "src" / "epp" / "cs_hosts_lat_seen_with_invalid_ring_tags.lock"
             with fasteners.InterProcessLock(lock_path):
                 cs_hosts_with_invalid_ring_tags.generate_report()
-                filename = DATA_DIR / "cs_hosts_with_invalid_ring_tags.xlsx"
+                filename = DATA_DIR / today_date / "cs_servers_with_invalid_ring_tags_only.xlsx"
                 message = 'Unique CS servers with Invalid Ring tags'
                 send_report(room_id, filename, message)
                 seek_approval_to_delete_invalid_ring_tags(room_id)
