@@ -179,9 +179,11 @@ def announce_previous_shift_performance(room_id, shift_name):
                     facts=[
                         Fact(title="Shift Lead", value=previous_shift_staffing_data['SA'][0]),
                         Fact(title="Tickets ack'ed", value=str(len(inflow))),
-                        Fact(title="Tickets closed", value=f"{len(outflow)} ({tickets_closed_per_analyst:.2f}/analyst)"),
-                        Fact(title="SLA Breaches", value=f"Response- {len(response_sla_breaches)} \n"
-                                                         f"Containment- {len(containment_sla_breaches)}"),
+                        Fact(title="Tickets closed",
+                             value=f"{len(outflow)} ({tickets_closed_per_analyst:.2f}/analyst)"),
+                        Fact(title="SLA Breaches",
+                             value=f"Resp- {len(response_sla_breaches)} [{', '.join(['X#' + breach.get('id') for breach in response_sla_breaches])}]\n"
+                                   f"Cont- {len(containment_sla_breaches)} [{', '.join(['X#' + breach.get('id') for breach in containment_sla_breaches])}]"),
                         Fact(title="MTT (min:sec)",
                              value=f"Respond- {int(mean_time_to_respond // 60)}:{int(mean_time_to_respond % 60):02d} \n"
                                    f"Contain- {int(mean_time_to_contain // 60)}:{int(mean_time_to_contain % 60):02d}"),
@@ -221,7 +223,22 @@ def announce_shift_change(shift_name, room_id, sleep_time=30):
                 note = management_notes['note']
 
         hosts_in_containment = list_handler.get_list_data_by_name(f'{config.team_name} Contained Hosts')
-        hosts_in_containment = [item["hostname"] for item in hosts_in_containment]
+        for item in hosts_in_containment:
+            contained_at = safe_parse_datetime(item.get("contained_at"))
+            if contained_at:
+                time_under_containment_delta = datetime.now() - contained_at
+                days = time_under_containment_delta.days
+                hours = time_under_containment_delta.seconds // 3600
+                item["time_under_containment"] = f"{days} days, {hours} hours"
+            else:
+                item["time_under_containment"] = "Unknown"
+
+        hosts_in_containment = [
+            'X#' + item.get('ticket#', 'N/A') + ' | ' +
+            item["hostname"] + ' | ' +
+            item['time_under_containment']
+            for item in hosts_in_containment
+        ]
 
         # Send a new shift starting message to Webex room
         webex_api.messages.create(
@@ -230,7 +247,7 @@ def announce_shift_change(shift_name, room_id, sleep_time=30):
             markdown=f"Good **{shift_name.upper()}**! A new shift's starting now!\n"
                      f"Timings: {sheet[cell_names_by_shift['shift_timings'][shift_name]].value}\n"
                      f"Open {config.team_name}* tickets: {get_open_tickets()}\n"
-                     f"Hosts in Containment: {', '.join(hosts_in_containment) if hosts_in_containment else 'None'}\n"
+                     f"Hosts in Containment (TUC): \n {'\n'.join(hosts_in_containment) if hosts_in_containment else 'None'}\n"
                      f"**Management Notes**: {note}\n"
                      f"Staffing:\n"
                      f"```\n{shift_data_table}\n```"
@@ -250,8 +267,7 @@ def main():
     """
     room_id = config.webex_room_id_vinay_test_space
     announce_shift_change('night', room_id, sleep_time=0)
-    # announce_shift_change('afternoon')
-    # announce_shift_change('night')
+    # announce_previous_shift_performance(room_id, 'night')
 
 
 if __name__ == "__main__":
