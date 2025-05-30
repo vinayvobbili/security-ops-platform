@@ -30,8 +30,6 @@ webex_api = WebexAPI(CONFIG.webex_bot_access_token_toodles)
 approved_testing_list_name: str = f"{CONFIG.team_name}_Approved_Testing"
 approved_testing_master_list_name: str = f"{CONFIG.team_name}_Approved_Testing_MASTER"
 
-crowdstrike = CrowdStrikeClient()
-
 prod_headers = {
     "authorization": CONFIG.xsoar_prod_auth_key,
     "x-xdr-auth-id": CONFIG.xsoar_prod_auth_id,
@@ -1611,6 +1609,7 @@ class ContainmentStatusCS(Command):
             return "Please enter a host name and try again"
 
         try:
+            crowdstrike = CrowdStrikeClient()
             return f'{activity['actor']['displayName']}, The network containment status of {host_name_cs} in CS is {crowdstrike.get_device_containment_status(host_name_cs)}'
         except Exception as e:
             return f'There seems to be an issue with finding the host you entered. Please make sure the host is valid. Error: {str(e)}'
@@ -1697,9 +1696,9 @@ SEARCH_X_CARD = AdaptiveCard(
         ActionSet(
             actions=[
                 Submit(
-                    title="Search",
+                    title=f"Get {CONFIG.team_name} Tickets",
                     style=ActionStyle.POSITIVE,
-                    data={"callback_keyword": "search_x"}
+                    data={"callback_keyword": "fetch_xsoar_tickets"}
                 )
             ],
         )
@@ -1707,30 +1706,50 @@ SEARCH_X_CARD = AdaptiveCard(
 )
 
 
-class SearchXSOAR(Command):
+class GetSearchXSOARCard(Command):
     def __init__(self):
         super().__init__(
             help_message="Search X",
-            command_keyword="search_xsoar",
+            command_keyword="get_search_xsoar_card",
             card=SEARCH_X_CARD.to_dict(),
             delete_previous_message=True
         )
 
     @log_toodles_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles)
     def execute(self, message, attachment_actions, activity):
+        pass
+
+
+class FetchXSOARTickets(Command):
+    def __init__(self):
+        super().__init__(
+            command_keyword="fetch_xsoar_tickets",
+            card=None
+        )
+
+    def execute(self, message, attachment_actions, activity):
         username = attachment_actions.inputs['username']
         email = attachment_actions.inputs['email']
         hostname = attachment_actions.inputs['hostname']
 
-        query = ''
-        query += f"username:{username}" if username else ''
+        query = f'type:{CONFIG.team_name}'
+        query += f" username:{username}" if username else ''
         query += f" email:{email}" if email else ''
         query += f" hostname:{hostname}" if hostname else ''
+
+        ticket_handler = TicketHandler()
+        tickets = ticket_handler.get_tickets(query=query)
+        if tickets:
+            for ticket in tickets:
+                message = f"[X#{ticket.get('id')}]({CONFIG.xsoar_prod_ui_base_url}/Custom/caseinfoid/{ticket.get('id')}) - {ticket.get('name')}\n"
+        else:
+            message = 'None Found'
+        return message
 
 
 def main():
     bot = WebexBot(
-        CONFIG.webex_bot_access_token_toodles,
+        CONFIG.webex_bot_access_token_hal9000,
         bot_name="Hello from Toodles!",
         approved_domains=['company.com']
     )
@@ -1754,7 +1773,8 @@ def main():
     bot.add_command(GetAllOptions())
     bot.add_command(ImportTicket())
     bot.add_command(CreateTuningRequest())
-    bot.add_command(SearchXSOAR())
+    bot.add_command(GetSearchXSOARCard())
+    bot.add_command(FetchXSOARTickets())
 
     bot.run()
 
