@@ -25,7 +25,7 @@ ROOT_DIRECTORY = Path(__file__).parent.parent
 DATA_DIR = ROOT_DIRECTORY / "data" / "transient" / "epp_device_tagging"
 
 # Set this to True to route traffic via the jump server
-SHOULD_USE_JUMP_SERVER = False
+SHOULD_USE_JUMP_SERVER = True
 
 
 class CrowdStrikeClient:
@@ -69,7 +69,8 @@ class CrowdStrikeClient:
                 ssh_username=self.config.jump_server_username,
                 ssh_password=self.config.jump_server_password,  # Use password instead of key
                 remote_bind_address=(self.base_url, 443),
-                local_bind_address=('localhost', self.local_port)
+                local_bind_address=('localhost', self.local_port),
+                banner_timeout=60
             )
 
             self.tunnel.start()
