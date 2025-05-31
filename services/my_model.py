@@ -187,7 +187,7 @@ Response:"""
 # Initialize the model
 print("Initializing Llama 3.2 model...")
 llm = ChatOllama(
-    model="llama3.2:latest",
+    model="phi4:latest",
     temperature=0.1
 )
 
