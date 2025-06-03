@@ -1749,7 +1749,7 @@ class FetchXSOARTickets(Command):
 
 def main():
     bot = WebexBot(
-        CONFIG.webex_bot_access_token_hal9000,
+        CONFIG.webex_bot_access_token_toodles,
         bot_name="Hello from Toodles!",
         approved_domains=['company.com']
     )
