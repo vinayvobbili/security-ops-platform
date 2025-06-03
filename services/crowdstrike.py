@@ -410,7 +410,7 @@ def main() -> None:
 
     # Continue with your operations
     print("Testing API with obtained token...")
-    device_id = client.get_device_id('AUSYD1METV0051')
+    device_id = client.get_device_id('AEANEMETU0008')
     if device_id:
         print(f"Successfully retrieved device ID: {device_id}")
         print(client.get_device_details(device_id))
