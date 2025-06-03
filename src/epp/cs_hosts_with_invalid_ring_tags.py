@@ -64,11 +64,17 @@ def analyze_ring_tags(servers_df):
         if not ring_numbers:
             continue
 
+        if len(ring_numbers) > 1:
+            servers_df.loc[index, 'has_invalid_ring_tag'] = True
+            servers_df.loc[index, 'comment'] = 'multiple ring tags found'
+            logger.info(f"Multiple ring tags found for host {server.get('hostname', 'Unknown')}: {ring_numbers}")
+            continue
+
         expected_ring = get_expected_ring(env)
         if any(num != expected_ring for num in ring_numbers):
             servers_df.loc[index, 'has_invalid_ring_tag'] = True
             servers_df.loc[index, 'comment'] = f'{env} server should not be in Ring {ring_numbers}, expected Ring {expected_ring}'
-            logger.info(f"Invalid ring tag found for host {server.get('cs_hostname', 'Unknown')}: Ring {ring_numbers}, expected Ring {expected_ring}")
+            logger.info(f"Invalid ring tag found for host {server.get('hostname', 'Unknown')}: Ring {ring_numbers}, expected Ring {expected_ring}")
 
 
 def generate_report():
@@ -84,12 +90,12 @@ def generate_report():
         crowdstrike.update_unique_hosts_from_cs()
 
     # Read and filter data
-    unique_cs_servers_df = pd.read_excel(input_file_path, engine="openpyxl")
-    logger.info(f"Read {len(unique_cs_servers_df)} records from {input_file_path}")
+    unique_cs_hosts_df = pd.read_excel(input_file_path, engine="openpyxl")
+    logger.info(f"Read {len(unique_cs_hosts_df)} records from {input_file_path}")
 
     # Filter for servers only
-    servers = unique_cs_servers_df[
-        unique_cs_servers_df['cs_host_category'].str.lower().isin(['server', 'domain controller'])
+    servers = unique_cs_hosts_df[
+        unique_cs_hosts_df['cs_host_category'].str.lower().isin(['server', 'domain controller'])
     ]
     logger.info(f"Found {len(servers)} servers")
 
