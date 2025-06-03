@@ -263,12 +263,19 @@ def enrich_host_report(input_file):
     """
     Enrich host data with ServiceNow details using multithreading.
     """
+    today_date = datetime.now().strftime('%m-%d-%Y')
+    input_file_name = Path(input_file).name
+    enriched_hosts_file = DATA_DIR / today_date / f"enriched_{input_file_name}"
+    if enriched_hosts_file.exists():
+        return enriched_hosts_file
+
     try:
         # Initialize ServiceNow client if not provided
         snow_client = ServiceNowClient()
 
         # Get device details from SNOW
         input_file_df = pd.read_excel(input_file, engine="openpyxl")
+
         hostnames = input_file_df['hostname'].tolist()
         all_device_details = []
 
@@ -306,9 +313,6 @@ def enrich_host_report(input_file):
         # Drop the temporary column
         input_file_df = input_file_df.drop('hostname_short', axis=1)
 
-        today_date = datetime.now().strftime('%m-%d-%Y')
-        input_file_name = Path(input_file).name
-        enriched_hosts_file = DATA_DIR / today_date / f"enriched_{input_file_name}"
         enriched_hosts_file.parent.mkdir(parents=True, exist_ok=True)
         logger.info(f"Saving enriched data to {enriched_hosts_file.absolute()}")
         input_file_df.to_excel(enriched_hosts_file, index=False, engine="openpyxl")
