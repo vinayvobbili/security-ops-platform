@@ -35,7 +35,7 @@ def block_ip():
 def get_image_files() -> List[str]:
     """Retrieves a list of image files from the static and charts directories."""
     today_date = datetime.now().strftime('%m-%d-%Y')
-    IMAGE_ORDER = [
+    image_order = [
         "images/Company Logo.png",
         "images/DnR Welcome.png",
         f"charts/{today_date}/Threatcon Level.png",
@@ -70,7 +70,7 @@ def get_image_files() -> List[str]:
     ]
     image_files = []
     # fetch files per that image order
-    for image_path in IMAGE_ORDER:
+    for image_path in image_order:
         full_path = os.path.join(app.static_folder, image_path)
         if os.path.exists(full_path):
             image_files.append(image_path)
