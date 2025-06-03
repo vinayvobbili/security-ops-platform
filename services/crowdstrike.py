@@ -25,7 +25,7 @@ ROOT_DIRECTORY = Path(__file__).parent.parent
 DATA_DIR = ROOT_DIRECTORY / "data" / "transient" / "epp_device_tagging"
 
 # Set this to True to route traffic via the jump server
-SHOULD_USE_JUMP_SERVER = True
+SHOULD_USE_JUMP_SERVER = False
 
 
 class CrowdStrikeClient:
