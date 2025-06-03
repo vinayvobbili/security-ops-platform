@@ -64,7 +64,7 @@ def get_config():
         my_web_domain=os.environ["MY_WEB_DOMAIN"],
         resp_eng_auto_lead=os.environ["RESP_ENG_AUTO_LEAD"],
         resp_eng_ops_lead=os.environ["RESP_ENG_OPS_LEAD"],
-        qradar_efficacy_chart_receiver=os.environ["QRADAR_EFFICACY_CHART_RECEIVER"],
+        efficacy_charts_receiver=os.environ["EFFICACY_CHARTS_RECEIVER"],
         phish_fort_api_key=os.environ["PHISH_FORT_API_KEY"],
         my_email_address=os.environ["MY_EMAIL_ADDRESS"],
         twilio_account_sid=os.environ["TWILIO_ACCOUNT_SID"],
@@ -138,7 +138,7 @@ class Config:
     my_web_domain: str
     resp_eng_auto_lead: str
     resp_eng_ops_lead: str
-    qradar_efficacy_chart_receiver: str
+    efficacy_charts_receiver: str
     phish_fort_api_key: str
     my_email_address: str
     twilio_account_sid: str
