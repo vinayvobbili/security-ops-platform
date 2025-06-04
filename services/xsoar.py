@@ -79,7 +79,7 @@ class TicketHandler:
             payload["filter"]["period"] = period
 
         try:
-            response = requests.post(self.incident_search_url, headers=self.headers, json=payload, timeout=300)
+            response = requests.post(self.incident_search_url, headers=self.headers, json=payload, timeout=300, verify=False)
             response.raise_for_status()
             tickets = response.json()
 
@@ -166,4 +166,4 @@ if __name__ == "__main__":
     # print(destination_ticket_number, destination_ticket_link)
     list_handler = ListHandler()
     ticket_handler = TicketHandler()
-    # print(ticket_handler.get_tickets("hostname:US9F20TZ3"))
+    print(ticket_handler.get_tickets("hostname:US9F20TZ3"))
