@@ -13,6 +13,8 @@ from pytz import timezone
 
 from config import get_config
 from services.xsoar import TicketHandler
+import ssl
+import urllib.request
 
 config = get_config()
 
@@ -23,6 +25,18 @@ PERIOD = {"byFrom": "days", "fromValue": 30}
 
 ROOT_DIRECTORY = Path(__file__).parent.parent.parent
 DATA_DIR = ROOT_DIRECTORY / 'data' / 'metrics'
+
+
+# Set up a custom SSL context that doesn't verify certificates
+def fix_ssl_verification():
+    ssl_context = ssl._create_unverified_context()
+    # Replace the default HTTPS opener with one that uses our custom SSL context
+    opener = urllib.request.build_opener(urllib.request.HTTPSHandler(context=ssl_context))
+    urllib.request.install_opener(opener)
+
+
+# Call this function at the beginning of your script, before any Cartopy calls
+fix_ssl_verification()
 
 
 def create_choropleth_map():

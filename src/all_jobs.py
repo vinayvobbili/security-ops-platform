@@ -78,11 +78,11 @@ def main():
     schedule.every().day.at("12:30", eastern).do(lambda: secops.announce_shift_change('afternoon', room_id))
     schedule.every().day.at("20:30", eastern).do(lambda: secops.announce_shift_change('night', room_id))
     schedule.every().friday.at("08:00", eastern).do(lambda: (
-        qradar_rule_efficacy.send_charts()
+        qradar_rule_efficacy.send_charts(),
+        crowdstrike_efficacy.send_charts()
     ))
     schedule.every().friday.at("14:00", eastern).do(lambda: oncall.alert_change())
     schedule.every().monday.at("08:00", eastern).do(lambda: (
-
         phish_fort.fetch_and_report_incidents(),
         oncall.announce_change()
     ))
