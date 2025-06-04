@@ -5,7 +5,7 @@ import schedule
 
 import secops
 from config import get_config
-from services import phish_fort, crowdstrike
+from services import phish_fort
 from src import helper_methods
 from src.charts import mttr_mttc, outflow, lifespan, heatmap, sla_breaches, aging_tickets, inflow, qradar_rule_efficacy, de_stories, days_since_incident, re_stories, threatcon_level, vectra_volume, \
     crowdstrike_volume, threat_tippers, crowdstrike_efficacy
@@ -68,8 +68,7 @@ def main():
         threat_tippers.make_chart(),
         threatcon_level.make_chart(),
         vectra_volume.make_chart(),
-        vectra_volume.make_chart(),
-        crowdstrike.update_unique_hosts_from_cs()
+        vectra_volume.make_chart()
     ))
 
     # schedule.every(5).minutes.do(verify_host_online_status.start)
