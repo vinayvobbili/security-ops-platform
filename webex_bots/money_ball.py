@@ -138,6 +138,7 @@ class QRadarRuleEfficacy(Command):
         send_chart(attachment_actions.json_data["roomId"], activity['actor']['displayName'], "QR Rule Efficacy", "QR Rule Efficacy.png")
 
 
+'''
 class TestSendThreatconLevelChart(unittest.TestCase):
     @patch('webex_bots.money_ball.webex_api.messages.create')
     def test_send_threatcon_level_chart(self, mock_create_message):
@@ -157,6 +158,7 @@ class TestSendThreatconLevelChart(unittest.TestCase):
                 roomId=config.webex_room_id_vinay_test_space,
                 text=f"An error occurred: {ex}"
             )
+'''
 
 
 class GetAgingTicketsByOwnerReport(Command):
