@@ -86,14 +86,13 @@ def main():
         phish_fort.fetch_and_report_incidents(),
         oncall.announce_change()
     ))
+    schedule.every().day.at("17:00", eastern).do(approved_security_testing.removed_expired_entries)
+    schedule.every().day.at("08:00", eastern).do(thithi.main)
 
+    while True:
+        schedule.run_pending()
+        time.sleep(60)
 
-schedule.every().day.at("17:00", eastern).do(approved_security_testing.removed_expired_entries)
-schedule.every().day.at("08:00", eastern).do(thithi.main)
-
-while True:
-    schedule.run_pending()
-    time.sleep(60)
 
 if __name__ in ('__main__', '__builtin__', 'builtins'):
     main()
