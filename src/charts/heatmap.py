@@ -148,6 +148,7 @@ def create_choropleth_map():
 
     today_date = datetime.now().strftime('%m-%d-%Y')
     OUTPUT_PATH = ROOT_DIRECTORY / "web" / "static" / "charts" / today_date / "Heat Map.png"
+    OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
     plt.savefig(OUTPUT_PATH)
     plt.close(fig)
 
