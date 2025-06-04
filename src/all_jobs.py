@@ -68,7 +68,7 @@ def main():
         threat_tippers.make_chart(),
         threatcon_level.make_chart(),
         vectra_volume.make_chart(),
-        vectra_volume.make_chart()
+        vectra_volume.make_chart(),
     ))
 
     # schedule.every(5).minutes.do(verify_host_online_status.start)
