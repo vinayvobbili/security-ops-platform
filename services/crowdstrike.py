@@ -1,7 +1,13 @@
+import urllib3
+from urllib3.exceptions import InsecureRequestWarning
+
+# Disable the InsecureRequestWarning
+urllib3.disable_warnings(InsecureRequestWarning)
+
 import concurrent.futures
 import logging
 import os
-import socket
+
 import threading
 import time
 from datetime import datetime
@@ -11,7 +17,7 @@ from typing import List
 
 import pandas as pd
 import requests
-import sshtunnel
+
 from falconpy import Hosts
 from falconpy import OAuth2
 
@@ -24,8 +30,8 @@ logger = logging.getLogger(__name__)
 ROOT_DIRECTORY = Path(__file__).parent.parent
 DATA_DIR = ROOT_DIRECTORY / "data" / "transient" / "epp_device_tagging"
 
-# Set this to True to route traffic via the jump server
-SHOULD_USE_JUMP_SERVER = False
+# Set this to True to route traffic via the Python proxy
+SHOULD_USE_PROXY = True
 
 
 class CrowdStrikeClient:
@@ -33,60 +39,39 @@ class CrowdStrikeClient:
 
     def __init__(self):
         self.config = get_config()
-        self.base_url = "api.us-2.crowdstrike.com"
+        self.base_url = "api.us-2.crowdstrike.com"  # This is the actual CrowdStrike URL
         self.output_dir = ROOT_DIRECTORY / "data" / "transient" / "epp_device_tagging"
-        self.tunnel = None
-        self.local_port = None
+        self.proxies = None  # Initialize proxies
 
-        # Setup jump server tunnel if enabled
-        if SHOULD_USE_JUMP_SERVER:
-            self.setup_tunnel()
-            api_base = f"localhost:{self.local_port}"
+        # Setup proxy if enabled
+        if SHOULD_USE_PROXY:
+            # IMPORTANT: Replace "YOUR_OFFICE_WINDOWS_IP" with the actual IP of your Windows office machine
+            # This IP must be accessible via your ZPA connection.
+            proxy_server_ip = self.config.jump_server_host
+            proxy_port = 8080  # This matches the port used by simple_proxy.py
+
+            self.proxies = {
+                "http": f"http://{proxy_server_ip}:{proxy_port}",
+                "https": f"http://{proxy_server_ip}:{proxy_port}",
+            }
+            print(f"Configuring requests to use proxy: {self.proxies['https']}")
         else:
-            api_base = self.base_url
+            print("Proxy not enabled. Connecting directly.")
 
-        # Initialize authentication with the appropriate base URL
+        # Initialize authentication with the actual CrowdStrike base URL.
+        # FalconPy will use the proxy for all its requests if configured.
         self.auth = OAuth2(
             client_id=self.config.cs_ro_client_id,
             client_secret=self.config.cs_ro_client_secret,
-            base_url=api_base,
-            ssl_verify=False,
+            base_url=self.base_url,  # Always use the actual API base URL here
+            ssl_verify=False,  # Keep for now if you're seeing SSL issues, but ideally should be True
+            proxy=self.proxies  # Pass the proxies here
         )
         self.hosts_client = Hosts(auth_object=self.auth)
 
-    def setup_tunnel(self):
-        """Set up SSH tunnel to the CrowdStrike API through a jump server using password auth"""
-        try:
-            # Find an available local port
-            sock = socket.socket()
-            sock.bind(('', 0))
-            self.local_port = sock.getsockname()[1]
-            sock.close()
-
-            # Create the SSH tunnel with password authentication
-            self.tunnel = sshtunnel.SSHTunnelForwarder(
-                (self.config.jump_server_host, 22),
-                ssh_username=self.config.jump_server_username,
-                ssh_password=self.config.jump_server_password,  # Use password instead of key
-                remote_bind_address=(self.base_url, 443),
-                local_bind_address=('localhost', self.local_port),
-                banner_timeout=60
-            )
-
-            self.tunnel.start()
-            print(f"SSH tunnel established via {self.config.jump_server_host} to {self.base_url}")
-            print(f"Forwarding localhost:{self.local_port} → {self.base_url}:443")
-        except Exception as e:
-            print(f"Error establishing SSH tunnel: {e}")
-            raise
-
     def get_access_token(self) -> str:
         """Get CrowdStrike access token using direct API call."""
-        # Choose correct URL based on whether using tunnel
-        if self.tunnel and self.tunnel.is_active:
-            url = f'https://localhost:{self.local_port}/oauth2/token'
-        else:
-            url = f'https://{self.base_url}/oauth2/token'
+        url = f'https://{self.base_url}/oauth2/token'
 
         body = {
             'client_id': self.config.cs_ro_client_id,
@@ -94,12 +79,21 @@ class CrowdStrikeClient:
         }
         try:
             print(f"Requesting token from: {url}")
-            print(f"Using client_id: {self.config.cs_ro_client_id[:5]}...")  # Print first 5 chars for security
-            response = requests.post(url, data=body, verify=False)
+            print(f"Using client_id: {self.config.cs_ro_client_id[:5]}...")
+            response = requests.post(url, data=body, verify=False, proxies=self.proxies)
             print(f"Token response status: {response.status_code}")
-            if response.status_code != 200:
-                print(f"Error response: {response.text}")
+            # Change this part:
+            # if response.status_code != 200: # This is too specific
+            #    print(f"Error response: {response.text}")
+
+            # This line will raise an exception for 4xx or 5xx responses
             response.raise_for_status()
+
+            # If no exception is raised, it's a success code (2xx)
+            # You can optionally add a message here for non-200 success codes if you wish
+            if response.status_code != 200:
+                print(f"Note: Received {response.status_code} status, but token was obtained.")
+
             token = response.json()['access_token']
             print(f"Token acquired successfully: {token[:5]}...")
             return token
@@ -121,7 +115,6 @@ class CrowdStrikeClient:
         results = {}
         for i in range(0, len(hostnames), batch_size):
             batch = hostnames[i:i + batch_size]
-            # Create filter with all hostnames in this batch
             host_filter = f"hostname:['{'', ''.join(batch)}']"
 
             try:
@@ -133,7 +126,6 @@ class CrowdStrikeClient:
                 if response.get("status_code") == 200:
                     device_ids = response["body"].get("resources", [])
 
-                    # Get full details to map IDs to hostnames
                     if device_ids:
                         details = self.hosts_client.get_device_details(ids=device_ids)
                         if details.get("status_code") == 200:
@@ -170,7 +162,7 @@ class CrowdStrikeClient:
             if response.get("status_code") == 200:
                 devices = response["body"].get("resources", [])
                 if devices:
-                    return devices[0]  # Return the first matching device ID
+                    return devices[0]
                 print(f"No devices found for hostname: {hostname}")
             else:
                 print(
@@ -228,7 +220,7 @@ class CrowdStrikeClient:
         """
         all_host_data = []
         unique_device_ids = set()
-        data_lock = threading.Lock()  # For thread-safe access to shared data
+        data_lock = threading.Lock()
         offset = None
         limit = 5000
 
@@ -254,7 +246,6 @@ class CrowdStrikeClient:
                     if not device_id:
                         continue
 
-                    # Prepare data for this host
                     host_data = {
                         "hostname": host.get("hostname"),
                         "host_id": device_id,
@@ -267,37 +258,29 @@ class CrowdStrikeClient:
                     new_hosts_data.append((device_id, host_data))
                     new_hosts += 1
 
-                # Use lock when accessing shared data structures
                 with data_lock:
                     for device_id, host_data in new_hosts_data:
                         if device_id not in unique_device_ids:
                             unique_device_ids.add(device_id)
                             all_host_data.append(host_data)
 
-                # print(f"Processed batch with {new_hosts} hosts")
             except Exception as e:
                 print(f"Error in thread processing host details: {e}")
 
         try:
             with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
                 while True:
-                    # Refresh token periodically
                     if batch_count > 0 and batch_count % 10 == 0:
                         print(f"Refreshing authentication token after {total_fetched} records...")
-                        if self.tunnel and self.tunnel.is_active:
-                            api_base = f"localhost:{self.local_port}"
-                        else:
-                            api_base = self.base_url
-
                         self.auth = OAuth2(
                             client_id=self.config.cs_ro_client_id,
                             client_secret=self.config.cs_ro_client_secret,
-                            base_url=api_base,
+                            base_url=self.base_url,
                             ssl_verify=False,
+                            proxy=self.proxies
                         )
                         self.hosts_client = Hosts(auth_object=self.auth)
 
-                    # Get batch of host IDs (this remains sequential)
                     response = self.hosts_client.query_devices_by_filter_scroll(
                         limit=limit, offset=offset
                     )
@@ -311,29 +294,25 @@ class CrowdStrikeClient:
                         print("No more hosts to fetch - reached end of data")
                         break
 
-                    # Split host IDs into smaller batches for parallel processing
-                    batch_size = min(500, len(host_ids))  # Process in smaller chunks
+                    batch_size = min(500, len(host_ids))
                     host_id_batches = [host_ids[i:i + batch_size] for i in range(0, len(host_ids), batch_size)]
 
-                    # Submit each batch for parallel processing
                     futures = [executor.submit(process_host_details, id_batch) for id_batch in host_id_batches]
-                    concurrent.futures.wait(futures)  # Wait for all batches to complete
+                    concurrent.futures.wait(futures)
 
                     total_fetched += len(host_ids)
                     batch_count += 1
 
-                    # Get next offset for pagination
                     offset = response["body"].get("meta", {}).get("pagination", {}).get("offset")
                     if not offset:
                         print("No offset returned - reached end of pagination")
                         break
 
-                    time.sleep(0.5)  # Small delay between pagination requests
+                    time.sleep(0.5)
 
         except Exception as e:
             print(f"An error occurred fetching host data: {e}")
 
-        # Write results to Excel
         today_date = datetime.now().strftime('%m-%d-%Y')
         output_path = self.output_dir / today_date
         os.makedirs(output_path, exist_ok=True)
@@ -346,11 +325,7 @@ class CrowdStrikeClient:
         except Exception as e:
             print(f"Error writing to XLSX: {e}")
 
-    def __del__(self):
-        """Clean up resources when the object is destroyed."""
-        if self.tunnel and self.tunnel.is_active:
-            print("Closing SSH tunnel")
-            self.tunnel.stop()
+    # No __del__ method needed as no tunnel to close
 
 
 def process_unique_hosts(df: pd.DataFrame) -> pd.DataFrame:
@@ -399,7 +374,7 @@ def update_unique_hosts_from_cs() -> None:
 
 
 def main() -> None:
-    # To use the jump server, set USE_JUMP_SERVER = True at the top of this file
+    # To use the proxy, ensure SHOULD_USE_PROXY = True at the top of this file
     client = CrowdStrikeClient()
 
     # First explicitly get and print the token status
