@@ -334,6 +334,8 @@ class OptimizedProxy(http.server.SimpleHTTPRequestHandler):
         target_host, target_port = self.path.split(':', 1)
         target_port = int(target_port)
 
+        print(f"CONNECT request to {target_host}:{target_port}")
+
         try:
             # Establish direct connection to the target server
             target_sock = socket.create_connection((target_host, target_port), timeout=60)
@@ -343,22 +345,62 @@ class OptimizedProxy(http.server.SimpleHTTPRequestHandler):
             self.send_header('Proxy-agent', self.server_version)
             self.end_headers()
 
-            # Relay data between client and target using asyncio
-            self.connection.setblocking(False)
-            target_sock.setblocking(False)
-
-            # Use ThreadPoolExecutor for async operation
-            future = http_pool.submit(
-                self.relay_data_async,
-                self.connection,
-                target_sock
+            # Create separate threads to relay data in both directions
+            client_to_target = threading.Thread(
+                target=self._relay_tcp,
+                args=(self.connection, target_sock)
             )
+            target_to_client = threading.Thread(
+                target=self._relay_tcp,
+                args=(target_sock, self.connection)
+            )
+
+            client_to_target.daemon = True
+            target_to_client.daemon = True
+
+            client_to_target.start()
+            target_to_client.start()
+
+            # Wait for one direction to close
+            client_to_target.join()
+            target_to_client.join()
 
         except Exception as e:
             print(f"CONNECT error establishing tunnel to {target_host}:{target_port}: {e}")
             self.send_error(502, "Bad Gateway")
             try:
                 self.connection.close()
+            except:
+                pass
+
+    def _relay_tcp(self, source, destination):
+        try:
+            source.settimeout(30)  # Set reasonable timeouts
+            destination.settimeout(30)
+
+            while True:
+                try:
+                    data = source.recv(BUFFER_SIZE)
+                    if not data:
+                        break
+                    destination.sendall(data)
+                except socket.timeout:
+                    # Just try again on timeout
+                    continue
+                except (ConnectionResetError, BrokenPipeError):
+                    break
+        except Exception as e:
+            print(f"Relay error: {e}")
+        finally:
+            # Ensure both sockets get closed
+            try:
+                source.shutdown(socket.SHUT_RDWR)
+                source.close()
+            except:
+                pass
+            try:
+                destination.shutdown(socket.SHUT_RDWR)
+                destination.close()
             except:
                 pass
 
