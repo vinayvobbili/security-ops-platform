@@ -90,9 +90,9 @@ class OptimizedProxy(http.server.SimpleHTTPRequestHandler):
             self.connection.setblocking(False)
             target_sock.setblocking(False)
 
-            # Use ThreadPoolExecutor for async operation
+            # Use ThreadPoolExecutor for operation
             future = http_pool.submit(
-                self.relay_data_async,
+                self.relay_data,  # Use the synchronous wrapper
                 self.connection,
                 target_sock
             )
@@ -181,65 +181,72 @@ class OptimizedProxy(http.server.SimpleHTTPRequestHandler):
             print(f"Error during HTTP proxy request: {e}")
             self.send_error(502, "Bad Gateway")
 
-    def relay_data_async(self, client_sock, target_sock):
-        """Efficiently relays data bidirectionally between client_sock and target_sock."""
+    def relay_data(self, client_sock, target_sock):
+        """Synchronous wrapper to run the async relay function in a thread"""
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
         try:
-            # Use two separate buffers for better performance
-            client_to_target = bytearray(BUFFER_SIZE)
-            target_to_client = bytearray(BUFFER_SIZE)
-
-            while True:
-                # Select with a timeout to prevent high CPU usage
-                r, _, _ = asyncio.get_event_loop().run_until_complete(
-                    asyncio.wait_for(
-                        self._async_select(client_sock, target_sock),
-                        timeout=2.0
-                    )
-                )
-
-                if not r:
-                    # Check if connections are still alive
-                    if client_sock.fileno() == -1 or target_sock.fileno() == -1:
-                        break
-
-                if client_sock in r:
-                    # Use memory view for zero-copy slicing
-                    view = memoryview(client_to_target)
-                    bytes_read = client_sock.recv_into(view)
-                    if not bytes_read:
-                        break
-                    target_sock.sendall(view[:bytes_read])
-
-                if target_sock in r:
-                    view = memoryview(target_to_client)
-                    bytes_read = target_sock.recv_into(view)
-                    if not bytes_read:
-                        break
-                    client_sock.sendall(view[:bytes_read])
-
-        except (ConnectionResetError, BrokenPipeError, ssl.SSLError) as e:
-            # Common connection errors - log but don't clutter logs
-            pass
-        except Exception as e:
-            print(f"Error during relay: {e}")
+            return loop.run_until_complete(self.relay_data_async(client_sock, target_sock))
         finally:
+            loop.close()
+
+    async def relay_data_async(self, client_sock, target_sock):
+        """Efficiently relays data bidirectionally between client_sock and target_sock using asyncio streams."""
+        client_writer = target_writer = None
+        try:
+            # Wrap sockets with asyncio streams
+            client_reader, client_writer = await asyncio.open_connection(sock=client_sock)
+            target_reader, target_writer = await asyncio.open_connection(sock=target_sock)
+
+            async def relay(reader, writer, name):
+                try:
+                    while True:
+                        data = await reader.read(BUFFER_SIZE)
+                        if not data:
+                            break
+                        writer.write(data)
+                        await writer.drain()
+                except (ConnectionError, BrokenPipeError):
+                    # Handle connection issues gracefully
+                    pass
+                except Exception as e:
+                    print(f"Error in {name} relay: {e}")
+                # No finally block with unreachable return
+
+            # Use asyncio.wait with return_when=FIRST_COMPLETED to handle when either direction finishes
+            tasks = [
+                asyncio.create_task(relay(client_reader, target_writer, "client->target")),
+                asyncio.create_task(relay(target_reader, client_writer, "target->client"))
+            ]
+
+            # Wait until either relay direction completes
+            done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+
+            # Cancel any remaining tasks
+            for task in pending:
+                task.cancel()
+
+            # Wait for cancelled tasks to finish
+            if pending:
+                await asyncio.wait(pending, return_when=asyncio.ALL_COMPLETED)
+
+        except Exception as e:
+            print(f"Error setting up relay: {e}")
+        finally:
+            # Close stream writers first if they were created
+            if client_writer:
+                client_writer.close()
+                await client_writer.wait_closed()
+            if target_writer:
+                target_writer.close()
+                await target_writer.wait_closed()
+
+            # Then close the original sockets
             for sock in [client_sock, target_sock]:
                 try:
                     sock.close()
                 except:
                     pass
-
-    async def _async_select(self, client_sock, target_sock):
-        """Async-compatible version of select operation"""
-        loop = asyncio.get_event_loop()
-        readable = []
-        for sock in [client_sock, target_sock]:
-            try:
-                if await loop.sock_recv(sock, 1, peek=True):
-                    readable.append(sock)
-            except:
-                pass
-        return readable, [], []
 
 
 def main():
