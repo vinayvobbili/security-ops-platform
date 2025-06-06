@@ -1,0 +1,218 @@
+body {
+    font-family: Arial, sans-serif;
+    max-width: 800px;
+    margin: 2rem auto;
+    padding: 0 1rem;
+    min-height: 100vh;
+    background: linear-gradient(135deg, rgb(147, 197, 193) 0%, rgb(128, 182, 178) 100%);
+    position: relative;
+    overflow: hidden;
+}
+
+body::before,
+body::after {
+    content: '';
+    position: absolute;
+    width: 200%;
+    height: 200%;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 50%;
+    transform: rotate(-3deg);
+    z-index: -1;
+}
+
+body::before {
+    top: -100%;
+    left: -50%;
+}
+
+body::after {
+    bottom: -100%;
+    right: -50%;
+    transform: rotate(7deg);
+}
+
+h2, .fancy-title {
+    color: #333;
+    margin-bottom: 1.5rem;
+    margin-top: 0.5rem;
+    text-align: center;
+    font-size: 2rem;
+    font-weight: 700;
+    background: none;
+    -webkit-background-clip: unset;
+    background-clip: unset;
+    letter-spacing: 0.5px;
+    border-bottom: none;
+    padding-bottom: 0;
+    text-shadow: none;
+}
+
+.form-container {
+    background: linear-gradient(to bottom, #f5f9fa, #edf3f4);
+    padding: 2rem;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    max-width: 800px;
+    margin: 2rem auto;
+}
+
+.form-group {
+    margin-bottom: 1.2rem;
+    padding-bottom: 0.2rem;
+}
+
+label {
+    display: block;
+    margin-bottom: 0;
+    color: #333;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+}
+
+input[type="text"],
+input[type="date"],
+textarea {
+    margin-bottom: 0.5rem;
+    margin-top: 0;
+    width: 90%;
+    padding: 0.5rem;
+    border: 1.5px solid #b0bfc7;
+    border-radius: 4px;
+    font-size: 1rem;
+    background-color: white;
+    transition: border-color 0.2s;
+}
+
+input[type="text"]:focus,
+input[type="date"]:focus,
+textarea:focus {
+    border-color: #007bff;
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.08);
+}
+
+textarea {
+    min-height: 100px;
+    resize: vertical;
+    width: 100%;
+}
+
+button[type="submit"] {
+    background-color: #007bff;
+    color: white;
+    padding: 0.75rem 1.5rem;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 1rem;
+    display: block;
+    margin-left: auto;
+    transition: background 0.2s;
+}
+
+button[type="submit"]:hover {
+    background-color: #0056b3;
+}
+
+#result {
+    max-width: 500px;
+    margin: 0 auto;
+    text-align: center;
+    color: #27ae60;
+    font-weight: bold;
+    padding-top: 10px;
+}
+
+.keep-until-date {
+    min-width: 170px;
+    width: 170px;
+    max-width: 220px;
+    padding: 0.5rem;
+    border: 1.5px solid #b0bfc7;
+    border-radius: 4px;
+    font-size: 1rem;
+    background-color: white;
+    transition: border-color 0.2s;
+}
+
+.keep-until-date:focus {
+    border-color: #007bff;
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.08);
+}
+
+.loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(255, 255, 255, 0.7);
+    z-index: 1000;
+    margin: 0;
+}
+
+.loading-spinner {
+    border: 4px solid #f3f3f3;
+    border-top: 4px solid #4a6cf7;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    animation: spin 1s linear infinite;
+    margin-bottom: 0.5rem;
+}
+
+@keyframes spin {
+    0% {
+        transform: rotate(0deg);
+    }
+    100% {
+        transform: rotate(360deg);
+    }
+}
+
+#successDialog {
+    border-radius: 12px;
+    border: 1.5px solid #4a6cf7;
+    padding: 1.5rem 2rem;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
+    text-align: center;
+    min-width: 320px;
+}
+
+#successDialog h3 {
+    color: #0cbc87;
+    margin-bottom: 1rem;
+}
+
+#entryDetails ul {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 1rem 0;
+}
+
+#entryDetails li {
+    margin-bottom: 0.5rem;
+    text-align: left;
+}
+
+#okBtn {
+    background: #4a6cf7;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    padding: 0.5rem 1.5rem;
+    font-size: 1rem;
+    cursor: pointer;
+    margin-top: 1rem;
+    transition: background 0.2s;
+}
+
+#okBtn:hover {
+    background: #3b5cde;
+}

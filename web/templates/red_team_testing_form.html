@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Red Team Testing Request Form</title>
+    <link rel="stylesheet" href="/static/red_team_testing_form.css">
+</head>
+<body>
+<div class="form-container">
+    <h2>Red Team Testing Request Form</h2>
+    <form id="red-team-testing-form" method="post" action="/submit-red-team-testing-form">
+        <div class="form-group">
+            <label for="usernames">Usernames (comma-separated):</label><br>
+            <textarea id="usernames" name="usernames" rows="2"></textarea>
+        </div>
+        <div class="form-group">
+            <label for="tester_hosts">Tester IPs, CIDR Blocks, Hostnames (comma-separated):</label><br>
+            <textarea id="tester_hosts" name="tester_hosts" rows="2"></textarea>
+        </div>
+        <div class="form-group">
+            <label for="targets">Targets to be tested (IPs, CIDR Blocks, Hostnames, comma-separated):</label><br>
+            <textarea id="targets" name="targets" rows="2"></textarea>
+        </div>
+        <div class="form-group">
+            <label for="description">Description:</label><br>
+            <textarea id="description" name="description" rows="3" required></textarea>
+        </div>
+        <div class="form-group">
+            <label for="notes_scope">Notes/Scope:</label><br>
+            <textarea id="notes_scope" name="notes_scope" rows="2"></textarea>
+        </div>
+        <div class="form-group" style="display: flex; align-items: center; gap: 1rem;">
+            <label for="keep_until" style="margin-bottom: 0; white-space: nowrap;">Keep Until:</label>
+            <input type="date" id="keep_until" name="keep_until" class="keep-until-date"
+                min="{{ tomorrow }}" value="{{ tomorrow }}">
+            <span style="white-space: nowrap; color: #555; font-size: 0.98em;">5 PM ET</span>
+        </div>
+        <button type="submit">Submit</button>
+    </form>
+    <div class="loading" id="loading" style="display:none;">
+        <div class="loading-spinner"></div>
+        <p>Processing your request...</p>
+    </div>
+    <div id="result"></div>
+    <dialog id="successDialog">
+        <form method="dialog">
+            <h3 id="dialogHeading">Entry submitted successfully</h3>
+            <div id="entryDetails"></div>
+            <button id="okBtn" type="submit">OK</button>
+        </form>
+    </dialog>
+</div>
+<script src="/static/red_team_testing_form.js"></script>
+</body>
+</html>
