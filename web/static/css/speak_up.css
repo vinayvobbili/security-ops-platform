@@ -50,13 +50,16 @@ h1 {
 }
 
 .form-group {
-    margin-bottom: 1.5rem;
+    margin-bottom: 1.2rem;
+    padding-bottom: 0.2rem;
 }
 
 label {
     display: block;
-    margin-bottom: 0.5rem;
+    margin-bottom: 0;
     color: #333;
+    font-weight: 600;
+    letter-spacing: 0.01em;
 }
 
 .required {
@@ -71,14 +74,26 @@ label {
     height: 1rem;
 }
 
+input[type="text"],
 input[type="date"],
 textarea {
+    margin-bottom: 0.5rem;
+    margin-top: 0; /* Remove gap above input */
     width: 90%;
     padding: 0.5rem;
-    border: 1px solid #ddd;
+    border: 1.5px solid #b0bfc7;
     border-radius: 4px;
     font-size: 1rem;
     background-color: white;
+    transition: border-color 0.2s;
+}
+
+input[type="text"]:focus,
+input[type="date"]:focus,
+textarea:focus {
+    border-color: #007bff;
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(0,123,255,0.08);
 }
 
 textarea {

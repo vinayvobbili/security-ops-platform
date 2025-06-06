@@ -8,7 +8,7 @@ import socketserver
 import ssl
 import threading
 from concurrent.futures import ThreadPoolExecutor
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import List, Dict
 from urllib.parse import urlsplit
 
@@ -18,7 +18,6 @@ from flask import Flask, request, abort, jsonify, render_template
 
 from config import get_config
 from services import xsoar
-from services.xsoar import ListHandler, TicketHandler
 from src.helper_methods import log_web_activity
 
 # Define the proxy port
@@ -41,8 +40,8 @@ http_pool = ThreadPoolExecutor(max_workers=NUM_WORKERS)
 IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".gif", ".svg")
 blocked_ip_ranges = []  # ["10.49.70.0/24", "10.50.70.0/24"]
 
-list_handler = ListHandler()
-incident_handler = TicketHandler()
+list_handler = xsoar.ListHandler()
+incident_handler = xsoar.TicketHandler()
 
 
 @app.before_request
@@ -271,6 +270,73 @@ def handle_travel_form_submission():
     return jsonify({
         'status': 'success',
         'response': response
+    })
+
+
+@app.route("/red-team-testing-form")
+@log_web_activity
+def display_red_team_testing_form():
+    """Displays the Red Team Testing form."""
+    tomorrow = (datetime.now() + timedelta(days=1)).strftime('%Y-%m-%d')
+    return render_template("red_team_testing_form.html", tomorrow=tomorrow)
+
+
+@app.route("/submit-red-team-testing-form", methods=['POST'])
+@log_web_activity
+def handle_red_team_testing_form_submission():
+    """Handles the Red Team Testing form submissions and processes the data."""
+    form = request.form.to_dict()
+
+    usernames = form.get('usernames', '').strip()
+    tester_hosts = form.get('tester_hosts', '').strip()
+    targets = form.get('targets', '').strip()
+    description = form.get('description', '').strip()
+    notes_scope = form.get('notes_scope', '').strip()
+    keep_until = form.get('keep_until', '')
+    submitter = request.remote_addr  # Or use a user field if available
+
+    # Format the keep_until date from yyyy-mm-dd to mm/dd/yyyy
+    formatted_keep_until = ""
+    if keep_until:
+        try:
+            year, month, day = keep_until.split('-')
+            formatted_keep_until = f"{month}/{day}/{year}"
+        except ValueError:
+            formatted_keep_until = keep_until
+
+    # Prepare the entry for the Red Team Testing list
+    entry = {
+        "usernames": usernames,
+        "items_of_tester": tester_hosts,
+        "items_to_be_tested": targets,
+        "description": description,
+        "scope": notes_scope,
+        "expiry_date": keep_until,
+        "submitter": submitter,
+        "submit_date": datetime.now(eastern).strftime("%m/%d/%Y")
+    }
+
+    # Require at least one of the first three fields to be filled
+    if not (usernames or tester_hosts or targets):
+        return jsonify({
+            'status': 'error',
+            'message': 'At least one of Usernames, Tester Hosts, or Targets must be filled.'
+        }), 400
+
+    # Save to the correct XSOAR list for Red Team Testing
+    list_name = "METCIRT_Approved_Testing"
+    current_entries = list_handler.get_list_data_by_name(list_name)
+    if not current_entries:
+        current_entries = {"ENTRIES": []}
+    if "ENTRIES" not in current_entries:
+        current_entries["ENTRIES"] = []
+    current_entries["ENTRIES"].append(entry)
+    list_handler.save(list_name, current_entries)
+
+    return jsonify({
+        'status': 'success',
+        'message': 'Red Team Testing entry added',
+        'entry': entry
     })
 
 
