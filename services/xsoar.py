@@ -1,3 +1,9 @@
+import urllib3
+from urllib3.exceptions import InsecureRequestWarning
+
+# Disable the InsecureRequestWarning
+urllib3.disable_warnings(InsecureRequestWarning)
+
 import json
 import logging
 from pathlib import Path
