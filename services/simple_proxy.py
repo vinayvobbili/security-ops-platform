@@ -113,20 +113,39 @@ class OptimizedProxy(http.server.SimpleHTTPRequestHandler):
 
     def _relay_tcp(self, source, destination):
         try:
-            while True:
-                data = source.recv(BUFFER_SIZE)
-                if not data:
+            source.settimeout(30)  # Set reasonable timeouts
+            destination.settimeout(30)
+
+            idle_count = 0
+            max_idle = 10  # Maximum number of consecutive timeouts
+
+            while idle_count < max_idle:  # Prevent infinite timeout loops
+                try:
+                    data = source.recv(BUFFER_SIZE)
+                    if not data:
+                        break
+                    destination.sendall(data)
+                    idle_count = 0  # Reset idle counter on successful data transfer
+                except socket.timeout:
+                    idle_count += 1  # Increment idle counter on timeout
+                    continue
+                except (ConnectionResetError, BrokenPipeError, OSError):
                     break
-                destination.sendall(data)
-        except (ConnectionError, BrokenPipeError):
-            pass
         except Exception as e:
             print(f"Relay error: {e}")
         finally:
-            try:
-                source.close()
-            except:
-                pass
+            # More carefully close sockets
+            for sock in [source, destination]:
+                try:
+                    # Check if socket is still valid before shutdown
+                    if sock and sock.fileno() != -1:
+                        try:
+                            sock.shutdown(socket.SHUT_RDWR)
+                        except:
+                            pass
+                        sock.close()
+                except:
+                    pass
 
     def proxy_http_request(self):
         # This part handles regular HTTP requests (not HTTPS via CONNECT)
