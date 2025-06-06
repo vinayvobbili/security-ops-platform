@@ -50,7 +50,7 @@ def get_expected_ring(env):
 
 
 def analyze_ring_tags(servers_df):
-    """Analyze servers and mark those with invalid ring tags."""
+    """Analyze servers and mark those with invalid ring tags, completely ignoring Citrix rings."""
     servers_df['has_invalid_ring_tag'] = False
     servers_df['comment'] = ''
 
@@ -58,23 +58,32 @@ def analyze_ring_tags(servers_df):
         env = str(server.get('environment', '')).lower()
         current_tags = server.get('current_tags', '')
 
-        # Extract ring numbers from tags
-        ring_numbers = [int(tag) for tag in re.findall(r'FalconGroupingTags/(?!Citrix).*?SrvRing(\d+)', current_tags, re.IGNORECASE)]
+        # Extract all ring tags first
+        all_ring_tags = re.findall(r'FalconGroupingTags/[^,]*?SRVRing(\d+)', current_tags, re.IGNORECASE)
 
-        if not ring_numbers:
+        # Find complete ring tag strings to check for Citrix
+        complete_ring_tag_matches = re.findall(r'(FalconGroupingTags/[^,]*?SRVRing\d+)', current_tags, re.IGNORECASE)
+
+        # Filter to only non-Citrix rings by checking the complete tag
+        non_citrix_rings = []
+        for i, ring_num in enumerate(all_ring_tags):
+            if 'citrix' not in complete_ring_tag_matches[i].lower():
+                non_citrix_rings.append(int(ring_num))
+
+        if not non_citrix_rings:
             continue
 
-        if len(ring_numbers) > 1:
+        if len(non_citrix_rings) > 1:
             servers_df.loc[index, 'has_invalid_ring_tag'] = True
             servers_df.loc[index, 'comment'] = 'multiple ring tags found'
-            logger.info(f"Multiple ring tags found for host {server.get('hostname', 'Unknown')}: {ring_numbers}")
+            logger.info(f"Multiple non-Citrix ring tags found for host {server.get('hostname', 'Unknown')}: {non_citrix_rings}")
             continue
 
         expected_ring = get_expected_ring(env)
-        if any(num != expected_ring for num in ring_numbers):
+        if any(num != expected_ring for num in non_citrix_rings):
             servers_df.loc[index, 'has_invalid_ring_tag'] = True
-            servers_df.loc[index, 'comment'] = f'{env} server should not be in Ring {ring_numbers}, expected Ring {expected_ring}'
-            logger.info(f"Invalid ring tag found for host {server.get('hostname', 'Unknown')}: Ring {ring_numbers}, expected Ring {expected_ring}")
+            servers_df.loc[index, 'comment'] = f'{env} server should not be in Ring {non_citrix_rings}, expected Ring {expected_ring}'
+            logger.info(f"Invalid ring tag found for host {server.get('hostname', 'Unknown')}: Ring {non_citrix_rings}, expected Ring {expected_ring}")
 
 
 def generate_report():

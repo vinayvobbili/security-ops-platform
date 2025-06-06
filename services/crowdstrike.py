@@ -7,6 +7,7 @@ urllib3.disable_warnings(InsecureRequestWarning)
 import concurrent.futures
 import logging
 import os
+import tqdm
 
 import threading
 import time
@@ -217,7 +218,9 @@ class CrowdStrikeClient:
     def fetch_all_hosts_and_write_to_xlsx(self, xlsx_filename: str = "all_cs_hosts.xlsx") -> None:
         """
         Fetches all hosts from CrowdStrike Falcon using multithreading for details fetching.
+        Shows a tqdm progress bar for each batch of host IDs processed.
         """
+
         all_host_data = []
         unique_device_ids = set()
         data_lock = threading.Lock()
@@ -297,7 +300,11 @@ class CrowdStrikeClient:
                     batch_size = min(500, len(host_ids))
                     host_id_batches = [host_ids[i:i + batch_size] for i in range(0, len(host_ids), batch_size)]
 
-                    futures = [executor.submit(process_host_details, id_batch) for id_batch in host_id_batches]
+                    # tqdm progress bar for batch processing
+                    futures = [
+                        executor.submit(process_host_details, id_batch)
+                        for id_batch in tqdm.tqdm(host_id_batches, desc="Processing host batches")
+                    ]
                     concurrent.futures.wait(futures)
 
                     total_fetched += len(host_ids)
