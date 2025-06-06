@@ -59,7 +59,7 @@ def analyze_ring_tags(servers_df):
         current_tags = server.get('current_tags', '')
 
         # Extract ring numbers from tags
-        ring_numbers = [int(tag) for tag in re.findall(r'FalconGroupingTags/.*?SrvRing(\d+)', current_tags, re.IGNORECASE)]
+        ring_numbers = [int(tag) for tag in re.findall(r'FalconGroupingTags/(?!Citrix).*?SrvRing(\d+)', current_tags, re.IGNORECASE)]
 
         if not ring_numbers:
             continue
