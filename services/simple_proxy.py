@@ -71,36 +71,60 @@ class OptimizedProxy(http.server.SimpleHTTPRequestHandler):
         self.proxy_http_request()
 
     def do_CONNECT(self):
-        # This handles HTTPS tunneling
+        # Parse target address from the request
         target_host, target_port = self.path.split(':', 1)
         target_port = int(target_port)
 
         print(f"CONNECT request to {target_host}:{target_port}")
 
         try:
-            # Establish direct connection to the target server
+            # Connect to the target server
             target_sock = socket.create_connection((target_host, target_port), timeout=60)
 
-            # Send 200 OK to the client to establish the tunnel
+            # Send 200 Connection Established to the client
             self.send_response(200)
-            self.send_header('Proxy-agent', self.server_version)
+            self.send_header('Connection', 'keep-alive')
             self.end_headers()
 
-            # DO NOT set sockets to non-blocking - asyncio needs blocking sockets
-            # and will handle the async operations internally
-
-            # Use ThreadPoolExecutor for operation
-            future = http_pool.submit(
-                self.relay_data,
-                self.connection,
-                target_sock
+            # Create separate threads to relay data in both directions
+            client_to_target = threading.Thread(
+                target=self._relay_tcp,
+                args=(self.connection, target_sock)
+            )
+            target_to_client = threading.Thread(
+                target=self._relay_tcp,
+                args=(target_sock, self.connection)
             )
 
+            client_to_target.daemon = True
+            target_to_client.daemon = True
+
+            client_to_target.start()
+            target_to_client.start()
+
+            # Wait for one direction to close
+            client_to_target.join()
+            target_to_client.join()
+
         except Exception as e:
-            print(f"CONNECT error establishing tunnel to {target_host}:{target_port}: {e}")
+            print(f"CONNECT error: {e}")
             self.send_error(502, "Bad Gateway")
+            return
+
+    def _relay_tcp(self, source, destination):
+        try:
+            while True:
+                data = source.recv(BUFFER_SIZE)
+                if not data:
+                    break
+                destination.sendall(data)
+        except (ConnectionError, BrokenPipeError):
+            pass
+        except Exception as e:
+            print(f"Relay error: {e}")
+        finally:
             try:
-                self.connection.close()
+                source.close()
             except:
                 pass
 
