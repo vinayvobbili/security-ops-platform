@@ -1,13 +1,14 @@
 import http.server
 import socketserver
-import socket # Ensure socket is imported
-import select # For non-blocking I/O in relay
+import socket  # Ensure socket is imported
+import select  # For non-blocking I/O in relay
 import ssl
 import os
-import http.client # For making HTTP requests to target (though CONNECT bypasses it for body)
+import http.client  # For making HTTP requests to target (though CONNECT bypasses it for body)
 
 # Define the port you want the proxy to listen on
 PORT = 8080
+
 
 class SimpleProxy(http.server.SimpleHTTPRequestHandler):
     def do_GET(self):
@@ -108,11 +109,10 @@ class SimpleProxy(http.server.SimpleHTTPRequestHandler):
                     self.send_header(h, v)
             self.end_headers()
             self.wfile.write(response.read())
-            conn.close() # Close connection to target
+            conn.close()  # Close connection to target
         except Exception as e:
             print(f"Error during HTTP proxy request: {e}")
             self.send_error(502, "Bad Gateway")
-
 
     def relay_data(self, client_sock, target_sock):
         """Relays data bidirectionally between client_sock and target_sock."""
@@ -121,24 +121,24 @@ class SimpleProxy(http.server.SimpleHTTPRequestHandler):
             while True:
                 # Wait until one of the sockets is ready for reading
                 # Using select.select for non-blocking I/O
-                readable, _, _ = select.select(sockets, [], [], 1) # 1 second timeout for polling
+                readable, _, _ = select.select(sockets, [], [], 1)  # 1 second timeout for polling
 
                 if not readable:
                     # If no data for 1 second, check if connections are still alive
                     # This helps prevent infinite loops if one side closes silently
                     if client_sock.fileno() == -1 or target_sock.fileno() == -1:
-                        break # One of the sockets is closed, break out
+                        break  # One of the sockets is closed, break out
 
                 for sock in readable:
                     if sock is client_sock:
                         data = client_sock.recv(4096)
                         if not data:
-                            return # Client closed connection
+                            return  # Client closed connection
                         target_sock.sendall(data)
                     elif sock is target_sock:
                         data = target_sock.recv(4096)
                         if not data:
-                            return # Target closed connection
+                            return  # Target closed connection
                         client_sock.sendall(data)
         except Exception as e:
             print(f"Error during relay: {e}")
@@ -165,4 +165,4 @@ except Exception as e:
     print(f"Failed to start proxy: {e}")
     print("This often means the port is in use or you need Administrator privileges to bind to it.")
     print("Try a higher port number (e.g., 8080 or 8888) if you're not running as admin.")
-    input("Press Enter to exit...") # Keep window open for manual exit
+    input("Press Enter to exit...")  # Keep window open for manual exit
