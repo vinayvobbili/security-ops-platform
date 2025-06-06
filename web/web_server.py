@@ -10,15 +10,16 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime
 from typing import List, Dict
+from urllib.parse import urlsplit
 
 import pytz
+import select
 from flask import Flask, request, abort, jsonify, render_template
 
 from config import get_config
 from services import xsoar
 from services.xsoar import ListHandler, TicketHandler
 from src.helper_methods import log_web_activity
-from urllib.parse import urlsplit
 
 # Define the proxy port
 PROXY_PORT = 8080
