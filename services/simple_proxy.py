@@ -1,16 +1,60 @@
+import asyncio
+import http.client
 import http.server
+import socket
 import socketserver
-import socket  # Ensure socket is imported
-import select  # For non-blocking I/O in relay
 import ssl
-import os
-import http.client  # For making HTTP requests to target (though CONNECT bypasses it for body)
+import threading
+from concurrent.futures import ThreadPoolExecutor
+from typing import Dict, List
+from urllib.parse import urlsplit
 
-# Define the port you want the proxy to listen on
-PORT = 8080
+# Performance optimization constants
+PROXY_PORT = 8080
+BUFFER_SIZE = 16384  # Increased from default 4096
+NUM_WORKERS = 10
+MAX_CONNECTIONS = 100
+
+# Global thread pool for HTTP requests
+http_pool = ThreadPoolExecutor(max_workers=NUM_WORKERS)
 
 
-class SimpleProxy(http.server.SimpleHTTPRequestHandler):
+# HTTP connection pool for reusing connections
+class ConnectionPool:
+    def __init__(self, max_connections=100):
+        self.pool: Dict[str, List[http.client.HTTPConnection]] = {}
+        self.max_connections = max_connections
+        self.lock = threading.RLock()
+
+    def get_connection(self, host):
+        with self.lock:
+            if host not in self.pool:
+                self.pool[host] = []
+
+            if self.pool[host]:
+                return self.pool[host].pop()
+            else:
+                return http.client.HTTPConnection(host)
+
+    def release_connection(self, host, conn):
+        with self.lock:
+            if host not in self.pool:
+                self.pool[host] = []
+
+            if len(self.pool[host]) < self.max_connections:
+                self.pool[host].append(conn)
+            else:
+                conn.close()
+
+
+# Create a global connection pool
+connection_pool = ConnectionPool(max_connections=MAX_CONNECTIONS)
+
+
+# Optimized proxy handler with connection pooling and async support
+class OptimizedProxy(http.server.SimpleHTTPRequestHandler):
+    protocol_version = 'HTTP/1.1'  # Enable keep-alive
+
     def do_GET(self):
         self.proxy_http_request()
 
@@ -35,7 +79,6 @@ class SimpleProxy(http.server.SimpleHTTPRequestHandler):
 
         try:
             # Establish direct connection to the target server
-            # Use socket.create_connection for robust connection
             target_sock = socket.create_connection((target_host, target_port), timeout=60)
 
             # Send 200 OK to the client to establish the tunnel
@@ -43,21 +86,22 @@ class SimpleProxy(http.server.SimpleHTTPRequestHandler):
             self.send_header('Proxy-agent', self.server_version)
             self.end_headers()
 
-            # Now, relay data between client and target
-            # self.connection is the socket connected to the client (your Mac)
-            self.relay_data(self.connection, target_sock)
+            # Set sockets to non-blocking for async operation
+            self.connection.setblocking(False)
+            target_sock.setblocking(False)
+
+            # Use ThreadPoolExecutor for async operation
+            future = http_pool.submit(
+                self.relay_data_async,
+                self.connection,
+                target_sock
+            )
 
         except Exception as e:
             print(f"CONNECT error establishing tunnel to {target_host}:{target_port}: {e}")
             self.send_error(502, "Bad Gateway")
-            # Ensure connections are closed if an error occurs
             try:
                 self.connection.close()
-            except:
-                pass
-            try:
-                if 'target_sock' in locals() and target_sock:
-                    target_sock.close()
             except:
                 pass
 
@@ -66,12 +110,12 @@ class SimpleProxy(http.server.SimpleHTTPRequestHandler):
         url = self.path
 
         if url.startswith('https://'):
-            print(f"Warning: Client tried to send HTTPS GET/POST directly. Use CONNECT for HTTPS tunneling: {url}")
+            print(f"Warning: Client tried to send HTTPS directly. Use CONNECT for HTTPS tunneling")
             self.send_error(501, "HTTPS GET/POST proxy not implemented (use CONNECT)")
             return
 
         try:
-            parts = http.client.urlsplit(url)
+            parts = urlsplit(url)
             netloc = parts.netloc
             path = parts.path
             query = parts.query
@@ -83,14 +127,21 @@ class SimpleProxy(http.server.SimpleHTTPRequestHandler):
             if fragment:
                 full_path += '#' + fragment
 
+            # Check if client accepts gzip encoding
+            accept_encoding = self.headers.get('Accept-Encoding', '')
+            supports_gzip = 'gzip' in accept_encoding.lower()
+
             headers = {}
             for h in self.headers:
-                # Filter out proxy-specific headers and connection headers that might cause issues
                 if h.lower() not in ['proxy-connection', 'transfer-encoding', 'connection']:
                     headers[h] = self.headers[h]
 
-            # Use http.client for internal request to the destination
-            conn = http.client.HTTPConnection(netloc)
+            # Add support for gzip if client accepts it
+            if supports_gzip and 'Accept-Encoding' not in headers:
+                headers['Accept-Encoding'] = 'gzip'
+
+            # Use connection pool
+            conn = connection_pool.get_connection(netloc)
 
             if self.command == 'GET':
                 conn.request(self.command, full_path, headers=headers)
@@ -100,69 +151,117 @@ class SimpleProxy(http.server.SimpleHTTPRequestHandler):
                 conn.request(self.command, full_path, body=body, headers=headers)
 
             response = conn.getresponse()
-
-            # Send response back to the client
             self.send_response(response.status)
+
+            # Prepare for potential gzip compression
+            is_gzipped = False
             for h, v in response.getheaders():
-                # Filter out problematic headers from response
+                if h.lower() == 'content-encoding' and 'gzip' in v.lower():
+                    is_gzipped = True
                 if h.lower() not in ['transfer-encoding', 'connection']:
                     self.send_header(h, v)
+
             self.end_headers()
-            self.wfile.write(response.read())
-            conn.close()  # Close connection to target
+
+            # Read response content in larger chunks for better performance
+            content = b''
+            while True:
+                chunk = response.read(BUFFER_SIZE)
+                if not chunk:
+                    break
+                content += chunk
+
+            # Return the connection to the pool
+            connection_pool.release_connection(netloc, conn)
+
+            # Send response data to client
+            self.wfile.write(content)
+
         except Exception as e:
             print(f"Error during HTTP proxy request: {e}")
             self.send_error(502, "Bad Gateway")
 
-    def relay_data(self, client_sock, target_sock):
-        """Relays data bidirectionally between client_sock and target_sock."""
-        sockets = [client_sock, target_sock]
+    def relay_data_async(self, client_sock, target_sock):
+        """Efficiently relays data bidirectionally between client_sock and target_sock."""
         try:
+            # Use two separate buffers for better performance
+            client_to_target = bytearray(BUFFER_SIZE)
+            target_to_client = bytearray(BUFFER_SIZE)
+
             while True:
-                # Wait until one of the sockets is ready for reading
-                # Using select.select for non-blocking I/O
-                readable, _, _ = select.select(sockets, [], [], 1)  # 1 second timeout for polling
+                # Select with a timeout to prevent high CPU usage
+                r, _, _ = asyncio.get_event_loop().run_until_complete(
+                    asyncio.wait_for(
+                        self._async_select(client_sock, target_sock),
+                        timeout=2.0
+                    )
+                )
 
-                if not readable:
-                    # If no data for 1 second, check if connections are still alive
-                    # This helps prevent infinite loops if one side closes silently
+                if not r:
+                    # Check if connections are still alive
                     if client_sock.fileno() == -1 or target_sock.fileno() == -1:
-                        break  # One of the sockets is closed, break out
+                        break
 
-                for sock in readable:
-                    if sock is client_sock:
-                        data = client_sock.recv(4096)
-                        if not data:
-                            return  # Client closed connection
-                        target_sock.sendall(data)
-                    elif sock is target_sock:
-                        data = target_sock.recv(4096)
-                        if not data:
-                            return  # Target closed connection
-                        client_sock.sendall(data)
+                if client_sock in r:
+                    # Use memory view for zero-copy slicing
+                    view = memoryview(client_to_target)
+                    bytes_read = client_sock.recv_into(view)
+                    if not bytes_read:
+                        break
+                    target_sock.sendall(view[:bytes_read])
+
+                if target_sock in r:
+                    view = memoryview(target_to_client)
+                    bytes_read = target_sock.recv_into(view)
+                    if not bytes_read:
+                        break
+                    client_sock.sendall(view[:bytes_read])
+
+        except (ConnectionResetError, BrokenPipeError, ssl.SSLError) as e:
+            # Common connection errors - log but don't clutter logs
+            pass
         except Exception as e:
             print(f"Error during relay: {e}")
         finally:
-            # Ensure both sockets are closed when relay ends
+            for sock in [client_sock, target_sock]:
+                try:
+                    sock.close()
+                except:
+                    pass
+
+    async def _async_select(self, client_sock, target_sock):
+        """Async-compatible version of select operation"""
+        loop = asyncio.get_event_loop()
+        readable = []
+        for sock in [client_sock, target_sock]:
             try:
-                client_sock.close()
+                if await loop.sock_recv(sock, 1, peek=True):
+                    readable.append(sock)
             except:
                 pass
-            try:
-                target_sock.close()
-            except:
-                pass
+        return readable, [], []
 
 
-Handler = SimpleProxy
+def main():
+    # Enable address reuse to avoid "address already in use" errors
+    socketserver.TCPServer.allow_reuse_address = True
 
-print(f"Starting proxy on port {PORT}")
-try:
-    # Use ThreadingTCPServer to handle multiple concurrent connections
-    with socketserver.ThreadingTCPServer(("", PORT), Handler) as httpd:
-        httpd.serve_forever()
-except Exception as e:
-    print(f"Failed to start proxy: {e}")
-    print("This often means the port is in use or you need Administrator privileges to bind to it.")
-    print("Try a higher port number (e.g., 8080 or 8888) if you're not running as admin.")
-    input("Press Enter to exit...")  # Keep window open for manual exit
+    print(f"Starting optimized proxy on port {PROXY_PORT}")
+    try:
+        # Use ThreadingTCPServer for concurrent connections
+        with socketserver.ThreadingTCPServer(("", PROXY_PORT), OptimizedProxy) as httpd:
+            httpd.serve_forever()
+    except Exception as e:
+        print(f"Failed to start proxy: {e}")
+        print("This often means the port is in use or you need Administrator privileges to bind to it.")
+
+
+if __name__ == "__main__":
+    # Setup asyncio event loop
+    try:
+        loop = asyncio.get_event_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+
+    main()
