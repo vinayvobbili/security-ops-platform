@@ -330,48 +330,54 @@ class OptimizedProxy(http.server.SimpleHTTPRequestHandler):
         self.proxy_http_request()
 
     def do_CONNECT(self):
-        # This handles HTTPS tunneling
+        # Parse target address
         target_host, target_port = self.path.split(':', 1)
         target_port = int(target_port)
 
         print(f"CONNECT request to {target_host}:{target_port}")
 
         try:
-            # Establish direct connection to the target server
+            # Connect to target
             target_sock = socket.create_connection((target_host, target_port), timeout=60)
 
-            # Send 200 OK to the client to establish the tunnel
+            # Send 200 Connection Established
             self.send_response(200)
-            self.send_header('Proxy-agent', self.server_version)
+            self.send_header('Connection', 'keep-alive')
             self.end_headers()
 
-            # Create separate threads to relay data in both directions
+            # Store original socket objects before they get closed
+            client_socket = self.connection
+
+            # Create threads for bidirectional relay
             client_to_target = threading.Thread(
                 target=self._relay_tcp,
-                args=(self.connection, target_sock)
+                args=(client_socket, target_sock)
             )
             target_to_client = threading.Thread(
                 target=self._relay_tcp,
-                args=(target_sock, self.connection)
+                args=(target_sock, client_socket)
             )
 
             client_to_target.daemon = True
             target_to_client.daemon = True
 
+            # Start relaying data
             client_to_target.start()
             target_to_client.start()
 
-            # Wait for one direction to close
+            # CRITICAL FIX: Don't let the HTTP handler continue reading from the socket
+            # This prevents the BrokenPipeError from being logged
+            self.close_connection = True
+
+            # Wait for threads to finish on their own - we won't get here
+            # until the HTTP request handler completes
             client_to_target.join()
             target_to_client.join()
 
         except Exception as e:
-            print(f"CONNECT error establishing tunnel to {target_host}:{target_port}: {e}")
+            print(f"CONNECT error: {e}")
             self.send_error(502, "Bad Gateway")
-            try:
-                self.connection.close()
-            except:
-                pass
+            return
 
     def _relay_tcp(self, source, destination):
         try:
