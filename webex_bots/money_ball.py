@@ -190,7 +190,7 @@ def main():
     bot.add_command(Inflow())
     bot.add_command(Outflow())
     bot.add_command(ThreatconLevel())
-    bot.add_command(GetAgingTicketsByOwnerReport())
+    # bot.add_command(GetAgingTicketsByOwnerReport())
 
     # Start the bot
     bot.run()
