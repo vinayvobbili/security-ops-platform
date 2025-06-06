@@ -337,78 +337,55 @@ class OptimizedProxy(http.server.SimpleHTTPRequestHandler):
         print(f"CONNECT request to {target_host}:{target_port}")
 
         try:
-            # Connect to target
+            # Connect to target server
             target_sock = socket.create_connection((target_host, target_port), timeout=60)
 
-            # Send 200 Connection Established
-            self.send_response(200)
-            self.send_header('Connection', 'keep-alive')
-            self.end_headers()
+            # Send 200 Connection Established response
+            self.wfile.write(b"HTTP/1.1 200 Connection established\r\n\r\n")
 
-            # Store original socket objects before they get closed
+            # Create connection pipes
             client_socket = self.connection
 
-            # Create threads for bidirectional relay
-            client_to_target = threading.Thread(
-                target=self._relay_tcp,
-                args=(client_socket, target_sock)
-            )
-            target_to_client = threading.Thread(
-                target=self._relay_tcp,
-                args=(target_sock, client_socket)
-            )
+            # Set reasonable timeouts
+            client_socket.settimeout(60)
+            target_sock.settimeout(60)
 
-            client_to_target.daemon = True
-            target_to_client.daemon = True
+            # Start bidirectional relay
+            self._relay_sockets(client_socket, target_sock)
 
-            # Start relaying data
-            client_to_target.start()
-            target_to_client.start()
-
-            # CRITICAL FIX: Don't let the HTTP handler continue reading from the socket
-            # This prevents the BrokenPipeError from being logged
-            self.close_connection = True
-
-            # Wait for threads to finish on their own - we won't get here
-            # until the HTTP request handler completes
-            client_to_target.join()
-            target_to_client.join()
+            return
 
         except Exception as e:
             print(f"CONNECT error: {e}")
-            self.send_error(502, "Bad Gateway")
+            self.send_error(502, f"Cannot connect to {target_host}:{target_port}")
             return
 
-    def _relay_tcp(self, source, destination):
-        try:
-            source.settimeout(30)  # Set reasonable timeouts
-            destination.settimeout(30)
+    def _relay_sockets(self, client, target):
+        """Simple synchronous socket relay that avoids HTTP processing"""
+        sockets = [client, target]
 
-            while True:
+        # Keep transferring data between client and target
+        while True:
+            # Wait until a socket is ready to be read
+            readable, _, exceptional = select.select(sockets, [], sockets, 60)
+
+            if exceptional:
+                break
+
+            if not readable:
+                continue  # Timeout, try again
+
+            for sock in readable:
+                # Determine the destination socket
+                dest = target if sock is client else client
+
                 try:
-                    data = source.recv(BUFFER_SIZE)
+                    data = sock.recv(BUFFER_SIZE)
                     if not data:
-                        break
-                    destination.sendall(data)
-                except socket.timeout:
-                    # Just try again on timeout
-                    continue
-                except (ConnectionResetError, BrokenPipeError):
-                    break
-        except Exception as e:
-            print(f"Relay error: {e}")
-        finally:
-            # Ensure both sockets get closed
-            try:
-                source.shutdown(socket.SHUT_RDWR)
-                source.close()
-            except:
-                pass
-            try:
-                destination.shutdown(socket.SHUT_RDWR)
-                destination.close()
-            except:
-                pass
+                        return  # Connection closed
+                    dest.sendall(data)
+                except (socket.error, ConnectionResetError, BrokenPipeError):
+                    return  # Any socket error means we're done
 
     def proxy_http_request(self):
         # This part handles regular HTTP requests (not HTTPS via CONNECT)
