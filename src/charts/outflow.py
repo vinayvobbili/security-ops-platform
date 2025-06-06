@@ -72,6 +72,8 @@ def create_graph(tickets):
                             .replace(config.team_name, '').strip()
                             .replace('CrowdStrike Falcon Detection', 'CS Detection').strip()
                             .replace('CrowdStrike Falcon Incident', 'CS Incident').strip()
+                            .replace('Prisma Cloud Compute Runtime Alert', 'Prisma Runtime').strip()
+                            .replace('Lost or Stolen Computer', 'Lost/Stolen Device').strip()
                                         + ' - ' + row['source'], axis=1)
 
     # Count the occurrences of each source and impact
