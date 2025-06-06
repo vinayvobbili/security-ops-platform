@@ -86,13 +86,12 @@ class OptimizedProxy(http.server.SimpleHTTPRequestHandler):
             self.send_header('Proxy-agent', self.server_version)
             self.end_headers()
 
-            # Set sockets to non-blocking for async operation
-            self.connection.setblocking(False)
-            target_sock.setblocking(False)
+            # DO NOT set sockets to non-blocking - asyncio needs blocking sockets
+            # and will handle the async operations internally
 
             # Use ThreadPoolExecutor for operation
             future = http_pool.submit(
-                self.relay_data,  # Use the synchronous wrapper
+                self.relay_data,
                 self.connection,
                 target_sock
             )
@@ -192,9 +191,11 @@ class OptimizedProxy(http.server.SimpleHTTPRequestHandler):
 
     async def relay_data_async(self, client_sock, target_sock):
         """Efficiently relays data bidirectionally between client_sock and target_sock using asyncio streams."""
-        client_writer = target_writer = None
+        client_writer = None
+        target_writer = None
+
         try:
-            # Wrap sockets with asyncio streams
+            # Create asyncio stream readers/writers from the sockets
             client_reader, client_writer = await asyncio.open_connection(sock=client_sock)
             target_reader, target_writer = await asyncio.open_connection(sock=target_sock)
 
@@ -207,46 +208,49 @@ class OptimizedProxy(http.server.SimpleHTTPRequestHandler):
                         writer.write(data)
                         await writer.drain()
                 except (ConnectionError, BrokenPipeError):
-                    # Handle connection issues gracefully
                     pass
                 except Exception as e:
                     print(f"Error in {name} relay: {e}")
-                # No finally block with unreachable return
 
-            # Use asyncio.wait with return_when=FIRST_COMPLETED to handle when either direction finishes
+            # Create tasks for bidirectional data relay
             tasks = [
                 asyncio.create_task(relay(client_reader, target_writer, "client->target")),
                 asyncio.create_task(relay(target_reader, client_writer, "target->client"))
             ]
 
-            # Wait until either relay direction completes
+            # Wait until either direction completes
             done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
 
-            # Cancel any remaining tasks
+            # Cancel pending tasks
             for task in pending:
                 task.cancel()
 
             # Wait for cancelled tasks to finish
             if pending:
-                await asyncio.wait(pending, return_when=asyncio.ALL_COMPLETED)
+                try:
+                    await asyncio.wait(pending, return_when=asyncio.ALL_COMPLETED)
+                except asyncio.CancelledError:
+                    pass
 
         except Exception as e:
             print(f"Error setting up relay: {e}")
         finally:
-            # Close stream writers first if they were created
+            # Close stream writers
             if client_writer:
-                client_writer.close()
-                await client_writer.wait_closed()
-            if target_writer:
-                target_writer.close()
-                await target_writer.wait_closed()
-
-            # Then close the original sockets
-            for sock in [client_sock, target_sock]:
                 try:
-                    sock.close()
-                except:
+                    client_writer.close()
+                    await client_writer.wait_closed()
+                except Exception:
                     pass
+
+            if target_writer:
+                try:
+                    target_writer.close()
+                    await target_writer.wait_closed()
+                except Exception:
+                    pass
+
+            # No need to close the original sockets as they are managed by the writers
 
 
 def main():
