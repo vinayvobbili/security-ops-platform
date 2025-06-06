@@ -1,26 +1,24 @@
+import asyncio
+import http.client
+import http.server
 import ipaddress
 import os
-import gzip
-import asyncio
-import aiohttp
-from datetime import date, datetime
-from typing import List, Dict, Optional
 import socket
+import socketserver
 import ssl
 import threading
-import io
-import zlib
 from concurrent.futures import ThreadPoolExecutor
+from datetime import date, datetime
+from typing import List, Dict
+
 import pytz
 from flask import Flask, request, abort, jsonify, render_template
-from aiohttp import ClientSession
+
 from config import get_config
 from services import xsoar
 from services.xsoar import ListHandler, TicketHandler
 from src.helper_methods import log_web_activity
-import http.server
-import socketserver
-import http.client
+from urllib.parse import urlsplit
 
 # Define the proxy port
 PROXY_PORT = 8080
@@ -149,6 +147,7 @@ def handle_speak_up_form_submission():
 
     # Format the date from yyyy-mm-dd to mm/dd/yyyy
     date_occurred = form.get('dateOccurred', '')
+    formatted_date = ""
     if date_occurred:
         try:
             # Parse the date string from the form (likely in yyyy-mm-dd format)
@@ -158,8 +157,6 @@ def handle_speak_up_form_submission():
         except ValueError:
             # If there's an error parsing, use the original value
             formatted_date = date_occurred
-    else:
-        formatted_date = ""
 
     form['name'] = 'Speak Up Report'
     form['type'] = f'{CONFIG.team_name} Employee Reported Incident'
@@ -271,7 +268,8 @@ def handle_travel_form_submission():
     })
 
     return jsonify({
-        'status': 'success'
+        'status': 'success',
+        'response': response
     })
 
 
@@ -374,7 +372,7 @@ class OptimizedProxy(http.server.SimpleHTTPRequestHandler):
             return
 
         try:
-            parts = http.client.urlsplit(url)
+            parts = urlsplit(url)
             netloc = parts.netloc
             path = parts.path
             query = parts.query
@@ -463,7 +461,7 @@ class OptimizedProxy(http.server.SimpleHTTPRequestHandler):
                         break
 
                 if client_sock in r:
-                    # Use memoryview for zero-copy slicing
+                    # Use memory view for zero-copy slicing
                     view = memoryview(client_to_target)
                     bytes_read = client_sock.recv_into(view)
                     if not bytes_read:
@@ -495,7 +493,7 @@ class OptimizedProxy(http.server.SimpleHTTPRequestHandler):
         readable = []
         for sock in [client_sock, target_sock]:
             try:
-                if await loop.sock_recv(sock, 1, peek=True):
+                if await loop.sock_recv(sock, 1):
                     readable.append(sock)
             except:
                 pass
