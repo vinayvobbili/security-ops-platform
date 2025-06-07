@@ -5,8 +5,129 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Upcoming Travel Notification Form</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/upcoming_travel_notification_form.css') }}">
+    <style>
+        body {
+            font-family: 'Inter', Arial, sans-serif;
+            background: #f8fafc;
+            margin: 0;
+            padding-top: 0;
+        }
+        .top-nav {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 48px;
+            display: flex;
+            align-items: center;
+            z-index: 1000;
+            background: transparent !important;
+        }
+        .nav-home {
+            position: relative;
+            margin-left: 8px;
+            margin-top: 8px;
+            z-index: 2;
+        }
+        .nav-icon {
+            width: 28px;
+            height: 28px;
+            cursor: pointer;
+        }
+        .nav-title {
+            flex: 1;
+            text-align: center;
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: #222;
+            letter-spacing: 0.5px;
+        }
+        body {
+            padding-top: 56px;
+        }
+        .form-container {
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 2px 16px rgba(0,0,0,0.07);
+            padding: 2rem 2.5rem 2rem 2.5rem;
+            margin: 2.5rem auto 0 auto;
+            max-width: 520px;
+        }
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+        .form-group label {
+            font-weight: 600;
+            color: #222;
+        }
+        input, textarea, select {
+            font-family: inherit;
+            font-size: 1rem;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            padding: 0.5rem 0.75rem;
+            margin-top: 0.25rem;
+            margin-bottom: 1rem;
+            width: 100%;
+            box-sizing: border-box;
+            transition: border 0.2s;
+        }
+        input:focus, textarea:focus, select:focus {
+            border: 1.5px solid #2563eb;
+            outline: none;
+            background: #f0f6ff;
+        }
+        .primary-btn {
+            background: #2563eb;
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            padding: 0.7rem 1.5rem;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            box-shadow: 0 2px 8px rgba(37,99,235,0.08);
+            transition: background 0.2s;
+        }
+        .primary-btn:hover {
+            background: #1746a2;
+        }
+        .toast {
+            position: fixed;
+            top: 60px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #28a745;
+            color: #fff;
+            padding: 0.75rem 2rem;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            z-index: 2000;
+            transition: opacity 0.2s;
+        }
+        @media (max-width: 600px) {
+            .form-container {
+                padding: 1rem 0.5rem 1rem 0.5rem;
+                max-width: 98vw;
+            }
+            .nav-title {
+                font-size: 1rem;
+            }
+        }
+    </style>
+    <!-- Add Google Fonts for modern look -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
 </head>
 <body>
+<div class="top-nav">
+    <a href="/" class="nav-home" title="Back to Home">
+        <img src="{{ url_for('static', filename='icons/home.svg') }}" alt="Home" class="nav-icon">
+    </a>
+    <span class="nav-title">Travel Notification</span>
+</div>
+<div class="toast" id="toast" style="display:none;"></div>
 <div class="form-container">
     <h1>Upcoming Travel Notification Form</h1>
 
@@ -58,10 +179,32 @@
             <textarea id="comments" name="comments" rows="4"></textarea>
         </div>
 
-        <button type="submit">Submit Travel Notification</button>
+        <button type="submit" class="primary-btn">Submit Travel Notification</button>
     </form>
 
 </div>
-</body>
 <script src="{{ url_for('static', filename='js/upcoming_travel_notification_form.js') }}"></script>
+<script>
+// Toast notification for feedback
+function showToast(message, isError = false) {
+    const toast = document.getElementById('toast');
+    toast.textContent = message;
+    toast.style.background = isError ? '#d9534f' : '#28a745';
+    toast.style.display = 'block';
+    setTimeout(() => { toast.style.display = 'none'; }, 3000);
+}
+// Example: showToast('Submitted successfully!');
+
+// Add form feedback
+const form = document.getElementById('travelForm');
+form.addEventListener('submit', function(e) {
+    e.preventDefault();
+    // Simulate AJAX submit
+    setTimeout(() => {
+        showToast('Travel notification submitted!', false);
+        form.reset();
+    }, 500);
+});
+</script>
+</body>
 </html>

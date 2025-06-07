@@ -90,20 +90,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
     music.volume = 0.5; // Set initial volume (0.0 to 1.0)
 
-    function toggleAudio() {
+    // Make toggleAudio globally accessible
+    window.toggleAudio = function() {
         if (music.muted) {
             music.muted = false;
-            music.play();
+            music.play().catch(() => {}); // Try to play, ignore errors
             music_icon.src = '/static/icons/volume-high-solid.svg';
         } else {
-            music.muted = true; // Or music.pause(); if you want to stop playback entirely.
+            music.muted = true;
             music_icon.src = '/static/icons/volume-xmark-solid.svg';
         }
     }
-
-
-    music_icon.addEventListener('click', toggleAudio);
-    music.play(); // Start playback muted
-
 });
-

@@ -5,8 +5,40 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MSOC</title>
     <link rel="stylesheet" href="/static/css/msoc.css">
+    <style>
+        .top-nav {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 48px;
+            display: flex;
+            align-items: center;
+            z-index: 1000;
+            background: transparent !important;
+        }
+        .nav-home {
+            position: relative;
+            margin-left: 8px;
+            margin-top: 8px;
+            z-index: 2;
+        }
+        .nav-icon {
+            width: 28px;
+            height: 28px;
+            cursor: pointer;
+        }
+        body {
+            padding-top: 56px;
+        }
+    </style>
 </head>
 <body>
+<div class="top-nav">
+    <a href="/" class="nav-home">
+        <img src="{{ url_for('static', filename='icons/home.svg') }}" alt="Home" class="nav-icon">
+    </a>
+</div>
 
 <div class="form-container">
     <h1>MSOC Intake Form</h1>

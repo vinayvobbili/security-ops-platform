@@ -108,14 +108,14 @@ def get_image_files() -> List[str]:
 def get_ir_dashboard_slide_show():
     """Renders the HTML template with the ordered list of image files."""
     image_files = get_image_files()
-    return render_template("slide-show.html", image_files=image_files)
+    return render_template("slide-show.html", image_files=image_files, show_burger=True)
 
 
 @app.route("/msoc-form")
 @log_web_activity
 def display_msoc_form():
     """Displays the MSOC form."""
-    return render_template("msoc_form.html")
+    return render_template("msoc_form.html", show_burger=False)
 
 
 @app.route("/submit-msoc-form", methods=['POST'])
@@ -606,7 +606,7 @@ def main():
 
     # Start Flask server in main thread
     print(f"Starting web server on port 80")
-    app.run(debug=False, host='0.0.0.0', port=80, threaded=True)
+    app.run(debug=True, host='0.0.0.0', port=80, threaded=True)
 
 
 if __name__ == "__main__":

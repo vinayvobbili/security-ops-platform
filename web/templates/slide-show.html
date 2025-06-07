@@ -8,12 +8,28 @@
     <link rel="icon" href="{{ url_for('static', filename='icons/metrics-dashboard-icon.ico') }}" type="image/x-icon">
 </head>
 <body>
+<!-- Top Navigation Bar -->
+<div class="top-nav">
+    <div class="nav-burger" onclick="toggleMenu()">
+        <img src="{{ url_for('static', filename='icons/burger.svg') }}" alt="Menu" class="nav-icon">
+    </div>
+    <!-- Title can be added here if needed in the future -->
+    <div id="burgerMenu" class="burger-menu-content" style="display:none;">
+        <a href="/msoc-form">MSOC Form</a>
+        <a href="/speak-up-form">Speak Up Form</a>
+        <a href="/xsoar-ticket-import-form">XSOAR Ticket Import</a>
+        <a href="/travel-form">Travel Form</a>
+        <a href="/red-team-testing-form">Red Team Testing</a>
+        <!-- Add more links as needed -->
+    </div>
+</div>
+
 <div class="slider-container">
     <div class="slides">
         {% for filename in image_files %}
-        <figure>
-            <img src="{{ url_for('static', filename=filename) }}" alt="{{ filename }}">
-        </figure>
+            <figure>
+                <img src="{{ url_for('static', filename=filename) }}" alt="{{ filename }}">
+            </figure>
         {% endfor %}
     </div>
 </div>
@@ -21,9 +37,10 @@
 <img src="{{ url_for('static', filename='icons/circle-right-solid.svg') }}" alt="Right Arrow" class="arrow right" onclick="moveSlide(1)">
 <div class="nav-buttons">
     {% for image_file in image_files %}
-    <button onclick="goToSlide({{ loop.index0 }})" class="nav-dot"></button>
+        <button onclick="goToSlide({{ loop.index0 }})" class="nav-dot"></button>
     {% endfor %}
 </div>
+<img id="reloadButton" src="{{ url_for('static', filename='icons/reload.svg') }}" alt="Reload" class="reload-icon" onclick="restartSlideshow()">
 <img id="pausePlayButton" onclick="toggleSlideshow()" src="{{ url_for('static', filename='icons/pause-solid.svg') }}" alt="Pause">
 
 <audio id="music" src="{{ url_for('static', filename='audio/inspirational-uplifting-calm-piano-254764.mp3') }}" loop muted></audio>
@@ -34,7 +51,33 @@
     </button>
 </div>
 
-</body>
 <script src="{{ url_for('static', filename='js/slide-show.js') }}"></script>
 <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.5.1/dist/confetti.browser.min.js"></script>
+<script>
+    function toggleMenu() {
+        var menu = document.getElementById('burgerMenu');
+        menu.style.display = (menu.style.display === 'none' || menu.style.display === '') ? 'block' : 'none';
+    }
+    // Close menu when a link is clicked
+    document.addEventListener('DOMContentLoaded', function() {
+        var burgerMenu = document.getElementById('burgerMenu');
+        if (burgerMenu) {
+            burgerMenu.querySelectorAll('a').forEach(function(link) {
+                link.addEventListener('click', function() {
+                    burgerMenu.style.display = 'none';
+                });
+            });
+        }
+    });
+    function restartSlideshow() {
+        currentSlide = 0;
+        updateSlider();
+        // If paused, also resume the slideshow
+        if (pausePlayButton.src.split('/').pop() === "play-solid.svg") {
+            playSlideshow();
+            pausePlayButton.src = "/static/icons/pause-solid.svg";
+        }
+    }
+</script>
+</body>
 </html>
