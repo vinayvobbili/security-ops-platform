@@ -18,6 +18,7 @@ from flask import Flask, request, abort, jsonify, render_template
 
 from config import get_config
 from services import xsoar
+from services.approved_testing_utils import add_approved_testing_entry, announce_new_approved_testing_entry
 from src.helper_methods import log_web_activity
 
 # Define the proxy port
@@ -293,50 +294,38 @@ def handle_red_team_testing_form_submission():
     description = form.get('description', '').strip()
     notes_scope = form.get('notes_scope', '').strip()
     keep_until = form.get('keep_until', '')
-    submitter = request.remote_addr  # Or use a user field if available
+    submitter_ip_address = request.remote_addr
+    submitter_email_address = form.get('email_local', '') + '@company.com'
+    submit_date = datetime.now(eastern).strftime("%m/%d/%Y")
 
-    # Format the keep_until date from yyyy-mm-dd to mm/dd/yyyy
-    formatted_keep_until = ""
-    if keep_until:
-        try:
-            year, month, day = keep_until.split('-')
-            formatted_keep_until = f"{month}/{day}/{year}"
-        except ValueError:
-            formatted_keep_until = keep_until
-
-    # Prepare the entry for the Red Team Testing list
-    entry = {
-        "usernames": usernames,
-        "items_of_tester": tester_hosts,
-        "items_to_be_tested": targets,
-        "description": description,
-        "scope": notes_scope,
-        "expiry_date": keep_until,
-        "submitter": submitter,
-        "submit_date": datetime.now(eastern).strftime("%m/%d/%Y")
-    }
-
-    # Require at least one of the first three fields to be filled
-    if not (usernames or tester_hosts or targets):
+    # Use the same logic as toodles AddApprovedTestingEntry
+    approved_testing_list_name = f"{CONFIG.team_name}_Approved_Testing"
+    approved_testing_master_list_name = f"{CONFIG.team_name}_Approved_Testing_MASTER"
+    try:
+        current_entries, master_entries, new_item = add_approved_testing_entry(
+            list_handler,
+            approved_testing_list_name,
+            approved_testing_master_list_name,
+            usernames,
+            tester_hosts,
+            targets,
+            description,
+            notes_scope,
+            submitter_email_address,
+            keep_until,
+            submit_date,
+            announce_new_approved_testing_entry  # Announce in Webex
+        )
+    except ValueError as e:
         return jsonify({
             'status': 'error',
-            'message': 'At least one of Usernames, Tester Hosts, or Targets must be filled.'
+            'message': str(e)
         }), 400
 
-    # Save to the correct XSOAR list for Red Team Testing
-    list_name = "METCIRT_Approved_Testing"
-    current_entries = list_handler.get_list_data_by_name(list_name)
-    if not current_entries:
-        current_entries = {"ENTRIES": []}
-    if "ENTRIES" not in current_entries:
-        current_entries["ENTRIES"] = []
-    current_entries["ENTRIES"].append(entry)
-    list_handler.save(list_name, current_entries)
-
+    # Optionally, return the new entry details
     return jsonify({
         'status': 'success',
-        'message': 'Red Team Testing entry added',
-        'entry': entry
+        'entry': new_item
     })
 
 

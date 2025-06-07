@@ -35,7 +35,15 @@
                 min="{{ tomorrow }}" value="{{ tomorrow }}">
             <span style="white-space: nowrap; color: #555; font-size: 0.98em;">5 PM ET</span>
         </div>
-        <button type="submit">Submit</button>
+        <div class="form-group" style="display: flex; align-items: center; gap: 1rem;">
+            <label for="email_local" style="margin-bottom: 0; white-space: nowrap;">Your email address:</label>
+            <input type="text" id="email_local" name="email_local" style="width: 180px; margin-right:0;" placeholder="username" required>
+            <span style="white-space: nowrap; margin-left:0;">@company.com</span>
+        </div>
+        <div style="display: flex; flex-direction: row; gap: 0.5rem; align-items: center; justify-content: flex-end;">
+            <button type="button" class="current-entries-btn" onclick="window.open('http://gdnr.company.com/get-approved-testing-entries', '_blank')">Current Entries</button>
+            <button type="submit">Submit</button>
+        </div>
     </form>
     <div class="loading" id="loading" style="display:none;">
         <div class="loading-spinner"></div>
