@@ -298,11 +298,10 @@ def handle_red_team_testing_form_submission():
     submitter_email_address = form.get('email_local', '') + '@company.com'
     submit_date = datetime.now(eastern).strftime("%m/%d/%Y")
 
-    # Use the same logic as toodles AddApprovedTestingEntry
     approved_testing_list_name = f"{CONFIG.team_name}_Approved_Testing"
     approved_testing_master_list_name = f"{CONFIG.team_name}_Approved_Testing_MASTER"
     try:
-        current_entries, master_entries, new_item = add_approved_testing_entry(
+        add_approved_testing_entry(
             list_handler,
             approved_testing_list_name,
             approved_testing_master_list_name,
@@ -321,10 +320,8 @@ def handle_red_team_testing_form_submission():
             'message': str(e)
         }), 400
 
-    # Optionally, return the new entry details
     return jsonify({
-        'status': 'success',
-        'entry': new_item
+        'status': 'success'
     })
 
 
