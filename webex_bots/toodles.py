@@ -23,6 +23,7 @@ from services import xsoar, azdo
 from services.crowdstrike import CrowdStrikeClient
 from services.xsoar import ListHandler, TicketHandler
 from src.helper_methods import log_toodles_activity
+from services.approved_testing_utils import add_approved_testing_entry
 
 CONFIG = get_config()
 webex_api = WebexAPI(CONFIG.webex_bot_access_token_toodles)
@@ -1432,83 +1433,31 @@ class AddApprovedTestingEntry(Command):
         usernames = attachment_actions.inputs['usernames'].strip()
         items_of_tester = attachment_actions.inputs['ip_addresses_and_host_names_of_tester'].strip()
         items_to_be_tested = attachment_actions.inputs['ip_addresses_and_host_names_to_be_tested'].strip()
-
-        if usernames == "" and items_of_tester == "" and items_to_be_tested == "":
-            return "One of username, host name, or IP address fields must be filled in. Please try again!"
-
-        all_items = items_of_tester + ', ' + items_to_be_tested
         description = attachment_actions.inputs['description'].strip()
         scope = attachment_actions.inputs['scope'].strip()
         submitter = activity['actor']['emailAddress']
         expiry_date = attachment_actions.inputs['expiry_date']
         if attachment_actions.inputs['callback_keyword'] == 'add_approved_testing' and expiry_date == "":
             expiry_date = (datetime.now(timezone('US/Eastern')) + timedelta(days=1)).strftime("%Y-%m-%d")
-
-        current_entries = list_handler.get_list_data_by_name(approved_testing_list_name)
-        master_entries = list_handler.get_list_data_by_name(approved_testing_master_list_name)
-
-        if usernames:
-            usernames = usernames.split(',')
-            for username in usernames:
-                if username:
-                    current_entries.get("USERNAMES").append(
-                        {"data": username.strip(), "expiry_date": expiry_date, "submitter": submitter})
-                    new_testing_entry = {
-                        "username": username,
-                        "description": description,
-                        "scope": scope,
-                        "submitter": submitter,
-                        "submit_date": datetime.now().strftime("%m/%d/%Y"),
-                        "expiry_date": expiry_date
-                    }
-                    master_entries.append(new_testing_entry)
-
-        if all_items:
-            items = all_items.split(',')
-            for item in items:
-                if item:
-                    item = item.strip()
-                    if is_valid_ip(item):
-                        current_entries.get("IP_ADDRESSES").append(
-                            {"data": item, "expiry_date": expiry_date, "submitter": submitter})
-                        new_testing_entry = {
-                            "ip_address": item,
-                            "description": description,
-                            "scope": scope,
-                            "submitter": submitter,
-                            "submit_date": datetime.now().strftime("%m/%d/%Y"),
-                            "expiry_date": expiry_date
-                        }
-                        master_entries.append(new_testing_entry)
-                    else:
-                        current_entries.get("ENDPOINTS").append(
-                            {"data": item, "expiry_date": expiry_date, "submitter": submitter})
-                        new_testing_entry = {
-                            "host_name": item,
-                            "description": description,
-                            "scope": scope,
-                            "submitter": submitter,
-                            "submit_date": datetime.now().strftime("%m/%d/%Y"),
-                            "expiry_date": expiry_date
-                        }
-                        master_entries.append(new_testing_entry)
-
-        list_handler.save(approved_testing_list_name, current_entries)
-        list_handler.save(approved_testing_master_list_name, master_entries)
-
-        announce_new_approved_testing_entry({
-            "description": description,
-            "scope": scope,
-            "submitter": submitter,
-            "submit_date": datetime.now().strftime("%m/%d/%Y"),
-            "expiry_date": expiry_date,
-            "usernames": ', '.join(usernames) if usernames else "",
-            "items_of_tester": items_of_tester,
-            "items_to_be_tested": items_to_be_tested
-        })
-
+        submit_date = datetime.now().strftime("%m/%d/%Y")
+        try:
+            current_entries, master_entries, new_item = add_approved_testing_entry(
+                list_handler,
+                approved_testing_list_name,
+                approved_testing_master_list_name,
+                usernames,
+                items_of_tester,
+                items_to_be_tested,
+                description,
+                scope,
+                submitter,
+                expiry_date,
+                submit_date,
+                announce_new_approved_testing_entry
+            )
+        except ValueError as e:
+            return str(e)
         approved_testing_items_table = get_approved_testing_entries_table()
-
         return (
             f"{activity['actor']['displayName']}, your entry has been added to the Approved Testing list. Here's the current list\n"
             "```\n"
