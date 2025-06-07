@@ -57,7 +57,35 @@
             <button id="okBtn" type="submit">OK</button>
         </form>
     </dialog>
+    <audio id="music" src="/static/audio/inspirational-uplifting-calm-piano-254764.mp3" loop muted></audio>
+    <div class="audio-controls audio-controls-top-left">
+        <button onclick="toggleAudio()" type="button">
+            <img src="/static/icons/volume-xmark-solid.svg" alt="Unmute Icon" class="music-icon" id="music-icon">
+        </button>
+    </div>
 </div>
 <script src="/static/red_team_testing_form.js"></script>
+<script>
+function toggleAudio() {
+    const music = document.getElementById('music');
+    const icon = document.getElementById('music-icon');
+    if (music.muted) {
+        music.muted = false;
+        music.play();
+        icon.src = '/static/icons/volume-high-solid.svg';
+    } else {
+        music.muted = true;
+        music.pause();
+        icon.src = '/static/icons/volume-xmark-solid.svg';
+    }
+}
+// Auto-play music if not muted (user interaction required by browsers)
+document.addEventListener('DOMContentLoaded', function() {
+    const music = document.getElementById('music');
+    const icon = document.getElementById('music-icon');
+    music.pause();
+    icon.src = '/static/icons/volume-xmark-solid.svg';
+});
+</script>
 </body>
 </html>
