@@ -1,23 +1,27 @@
+import ipaddress
 from datetime import datetime, timedelta
+
 from pytz import timezone
-from services.webex import webex_api
+from webexteamssdk import WebexTeamsAPI
+
 from config import get_config
 
 CONFIG = get_config()
 
+
 def add_approved_testing_entry(
-    list_handler,
-    approved_testing_list_name,
-    approved_testing_master_list_name,
-    usernames,
-    items_of_tester,
-    items_to_be_tested,
-    description,
-    scope,
-    submitter,
-    expiry_date,
-    submit_date=None,
-    announce_func=None
+        list_handler,
+        approved_testing_list_name,
+        approved_testing_master_list_name,
+        usernames,
+        items_of_tester,
+        items_to_be_tested,
+        description,
+        scope,
+        submitter,
+        expiry_date,
+        submit_date=None,
+        announce_func=None
 ):
     """
     Adds an approved testing entry to both the current and master lists.
@@ -53,7 +57,6 @@ def add_approved_testing_entry(
                 "expiry_date": expiry_date
             })
     # Add IPs/hostnames
-    import ipaddress
     for item in items_list:
         if not item:
             continue
@@ -97,9 +100,8 @@ def add_approved_testing_entry(
         "items_of_tester": items_of_tester,
         "items_to_be_tested": items_to_be_tested
     }
-    if announce_func:
-        announce_func(new_item)
-    return current_entries, master_entries, new_item
+    announce_new_approved_testing_entry(new_item)
+
 
 def announce_new_approved_testing_entry(new_item) -> None:
     payload = {
@@ -144,8 +146,9 @@ def announce_new_approved_testing_entry(new_item) -> None:
             }
         ]
     }
+    webex_api = WebexTeamsAPI(access_token=CONFIG.webex_bot_access_token_jarvais)
     webex_api.messages.create(
-        roomId=CONFIG.webex_room_id_gosc_t2,
+        roomId=CONFIG.webex_room_id_vinay_test_space,
         text="New Approved Testing!",
         attachments=[{"contentType": "application/vnd.microsoft.card.adaptive", "content": payload}]
     )
