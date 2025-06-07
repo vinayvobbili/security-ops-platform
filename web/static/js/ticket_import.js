@@ -56,30 +56,52 @@ document.getElementById('xsoarTicketImportForm').addEventListener('submit', func
       </div>
     `;
 
-            // Add copy button functionality
+            // Add copy button functionality with fallback
             document.querySelectorAll('.copy-btn').forEach(button => {
                 button.addEventListener('click', function () {
                     const textToCopy = this.getAttribute('data-clipboard');
-                    navigator.clipboard.writeText(textToCopy).then(() => {
-                        // Change button appearance temporarily to show success
-                        const originalHTML = this.innerHTML;
-                        this.innerHTML = `
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="20 6 9 17 4 12"></polyline>
-            </svg>
-          `;
-                        this.classList.add('copied');
-
-                        // Reset after 2 seconds
-                        setTimeout(() => {
-                            this.innerHTML = originalHTML;
-                            this.classList.remove('copied');
-                        }, 2000);
-                    }).catch(err => {
-                        console.error('Could not copy text: ', err);
-                    });
+                    if (navigator.clipboard && window.isSecureContext) {
+                        navigator.clipboard.writeText(textToCopy).then(() => {
+                            showCopySuccess(this);
+                        }).catch(() => {
+                            fallbackCopyTextToClipboard(textToCopy, this);
+                        });
+                    } else {
+                        fallbackCopyTextToClipboard(textToCopy, this);
+                    }
                 });
             });
+
+            function fallbackCopyTextToClipboard(text, btn) {
+                const textArea = document.createElement('textarea');
+                textArea.value = text;
+                document.body.appendChild(textArea);
+                textArea.focus();
+                textArea.select();
+                try {
+                    const successful = document.execCommand('copy');
+                    if (successful) {
+                        showCopySuccess(btn);
+                    }
+                } catch (err) {
+                    alert('Could not copy text');
+                }
+                document.body.removeChild(textArea);
+            }
+
+            function showCopySuccess(btn) {
+                const originalHTML = btn.innerHTML;
+                btn.innerHTML = `
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="20 6 9 17 4 12"></polyline>
+                    </svg>
+                `;
+                btn.classList.add('copied');
+                setTimeout(() => {
+                    btn.innerHTML = originalHTML;
+                    btn.classList.remove('copied');
+                }, 2000);
+            }
 
             // Add show class for animation
             setTimeout(() => {
