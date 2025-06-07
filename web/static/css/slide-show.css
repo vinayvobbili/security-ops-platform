@@ -253,9 +253,9 @@ canvas.confetti-canvas {
     position: absolute;
     top: 48px;
     left: 8px;
-    background: #333;
+    background: linear-gradient(135deg, #42a5f5 0%, #26c6da 100%); /* Bluish gradient */
     border-radius: 6px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    box-shadow: 0 2px 8px rgba(66, 165, 245, 0.15);
     z-index: 1100;
     min-width: 180px;
     padding: 10px 0;
@@ -263,13 +263,13 @@ canvas.confetti-canvas {
 
 .burger-menu-content a {
     display: block;
-    color: #fff;
+    color: #111; /* Black text for better contrast */
     padding: 10px 20px;
     text-decoration: none;
     transition: background 0.2s;
 }
 
 .burger-menu-content a:hover {
-    background: #444;
+    background: rgba(38, 198, 218, 0.2); /* Light blue hover */
 }
 /* --- End moved styles --- */
