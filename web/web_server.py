@@ -313,8 +313,7 @@ def handle_red_team_testing_form_submission():
             notes_scope,
             submitter_email_address,
             keep_until,
-            submit_date,
-            announce_new_approved_testing_entry  # Announce in Webex
+            submit_date
         )
     except ValueError as e:
         return jsonify({

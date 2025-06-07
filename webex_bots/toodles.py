@@ -1441,7 +1441,7 @@ class AddApprovedTestingEntry(Command):
             expiry_date = (datetime.now(timezone('US/Eastern')) + timedelta(days=1)).strftime("%Y-%m-%d")
         submit_date = datetime.now().strftime("%m/%d/%Y")
         try:
-            current_entries, master_entries, new_item = add_approved_testing_entry(
+            add_approved_testing_entry(
                 list_handler,
                 approved_testing_list_name,
                 approved_testing_master_list_name,
@@ -1452,8 +1452,7 @@ class AddApprovedTestingEntry(Command):
                 scope,
                 submitter,
                 expiry_date,
-                submit_date,
-                announce_new_approved_testing_entry
+                submit_date
             )
         except ValueError as e:
             return str(e)
