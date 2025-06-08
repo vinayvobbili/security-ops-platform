@@ -143,8 +143,8 @@ def announce_new_approved_testing_entry(new_item) -> None:
                     {"title": "Submitter", "value": new_item.get('submitter')},
                     {"title": "Description", "wrap": True, "value": new_item.get('description')},
                     {"title": "Username(s)", "wrap": True, "value": new_item.get('usernames')},
-                    {"title": "IPs/Hostnames of Tester", "wrap": True, "value": new_item.get('items_of_tester')},
-                    {"title": "IPs/Hostnames to be tested", "wrap": True, "value": new_item.get('items_to_be_tested')},
+                    {"title": "IPs/Hostnames/CIDRs of Tester", "wrap": True, "value": new_item.get('items_of_tester')},
+                    {"title": "IPs/Hostnames/CIDRs to be tested", "wrap": True, "value": new_item.get('items_to_be_tested')},
                     {"title": "Scope", "wrap": True, "value": new_item.get('scope')},
                     {"title": "Keep until", "value": new_item.get('expiry_date')}
                 ],
