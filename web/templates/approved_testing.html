@@ -9,7 +9,7 @@
 <body>
 <div class="top-nav">
     <a href="/" class="nav-home">
-        <img src="{{ url_for('static', filename='icons/home.svg') }}" alt="Home" class="nav-icon">
+        <img src="{{ url_for('static', filename='icons/home.svg') }}" alt="Home" class="nav-icon" style="width:32px;height:32px;">
     </a>
 </div>
 <div class="container">
@@ -18,78 +18,104 @@
     <section>
         <h2>Endpoints</h2>
         {% if ENDPOINTS %}
-        <table>
-            <thead>
-            <tr>
-                <th>Data</th>
-                <th>Expiry Date</th>
-                <th>Submitter</th>
-            </tr>
-            </thead>
-            <tbody>
-            {% for record in ENDPOINTS %}
-            <tr>
-                <td>{{ record.data }}</td>
-                <td>{{ record.expiry_date }}</td>
-                <td>{{ record.submitter }}</td>
-            </tr>
-            {% endfor %}
-            </tbody>
-        </table>
+            <table>
+                <thead>
+                <tr>
+                    <th>Data</th>
+                    <th>Expiry Date</th>
+                    <th>Submitter</th>
+                </tr>
+                </thead>
+                <tbody>
+                {% for record in ENDPOINTS %}
+                    <tr>
+                        <td>{{ record.data }}</td>
+                        <td>{{ record.expiry_date }}</td>
+                        <td>{{ record.submitter }}</td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
         {% else %}
-        <p>No endpoint records found.</p>
+            <p>No endpoint records found.</p>
         {% endif %}
     </section>
 
     <section>
         <h2>Usernames</h2>
         {% if USERNAMES %}
-        <table>
-            <thead>
-            <tr>
-                <th>Data</th>
-                <th>Expiry Date</th>
-                <th>Submitter</th>
-            </tr>
-            </thead>
-            <tbody>
-            {% for record in USERNAMES %}
-            <tr>
-                <td>{{ record.data }}</td>
-                <td>{{ record.expiry_date }}</td>
-                <td>{{ record.submitter }}</td>
-            </tr>
-            {% endfor %}
-            </tbody>
-        </table>
+            <table>
+                <thead>
+                <tr>
+                    <th>Data</th>
+                    <th>Expiry Date</th>
+                    <th>Submitter</th>
+                </tr>
+                </thead>
+                <tbody>
+                {% for record in USERNAMES %}
+                    <tr>
+                        <td>{{ record.data }}</td>
+                        <td>{{ record.expiry_date }}</td>
+                        <td>{{ record.submitter }}</td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
         {% else %}
-        <p>No username records found.</p>
+            <p>No username records found.</p>
         {% endif %}
     </section>
 
     <section>
         <h2>IP Addresses</h2>
         {% if IP_ADDRESSES %}
-        <table>
-            <thead>
-            <tr>
-                <th>Data</th>
-                <th>Expiry Date</th>
-                <th>Submitter</th>
-            </tr>
-            </thead>
-            <tbody>
-            {% for record in IP_ADDRESSES %}
-            <tr>
-                <td>{{ record.data }}</td>
-                <td>{{ record.expiry_date }}</td>
-                <td>{{ record.submitter }}</td>
-            </tr>
-            {% endfor %}
-            </tbody>
-        </table>
+            <table>
+                <thead>
+                <tr>
+                    <th>Data</th>
+                    <th>Expiry Date</th>
+                    <th>Submitter</th>
+                </tr>
+                </thead>
+                <tbody>
+                {% for record in IP_ADDRESSES %}
+                    <tr>
+                        <td>{{ record.data }}</td>
+                        <td>{{ record.expiry_date }}</td>
+                        <td>{{ record.submitter }}</td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
         {% else %}
-        <p>No IP address records found.</p>
+            <p>No IP address records found.</p>
+        {% endif %}
+    </section>
+
+    <section>
+        <h2>CIDR Blocks</h2>
+        {% if CIDR_BLOCKS %}
+            <table>
+                <thead>
+                <tr>
+                    <th>Data</th>
+                    <th>Expiry Date</th>
+                    <th>Submitter</th>
+                </tr>
+                </thead>
+                <tbody>
+                {% for record in CIDR_BLOCKS %}
+                    <tr>
+                        <td>{{ record.data }}</td>
+                        <td>{{ record.expiry_date }}</td>
+                        <td>{{ record.submitter }}</td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <p>No CIDR block records found.</p>
         {% endif %}
     </section>
 </div>
