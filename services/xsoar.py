@@ -57,11 +57,11 @@ def import_ticket(source_ticket_number):
     incident_data = get_incident(source_ticket_number)
 
     # Create ticket in dev
-    new_ticket_details = ticket_handler.create_in_dev(incident_data)
-    if 'id' in new_ticket_details:
-        return new_ticket_details['id'], f'{CONFIG.xsoar_dev_ui_base_url}/Custom/caseinfoid/{new_ticket_details['id']}'
-    else:
-        return new_ticket_details.get('error'), None
+    new_ticket_data = ticket_handler.create_in_dev(incident_data)
+    if 'error' in new_ticket_data:
+        return new_ticket_data, ''
+
+    return new_ticket_data['id'], f'{CONFIG.xsoar_dev_ui_base_url}/Custom/caseinfoid/{new_ticket_data['id']}'
 
 
 class TicketHandler:
@@ -118,17 +118,20 @@ class TicketHandler:
 
     def create_in_dev(self, payload):
         """Creates a new incident in XSOAR Dev."""
+        payload.pop('id', None)
+        payload.pop('phase', None)
+        payload.pop('status', None)
+        payload.update({"all": True, "createInvestigation": True, "force": True})
+        response = requests.post(self.incident_create_url_dev, headers=dev_headers, json=payload)
         try:
-            payload.pop('id', None)
-            payload.pop('phase', None)
-            payload.pop('status', None)
-            payload.update({"all": True, "createInvestigation": True, "force": True})
-            response = requests.post(self.incident_create_url_dev, headers=dev_headers, json=payload)
             response.raise_for_status()
             return response.json()
         except requests.exceptions.RequestException as e:
-            log.error(f"Error creating incident in dev: {e}")
-            return {"error": str(e)}
+            try:
+                return response.text
+            except Exception:
+                log.error(f"Error creating incident in dev: {e}")
+                return {"error": str(e)}
 
 
 class ListHandler:
@@ -174,4 +177,4 @@ if __name__ == "__main__":
     # print(destination_ticket_number, destination_ticket_link)
     list_handler = ListHandler()
     ticket_handler = TicketHandler()
-    print(import_ticket('689060'))
+    print(ticket_handler.get_tickets("hostname:US9F20TZ3"))
