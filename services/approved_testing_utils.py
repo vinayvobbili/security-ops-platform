@@ -63,13 +63,32 @@ def add_approved_testing_entry(
         try:
             ipaddress.ip_address(item)
             is_ip = True
+            is_cidr = False
         except ValueError:
-            is_ip = False
+            # Check if it's a CIDR block
+            try:
+                ipaddress.ip_network(item, strict=False)
+                is_ip = False
+                is_cidr = True
+            except ValueError:
+                is_ip = False
+                is_cidr = False
         if is_ip:
             current_entries.get("IP_ADDRESSES").append(
                 {"data": item, "expiry_date": expiry_date, "submitter": submitter})
             master_entries.append({
                 "ip_address": item,
+                "description": description,
+                "scope": scope,
+                "submitter": submitter,
+                "submit_date": submit_date,
+                "expiry_date": expiry_date
+            })
+        elif is_cidr:
+            current_entries.get("CIDR_BLOCKS").append(
+                {"data": item, "expiry_date": expiry_date, "submitter": submitter})
+            master_entries.append({
+                "cidr_block": item,
                 "description": description,
                 "scope": scope,
                 "submitter": submitter,

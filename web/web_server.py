@@ -206,13 +206,15 @@ def get_approved_testing_entries():
     endpoints = approved_testing_records.get("ENDPOINTS", [])
     usernames = approved_testing_records.get("USERNAMES", [])
     ip_addresses = approved_testing_records.get("IP_ADDRESSES", [])
+    cidr_blocks = approved_testing_records.get("CIDR_BLOCKS", [])
 
     # Render the template with the data
     return render_template(
         'approved_testing.html',
         ENDPOINTS=endpoints,
         USERNAMES=usernames,
-        IP_ADDRESSES=ip_addresses
+        IP_ADDRESSES=ip_addresses,
+        CIDR_BLOCKS=cidr_blocks
     )
 
 
