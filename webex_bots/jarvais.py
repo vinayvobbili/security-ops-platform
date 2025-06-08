@@ -222,7 +222,7 @@ class CSHostsWithInvalidRingTags(Command):
                 logger.error(f"Failed to send error message: {msg_error}")
 
 
-class DontDropInvalidRings(Command):
+class DontRemoveInvalidRings(Command):
     def __init__(self):
         super().__init__(
             command_keyword="dont_drop_invalid_ring_tag_cs_hosts",
@@ -231,10 +231,10 @@ class DontDropInvalidRings(Command):
 
     @log_jarvais_activity(bot_access_token=CONFIG.webex_bot_access_token_jarvais)
     def execute(self, message, attachment_actions, activity):
-        return f"Alright {activity['actor']['displayName']}, I won't drop no invalid Rings. Until next time!👋🏾"
+        return f"Alright {activity['actor']['displayName']}, I won't remove invalid Rings. Until next time!👋🏾"
 
 
-class DropInvalidRings(Command):
+class RemoveInvalidRings(Command):
     def __init__(self):
         super().__init__(
             command_keyword="drop_invalid_ring_tags",
@@ -267,8 +267,8 @@ def main():
     bot.add_command(RingTagCSHosts())
     bot.add_command(DontRingTagCSHosts())
     bot.add_command(CSHostsWithInvalidRingTags())
-    bot.add_command(DropInvalidRings())
-    bot.add_command(DontDropInvalidRings())
+    bot.add_command(RemoveInvalidRings())
+    bot.add_command(DontRemoveInvalidRings())
 
     # Start the bot
     bot.run()

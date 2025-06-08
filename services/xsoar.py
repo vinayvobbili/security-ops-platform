@@ -57,9 +57,11 @@ def import_ticket(source_ticket_number):
     incident_data = get_incident(source_ticket_number)
 
     # Create ticket in dev
-    new_ticket = ticket_handler.create_in_dev(incident_data)
-
-    return new_ticket['id'], f'{CONFIG.xsoar_dev_ui_base_url}/Custom/caseinfoid/{new_ticket['id']}'
+    new_ticket_details = ticket_handler.create_in_dev(incident_data)
+    if 'id' in new_ticket_details:
+        return new_ticket_details['id'], f'{CONFIG.xsoar_dev_ui_base_url}/Custom/caseinfoid/{new_ticket_details['id']}'
+    else:
+        return new_ticket_details.get('error'), None
 
 
 class TicketHandler:
@@ -172,4 +174,4 @@ if __name__ == "__main__":
     # print(destination_ticket_number, destination_ticket_link)
     list_handler = ListHandler()
     ticket_handler = TicketHandler()
-    print(ticket_handler.get_tickets("hostname:US9F20TZ3"))
+    print(import_ticket('689060'))
