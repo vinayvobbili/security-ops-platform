@@ -155,7 +155,6 @@ class Host:
     status_message: str = ""
 
     @staticmethod
-    @benchmark
     def initialize_hosts_parallel(hostnames, max_workers=10):
         """Initialize hosts in parallel and yield them one by one."""
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
@@ -283,7 +282,6 @@ class TagManager:
     """Manager class for handling host tags."""
 
     @staticmethod
-    @benchmark
     def generate_tags(hosts: List[Host]) -> None:
         """Assign rings to hosts based on predefined distribution."""
         # Filter hosts to only include those without existing ring tags
@@ -378,7 +376,6 @@ class TagManager:
             return environment.lower().strip()
 
     @staticmethod
-    @benchmark
     def apply_tags(hosts: List[Host]) -> List[Host]:
         """Apply tags to hosts and update their status."""
         successfully_tagged = []
@@ -410,12 +407,35 @@ class TagManager:
 
         return successfully_tagged
 
+    @staticmethod
+    def remove_tags(hosts_with_tags_to_remove: List[dict], batch_size: int = 100) -> None:
+        """
+        Remove specified tags from hosts in batches.
+        Each dict in hosts_with_tags_to_remove should have:
+            - 'device_id': str
+            - 'tags': List[str] (tags to remove)
+        """
+        from tqdm import tqdm
+        total = len(hosts_with_tags_to_remove)
+        for i in tqdm(range(0, total, batch_size), desc="Removing tags from hosts"):
+            batch = hosts_with_tags_to_remove[i:i+batch_size]
+            device_ids = [item['device_id'] for item in batch]
+            tags_to_remove = list({tag for item in batch for tag in item['tags']})
+            if not device_ids or not tags_to_remove:
+                continue
+            response = falcon_hosts.update_device_tags(
+                action_name='remove',
+                ids=device_ids,
+                tags=tags_to_remove
+            )
+            if response.get("status_code") != 200:
+                print(f"Failed to remove tags for batch {i//batch_size+1}: {response.get('errors', ['Unknown error'])}")
+
 
 class FileHandler:
     """Class for handling file operations."""
 
     @staticmethod
-    @benchmark
     def get_hostnames() -> List[str]:
         """
         Retrieves hostnames from an Excel file.
@@ -441,7 +461,6 @@ class FileHandler:
             return []
 
     @staticmethod
-    @benchmark
     def write_results_to_file(hosts: List[Host]) -> str:
         """
         Writes the results to a new Excel sheet with timestamps.
@@ -536,7 +555,6 @@ Timing:
         """
 
     @staticmethod
-    @benchmark
     def send_report(output_filename: str, time_report: str, room_id) -> bool:
         """Send a report via Webex with the result file attached."""
         try:
@@ -575,7 +593,6 @@ def parse_args():
     return parser.parse_args()
 
 
-@benchmark
 def run_workflow(room_id):
     """Main execution workflow without profiling."""
     # Fetch and initialize hosts
