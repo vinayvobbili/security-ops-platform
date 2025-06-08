@@ -165,9 +165,9 @@ def announce_new_approved_testing_entry(new_item) -> None:
             }
         ]
     }
-    webex_api = WebexTeamsAPI(access_token=CONFIG.webex_bot_access_token_jarvais)
+    webex_api = WebexTeamsAPI(access_token=CONFIG.webex_bot_access_token_toodles)
     webex_api.messages.create(
-        roomId=CONFIG.webex_room_id_vinay_test_space,
+        roomId=CONFIG.webex_room_id_gosc_t2,
         text="New Approved Testing!",
         attachments=[{"contentType": "application/vnd.microsoft.card.adaptive", "content": payload}]
     )
