@@ -244,13 +244,43 @@ class RemoveInvalidRings(Command):
     @log_jarvais_activity(bot_access_token=CONFIG.webex_bot_access_token_jarvais)
     def execute(self, message, attachment_actions, activity):
         room_id = attachment_actions.roomId
+        today_date = datetime.now().strftime('%m-%d-%Y')
+        report_path = DATA_DIR / today_date / "cs_servers_with_invalid_ring_tags_only.xlsx"
         webex_api.messages.create(
             roomId=room_id,
-            markdown=f"Hello {activity['actor']['displayName']}! This is still work in progress!."
+            markdown=f"Hello {activity['actor']['displayName']}! Starting removal of invalid ring tags. This may take a few minutes."
         )
         lock_path = ROOT_DIRECTORY / "src" / "epp" / "drop_invalid_ring_tag_cs_hosts.lock"
         with fasteners.InterProcessLock(lock_path):
-            pass
+            try:
+                df = pd.read_excel(report_path)
+                # Prepare list of dicts: device_id and tags to remove
+                hosts_with_tags_to_remove = []
+                for _, row in df.iterrows():
+                    device_id = row.get('host_id')
+                    invalid_tags = row.get('invalid_tags')
+                    if pd.isna(device_id) or pd.isna(invalid_tags):
+                        continue
+                    tags = [tag.strip() for tag in str(invalid_tags).split(',') if tag.strip()]
+                    if tags:
+                        hosts_with_tags_to_remove.append({'device_id': device_id, 'tags': tags})
+                if not hosts_with_tags_to_remove:
+                    webex_api.messages.create(
+                        roomId=room_id,
+                        markdown="No hosts with invalid tags found to remove."
+                    )
+                    return
+                ring_tag_cs_hosts.TagManager.remove_tags(hosts_with_tags_to_remove)
+                webex_api.messages.create(
+                    roomId=room_id,
+                    markdown=f"Invalid ring tags removed from {len(hosts_with_tags_to_remove)} hosts."
+                )
+            except Exception as e:
+                logger.error(f"Error removing invalid ring tags: {e}")
+                webex_api.messages.create(
+                    roomId=room_id,
+                    markdown=f"Failed to remove invalid ring tags: {str(e)}"
+                )
 
 
 def main():
