@@ -15,17 +15,20 @@
             align-items: flex-start;
             z-index: 1000;
         }
+
         .nav-home {
             position: relative;
             margin-left: 8px;
             margin-top: 8px;
             z-index: 2;
         }
+
         .nav-icon {
             width: 28px;
             height: 28px;
             cursor: pointer;
         }
+
         .music-icon {
             position: fixed;
             top: 12px;
@@ -35,6 +38,7 @@
             cursor: pointer;
             z-index: 1100;
         }
+
         body {
             padding-top: 0;
         }
@@ -47,7 +51,7 @@
     </a>
 </div>
 <div class="form-container">
-    <h2>Red Team Testing Request Form</h2>
+    <h2>Red Team Testing Notification Form</h2>
     <form id="red-team-testing-form" method="post" action="/submit-red-team-testing-form">
         <div class="form-group">
             <label for="usernames">Usernames (comma-separated):</label><br>
@@ -72,7 +76,7 @@
         <div class="form-group" style="display: flex; align-items: center; gap: 1rem;">
             <label for="keep_until" style="margin-bottom: 0; white-space: nowrap;">Keep Until:</label>
             <input type="date" id="keep_until" name="keep_until" class="keep-until-date"
-                min="{{ tomorrow }}" value="{{ tomorrow }}">
+                   min="{{ tomorrow }}" value="{{ tomorrow }}">
             <span style="white-space: nowrap; color: #555; font-size: 0.98em;">5 PM ET</span>
         </div>
         <div class="form-group" style="display: flex; align-items: center; gap: 1rem;">
@@ -102,26 +106,27 @@
 </div>
 <script src="/static/red_team_testing_form.js"></script>
 <script>
-function toggleAudio() {
-    const music = document.getElementById('music');
-    const icon = document.getElementById('music-icon');
-    if (music.muted) {
-        music.muted = false;
-        music.play();
-        icon.src = '/static/icons/volume-high-solid.svg';
-    } else {
-        music.muted = true;
+    function toggleAudio() {
+        const music = document.getElementById('music');
+        const icon = document.getElementById('music-icon');
+        if (music.muted) {
+            music.muted = false;
+            music.play();
+            icon.src = '/static/icons/volume-high-solid.svg';
+        } else {
+            music.muted = true;
+            music.pause();
+            icon.src = '/static/icons/volume-xmark-solid.svg';
+        }
+    }
+
+    // Auto-play music if not muted (user interaction required by browsers)
+    document.addEventListener('DOMContentLoaded', function () {
+        const music = document.getElementById('music');
+        const icon = document.getElementById('music-icon');
         music.pause();
         icon.src = '/static/icons/volume-xmark-solid.svg';
-    }
-}
-// Auto-play music if not muted (user interaction required by browsers)
-document.addEventListener('DOMContentLoaded', function() {
-    const music = document.getElementById('music');
-    const icon = document.getElementById('music-icon');
-    music.pause();
-    icon.src = '/static/icons/volume-xmark-solid.svg';
-});
+    });
 </script>
 </body>
 </html>
