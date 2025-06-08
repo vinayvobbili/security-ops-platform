@@ -297,7 +297,7 @@ class CrowdStrikeClient:
                         print("No more hosts to fetch - reached end of data")
                         break
 
-                    batch_size = min(500, len(host_ids))
+                    batch_size = 1000
                     host_id_batches = [host_ids[i:i + batch_size] for i in range(0, len(host_ids), batch_size)]
 
                     # tqdm progress bar for batch processing

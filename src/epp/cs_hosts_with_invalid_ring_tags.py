@@ -132,8 +132,34 @@ def generate_report():
     # Save filtered report (invalid tags only)
     invalid_servers = enriched_servers[enriched_servers['has_invalid_ring_tag']].copy()
     if not invalid_servers.empty:
+        # Add invalid_tags column
+        def extract_invalid_tags(row):
+            current_tags = row.get('current_tags', '')
+            # Extract all non-Citrix ring tags
+            all_ring_tags = re.findall(r'FalconGroupingTags/[^,]*?SRVRing(\d+)', current_tags, re.IGNORECASE)
+            complete_ring_tag_matches = re.findall(r'(FalconGroupingTags/[^,]*?SRVRing\d+)', current_tags, re.IGNORECASE)
+            invalid = []
+            for i, ring_num in enumerate(all_ring_tags):
+                if 'citrix' not in complete_ring_tag_matches[i].lower():
+                    invalid.append(complete_ring_tag_matches[i])
+            return ', '.join(invalid) if invalid else ''
+        invalid_servers['invalid_tags'] = invalid_servers.apply(extract_invalid_tags, axis=1)
+
+        # Only keep the requested columns
+        columns_to_keep = [
+            'hostname',
+            'host_id',
+            'current_tags',
+            'invalid_tags',
+            'last_seen',
+            'status',
+            'cs_host_category',
+            'environment',
+            'lifecycleStatus',
+            'comment',
+        ]
         filtered_report_path = output_dir / "cs_servers_with_invalid_ring_tags_only.xlsx"
-        invalid_servers.to_excel(filtered_report_path, index=False, engine="openpyxl")
+        invalid_servers[columns_to_keep].to_excel(filtered_report_path, index=False, engine="openpyxl")
         logger.info(f"Found {len(invalid_servers)} hosts with invalid ring tags")
     else:
         logger.info("No hosts with invalid ring tags found")
