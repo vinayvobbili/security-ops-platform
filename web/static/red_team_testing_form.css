@@ -54,7 +54,7 @@ h2, .fancy-title {
     border-radius: 8px;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     max-width: 800px;
-    margin: 2rem auto;
+    margin: 2rem auto 0 auto; /* Remove bottom margin */
 }
 
 .form-group {
