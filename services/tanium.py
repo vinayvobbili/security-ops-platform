@@ -134,6 +134,64 @@ class TaniumClient:
             print(f"- {field['name']}")
         return fields
 
+    def get_host_custom_tags(self, host_name: str, sensor_name: str = "Custom Tags", param_name: str = "Computer Name", stable_wait_time: int = 60):
+        """
+        Fetch custom tags for a specific host using the endpointCounts query.
+        :param host_name: The computer name to search for.
+        :param sensor_name: The sensor name to use (default: 'Custom Tags').
+        :param param_name: The parameter name to use (default: 'Computer Name').
+        :param stable_wait_time: The stable wait time for the query (default: 60).
+        :return: The columns and values for the host's custom tags.
+        """
+        gql = f'''
+        query exampleCountEndpointParamSensor($first: Int!, $stableWaitTime: Int, $sensorName: String!, $paramName: String!, $paramValue: String!) {{
+            endpointCounts(
+                input: {{
+                    source: {{ts: {{stableWaitTime: $stableWaitTime}}}},
+                    sensors: [{{name: $sensorName, params: [{{name: $paramName, value: $paramValue}}]}}]
+                }}
+            ) {{
+                edges {{
+                    node {{
+                        count
+                        columns {{
+                            columnName
+                            sensor {{ name }}
+                            values
+                        }}
+                    }}
+                }}
+            }}
+        }}
+        '''
+        variables = {
+            "first": 1,
+            "stableWaitTime": stable_wait_time,
+            "sensorName": sensor_name,
+            "paramName": param_name,
+            "paramValue": host_name
+        }
+        response = requests.post(
+            f"{self.server_url}/plugin/products/gateway/graphql",
+            json={"query": gql, "variables": variables},
+            headers=self.headers
+        )
+        if response.status_code != 200:
+            print("GraphQL error response:")
+            print(response.text)
+        response.raise_for_status()
+        data = response.json()
+        try:
+            columns = data['data']['endpointCounts']['edges'][0]['node']['columns']
+            print(f"Custom tags for {host_name}:")
+            for col in columns:
+                print(f"- {col['columnName']}: {col['values']}")
+            return columns
+        except Exception as e:
+            print(f"No custom tags found or error: {e}")
+            print(data)
+            return None
+
 
 def validateToken(ts: str, token: str):
     """
@@ -180,18 +238,22 @@ def query_with_session(ts: str, api_gateway_url: str, session_token: str, gql_qu
 # Example usage
 if __name__ == "__main__":
     client = TaniumClient("https://metportal-api.cloud.tanium.com", CONFIG.tanium_api_token)
-    computers = client.get_computers()
+    # computers = client.get_computers()
+    #
+    # # Print the raw details of each computer (as dict)
+    # for c in computers:
+    #     print(c.__dict__)
+    #
+    # # Fetch and print details for a specific computer
+    # specific_name = "US4DC8974.internal.company.com"
+    # details = client.get_computer(specific_name)
+    # print(f"Details for {specific_name}: {details}")
+    #
+    # # Introspect and print all available fields for the Endpoint type
+    # print("\n--- Available fields for Endpoint ---")
+    # client.introspect_endpoint_fields()
+    # print("\nTo fetch more data points, add the desired field names to your GraphQL query in get_computers or get_computer.")
 
-    # Print the raw details of each computer (as dict)
-    for c in computers:
-        print(c.__dict__)
-
-    # Fetch and print details for a specific computer
-    specific_name = "US4DC8974.internal.company.com"
-    details = client.get_computer(specific_name)
-    print(f"Details for {specific_name}: {details}")
-
-    # Introspect and print all available fields for the Endpoint type
-    print("\n--- Available fields for Endpoint ---")
-    client.introspect_endpoint_fields()
-    print("\nTo fetch more data points, add the desired field names to your GraphQL query in get_computers or get_computer.")
+    # Fetch and print custom tags for a specific host
+    host_name = "US4DC8974.internal.company.com"
+    client.get_host_custom_tags(host_name)
