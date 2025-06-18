@@ -143,8 +143,9 @@ class TaniumClient:
         :param stable_wait_time: The stable wait time for the query (default: 60).
         :return: The columns and values for the host's custom tags.
         """
+        # Removed $first: Int! from the query definition
         gql = f'''
-        query exampleCountEndpointParamSensor($first: Int!, $stableWaitTime: Int, $sensorName: String!, $paramName: String!, $paramValue: String!) {{
+        query exampleCountEndpointParamSensor($stableWaitTime: Int, $sensorName: String!, $paramName: String!, $paramValue: String!) {{
             endpointCounts(
                 input: {{
                     source: {{ts: {{stableWaitTime: $stableWaitTime}}}},
@@ -164,8 +165,8 @@ class TaniumClient:
             }}
         }}
         '''
+        # Removed "first": 1 from the variables
         variables = {
-            "first": 1,
             "stableWaitTime": stable_wait_time,
             "sensorName": sensor_name,
             "paramName": param_name,
@@ -187,8 +188,9 @@ class TaniumClient:
             for col in columns:
                 print(f"- {col['columnName']}: {col['values']}")
             return columns
-        except Exception as e:
-            print(f"No custom tags found or error: {e}")
+        except (IndexError, KeyError, TypeError) as e:  # Added more specific exception handling
+            print(f"No custom tags found or error parsing response: {e}")
+            print("Full response data:")
             print(data)
             return None
 
