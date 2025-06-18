@@ -24,7 +24,7 @@ from webexpythonsdk.models.cards.actions import Submit
 # Ensure these paths are correct relative to your project structure
 import src.components.oncall as oncall
 from config import get_config
-from data.transient.data_maps import azdo_area_paths, azdo_orgs, azdo_projects
+from data.data_maps import azdo_area_paths, azdo_orgs, azdo_projects
 from services import azdo, xsoar
 from services.crowdstrike import CrowdStrikeClient
 from services.xsoar import TicketHandler, ListHandler

@@ -18,7 +18,7 @@ from webexpythonsdk.models.cards.actions import Submit
 
 import src.components.oncall as oncall
 from config import get_config
-from data.transient.data_maps import azdo_projects, azdo_orgs, azdo_area_paths
+from data.data_maps import azdo_projects, azdo_orgs, azdo_area_paths
 from services import xsoar, azdo
 from services.crowdstrike import CrowdStrikeClient
 from services.xsoar import ListHandler, TicketHandler
