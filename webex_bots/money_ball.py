@@ -180,7 +180,9 @@ def main():
     bot = WebexBot(
         config.webex_bot_access_token_moneyball,
         approved_rooms=[config.webex_room_id_vinay_test_space, config.webex_room_id_metrics],
-        bot_name="Hello, Metricmeister!"
+        bot_name="Hello, Metricmeister!",
+        threads=True,
+        log_level="ERROR"
     )
 
     # Add commands to the bot
@@ -192,6 +194,7 @@ def main():
     bot.add_command(ThreatconLevel())
     # bot.add_command(GetAgingTicketsByOwnerReport())
 
+    print("MoneyBall is up and running...")
     # Start the bot
     bot.run()
 

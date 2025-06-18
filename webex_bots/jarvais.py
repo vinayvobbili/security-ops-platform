@@ -289,7 +289,9 @@ def main():
     bot = WebexBot(
         CONFIG.webex_bot_access_token_jarvais,
         approved_rooms=[CONFIG.webex_room_id_epp_tagging, CONFIG.webex_room_id_vinay_test_space],
-        bot_name="Hello, Tagger!"
+        bot_name="Hello, Tagger!",
+        threads=True,
+        log_level="ERROR"
     )
 
     # Add commands to the bot
@@ -300,6 +302,7 @@ def main():
     bot.add_command(RemoveInvalidRings())
     bot.add_command(DontRemoveInvalidRings())
 
+    print("Jarvais is up and running...")
     # Start the bot
     bot.run()
 
