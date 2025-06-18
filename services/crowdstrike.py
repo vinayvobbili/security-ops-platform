@@ -32,7 +32,7 @@ ROOT_DIRECTORY = Path(__file__).parent.parent
 DATA_DIR = ROOT_DIRECTORY / "data" / "transient" / "epp_device_tagging"
 
 # Set this to True to route traffic via the Python proxy
-SHOULD_USE_PROXY = False
+SHOULD_USE_PROXY = True
 
 
 class CrowdStrikeClient:
