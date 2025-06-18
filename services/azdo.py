@@ -12,7 +12,7 @@ from azure.devops.v7_0.work_item_tracking.models import Wiql
 from msrest.authentication import BasicAuthentication
 
 from config import get_config
-from data.transient.data_maps import azdo_projects, azdo_orgs
+from data.data_maps import azdo_projects, azdo_orgs
 from services.xsoar import ListHandler, CONFIG
 
 config = get_config()
