@@ -10,7 +10,7 @@ import pytz
 from matplotlib.ticker import MaxNLocator
 
 import services.azdo as azdo
-from data.transient.data_maps import azdo_area_paths
+from data.data_maps import azdo_area_paths
 
 eastern = pytz.timezone('US/Eastern')
 ROOT_DIRECTORY = Path(__file__).parent.parent.parent

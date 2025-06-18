@@ -11,7 +11,7 @@ from matplotlib import transforms
 from webexpythonsdk import WebexAPI
 
 from config import get_config
-from data.transient.data_maps import impact_colors
+from data.data_maps import impact_colors
 from services.xsoar import TicketHandler
 
 # Configure logging

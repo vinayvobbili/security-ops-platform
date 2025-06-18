@@ -1,0 +1,42 @@
+TICKET_TYPE_MAPPING = {
+    "Prisma Cloud Compute Runtime Alert": "Pr. Comp",
+    "UEBA Prisma Cloud": "Pr. UEBA",
+    "Third Party Compromise": "Third Party",
+    "Qradar Alert": "QRadar",
+    "Ticket QA": "QA",
+    "Employee Reported Incident": "ER",
+    "CrowdStrike Falcon Incident": "CS I",
+    "CrowdStrike Falcon Detection": "CS D",
+    "Akamai Alert": "Akamai",
+    "Vectra Detection": "Vectra",
+    "Splunk Alert": "Splunk",
+    "Lost or Stolen Computer": "Lost/Stolen"
+}
+impact_colors = {
+    "Significant": "#ff0000",  # red
+    "Confirmed": "#ffa500",  # orange
+    "Detected": "#ffd700",  # gold
+    "Prevented": "#008000",  # green
+    "Ignore": "#808080",  # gray
+    "Testing": "#add8e6",  # light blue
+    "False Positive": "#90ee90",  # light green
+}
+azdo_projects = {
+    'platforms': 'MetLife-Cyber-Platforms',
+    'rea': 'MetLife-Cyber-Security',  # Response Engineering Automation
+    'reo': 'MetLife-Cyber-Security',  # Response Engineering Operations
+    'de': 'Detection-Engineering',
+    'gdr': 'Global Detection and Response Shared'
+}
+azdo_orgs = {
+    'platforms': 'MetLife-US',
+    'rea': 'MetLife-US',
+    'reo': 'MetLife-US',
+    'de': 'MetLife-US',
+    'gdr': 'MetLife-US-2'
+}
+azdo_area_paths = {
+    're': 'MetLife-Cyber-Security\\METCIRT\\METCIRT Tier III',
+    'tuning_request': 'Detection-Engineering\\Detection Engineering\\Tuning',
+    'threat_hunting': 'Detection-Engineering\\DE Rules\\Threat Hunting'
+}
