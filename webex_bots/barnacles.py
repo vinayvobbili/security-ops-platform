@@ -374,13 +374,17 @@ def run_bot():
             bot_token,
             approved_rooms=[],
             approved_users=config.barnacles_approved_users.split(','),
-            bot_name="Hello, Captain!"
+            bot_name="Hello, Captain!",
+            threads=True,
+            log_level="ERROR"
         )
         bot.add_command(ManagementNotes())
         bot.add_command(ThreatconLevel())
         bot.add_command(SaveManagementNotes())
         bot.add_command(SaveThreatcon())
         bot.add_command(AnnounceThreatcon())
+
+        print("Barnacles is up and running...")
         bot.run()
     except Exception as e:
         print(f"Bot failed to start: {e}")

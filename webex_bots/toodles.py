@@ -1202,6 +1202,7 @@ class CreateAZDOWorkItem(Command):
             elif project == 'rea':
                 assignee = CONFIG.resp_eng_auto_lead
                 area_path = azdo_area_paths['re']
+                parent_url = CONFIG.azdo_rea_parent_url
             elif project == 'reo':
                 assignee = CONFIG.resp_eng_ops_lead
                 area_path = azdo_area_paths['re']
@@ -1321,7 +1322,11 @@ class GetCurrentApprovedTestingEntries(Command):
     @log_toodles_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles)
     def execute(self, message, attachment_actions, activity):
         approved_testing_items_table = get_approved_testing_entries_table()
-
+        # Webex message length limit: 7439 chars before encryption
+        max_length = 7400
+        if len(approved_testing_items_table) > max_length:
+            return (f"{activity['actor']['displayName']}, the current list is too long to be displayed here. "
+                    "You may find the same list at http://gdnr.company.com/get-approved-testing-entries")
         # Construct the final output
         result = (
             f"{activity['actor']['displayName']}, here are the current Approved Security Testing entries\n"
@@ -1699,7 +1704,10 @@ def main():
     bot = WebexBot(
         CONFIG.webex_bot_access_token_toodles,
         bot_name="Hello from Toodles!",
-        approved_domains=['company.com']
+        approved_rooms=[CONFIG.webex_room_id_vinay_test_space, CONFIG.webex_room_id_gosc_t2, CONFIG.webex_room_id_threatcon_collab],
+        log_level="ERROR",
+        threads=True,
+        bot_help_subtitle="Pick a tool!"
     )
 
     bot.add_command(GetApprovedTestingCard())
@@ -1724,6 +1732,7 @@ def main():
     bot.add_command(GetSearchXSOARCard())
     bot.add_command(FetchXSOARTickets())
 
+    print("Toodles is up and running...")
     bot.run()
 
 
