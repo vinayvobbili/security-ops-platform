@@ -40,6 +40,7 @@ def get_config():
         azdo_de_project=os.environ["AZDO_DE_PROJECT"],
         azdo_re_project=os.environ["AZDO_RE_PROJECT"],
         azdo_platforms_parent_url=os.environ["AZDO_PLATFORMS_PARENT_URL"],
+        azdo_rea_parent_url=os.environ["AZDO_REA_PARENT_URL"],
         azdo_pat=os.environ["AZDO_PERSONAL_ACCESS_TOKEN"],
         cs_ro_client_id=os.environ["CROWD_STRIKE_RO_CLIENT_ID"],
         cs_ro_client_secret=os.environ["CROWD_STRIKE_RO_CLIENT_SECRET"],
@@ -113,6 +114,7 @@ class Config:
     azdo_de_project: str
     azdo_re_project: str
     azdo_platforms_parent_url: str
+    azdo_rea_parent_url: str
     azdo_pat: str
     cs_ro_client_id: str
     cs_ro_client_secret: str
