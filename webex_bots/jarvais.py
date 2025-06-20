@@ -291,7 +291,8 @@ def main():
         approved_rooms=[CONFIG.webex_room_id_epp_tagging, CONFIG.webex_room_id_vinay_test_space],
         bot_name="Hello, Tagger!",
         threads=True,
-        log_level="ERROR"
+        log_level="ERROR",
+        bot_help_subtitle="Let the magic begin!!"
     )
 
     # Add commands to the bot
