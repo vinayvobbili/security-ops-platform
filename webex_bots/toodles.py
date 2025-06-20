@@ -1324,10 +1324,6 @@ class GetCurrentApprovedTestingEntries(Command):
         approved_testing_items_table = get_approved_testing_entries_table()
         # Webex message length limit: 7439 chars before encryption
         max_length = 7400
-        if len(approved_testing_items_table) > max_length:
-            return (f"{activity['actor']['displayName']}, the current list is too long to be displayed here. "
-                    "You may find the same list at http://gdnr.company.com/get-approved-testing-entries")
-        # Construct the final output
         result = (
             f"{activity['actor']['displayName']}, here are the current Approved Security Testing entries\n"
             "```\n"
@@ -1335,7 +1331,9 @@ class GetCurrentApprovedTestingEntries(Command):
             "```\n"
             "\n*Entries expire at 5 PM ET on the date shown"
         )
-
+        if len(result) > max_length:
+            return (f"{activity['actor']['displayName']}, the current list is too long to be displayed here. "
+                    "You may find the same list at http://gdnr.company.com/get-approved-testing-entries")
         return result
 
 
@@ -1563,7 +1561,7 @@ class ContainmentStatusCS(Command):
 
         try:
             crowdstrike = CrowdStrikeClient()
-            return f'{activity['actor']['displayName']}, The network containment status of {host_name_cs} in CS is {crowdstrike.get_device_containment_status(host_name_cs)}'
+            return f'{activity['actor']['displayName']}, The network containment status of {host_name_cs} in CS is **{crowdstrike.get_device_containment_status(host_name_cs)}**'
         except Exception as e:
             return f'There seems to be an issue with finding the host you entered. Please make sure the host is valid. Error: {str(e)}'
 

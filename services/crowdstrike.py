@@ -210,7 +210,7 @@ class CrowdStrikeClient:
         """
         device_id = self.get_device_id(hostname)
         if not device_id:
-            return None
+            return 'Host not found in CS'
 
         device_details = self.get_device_details(device_id)
         return device_details.get("status")
@@ -392,12 +392,16 @@ def main() -> None:
 
     # Continue with your operations
     print("Testing API with obtained token...")
-    device_id = client.get_device_id('AEANEMETU0008')
+    host_name_cs = "USCKU1METV01ADA"
+    device_id = client.get_device_id(host_name_cs)
     if device_id:
         print(f"Successfully retrieved device ID: {device_id}")
         print(client.get_device_details(device_id))
     else:
         print("Failed to retrieve device ID")
+
+    network_containment_status = client.get_device_containment_status(host_name_cs)
+    print(network_containment_status)
 
 
 if __name__ == "__main__":
