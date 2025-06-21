@@ -1,15 +1,19 @@
 #!/usr/bin/env python3
 """
-Simple Tanium API Client for fetching computers
+Simple Tanium API Client for fetching computers and custom tags
 
 Usage:
     client = TaniumClient("https://tanium-server.com", "api-token")
     computers = client.get_computers()
+    tags = client.get_custom_tags()
 """
 
-import requests
 from dataclasses import dataclass
-from typing import List, Optional
+from datetime import datetime
+from typing import List, Optional, Dict, Any
+
+import pandas as pd
+import requests
 
 from config import get_config
 
@@ -18,244 +22,173 @@ CONFIG = get_config()
 
 @dataclass
 class Computer:
-    id: str
     name: str
-    os: Optional[str] = None
-    ip: Optional[str] = None
-    online: bool = False
-    tags: List[str] = None
+    id: str
+    ip: str
+    custom_tags: List[str] = None
+
+    def __post_init__(self):
+        if self.custom_tags is None:
+            self.custom_tags = []
 
 
 class TaniumClient:
     def __init__(self, server_url: str, token: str = None):
         self.server_url = server_url.rstrip('/')
-        self.token = token
-        # Use 'session' header for Tanium API Gateway (GraphQL), as required
-        self.headers = {'session': token} if token else {}
+        self.token = token or CONFIG.tanium_api_token
+        self.headers = {'session': self.token}
+        self.graphql_url = f"{self.server_url}/plugin/products/gateway/graphql"
 
-    def login(self, username: str, password: str):
-        print("WARNING: login() is not supported for GraphQL API. Use an API token and the session header.")
-        raise NotImplementedError("Session login is not supported for Tanium API Gateway/GraphQL. Use an API token.")
+    def query(self, gql: str, variables: Dict[str, Any] = None) -> Dict[str, Any]:
+        """Execute a GraphQL query"""
+        payload = {'query': gql}
+        if variables:
+            payload['variables'] = variables
 
-    def query(self, gql: str):
-        r = requests.post(f"{self.server_url}/plugin/products/gateway/graphql",
-                          json={'query': gql}, headers=self.headers)
-        try:
-            r.raise_for_status()
-            return r.json()
-        except requests.exceptions.HTTPError as e:
-            if r.status_code == 401:
-                print("ERROR: Unauthorized (401). Please check your Tanium API token or login credentials.")
-            else:
-                print(f"HTTP error: {e}\nResponse: {r.text}")
-            raise
-        except requests.exceptions.JSONDecodeError:
-            print(f"Non-JSON response received: {r.text}")
-            raise
+        response = requests.post(self.graphql_url, json=payload, headers=self.headers)
+        response.raise_for_status()
+        return response.json()
 
-    def get_computers(self, limit: int = 10) -> List[Computer]:
+    def get_computers_with_custom_tags(self, limit: int = 100) -> List[Computer]:
+        """Fetch computers with their custom tags"""
+        gql = """
+        query getEndpointsWithCustomTags($first: Int) {
+            endpoints(first: $first) {
+                edges {
+                    node {
+                        name
+                        id
+                        ipAddress
+                        sensorReadings(sensors: [{name: "Custom Tags"}]) {
+                            columns {
+                                name
+                                values
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        """
+
+        variables = {'first': limit}
+        data = self.query(gql, variables)
+
         computers = []
-        cursor = None
-        count = 0
+        for edge in data['data']['endpoints']['edges']:
+            node = edge['node']
 
-        while True:
-            after = f'(after: "{cursor}")' if cursor else ""
-            gql = f"""
-            {{
-                endpoints{after} {{
-                    pageInfo {{ endCursor hasNextPage }}
-                    edges {{
-                        node {{
-                            id
-                            name
-                            ipAddress
-                            ipAddresses
-                            macAddresses
-                            lastLoggedInUser
-                            isVirtual
-                            isEncrypted
-                            serialNumber
-                            manufacturer
-                            model
-                        }}
-                    }}
-                }}
-            }}
-            """
+            # Extract custom tags
+            custom_tags = []
+            sensor_readings = node.get('sensorReadings', {})
 
-            data = self.query(gql)['data']['endpoints']
+            # sensorReadings is a single dict, not a list
+            if isinstance(sensor_readings, dict) and 'columns' in sensor_readings:
+                for column in sensor_readings['columns']:
+                    if column.get('values'):
+                        # Filter out "[No Tags]" entries
+                        for tag in column['values']:
+                            if tag != '[No Tags]':
+                                custom_tags.append(tag)
 
-            for edge in data['edges']:
-                node = edge['node']
-                computers.append(Computer(
-                    id=node.get('id', ""),
-                    name=node.get('name'),
-                    os=node.get('os'),
-                    ip=node.get('ipAddress'),
-                    online=node.get('isVirtual', False),
-                    tags=node.get('macAddresses', []),  # Use macAddresses as a sample list field
-                ))
-                count += 1
-                if count >= limit:
-                    return computers
-
-            if not data['pageInfo']['hasNextPage']:
-                break
-            cursor = data['pageInfo']['endCursor']
+            computers.append(Computer(
+                name=node.get('name', ''),
+                id=node.get('id', ''),
+                ip=node.get('ipAddress'),
+                custom_tags=custom_tags
+            ))
 
         return computers
 
-    def get_computer(self, name: str):
-        """
-        Fetch details for a specific computer by name.
-        :param name: The computer name to search for.
-        :return: The computer details as a dict, or None if not found.
-        """
-        computers = self.get_computers(limit=500)
-        for c in computers:
-            if c.name == name:
-                return c.__dict__
-        return None
+    def get_computer_by_name(self, name: str) -> Optional[Computer]:
+        """Get a specific computer by name"""
+        computers = self.get_computers_with_custom_tags(limit=500)
+        return next((c for c in computers if c.name == name), None)
 
-    def introspect_endpoint_fields(self):
-        """
-        Query the GraphQL schema to list all available fields for the Endpoint type.
-        """
-        introspection_query = '''
-        { __type(name: "Endpoint") {
-            name
-            fields { name type { name kind ofType { name kind } } }
-        }}
-        '''
-        result = self.query(introspection_query)
-        fields = result.get('data', {}).get('__type', {}).get('fields', [])
-        print("Available fields for Endpoint:")
-        for field in fields:
-            print(f"- {field['name']}")
-        return fields
+    def get_custom_tags_for_host(self, host_name: str) -> List[str]:
+        """Get custom tags for a specific host"""
+        computer = self.get_computer_by_name(host_name)
+        return computer.custom_tags if computer else []
 
-    def get_host_custom_tags(self, host_name: str, sensor_name: str = "Custom Tags", param_name: str = "Computer Name", stable_wait_time: int = 60):
-        """
-        Fetch custom tags for a specific host using the endpointCounts query.
-        :param host_name: The computer name to search for.
-        :param sensor_name: The sensor name to use (default: 'Custom Tags').
-        :param param_name: The parameter name to use (default: 'Computer Name').
-        :param stable_wait_time: The stable wait time for the query (default: 60).
-        :return: The columns and values for the host's custom tags.
-        """
-        # Removed $first: Int! from the query definition
-        gql = f'''
-        query exampleCountEndpointParamSensor($stableWaitTime: Int, $sensorName: String!, $paramName: String!, $paramValue: String!) {{
-            endpointCounts(
-                input: {{
-                    source: {{ts: {{stableWaitTime: $stableWaitTime}}}},
-                    sensors: [{{name: $sensorName, params: [{{name: $paramName, value: $paramValue}}]}}]
-                }}
-            ) {{
-                edges {{
-                    node {{
-                        count
-                        columns {{
-                            columnName
-                            sensor {{ name }}
-                            values
-                        }}
-                    }}
-                }}
-            }}
-        }}
-        '''
-        # Removed "first": 1 from the variables
-        variables = {
-            "stableWaitTime": stable_wait_time,
-            "sensorName": sensor_name,
-            "paramName": param_name,
-            "paramValue": host_name
-        }
-        response = requests.post(
-            f"{self.server_url}/plugin/products/gateway/graphql",
-            json={"query": gql, "variables": variables},
-            headers=self.headers
-        )
-        if response.status_code != 200:
-            print("GraphQL error response:")
-            print(response.text)
-        response.raise_for_status()
-        data = response.json()
+    def export_to_excel(self, computers: List[Computer], filename: str = None) -> str:
+        """Export computers data to Excel file"""
+        if not filename:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"tanium_computers_{timestamp}.xlsx"
+
+        # Convert to DataFrame
+        data = []
+        for computer in computers:
+            data.append({
+                'Computer Name': computer.name,
+                'ID': computer.id,
+                'IP Address': computer.ip,
+                'Custom Tags': ', '.join(computer.custom_tags) if computer.custom_tags else '',
+                'Tag Count': len(computer.custom_tags)
+            })
+
+        df = pd.DataFrame(data)
+
+        # Write to Excel with formatting
+        with pd.ExcelWriter(filename, engine='openpyxl') as writer:
+            df.to_excel(writer, sheet_name='Computers', index=False)
+
+            # Auto-adjust column widths
+            worksheet = writer.sheets['Computers']
+            for column in worksheet.columns:
+                max_length = 0
+                column_letter = column[0].column_letter
+                for cell in column:
+                    try:
+                        if len(str(cell.value)) > max_length:
+                            max_length = len(str(cell.value))
+                    except:
+                        pass
+                adjusted_width = min(max_length + 2, 50)
+                worksheet.column_dimensions[column_letter].width = adjusted_width
+
+        print(f"Data exported to: {filename}")
+        return filename
+
+    def get_and_export_computers(self, limit: int = 100, filename: str = None) -> str:
+        """Get computers and export directly to Excel"""
         try:
-            columns = data['data']['endpointCounts']['edges'][0]['node']['columns']
-            print(f"Custom tags for {host_name}:")
-            for col in columns:
-                print(f"- {col['columnName']}: {col['values']}")
-            return columns
-        except (IndexError, KeyError, TypeError) as e:  # Added more specific exception handling
-            print(f"No custom tags found or error parsing response: {e}")
-            print("Full response data:")
-            print(data)
-            return None
+            computers = self.get_computers_with_custom_tags(limit)
+            return self.export_to_excel(computers, filename)
+        except Exception as e:
+            print(f"Error fetching and exporting computers: {e}")
+            raise
 
-
-def validateToken(ts: str, token: str):
-    """
-    Example function of how to validate that an API token is able
-    to hit the Tanium server and get a 200 response.
-
-    parameter ts is the Tanium server to use.
-    Example: 'https://MyTaniumServer.com'
-    parameter token is the api token string generated from the ts gui.
-    """
-    r = requests.post(f"{ts}/api/v2/session/validate",
-                      json={'session': token},
-                      headers={'session': token}
-                      )
-    # status_code should be 200 on successful validation of token.
-    print(f"Status code from validating token: {r.status_code}.")
-
-
-def query_with_session(ts: str, api_gateway_url: str, session_token: str, gql_query: str):
-    """
-    Makes a POST request to the Tanium API Gateway GraphQL endpoint using the session token in the 'session' header.
-    :param ts: The Tanium server URL (e.g., 'https://my-company.cloud.tanium.com')
-    :param api_gateway_url: The API Gateway GraphQL endpoint (e.g., 'https://my-company-API.cloud.tanium.com/plugin/products/gateway/graphql')
-    :param session_token: The session token string (e.g., 'token-RedactedApiKey')
-    :param gql_query: The GraphQL query string (e.g., '{ now }')
-    :return: The response JSON or error message
-    """
-    headers = {
-        'Content-type': 'application/json',
-        'session': session_token,
-        'tanium_server': ts
-    }
-    body = {'query': gql_query}
-    r = requests.post(api_gateway_url, json=body, headers=headers)
-    print(f"Status code: {r.status_code}")
-    try:
-        print(r.json())
-        return r.json()
-    except Exception:
-        print(r.text)
-        return r.text
+    def validate_token(self) -> bool:
+        """Validate the API token"""
+        try:
+            response = requests.post(
+                f"{self.server_url}/api/v2/session/validate",
+                json={'session': self.token},
+                headers=self.headers
+            )
+            return response.status_code == 200
+        except requests.RequestException:
+            return False
 
 
 # Example usage
 if __name__ == "__main__":
-    client = TaniumClient("https://metportal-api.cloud.tanium.com", CONFIG.tanium_api_token)
-    # computers = client.get_computers()
-    #
-    # # Print the raw details of each computer (as dict)
-    # for c in computers:
-    #     print(c.__dict__)
-    #
-    # # Fetch and print details for a specific computer
-    # specific_name = "US4DC8974.internal.company.com"
-    # details = client.get_computer(specific_name)
-    # print(f"Details for {specific_name}: {details}")
-    #
-    # # Introspect and print all available fields for the Endpoint type
-    # print("\n--- Available fields for Endpoint ---")
-    # client.introspect_endpoint_fields()
-    # print("\nTo fetch more data points, add the desired field names to your GraphQL query in get_computers or get_computer.")
+    client = TaniumClient("https://metportal-api.cloud.tanium.com")
 
-    # Fetch and print custom tags for a specific host
-    host_name = "US4DC8974.internal.company.com"
-    client.get_host_custom_tags(host_name)
+    # Validate token
+    if not client.validate_token():
+        print("Invalid token!")
+        exit(1)
+
+    # Get computers and export to Excel
+    print("Fetching computers and exporting to Excel...")
+    filename = client.get_and_export_computers(limit=100)
+
+    # Optional: Also print to console
+    computers = client.get_computers_with_custom_tags(limit=5)  # Just first 5 for console
+    print(f"\nFirst {len(computers)} computers:")
+    for computer in computers:
+        print(f"  {computer.name} | {computer.ip} | Tags: {len(computer.custom_tags)}")
+
+    print(f"\nFull data exported to: {filename}")
