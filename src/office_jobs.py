@@ -4,7 +4,6 @@ import pytz
 import schedule
 
 from config import get_config
-from services import crowdstrike
 from src import helper_methods
 from src.charts import mttr_mttc, outflow, lifespan, heatmap, sla_breaches, aging_tickets, inflow, qradar_rule_efficacy, de_stories, days_since_incident, re_stories, threatcon_level, vectra_volume, \
     crowdstrike_volume, threat_tippers, crowdstrike_efficacy
@@ -41,7 +40,7 @@ def main():
         vectra_volume.make_chart(),
         crowdstrike_volume.make_chart(),
         threat_tippers.make_chart(),
-        crowdstrike.update_unique_hosts_from_cs()
+        # crowdstrike.update_unique_hosts_from_cs()
     ))
 
     while True:
