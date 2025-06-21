@@ -111,7 +111,7 @@ class TicketHandler:
 
     def create(self, payload):
         """Creates a new incident in XSOAR."""
-        payload.update({"all": True, "createInvestigation": True, "force": True})
+        payload.update({"all": True, "createInvestigation": 'true', "force": True})
         response = requests.post(self.incident_create_url, headers=self.headers, json=payload)
         response.raise_for_status()
         return response.json()
@@ -173,8 +173,8 @@ class ListHandler:
 
 
 if __name__ == "__main__":
-    # destination_ticket_number, destination_ticket_link = import_ticket('621684')
+    # destination_ticket_number, destination_ticket_link = import_ticket('690289')
     # print(destination_ticket_number, destination_ticket_link)
     list_handler = ListHandler()
     ticket_handler = TicketHandler()
-    print(ticket_handler.get_tickets("hostname:US9F20TZ3"))
+    # print(ticket_handler.get_tickets("hostname:US9F20TZ3"))
