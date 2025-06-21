@@ -247,7 +247,7 @@ def announce_shift_change(shift_name, room_id, sleep_time=30):
             markdown=f"Good **{shift_name.upper()}**! A new shift's starting now!\n"
                      f"Timings: {sheet[cell_names_by_shift['shift_timings'][shift_name]].value}\n"
                      f"Open {config.team_name}* tickets: {get_open_tickets()}\n"
-                     f"Hosts in Containment (TUC): \n {'\n'.join(hosts_in_containment) if hosts_in_containment else 'None'}\n\n"
+                     f"Hosts in Containment (TUC): {'\n'.join(hosts_in_containment) if hosts_in_containment else 'None'}\n\n"
                      f"**Management Notes**: {note}\n"
                      f"Staffing:\n"
                      f"```\n{shift_data_table}\n```"
