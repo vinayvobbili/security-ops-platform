@@ -86,7 +86,7 @@ def main():
         oncall.announce_change()
     ))
     schedule.every().day.at("17:00", eastern).do(approved_security_testing.removed_expired_entries)
-    schedule.every().day.at("08:00", eastern).do(thithi.main)
+    schedule.every().day.at("07:00", eastern).do(thithi.main)
 
     while True:
         schedule.run_pending()
