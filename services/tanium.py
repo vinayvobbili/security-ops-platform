@@ -97,7 +97,7 @@ class TaniumClient:
 
         computers = []
         total_fetched = 0
-        page_size = 2000  # Increased from 500 to 2000 for faster fetching
+        page_size = 5000
 
         # Set up progress bar
         with tqdm.tqdm(desc="Fetching Tanium computers", unit="host") as progress_bar:
