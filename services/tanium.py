@@ -28,6 +28,7 @@ class Computer:
     name: str
     id: str
     ip: str
+    eidLastSeen: str
     custom_tags: List[str] = None
 
     def __post_init__(self):
@@ -83,6 +84,7 @@ class TaniumClient:
                 id
                 name
                 ipAddress
+                eidLastSeen
                 sensorReadings(sensors: [{name: "Custom Tags"}]) {
                   columns {
                     name
@@ -138,6 +140,7 @@ class TaniumClient:
                             name=node.get('name', ''),
                             id=node.get('id', ''),
                             ip=node.get('ipAddress'),
+                            eidLastSeen=node.get('eidLastSeen'),
                             custom_tags=custom_tags
                         ))
 
@@ -193,6 +196,7 @@ class TaniumClient:
                 'Name': computer.name,
                 'ID': computer.id,
                 'IP Address': computer.ip,
+                'Last Seen': computer.eidLastSeen,
                 'Custom Tags': ', '.join(computer.custom_tags) if computer.custom_tags else '',
                 'Tag Count': len(computer.custom_tags)
             })
@@ -254,11 +258,5 @@ if __name__ == "__main__":
     # Get computers and export to Excel - no limit for the fetch
     print("Fetching computers and exporting to Excel...")
     filename = client.get_and_export_computers()  # No limit, fetch all computers
-
-    # Optional: Still just print first 5 to console for brevity
-    computers = client.get_computers_with_custom_tags(limit=5)  # Just first 5 for console
-    print(f"\nFirst {len(computers)} computers:")
-    for computer in computers[:5]:  # Use slice notation to get first 5
-        print(f"  {computer.name} | {computer.ip} | Tags: {len(computer.custom_tags)}")
 
     print(f"\nFull data exported to: {filename}")
