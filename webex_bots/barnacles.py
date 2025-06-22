@@ -339,10 +339,11 @@ class AnnounceThreatcon(Command):
 
         today_date = datetime.now().strftime('%m-%d-%Y')
         FILE_PATH = ROOT_DIRECTORY / "web" / "static" / "charts" / today_date / "Threatcon Level.png"
-        webex_api.messages.create(
+
+        WebexTeamsAPI(access_token=config.webex_bot_access_token_toodles).messages.create(
             roomId=config.webex_room_id_threatcon_collab,
-            text=f"New ThreatCon Level",
-            files=[FILE_PATH]
+            text=f"🚨🚨 NEW THREATCON LEVEL ANNOUNCEMENT! 🚨🚨",
+            files=[str(FILE_PATH)]
         )
 
         # Confirm to user
