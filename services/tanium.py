@@ -5,7 +5,7 @@ Simple Tanium API Client for fetching computers and custom tags
 Usage:
     client = TaniumClient("https://tanium-server.com", "api-token")
     computers = client.get_computers()
-    tags = client.get_custom_tags()
+    filename = client.export_to_excel(computers)
 """
 
 import os
@@ -47,32 +47,15 @@ class TaniumClient:
         """Execute a GraphQL query"""
         payload = {'query': gql}
         if variables:
-            payload['variables'] = variables  # type: ignore
-        response = ''
-        try:
-            response = requests.post(self.graphql_url, json=payload, headers=self.headers)
-            response.raise_for_status()
-            return response.json()
-        except requests.exceptions.HTTPError as e:
-            # Try to get more detailed error information from the response
-            error_detail = ""
-            try:
-                error_json = response.json()
-                if 'errors' in error_json:
-                    error_detail = ": " + str(error_json['errors'])
-            except:
-                pass
-            print(f"HTTP Error: {e}{error_detail}")
-            print(f"Query: {gql}")
-            print(f"Variables: {variables}")
-            raise
-        except Exception as e:
-            print(f"Error in query: {e}")
-            raise
+            payload['variables'] = variables
 
-    def get_computers_with_custom_tags(self, limit: int = None) -> List[Computer]:
-        """Fetch all computers with their custom tags (no limit if limit=None)"""
-        query_gql = """
+        response = requests.post(self.graphql_url, json=payload, headers=self.headers)
+        response.raise_for_status()
+        return response.json()
+
+    def get_computers(self, limit: int = None) -> List[Computer]:
+        """Fetch all computers with their custom tags"""
+        query = """
         query getEndpoints($first: Int, $after: Cursor) {
           endpoints(first: $first, after: $after) {
             pageInfo {
@@ -98,165 +81,108 @@ class TaniumClient:
         """
 
         computers = []
-        total_fetched = 0
+        after_cursor = None
         page_size = 5000
 
-        # Set up progress bar
-        with tqdm.tqdm(desc="Fetching Tanium computers", unit="host") as progress_bar:
-            try:
-                # Pagination variables
-                after_cursor = None
-                page_count = 0
-                has_more = True
+        with tqdm.tqdm(desc="Fetching computers", unit="host") as pbar:
+            while True:
+                variables = {'first': page_size}
+                if after_cursor:
+                    variables['after'] = after_cursor
 
-                while has_more:
-                    page_count += 1
+                data = self.query(query, variables)
+                endpoints = data['data']['endpoints']
+                edges = endpoints['edges']
 
-                    # Prepare variables for this batch
-                    variables = {'first': page_size}
-                    if after_cursor:
-                        variables['after'] = after_cursor
+                if not edges:
+                    break
 
-                    print(f"Fetching batch {page_count} of Tanium computers (batch size: {page_size})...")
-                    data = self.query(query_gql, variables)
+                for edge in edges:
+                    node = edge['node']
+                    custom_tags = self._extract_custom_tags(node.get('sensorReadings', {}))
+                    computers.append(Computer(
+                        name=node.get('name', ''),
+                        id=node.get('id', ''),
+                        ip=node.get('ipAddress'),
+                        eidLastSeen=node.get('eidLastSeen'),
+                        custom_tags=custom_tags
+                    ))
 
-                    # Process this batch of computers
-                    endpoints = data['data']['endpoints']
-                    edges = endpoints['edges']
-                    batch_size = len(edges)
+                pbar.update(len(edges))
 
-                    if batch_size == 0:
-                        break
+                if not endpoints['pageInfo']['hasNextPage']:
+                    break
+                if limit and len(computers) >= limit:
+                    break
 
-                    # Update progress tracking
-                    total_fetched += batch_size
-                    progress_bar.update(batch_size)
+                after_cursor = endpoints['pageInfo']['endCursor']
 
-                    # Process each computer in this batch
-                    for edge in edges:
-                        node = edge['node']
-                        custom_tags = self._extract_custom_tags(node.get('sensorReadings', {}))
-                        computers.append(Computer(
-                            name=node.get('name', ''),
-                            id=node.get('id', ''),
-                            ip=node.get('ipAddress'),
-                            eidLastSeen=node.get('eidLastSeen'),
-                            custom_tags=custom_tags
-                        ))
-
-                    # Check if there are more pages to fetch
-                    has_more = endpoints['pageInfo']['hasNextPage']
-                    after_cursor = endpoints['pageInfo']['endCursor']
-
-                    # Apply optional limit (for testing or console display)
-                    if limit and total_fetched >= limit:
-                        print(f"Reached specified limit of {limit} computers")
-                        break
-
-                print(f"Successfully fetched {total_fetched} computers from {page_count} pages")
-                return computers
-
-            except Exception as e:
-                print(f"Error fetching computers: {e}")
-                raise
+        return computers[:limit] if limit else computers
 
     def _extract_custom_tags(self, sensor_readings: Dict) -> List[str]:
-        """Helper method to extract custom tags from sensor readings"""
-        custom_tags = []
-        if isinstance(sensor_readings, dict) and 'columns' in sensor_readings:
-            for column in sensor_readings['columns']:
-                if column.get('values'):
-                    for tag in column['values']:
-                        if tag != '[No Tags]':
-                            custom_tags.append(tag)
-        return custom_tags
+        """Extract custom tags from sensor readings"""
+        tags = []
+        columns = sensor_readings.get('columns', [])
+        for column in columns:
+            values = column.get('values', [])
+            tags.extend([tag for tag in values if tag != '[No Tags]'])
+        return tags
 
     def get_computer_by_name(self, name: str) -> Optional[Computer]:
         """Get a specific computer by name"""
-        computers = self.get_computers_with_custom_tags(limit=500)
+        computers = self.get_computers(limit=500)
         return next((c for c in computers if c.name == name), None)
-
-    def get_custom_tags_for_host(self, host_name: str) -> List[str]:
-        """Get custom tags for a specific host"""
-        computer = self.get_computer_by_name(host_name)
-        return computer.custom_tags if computer else []
 
     def export_to_excel(self, computers: List[Computer], filename: str = None) -> str:
         """Export computers data to Excel file"""
-        # Always write to a dated folder under epp_device_tagging
-        today_date = datetime.now().strftime('%m-%d-%Y')
-        base_dir = Path(__file__).parent.parent / "data" / "transient" / "epp_device_tagging" / today_date
-        os.makedirs(base_dir, exist_ok=True)
-        output_path = base_dir / "all_tanium_hosts.xlsx"
+        today = datetime.now().strftime('%m-%d-%Y')
+        output_dir = Path(__file__).parent.parent / "data" / "transient" / "epp_device_tagging" / today
+        output_dir.mkdir(parents=True, exist_ok=True)
+        output_path = output_dir / "all_tanium_hosts.xlsx"
 
-        # Convert to DataFrame
-        data = []
-        for computer in computers:
-            data.append({
-                'Name': computer.name,
-                'ID': computer.id,
-                'IP Address': computer.ip,
-                'Last Seen': computer.eidLastSeen,
-                'Custom Tags': ', '.join(computer.custom_tags) if computer.custom_tags else '',
-                'Tag Count': len(computer.custom_tags)
-            })
+        data = [{
+            'Name': c.name,
+            'ID': c.id,
+            'IP Address': c.ip,
+            'Last Seen': c.eidLastSeen,
+            'Custom Tags': ', '.join(c.custom_tags),
+            'Tag Count': len(c.custom_tags)
+        } for c in computers]
 
         df = pd.DataFrame(data)
 
-        # Write to Excel with formatting
         with pd.ExcelWriter(output_path, engine='openpyxl') as writer:
             df.to_excel(writer, sheet_name='Computers', index=False)
 
             # Auto-adjust column widths
             worksheet = writer.sheets['Computers']
             for column in worksheet.columns:
-                max_length = 0
-                column_letter = column[0].column_letter
-                for cell in column:
-                    try:
-                        if len(str(cell.value)) > max_length:
-                            max_length = len(str(cell.value))
-                    except:
-                        pass
-                adjusted_width = min(max_length + 2, 50)
-                worksheet.column_dimensions[column_letter].width = adjusted_width
+                max_length = max(len(str(cell.value)) for cell in column)
+                worksheet.column_dimensions[column[0].column_letter].width = min(max_length + 2, 50)
 
-        print(f"Data exported to: {output_path}")
         return str(output_path)
 
     def get_and_export_computers(self) -> str:
-        """Get computers and export directly to Excel"""
-        try:
-            computers = self.get_computers_with_custom_tags()
-            return self.export_to_excel(computers)
-        except Exception as e:
-            print(f"Error fetching and exporting computers: {e}")
-            raise
+        """Get all computers and export to Excel"""
+        computers = self.get_computers()
+        return self.export_to_excel(computers)
 
     def validate_token(self) -> bool:
         """Validate the API token"""
-        try:
-            response = requests.post(
-                f"{self.server_url}/api/v2/session/validate",
-                json={'session': self.token},
-                headers=self.headers
-            )
-            return response.status_code == 200
-        except requests.RequestException:
-            return False
+        response = requests.post(
+            f"{self.server_url}/api/v2/session/validate",
+            json={'session': self.token},
+            headers=self.headers
+        )
+        return response.status_code == 200
 
 
-# Example usage
 if __name__ == "__main__":
     client = TaniumClient("https://metportal-api.cloud.tanium.com")
 
-    # Validate token
     if not client.validate_token():
         print("Invalid token!")
         exit(1)
 
-    # Get computers and export to Excel - no limit for the fetch
-    print("Fetching computers and exporting to Excel...")
-    filename = client.get_and_export_computers()  # No limit, fetch all computers
-
-    print(f"\nFull data exported to: {filename}")
+    filename = client.get_and_export_computers()
+    print(f"Data exported to: {filename}")
