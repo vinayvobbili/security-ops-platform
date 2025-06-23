@@ -1,7 +1,7 @@
 python-dotenv~=1.0.1
 matplotlib~=3.9.0
 pandas~=2.2.2
-webexpythonsdk~=2.0.4
+webexpythonsdk
 requests~=2.32.3
 pytz~=2024.1
 
@@ -10,7 +10,7 @@ webexteamssdk==1.6.1
 Cartopy~=0.24.1
 schedule~=1.2.1
 pytesseract~=0.3.10
-pillow~=10.3.0
+pillow
 config~=0.5.1
 crowdstrike-falconpy~=1.4.7
 Flask~=3.0.3
@@ -25,6 +25,6 @@ fasteners~=0.19
 beautifulsoup4~=4.12.3
 altair~=5.2.0
 twilio~=9.0.4
-langchain~=0.3.1
-urllib3~=2.2.2
-webex_bot~=0.6.2
+langchain
+urllib3~=2.5.0
+webex_bot
