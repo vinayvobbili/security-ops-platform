@@ -4,7 +4,6 @@ from urllib3.exceptions import InsecureRequestWarning
 urllib3.disable_warnings(InsecureRequestWarning)
 
 import concurrent.futures
-import os
 import time
 from datetime import datetime
 from pathlib import Path
