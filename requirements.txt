@@ -6,7 +6,7 @@ requests~=2.32.3
 pytz~=2024.1
 
 numpy~=1.26.4
-webexteamssdk==1.6.1
+webexteamssdk
 Cartopy~=0.24.1
 schedule~=1.2.1
 pytesseract~=0.3.10
@@ -27,4 +27,4 @@ altair~=5.2.0
 twilio~=9.0.4
 langchain
 urllib3~=2.5.0
-webex_bot
+webex-bot
