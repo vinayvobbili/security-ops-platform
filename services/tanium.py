@@ -7,16 +7,15 @@ Usage:
     filename = client.get_and_export_all_computers()
 """
 
-import os
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import List, Optional, Dict, Any, Tuple
-import urllib3
 
 import pandas as pd
 import requests
 import tqdm
+import urllib3
 
 from config import get_config
 
@@ -288,7 +287,7 @@ class TaniumClient:
 
         return str(output_path)
 
-    def get_and_export_all_computers(self, filename: str = None) -> str:
+    def get_and_export_all_computers(self, filename: str = None) -> str | None:
         """Get all computers from all instances and export to Excel"""
         all_computers, _ = self.get_all_computers()
 
