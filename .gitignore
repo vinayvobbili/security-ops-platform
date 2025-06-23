@@ -4,3 +4,4 @@
 __pycache__/
 web/static/charts/*
 data/transient/*
+scheduler.pid

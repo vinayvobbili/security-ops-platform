@@ -1,3 +1,7 @@
+import multiprocessing
+import os
+import signal
+import sys
 import time
 
 import pytz
@@ -11,11 +15,20 @@ from src.charts import mttr_mttc, outflow, lifespan, heatmap, sla_breaches, agin
 config = get_config()
 eastern = pytz.timezone('US/Eastern')
 
+# Create a PID file path in the project directory
+PID_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scheduler.pid")
 
-def main():
+
+def scheduler_process():
     """
-    Main function to run the scheduled jobs.
+    The scheduler process that runs continuously.
     """
+    # Write PID to file so we can check if it's running
+    with open(PID_FILE, 'w') as f:
+        f.write(str(os.getpid()))
+
+    print(f"Scheduler started with PID {os.getpid()}")
+    print(f"PID file written to {PID_FILE}")
 
     # schedule
     print("Starting the scheduler...")
@@ -43,9 +56,95 @@ def main():
         # crowdstrike.update_unique_hosts_from_cs()
     ))
 
-    while True:
-        schedule.run_pending()
-        time.sleep(60)
+    try:
+        while True:
+            schedule.run_pending()
+            time.sleep(60)
+    except KeyboardInterrupt:
+        print("Scheduler shutting down...")
+    finally:
+        # Clean up PID file on exit
+        if os.path.exists(PID_FILE):
+            os.remove(PID_FILE)
+
+
+def is_scheduler_running():
+    """Check if the scheduler is already running by checking the PID file"""
+    if not os.path.exists(PID_FILE):
+        return False
+
+    # Read the PID from file
+    with open(PID_FILE, 'r') as f:
+        try:
+            pid = int(f.read().strip())
+        except (ValueError, IOError):
+            return False
+
+    # Check if process with this PID exists
+    try:
+        # Sending signal 0 checks if process exists without affecting it
+        os.kill(pid, 0)
+        return True
+    except OSError:
+        # Process doesn't exist
+        return False
+
+
+def stop_scheduler():
+    """Stop the scheduler if it's running"""
+    if not os.path.exists(PID_FILE):
+        print("Scheduler is not running.")
+        return
+
+    with open(PID_FILE, 'r') as f:
+        try:
+            pid = int(f.read().strip())
+        except (ValueError, IOError):
+            print("Invalid PID file.")
+            return
+
+    try:
+        os.kill(pid, signal.SIGTERM)
+        print(f"Sent termination signal to scheduler process (PID: {pid})")
+    except OSError:
+        print("Failed to stop scheduler process - it may not be running.")
+
+    # Clean up PID file
+    if os.path.exists(PID_FILE):
+        os.remove(PID_FILE)
+
+
+def main():
+    """
+    Main function to run or manage the scheduler.
+    """
+    if len(sys.argv) > 1:
+        if sys.argv[1] == 'stop':
+            stop_scheduler()
+            return
+        elif sys.argv[1] == 'status':
+            if is_scheduler_running():
+                print("Scheduler is running.")
+            else:
+                print("Scheduler is not running.")
+            return
+
+    # Check if already running
+    if is_scheduler_running():
+        print("Scheduler is already running. Use 'stop' command to stop it first.")
+        return
+
+    # Start as a separate process
+    process = multiprocessing.Process(target=scheduler_process)
+    process.daemon = True  # This allows the process to continue running when script exits
+    process.start()
+    print(f"Started scheduler process with PID {process.pid}")
+
+    # Keep the main process running to allow the daemon process to continue
+    try:
+        process.join()
+    except KeyboardInterrupt:
+        print("Exiting main process, scheduler will continue running in background.")
 
 
 if __name__ in ('__main__', '__builtin__', 'builtins'):
