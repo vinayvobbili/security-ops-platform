@@ -75,7 +75,11 @@ def get_config():
         whatsapp_receiver_numbers=os.environ["WHATSAPP_RECEIVER_NUMBERS"],
         webex_api_url=os.environ["WEBEX_API_URL"],
         jump_server_host=os.environ["JUMP_SERVER_HOST"],
-        tanium_api_token=os.environ["TANIUM_API_TOKEN"]
+        tanium_cloud_api_token=os.environ["TANIUM_CLOUD_API_TOKEN"],
+        tanium_cloud_api_url=os.environ["TANIUM_CLOUD_API_URL"],
+        tanium_onprem_api_token=os.environ["TANIUM_ONPREM_API_TOKEN"],
+        tanium_onprem_api_url=os.environ["TANIUM_ONPREM_API_URL"],
+
     )
 
 
@@ -149,4 +153,7 @@ class Config:
     whatsapp_receiver_numbers: str
     webex_api_url: str
     jump_server_host: str
-    tanium_api_token: str
+    tanium_cloud_api_token: str
+    tanium_cloud_api_url: str
+    tanium_onprem_api_token: str
+    tanium_onprem_api_url: str
