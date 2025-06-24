@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 from urllib.parse import quote
 import threading
 import time
+import logging
 
 import pandas
 import requests
@@ -1072,7 +1073,9 @@ class CreateXSOARTicket(Command):
     @log_toodles_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles)
     def execute(self, message, attachment_actions, activity):
         if attachment_actions.inputs['title'].strip() == "" or attachment_actions.inputs['details'].strip() == "":
-            return "Please fill in both fields to create a new ticket."
+            reply = "Please fill in both fields to create a new ticket."
+            logger.info(f"Reply from CreateXSOARTicket is {len(reply)} characters")
+            return reply
 
         incident = {
             'name': attachment_actions.inputs['title'].strip(),
@@ -1087,8 +1090,9 @@ class CreateXSOARTicket(Command):
         result = incident_handler.create(incident)
         new_incident_id = result.get('id')
         incident_url = CONFIG.xsoar_prod_ui_base_url + '/Custom/caseinfoid/' + new_incident_id
-
-        return f"{activity['actor']['displayName']}, Ticket [#{new_incident_id}]({incident_url}) has been created in XSOAR Prod."
+        reply = f"{activity['actor']['displayName']}, Ticket [#{new_incident_id}]({incident_url}) has been created in XSOAR Prod."
+        logger.info(f"Reply from CreateXSOARTicket is {len(reply)} characters")
+        return reply
 
 
 class IOC(Command):
@@ -1333,7 +1337,9 @@ class GetCurrentApprovedTestingEntries(Command):
             "```\n"
             "\n*Entries expire at 5 PM ET on the date shown"
         )
+        logger.info(f"Reply from GetCurrentApprovedTestingEntries is {len(result)} characters")
         if len(result) > max_length:
+            logger.warning(f"Reply from GetCurrentApprovedTestingEntries exceeded max length: {len(result)}")
             return (f"{activity['actor']['displayName']}, the current list is too long to be displayed here. "
                     "You may find the same list at http://gdnr.company.com/get-approved-testing-entries")
         return result
@@ -1708,6 +1714,18 @@ class FetchXSOARTickets(Command):
         else:
             message = 'None Found'
         return message
+
+
+# Set up a logger for message length tracking
+logger = logging.getLogger("toodles_message_length")
+logger.setLevel(logging.INFO)
+
+# Optionally, add a file handler or stream handler if not already present
+if not logger.hasHandlers():
+    handler = logging.StreamHandler()
+    formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
 
 
 def main():
