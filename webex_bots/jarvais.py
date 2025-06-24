@@ -1,6 +1,8 @@
 import logging
 from datetime import datetime
 from pathlib import Path
+import threading
+import time
 
 import fasteners
 import pandas as pd
@@ -319,7 +321,18 @@ class AllTaniumHosts(Command):
                 )
 
 
+def keepalive_ping():
+    while True:
+        try:
+            webex_api.people.me()
+        except Exception as e:
+            print(f"Keepalive ping failed: {e}")
+        time.sleep(240)  # 4 minutes
+
+
 def main():
+    threading.Thread(target=keepalive_ping, daemon=True).start()
+
     """Initialize and run the Webex bot."""
 
     bot = WebexBot(
