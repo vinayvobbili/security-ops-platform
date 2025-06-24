@@ -54,7 +54,6 @@ def main():
         aging_tickets.make_chart(),
         crowdstrike_efficacy.make_chart(),
         crowdstrike_volume.make_chart(),
-        crowdstrike_volume.make_chart(),
         days_since_incident.make_chart(),
         de_stories.make_chart(),
         heatmap.create_choropleth_map(),
@@ -67,7 +66,6 @@ def main():
         sla_breaches.make_chart(),
         threat_tippers.make_chart(),
         threatcon_level.make_chart(),
-        vectra_volume.make_chart(),
         vectra_volume.make_chart(),
     ))
 
