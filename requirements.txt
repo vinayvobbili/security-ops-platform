@@ -29,3 +29,4 @@ langchain
 urllib3
 types-pytz
 langsmith<0.4
+websockets

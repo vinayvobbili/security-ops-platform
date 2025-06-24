@@ -1,6 +1,8 @@
 import ipaddress
 from datetime import datetime, timedelta
 from urllib.parse import quote
+import threading
+import time
 
 import pandas
 import requests
@@ -1501,6 +1503,16 @@ def announce_new_threat_hunt(ticket_no, ticket_title, incident_url, person_id):
     requests.post(webex_data.get('api_url'), headers=headers, json=payload_json)
 
 
+def keepalive_ping():
+    while True:
+        try:
+            # Lightweight API call to keep the connection alive
+            webex_api.people.me()
+        except Exception as e:
+            print(f"Keepalive ping failed: {e}")
+        time.sleep(240)  # 4 minutes
+
+
 class Who(Command):
     """Return who the on-call person is"""
 
@@ -1699,6 +1711,9 @@ class FetchXSOARTickets(Command):
 
 
 def main():
+    # Start keepalive thread
+    threading.Thread(target=keepalive_ping, daemon=True).start()
+
     bot = WebexBot(
         CONFIG.webex_bot_access_token_toodles,
         bot_name="Hello from Toodles!",
