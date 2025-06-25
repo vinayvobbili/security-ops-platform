@@ -18,7 +18,7 @@ from webexteamssdk import WebexTeamsAPI
 from config import get_config
 from services.service_now import enrich_host_report
 from src.epp import ring_tag_cs_hosts, cs_hosts_without_ring_tag, cs_hosts_with_invalid_ring_tags
-from src.epp.tanium_hosts_without_ring_tag import get_and_export_computers_without_ring_tag
+from src.epp.tanium_hosts_without_ring_tag import get_tanium_hosts_without_ring_tag
 from src.helper_methods import log_jarvais_activity
 
 # Setup logging
@@ -313,7 +313,7 @@ class GetTaniumHostsWithoutEcmTag(Command):
             )
             lock_path = ROOT_DIRECTORY / "src" / "epp" / "all_tanium_hosts.lock"
             with fasteners.InterProcessLock(lock_path):
-                filepath = get_and_export_computers_without_ring_tag(filename="Tanium hosts without ring tag.xlsx")
+                filepath = get_tanium_hosts_without_ring_tag(filename="Tanium hosts without ring tag.xlsx")
 
                 # Enrich the report with ServiceNow data
                 enriched_filepath = enrich_host_report(filepath)
