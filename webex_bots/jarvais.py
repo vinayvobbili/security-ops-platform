@@ -312,8 +312,8 @@ class AllTaniumHosts(Command):
             )
             lock_path = ROOT_DIRECTORY / "src" / "epp" / "all_tanium_hosts.lock"
             with fasteners.InterProcessLock(lock_path):
-                client = TaniumClient("https://metportal-api.cloud.tanium.com")
-                filepath = client.get_and_export_computers()
+                client = TaniumClient()
+                filepath = client.get_and_export_all_computers()
                 webex_api.messages.create(
                     roomId=room_id,
                     markdown=f"Hello {activity['actor']['displayName']}! Here's the full list of ALL hosts from Tanium along with their custom tags",
@@ -322,12 +322,18 @@ class AllTaniumHosts(Command):
 
 
 def keepalive_ping():
+    wait = 60  # Start with 1 minute
+    max_wait = 1800  # Max wait: 30 minutes
     while True:
         try:
             webex_api.people.me()
+            wait = 240  # Reset to normal interval (4 min) after success
         except Exception as e:
-            print(f"Keepalive ping failed: {e}")
-        time.sleep(240)  # 4 minutes
+            logger.warning(f"Keepalive ping failed: {e}. Retrying in {wait} seconds.")
+            time.sleep(wait)
+            wait = min(wait * 2, max_wait)  # Exponential backoff, capped at max_wait
+            continue
+        time.sleep(wait)
 
 
 def main():
