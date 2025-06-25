@@ -3,6 +3,7 @@ import http.client
 import http.server
 import ipaddress
 import os
+import select
 import socket
 import socketserver
 import ssl
@@ -13,12 +14,11 @@ from typing import List, Dict
 from urllib.parse import urlsplit
 
 import pytz
-import select
 from flask import Flask, request, abort, jsonify, render_template
 
 from config import get_config
 from services import xsoar
-from services.approved_testing_utils import add_approved_testing_entry, announce_new_approved_testing_entry
+from services.approved_testing_utils import add_approved_testing_entry
 from src.helper_methods import log_web_activity
 
 # Define the proxy port
@@ -388,7 +388,9 @@ class OptimizedProxy(http.server.SimpleHTTPRequestHandler):
         target_host, target_port = self.path.split(':', 1)
         target_port = int(target_port)
 
-        print(f"CONNECT request to {target_host}:{target_port}")
+        timestamp = datetime.now(eastern).strftime('%Y-%m-%d %H:%M:%S %Z')
+        client_ip = self.client_address[0] if hasattr(self, 'client_address') else 'Unknown'
+        print(f"[{timestamp}] CONNECT request from {client_ip} to {target_host}:{target_port}")
 
         try:
             # Connect to target server
