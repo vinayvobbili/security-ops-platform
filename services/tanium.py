@@ -11,7 +11,7 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional, Dict, Any, Tuple, Iterator
+from typing import List, Optional, Dict, Any, Iterator
 
 import pandas as pd
 import requests
@@ -377,10 +377,9 @@ class TaniumClient:
             results[instance.name] = instance.validate_token()
         return results
 
-    def get_all_computers(self, limit: Optional[int] = None) -> Tuple[List[Computer], Dict[str, List[Computer]]]:
+    def get_all_computers(self, limit: Optional[int] = None) -> List[Computer]:
         """Get computers from all instances"""
         all_computers = []
-        computers_by_instance = {}
 
         for instance in self.instances:
             if not instance.validate_token():
@@ -390,10 +389,9 @@ class TaniumClient:
             logger.info(f"Fetching computers from {instance.name}...")
             computers = instance.get_computers(limit)
             all_computers.extend(computers)
-            computers_by_instance[instance.name] = computers
             logger.info(f"Retrieved {len(computers)} computers from {instance.name}")
 
-        return all_computers, computers_by_instance
+        return all_computers
 
     def _get_output_path(self, filename: Optional[str] = None) -> Path:
         """Get the output path for Excel export"""
@@ -409,24 +407,23 @@ class TaniumClient:
         data = []
         for computer in all_computers:
             data.append({
-                'Name': computer.name,
+                'Hostname': computer.name,
                 'ID': computer.id,
                 'IP Address': computer.ip,
                 'Last Seen': computer.eidLastSeen,
                 'Source': computer.source,
-                'Custom Tags': ', '.join(computer.custom_tags),
-                'Tag Count': len(computer.custom_tags),
-                'Has EPP Ring Tag': 'Yes' if computer.has_epp_ring_tag() else 'No'
+                'Current Tags': ', '.join(computer.custom_tags),
             })
 
         try:
             df = pd.DataFrame(data)
+            sheet_name = 'Computers'
 
             with pd.ExcelWriter(output_path, engine='openpyxl') as writer:
-                df.to_excel(writer, sheet_name='Computers', index=False)
+                df.to_excel(writer, sheet_name=sheet_name, index=False)
 
                 # Auto-adjust column widths
-                worksheet = writer.sheets['Computers']
+                worksheet = writer.sheets[sheet_name]
                 for column in worksheet.columns:
                     max_length = max(len(str(cell.value)) for cell in column)
                     worksheet.column_dimensions[column[0].column_letter].width = min(max_length + 2, 50)
@@ -440,17 +437,16 @@ class TaniumClient:
 
     def get_and_export_all_computers(self, filename: Optional[str] = None) -> Optional[str]:
         """Get all computers from all instances and export to Excel"""
-        all_computers, _ = self.get_all_computers()
+        all_computers = self.get_all_computers()
 
         if not all_computers:
             logger.warning("No computers retrieved from any instance!")
             return None
-
-        return self.export_to_excel(all_computers, filename)
+        return self.export_to_excel(all_computers, 'All Tanium Hosts.xlsx')
 
     def get_computer_by_name(self, name: str) -> Optional[Computer]:
         """Get a specific computer by name from any instance"""
-        all_computers, _ = self.get_all_computers(limit=TaniumInstance.DEFAULT_SEARCH_LIMIT)
+        all_computers = self.get_all_computers(limit=TaniumInstance.DEFAULT_SEARCH_LIMIT)
         return next((c for c in all_computers if c.name.lower() == name.lower()), None)
 
     def add_custom_tag_to_computer(self, computer_name: str, tag: str, instance_name: str) -> bool:
@@ -601,11 +597,8 @@ def main():
         results = client.add_custom_tag_to_computer_all_instances("SERVER-001", "Critical System")
         logger.info(f"Tag addition results across all instances: {results}")
 
-        return 0
-
     except Exception as e:
         logger.error(f"Error during execution: {e}")
-        return 1
 
 
 if __name__ == "__main__":
