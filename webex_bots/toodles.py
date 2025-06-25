@@ -1510,13 +1510,19 @@ def announce_new_threat_hunt(ticket_no, ticket_title, incident_url, person_id):
 
 
 def keepalive_ping():
+    wait = 60  # Start with 1 minute
+    max_wait = 1800  # Max wait: 30 minutes
     while True:
         try:
             # Lightweight API call to keep the connection alive
             webex_api.people.me()
+            wait = 240  # Reset to normal interval (4 min) after success
         except Exception as e:
-            print(f"Keepalive ping failed: {e}")
-        time.sleep(240)  # 4 minutes
+            logger.warning(f"Keepalive ping failed: {e}. Retrying in {wait} seconds.")
+            time.sleep(wait)
+            wait = min(wait * 2, max_wait)  # Exponential backoff, capped at max_wait
+            continue
+        time.sleep(wait)
 
 
 class Who(Command):
