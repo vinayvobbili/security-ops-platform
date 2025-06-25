@@ -1,8 +1,8 @@
 import logging
-from datetime import datetime
-from pathlib import Path
 import threading
 import time
+from datetime import datetime
+from pathlib import Path
 
 import fasteners
 import pandas as pd
@@ -16,8 +16,9 @@ from webexpythonsdk.models.cards.actions import Submit
 from webexteamssdk import WebexTeamsAPI
 
 from config import get_config
-from services.tanium import TaniumClient
+from services.service_now import enrich_host_report
 from src.epp import ring_tag_cs_hosts, cs_hosts_without_ring_tag, cs_hosts_with_invalid_ring_tags
+from src.epp.tanium_hosts_without_ring_tag import get_and_export_computers_without_ring_tag
 from src.helper_methods import log_jarvais_activity
 
 # Setup logging
@@ -286,11 +287,11 @@ class RemoveInvalidRings(Command):
                 )
 
 
-class AllTaniumHosts(Command):
+class GetTaniumHostsWithoutEcmTag(Command):
     def __init__(self):
         super().__init__(
-            command_keyword="all_tanium_hosts",
-            help_message="Get all Tanium Hosts",
+            command_keyword="tanium_hosts_without_ecm_tag",
+            help_message="Get Tanium Hosts without an ECM Tag",
             delete_previous_message=True,
         )
 
@@ -312,12 +313,15 @@ class AllTaniumHosts(Command):
             )
             lock_path = ROOT_DIRECTORY / "src" / "epp" / "all_tanium_hosts.lock"
             with fasteners.InterProcessLock(lock_path):
-                client = TaniumClient()
-                filepath = client.get_and_export_all_computers()
+                filepath = get_and_export_computers_without_ring_tag(filename="Tanium hosts without ring tag.xlsx")
+
+                # Enrich the report with ServiceNow data
+                enriched_filepath = enrich_host_report(filepath)
+
                 webex_api.messages.create(
                     roomId=room_id,
-                    markdown=f"Hello {activity['actor']['displayName']}! Here's the full list of ALL hosts from Tanium along with their custom tags",
-                    files=[str(filepath)]
+                    markdown=f"Hello {activity['actor']['displayName']}! Here's the full list of Tanium hosts without a Ring Tag. The report has been enriched with SNOW data. Ring tags have also been generated for your review.",
+                    files=[str(enriched_filepath)]
                 )
 
 
@@ -357,7 +361,7 @@ def main():
     bot.add_command(CSHostsWithInvalidRingTags())
     bot.add_command(RemoveInvalidRings())
     bot.add_command(DontRemoveInvalidRings())
-    bot.add_command(AllTaniumHosts())
+    bot.add_command(GetTaniumHostsWithoutEcmTag())
 
     print("Jarvais is up and running...")
     # Start the bot

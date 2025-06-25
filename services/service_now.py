@@ -1,11 +1,10 @@
 import base64
 import json
 import logging
-import os
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
-from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import pandas as pd
 import requests
@@ -113,6 +112,11 @@ class ServiceNowClient:
 
     def get_host_details(self, hostname):
         """Get host details by hostname, checking servers first then workstations."""
+        # Safely handle hostname that might be None or not a string
+        if not hostname or not isinstance(hostname, str):
+            logger.warning(f"Invalid hostname provided: {hostname}")
+            return {"name": str(hostname) if hostname is not None else "unknown", "status": "Invalid Hostname"}
+
         hostname = hostname.split('.')[0]  # Remove domain
 
         # Try servers first
@@ -127,27 +131,31 @@ class ServiceNowClient:
             host_details['category'] = 'workstation'
             return host_details
 
-        return None
+        return {"name": hostname, "status": "Not Found"}
 
     def _search_endpoint(self, endpoint, hostname):
         """Search a specific endpoint for hostname."""
         headers = self.token_manager.get_auth_headers()
         params = {'name': hostname}
 
-        response = requests.get(endpoint, headers=headers, params=params)
-        response.raise_for_status()
+        try:
+            response = requests.get(endpoint, headers=headers, params=params, timeout=10)
+            response.raise_for_status()
 
-        data = response.json()
-        items = data.get('items', data) if isinstance(data, dict) else data
+            data = response.json()
+            items = data.get('items', data) if isinstance(data, dict) else data
 
-        if not items:
-            return None
+            if not items:
+                return None
 
-        # Return most recently discovered item
-        if len(items) > 1:
-            items = sorted(items, key=self._parse_discovery_date, reverse=True)
+            # Return most recently discovered item
+            if len(items) > 1:
+                items = sorted(items, key=self._parse_discovery_date, reverse=True)
 
-        return items[0]
+            return items[0]
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Error fetching details for {hostname}: {str(e)}")
+            return {"name": hostname, "error": str(e), "status": "ServiceNow API Error"}
 
     def _parse_discovery_date(self, item):
         """Parse discovery date, return epoch if invalid."""
@@ -165,52 +173,122 @@ def enrich_host_report(input_file, chunk_size=1000, max_workers=50):
     """Enrich host data with ServiceNow details."""
     today = datetime.now().strftime('%m-%d-%Y')
     input_name = Path(input_file).name
-    output_file = DATA_DIR / today / f"enriched_{input_name}"
+    output_file = DATA_DIR / today / f"Enriched {input_name}"
 
     if output_file.exists():
         logger.info(f"Enriched file already exists: {output_file}")
         return output_file
 
     # Read input data
+    logger.info(f"Reading input file: {input_file}")
     df = pd.read_excel(input_file, engine="openpyxl")
-    hostnames = df['hostname'].tolist()
+
+    # Detect hostname column
+    hostname_col = None
+    for col in df.columns:
+        if 'hostname' in col.lower():
+            hostname_col = col
+            break
+
+    if not hostname_col:
+        logger.error("Could not find hostname column in the input file")
+        return input_file
+
+    logger.info(f"Using column '{hostname_col}' for hostnames")
+
+    # Clean the dataframe: remove rows with empty hostnames
+    df = df.dropna(subset=[hostname_col])
+
+    # Extract hostnames and filter out any None or empty values
+    hostnames = [h for h in df[hostname_col].tolist() if h and isinstance(h, str)]
+    logger.info(f"Processing {len(hostnames)} valid hostnames from {input_file}")
 
     # Get ServiceNow details for all hosts
     client = ServiceNowClient()
-    all_details = []
+    snow_data = {}  # Dictionary to store ServiceNow data by hostname
 
-    for i in range(0, len(hostnames), chunk_size):
-        chunk = hostnames[i:i + chunk_size]
+    # Track any errors that occur during processing
+    errors_occurred = False
 
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            future_to_hostname = {
-                executor.submit(client.get_host_details, hostname): hostname
-                for hostname in chunk
-            }
+    try:
+        for i in range(0, len(hostnames), chunk_size):
+            chunk = hostnames[i:i + chunk_size]
 
-            for future in tqdm(as_completed(future_to_hostname),
-                               total=len(chunk),
-                               desc=f"Processing chunk {i // chunk_size + 1}"):
-                hostname = future_to_hostname[future]
-                result = future.result()
-                all_details.append(result or {"name": hostname.split('.')[0]})
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                future_to_hostname = {
+                    executor.submit(client.get_host_details, hostname): hostname
+                    for hostname in chunk
+                }
 
-    # Merge data
-    details_df = pd.json_normalize(all_details)
-    df['hostname_short'] = df['hostname'].str.split('.').str[0]
+                for future in tqdm(as_completed(future_to_hostname),
+                                  total=len(chunk),
+                                  desc=f"Processing chunk {i // chunk_size + 1}"):
+                    hostname = future_to_hostname[future]
+                    try:
+                        result = future.result()
+                        if result:
+                            # Store the result in our dictionary, keyed by lowercase hostname (without domain)
+                            short_hostname = hostname.split('.')[0].lower() if hostname and isinstance(hostname, str) else ""
+                            snow_data[short_hostname] = result
+                    except Exception as e:
+                        errors_occurred = True
+                        logger.error(f"Error processing hostname {hostname}: {e}")
+    except Exception as e:
+        errors_occurred = True
+        logger.error(f"Error during chunk processing: {e}")
 
-    merged_df = pd.merge(
-        df, details_df,
-        left_on=df['hostname_short'].str.lower(),
-        right_on=details_df['name'].str.lower(),
-        how='left'
-    ).drop('hostname_short', axis=1)
+    if not snow_data:
+        logger.error("No ServiceNow data collected, cannot enrich report")
+        return input_file
 
-    # Save results
+    # Add ServiceNow data to the original dataframe
+    logger.info(f"Retrieved data for {len(snow_data)} hosts from ServiceNow")
+
+    # Create new columns for ServiceNow data
+    snow_columns = ['id', 'ciClass', 'environment', 'lifecycleStatus', 'country',
+                   'supportedCountry', 'operatingSystem', 'category', 'status', 'error']
+
+    for col in snow_columns:
+        df[f'SNOW_{col}'] = None
+
+    # For each row in the dataframe, add the ServiceNow data
+    for idx, row in df.iterrows():
+        hostname = row[hostname_col]
+        if not isinstance(hostname, str):
+            continue
+
+        short_hostname = hostname.split('.')[0].lower()
+        if short_hostname in snow_data:
+            for col in snow_columns:
+                if col in snow_data[short_hostname]:
+                    df.at[idx, f'SNOW_{col}'] = snow_data[short_hostname][col]
+
+    # Save results with adjusted column widths
     output_file.parent.mkdir(parents=True, exist_ok=True)
-    merged_df.to_excel(output_file, index=False, engine="openpyxl")
 
-    logger.info(f"Enriched {len(all_details)} hosts, saved to {output_file}")
+    with pd.ExcelWriter(output_file, engine="openpyxl") as writer:
+        df.to_excel(writer, index=False)
+
+        # Auto-adjust column widths for better readability
+        worksheet = writer.sheets['Sheet1']
+        for i, column in enumerate(df.columns):
+            # Set column width based on content
+            max_length = max(
+                df[column].astype(str).apply(len).max(),
+                len(str(column))
+            ) + 2  # add a little extra space
+
+            # Cap the width at a reasonable maximum to prevent overly wide columns
+            column_width = min(max_length, 30)
+
+            # Convert to Excel's character width
+            worksheet.column_dimensions[worksheet.cell(row=1, column=i+1).column_letter].width = column_width
+
+    if errors_occurred:
+        logger.warning(f"Enriched report saved with some errors to {output_file}")
+    else:
+        logger.info(f"Successfully enriched report saved to {output_file}")
+
     return output_file
 
 
