@@ -33,7 +33,7 @@ from pathlib import Path
 from typing import Optional, List, Union, Dict, Callable, TypeVar, cast, Any
 
 import openpyxl
-from falconpy import OAuth2, Hosts, RealTimeResponse
+from falconpy import OAuth2, Hosts
 from pytz import timezone
 from tqdm import tqdm
 from webexpythonsdk import WebexAPI
@@ -91,7 +91,6 @@ falcon_auth = OAuth2(
     base_url="api.us-2.crowdstrike.com",
     ssl_verify=False
 )
-falcon_rtr = RealTimeResponse(auth_object=falcon_auth)
 falcon_hosts = Hosts(auth_object=falcon_auth)
 
 crowdstrike = CrowdStrikeClient()
