@@ -231,8 +231,13 @@ def generate_ring_tags(computers: List[Computer], filename: str) -> str:
                 setattr(computer, "was_country_guessed", True)
                 _append_status(computer, explanation)
                 computers_with_guessed_country += 1
-            else:
-                _append_status(computer, "Unable to determine country")
+                # Set region based on guessed country
+                guessed_region = _get_region_from_country(guessed_country)
+                if guessed_region:
+                    setattr(computer, "region", guessed_region)
+        # Only add 'Missing region data' after all attempts to set region
+        if not getattr(computer, "region", None) or getattr(computer, "region") == "Unknown Region":
+            _append_status(computer, "Missing region data")
 
         # Determine type more intelligently
         if enrichment["type"]:
@@ -276,11 +281,16 @@ def generate_ring_tags(computers: List[Computer], filename: str) -> str:
     # Format headers: bold and add filter
     from openpyxl.styles import Font
 
-    # Bold the headers
+    # Bold the headers and set font size to 14
     for cell in output_ws[1]:
-        cell.font = Font(bold=True)
+        cell.font = Font(bold=True, size=14)
 
-    # Add autofilter to the header row
+    # Set font size 14 for all data rows (excluding header)
+    for row in output_ws.iter_rows(min_row=2, max_row=output_ws.max_row):
+        for cell in row:
+            cell.font = Font(size=14)
+
+    # Add auto filter to the header row
     output_ws.auto_filter.ref = f"A1:J{len(workstations) + len(servers) + 1}"
 
     # Freeze the first row
@@ -302,6 +312,13 @@ def generate_ring_tags(computers: List[Computer], filename: str) -> str:
         elif computer_type and computer_type.lower() in ("server", "srv"):
             computer_type = "Server"  # Standardize to title case
 
+        # Do not generate a ring tag if region is unknown
+        region = getattr(computer, "region", None)
+        new_tag = getattr(computer, "new_tag", None)
+        if region == "Unknown Region":
+            new_tag = None
+            _append_status(computer, "Skipping tag generation due to unknown region")
+
         # Add a row with all the data
         output_ws.append([
             computer.name,
@@ -309,10 +326,10 @@ def generate_ring_tags(computers: List[Computer], filename: str) -> str:
             computer_type,  # Use normalized type
             getattr(computer, "environment"),
             getattr(computer, "country"),
-            getattr(computer, "region"),
+            region,
             "Yes" if getattr(computer, "was_country_guessed", False) else "No",
             current_tags,
-            getattr(computer, "new_tag"),
+            new_tag,
             getattr(computer, "status")
         ])
 
@@ -565,10 +582,6 @@ def _get_region_from_country(country: str) -> str:
 
     if normalized_country.lower() in ('us', 'united states'):
         return 'US'
-    elif normalized_country.lower() == 'japan':
-        return 'Japan'
-    elif normalized_country.lower() in ('mexico', 'mexico (gss)'):
-        return 'LATAM'
 
     # Load region mapping if not already loaded (caching for efficiency)
     if not hasattr(_get_region_from_country, 'regions_by_country'):

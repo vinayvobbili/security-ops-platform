@@ -287,11 +287,11 @@ class RemoveInvalidRings(Command):
                 )
 
 
-class GetTaniumHostsWithoutEcmTag(Command):
+class GetTaniumHostsWithoutRingTag(Command):
     def __init__(self):
         super().__init__(
-            command_keyword="tanium_hosts_without_ecm_tag",
-            help_message="Get Tanium Hosts without an ECM Tag",
+            command_keyword="tanium_hosts_without_ring_tag",
+            help_message="Get Tanium Hosts without a Ring Tag",
             delete_previous_message=True,
         )
 
@@ -300,29 +300,22 @@ class GetTaniumHostsWithoutEcmTag(Command):
         room_id = attachment_actions.roomId
         today_date = datetime.now().strftime('%m-%d-%Y')
         filepath = DATA_DIR / today_date / "all_tanium_hosts.xlsx"
-        if filepath.exists():
+        if not filepath.exists():
             webex_api.messages.create(
                 roomId=room_id,
-                markdown=f"Hello {activity['actor']['displayName']}! Here's the full list of ALL hosts from Tanium along with their custom tags",
-                files=[str(filepath)]
-            )
-        else:
-            webex_api.messages.create(
-                roomId=room_id,
-                markdown=f"Hello {activity['actor']['displayName']}! I have started the report generation process for ALL Tanium Hosts. It is running in the background and will complete in about 5 mins."
+                markdown=f"Hello {activity['actor']['displayName']}! I've started the report generation process for Tanium Hosts without a ring tag. It is running in the background and will complete in about 5 mins",
             )
             lock_path = ROOT_DIRECTORY / "src" / "epp" / "all_tanium_hosts.lock"
             with fasteners.InterProcessLock(lock_path):
                 filepath = get_tanium_hosts_without_ring_tag(filename="Tanium hosts without ring tag.xlsx")
 
-                # Enrich the report with ServiceNow data
-                enriched_filepath = enrich_host_report(filepath)
+        message = f"Hello {activity['actor']['displayName']}! Here's the list of Tanium hosts without a Ring Tag. Ring tags have also been generated for your review. Count = {len(pd.read_excel(filepath))}"
 
-                webex_api.messages.create(
-                    roomId=room_id,
-                    markdown=f"Hello {activity['actor']['displayName']}! Here's the full list of Tanium hosts without a Ring Tag. The report has been enriched with SNOW data. Ring tags have also been generated for your review.",
-                    files=[str(enriched_filepath)]
-                )
+        webex_api.messages.create(
+            roomId=room_id,
+            markdown=message,
+            files=[str(filepath)]
+        )
 
 
 def keepalive_ping():
@@ -361,7 +354,7 @@ def main():
     bot.add_command(CSHostsWithInvalidRingTags())
     bot.add_command(RemoveInvalidRings())
     bot.add_command(DontRemoveInvalidRings())
-    bot.add_command(GetTaniumHostsWithoutEcmTag())
+    bot.add_command(GetTaniumHostsWithoutRingTag())
 
     print("Jarvais is up and running...")
     # Start the bot
