@@ -85,15 +85,7 @@ with open(COUNTRIES_FILE, 'r') as f:
     COUNTRY_NAMES_BY_ABBREVIATION = json.load(f)
 
 # Initialize API clients
-falcon_auth = OAuth2(
-    client_id=config.cs_host_write_client_id,
-    client_secret=config.cs_host_write_client_secret,
-    base_url="api.us-2.crowdstrike.com",
-    ssl_verify=False
-)
-falcon_hosts = Hosts(auth_object=falcon_auth)
-
-crowdstrike = CrowdStrikeClient()
+crowdstrike = CrowdStrikeClient(use_host_write_creds=True)
 
 
 def benchmark(func: F) -> F:
@@ -187,32 +179,33 @@ class Host:
 
             if self.device_id is None:
                 self.status_message += f" Error retrieving CrowdStrike Device ID for {self.name}."
+                logger.warning(f"[CrowdStrike] Device ID not found for host: {self.name}")
                 return
 
             # Fetch device details including tags
-            device_response = falcon_hosts.get_device_details(ids=self.device_id)
+            device_details = crowdstrike.get_device_details(self.device_id)
 
-            if device_response.get("status_code") != 200:
-                error_detail = device_response.get('errors', ['Unknown error'])
-                self.status_message += f" Error fetching device details from CrowdStrike: {error_detail}."
-                # Optionally, log the full device_response for debugging
-                logger.error(f"CrowdStrike device details error for {self.device_id}: {device_response}")
+            if not device_details or not isinstance(device_details, dict):
+                self.status_message += f" Error fetching device details from CrowdStrike: No details returned."
+                logger.error(f"[CrowdStrike] No device details returned for device_id: {self.device_id}")
                 return
 
-            device_resources = device_response["body"].get("resources", [])
+            self.current_crowd_strike_tags = device_details.get('tags', [])
+            category = device_details.get('product_type_desc', '').lower()
+            if category == 'workstation':
+                self.category = HostCategory.WORKSTATION
+            elif category in ('server', 'domain controller'):
+                self.category = HostCategory.SERVER
+            else:
+                self.status_message += f" Unknown host category: {category}."
+                logger.warning(f"[CrowdStrike] Unknown host category '{category}' for device_id: {self.device_id}")
 
-            if device_resources:
-                self.current_crowd_strike_tags = device_resources[0].get('tags', [])
-                category = device_resources[0].get('product_type_desc', '').lower()
-                if category == 'workstation':
-                    self.category = HostCategory.WORKSTATION
-                elif category in ('server', 'domain controller'):
-                    self.category = HostCategory.SERVER
-                else:
-                    self.status_message += f" Unknown host category: {category}."
+            # Log success for clarity
+            logger.info(f"[CrowdStrike] Retrieved details for {self.name} (device_id: {self.device_id}), tags: {self.current_crowd_strike_tags}, category: {category}")
 
         except Exception as e:
             self.status_message += f" Error retrieving CrowdStrike data: {str(e)}."
+            logger.error(f"[CrowdStrike] Exception retrieving data for {self.name}: {e}")
 
     def _set_host_details_from_snow(self) -> None:
         """Retrieve host details from ServiceNow."""
@@ -395,7 +388,7 @@ class TagManager:
 
         # Apply tags to each group of devices
         for tag, device_ids in tag_groups.items():
-            response = falcon_hosts.update_device_tags(
+            response = crowdstrike.update_device_tags(
                 action_name='add',
                 ids=device_ids,
                 tags=[tag]
@@ -430,7 +423,7 @@ class TagManager:
             tags_to_remove = list({tag for item in batch for tag in item['tags']})
             if not device_ids or not tags_to_remove:
                 continue
-            response = falcon_hosts.update_device_tags(
+            response = crowdstrike.update_device_tags(
                 action_name='remove',
                 ids=device_ids,
                 tags=tags_to_remove
@@ -657,19 +650,21 @@ def main() -> None:
     """Main execution function with profiling options."""
     try:
         print("Starting EPP Device Tagging")
-        # run_workflow(config.webex_room_id_vinay_test_space)
-        # Test if the CS API token is active by attempting to tag your computer
         hosts = list(Host.initialize_hosts_parallel(['Y54G91YXRY']))
         # Assign a test tag for verification
+        test_tag = "FalconGroupingTags/TestTokenActive1"
         for host in hosts:
-            host.new_crowd_strike_tag = "FalconGroupingTags/TestTokenActive"
-        result = TagManager.apply_tags(hosts)
-        if result:
-            print("Test tag successfully applied to Y54G91YXRY. Please verify in CrowdStrike.")
-        else:
-            print("Failed to apply test tag. Check API token and permissions.")
+            host.new_crowd_strike_tag = test_tag
+        TagManager.apply_tags(hosts)
+        # Re-fetch host details to verify tag presence
+        for host in hosts:
+            refreshed_details = crowdstrike.get_device_details(host.device_id)
+            tags = refreshed_details.get('tags', [])
+            if test_tag in tags:
+                print(f"Test tag successfully applied to {host.name}. Tag is present in CrowdStrike.")
+            else:
+                print(f"Failed to apply test tag to {host.name}. Tag not found in CrowdStrike. Check API token and permissions.")
         print("Completed EPP Device Tagging")
-
     except Exception as e:
         print(f"Error in main workflow: {e}")
 
