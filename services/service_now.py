@@ -2,13 +2,18 @@ import base64
 import json
 import logging
 import time
+import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
+import asyncio
+import aiohttp
+from tqdm.asyncio import tqdm as tqdm_asyncio
 
 import pandas as pd
 import requests
 from tqdm import tqdm
+from filelock import FileLock
 
 from config import get_config
 
@@ -33,6 +38,7 @@ class ServiceNowTokenManager:
 
     def _load_token(self):
         if TOKEN_FILE.exists():
+            logger.info(f"Loading token from {TOKEN_FILE}")
             with open(TOKEN_FILE) as f:
                 data = json.load(f)
                 self.access_token = data.get('access_token')
@@ -49,8 +55,16 @@ class ServiceNowTokenManager:
             'refresh_token': self.refresh_token,
             'token_expiry': self.token_expiry
         }
-        with open(TOKEN_FILE, 'w') as f:
-            json.dump(data, f, indent=2)
+        lock_path = str(TOKEN_FILE) + '.lock'
+        temp_path = str(TOKEN_FILE) + '.tmp'
+        logger.info(f"Saving token to {TOKEN_FILE} (using lock {lock_path})")
+        with FileLock(lock_path):
+            with open(temp_path, 'w') as f:
+                json.dump(data, f, indent=2)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(temp_path, TOKEN_FILE)
+        logger.info(f"Token saved to {TOKEN_FILE}")
 
     def _get_new_token(self):
         url = f"{self.instance_url}/authorization/token"
@@ -169,6 +183,63 @@ class ServiceNowClient:
             return datetime(1970, 1, 1)
 
 
+class AsyncServiceNowClient:
+    def __init__(self, token_manager=None):
+        if token_manager is None:
+            token_manager = ServiceNowTokenManager(
+                instance_url=config.snow_base_url,
+                username=config.snow_functional_account_id,
+                password=config.snow_functional_account_password,
+                client_id=config.snow_client_key
+            )
+        self.token_manager = token_manager
+        base_url = config.snow_base_url.rstrip('/')
+        self.server_url = f"{base_url}/itsm-compute/compute/instances"
+        self.workstation_url = f"{base_url}/itsm-compute/compute/computers"
+
+    async def get_host_details(self, session, hostname):
+        if not hostname or not isinstance(hostname, str):
+            return {"name": str(hostname) if hostname is not None else "unknown", "status": "Invalid Hostname"}
+        hostname_short = hostname.split('.')[0]
+        # Try servers first
+        result = await self._search_endpoint(session, self.server_url, hostname_short)
+        if result:
+            result['category'] = 'server'
+            return result
+        # Try workstations
+        result = await self._search_endpoint(session, self.workstation_url, hostname_short)
+        if result:
+            result['category'] = 'workstation'
+            return result
+        return {"name": hostname_short, "status": "Not Found"}
+
+    async def _search_endpoint(self, session, endpoint, hostname):
+        headers = self.token_manager.get_auth_headers()
+        params = {'name': hostname}
+        try:
+            async with session.get(endpoint, headers=headers, params=params, timeout=10) as response:
+                if response.status != 200:
+                    return None
+                data = await response.json()
+                items = data.get('items', data) if isinstance(data, dict) else data
+                if not items:
+                    return None
+                if len(items) > 1:
+                    items = sorted(items, key=self._parse_discovery_date, reverse=True)
+                return items[0]
+        except Exception as e:
+            return {"name": hostname, "error": str(e), "status": "ServiceNow API Error"}
+
+    def _parse_discovery_date(self, item):
+        date_str = item.get('mostRecentDiscovery')
+        if not date_str:
+            return datetime(1970, 1, 1)
+        try:
+            return datetime.strptime(date_str, '%m-%d-%Y %I:%M %p')
+        except (ValueError, TypeError):
+            return datetime(1970, 1, 1)
+
+
 def enrich_host_report(input_file, chunk_size=1000, max_workers=50):
     """Enrich host data with ServiceNow details."""
     today = datetime.now().strftime('%m-%d-%Y')
@@ -203,39 +274,27 @@ def enrich_host_report(input_file, chunk_size=1000, max_workers=50):
     hostnames = [h for h in df[hostname_col].tolist() if h and isinstance(h, str)]
     logger.info(f"Processing {len(hostnames)} valid hostnames from {input_file}")
 
-    # Get ServiceNow details for all hosts
-    client = ServiceNowClient()
-    snow_data = {}  # Dictionary to store ServiceNow data by hostname
+    async def async_enrich():
+        client = AsyncServiceNowClient()
+        snow_data = {}
+        errors_occurred = False
+        connector = aiohttp.TCPConnector(limit_per_host=30)
+        async with aiohttp.ClientSession(connector=connector) as session:
+            tasks = [client.get_host_details(session, hostname) for hostname in hostnames]
+            results = []
+            for coro in tqdm_asyncio.as_completed(tasks, total=len(tasks), desc="Enriching hosts with ServiceNow"):
+                result = await coro
+                results.append(result)
+            for idx, result in enumerate(results):
+                hostname = hostnames[idx]
+                short_hostname = hostname.split('.')[0].lower() if hostname and isinstance(hostname, str) else ""
+                if result:
+                    snow_data[short_hostname] = result
+                if 'error' in result:
+                    errors_occurred = True
+        return snow_data, errors_occurred
 
-    # Track any errors that occur during processing
-    errors_occurred = False
-
-    try:
-        for i in range(0, len(hostnames), chunk_size):
-            chunk = hostnames[i:i + chunk_size]
-
-            with ThreadPoolExecutor(max_workers=max_workers) as executor:
-                future_to_hostname = {
-                    executor.submit(client.get_host_details, hostname): hostname
-                    for hostname in chunk
-                }
-
-                for future in tqdm(as_completed(future_to_hostname),
-                                  total=len(chunk),
-                                  desc=f"Processing chunk {i // chunk_size + 1}"):
-                    hostname = future_to_hostname[future]
-                    try:
-                        result = future.result()
-                        if result:
-                            # Store the result in our dictionary, keyed by lowercase hostname (without domain)
-                            short_hostname = hostname.split('.')[0].lower() if hostname and isinstance(hostname, str) else ""
-                            snow_data[short_hostname] = result
-                    except Exception as e:
-                        errors_occurred = True
-                        logger.error(f"Error processing hostname {hostname}: {e}")
-    except Exception as e:
-        errors_occurred = True
-        logger.error(f"Error during chunk processing: {e}")
+    snow_data, errors_occurred = asyncio.run(async_enrich())
 
     if not snow_data:
         logger.error("No ServiceNow data collected, cannot enrich report")
@@ -246,7 +305,7 @@ def enrich_host_report(input_file, chunk_size=1000, max_workers=50):
 
     # Create new columns for ServiceNow data
     snow_columns = ['id', 'ciClass', 'environment', 'lifecycleStatus', 'country',
-                   'supportedCountry', 'operatingSystem', 'category', 'status', 'error']
+                    'supportedCountry', 'operatingSystem', 'category', 'status', 'error']
 
     for col in snow_columns:
         df[f'SNOW_{col}'] = None
@@ -282,7 +341,7 @@ def enrich_host_report(input_file, chunk_size=1000, max_workers=50):
             column_width = min(max_length, 30)
 
             # Convert to Excel's character width
-            worksheet.column_dimensions[worksheet.cell(row=1, column=i+1).column_letter].width = column_width
+            worksheet.column_dimensions[worksheet.cell(row=1, column=i + 1).column_letter].width = column_width
 
     if errors_occurred:
         logger.warning(f"Enriched report saved with some errors to {output_file}")
