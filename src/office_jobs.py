@@ -11,6 +11,7 @@ from config import get_config
 from src import helper_methods
 from src.charts import mttr_mttc, outflow, lifespan, heatmap, sla_breaches, aging_tickets, inflow, qradar_rule_efficacy, de_stories, days_since_incident, re_stories, threatcon_level, vectra_volume, \
     crowdstrike_volume, threat_tippers, crowdstrike_efficacy
+from src.utils.fs_utils import make_dir_for_todays_charts
 
 config = get_config()
 eastern = pytz.timezone('US/Eastern')
@@ -21,7 +22,7 @@ PID_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__
 
 def scheduler_process():
     """
-    The scheduler process that runs continuously.
+    Scheduler process that runs daily jobs and writes its PID to a file.
     """
     # Write PID to file so we can check if it's running
     with open(PID_FILE, 'w') as f:
@@ -34,7 +35,7 @@ def scheduler_process():
     print("Starting the scheduler...")
 
     schedule.every().day.at("00:01", eastern).do(lambda: (
-        helper_methods.make_dir_for_todays_charts(),
+        make_dir_for_todays_charts(helper_methods.CHARTS_DIR_PATH),
         aging_tickets.make_chart(),
         days_since_incident.make_chart(),
         crowdstrike_volume.make_chart(),
@@ -69,7 +70,7 @@ def scheduler_process():
 
 
 def is_scheduler_running():
-    """Check if the scheduler is already running by checking the PID file"""
+    """Check if the scheduler process is running by checking the PID file."""
     if not os.path.exists(PID_FILE):
         return False
 
@@ -91,7 +92,7 @@ def is_scheduler_running():
 
 
 def stop_scheduler():
-    """Stop the scheduler if it's running"""
+    """Stop the scheduler process if it is running."""
     if not os.path.exists(PID_FILE):
         print("Scheduler is not running.")
         return
@@ -115,9 +116,7 @@ def stop_scheduler():
 
 
 def main():
-    """
-    Main function to run or manage the scheduler.
-    """
+    """Entry point for running the scheduler from the command line."""
     if len(sys.argv) > 1:
         if sys.argv[1] == 'stop':
             stop_scheduler()
