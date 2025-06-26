@@ -23,6 +23,7 @@ import json
 import math
 import pstats
 import time
+import logging
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
@@ -40,6 +41,10 @@ from webexpythonsdk import WebexAPI
 from config import get_config
 from services.crowdstrike import CrowdStrikeClient
 from services.service_now import ServiceNowClient
+
+# Setup logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 # Load configuration
 config = get_config()
@@ -189,7 +194,10 @@ class Host:
             device_response = falcon_hosts.get_device_details(ids=self.device_id)
 
             if device_response.get("status_code") != 200:
-                self.status_message += f" Error fetching device details: {device_response.get('errors', ['Unknown error'])}."
+                error_detail = device_response.get('errors', ['Unknown error'])
+                self.status_message += f" Error fetching device details from CrowdStrike: {error_detail}."
+                # Optionally, log the full device_response for debugging
+                logger.error(f"CrowdStrike device details error for {self.device_id}: {device_response}")
                 return
 
             device_resources = device_response["body"].get("resources", [])
@@ -418,7 +426,7 @@ class TagManager:
         from tqdm import tqdm
         total = len(hosts_with_tags_to_remove)
         for i in tqdm(range(0, total, batch_size), desc="Removing tags from hosts"):
-            batch = hosts_with_tags_to_remove[i:i+batch_size]
+            batch = hosts_with_tags_to_remove[i:i + batch_size]
             device_ids = [item['device_id'] for item in batch]
             tags_to_remove = list({tag for item in batch for tag in item['tags']})
             if not device_ids or not tags_to_remove:
@@ -429,7 +437,7 @@ class TagManager:
                 tags=tags_to_remove
             )
             if response.get("status_code") != 200:
-                print(f"Failed to remove tags for batch {i//batch_size+1}: {response.get('errors', ['Unknown error'])}")
+                print(f"Failed to remove tags for batch {i // batch_size + 1}: {response.get('errors', ['Unknown error'])}")
 
 
 class FileHandler:
@@ -541,6 +549,7 @@ class ReportHandler:
     @staticmethod
     def generate_time_report(timings: Dict[str, float], stats: Dict[str, int]) -> str:
         """Generate a timing and statistics report."""
+
         return f"""
 Summary:
 - Total hosts processed: {stats.get('total_hosts', 0)}
@@ -649,7 +658,7 @@ def main() -> None:
     """Main execution function with profiling options."""
     try:
         print("Starting EPP Device Tagging")
-        run_workflow()
+        run_workflow(config.webex_room_id_vinay_test_space)
         print("Completed EPP Device Tagging")
 
     except Exception as e:

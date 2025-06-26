@@ -333,6 +333,25 @@ def keepalive_ping():
         time.sleep(wait)
 
 
+class GetTaniumUnhealthyHosts(Command):
+    def __init__(self):
+        super().__init__(
+            command_keyword="tanium_unhealthy_hosts",
+            help_message="Get Tanium Unhealthy Hosts",
+            delete_previous_message=True,
+        )
+
+    @log_jarvais_activity(bot_access_token=CONFIG.webex_bot_access_token_jarvais)
+    def execute(self, message, attachment_actions, activity):
+        room_id = attachment_actions.roomId
+        message = f"Hello {activity['actor']['displayName']}! This is still work in progress. Please try again later."
+
+        webex_api.messages.create(
+            roomId=room_id,
+            markdown=message,
+        )
+
+
 def main():
     threading.Thread(target=keepalive_ping, daemon=True).start()
 
@@ -355,6 +374,7 @@ def main():
     bot.add_command(RemoveInvalidRings())
     bot.add_command(DontRemoveInvalidRings())
     bot.add_command(GetTaniumHostsWithoutRingTag())
+    bot.add_command(GetTaniumUnhealthyHosts())
 
     print("Jarvais is up and running...")
     # Start the bot
