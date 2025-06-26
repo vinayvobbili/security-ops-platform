@@ -10,6 +10,7 @@ from src import helper_methods
 from src.charts import mttr_mttc, outflow, lifespan, heatmap, sla_breaches, aging_tickets, inflow, qradar_rule_efficacy, de_stories, days_since_incident, re_stories, threatcon_level, vectra_volume, \
     crowdstrike_volume, threat_tippers, crowdstrike_efficacy
 from src.components import oncall, approved_security_testing, thithi
+from src.utils.fs_utils import make_dir_for_todays_charts
 
 config = get_config()
 eastern = pytz.timezone('US/Eastern')
@@ -20,7 +21,7 @@ def main():
     Main function to run the scheduled jobs.
     """
     # run once to test
-    helper_methods.make_dir_for_todays_charts()
+    make_dir_for_todays_charts(helper_methods.CHARTS_DIR_PATH)
     aging_tickets.make_chart()
     crowdstrike_efficacy.make_chart()
     crowdstrike_volume.make_chart()
@@ -50,7 +51,7 @@ def main():
     ))
 
     schedule.every().day.at("00:01", eastern).do(lambda: (
-        helper_methods.make_dir_for_todays_charts(),
+        make_dir_for_todays_charts(helper_methods.CHARTS_DIR_PATH),
         aging_tickets.make_chart(),
         crowdstrike_efficacy.make_chart(),
         crowdstrike_volume.make_chart(),
