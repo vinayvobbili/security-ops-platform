@@ -23,12 +23,22 @@ SHOULD_USE_PROXY = True
 class CrowdStrikeClient:
     """Client for interacting with the CrowdStrike Falcon API."""
 
-    def __init__(self):
+    def __init__(self, use_host_write_creds: bool = False):
         self.config = get_config()
         self.base_url = "api.us-2.crowdstrike.com"
         self.proxies = self._setup_proxy()
+        if self.proxies:
+            print(f"[CrowdStrikeClient] Proxy enabled: {self.proxies}")
+        else:
+            print("[CrowdStrikeClient] Proxy not enabled.")
+        self.use_host_write_creds = use_host_write_creds
         self.auth = self._create_auth()
         self.hosts_client = Hosts(auth_object=self.auth)
+
+    def _get_client_id_secret(self):
+        if self.use_host_write_creds:
+            return self.config.cs_host_write_client_id, self.config.cs_host_write_client_secret
+        return self.config.cs_ro_client_id, self.config.cs_ro_client_secret
 
     def _setup_proxy(self):
         """Setup proxy configuration if enabled"""
@@ -39,10 +49,11 @@ class CrowdStrikeClient:
         return {"http": proxy_url, "https": proxy_url}
 
     def _create_auth(self):
+        client_id, client_secret = self._get_client_id_secret()
         """Create OAuth2 authentication object"""
         return OAuth2(
-            client_id=self.config.cs_ro_client_id,
-            client_secret=self.config.cs_ro_client_secret,
+            client_id=client_id,
+            client_secret=client_secret,
             base_url=self.base_url,
             ssl_verify=False,
             proxy=self.proxies
@@ -51,9 +62,10 @@ class CrowdStrikeClient:
     def get_access_token(self) -> str:
         """Get CrowdStrike access token using direct API call"""
         url = f'https://{self.base_url}/oauth2/token'
+        client_id, client_secret = self._get_client_id_secret()
         body = {
-            'client_id': self.config.cs_ro_client_id,
-            'client_secret': self.config.cs_ro_client_secret
+            'client_id': client_id,
+            'client_secret': client_secret
         }
 
         response = requests.post(url, data=body, verify=False, proxies=self.proxies)
@@ -191,6 +203,14 @@ class CrowdStrikeClient:
 
         df = pd.DataFrame(all_host_data)
         df.to_excel(output_path / xlsx_filename, index=False, engine='openpyxl')
+
+    def update_device_tags(self, action_name: str, ids: list, tags: list) -> dict:
+        """Update device tags (add/remove) for a list of device IDs."""
+        return self.hosts_client.update_device_tags(
+            action_name=action_name,
+            ids=ids,
+            tags=tags
+        )
 
 
 def process_unique_hosts(df: pd.DataFrame) -> pd.DataFrame:
