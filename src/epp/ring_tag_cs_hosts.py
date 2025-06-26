@@ -197,7 +197,7 @@ class Host:
                 error_detail = device_response.get('errors', ['Unknown error'])
                 self.status_message += f" Error fetching device details from CrowdStrike: {error_detail}."
                 # Optionally, log the full device_response for debugging
-                logger.error(f"CrowdStrike device details error for {self.device_id}: {device_response}")
+                # logger.error(f"CrowdStrike device details error for {self.device_id}: {device_response}")
                 return
 
             device_resources = device_response["body"].get("resources", [])
