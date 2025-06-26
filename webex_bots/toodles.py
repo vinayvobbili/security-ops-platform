@@ -25,7 +25,7 @@ from data.data_maps import azdo_projects, azdo_orgs, azdo_area_paths
 from services import xsoar, azdo
 from services.crowdstrike import CrowdStrikeClient
 from services.xsoar import ListHandler, TicketHandler
-from src.helper_methods import log_toodles_activity
+from src.utils.logging_utils import log_activity
 from services.approved_testing_utils import add_approved_testing_entry
 
 CONFIG = get_config()
@@ -1043,7 +1043,7 @@ class URLs(Command):
             delete_previous_message=True
         )
 
-    @log_toodles_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles)
+    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles, log_file_name="toodles_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
         pass
 
@@ -1057,7 +1057,7 @@ class GetNewXTicketForm(Command):
             delete_previous_message=True
         )
 
-    @log_toodles_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles)
+    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles, log_file_name="toodles_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
         pass
 
@@ -1070,7 +1070,7 @@ class CreateXSOARTicket(Command):
             delete_previous_message=True
         )
 
-    @log_toodles_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles)
+    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles, log_file_name="toodles_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
         if attachment_actions.inputs['title'].strip() == "" or attachment_actions.inputs['details'].strip() == "":
             reply = "Please fill in both fields to create a new ticket."
@@ -1103,7 +1103,7 @@ class IOC(Command):
             delete_previous_message=True
         )
 
-    @log_toodles_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles)
+    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles, log_file_name="toodles_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
         pass
 
@@ -1116,7 +1116,7 @@ class IOCHunt(Command):
             delete_previous_message=True
         )
 
-    @log_toodles_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles)
+    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles, log_file_name="toodles_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
         if attachment_actions.inputs['ioc_hunt_title'].strip() == "" or attachment_actions.inputs[
             'ioc_hunt_iocs'].strip() == "":
@@ -1157,7 +1157,7 @@ class CreateThreatHunt(Command):
             delete_previous_message=True
         )
 
-    @log_toodles_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles)
+    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles, log_file_name="toodles_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
         if attachment_actions.inputs['threat_hunt_title'].strip() == "" or attachment_actions.inputs[
             'threat_hunt_desc'].strip() == "":
@@ -1188,7 +1188,7 @@ class CreateAZDOWorkItem(Command):
             delete_previous_message=True
         )
 
-    @log_toodles_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles)
+    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles, log_file_name="toodles_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
 
         try:
@@ -1245,7 +1245,7 @@ class Review(Command):
             delete_previous_message=True
         )
 
-    @log_toodles_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles)
+    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles, log_file_name="toodles_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
         if attachment_actions.inputs["review_notes"] == "":
             return "Please add a comment to submit this ticket for review."
@@ -1271,7 +1271,7 @@ class GetApprovedTestingCard(Command):
             delete_previous_message=True
         )
 
-    @log_toodles_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles)
+    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles, log_file_name="toodles_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
         pass
 
@@ -1325,7 +1325,7 @@ class GetCurrentApprovedTestingEntries(Command):
             card=None
         )
 
-    @log_toodles_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles)
+    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles, log_file_name="toodles_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
         approved_testing_items_table = get_approved_testing_entries_table()
         # Webex message length limit: 7439 chars before encryption
@@ -1439,7 +1439,7 @@ class AddApprovedTestingEntry(Command):
             delete_previous_message=True
         )
 
-    @log_toodles_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles)
+    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles, log_file_name="toodles_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
         usernames = attachment_actions.inputs['usernames'].strip()
         items_of_tester = attachment_actions.inputs['ip_addresses_and_host_names_of_tester'].strip()
@@ -1536,7 +1536,7 @@ class Who(Command):
             delete_previous_message=True
         )
 
-    @log_toodles_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles)
+    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles, log_file_name="toodles_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
         return f"{activity['actor']['displayName']}, the DnR On-call person is {oncall.get_on_call_person()}"
 
@@ -1551,7 +1551,7 @@ class Rotation(Command):
             delete_previous_message=True
         )
 
-    @log_toodles_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles)
+    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles, log_file_name="toodles_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
         rotation = oncall.get_rotation()
 
@@ -1571,7 +1571,7 @@ class ContainmentStatusCS(Command):
             delete_previous_message=True
         )
 
-    @log_toodles_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles)
+    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles, log_file_name="toodles_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
 
         if message.strip() != "":
@@ -1611,7 +1611,7 @@ class ImportTicket(Command):
             delete_previous_message=True
         )
 
-    @log_toodles_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles)
+    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles, log_file_name="toodles_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
         prod_ticket_number = attachment_actions.inputs['prod_ticket_number']
         destination_ticket_number, destination_ticket_link = xsoar.import_ticket(prod_ticket_number)
@@ -1627,7 +1627,7 @@ class CreateTuningRequest(Command):
             delete_previous_message=True
         )
 
-    @log_toodles_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles)
+    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles, log_file_name="toodles_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
         title = attachment_actions.inputs['title']
         description = attachment_actions.inputs['description']
@@ -1690,7 +1690,7 @@ class GetSearchXSOARCard(Command):
             delete_previous_message=True
         )
 
-    @log_toodles_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles)
+    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles, log_file_name="toodles_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
         pass
 
