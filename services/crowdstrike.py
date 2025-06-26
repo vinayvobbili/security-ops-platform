@@ -8,6 +8,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Optional, Any, List
+import os
 
 import pandas as pd
 import requests
@@ -18,12 +19,13 @@ from config import get_config
 
 DATA_DIR = Path(__file__).parent.parent / "data" / "transient" / "epp_device_tagging"
 SHOULD_USE_PROXY = True
+CS_FETCH_MAX_WORKERS = 10
 
 
 class CrowdStrikeClient:
     """Client for interacting with the CrowdStrike Falcon API."""
 
-    def __init__(self, use_host_write_creds: bool = False):
+    def __init__(self, use_host_write_creds: bool = False, max_workers: Optional[int] = None):
         self.config = get_config()
         self.base_url = "api.us-2.crowdstrike.com"
         self.proxies = self._setup_proxy()
@@ -34,6 +36,8 @@ class CrowdStrikeClient:
         self.use_host_write_creds = use_host_write_creds
         self.auth = self._create_auth()
         self.hosts_client = Hosts(auth_object=self.auth)
+        # Allow thread pool size to be set via env or parameter
+        self.max_workers = max_workers or CS_FETCH_MAX_WORKERS
 
     def _get_client_id_secret(self):
         if self.use_host_write_creds:
@@ -132,11 +136,14 @@ class CrowdStrikeClient:
 
     def fetch_all_hosts_and_write_to_xlsx(self, xlsx_filename: str = "all_cs_hosts.xlsx") -> None:
         """Fetch all hosts from CrowdStrike Falcon using multithreading"""
+        import logging
+        logger = logging.getLogger(__name__)
         all_host_data = []
         unique_device_ids = set()
         offset = None
         limit = 5000
         batch_count = 0
+        start_time = time.time()
 
         def process_host_details(host_ids_batch: List[str]) -> None:
             """Thread worker to process a batch of host IDs"""
@@ -162,7 +169,8 @@ class CrowdStrikeClient:
                 }
                 all_host_data.append(host_data)
 
-        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+        logger.info(f"Starting fetch_all_hosts_and_write_to_xlsx with max_workers={self.max_workers}")
+        with concurrent.futures.ThreadPoolExecutor(max_workers=self.max_workers) as executor:
             while True:
                 # Refresh auth token every 10 batches
                 if batch_count > 0 and batch_count % 10 == 0:
@@ -195,6 +203,9 @@ class CrowdStrikeClient:
                     break
 
                 time.sleep(0.5)
+
+        elapsed = time.time() - start_time
+        logger.info(f"Completed fetch_all_hosts_and_write_to_xlsx in {elapsed:.2f} seconds. Total hosts: {len(all_host_data)}")
 
         # Write to Excel
         today_date = datetime.now().strftime('%m-%d-%Y')
