@@ -635,7 +635,7 @@ def run_workflow(room_id):
 
     # Apply tags
     apply_tag_start = time.time()
-    successfully_tagged_hosts = TagManager.apply_tags(hosts[:10])
+    successfully_tagged_hosts = TagManager.apply_tags(hosts)
     apply_tag_end = time.time()
     timings['apply_tag_duration'] = apply_tag_end - apply_tag_start
     print(f'Successfully tagged {len(successfully_tagged_hosts)} hosts')
@@ -657,7 +657,17 @@ def main() -> None:
     """Main execution function with profiling options."""
     try:
         print("Starting EPP Device Tagging")
-        run_workflow(config.webex_room_id_vinay_test_space)
+        # run_workflow(config.webex_room_id_vinay_test_space)
+        # Test if the CS API token is active by attempting to tag your computer
+        hosts = list(Host.initialize_hosts_parallel(['Y54G91YXRY']))
+        # Assign a test tag for verification
+        for host in hosts:
+            host.new_crowd_strike_tag = "FalconGroupingTags/TestTokenActive"
+        result = TagManager.apply_tags(hosts)
+        if result:
+            print("Test tag successfully applied to Y54G91YXRY. Please verify in CrowdStrike.")
+        else:
+            print("Failed to apply test tag. Check API token and permissions.")
         print("Completed EPP Device Tagging")
 
     except Exception as e:
