@@ -38,6 +38,7 @@ MANAGEMENT_NOTES_FILE = root_directory / 'data' / 'transient' / 'secOps' / 'mana
 
 
 def get_open_tickets():
+    """Return a summary of open tickets, showing up to 5 with links."""
     all_tickets = TicketHandler().get_tickets(query=BASE_QUERY + ' -status:closed')
     total_tickets = len(all_tickets)
     ticket_show_count = min(total_tickets, 5)
@@ -48,6 +49,7 @@ def get_open_tickets():
 
 
 def get_staffing_data(day_name, shift_name):
+    """Return staffing data for a given day and shift."""
     shift_cell_names = cell_names_by_shift[day_name][shift_name]
     staffing_data = {}
     for team, cell_names in shift_cell_names.items():
@@ -56,7 +58,7 @@ def get_staffing_data(day_name, shift_name):
 
 
 def safe_parse_datetime(dt_string):
-    """Parse datetime string safely, ensuring it's timezone naive"""
+    """Parse datetime string safely, ensuring it's timezone naive."""
     try:
         if not dt_string:
             return None
@@ -68,6 +70,7 @@ def safe_parse_datetime(dt_string):
 
 
 def announce_previous_shift_performance(room_id, shift_name):
+    """Announce the performance of the previous shift in the Webex room."""
     try:
         # Send previous shift performance to Webex room
         day_name = datetime.now().strftime("%A")
@@ -205,6 +208,7 @@ def announce_previous_shift_performance(room_id, shift_name):
 
 
 def announce_shift_change(shift_name, room_id, sleep_time=30):
+    """Announce the change of shift in the Webex room."""
     try:
         day_name = datetime.now().strftime("%A")
         staffing_data = get_staffing_data(day_name, shift_name)

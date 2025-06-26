@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 
 
 def get_list_by_name(list_name):
-    """Fetches a list by its name from Demisto's internal lists."""
+    """Fetch a list by name from Demisto's internal lists."""
     try:
         response = demisto.internalHttpRequest('GET', '/lists')
         all_lists = json.loads(response.get("body", "[]"))
@@ -71,6 +71,7 @@ def notify(message):
 
 
 def get_time_remaining(future_timestamp):
+    """Return the time remaining until a future timestamp, in seconds."""
     # Remove the microseconds and the 'Z'
     future_timestamp_cleaned = future_timestamp.split('.')[0] + 'Z'
 
@@ -95,9 +96,8 @@ def get_time_remaining(future_timestamp):
     return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
 
 
-
 def handle_incidents_at_risk_of_breaching_incident_notification_sla():
-    """Process incidents at risk of breaching the SLA and send notifications."""
+    """Main handler for incidents at risk of breaching the notification SLA."""
     try:
         response = requests.post(incident_search_url, headers=headers, json=incident_search_filter)
         response.raise_for_status()
@@ -141,7 +141,7 @@ def handle_incidents_at_risk_of_breaching_incident_notification_sla():
 
 
 def main():
-    """Main scheduling loop."""
+    """Entry point for running the SLA risk handler script."""
     demisto.debug('Starting the METCIRT Incident Notification SLA Risk Handler...')
     handle_incidents_at_risk_of_breaching_incident_notification_sla()
     try:
