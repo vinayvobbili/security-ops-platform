@@ -88,14 +88,14 @@ def get_tanium_hosts_without_ring_tag(filename) -> str:
     if not all_computers:
         logger.warning("No computers retrieved from any instance!")
         return 'No computers retrieved from any instance!'
-    computers_without_ecm_tag = [c for c in all_computers if not c.has_epp_ring_tag()]
-    computers_without_ecm_tag_filename = client.export_to_excel(computers_without_ecm_tag, filename)
-    print(f'Found {len(computers_without_ecm_tag)} Tanium hosts without ring tag')
+    computers_without_ring_tag = [c for c in all_computers if not c.has_epp_ring_tag()]
+    computers_without_ring_tag_filename = client.export_to_excel(computers_without_ring_tag, filename)
+    print(f'Found {len(computers_without_ring_tag)} Tanium hosts without ring tag')
     print('Starting enrichment of these hosts with ServiceNow data')
-    enriched_report = enrich_host_report(computers_without_ecm_tag_filename)
+    enriched_report = enrich_host_report(computers_without_ring_tag_filename)
 
     # Generate Ring tags
-    tagged_report = generate_ring_tags(computers_without_ecm_tag, enriched_report)
+    tagged_report = generate_ring_tags(computers_without_ring_tag, enriched_report)
 
     print(f'Completed enrichment and tag generation. The full report can be found at {tagged_report}')
     return tagged_report
@@ -217,8 +217,9 @@ def generate_ring_tags(computers: List[Computer], filename: str) -> str:
         setattr(computer, "was_country_guessed", False)
 
         # Record if critical data is missing
-        if not enrichment["region"] or enrichment["region"] == "Unknown Region":
-            _append_status(computer, "Missing region data")
+        # (moved to after all attempts to set region)
+        # if not enrichment["region"] or enrichment["region"] == "Unknown Region":
+        #     _append_status(computer, "Missing region data")
 
         if not enrichment["environment"]:
             _append_status(computer, "Missing environment data")
@@ -350,8 +351,9 @@ def generate_ring_tags(computers: List[Computer], filename: str) -> str:
     for col, width in column_widths.items():
         output_ws.column_dimensions[col].width = width
 
-    # Save the output file with a descriptive name
-    output_path = Path(filename).parent / "Tanium hosts without ring tag - enriched with SNOW data and with tags generated.xlsx"
+    # Save the output file with a timestamp in the filename (CS report style)
+    timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+    output_path = Path(filename).parent / f"Tanium hosts without ring tag - enriched with SNOW data and with tags generated - {timestamp}.xlsx"
     output_wb.save(output_path)
 
     logger.info(f"Generated ring tags for {len(computers)} computers: "

@@ -196,7 +196,7 @@ class Host:
                 error_detail = device_response.get('errors', ['Unknown error'])
                 self.status_message += f" Error fetching device details from CrowdStrike: {error_detail}."
                 # Optionally, log the full device_response for debugging
-                # logger.error(f"CrowdStrike device details error for {self.device_id}: {device_response}")
+                logger.error(f"CrowdStrike device details error for {self.device_id}: {device_response}")
                 return
 
             device_resources = device_response["body"].get("resources", [])
@@ -635,7 +635,7 @@ def run_workflow(room_id):
 
     # Apply tags
     apply_tag_start = time.time()
-    successfully_tagged_hosts = TagManager.apply_tags(hosts)
+    successfully_tagged_hosts = TagManager.apply_tags(hosts[:10])
     apply_tag_end = time.time()
     timings['apply_tag_duration'] = apply_tag_end - apply_tag_start
     print(f'Successfully tagged {len(successfully_tagged_hosts)} hosts')
