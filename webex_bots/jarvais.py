@@ -19,7 +19,7 @@ from config import get_config
 from services.service_now import enrich_host_report
 from src.epp import ring_tag_cs_hosts, cs_hosts_without_ring_tag, cs_hosts_with_invalid_ring_tags
 from src.epp.tanium_hosts_without_ring_tag import get_tanium_hosts_without_ring_tag
-from src.helper_methods import log_jarvais_activity
+from src.utils.logging_utils import log_activity
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -138,7 +138,7 @@ class CSHostsWithoutRingTag(Command):
             delete_previous_message=True,
         )
 
-    @log_jarvais_activity(bot_access_token=CONFIG.webex_bot_access_token_jarvais)
+    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_jarvais, log_file_name="jarvais_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
         room_id = attachment_actions.roomId
         webex_api.messages.create(
@@ -161,7 +161,7 @@ class RingTagCSHosts(Command):
             delete_previous_message=True,
         )
 
-    @log_jarvais_activity(bot_access_token=CONFIG.webex_bot_access_token_jarvais)
+    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_jarvais, log_file_name="jarvais_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
         room_id = attachment_actions.roomId
         webex_api.messages.create(
@@ -180,7 +180,7 @@ class DontRingTagCSHosts(Command):
             delete_previous_message=True,
         )
 
-    @log_jarvais_activity(bot_access_token=CONFIG.webex_bot_access_token_jarvais)
+    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_jarvais, log_file_name="jarvais_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
         return f"Alright {activity['actor']['displayName']}, I won't tag no more. Until next time!👋🏾"
 
@@ -193,7 +193,7 @@ class CSHostsWithInvalidRingTags(Command):
             delete_previous_message=True,
         )
 
-    @log_jarvais_activity(bot_access_token=CONFIG.webex_bot_access_token_jarvais)
+    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_jarvais, log_file_name="jarvais_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
         try:
             today_date = datetime.now().strftime('%m-%d-%Y')
@@ -233,7 +233,7 @@ class DontRemoveInvalidRings(Command):
             delete_previous_message=True,
         )
 
-    @log_jarvais_activity(bot_access_token=CONFIG.webex_bot_access_token_jarvais)
+    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_jarvais, log_file_name="jarvais_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
         return f"Alright {activity['actor']['displayName']}, I won't remove invalid Rings. Until next time!👋🏾"
 
@@ -245,7 +245,7 @@ class RemoveInvalidRings(Command):
             delete_previous_message=True,
         )
 
-    @log_jarvais_activity(bot_access_token=CONFIG.webex_bot_access_token_jarvais)
+    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_jarvais, log_file_name="jarvais_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
         room_id = attachment_actions.roomId
         today_date = datetime.now().strftime('%m-%d-%Y')
@@ -295,7 +295,7 @@ class GetTaniumHostsWithoutRingTag(Command):
             delete_previous_message=True,
         )
 
-    @log_jarvais_activity(bot_access_token=CONFIG.webex_bot_access_token_jarvais)
+    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_jarvais, log_file_name="jarvais_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
         room_id = attachment_actions.roomId
         today_date = datetime.now().strftime('%m-%d-%Y')
@@ -341,7 +341,7 @@ class GetTaniumUnhealthyHosts(Command):
             delete_previous_message=True,
         )
 
-    @log_jarvais_activity(bot_access_token=CONFIG.webex_bot_access_token_jarvais)
+    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_jarvais, log_file_name="jarvais_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
         room_id = attachment_actions.roomId
         message = f"Hello {activity['actor']['displayName']}! This is still work in progress. Please try again later."
