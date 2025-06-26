@@ -143,7 +143,7 @@ class CSHostsWithoutRingTag(Command):
         room_id = attachment_actions.roomId
         webex_api.messages.create(
             roomId=room_id,
-            markdown=f"Hello {activity['actor']['displayName']}! I've started the report generation process for CS Hosts without a Ring Tag. It is running in the background and will complete shortly."
+            markdown=f"Hello {activity['actor']['displayName']}! I've started the report generation process for CS Hosts without a Ring Tag. It is running in the background and will complete in about 5 mins."
         )
         lock_path = ROOT_DIRECTORY / "src" / "epp" / "cs_hosts_without_ring_tag.lock"
         with fasteners.InterProcessLock(lock_path):
@@ -166,7 +166,7 @@ class RingTagCSHosts(Command):
         room_id = attachment_actions.roomId
         webex_api.messages.create(
             roomId=room_id,
-            markdown=f"Hello {activity['actor']['displayName']}! I've started the ring tagging process for CS Hosts. It is running in the background and will complete in about 15 mins."
+            markdown=f"Hello {activity['actor']['displayName']}! I've started the ring tagging process for CS Hosts. It is running in the background and will complete in about 20 mins."
         )
         lock_path = ROOT_DIRECTORY / "src" / "epp" / "ring_tag_cs_hosts.lock"
         with fasteners.InterProcessLock(lock_path):
