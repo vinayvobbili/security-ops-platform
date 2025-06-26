@@ -10,6 +10,7 @@ import openpyxl
 from config import get_config
 from services.service_now import enrich_host_report
 from services.tanium import Computer, TaniumClient
+from src.enrichment.logic import guess_country_from_hostname, get_region_from_country
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -153,7 +154,7 @@ def generate_ring_tags(computers: List[Computer], filename: str) -> str:
 
             # Try to derive region from country if region is unknown
             if enriched_data[computer_name]["region"] == "Unknown Region" and enriched_data[computer_name]["country"]:
-                derived_region = _get_region_from_country(enriched_data[computer_name]["country"])
+                derived_region = get_region_from_country(enriched_data[computer_name]["country"])
                 if derived_region:
                     enriched_data[computer_name]["region"] = derived_region
                     logger.info(f"Derived region '{derived_region}' from country '{enriched_data[computer_name]['country']}' for {computer_name}")
@@ -226,14 +227,14 @@ def generate_ring_tags(computers: List[Computer], filename: str) -> str:
 
         # Try to guess country if it's missing
         if not enrichment["country"] or enrichment["country"] == "Unknown Country":
-            guessed_country, explanation = _guess_country_from_hostname(computer)
+            guessed_country, explanation = guess_country_from_hostname(computer)
             if guessed_country:
                 setattr(computer, "country", guessed_country)
                 setattr(computer, "was_country_guessed", True)
                 _append_status(computer, explanation)
                 computers_with_guessed_country += 1
                 # Set region based on guessed country
-                guessed_region = _get_region_from_country(guessed_country)
+                guessed_region = get_region_from_country(guessed_country)
                 if guessed_region:
                     setattr(computer, "region", guessed_region)
         # Only add 'Missing region data' after all attempts to set region
