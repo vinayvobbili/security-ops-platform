@@ -280,7 +280,7 @@ def main():
     Main function to run the scheduled jobs.
     """
     room_id = config.webex_room_id_vinay_test_space
-    announce_shift_change('night', room_id, sleep_time=0)
+    announce_shift_change('afternoon', room_id, sleep_time=0)
     # announce_previous_shift_performance(room_id, 'night')
 
 
