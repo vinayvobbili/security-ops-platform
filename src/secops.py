@@ -8,6 +8,7 @@ from pathlib import Path
 from dateutil import parser
 from openpyxl import load_workbook
 from tabulate import tabulate
+from tenacity import retry, stop_after_attempt, wait_exponential
 from webexpythonsdk import WebexAPI
 from webexpythonsdk.models.cards import (
     Colors, TextBlock, FontWeight, FontSize,
@@ -38,7 +39,6 @@ MANAGEMENT_NOTES_FILE = root_directory / 'data' / 'transient' / 'secOps' / 'mana
 
 
 def get_open_tickets():
-    """Return a summary of open tickets, showing up to 5 with links."""
     all_tickets = TicketHandler().get_tickets(query=BASE_QUERY + ' -status:closed')
     total_tickets = len(all_tickets)
     ticket_show_count = min(total_tickets, 5)
@@ -49,7 +49,6 @@ def get_open_tickets():
 
 
 def get_staffing_data(day_name, shift_name):
-    """Return staffing data for a given day and shift."""
     shift_cell_names = cell_names_by_shift[day_name][shift_name]
     staffing_data = {}
     for team, cell_names in shift_cell_names.items():
@@ -207,8 +206,15 @@ def announce_previous_shift_performance(room_id, shift_name):
         traceback.print_exc()
 
 
+@retry(
+    reraise=True,
+    stop=stop_after_attempt(3),  # Retry up to 3 times
+    wait=wait_exponential(multiplier=2, min=2, max=10),  # Exponential backoff
+)
 def announce_shift_change(shift_name, room_id, sleep_time=30):
     """Announce the change of shift in the Webex room."""
+    import requests
+    import urllib3
     try:
         day_name = datetime.now().strftime("%A")
         staffing_data = get_staffing_data(day_name, shift_name)
@@ -260,6 +266,10 @@ def announce_shift_change(shift_name, room_id, sleep_time=30):
         time.sleep(sleep_time)  # give time to digest the shift change message before sending the performance message
 
         announce_previous_shift_performance(shift_name=shift_name, room_id=room_id)
+    except (requests.exceptions.ConnectionError, urllib3.exceptions.ProtocolError) as net_err:
+        print(f"Network error in announce_shift_change: {net_err}")
+        traceback.print_exc()
+        raise  # Reraise to trigger retry
     except Exception as e:
         print(f"Error in announce_shift_change: {e}")
         traceback.print_exc()  # Print the full traceback for better debugging

@@ -29,6 +29,8 @@ langchain
 urllib3
 types-pytz
 langsmith<0.4
+websockets==11.0.3
 websockets
+tenacity
 filelock
 aiohttp
