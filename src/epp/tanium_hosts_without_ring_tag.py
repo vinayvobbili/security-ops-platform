@@ -10,7 +10,6 @@ import openpyxl
 from config import get_config
 from services.service_now import enrich_host_report
 from services.tanium import Computer, TaniumClient
-from src.enrichment.logic import guess_country_from_hostname, get_region_from_country
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -106,8 +105,8 @@ def generate_ring_tags(computers: List[Computer], filename: str) -> str:
     """
     Generate ring tags for a list of computers and export to Excel.
 
-    This function separates computers into workstations and servers,
-    then assigns appropriate ring tags based on region, country, and environment.
+    This function assumes all enrichment (region, country, environment, category, etc.)
+    has already been performed. It only generates ring tags and logs based on the given data.
     """
     # Load the enriched data from the file to get additional attributes like region, country, and environment
     enriched_data = {}
@@ -123,210 +122,95 @@ def generate_ring_tags(computers: List[Computer], filename: str) -> str:
         region_idx = next((i for i, h in enumerate(headers) if "region" in h), None)
         country_idx = next((i for i, h in enumerate(headers) if "country" in h), None)
         environment_idx = next((i for i, h in enumerate(headers) if "environment" in h or "env" == h), None)
-        type_idx = next((i for i, h in enumerate(headers) if "type" in h or "device type" in h or "category" in h), None)
+        category_idx = next((i for i, h in enumerate(headers) if "category" in h), None)
 
-        # Debugging log to help understand the structure
         logger.info(f"Reading enrichment data from {filename}")
         logger.info(f"Headers found: {[cell.value for cell in ws[1]]}")
-        logger.info(f"Column indices - Name: {name_idx}, Region: {region_idx}, Country: {country_idx}, Environment: {environment_idx}, Type: {type_idx}")
+        logger.info(f"Column indices - Name: {name_idx}, Region: {region_idx}, Country: {country_idx}, Environment: {environment_idx}, Category: {category_idx}")
 
-        # Process rows to get enrichment data
         row_count = 0
         for row in ws.iter_rows(min_row=2, values_only=True):
             if not row or len(row) <= name_idx or not row[name_idx]:
                 continue
-
             computer_name = row[name_idx]
-
-            # Safely extract data with checks for index validity
+            category_value = row[category_idx] if category_idx is not None and len(row) > category_idx else None
             region_value = row[region_idx] if region_idx is not None and len(row) > region_idx else None
             country_value = row[country_idx] if country_idx is not None and len(row) > country_idx else None
             environment_value = row[environment_idx] if environment_idx is not None and len(row) > environment_idx else None
-            type_value = row[type_idx] if type_idx is not None and len(row) > type_idx else None
-
-            # Extract data with better default values
             enriched_data[computer_name] = {
                 "region": region_value if region_value else "Unknown Region",
                 "country": country_value if country_value else "",
                 "environment": environment_value if environment_value else "Production",
-                "type": type_value
+                "category": category_value
             }
-
-            # Try to derive region from country if region is unknown
-            if enriched_data[computer_name]["region"] == "Unknown Region" and enriched_data[computer_name]["country"]:
-                derived_region = get_region_from_country(enriched_data[computer_name]["country"])
-                if derived_region:
-                    enriched_data[computer_name]["region"] = derived_region
-                    logger.info(f"Derived region '{derived_region}' from country '{enriched_data[computer_name]['country']}' for {computer_name}")
-
             row_count += 1
-
         logger.info(f"Processed {row_count} rows from enrichment data")
     except Exception as e:
         logger.error(f"Error loading enriched data: {e}")
-        # Default to simple ring assignment if we can't load enrichment data
         return _simple_ring_assignment(computers, filename)
 
-    # Separate computers into workstations and servers
     workstations = []
     servers = []
-
-    # Add additional attributes to Computer objects
-    computers_with_enrichment = 0
-    computers_without_enrichment = 0
-    computers_with_guessed_country = 0
-
     for computer in computers:
-        # Initialize status message for tracking processing steps and issues
-        setattr(computer, "status", "")
-
-        # Get enrichment data or use inferred values
         enrichment = enriched_data.get(computer.name)
-
-        if enrichment:
-            computers_with_enrichment += 1
-        else:
-            computers_without_enrichment += 1
-            # Try case-insensitive matching if exact match not found
-            computer_lower = computer.name.lower()
-            for name, data in enriched_data.items():
-                if name.lower() == computer_lower:
-                    enrichment = data
-                    computers_with_enrichment += 1
-                    computers_without_enrichment -= 1
-                    _append_status(computer, f"Found enrichment data via case-insensitive match for '{computer.name}'")
-                    break
-
         if not enrichment:
-            # No enrichment data found, use guess logic for country and region
-            guessed_country, explanation = guess_country_from_hostname(computer)
-            region = get_region_from_country(guessed_country) if guessed_country else "Unknown Region"
-            enrichment = {
-                "region": region,
-                "country": guessed_country or "",
-                "environment": "Production",  # Default to Production if unknown
-                "type": None  # Type will be set below
-            }
-            _append_status(computer, "No enrichment data found - using guess logic for country/region")
-            if explanation:
-                _append_status(computer, explanation)
-
-        # Add enrichment data to computer object as attributes
+            setattr(computer, "status", "No enrichment data found - skipping")
+            continue
         setattr(computer, "region", enrichment["region"])
         setattr(computer, "country", enrichment["country"])
         setattr(computer, "environment", enrichment["environment"])
+        setattr(computer, "type", enrichment["category"] if enrichment["category"] else "")
+        setattr(computer, "category", enrichment["category"] if enrichment["category"] else "")
         setattr(computer, "was_country_guessed", False)
-
-        # Record if critical data is missing
-        # (moved to after all attempts to set region)
-        # if not enrichment["region"] or enrichment["region"] == "Unknown Region":
-        #     _append_status(computer, "Missing region data")
-
-        if not enrichment["environment"]:
-            _append_status(computer, "Missing environment data")
-
-        # Try to guess country if it's missing
-        if not enrichment["country"] or enrichment["country"] == "Unknown Country":
-            guessed_country, explanation = guess_country_from_hostname(computer)
-            if guessed_country:
-                setattr(computer, "country", guessed_country)
-                setattr(computer, "was_country_guessed", True)
-                _append_status(computer, explanation)
-                computers_with_guessed_country += 1
-                # Set region based on guessed country
-                guessed_region = get_region_from_country(guessed_country)
-                if guessed_region:
-                    setattr(computer, "region", guessed_region)
-        # Only add 'Missing region data' after all attempts to set region
-        if not getattr(computer, "region", None) or getattr(computer, "region") == "Unknown Region":
-            _append_status(computer, "Missing region data")
-
-        # Determine type only from enrichment data, do not infer from name
-        if enrichment["type"]:
-            computer_type = enrichment["type"]
-        else:
-            # If type is not available, leave as None or empty string
-            computer_type = ""
-            _append_status(computer, "Type not available from enrichment data")
-
-        setattr(computer, "type", computer_type)
-        setattr(computer, "new_tag", None)  # Will hold the new ring tag
-
-        # Sort into workstations and servers
-        if _is_server(computer):
+        setattr(computer, "new_tag", None)
+        # Use ServiceNow-enriched category only
+        category = enrichment["category"] if enrichment["category"] else ""
+        if category and category.lower() in ("server", "srv"):
             servers.append(computer)
-        else:
+        elif category and category.lower() == "workstation":
             workstations.append(computer)
+        else:
+            # If category is missing or unknown, skip
+            setattr(computer, "status", "Category missing or unknown - skipping")
 
-    logger.info(f"Found enrichment data for {computers_with_enrichment} computers")
-    logger.info(f"Missing enrichment data for {computers_without_enrichment} computers")
-    logger.info(f"Guessed country for {computers_with_guessed_country} computers")
     logger.info(f"Classified {len(servers)} servers and {len(workstations)} workstations")
-
-    # Process workstations by region and country
     _process_workstations(workstations)
-
-    # Process servers by environment
     _process_servers(servers)
 
-    # Create output workbook
     output_wb = openpyxl.Workbook()
     output_ws = output_wb.active
     output_ws.title = "Ring Assignments"
-
-    # Define headers similar to the CS hosts report
     headers = [
-        "Computer Name", "Tanium ID", "Type", "Environment",
+        "Computer Name", "Tanium ID", "Category", "Environment",
         "Country", "Region", "Was Country Guessed", "Current Tags", "Generated Tag", "Comments"
     ]
     output_ws.append(headers)
-
-    # Format headers: bold and add filter
     from openpyxl.styles import Font
-
-    # Bold the headers and set font size to 14
     for cell in output_ws[1]:
         cell.font = Font(bold=True, size=14)
-
-    # Set font size 14 for all data rows (excluding header)
     for row in output_ws.iter_rows(min_row=2, max_row=output_ws.max_row):
         for cell in row:
             cell.font = Font(size=14)
-
-    # Add auto filter to the header row
     output_ws.auto_filter.ref = f"A1:J{len(workstations) + len(servers) + 1}"
-
-    # Freeze the first row
     output_ws.freeze_panes = "A2"
-
-    # Add data for all computers
     for computer in workstations + servers:
-        # Format current tags as a readable string
         current_tags = ", ".join(computer.custom_tags) if computer.custom_tags else ""
-
-        # If status is empty, add a default success message
         if not getattr(computer, "status", ""):
             _append_status(computer, "Successfully processed")
-
-        # Normalize type capitalization for consistent display
-        computer_type = getattr(computer, "type", "")
-        if computer_type and computer_type.lower() == "workstation":
-            computer_type = "Workstation"  # Standardize to title case
-        elif computer_type and computer_type.lower() in ("server", "srv"):
-            computer_type = "Server"  # Standardize to title case
-
-        # Do not generate a ring tag if region is unknown
+        computer_category = getattr(computer, "category", "")
+        if computer_category and computer_category.lower() == "workstation":
+            computer_category = "Workstation"
+        elif computer_category and computer_category.lower() in ("server", "srv"):
+            computer_category = "Server"
         region = getattr(computer, "region", None)
         new_tag = getattr(computer, "new_tag", None)
         if region == "Unknown Region":
             new_tag = None
             _append_status(computer, "Skipping tag generation due to unknown region")
-
-        # Add a row with all the data
         output_ws.append([
             computer.name,
             computer.id,
-            computer_type,  # Use normalized type
+            computer_category,
             getattr(computer, "environment"),
             getattr(computer, "country"),
             region,
@@ -335,32 +219,25 @@ def generate_ring_tags(computers: List[Computer], filename: str) -> str:
             new_tag,
             getattr(computer, "status")
         ])
-
-    # Adjust column widths for better visibility on wide monitors
     column_widths = {
-        'A': 40,  # Computer Name
-        'B': 25,  # Tanium ID
-        'C': 18,  # Type
-        'D': 22,  # Environment
-        'E': 22,  # Country
-        'F': 18,  # Region
-        'G': 14,  # Was Country Guessed
-        'H': 50,  # Current Tags
-        'I': 28,  # Generated Tag
-        'J': 80   # Comments
+        'A': 40,
+        'B': 25,
+        'C': 18,
+        'D': 22,
+        'E': 22,
+        'F': 18,
+        'G': 14,
+        'H': 50,
+        'I': 28,
+        'J': 80
     }
-
     for col, width in column_widths.items():
         output_ws.column_dimensions[col].width = width
-
-    # Save the output file with a timestamp in the filename (CS report style)
     timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
     output_path = Path(filename).parent / f"Tanium hosts without ring tag - enriched with SNOW data and with tags generated - {timestamp}.xlsx"
     output_wb.save(output_path)
-
     logger.info(f"Generated ring tags for {len(computers)} computers: "
                 f"{len(workstations)} workstations and {len(servers)} servers")
-
     return str(output_path)
 
 
@@ -402,17 +279,6 @@ def _simple_ring_assignment(computers: List[Computer], filename: str) -> str:
 
     logger.info(f"Generated simple ring tags for {len(computers)} computers")
     return str(output_file)
-
-
-def _is_server(computer: Computer) -> bool:
-    """Determine if a computer is a server based on its type or name."""
-    if hasattr(computer, 'type'):
-        computer_type = getattr(computer, 'type')
-        if computer_type:
-            # Make comparison case-insensitive
-            return computer_type.lower() in ('server', 'srv')
-    # If type is not available, treat as not a server
-    return False
 
 
 def _process_workstations(workstations: List[Computer]) -> None:
