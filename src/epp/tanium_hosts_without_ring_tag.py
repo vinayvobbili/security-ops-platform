@@ -198,18 +198,18 @@ def generate_ring_tags(computers: List[Computer], filename: str) -> str:
                     break
 
         if not enrichment:
-            # Infer type from name if not found in enrichment data
-            is_server = _is_server_by_name(computer.name)
-            inferred_type = "Server" if is_server else "Workstation"
-
+            # No enrichment data found, use guess logic for country and region
+            guessed_country, explanation = guess_country_from_hostname(computer)
+            region = get_region_from_country(guessed_country) if guessed_country else "Unknown Region"
             enrichment = {
-                "region": "Unknown Region",
-                "country": "",
-                "environment": "Production" if is_server else "Workstation",
-                "type": inferred_type
+                "region": region,
+                "country": guessed_country or "",
+                "environment": "Production",  # Default to Production if unknown
+                "type": None  # Type will be set below
             }
-
-            _append_status(computer, "No enrichment data found - using inferred values")
+            _append_status(computer, "No enrichment data found - using guess logic for country/region")
+            if explanation:
+                _append_status(computer, explanation)
 
         # Add enrichment data to computer object as attributes
         setattr(computer, "region", enrichment["region"])
@@ -241,12 +241,13 @@ def generate_ring_tags(computers: List[Computer], filename: str) -> str:
         if not getattr(computer, "region", None) or getattr(computer, "region") == "Unknown Region":
             _append_status(computer, "Missing region data")
 
-        # Determine type more intelligently
+        # Determine type only from enrichment data, do not infer from name
         if enrichment["type"]:
             computer_type = enrichment["type"]
         else:
-            computer_type = "Server" if _is_server_by_name(computer.name) else "Workstation"
-            _append_status(computer, f"Type inferred from hostname: {computer_type}")
+            # If type is not available, leave as None or empty string
+            computer_type = ""
+            _append_status(computer, "Type not available from enrichment data")
 
         setattr(computer, "type", computer_type)
         setattr(computer, "new_tag", None)  # Will hold the new ring tag
@@ -335,18 +336,18 @@ def generate_ring_tags(computers: List[Computer], filename: str) -> str:
             getattr(computer, "status")
         ])
 
-    # Adjust column widths for better readability
+    # Adjust column widths for better visibility on wide monitors
     column_widths = {
-        'A': 25,  # Computer Name
-        'B': 15,  # Tanium ID
-        'C': 12,  # Type
-        'D': 15,  # Environment
-        'E': 15,  # Country
-        'F': 12,  # Region
-        'G': 8,  # Was Country Guessed
-        'H': 30,  # Current Tags
-        'I': 15,  # Generated Tag
-        'J': 50  # Comments
+        'A': 40,  # Computer Name
+        'B': 25,  # Tanium ID
+        'C': 18,  # Type
+        'D': 22,  # Environment
+        'E': 22,  # Country
+        'F': 18,  # Region
+        'G': 14,  # Was Country Guessed
+        'H': 50,  # Current Tags
+        'I': 28,  # Generated Tag
+        'J': 80   # Comments
     }
 
     for col, width in column_widths.items():
@@ -410,16 +411,8 @@ def _is_server(computer: Computer) -> bool:
         if computer_type:
             # Make comparison case-insensitive
             return computer_type.lower() in ('server', 'srv')
-
-    # If type is not available, try to infer from the name
-    name_lower = computer.name.lower()
-    return any(keyword in name_lower for keyword in ('srv', 'server', 'dc', 'database', 'db', 'app'))
-
-
-def _is_server_by_name(name: str) -> bool:
-    """Infer if a computer is a server based on its name."""
-    name_lower = name.lower()
-    return any(keyword in name_lower for keyword in ('srv', 'server', 'dc', 'database', 'db', 'app'))
+    # If type is not available, treat as not a server
+    return False
 
 
 def _process_workstations(workstations: List[Computer]) -> None:
@@ -468,7 +461,8 @@ def _process_workstations(workstations: List[Computer]) -> None:
 
             for i in range(size):
                 if current_index < len(ws_group):
-                    setattr(ws_group[current_index], "new_tag", f"{region}WksRing{ring}")
+                    # Assign tag in the required format
+                    setattr(ws_group[current_index], "new_tag", f"EPP_ECMTag_{region}_Wks_Ring{ring}")
                     current_index += 1
 
 
@@ -487,9 +481,9 @@ def _process_servers(servers: List[Computer]) -> None:
             ring = 3
         else:  # production or unknown
             ring = 4
-
-        region = getattr(server, "region")
-        setattr(server, "new_tag", f"{region}SRVRing{ring}")
+        # Assign tag in the required format
+        region = getattr(server, "region", "Unknown")
+        setattr(server, "new_tag", f"EPP_ECMTag_{region}_SRV_Ring{ring}")
 
 
 def _normalize_environment(environment: Union[str, List[str], None]) -> str:
