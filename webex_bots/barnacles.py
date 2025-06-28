@@ -16,7 +16,7 @@ from webexteamssdk import WebexTeamsAPI
 
 from config import get_config
 from src.charts import threatcon_level
-from src.helper_methods import log_barnacles_activity
+from src.utils.logging_utils import log_activity
 
 ROOT_DIRECTORY = Path(__file__).parent.parent
 
@@ -48,7 +48,7 @@ class SaveManagementNotes(Command):
             exact_command_keyword_match=True
         )
 
-    @log_barnacles_activity(bot_access_token=bot_token)
+    @log_activity(config.webex_bot_access_token_barnacles, "barnacles_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
         with open(NOTES_FILE, "w") as file:
             file.write(json.dumps({
@@ -89,7 +89,7 @@ class ManagementNotes(Command):
             help_message="Management Notes",
         )
 
-    @log_barnacles_activity(bot_access_token=bot_token)
+    @log_activity(config.webex_bot_access_token_barnacles, "barnacles_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
         with open(NOTES_FILE, "r") as file:
             management_notes = file.read()
@@ -194,7 +194,7 @@ class SaveThreatcon(Command):
             exact_command_keyword_match=True
         )
 
-    @log_barnacles_activity(bot_access_token=bot_token)
+    @log_activity(config.webex_bot_access_token_barnacles, "barnacles_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
         level = attachment_actions.inputs['threatcon_level']
         reason = attachment_actions.inputs['reason']
@@ -248,7 +248,7 @@ class ThreatconLevel(Command):
             help_message="ThreatCon Level",
         )
 
-    @log_barnacles_activity(bot_access_token=bot_token)
+    @log_activity(config.webex_bot_access_token_barnacles, "barnacles_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
         with open(THREAT_CON_FILE, "r") as file:
             threatcon_details = json.load(file)
@@ -333,7 +333,7 @@ class AnnounceThreatcon(Command):
             exact_command_keyword_match=True
         )
 
-    @log_barnacles_activity(bot_access_token=bot_token)
+    @log_activity(config.webex_bot_access_token_barnacles, "barnacles_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
         threatcon_level.make_chart()
 
