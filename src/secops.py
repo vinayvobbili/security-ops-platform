@@ -8,7 +8,8 @@ from pathlib import Path
 from dateutil import parser
 from openpyxl import load_workbook
 from tabulate import tabulate
-from tenacity import retry, stop_after_attempt, wait_exponential
+from tenacity import retry, stop_after_attempt, wait_exponential, before_sleep_log
+import logging
 from webexpythonsdk import WebexAPI
 from webexpythonsdk.models.cards import (
     Colors, TextBlock, FontWeight, FontSize,
@@ -18,6 +19,10 @@ from webexpythonsdk.models.cards import (
 from config import get_config
 from services import azdo
 from services.xsoar import TicketHandler, ListHandler
+
+# Set up logging for tenacity retries
+logger = logging.getLogger("tenacity.retry")
+logging.basicConfig(level=logging.INFO)
 
 config = get_config()
 webex_api = WebexAPI(config.webex_bot_access_token_soar)
@@ -210,6 +215,7 @@ def announce_previous_shift_performance(room_id, shift_name):
     reraise=True,
     stop=stop_after_attempt(3),  # Retry up to 3 times
     wait=wait_exponential(multiplier=2, min=2, max=10),  # Exponential backoff
+    before_sleep=before_sleep_log(logger, logging.WARNING),
 )
 def announce_shift_change(shift_name, room_id, sleep_time=30):
     """Announce the change of shift in the Webex room."""
