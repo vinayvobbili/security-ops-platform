@@ -3,16 +3,14 @@ import json
 import logging
 import time
 import os
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
-import asyncio
-import aiohttp
-from tqdm.asyncio import tqdm as tqdm_asyncio
 
 import pandas as pd
 import requests
 from tqdm import tqdm
+import concurrent.futures
 from filelock import FileLock
 
 from config import get_config
@@ -112,6 +110,18 @@ class ServiceNowTokenManager:
         }
 
 
+def _parse_discovery_date(item):
+    """Parse discovery date, return epoch if invalid."""
+    date_str = item.get('mostRecentDiscovery')
+    if not date_str:
+        return datetime(1970, 1, 1)
+
+    try:
+        return datetime.strptime(date_str, '%m-%d-%Y %I:%M %p')
+    except (ValueError, TypeError):
+        return datetime(1970, 1, 1)
+
+
 class ServiceNowClient:
     def __init__(self):
         self.token_manager = ServiceNowTokenManager(
@@ -153,7 +163,7 @@ class ServiceNowClient:
         params = {'name': hostname}
 
         try:
-            response = requests.get(endpoint, headers=headers, params=params, timeout=10)
+            response = requests.get(endpoint, headers=headers, params=params, timeout=10, verify=False)
             response.raise_for_status()
 
             data = response.json()
@@ -164,23 +174,12 @@ class ServiceNowClient:
 
             # Return most recently discovered item
             if len(items) > 1:
-                items = sorted(items, key=self._parse_discovery_date, reverse=True)
+                items = sorted(items, key=_parse_discovery_date, reverse=True)
 
             return items[0]
         except requests.exceptions.RequestException as e:
             logger.error(f"Error fetching details for {hostname}: {str(e)}")
-            return {"name": hostname, "error": str(e), "status": "ServiceNow API Error"}
-
-    def _parse_discovery_date(self, item):
-        """Parse discovery date, return epoch if invalid."""
-        date_str = item.get('mostRecentDiscovery')
-        if not date_str:
-            return datetime(1970, 1, 1)
-
-        try:
-            return datetime.strptime(date_str, '%m-%d-%Y %I:%M %p')
-        except (ValueError, TypeError):
-            return datetime(1970, 1, 1)
+            return {"name": hostname, "error": str(e), "status": "ServiceNow API Error", "category": ""}
 
 
 class AsyncServiceNowClient:
@@ -217,7 +216,10 @@ class AsyncServiceNowClient:
         headers = self.token_manager.get_auth_headers()
         params = {'name': hostname}
         try:
-            async with session.get(endpoint, headers=headers, params=params, timeout=10) as response:
+            async with session.get(endpoint, headers=headers, params=params, timeout=10, verify_ssl=False) as response:
+                if response.status == 429:
+                    # Explicitly capture HTTP 429 Too Many Requests
+                    return {"name": hostname, "error": "HTTP 429 Too Many Requests", "status": "ServiceNow API Error", "category": ""}
                 if response.status != 200:
                     return None
                 data = await response.json()
@@ -225,23 +227,14 @@ class AsyncServiceNowClient:
                 if not items:
                     return None
                 if len(items) > 1:
-                    items = sorted(items, key=self._parse_discovery_date, reverse=True)
+                    items = sorted(items, key=_parse_discovery_date, reverse=True)
                 return items[0]
         except Exception as e:
-            return {"name": hostname, "error": str(e), "status": "ServiceNow API Error"}
-
-    def _parse_discovery_date(self, item):
-        date_str = item.get('mostRecentDiscovery')
-        if not date_str:
-            return datetime(1970, 1, 1)
-        try:
-            return datetime.strptime(date_str, '%m-%d-%Y %I:%M %p')
-        except (ValueError, TypeError):
-            return datetime(1970, 1, 1)
+            return {"name": hostname, "error": str(e), "status": "ServiceNow API Error", "category": ""}
 
 
-def enrich_host_report(input_file, chunk_size=1000, max_workers=50):
-    """Enrich host data with ServiceNow details."""
+def enrich_host_report(input_file):
+    """Enrich host data with ServiceNow details (synchronous version)."""
     today = datetime.now().strftime('%m-%d-%Y')
     input_name = Path(input_file).name
     output_file = DATA_DIR / today / f"Enriched {input_name}"
@@ -274,27 +267,26 @@ def enrich_host_report(input_file, chunk_size=1000, max_workers=50):
     hostnames = [h for h in df[hostname_col].tolist() if h and isinstance(h, str)]
     logger.info(f"Processing {len(hostnames)} valid hostnames from {input_file}")
 
-    async def async_enrich():
-        client = AsyncServiceNowClient()
-        snow_data = {}
-        errors_occurred = False
-        connector = aiohttp.TCPConnector(limit_per_host=30)
-        async with aiohttp.ClientSession(connector=connector) as session:
-            tasks = [client.get_host_details(session, hostname) for hostname in hostnames]
-            results = []
-            for coro in tqdm_asyncio.as_completed(tasks, total=len(tasks), desc="Enriching hosts with ServiceNow"):
-                result = await coro
-                results.append(result)
-            for idx, result in enumerate(results):
-                hostname = hostnames[idx]
-                short_hostname = hostname.split('.')[0].lower() if hostname and isinstance(hostname, str) else ""
-                if result:
-                    snow_data[short_hostname] = result
-                if 'error' in result:
-                    errors_occurred = True
-        return snow_data, errors_occurred
+    client = ServiceNowClient()
+    snow_data = {}
+    errors_occurred = False
 
-    snow_data, errors_occurred = asyncio.run(async_enrich())
+    def enrich_single_host(hostname):
+        details = client.get_host_details(hostname)
+        short_hostname = hostname.split('.')[0].lower() if hostname and isinstance(hostname, str) else ""
+        return short_hostname, details
+
+    max_workers = 5  # Safe parallelism, tune as needed
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {executor.submit(enrich_single_host, hostname): hostname for hostname in hostnames}
+        for idx, future in enumerate(tqdm(concurrent.futures.as_completed(futures), total=len(futures), desc="Enriching hosts with ServiceNow"), 1):
+            short_hostname, details = future.result()
+            if details:
+                snow_data[short_hostname] = details
+            if details and 'error' in details:
+                errors_occurred = True
+            if idx % 100 == 0 or idx == len(futures):
+                logger.info(f"Enriched {idx}/{len(futures)} hosts with ServiceNow data...")
 
     if not snow_data:
         logger.error("No ServiceNow data collected, cannot enrich report")
@@ -318,9 +310,13 @@ def enrich_host_report(input_file, chunk_size=1000, max_workers=50):
 
         short_hostname = hostname.split('.')[0].lower()
         if short_hostname in snow_data:
+            result = snow_data[short_hostname]
+            # If there is an error, always set category to empty string
+            if result.get('status') == 'ServiceNow API Error':
+                df.at[idx, 'SNOW_category'] = ''
             for col in snow_columns:
-                if col in snow_data[short_hostname]:
-                    df.at[idx, f'SNOW_{col}'] = snow_data[short_hostname][col]
+                if col in result and not (col == 'category' and result.get('status') == 'ServiceNow API Error'):
+                    df.at[idx, f'SNOW_{col}'] = result[col]
 
     # Save results with adjusted column widths
     output_file.parent.mkdir(parents=True, exist_ok=True)
@@ -354,7 +350,7 @@ def enrich_host_report(input_file, chunk_size=1000, max_workers=50):
 if __name__ == "__main__":
     client = ServiceNowClient()
 
-    hostname = "vm11923e1dv0004"
+    hostname = "JP2NKTQL3.alico.corp"
     logger.info(f"Looking up {hostname}...")
 
     details = client.get_host_details(hostname)
@@ -367,5 +363,9 @@ if __name__ == "__main__":
         print(f"Status: {details.get('state')}")
         print(f"Domain: {details.get('osDomain')}")
         print(f"Environment: {details.get('environment')}")
+        if 'status' in details:
+            print(f"SNOW Status: {details.get('status')}")
+        if 'error' in details:
+            print(f"SNOW Error: {details.get('error')}")
     else:
         print("Host not found")
