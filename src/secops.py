@@ -5,6 +5,8 @@ from datetime import date
 from datetime import datetime, timedelta
 from pathlib import Path
 
+import requests
+import urllib3
 from dateutil import parser
 from openpyxl import load_workbook
 from tabulate import tabulate
@@ -91,9 +93,15 @@ def announce_previous_shift_performance(room_id, shift_name):
             period=period
         )
         outflow = incident_fetcher.get_tickets(
-            query=BASE_QUERY + ' -status:closed',
+            query=BASE_QUERY + ' status:closed',
             period=period
         )
+        print([ticket.get('id') for ticket in outflow])
+        malicious_true_positives = incident_fetcher.get_tickets(
+            query=BASE_QUERY + ' status:closed impact:"Malicious True Positive"',
+            period=period
+        )
+        print([ticket.get('id') for ticket in malicious_true_positives])
         response_sla_breaches = incident_fetcher.get_tickets(
             query=BASE_QUERY + ' timetorespond.slaStatus:late',
             period=period
@@ -188,15 +196,17 @@ def announce_previous_shift_performance(room_id, shift_name):
                         Fact(title="Tickets ack'ed", value=str(len(inflow))),
                         Fact(title="Tickets closed",
                              value=f"{len(outflow)} ({tickets_closed_per_analyst:.2f}/analyst)"),
+                        Fact(title="MTPs",
+                             value=', '.join([ticket.get('id') for ticket in malicious_true_positives])),
                         Fact(title="SLA Breaches",
                              value=f"Resp- {len(response_sla_breaches)} [{', '.join(['X#' + breach.get('id') for breach in response_sla_breaches])}]\n"
                                    f"Cont- {len(containment_sla_breaches)} [{', '.join(['X#' + breach.get('id') for breach in containment_sla_breaches])}]"),
                         Fact(title="MTT (min:sec)",
                              value=f"Respond- {int(mean_time_to_respond // 60)}:{int(mean_time_to_respond % 60):02d} \n"
                                    f"Contain- {int(mean_time_to_contain // 60)}:{int(mean_time_to_contain % 60):02d}"),
-                        Fact(title="IOCs blocked", value=iocs_blocked or "None"),
-                        Fact(title="Hosts contained", value=hosts_contained or "None"),
-                        Fact(title="Tuning requests", value=', '.join(tuning_requests_submitted) or "None")
+                        Fact(title="IOCs blocked", value=iocs_blocked or ""),
+                        Fact(title="Hosts contained", value=hosts_contained or ""),
+                        Fact(title="Tuning requests", value=', '.join(tuning_requests_submitted) or "")
                     ]
                 )
             ]
@@ -219,8 +229,6 @@ def announce_previous_shift_performance(room_id, shift_name):
 )
 def announce_shift_change(shift_name, room_id, sleep_time=30):
     """Announce the change of shift in the Webex room."""
-    import requests
-    import urllib3
     try:
         day_name = datetime.now().strftime("%A")
         staffing_data = get_staffing_data(day_name, shift_name)
@@ -231,7 +239,7 @@ def announce_shift_change(shift_name, room_id, sleep_time=30):
         shift_data_table = list(zip(*staffing_data.values()))
         shift_data_table = tabulate(shift_data_table, headers=headers, tablefmt="simple")
 
-        note = 'None'
+        note = ''
         with open(MANAGEMENT_NOTES_FILE, "r") as file:
             management_notes = json.loads(file.read())
             keep_until = datetime.strptime(management_notes['keep_until'], '%Y-%m-%d').date()
@@ -263,7 +271,7 @@ def announce_shift_change(shift_name, room_id, sleep_time=30):
             markdown=f"Good **{shift_name.upper()}**! A new shift's starting now!\n"
                      f"Timings: {sheet[cell_names_by_shift['shift_timings'][shift_name]].value}\n"
                      f"Open {config.team_name}* tickets: {get_open_tickets()}\n"
-                     f"Hosts in Containment (TUC): {'\n'.join(hosts_in_containment) if hosts_in_containment else 'None'}\n\n"
+                     f"Hosts in Containment (TUC): \n {'\n'.join(hosts_in_containment) if hosts_in_containment else ''}\n\n"
                      f"**Management Notes**: {note}\n"
                      f"Staffing:\n"
                      f"```\n{shift_data_table}\n```"
@@ -286,7 +294,7 @@ def main():
     Main function to run the scheduled jobs.
     """
     room_id = config.webex_room_id_vinay_test_space
-    announce_shift_change('afternoon', room_id, sleep_time=0)
+    announce_shift_change('night', room_id, sleep_time=0)
     # announce_previous_shift_performance(room_id, 'night')
 
 
