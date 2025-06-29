@@ -1614,7 +1614,8 @@ class ImportTicket(Command):
     @log_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles, log_file_name="toodles_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
         prod_ticket_number = attachment_actions.inputs['prod_ticket_number']
-        destination_ticket_number, destination_ticket_link = xsoar.import_ticket(prod_ticket_number)
+        requestor_email_address = activity['actor']['emailAddress']
+        destination_ticket_number, destination_ticket_link = xsoar.import_ticket(prod_ticket_number, requestor_email_address)
         return f'{activity['actor']['displayName']}, the Prod ticket has been copied to Dev [X#{destination_ticket_number}]({destination_ticket_link})'
 
 
