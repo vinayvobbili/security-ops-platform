@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import List, Union
 
 import openpyxl
+import pandas as pd
 
 from config import get_config
 from services.service_now import enrich_host_report
@@ -94,14 +95,54 @@ def get_tanium_hosts_without_ring_tag(filename) -> str:
     print('Starting enrichment of these hosts with ServiceNow data')
     enriched_report = enrich_host_report(computers_without_ring_tag_filename)
 
+    # add a column to the enriched_report 'region'. Use the country column to derive it from regions_by_country.json
+    regions_by_country_path = DATA_DIR / "regions_by_country.json"
+
+    with open(regions_by_country_path, 'r') as f:
+        regions_by_country = json.load(f)
+
+    df_enriched = pd.read_excel(enriched_report)
+    # Use consistent column name 'Region' (capital R)
+    df_enriched['Region'] = None
+    df_enriched['Was Country Guessed'] = False
+
+    for index, row in df_enriched.iterrows():
+        country_from_snow = row.get('SNOW_country')
+        hostname = row.get('Computer Name')
+
+        country_to_use = None
+        was_country_guessed = False
+
+        if pd.notna(country_from_snow) and country_from_snow:
+            country_to_use = country_from_snow
+        elif pd.notna(hostname) and hostname:
+            # Create a dummy Computer object for _guess_country_from_hostname
+            dummy_computer = Computer(name=hostname, id="", ip="", eidLastSeen="", source="")
+            guessed_country, _ = _guess_country_from_hostname(dummy_computer)
+            if guessed_country:
+                country_to_use = guessed_country
+                was_country_guessed = True
+
+        if country_to_use:
+            region = regions_by_country.get(country_to_use, 'Unknown Region')
+            df_enriched.at[index, 'Region'] = region
+            df_enriched.at[index, 'Was Country Guessed'] = was_country_guessed
+        else:
+            df_enriched.at[index, 'Region'] = 'Unknown Region'
+            df_enriched.at[index, 'Was Country Guessed'] = False
+
+    # Save the DataFrame with the new 'Region' column
+    enriched_report_with_region = Path(enriched_report).parent / "Tanium hosts without ring tag - enriched with SNOW data.xlsx"
+    df_enriched.to_excel(enriched_report_with_region, index=False)
+
     # Generate Ring tags
-    tagged_report = generate_ring_tags(computers_without_ring_tag, enriched_report)
+    tagged_report = generate_ring_tags(str(enriched_report_with_region))
 
     print(f'Completed enrichment and tag generation. The full report can be found at {tagged_report}')
     return tagged_report
 
 
-def generate_ring_tags(computers: List[Computer], filename: str) -> str:
+def generate_ring_tags(filename: str) -> str:
     """
     Generate ring tags for a list of computers and export to Excel.
 
@@ -147,10 +188,35 @@ def generate_ring_tags(computers: List[Computer], filename: str) -> str:
         logger.info(f"Processed {row_count} rows from enrichment data")
     except Exception as e:
         logger.error(f"Error loading enriched data: {e}")
-        return _simple_ring_assignment(computers, filename)
 
     workstations = []
     servers = []
+    # Read the Excel file into a DataFrame
+    df = pd.read_excel(filename)
+
+    # Convert DataFrame rows to Computer objects
+    computers = []
+    for index, row in df.iterrows():
+        # Extract data, handling potential missing values or types
+        name = str(row.get('Hostname', ''))
+        computer_id = str(row.get('ID', ''))
+        ip = str(row.get('IP Address', ''))
+        eid_last_seen = row.get('Last Seen')
+        source = str(row.get('Source', ''))
+        current_tags_str = str(row.get('Current Tags', ''))
+        custom_tags = [tag.strip() for tag in current_tags_str.split(',') if tag.strip()]
+
+        # Create Computer object
+        computer = Computer(
+            name=name,
+            id=computer_id,
+            ip=ip,
+            eidLastSeen=eid_last_seen,
+            source=source,
+            custom_tags=custom_tags
+        )
+        computers.append(computer)
+
     for computer in computers:
         enrichment = enriched_data.get(computer.name)
         if not enrichment:
@@ -194,7 +260,12 @@ def generate_ring_tags(computers: List[Computer], filename: str) -> str:
     output_ws.auto_filter.ref = f"A1:J{len(workstations) + len(servers) + 1}"
     output_ws.freeze_panes = "A2"
     for computer in workstations + servers:
-        current_tags = ", ".join(computer.custom_tags) if computer.custom_tags else ""
+        current_tags = ""
+        if hasattr(computer, "custom_tags") and computer.custom_tags:
+            # Filter out nan or empty tags
+            filtered_tags = [tag for tag in computer.custom_tags if tag and str(tag).lower() != "nan"]
+            if filtered_tags:
+                current_tags = ", ".join(filtered_tags)
         if not getattr(computer, "status", ""):
             _append_status(computer, "Successfully processed")
         computer_category = getattr(computer, "category", "")
@@ -238,96 +309,41 @@ def generate_ring_tags(computers: List[Computer], filename: str) -> str:
     output_wb.save(output_path)
     logger.info(f"Generated ring tags for {len(computers)} computers: "
                 f"{len(workstations)} workstations and {len(servers)} servers")
+    logger.info(f"Processed {len(computers)} computers: {len(workstations)} workstations and {len(servers)} servers (including those skipped or with unknown region)")
+    # Count computers with generated tags
+    generated_tag_count = sum(1 for c in workstations + servers if getattr(c, "new_tag", None))
+    generated_tag_workstations = sum(1 for c in workstations if getattr(c, 'new_tag', None))
+    generated_tag_servers = sum(1 for c in servers if getattr(c, 'new_tag', None))
+    logger.info(f"Generated ring tags for {generated_tag_count} computers: {generated_tag_workstations} workstations and {generated_tag_servers} servers (with tags assigned)")
     return str(output_path)
 
 
-def _simple_ring_assignment(computers: List[Computer], filename: str) -> str:
-    """Fallback function for simple ring assignment without enrichment data."""
-    # Sort computers by last seen date (newest first) and then by name
-    computers.sort(key=lambda c: (c.eidLastSeen is None, c.eidLastSeen, c.name))
-
-    # Calculate the number of computers to assign to each ring
-    total_computers = len(computers)
-    ring_1_count = max(1, int(total_computers * RING_1_PERCENT))
-    ring_2_count = max(1, int(total_computers * RING_2_PERCENT))
-    ring_3_count = max(1, int(total_computers * RING_3_PERCENT))
-
-    # Assign rings based on the calculated counts
-    ring_assignments = defaultdict(list)
-    for i, computer in enumerate(computers):
-        if i < ring_1_count:
-            ring_assignments[1].append(computer)
-        elif i < ring_1_count + ring_2_count:
-            ring_assignments[2].append(computer)
-        elif i < ring_1_count + ring_2_count + ring_3_count:
-            ring_assignments[3].append(computer)
-        else:
-            ring_assignments[4].append(computer)
-
-    # Export the ring assignments to an Excel file
-    wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.title = "Ring Assignments"
-    ws.append(["Computer Name", "Ring"])
-
-    for ring, computers in ring_assignments.items():
-        for computer in computers:
-            ws.append([computer.name, ring])
-
-    output_file = Path(filename).parent / f"simple_ring_tagged_{Path(filename).name}"
-    wb.save(output_file)
-
-    logger.info(f"Generated simple ring tags for {len(computers)} computers")
-    return str(output_file)
-
-
 def _process_workstations(workstations: List[Computer]) -> None:
-    """Process workstations and assign ring tags based on region and country distribution."""
-    # Group workstations by region and country
+    """Assign ring tags to workstations based on region and country."""
     region_country_groups = defaultdict(list)
     for ws in workstations:
         region = getattr(ws, "region")
         country = getattr(ws, "country")
-
-        # If region is unknown, try to derive it from country
         if region == "Unknown Region":
             region = _get_region_from_country(country)
-            # If we still can't determine the region, skip this host for tagging
             if not region:
-                _append_status(ws, "Skipping tag generation due to unknown region")
                 continue
-            _append_status(ws, f"Using derived region '{region}' for tagging")
+        region_country_groups[(region, country)].append(ws)
 
-        region_country_key = (region, country)
-        region_country_groups[region_country_key].append(ws)
-
-    # Process each region-country group
     for (region, country), ws_group in region_country_groups.items():
         total = len(ws_group)
         if total == 0:
             continue
-
-        # Calculate ring sizes based on percentages
         ring_1_size = max(1, int(RING_1_PERCENT * total)) if total >= 10 else 0
         ring_2_size = max(1, int(RING_2_PERCENT * total)) if total >= 5 else 0
         ring_3_size = max(1, int(RING_3_PERCENT * total)) if total >= 3 else 0
         ring_4_size = total - ring_1_size - ring_2_size - ring_3_size
-
-        # Ensure at least one host in each ring when possible
         ring_sizes = [ring_1_size, ring_2_size, ring_3_size, ring_4_size]
-
-        # Sort workstations by last seen time (most recent first)
         ws_group.sort(key=lambda c: (c.eidLastSeen is None, c.eidLastSeen))
-
-        # Distribute workstations into rings
         current_index = 0
         for ring, size in enumerate(ring_sizes, start=1):
-            if size <= 0:
-                continue
-
             for i in range(size):
                 if current_index < len(ws_group):
-                    # Assign tag in the required format
                     setattr(ws_group[current_index], "new_tag", f"EPP_ECMTag_{region}_Wks_Ring{ring}")
                     current_index += 1
 
@@ -449,7 +465,7 @@ def _get_region_from_country(country: str) -> str:
     # Load region mapping if not already loaded (caching for efficiency)
     if not hasattr(_get_region_from_country, 'regions_by_country'):
         try:
-            with open(DATA_DIR / "regions_by_country.json", 'r') as f:
+            with open(DATA_DIR / "regions_by_country", 'r') as f:
                 _get_region_from_country.regions_by_country = json.load(f)
                 logger.info(f"Loaded region data for {len(_get_region_from_country.regions_by_country)} countries")
         except Exception as e:
@@ -462,7 +478,10 @@ def _get_region_from_country(country: str) -> str:
             return region
 
     # Fall back to exact match if case-insensitive match fails
-    return _get_region_from_country.regions_by_country.get(country, '')
+    region = _get_region_from_country.regions_by_country.get(country, '')
+    if not region:
+        logger.warning(f"Region unknown for country: '{country}' (normalized: '{normalized_country}') - mapping keys: {list(_get_region_from_country.regions_by_country.keys())}")
+    return region
 
 
 def main():
