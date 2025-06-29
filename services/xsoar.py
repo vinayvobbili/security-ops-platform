@@ -35,11 +35,14 @@ def get_incident(incident_id):
     return response.json()
 
 
-def import_ticket(source_ticket_number):
+def import_ticket(source_ticket_number, requestor_email_address=None):
     """Import ticket from prod to dev"""
     ticket_handler = TicketHandler()
 
     incident_data = get_incident(source_ticket_number)
+    if requestor_email_address:
+        incident_data['owner'] = requestor_email_address
+
     new_ticket_data = ticket_handler.create_in_dev(incident_data)
 
     if 'error' in new_ticket_data:
