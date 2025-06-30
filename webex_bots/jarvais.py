@@ -16,7 +16,6 @@ from webexpythonsdk.models.cards.actions import Submit
 from webexteamssdk import WebexTeamsAPI
 
 from config import get_config
-from services.service_now import enrich_host_report
 from src.epp import ring_tag_cs_hosts, cs_hosts_without_ring_tag, cs_hosts_with_invalid_ring_tags
 from src.epp.tanium_hosts_without_ring_tag import get_tanium_hosts_without_ring_tag
 from src.utils.logging_utils import log_activity
@@ -303,7 +302,7 @@ class GetTaniumHostsWithoutRingTag(Command):
         if not filepath.exists():
             webex_api.messages.create(
                 roomId=room_id,
-                markdown=f"Hello {activity['actor']['displayName']}! I've started the report generation process for Tanium Hosts without a ring tag. It is running in the background and will complete in about 5 mins",
+                markdown=f"Hello {activity['actor']['displayName']}! I've started the report generation process for Tanium Hosts without a ring tag. It is running in the background and will complete in about 15 mins",
             )
             lock_path = ROOT_DIRECTORY / "src" / "epp" / "all_tanium_hosts.lock"
             with fasteners.InterProcessLock(lock_path):
