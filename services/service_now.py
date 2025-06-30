@@ -276,7 +276,7 @@ def enrich_host_report(input_file):
         short_hostname = hostname.split('.')[0].lower() if hostname and isinstance(hostname, str) else ""
         return short_hostname, details
 
-    max_workers = 5  # Safe parallelism, tune as needed
+    max_workers = 10  # Safe parallelism, tune as needed
     with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = {executor.submit(enrich_single_host, hostname): hostname for hostname in hostnames}
         for idx, future in enumerate(tqdm(concurrent.futures.as_completed(futures), total=len(futures), desc="Enriching hosts with ServiceNow"), 1):
