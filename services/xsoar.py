@@ -5,7 +5,6 @@ urllib3.disable_warnings(InsecureRequestWarning)
 
 import json
 import logging
-from pathlib import Path
 
 import requests
 
@@ -166,4 +165,4 @@ if __name__ == "__main__":
     # print(destination_ticket_number, destination_ticket_link)
     list_handler = ListHandler()
     ticket_handler = TicketHandler()
-    # print(ticket_handler.get_tickets("hostname:US9F20TZ3"))
+    print(ticket_handler.get_tickets("id:717407"))
