@@ -9,7 +9,7 @@ from services import phish_fort
 from src import helper_methods
 from src.charts import mttr_mttc, outflow, lifespan, heatmap, sla_breaches, aging_tickets, inflow, qradar_rule_efficacy, de_stories, days_since_incident, re_stories, threatcon_level, vectra_volume, \
     crowdstrike_volume, threat_tippers, crowdstrike_efficacy
-from src.components import oncall, approved_security_testing, thithi
+from src.components import oncall, approved_security_testing, thithi, orphaned_tickets
 from src.utils.fs_utils import make_dir_for_todays_charts
 
 config = get_config()
@@ -48,6 +48,7 @@ def main():
     schedule.every().day.at("08:00", eastern).do(lambda: (
         aging_tickets.send_report(config.webex_room_id_aging_tickets),
         # abandoned_tickets.send_report(),
+        orphaned_tickets.send_report(config.webex_room_id_aging_tickets)
     ))
 
     schedule.every().day.at("00:01", eastern).do(lambda: (
