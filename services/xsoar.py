@@ -130,7 +130,10 @@ class ListHandler:
         """Get list data by name"""
         all_lists = self.get_all_lists()
         list_item = next(item for item in all_lists if item['id'] == list_name)
-        return json.loads(list_item['data'])
+        try:
+            return json.loads(list_item['data'])
+        except (TypeError, json.JSONDecodeError):
+            return list_item['data']
 
     def get_list_version_by_name(self, list_name):
         """Get list version by name"""
