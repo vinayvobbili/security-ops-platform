@@ -13,6 +13,8 @@ def send_report(room_id):
     ticket_handler = TicketHandler()
     query = '-status:closed -category:job type:METCIRT owner:""'
     tickets = ticket_handler.get_tickets(query)
+    if not tickets:
+        return
 
     # Build table rows for tabulate
     rows = []
