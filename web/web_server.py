@@ -19,7 +19,7 @@ from flask import Flask, request, abort, jsonify, render_template
 from config import get_config
 from services import xsoar
 from services.approved_testing_utils import add_approved_testing_entry
-from src.utils.logging_utils import log_activity
+from src.utils.logging_utils import log_web_activity
 
 # Define the proxy port
 PROXY_PORT = 8080
@@ -104,7 +104,7 @@ def get_image_files() -> List[str]:
 
 
 @app.route("/")
-@log_activity(bot_access_token=None, log_file_name="web_server_activity_log.csv")
+@log_web_activity
 def get_ir_dashboard_slide_show():
     """Renders the HTML template with the ordered list of image files."""
     image_files = get_image_files()
@@ -112,14 +112,14 @@ def get_ir_dashboard_slide_show():
 
 
 @app.route("/msoc-form")
-@log_activity(bot_access_token=None, log_file_name="web_server_activity_log.csv")
+@log_web_activity
 def display_msoc_form():
     """Displays the MSOC form."""
     return render_template("msoc_form.html", show_burger=False)
 
 
 @app.route("/submit-msoc-form", methods=['POST'])
-@log_activity(bot_access_token=None, log_file_name="web_server_activity_log.csv")
+@log_web_activity
 def handle_msoc_form_submission():
     """Handles MSOC form submissions and processes the data."""
     form = request.form.to_dict()
