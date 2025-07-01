@@ -156,6 +156,19 @@ class ListHandler:
         response = requests.post(f"{self.base_url}/lists/save", headers=prod_headers, json=payload)
         response.raise_for_status()
 
+    def save_as_text(self, list_name, list_data):
+        """Save list data as plain text (comma-separated string)."""
+        list_version = self.get_list_version_by_name(list_name)
+        payload = {
+            "data": ','.join(list_data),
+            "name": list_name,
+            "type": "text",
+            "id": list_name,
+            "version": list_version
+        }
+        response = requests.post(f"{self.base_url}/lists/save", headers=prod_headers, json=payload)
+        response.raise_for_status()
+
     def add_item_to_list(self, list_name, new_entry):
         """Add item to existing list"""
         list_data = self.get_list_data_by_name(list_name)

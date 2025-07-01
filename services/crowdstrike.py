@@ -223,6 +223,18 @@ class CrowdStrikeClient:
             tags=tags
         )
 
+    def get_device_online_state(self, hostname: str) -> Optional[str]:
+        """Get the online state for a single hostname."""
+        device_id = self.get_device_id(hostname)
+        if not device_id:
+            return None
+        response = self.hosts_client.get_online_state(ids=[device_id])
+        if response.get("status_code") == 200:
+            resources = response['body'].get('resources', [])
+            if resources:
+                return resources[0].get('state')
+        return None
+
 
 def process_unique_hosts(df: pd.DataFrame) -> pd.DataFrame:
     """Process dataframe to get unique hosts with latest last_seen"""
@@ -257,7 +269,7 @@ def main() -> None:
         return
 
     # Test API
-    host_name_cs = "20220702BB02905"
+    host_name_cs = "Y54G91YXRY"
     device_id = client.get_device_id(host_name_cs)
     if device_id:
         print(f"Device ID: {device_id}")
@@ -265,6 +277,9 @@ def main() -> None:
 
     containment_status = client.get_device_containment_status(host_name_cs)
     print(f"Containment status: {containment_status}")
+
+    online_status = client.get_device_online_state(host_name_cs)
+    print(f"Online status: {online_status}")
 
 
 if __name__ == "__main__":
