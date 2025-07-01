@@ -26,9 +26,9 @@ RING_3_PERCENT = 0.30  # 30% of workstations in Ring 3
 # Remaining 40% in Ring 4
 
 # Environment-based ring assignment for servers
-RING_1_ENVS = {'dev', 'development', 'sandbox', 'lab', 'poc'}
+RING_1_ENVS = {'dev', 'development', 'sandbox', 'lab', 'poc', 'integration', 'int'}
 RING_2_ENVS = {'test', 'testing', 'qa'}
-RING_3_ENVS = {'stage', 'staging', 'uat', 'pre-prod', 'preprod', 'dr'}
+RING_3_ENVS = {'stage', 'staging', 'uat', 'pre-prod', 'preprod', 'dr', 'qa/dr'}
 # All other environments (including production) go to Ring 4
 
 # Data directories and files
