@@ -19,7 +19,7 @@ from flask import Flask, request, abort, jsonify, render_template
 from config import get_config
 from services import xsoar
 from services.approved_testing_utils import add_approved_testing_entry
-from src.utils.logging_utils import log_web_activity
+from src.utils.logging_utils import log_web_activity, is_scanner_request
 
 # Define the proxy port
 PROXY_PORT = 8080
@@ -49,6 +49,12 @@ incident_handler = xsoar.TicketHandler()
 def block_ip():
     if any(ipaddress.ip_network(request.remote_addr).subnet_of(ipaddress.ip_network(blocked_ip_range)) for blocked_ip_range in blocked_ip_ranges):
         abort(403)  # Forbidden
+
+    # Check for scanner patterns to quickly return 404 for scanner probes
+    if is_scanner_request():
+        # Return a very minimal 404 response without logging to reduce overhead
+        # This will bypass the normal Flask request handling
+        return abort(404)
 
 
 def get_image_files() -> List[str]:
@@ -320,7 +326,7 @@ def handle_red_team_testing_form_submission():
         return jsonify({
             'status': 'error',
             'message': str(e)
-        }), 400
+        }, 400)
 
     return jsonify({
         'status': 'success'
