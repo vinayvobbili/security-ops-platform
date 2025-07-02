@@ -74,11 +74,12 @@ mutation removeCustomTag($endpointId: String!, $tag: String!) {
 
 @dataclass
 class Computer:
+    """Represents a computer/endpoint in Tanium"""
     name: str
     id: str
     ip: str
     eidLastSeen: str
-    source: str  # Added to track which instance this came from
+    source: str  # Tracks which instance this came from
     custom_tags: List[str] = None
 
     def __post_init__(self):
@@ -97,37 +98,18 @@ class TaniumAPIError(Exception):
 
 class TaniumInstance:
     """Represents a single Tanium instance (cloud or on-prem)"""
-
-    # Constants
     DEFAULT_PAGE_SIZE = 5000
     DEFAULT_SEARCH_LIMIT = 500
     NO_TAGS_PLACEHOLDER = '[No Tags]'
 
-    def __init__(self, name: str, server_url: str, token: str, verify_ssl: bool = True, use_proxy: bool = False, config: Any = None):
+    def __init__(self, name: str, server_url: str, token: str, verify_ssl: bool = True):
         self.name = name
         self.server_url = server_url.rstrip('/')
         self.token = token
         self.headers = {'session': self.token}
         self.graphql_url = f"{self.server_url}/plugin/products/gateway/graphql"
         self.verify_ssl = verify_ssl
-        self.use_proxy = use_proxy
-        self.config = config
-        self.proxies = self._setup_proxy()
-
         logger.info(f"Initialized Tanium instance: {self.name}")
-
-    def _setup_proxy(self) -> Optional[Dict[str, str]]:
-        """Setup proxy configuration if enabled for this instance"""
-        if not self.use_proxy or not self.config:
-            return None
-
-        try:
-            proxy_url = f"http://{self.config.jump_server_host}:8080"
-            logger.info(f"Setting up proxy for {self.name}: {proxy_url}")
-            return {"http": proxy_url, "https": proxy_url}
-        except AttributeError:
-            logger.warning(f"Proxy configuration missing for {self.name}")
-            return None
 
     def query(self, gql: str, variables: Dict[str, Any] = None) -> Dict[str, Any]:
         """Execute a GraphQL query"""
@@ -135,17 +117,17 @@ class TaniumInstance:
         if variables:
             payload['variables'] = variables
 
-        # Debug: print the actual URL and headers used for the request
-        print(f"[DEBUG] Querying {self.name} at URL: {self.graphql_url}")
-        print(f"[DEBUG] Headers: {self.headers}")
+        logger.debug(f"Querying {self.name} at URL: {self.graphql_url}")
 
         try:
+            headers = self.headers.copy()
+            headers['Content-Type'] = 'application/json'
+
             response = requests.post(
                 self.graphql_url,
                 json=payload,
-                headers=self.headers,
+                headers=headers,
                 verify=self.verify_ssl,
-                proxies=self.proxies,
                 timeout=30
             )
             response.raise_for_status()
@@ -153,8 +135,8 @@ class TaniumInstance:
             result = response.json()
             if 'errors' in result:
                 raise TaniumAPIError(f"GraphQL errors: {result['errors']}")
-
             return result
+
         except requests.RequestException as e:
             logger.error(f"Request failed for {self.name}: {e}")
             raise TaniumAPIError(f"Request failed: {e}")
@@ -226,55 +208,23 @@ class TaniumInstance:
     def validate_token(self) -> bool:
         """Validate the API token"""
         try:
-            # Try the standard validation endpoint first
             response = requests.post(
                 f"{self.server_url}/api/v2/session/validate",
                 json={'session': self.token},
                 headers=self.headers,
                 verify=self.verify_ssl,
-                proxies=self.proxies,
                 timeout=10
             )
-
-            logger.debug(f"Token validation for {self.name}: Status {response.status_code}")
 
             if response.status_code == 200:
                 logger.info(f"✓ {self.name} token is valid")
                 return True
 
             logger.warning(f"Token validation failed for {self.name}: {response.status_code}")
-
-            # For on-prem, try alternative validation method
-            if self.name == "On-Prem":
-                return self._try_alternative_validation()
-
             return False
 
         except Exception as e:
             logger.error(f"Error validating token for {self.name}: {e}")
-            return False
-
-    def _try_alternative_validation(self) -> bool:
-        """Try alternative validation method for on-prem instances"""
-        try:
-            logger.info(f"Trying alternative validation for {self.name}...")
-            alt_response = requests.get(
-                f"{self.server_url}/api/v2/system_settings",
-                headers=self.headers,
-                verify=self.verify_ssl,
-                proxies=self.proxies,
-                timeout=10
-            )
-
-            if alt_response.status_code == 200:
-                logger.info(f"✓ {self.name} alternative validation successful")
-                return True
-
-            logger.warning(f"Alternative validation failed for {self.name}: {alt_response.status_code}")
-            return False
-
-        except Exception as e:
-            logger.error(f"Alternative validation error for {self.name}: {e}")
             return False
 
     def add_custom_tag(self, computer_name: str, tag: str) -> bool:
@@ -337,10 +287,7 @@ class TaniumInstance:
 
 class TaniumClient:
     """Main client for managing multiple Tanium instances"""
-
-    # Constants
     DEFAULT_FILENAME = "all_tanium_hosts.xlsx"
-    SHOULD_USE_PROXY_FOR_ONPREM = False
 
     def __init__(self, config: Any = None):
         self.config = config or get_config()
@@ -350,27 +297,23 @@ class TaniumClient:
 
     def _setup_instances(self):
         """Initialize cloud and on-prem instances"""
-        # Cloud instance (direct connection, verify SSL for cloud)
+        # Cloud instance (verify SSL for cloud)
         if hasattr(self.config, 'tanium_cloud_api_url') and self.config.tanium_cloud_api_url and self.config.tanium_cloud_api_token:
             cloud_instance = TaniumInstance(
                 "Cloud",
                 self.config.tanium_cloud_api_url,
                 self.config.tanium_cloud_api_token,
-                verify_ssl=True,
-                use_proxy=False,  # Cloud can connect directly
-                config=self.config
+                verify_ssl=True
             )
             self.instances.append(cloud_instance)
 
-        # On-prem instance (use proxy due to IP whitelisting, disable SSL verification)
+        # On-prem instance (disable SSL verification for on-prem)
         if hasattr(self.config, 'tanium_onprem_api_url') and self.config.tanium_onprem_api_url and self.config.tanium_onprem_api_token:
             onprem_instance = TaniumInstance(
                 "On-Prem",
                 self.config.tanium_onprem_api_url,
                 self.config.tanium_onprem_api_token,
-                verify_ssl=False,  # Disable SSL verification for on-prem
-                use_proxy=self.SHOULD_USE_PROXY_FOR_ONPREM,  # Can be toggled via flag
-                config=self.config
+                verify_ssl=False
             )
             self.instances.append(onprem_instance)
 
@@ -454,17 +397,7 @@ class TaniumClient:
         return next((c for c in all_computers if c.name.lower() == name.lower()), None)
 
     def add_custom_tag_to_computer(self, computer_name: str, tag: str, instance_name: str) -> bool:
-        """
-        Add a custom tag to a computer in a specific instance
-
-        Args:
-            computer_name: Name of the computer to tag
-            tag: Custom tag to apply
-            instance_name: Name of the instance ("Cloud" or "On-Prem")
-
-        Returns:
-            bool: True if successful, False otherwise
-        """
+        """Add a custom tag to a computer in a specific instance"""
         instance = self._get_instance_by_name(instance_name)
         if not instance:
             logger.error(f"Instance '{instance_name}' not found")
@@ -477,17 +410,7 @@ class TaniumClient:
         return instance.add_custom_tag(computer_name, tag)
 
     def remove_custom_tag_from_computer(self, computer_name: str, tag: str, instance_name: str) -> bool:
-        """
-        Remove a custom tag from a computer in a specific instance
-
-        Args:
-            computer_name: Name of the computer to untag
-            tag: Custom tag to remove
-            instance_name: Name of the instance ("Cloud" or "On-Prem")
-
-        Returns:
-            bool: True if successful, False otherwise
-        """
+        """Remove a custom tag from a computer in a specific instance"""
         instance = self._get_instance_by_name(instance_name)
         if not instance:
             logger.error(f"Instance '{instance_name}' not found")
@@ -500,70 +423,33 @@ class TaniumClient:
         return instance.remove_custom_tag(computer_name, tag)
 
     def _get_instance_by_name(self, instance_name: str) -> Optional[TaniumInstance]:
-        """
-        Get a Tanium instance by name
-
-        Args:
-            instance_name: Name of the instance ("Cloud" or "On-Prem")
-
-        Returns:
-            TaniumInstance if found, None otherwise
-        """
+        """Get a Tanium instance by name"""
         return next((i for i in self.instances if i.name.lower() == instance_name.lower()), None)
 
     def list_available_instances(self) -> List[str]:
-        """
-        Get list of available instance names
-
-        Returns:
-            List of instance names
-        """
+        """Get list of available instance names"""
         return [instance.name for instance in self.instances]
 
     def add_custom_tag_to_computer_all_instances(self, computer_name: str, tag: str) -> Dict[str, bool]:
-        """
-        Add a custom tag to a computer across all instances
-
-        Args:
-            computer_name: Name of the computer to tag
-            tag: Custom tag to apply
-
-        Returns:
-            Dict mapping instance names to success status
-        """
+        """Add a custom tag to a computer across all instances"""
         results = {}
-
         for instance in self.instances:
             if not instance.validate_token():
                 logger.warning(f"Invalid token for {instance.name}, skipping...")
                 results[instance.name] = False
                 continue
-
             results[instance.name] = instance.add_custom_tag(computer_name, tag)
-
         return results
 
     def remove_custom_tag_from_computer_all_instances(self, computer_name: str, tag: str) -> Dict[str, bool]:
-        """
-        Remove a custom tag from a computer across all instances
-
-        Args:
-            computer_name: Name of the computer to untag
-            tag: Custom tag to remove
-
-        Returns:
-            Dict mapping instance names to success status
-        """
+        """Remove a custom tag from a computer across all instances"""
         results = {}
-
         for instance in self.instances:
             if not instance.validate_token():
                 logger.warning(f"Invalid token for {instance.name}, skipping...")
                 results[instance.name] = False
                 continue
-
             results[instance.name] = instance.remove_custom_tag(computer_name, tag)
-
         return results
 
 
@@ -586,20 +472,6 @@ def main():
             logger.info(f"Data exported to: {filename}")
         else:
             logger.warning("No data to export")
-        #
-        # # Example tag operations
-        # success = client.add_custom_tag_to_computer("LAPTOP-ABC123", "EPP Ring 1", "Cloud")
-        # logger.info(f"Tag added to Cloud instance: {success}")
-        #
-        # success = client.add_custom_tag_to_computer("DESKTOP-XYZ789", "EPP Ring 2", "On-Prem")
-        # logger.info(f"Tag added to On-Prem instance: {success}")
-        #
-        # success = client.remove_custom_tag_from_computer("LAPTOP-ABC123", "EPP Ring 1", "Cloud")
-        # logger.info(f"Tag removed from Cloud instance: {success}")
-        #
-        # # Operate on all instances at once
-        # results = client.add_custom_tag_to_computer_all_instances("SERVER-001", "Critical System")
-        # logger.info(f"Tag addition results across all instances: {results}")
 
     except Exception as e:
         logger.error(f"Error during execution: {e}")
