@@ -5,9 +5,6 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# Add debug print to verify the On-Prem API URL loaded from environment
-print(f"[DEBUG] TANIUM_ONPREM_API_URL loaded: {os.environ.get('TANIUM_ONPREM_API_URL')}")
-
 
 def get_config():
     return Config(
