@@ -1,3 +1,4 @@
+import logging
 import time
 
 import pytz
@@ -12,6 +13,11 @@ from src.charts import mttr_mttc, outflow, lifespan, heatmap, sla_breaches, agin
 from src.components import oncall, approved_security_testing, thithi, orphaned_tickets, response_sla_risk_tickets, containment_sla_risk_tickets
 from src.utils.fs_utils import make_dir_for_todays_charts
 
+logging.basicConfig(level=logging.ERROR)
+logging.getLogger("webexpythonsdk.restsession").setLevel(logging.ERROR)
+logging.getLogger("webexteamssdk.restsession").setLevel(logging.ERROR)
+logging.getLogger("openpyxl").setLevel(logging.ERROR)
+
 config = get_config()
 eastern = pytz.timezone('US/Eastern')
 
@@ -21,6 +27,7 @@ def main():
     Main function to run the scheduled jobs.
     """
     # run once to test
+    print("Running once to test the scheduler...")
     make_dir_for_todays_charts(helper_methods.CHARTS_DIR_PATH)
     aging_tickets.make_chart()
     crowdstrike_efficacy.make_chart()
@@ -92,7 +99,7 @@ def main():
 
     while True:
         schedule.run_pending()
-        time.sleep(60)
+        time.sleep(1)
 
 
 if __name__ in ('__main__', '__builtin__', 'builtins'):
