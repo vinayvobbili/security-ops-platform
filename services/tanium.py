@@ -135,6 +135,10 @@ class TaniumInstance:
         if variables:
             payload['variables'] = variables
 
+        # Debug: print the actual URL and headers used for the request
+        print(f"[DEBUG] Querying {self.name} at URL: {self.graphql_url}")
+        print(f"[DEBUG] Headers: {self.headers}")
+
         try:
             response = requests.post(
                 self.graphql_url,
@@ -582,20 +586,20 @@ def main():
             logger.info(f"Data exported to: {filename}")
         else:
             logger.warning("No data to export")
-
-        # Example tag operations
-        success = client.add_custom_tag_to_computer("LAPTOP-ABC123", "EPP Ring 1", "Cloud")
-        logger.info(f"Tag added to Cloud instance: {success}")
-
-        success = client.add_custom_tag_to_computer("DESKTOP-XYZ789", "EPP Ring 2", "On-Prem")
-        logger.info(f"Tag added to On-Prem instance: {success}")
-
-        success = client.remove_custom_tag_from_computer("LAPTOP-ABC123", "EPP Ring 1", "Cloud")
-        logger.info(f"Tag removed from Cloud instance: {success}")
-
-        # Operate on all instances at once
-        results = client.add_custom_tag_to_computer_all_instances("SERVER-001", "Critical System")
-        logger.info(f"Tag addition results across all instances: {results}")
+        #
+        # # Example tag operations
+        # success = client.add_custom_tag_to_computer("LAPTOP-ABC123", "EPP Ring 1", "Cloud")
+        # logger.info(f"Tag added to Cloud instance: {success}")
+        #
+        # success = client.add_custom_tag_to_computer("DESKTOP-XYZ789", "EPP Ring 2", "On-Prem")
+        # logger.info(f"Tag added to On-Prem instance: {success}")
+        #
+        # success = client.remove_custom_tag_from_computer("LAPTOP-ABC123", "EPP Ring 1", "Cloud")
+        # logger.info(f"Tag removed from Cloud instance: {success}")
+        #
+        # # Operate on all instances at once
+        # results = client.add_custom_tag_to_computer_all_instances("SERVER-001", "Critical System")
+        # logger.info(f"Tag addition results across all instances: {results}")
 
     except Exception as e:
         logger.error(f"Error during execution: {e}")
