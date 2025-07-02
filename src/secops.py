@@ -1,4 +1,5 @@
 import json
+import logging
 import time
 import traceback
 from datetime import date
@@ -11,7 +12,6 @@ from dateutil import parser
 from openpyxl import load_workbook
 from tabulate import tabulate
 from tenacity import retry, stop_after_attempt, wait_exponential, before_sleep_log
-import logging
 from webexpythonsdk import WebexAPI
 from webexpythonsdk.models.cards import (
     Colors, TextBlock, FontWeight, FontSize,
