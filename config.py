@@ -26,7 +26,7 @@ def get_config():
         webex_room_id_phish_fort=os.environ["WEBEX_ROOM_ID_PHISH_FORT"],
         webex_room_id_host_announcements=os.environ["WEBEX_ROOM_ID_HOST_ANNOUNCEMENTS"],
         webex_room_id_response_sla_risk=os.environ["WEBEX_ROOM_ID_RESPONSE_SLA_RISK"],
-        webex_room_id_containment__sla_risk=os.environ["WEBEX_ROOM_ID_CONTAINMENT_SLA_RISK"],
+        webex_room_id_containment_sla_risk=os.environ["WEBEX_ROOM_ID_CONTAINMENT_SLA_RISK"],
         xsoar_prod_api_base_url=os.environ["XSOAR_PROD_API_BASE_URL"],
         xsoar_prod_ui_base_url=os.environ["XSOAR_PROD_UI_BASE_URL"],
         xsoar_dev_api_base_url=os.environ["XSOAR_DEV_API_BASE_URL"],
@@ -108,7 +108,7 @@ class Config:
     webex_room_id_phish_fort: str
     webex_room_id_host_announcements: str
     webex_room_id_response_sla_risk: str
-    webex_room_id_containment__sla_risk: str
+    webex_room_id_containment_sla_risk: str
     xsoar_prod_api_base_url: str
     xsoar_prod_ui_base_url: str
     xsoar_dev_api_base_url: str
