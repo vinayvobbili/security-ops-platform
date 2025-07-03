@@ -16,7 +16,7 @@ from webexpythonsdk.models.cards.actions import Submit
 from webexteamssdk import WebexTeamsAPI
 
 from config import get_config
-from src.epp import ring_tag_cs_hosts, cs_hosts_without_ring_tag, cs_hosts_with_invalid_ring_tags
+from src.epp import ring_tag_cs_hosts, cs_hosts_without_ring_tag, cs_servers_with_invalid_ring_tags
 from src.epp.tanium_hosts_without_ring_tag import get_tanium_hosts_without_ring_tag
 from src.utils.logging_utils import log_activity
 
@@ -208,9 +208,9 @@ class CSHostsWithInvalidRingTags(Command):
                 roomId=room_id,
                 markdown=f"Hello {activity['actor']['displayName']}! I've started the report generation process for CS Servers with Invalid Ring Tags. It is running in the background and will complete in about 15 mins."
             )
-            lock_path = ROOT_DIRECTORY / "src" / "epp" / "cs_hosts_lat_seen_with_invalid_ring_tags.lock"
+            lock_path = ROOT_DIRECTORY / "src" / "epp" / "cs_servers_with_invalid_ring_tags.lock"
             with fasteners.InterProcessLock(lock_path):
-                cs_hosts_with_invalid_ring_tags.generate_report()
+                cs_servers_with_invalid_ring_tags.generate_report()
 
                 send_report(room_id, filename, message)
                 seek_approval_to_delete_invalid_ring_tags(room_id)
