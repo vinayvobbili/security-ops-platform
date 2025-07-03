@@ -266,25 +266,30 @@ def generate_ring_tags(filename: str) -> str:
             filtered_tags = [tag for tag in computer.custom_tags if tag and str(tag).lower() != "nan"]
             if filtered_tags:
                 current_tags = ", ".join(filtered_tags)
-        if not getattr(computer, "status", ""):
-            _append_status(computer, "Successfully processed")
+        # Remove 'Successfully processed' status
+        if getattr(computer, "status", "") == "Successfully processed":
+            setattr(computer, "status", "")
         computer_category = getattr(computer, "category", "")
         if computer_category and computer_category.lower() == "workstation":
             computer_category = "Workstation"
         elif computer_category and computer_category.lower() in ("server", "srv"):
             computer_category = "Server"
         region = getattr(computer, "region", None)
+        # If region is 'Unknown Region', set to blank for output
+        output_region = region if region != "Unknown Region" else ""
         new_tag = getattr(computer, "new_tag", None)
         if region == "Unknown Region":
             new_tag = None
-            _append_status(computer, "Skipping tag generation due to unknown region")
+            _append_status(computer, "Region missing. Ring tag couldn't be generated")
+        elif new_tag:
+            _append_status(computer, "Ring tag generated successfully")
         output_ws.append([
             computer.name,
             computer.id,
             computer_category,
             getattr(computer, "environment"),
             getattr(computer, "country"),
-            region,
+            output_region,
             "Yes" if getattr(computer, "was_country_guessed", False) else "No",
             current_tags,
             new_tag,
