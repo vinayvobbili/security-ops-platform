@@ -155,8 +155,8 @@ def generate_report():
             'last_seen',
             'status',
             'cs_host_category',
-            'environment',
-            'lifecycleStatus',
+            'SNOW_environment',
+            'SNOW_lifecycleStatus',
             'comment',
         ]
         filtered_report_path = output_dir / "cs_servers_with_invalid_ring_tags_only.xlsx"
@@ -164,8 +164,6 @@ def generate_report():
         logger.info(f"Found {len(invalid_servers)} hosts with invalid ring tags")
     else:
         logger.info("No hosts with invalid ring tags found")
-
-    logger.info(f"Successfully wrote {len(enriched_servers)} records to {complete_report_path}")
 
 
 def main():
