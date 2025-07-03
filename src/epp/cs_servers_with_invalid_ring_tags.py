@@ -143,6 +143,7 @@ def generate_report():
                 if 'citrix' not in complete_ring_tag_matches[i].lower():
                     invalid.append(complete_ring_tag_matches[i])
             return ', '.join(invalid) if invalid else ''
+
         invalid_servers['invalid_tags'] = invalid_servers.apply(extract_invalid_tags, axis=1)
 
         # Only keep the requested columns
