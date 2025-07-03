@@ -383,7 +383,7 @@ def _normalize_environment(environment: Union[str, List[str], None]) -> str:
 
 def _guess_country_from_hostname(computer: Computer) -> tuple[str, str]:
     """
-    Guess country based on hostname patterns.
+    Guess country based on hostname and tags, matching cs logic.
 
     Args:
         computer: The Computer object to analyze
@@ -394,30 +394,26 @@ def _guess_country_from_hostname(computer: Computer) -> tuple[str, str]:
     computer_name = computer.name
     computer_name_lower = computer_name.lower()
 
-    # Check for specific patterns
-    if 'pmli' in computer_name_lower:
-        return 'India PMLI', "Country guessed from 'pmli' in hostname"
-
-    # Check for VMVDI or team name prefix to identify US hosts
+    # 1. If osDomain is 'pmli' (not available in Tanium, skip)
+    # 2. If hostname starts with 'vmvdi' or team name
     if computer_name_lower.startswith('vmvdi') or (hasattr(CONFIG, 'team_name') and computer_name_lower.startswith(CONFIG.team_name.lower())):
         return 'United States', f"Country guessed from VMVDI/{CONFIG.team_name if hasattr(CONFIG, 'team_name') else ''} in hostname"
 
-    # Infer country from hostname prefix (first two letters)
+    # 3. Infer from first two letters of hostname
     country_code = computer_name[:2].upper()
     country_name = COUNTRY_NAMES_BY_ABBREVIATION.get(country_code, '')
     if country_name:
         return country_name, f"Country guessed from first two letters of hostname: {country_code} -> {country_name}"
 
-    # Check for leading digits (Korean hosts)
-    if computer_name[0].isdigit():
+    # 4. If leading digit, Korea
+    if computer_name and computer_name[0].isdigit():
         return 'Korea', "Country guessed from leading digit in hostname"
 
-    # Check for VMs with US tags
+    # 5. If starts with 'vm' and has US tag
     if computer_name_lower.startswith('vm'):
-        # In Tanium we look at custom tags rather than CrowdStrike tags
-        for tag in computer.custom_tags:
-            if 'US' in tag:
-                return 'United States', "Country guessed from VM prefix and US tag"
+        for tag in getattr(computer, 'custom_tags', []):
+            if 'US' in tag or 'SensorGroupingTags/US' in tag:
+                return 'US', "Country guessed from leading characters VM in hostname and US tag"
 
     return '', ''
 
