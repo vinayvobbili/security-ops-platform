@@ -1,3 +1,26 @@
+"""
+qa_tickets.py
+
+This module automates the creation of QA (Quality Assurance) tickets for closed METCIRT tickets in XSOAR and notifies designated QA leads via Webex.
+
+Main Features:
+- Fetches recently closed METCIRT tickets (excluding job category and those with owners).
+- Groups tickets by their impact level.
+- Randomly selects a ticket from each impact group and assigns it to a QA lead in a round-robin fashion.
+- Creates a new QA ticket in XSOAR with relevant details and custom fields.
+- Notifies the assigned QA lead in a specified Webex room with a direct link to the QA ticket.
+
+Usage:
+- Can be run as a script, using the configured Webex room for notifications.
+- Intended for use in automation or scheduled QA review processes.
+
+Dependencies:
+- webexpythonsdk
+- config.py (for configuration)
+- services.xsoar (for ticket handling)
+
+"""
+
 from webexpythonsdk import WebexAPI
 
 from config import get_config
