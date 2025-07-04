@@ -4,6 +4,8 @@ from urllib.parse import quote
 import threading
 import time
 import logging
+from datetime import datetime
+import re
 
 import pandas
 import requests
@@ -1735,6 +1737,99 @@ if not logger.hasHandlers():
     logger.addHandler(handler)
 
 
+class GetCompanyHolidays(Command):
+    def __init__(self):
+        super().__init__(
+            command_keyword="holidays",
+            card=None
+        )
+
+    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles, log_file_name="toodles_activity_log.csv")
+    def execute(self, message, attachment_actions, activity):
+        today = datetime.now()
+        holidays = []
+        next_holiday_idx = None
+        next_holiday_date = None
+        emoji_map = {
+            "New Year's Day": "🥳",
+            "Martin Luther King, Jr. Day": "🕊️",
+            "Memorial Day": "🇺🇸",
+            "Independence Day": "🎆",
+            "Labor Day": "💼",
+            "Thanksgiving Day": "🦃",
+            "Day After Thanksgiving*": "🍂",
+            "Christmas Day": "🎄"
+        }
+
+        with open("../data/transient/company_holidays.txt", "r") as f:
+            for idx, line in enumerate(f.readlines()):
+                # Extract date from line
+                match = re.search(r", ([A-Za-z]+) (\d+)", line)
+                if match:
+                    month_str, day_str = match.groups()
+                    try:
+                        holiday_date = datetime.strptime(f"2025 {month_str} {day_str}", "%Y %B %d")
+                        if holiday_date >= today and next_holiday_idx is None:
+                            next_holiday_idx = idx
+                            next_holiday_date = holiday_date
+                        if holiday_date < today:
+                            style = 'italic'
+                        else:
+                            style = None
+                    except Exception:
+                        style = None
+                else:
+                    style = None
+
+                # Add emoji if available
+                holiday_name = line.split(' - ')[0]
+                emoji = emoji_map.get(holiday_name, "")
+                holiday_line = f"{emoji} {line.rstrip()}" if emoji else line.rstrip()
+                holidays.append((holiday_line, style))
+
+        # Add seasonal greeting based on current date
+        month = today.month
+        if month in [12, 1, 2]:
+            seasonal_greeting = "❄️ Winter holidays ahead!"
+        elif month in [3, 4, 5]:
+            seasonal_greeting = "🌸 Spring celebrations coming up!"
+        elif month in [6, 7, 8]:
+            seasonal_greeting = "☀️ Summer holidays to enjoy!"
+        else:  # 9, 10, 11
+            seasonal_greeting = "🍂 Fall festivities approaching!"
+
+        # Enhanced title with seasonal greeting
+        title = f"🎉 **2025 Company Holidays** 🎉\n{seasonal_greeting}\n═══════════════════════════════════\n"
+
+        # Build output with styles and merged countdown
+        output_lines = []
+        days_until = None  # Ensure days_until is always defined
+        for i, (h, style) in enumerate(holidays):
+            if i == next_holiday_idx:
+                # Bold the next holiday line and add countdown info
+                if next_holiday_date:
+                    days_until = (next_holiday_date - today).days
+                    if days_until == 0:
+                        h = f"🎊 **{h}** 🎊 (TODAY!)"
+                        # Do not italicize today's holiday
+                        style = None
+                    elif days_until == 1:
+                        h = f"⏰ **{h}** (TOMORROW!)"
+                    else:
+                        h = f"**{h}** ({days_until} days until⏱️)"
+                else:
+                    h = f"**{h}**"
+            if style == 'italic' and not (i == next_holiday_idx and days_until == 0):
+                # For past holidays, italicize the entire line, except today
+                h = f"*{h}*"
+            # If neither next holiday nor past, leave as-is (normal formatting)
+            output_lines.append(h)
+
+        # Enhanced footer with visual separator
+        note = f"\n═══════════════���═══════════════════\n"
+        return title + "\n".join(output_lines) + note
+
+
 def main():
     # Start keepalive thread
     threading.Thread(target=keepalive_ping, daemon=True).start()
@@ -1769,6 +1864,7 @@ def main():
     bot.add_command(CreateTuningRequest())
     bot.add_command(GetSearchXSOARCard())
     bot.add_command(FetchXSOARTickets())
+    bot.add_command(GetCompanyHolidays())
 
     print("the notification service is up and running...")
     bot.run()
