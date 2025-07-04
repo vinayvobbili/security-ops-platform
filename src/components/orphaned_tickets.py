@@ -33,7 +33,7 @@ def send_report(room_id):
         ticket_type = t.get('type', '').replace('METCIRT', '').strip()
         row = {
             'ID': t.get('id', ''),
-            'Name': t.get('name', ''),
+            'Name': truncate_text(t.get('name', ''), 50),
             'Type': ticket_type,
             'Created': created_str,
             'created_dt': created_dt
@@ -52,6 +52,13 @@ def send_report(room_id):
         text="Orphaned Tickets Summary!",
         markdown=table_str
     )
+
+
+def truncate_text(text, n=50):
+    """Truncate text after n characters, adding '...' if needed."""
+    if not text:
+        return ''
+    return text if len(text) <= n else text[:n] + '...'
 
 
 def main():
