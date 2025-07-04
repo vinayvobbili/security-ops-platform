@@ -7,17 +7,20 @@ Main Features:
 - Fetches recently closed METCIRT tickets (excluding job category and those with owners).
 - Groups tickets by their impact level.
 - Randomly selects a ticket from each impact group and assigns it to a QA lead in a round-robin fashion.
+- QA leads are loaded from and rotated in a JSON file (data/qa_leads.json) to ensure fair distribution.
 - Creates a new QA ticket in XSOAR with relevant details and custom fields.
 - Notifies the assigned QA lead in a specified Webex room with a direct link to the QA ticket.
 
 Usage:
 - Can be run as a script, using the configured Webex room for notifications.
 - Intended for use in automation or scheduled QA review processes.
+- To update the QA leads, edit the data/qa_leads.json file directly.
 
 Dependencies:
 - webexpythonsdk
 - config.py (for configuration)
 - services.xsoar (for ticket handling)
+- data/qa_leads.json (for QA lead rotation)
 
 """
 
@@ -26,17 +29,22 @@ from webexpythonsdk import WebexAPI
 from config import get_config
 from services.xsoar import TicketHandler
 import random
+import os
+import json
 
 CONFIG = get_config()
 webex_api = WebexAPI(access_token=CONFIG.webex_bot_access_token_soar)
 
-ticket_qa_leads = [
-    "cedric.smith@company.com",
-    "chelsea.koester@company.com",
-    "kenny.hollis@company.com",
-    "kyle.stephens1@company.com",
-    "tyler.brescia@company.com",
-]
+
+def load_qa_leads():
+    leads_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'data', 'qa_leads.json')
+    with open(leads_path, 'r') as f:
+        return json.load(f), leads_path
+
+
+def save_qa_leads(leads, leads_path):
+    with open(leads_path, 'w') as f:
+        json.dump(leads, f, indent=4)
 
 
 def generate(room_id):
@@ -57,9 +65,11 @@ def generate(room_id):
         impact = ticket['CustomFields'].get('impact', 'Unknown')
         tickets_by_impact.setdefault(impact, []).append(ticket)
 
+    qa_leads, leads_path = load_qa_leads()
+    lead_index = 0
     for impact, group in tickets_by_impact.items():
         source_ticket = random.choice(group)
-        owner = ticket_qa_leads[group.index(source_ticket) % len(ticket_qa_leads)]
+        owner = qa_leads[lead_index % len(qa_leads)]
         new_ticket_payload = {
             'type': 'METCIRT Ticket QA',
             'owner': owner,
@@ -73,7 +83,11 @@ def generate(room_id):
         }
         qa_ticket = ticket_handler.create(new_ticket_payload)
         qa_ticket_url = CONFIG.xsoar_prod_ui_base_url + "/Custom/caseinfoid/" + qa_ticket['id']
-        webex_api.messages.create(room_id, markdown=f"Hello <@personEmail:{owner}>👋🏾 [X#{qa_ticket['id']}]({qa_ticket_url}) has been assigned to you for QA")
+        webex_api.messages.create(room_id,
+                                  markdown=f"Hello <@personEmail:{owner}>👋🏾 [X#{qa_ticket['id']}]({qa_ticket_url}) has been assigned to you for QA\nSource ticket: [X#{source_ticket['id']}]({source_ticket['url']})\nTicket type: {source_ticket['type']}\nImpact: {impact}")
+        lead_index += 1
+    qa_leads = qa_leads[lead_index % len(qa_leads):] + qa_leads[:lead_index % len(qa_leads)]
+    save_qa_leads(qa_leads, leads_path)
 
 
 if __name__ == "__main__":
