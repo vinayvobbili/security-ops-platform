@@ -253,7 +253,7 @@ def announce_shift_change(shift_name, room_id, sleep_time=30):
                 time_under_containment_delta = datetime.now() - contained_at
                 days = time_under_containment_delta.days
                 hours = time_under_containment_delta.seconds // 3600
-                item["time_under_containment"] = f"{days} days, {hours} hours"
+                item["time_under_containment"] = f"{days} D, {hours} H"
             else:
                 item["time_under_containment"] = "Unknown"
 
