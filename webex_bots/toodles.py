@@ -987,6 +987,13 @@ all_options_card = {
                                 "data": {
                                     "callback_keyword": "urls"
                                 }
+                            },
+                            {
+                                "type": "Action.Submit",
+                                "title": "Holidays",
+                                "data": {
+                                    "callback_keyword": "holidays"
+                                }
                             }
                         ]
                     }
@@ -1740,7 +1747,8 @@ class GetCompanyHolidays(Command):
     def __init__(self):
         super().__init__(
             command_keyword="holidays",
-            card=None
+            card=None,
+            delete_previous_message=True
         )
 
     @log_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles, log_file_name="toodles_activity_log.csv")
