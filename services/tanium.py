@@ -111,7 +111,7 @@ class TaniumInstance:
         self.verify_ssl = verify_ssl
         logger.info(f"Initialized Tanium instance: {self.name}")
 
-    def query(self, gql: str, variables: Dict[str, Any] = None) -> Dict[str, Any]:
+    def query(self, gql: str, variables: str = None) -> Dict[str, Any]:
         """Execute a GraphQL query"""
         payload = {'query': gql}
         if variables:
