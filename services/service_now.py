@@ -181,6 +181,20 @@ class ServiceNowClient:
             logger.error(f"Error fetching details for {hostname}: {str(e)}")
             return {"name": hostname, "error": str(e), "status": "ServiceNow API Error", "category": ""}
 
+    def get_process_changes(self, params=None):
+        """Get process changes from ServiceNow custom endpoint."""
+        base_url = config.snow_base_url.rstrip('/')
+        endpoint = f"{base_url}/api/x_metli_acme_it/process/changes"
+        endpoint = 'https://acmeprod.service-now.com/api/x_metli_acme_it/process/changes'
+        headers = self.token_manager.get_auth_headers()
+        try:
+            response = requests.get(endpoint, headers=headers, params=params, timeout=10, verify=False)
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Error fetching process changes: {str(e)}")
+            return {"error": str(e), "status": "ServiceNow API Error"}
+
 
 class AsyncServiceNowClient:
     def __init__(self, token_manager=None):
@@ -369,3 +383,6 @@ if __name__ == "__main__":
             print(f"SNOW Error: {details.get('error')}")
     else:
         print("Host not found")
+
+    changes = client.get_process_changes()
+    print(changes)
