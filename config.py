@@ -3,7 +3,9 @@ from dataclasses import dataclass
 
 from dotenv import load_dotenv
 
-load_dotenv()
+# Load environment variables from .env file
+ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
+load_dotenv(ROOT_DIR + "/data/transient/.env")
 
 
 def get_config():

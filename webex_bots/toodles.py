@@ -1757,6 +1757,7 @@ class GetCompanyHolidays(Command):
         holidays = []
         next_holiday_idx = None
         next_holiday_date = None
+        today_holiday_idx = None
         emoji_map = {
             "New Year's Day": "🥳",
             "Martin Luther King, Jr. Day": "🕊️",
@@ -1776,10 +1777,17 @@ class GetCompanyHolidays(Command):
                     month_str, day_str = match.groups()
                     try:
                         holiday_date = datetime.strptime(f"2025 {month_str} {day_str}", "%Y %B %d")
-                        if holiday_date >= today and next_holiday_idx is None:
+
+                        # Check if this is today's holiday
+                        if holiday_date.date() == today.date():
+                            today_holiday_idx = idx
+                        # Find next future holiday (after today)
+                        elif holiday_date > today and next_holiday_idx is None:
                             next_holiday_idx = idx
                             next_holiday_date = holiday_date
-                        if holiday_date < today:
+
+                        # Determine styling
+                        if holiday_date.date() < today.date():
                             style = 'italic'
                         else:
                             style = None
@@ -1810,30 +1818,30 @@ class GetCompanyHolidays(Command):
 
         # Build output with styles and merged countdown
         output_lines = []
-        days_until = None  # Ensure days_until is always defined
         for i, (h, style) in enumerate(holidays):
-            if i == next_holiday_idx:
-                # Bold the next holiday line and add countdown info
+            # Handle today's holiday with special formatting
+            if i == today_holiday_idx:
+                h = f"🎊 **{h}** 🎊 (TODAY!)"
+                style = None  # Don't italicize today's holiday
+            # Handle next future holiday
+            elif i == next_holiday_idx:
                 if next_holiday_date:
                     days_until = (next_holiday_date - today).days
-                    if days_until == 0:
-                        h = f"🎊 **{h}** 🎊 (TODAY!)"
-                        # Do not italicize today's holiday
-                        style = None
-                    elif days_until == 1:
+                    if days_until == 1:
                         h = f"⏰ **{h}** (TOMORROW!)"
                     else:
                         h = f"**{h}** ({days_until} days until⏱️)"
                 else:
                     h = f"**{h}**"
-            if style == 'italic' and not (i == next_holiday_idx and days_until == 0):
-                # For past holidays, italicize the entire line, except today
+
+            # Apply italic styling for past holidays
+            if style == 'italic':
                 h = f"*{h}*"
-            # If neither next holiday nor past, leave as-is (normal formatting)
+
             output_lines.append(h)
 
         # Enhanced footer with visual separator
-        note = f"\n═══════════════���═══════════════════\n"
+        note = f"\n═══════════════════════════════════\n"
         return title + "\n".join(output_lines) + note
 
 
