@@ -4,8 +4,21 @@
     <meta charset="UTF-8">
     <title>APT Other Names Results</title>
     <link rel="stylesheet" href="/static/css/apt_other_names_results.css">
+    <style>
+        /* Overlay canvas for falling notes */
+        #falling-notes-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            pointer-events: none;
+            z-index: 100;
+        }
+    </style>
 </head>
 <body>
+<canvas id="falling-notes-canvas"></canvas>
 <div class="top-nav">
     <a href="/" class="nav-home">
         <img src="{{ url_for('static', filename='icons/home.svg') }}" alt="Home" class="nav-icon" style="width:32px;height:32px;">
@@ -13,16 +26,6 @@
 </div>
 <div class="container">
         <h1>APT Other Names Search Results</h1>
-        <form id="searchForm" action="/api/apt-other-names" method="get">
-            <label for="common_name">APT Common Name:</label>
-            <input type="text" id="common_name" name="common_name" value="{{ common_name }}" required>
-            <label for="should_include_metadata">
-                <input type="checkbox" id="should_include_metadata" name="should_include_metadata" value="true" {% if should_include_metadata %}checked{% endif %}>
-                Include Metadata
-            </label>
-            <button type="submit">Search</button>
-            <div id="spinner" class="spinner" style="display:none;"></div>
-        </form>
         <div id="results">
             {% if results and results|length > 0 %}
                 <h2>Other Names for '{{ common_name }}'</h2>
@@ -64,12 +67,20 @@
                 <p>No other names found for '{{ common_name }}'.</p>
             {% endif %}
         </div>
+        <div style="text-align:center; margin-top: 36px;">
+            <a href="/apt-other-names-search" class="back-to-search-btn">Back to Search</a>
+        </div>
     </div>
     <script src="/static/js/apt_other_names_results.js"></script>
+    <script src="/static/js/falling_notes.js"></script>
     <script>
-    document.getElementById('searchForm').addEventListener('submit', function() {
-        document.getElementById('spinner').style.display = 'inline-block';
-    });
+    // Only add event listener if the form exists (prevents error on results page)
+    var searchForm = document.getElementById('searchForm');
+    if (searchForm) {
+        searchForm.addEventListener('submit', function() {
+            document.getElementById('spinner').style.display = 'inline-block';
+        });
+    }
     </script>
 </body>
 </html>

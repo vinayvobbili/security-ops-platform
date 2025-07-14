@@ -15,12 +15,11 @@
     <h1>APT Other Names Search</h1>
     <form id="searchForm" action="/api/apt-other-names" method="get">
         <label for="common_name">APT Common Name:</label>
-        <input type="text" id="common_name" name="common_name" required>
+        <input type="text" id="common_name" name="common_name" value="{{ common_name }}" required>
         <label for="should_include_metadata">
-            <input type="checkbox" id="should_include_metadata" name="should_include_metadata" value="true">
+            <input type="checkbox" id="should_include_metadata" name="should_include_metadata" value="true" {% if should_include_metadata %}checked{% endif %}>
             Include Metadata
         </label>
-        <input type="hidden" name="format" value="html">
         <button type="submit">Search</button>
         <div id="spinner" class="spinner" style="display:none;"></div>
     </form>
