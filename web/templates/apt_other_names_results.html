@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>APT Other Names Results</title>
+    <link rel="stylesheet" href="/static/css/apt_other_names_results.css">
+</head>
+<body>
+<div class="top-nav">
+    <a href="/" class="nav-home">
+        <img src="{{ url_for('static', filename='icons/home.svg') }}" alt="Home" class="nav-icon" style="width:32px;height:32px;">
+    </a>
+</div>
+<div class="container">
+        <h1>APT Other Names Search Results</h1>
+        <form id="searchForm" action="/api/apt-other-names" method="get">
+            <label for="common_name">APT Common Name:</label>
+            <input type="text" id="common_name" name="common_name" value="{{ common_name }}" required>
+            <label for="should_include_metadata">
+                <input type="checkbox" id="should_include_metadata" name="should_include_metadata" value="true" {% if should_include_metadata %}checked{% endif %}>
+                Include Metadata
+            </label>
+            <button type="submit">Search</button>
+            <div id="spinner" class="spinner" style="display:none;"></div>
+        </form>
+        <div id="results">
+            {% if results and results|length > 0 %}
+                <h2>Other Names for '{{ common_name }}'</h2>
+                {% for item in results %}
+                <div class="apt-result-card">
+                    <div class="apt-header">
+                        <span class="apt-group">{{ item.common_name }}</span>
+                        <span class="apt-region">Region: {{ item.region }}</span>
+                        <span class="apt-sheet">Sheet: {{ item.sheet_name }}</span>
+                    </div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Source</th>
+                                <th>Alternative Name</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        {% for source, alt_name in item.alternative_names.items() %}
+                            <tr>
+                                <td>{{ source }}</td>
+                                <td>{{ alt_name }}</td>
+                            </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                    {% if should_include_metadata %}
+                    <div class="apt-metadata">
+                        <strong>Total Alternatives:</strong> {{ item.total_alternatives }}<br>
+                        <strong>Row Index:</strong> {{ item.row_index }}<br>
+                        <strong>Companies in Sheet:</strong> {{ item.companies_in_sheet }}<br>
+                        <strong>All Company Columns:</strong> {{ item.all_company_columns }}<br>
+                        <strong>All Row Data:</strong> {{ item.all_row_data }}
+                    </div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            {% else %}
+                <p>No other names found for '{{ common_name }}'.</p>
+            {% endif %}
+        </div>
+    </div>
+    <script src="/static/js/apt_other_names_results.js"></script>
+    <script>
+    document.getElementById('searchForm').addEventListener('submit', function() {
+        document.getElementById('spinner').style.display = 'inline-block';
+    });
+    </script>
+</body>
+</html>

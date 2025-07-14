@@ -20,8 +20,8 @@ def add_approved_testing_entry(
         scope,
         submitter,
         expiry_date,
+        submitter_ip_address,
         submit_date=None,
-        announce_func=None
 ):
     """
     Adds an approved testing entry to both the current and master lists.
@@ -46,15 +46,17 @@ def add_approved_testing_entry(
     # Add usernames
     for username in usernames_list:
         if username:
-            current_entries.get("USERNAMES").append(
-                {"data": username, "expiry_date": expiry_date, "submitter": submitter})
+            current_entries.get("USERNAMES").append({
+                "data": username, "expiry_date": expiry_date, "submitter": submitter
+            })
             master_entries.append({
                 "username": username,
                 "description": description,
                 "scope": scope,
                 "submitter": submitter,
                 "submit_date": submit_date,
-                "expiry_date": expiry_date
+                "expiry_date": expiry_date,
+                "submitter_ip_address": submitter_ip_address
             })
     # Add IPs/hostnames
     for item in items_list:
@@ -82,7 +84,8 @@ def add_approved_testing_entry(
                 "scope": scope,
                 "submitter": submitter,
                 "submit_date": submit_date,
-                "expiry_date": expiry_date
+                "expiry_date": expiry_date,
+                "submitter_ip_address": submitter_ip_address,
             })
         elif is_cidr:
             current_entries.get("CIDR_BLOCKS").append(
@@ -93,7 +96,8 @@ def add_approved_testing_entry(
                 "scope": scope,
                 "submitter": submitter,
                 "submit_date": submit_date,
-                "expiry_date": expiry_date
+                "expiry_date": expiry_date,
+                "submitter_ip_address": submitter_ip_address,
             })
         else:
             current_entries.get("ENDPOINTS").append(
@@ -104,7 +108,8 @@ def add_approved_testing_entry(
                 "scope": scope,
                 "submitter": submitter,
                 "submit_date": submit_date,
-                "expiry_date": expiry_date
+                "expiry_date": expiry_date,
+                "submitter_ip_address": submitter_ip_address,
             })
     list_handler.save(approved_testing_list_name, current_entries)
     list_handler.save(approved_testing_master_list_name, master_entries)
