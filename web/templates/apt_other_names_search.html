@@ -10,6 +10,12 @@
     <a href="/" class="nav-home">
         <img src="{{ url_for('static', filename='icons/home.svg') }}" alt="Home" class="nav-icon" style="width:32px;height:32px;">
     </a>
+    <div class="nav-music" style="margin-left:auto;">
+        <button type="button" onclick="toggleAptAudio()" style="background:none;border:none;cursor:pointer;padding:0 8px;">
+            <img src="/static/icons/volume-xmark-solid.svg" alt="Music Icon" class="music-icon" id="apt-music-icon" style="width:32px;height:32px;">
+        </button>
+        <audio id="apt-music" src="/static/audio/the-best-jazz-club-in-new-orleans-164472.mp3" loop></audio>
+    </div>
 </div>
 <div class="container">
     <h1>APT Other Names Search</h1>
@@ -28,6 +34,45 @@
 <script>
     document.getElementById('searchForm').addEventListener('submit', function () {
         document.getElementById('spinner').style.display = 'inline-block';
+    });
+
+    function toggleAptAudio() {
+        var audio = document.getElementById('apt-music');
+        var icon = document.getElementById('apt-music-icon');
+        if (audio.paused) {
+            audio.play();
+            icon.src = '/static/icons/volume-high-solid.svg';
+            // Save state
+            localStorage.setItem('apt-music-playing', 'true');
+        } else {
+            audio.pause();
+            icon.src = '/static/icons/volume-xmark-solid.svg';
+            // Save state
+            localStorage.setItem('apt-music-playing', 'false');
+        }
+    }
+
+    // On page load, restore music state
+    document.addEventListener('DOMContentLoaded', function() {
+        var audio = document.getElementById('apt-music');
+        var icon = document.getElementById('apt-music-icon');
+        var wasPlaying = localStorage.getItem('apt-music-playing') === 'true';
+        if (wasPlaying) {
+            audio.play().then(function() {
+                icon.src = '/static/icons/volume-high-solid.svg';
+            }).catch(function(){});
+        } else {
+            icon.src = '/static/icons/volume-xmark-solid.svg';
+        }
+        // Save current time on navigation away
+        window.addEventListener('beforeunload', function() {
+            localStorage.setItem('apt-music-current-time', audio.currentTime);
+        });
+        // Restore current time if available
+        var savedTime = parseFloat(localStorage.getItem('apt-music-current-time'));
+        if (!isNaN(savedTime)) {
+            audio.currentTime = savedTime;
+        }
     });
 </script>
 </body>
