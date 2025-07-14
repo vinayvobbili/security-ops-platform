@@ -85,7 +85,15 @@ def get_config():
         tanium_cloud_api_url=os.environ["TANIUM_CLOUD_API_URL"],
         tanium_onprem_api_token=os.environ["TANIUM_ONPREM_API_TOKEN"],
         tanium_onprem_api_url=os.environ["TANIUM_ONPREM_API_URL"],
-
+        zscaler_base_url=os.environ["ZSCALER_BASE_URL"],
+        zscaler_username=os.environ["ZSCALER_USERNAME"],
+        zscaler_password=os.environ["ZSCALER_PASSWORD"],
+        zscaler_api_key=os.environ["ZSCALER_API_KEY"],
+        infoblox_base_url=os.environ["INFOBLOX_BASE_URL"],
+        infoblox_username=os.environ["INFOBLOX_USERNAME"],
+        infoblox_password=os.environ["INFOBLOX_BASE_URL"],
+        palo_alto_host=os.environ["PALO_ALTO_HOST"],
+        palo_alto_api_key=os.environ["PALO_ALTO_API_KEY"],
     )
 
 
@@ -167,3 +175,12 @@ class Config:
     tanium_cloud_api_url: str
     tanium_onprem_api_token: str
     tanium_onprem_api_url: str
+    zscaler_base_url: str
+    zscaler_username: str
+    zscaler_password: str
+    zscaler_api_key: str
+    infoblox_base_url: str
+    infoblox_username: str
+    infoblox_password: str
+    palo_alto_host: str
+    palo_alto_api_key: str
