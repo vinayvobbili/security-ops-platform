@@ -24,20 +24,21 @@ Dependencies:
 
 """
 
+import json
+import os
+import random
+
 from webexpythonsdk import WebexAPI
 
 from config import get_config
 from services.xsoar import TicketHandler
-import random
-import os
-import json
 
 CONFIG = get_config()
 webex_api = WebexAPI(access_token=CONFIG.webex_bot_access_token_soar)
 
 
 def load_qa_leads():
-    leads_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'data', 'qa_leads.json')
+    leads_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'data', 'transient', 're', 'qa_leads.json')
     with open(leads_path, 'r') as f:
         return json.load(f), leads_path
 
@@ -81,7 +82,7 @@ def generate(room_id):
                 'securitycategory': 'CAT-7: Investigation',
             }
         }
-        qa_ticket = ticket_handler.create(new_ticket_payload)
+        qa_ticket = ticket_handler.create_in_dev(new_ticket_payload)
         qa_ticket_url = CONFIG.xsoar_prod_ui_base_url + "/Custom/caseinfoid/" + qa_ticket['id']
         webex_api.messages.create(room_id,
                                   markdown=f"Hello <@personEmail:{owner}>👋🏾 [X#{qa_ticket['id']}]({qa_ticket_url}) has been assigned to you for QA\nSource ticket: [X#{source_ticket['id']}]({source_ticket['url']})\nTicket type: {source_ticket['type']}\nImpact: {impact}")
