@@ -20,6 +20,7 @@
         <a href="/xsoar-ticket-import-form">XSOAR Ticket Import</a>
         <a href="/travel-form">Travel Form</a>
         <a href="/red-team-testing-form">Red Team Testing</a>
+        <a href="/apt-other-names-search">APT Other Names Search</a>
         <!-- Add more links as needed -->
     </div>
 </div>
@@ -58,17 +59,19 @@
         var menu = document.getElementById('burgerMenu');
         menu.style.display = (menu.style.display === 'none' || menu.style.display === '') ? 'block' : 'none';
     }
+
     // Close menu when a link is clicked
-    document.addEventListener('DOMContentLoaded', function() {
+    document.addEventListener('DOMContentLoaded', function () {
         var burgerMenu = document.getElementById('burgerMenu');
         if (burgerMenu) {
-            burgerMenu.querySelectorAll('a').forEach(function(link) {
-                link.addEventListener('click', function() {
+            burgerMenu.querySelectorAll('a').forEach(function (link) {
+                link.addEventListener('click', function () {
                     burgerMenu.style.display = 'none';
                 });
             });
         }
     });
+
     function restartSlideshow() {
         currentSlide = 0;
         updateSlider();

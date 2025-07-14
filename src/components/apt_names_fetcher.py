@@ -462,7 +462,7 @@ if __name__ == "__main__":
     print("=== WORKBOOK SUMMARY ===")
     print_workbook_summary(file_path)
 
-    apt_group = 'Andariel'
+    apt_group = 'APT2'
     print(f"\n=== TESTING: Search for {apt_group} ===")
     results = get_other_names_for_common_name(apt_group, file_path, should_include_metadata=True)
 
