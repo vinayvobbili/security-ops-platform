@@ -1,0 +1,288 @@
+/* Visually rich, modern, and engaging style for APT Other Names Search & Results */
+:root {
+  --primary-color: #6a11cb;
+  --secondary-color: #2575fc;
+  --accent-color: #ff6f61;
+  --success-color: #43e97b;
+  --danger-color: #e74c3c;
+  --bg-gradient: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%);
+  --card-bg: #fff;
+  --card-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
+  --border-radius: 18px;
+  --input-bg: #f4f7fa;
+  --input-border: #d1d8e0;
+  --input-focus: #6a11cb;
+  --table-header-bg: linear-gradient(90deg, #6a11cb 0%, #2575fc 100%);
+  --table-header-text: #fff;
+  --table-row-alt: #f4f7fa;
+  --table-row-hover: #e3e8f0;
+}
+
+body {
+  font-family: 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
+  background: var(--bg-gradient);
+  margin: 0;
+  min-height: 100vh;
+  color: #222;
+}
+
+.container {
+  max-width: 700px;
+  margin: 48px auto 0 auto;
+  background: var(--card-bg);
+  border-radius: var(--border-radius);
+  box-shadow: var(--card-shadow);
+  padding: 40px 36px 36px 36px;
+  position: relative;
+  overflow: hidden;
+  animation: fadeIn 1.2s cubic-bezier(.4,0,.2,1);
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(40px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+h1 {
+  text-align: center;
+  color: var(--primary-color);
+  font-size: 2.3em;
+  margin-bottom: 32px;
+  letter-spacing: 1px;
+  position: relative;
+}
+h1:after {
+  content: '';
+  display: block;
+  margin: 18px auto 0 auto;
+  width: 80px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--accent-color);
+}
+
+form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px 24px;
+  align-items: flex-end;
+  justify-content: center;
+  margin-bottom: 36px;
+  background: linear-gradient(90deg, #f4f7fa 60%, #e3e8f0 100%);
+  padding: 24px 18px 18px 18px;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(106,17,203,0.07);
+}
+form label {
+  font-weight: 600;
+  color: var(--primary-color);
+  margin-right: 8px;
+}
+form input[type="text"] {
+  padding: 10px 14px;
+  border: 2px solid var(--input-border);
+  border-radius: 6px;
+  background: var(--input-bg);
+  font-size: 1.1em;
+  transition: border 0.2s;
+  outline: none;
+}
+form input[type="text"]:focus {
+  border-color: var(--input-focus);
+  background: #fff;
+}
+form input[type="checkbox"] {
+  accent-color: var(--primary-color);
+  width: 18px;
+  height: 18px;
+  margin-right: 6px;
+}
+button[type="submit"] {
+  background: var(--primary-color);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 12px 28px;
+  font-size: 1.1em;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.1s;
+  box-shadow: 0 2px 8px rgba(106,17,203,0.08);
+}
+button[type="submit"]:hover {
+  background: var(--secondary-color);
+  transform: translateY(-2px) scale(1.04);
+}
+button[type="submit"].pulse {
+  animation: pulseBtn 0.4s;
+}
+@keyframes pulseBtn {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.12); }
+  100% { transform: scale(1); }
+}
+#results {
+  margin-top: 18px;
+  opacity: 0;
+  transform: translateY(30px);
+  transition: opacity 0.7s cubic-bezier(.4,0,.2,1), transform 0.7s cubic-bezier(.4,0,.2,1);
+}
+#results.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+#results h2 {
+  color: var(--secondary-color);
+  margin-bottom: 18px;
+  font-size: 1.3em;
+  letter-spacing: 0.5px;
+}
+table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  margin-top: 10px;
+  background: #fff;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(106,17,203,0.07);
+}
+table th, table td {
+  padding: 12px 14px;
+  text-align: left;
+  font-size: 1.05em;
+}
+table th {
+  background: var(--table-header-bg);
+  color: var(--table-header-text);
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  border: none;
+}
+table td {
+  border-bottom: 1px solid #e0e0e0;
+  background: #fff;
+}
+table tr:last-child td {
+  border-bottom: none;
+}
+table tr:nth-child(even) td {
+  background: var(--table-row-alt);
+}
+table tr:hover td {
+  background: var(--table-row-hover);
+  transition: background 0.2s;
+}
+#results p {
+  color: var(--danger-color);
+  background: #fff0f0;
+  border-left: 5px solid var(--danger-color);
+  padding: 16px 18px;
+  border-radius: 6px;
+  margin-top: 24px;
+  font-size: 1.1em;
+  box-shadow: 0 2px 8px rgba(231,76,60,0.07);
+}
+
+/* Fun animated accent for the container */
+.container:before {
+  content: '';
+  position: absolute;
+  top: -60px;
+  right: -60px;
+  width: 180px;
+  height: 180px;
+  background: radial-gradient(circle, var(--accent-color) 0%, transparent 70%);
+  opacity: 0.13;
+  z-index: 0;
+  pointer-events: none;
+  animation: floatAccent 6s ease-in-out infinite alternate;
+}
+@keyframes floatAccent {
+  from { transform: translateY(0) scale(1); }
+  to { transform: translateY(18px) scale(1.08); }
+}
+
+/* Spinner style */
+.spinner {
+  display: inline-block;
+  width: 28px;
+  height: 28px;
+  border: 4px solid #eee;
+  border-top: 4px solid var(--primary-color);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin-left: 12px;
+  vertical-align: middle;
+}
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Navigation styles */
+.top-nav {
+  display: flex;
+  align-items: center;
+  background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
+  padding: 10px 0 10px 18px;
+  box-shadow: 0 2px 8px rgba(106,17,203,0.10);
+  border-radius: 0 0 18px 18px;
+  margin-bottom: 18px;
+  animation: fadeInNav 1.1s cubic-bezier(.4,0,.2,1);
+}
+.nav-home {
+  display: flex;
+  align-items: center;
+  text-decoration: none;
+  transition: transform 0.15s;
+}
+.nav-home:hover {
+  transform: scale(1.12) rotate(-8deg);
+  filter: drop-shadow(0 2px 8px var(--accent-color));
+}
+.nav-icon {
+  width: 32px;
+  height: 32px;
+  margin-right: 8px;
+  filter: drop-shadow(0 2px 8px rgba(106,17,203,0.10));
+  transition: filter 0.2s;
+}
+
+/* Animate the spinner in the nav if needed */
+.top-nav .spinner {
+  margin-left: 16px;
+  margin-bottom: 0;
+}
+
+/* Add a subtle fade-in for the nav */
+.top-nav {
+  animation: fadeInNav 1.1s cubic-bezier(.4,0,.2,1);
+}
+@keyframes fadeInNav {
+  from { opacity: 0; transform: translateY(-20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Responsive design */
+@media (max-width: 800px) {
+  .container {
+    padding: 18px 6vw 24px 6vw;
+  }
+  form {
+    flex-direction: column;
+    gap: 14px 0;
+    align-items: stretch;
+  }
+  table th, table td {
+    font-size: 0.98em;
+    padding: 10px 8px;
+  }
+}
+@media (max-width: 500px) {
+  .container {
+    padding: 8px 2vw 12px 2vw;
+  }
+  h1 {
+    font-size: 1.3em;
+  }
+}

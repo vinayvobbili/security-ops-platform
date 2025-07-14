@@ -6,7 +6,6 @@ import os
 import select
 import socket
 import socketserver
-import ssl
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta
@@ -20,6 +19,7 @@ from config import get_config
 from services import xsoar
 from services.approved_testing_utils import add_approved_testing_entry
 from src.utils.logging_utils import log_web_activity, is_scanner_request
+from src.components import apt_names_fetcher
 
 # Define the proxy port
 PROXY_PORT = 8080
@@ -320,7 +320,8 @@ def handle_red_team_testing_form_submission():
             notes_scope,
             submitter_email_address,
             keep_until,
-            submit_date
+            submit_date,
+            submitter_ip_address
         )
     except ValueError as e:
         return jsonify({
@@ -371,6 +372,92 @@ connection_pool = ConnectionPool(max_connections=MAX_CONNECTIONS)
 
 
 # Optimized proxy class with async support
+def _relay_sockets(client, target):
+    """Simple synchronous socket relay that avoids HTTP processing"""
+    sockets = [client, target]
+
+    # Keep transferring data between client and target
+    while True:
+        # Wait until a socket is ready to be read
+        readable, _, exceptional = select.select(sockets, [], sockets, 60)
+
+        if exceptional:
+            break
+
+        if not readable:
+            continue  # Timeout, try again
+
+        for sock in readable:
+            # Determine the destination socket
+            dest = target if sock is client else client
+
+            try:
+                data = sock.recv(BUFFER_SIZE)
+                if not data:
+                    return  # Connection closed
+                dest.sendall(data)
+            except (socket.error, ConnectionResetError, BrokenPipeError):
+                return  # Any socket error means we're done
+
+
+async def _async_select(client_sock, target_sock):
+    """Async-compatible version of select operation"""
+    loop = asyncio.get_event_loop()
+    readable = []
+    for sock in [client_sock, target_sock]:
+        try:
+            if await loop.sock_recv(sock, 1):
+                readable.append(sock)
+        except:
+            pass
+    return readable
+
+
+def relay_data_async(client_sock, target_sock):
+    """Efficiently relays data bidirectionally between client_sock and target_sock."""
+    try:
+        # Use two separate buffers for better performance
+        client_to_target = bytearray(BUFFER_SIZE)
+        target_to_client = bytearray(BUFFER_SIZE)
+
+        while True:
+            # Select with a timeout to prevent high CPU usage
+            r, _, _ = asyncio.get_event_loop().run_until_complete(
+                asyncio.wait_for(
+                    _async_select(client_sock, target_sock),
+                    timeout=2.0
+                )
+            )
+
+            if not r:
+                # Check if connections are still alive
+                if client_sock.fileno() == -1 or target_sock.fileno() == -1:
+                    break
+
+            if client_sock in r:
+                # Use memory view for zero-copy slicing
+                view = memoryview(client_to_target)
+                bytes_read = client_sock.recv_into(view)
+                if not bytes_read:
+                    break
+                target_sock.sendall(view[:bytes_read])
+
+            if target_sock in r:
+                view = memoryview(target_to_client)
+                bytes_read = target_sock.recv_into(view)
+                if not bytes_read:
+                    break
+                client_sock.sendall(view[:bytes_read])
+    except Exception as e:
+        print(f"Error during relay: {e}")
+    finally:
+        for sock in [client_sock, target_sock]:
+            try:
+                sock.close()
+            except:
+                pass
+
+
 class OptimizedProxy(http.server.SimpleHTTPRequestHandler):
     protocol_version = 'HTTP/1.1'  # Enable keep-alive
 
@@ -413,7 +500,7 @@ class OptimizedProxy(http.server.SimpleHTTPRequestHandler):
             target_sock.settimeout(60)
 
             # Start bidirectional relay
-            self._relay_sockets(client_socket, target_sock)
+            _relay_sockets(client_socket, target_sock)
 
             return
 
@@ -421,33 +508,6 @@ class OptimizedProxy(http.server.SimpleHTTPRequestHandler):
             print(f"CONNECT error: {e}")
             self.send_error(502, f"Cannot connect to {target_host}:{target_port}")
             return
-
-    def _relay_sockets(self, client, target):
-        """Simple synchronous socket relay that avoids HTTP processing"""
-        sockets = [client, target]
-
-        # Keep transferring data between client and target
-        while True:
-            # Wait until a socket is ready to be read
-            readable, _, exceptional = select.select(sockets, [], sockets, 60)
-
-            if exceptional:
-                break
-
-            if not readable:
-                continue  # Timeout, try again
-
-            for sock in readable:
-                # Determine the destination socket
-                dest = target if sock is client else client
-
-                try:
-                    data = sock.recv(BUFFER_SIZE)
-                    if not data:
-                        return  # Connection closed
-                    dest.sendall(data)
-                except (socket.error, ConnectionResetError, BrokenPipeError):
-                    return  # Any socket error means we're done
 
     def proxy_http_request(self):
         # This part handles regular HTTP requests (not HTTPS via CONNECT)
@@ -499,10 +559,7 @@ class OptimizedProxy(http.server.SimpleHTTPRequestHandler):
             self.send_response(response.status)
 
             # Prepare for potential gzip compression
-            is_gzipped = False
             for h, v in response.getheaders():
-                if h.lower() == 'content-encoding' and 'gzip' in v.lower():
-                    is_gzipped = True
                 if h.lower() not in ['transfer-encoding', 'connection']:
                     self.send_header(h, v)
 
@@ -526,66 +583,6 @@ class OptimizedProxy(http.server.SimpleHTTPRequestHandler):
             print(f"Error during HTTP proxy request: {e}")
             self.send_error(502, "Bad Gateway")
 
-    def relay_data_async(self, client_sock, target_sock):
-        """Efficiently relays data bidirectionally between client_sock and target_sock."""
-        try:
-            # Use two separate buffers for better performance
-            client_to_target = bytearray(BUFFER_SIZE)
-            target_to_client = bytearray(BUFFER_SIZE)
-
-            while True:
-                # Select with a timeout to prevent high CPU usage
-                r, _, _ = asyncio.get_event_loop().run_until_complete(
-                    asyncio.wait_for(
-                        self._async_select(client_sock, target_sock),
-                        timeout=2.0
-                    )
-                )
-
-                if not r:
-                    # Check if connections are still alive
-                    if client_sock.fileno() == -1 or target_sock.fileno() == -1:
-                        break
-
-                if client_sock in r:
-                    # Use memory view for zero-copy slicing
-                    view = memoryview(client_to_target)
-                    bytes_read = client_sock.recv_into(view)
-                    if not bytes_read:
-                        break
-                    target_sock.sendall(view[:bytes_read])
-
-                if target_sock in r:
-                    view = memoryview(target_to_client)
-                    bytes_read = target_sock.recv_into(view)
-                    if not bytes_read:
-                        break
-                    client_sock.sendall(view[:bytes_read])
-
-        except (ConnectionResetError, BrokenPipeError, ssl.SSLError) as e:
-            # Common connection errors - log but don't clutter logs
-            pass
-        except Exception as e:
-            print(f"Error during relay: {e}")
-        finally:
-            for sock in [client_sock, target_sock]:
-                try:
-                    sock.close()
-                except:
-                    pass
-
-    async def _async_select(self, client_sock, target_sock):
-        """Async-compatible version of select operation"""
-        loop = asyncio.get_event_loop()
-        readable = []
-        for sock in [client_sock, target_sock]:
-            try:
-                if await loop.sock_recv(sock, 1):
-                    readable.append(sock)
-            except:
-                pass
-        return readable
-
 
 # Add a function to start the optimized proxy server
 def start_proxy_server():
@@ -594,7 +591,7 @@ def start_proxy_server():
     try:
         # Enable address reuse to avoid "address already in use" errors
         socketserver.TCPServer.allow_reuse_address = True
-        with socketserver.ThreadingTCPServer(("", PROXY_PORT), handler) as httpd:
+        with socketserver.ThreadingTCPServer(("", PROXY_PORT), handler) as httpd:  # type: ignore[arg-type]
             httpd.serve_forever()
     except Exception as e:
         print(f"Failed to start proxy: {e}")
@@ -613,6 +610,54 @@ def main():
     # Start Flask server in main thread
     print(f"Starting web server on port 80")
     app.run(debug=True, host='0.0.0.0', port=80, threaded=True)
+
+
+@app.route("/api/apt-names", methods=["GET"])
+@log_web_activity
+def api_apt_names():
+    """API endpoint to get APT workbook summary (region sheets only)."""
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    file_path = os.path.join(base_dir, '../data/transient/de/APTAKAcleaned.xlsx')
+    file_path = os.path.abspath(file_path)
+    info = apt_names_fetcher.get_workbook_info(file_path)
+    return jsonify(info)
+
+
+@app.route("/api/apt-other-names", methods=["GET"])
+@log_web_activity
+def api_apt_other_names():
+    """API endpoint to get other names for a given APT common name."""
+    common_name = request.args.get("common_name")
+    app.logger.info(f"[APT API] Received common_name: '{common_name}' from request")
+    if not common_name:
+        return jsonify({"error": "Missing required parameter: common_name"}), 400
+    should_include_metadata = request.args.get("should_include_metadata")
+    if should_include_metadata is not None:
+        should_include_metadata = should_include_metadata.lower() == "true"
+    else:
+        should_include_metadata = False
+    # Support both 'format' and 'response_format' query parameters
+    response_format = request.args.get("response_format")
+    if not response_format:
+        response_format = request.args.get("format", "html")
+    response_format = response_format.lower()
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    file_path = os.path.join(base_dir, '../data/transient/de/APTAKAcleaned.xlsx')
+    file_path = os.path.abspath(file_path)
+    app.logger.info(f"[APT API] Calling get_other_names_for_common_name with common_name: '{common_name}', file_path: '{file_path}', should_include_metadata: {should_include_metadata}")
+    results = apt_names_fetcher.get_other_names_for_common_name(common_name, file_path, should_include_metadata)
+    app.logger.info(f"[APT API] Results returned: {results}")
+    if response_format == "json":
+        return jsonify(results)
+    else:
+        return render_template("apt_other_names_results.html", common_name=common_name, results=results, should_include_metadata=should_include_metadata)
+
+
+@app.route("/apt-other-names-search", methods=["GET"])
+@log_web_activity
+def apt_other_names_search():
+    """Render the APT Other Names search form page."""
+    return render_template("apt_other_names_search.html")
 
 
 if __name__ == "__main__":

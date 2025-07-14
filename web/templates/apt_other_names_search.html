@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>APT Other Names Search</title>
+    <link rel="stylesheet" href="/static/css/apt_other_names_results.css">
+</head>
+<body>
+<div class="top-nav">
+    <a href="/" class="nav-home">
+        <img src="{{ url_for('static', filename='icons/home.svg') }}" alt="Home" class="nav-icon" style="width:32px;height:32px;">
+    </a>
+</div>
+<div class="container">
+    <h1>APT Other Names Search</h1>
+    <form id="searchForm" action="/api/apt-other-names" method="get">
+        <label for="common_name">APT Common Name:</label>
+        <input type="text" id="common_name" name="common_name" required>
+        <label for="should_include_metadata">
+            <input type="checkbox" id="should_include_metadata" name="should_include_metadata" value="true">
+            Include Metadata
+        </label>
+        <input type="hidden" name="format" value="html">
+        <button type="submit">Search</button>
+        <div id="spinner" class="spinner" style="display:none;"></div>
+    </form>
+</div>
+<script src="/static/js/apt_other_names_results.js"></script>
+<script>
+    document.getElementById('searchForm').addEventListener('submit', function () {
+        document.getElementById('spinner').style.display = 'inline-block';
+    });
+</script>
+</body>
+</html>
