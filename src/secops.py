@@ -33,9 +33,13 @@ BASE_QUERY = f'type:{config.team_name} -owner:""'
 root_directory = Path(__file__).parent.parent
 
 # Load the workbook
-wb = load_workbook(root_directory / 'data' / 'transient' / 'secOps' / config.secops_shift_staffing_filename)
+excel_path = root_directory / 'data' / 'transient' / 'secOps' / config.secops_shift_staffing_filename
+print(f"Loading Excel file from: {excel_path}")
+print(config.secops_shift_staffing_filename)
+wb = load_workbook(excel_path)
+print(wb.sheetnames)
 # Select the sheet
-sheet = wb['May-June 2025']
+sheet = wb['SecOps Roster 2025 Jul Aug']
 
 # get the cell names by shift from the sheet
 SECOPS_SHIFT_STAFFING_FILENAME = root_directory / 'data' / 'secOps' / 'cell_names_by_shift.json'
