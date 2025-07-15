@@ -34,10 +34,7 @@ root_directory = Path(__file__).parent.parent
 
 # Load the workbook
 excel_path = root_directory / 'data' / 'transient' / 'secOps' / config.secops_shift_staffing_filename
-print(f"Loading Excel file from: {excel_path}")
-print(config.secops_shift_staffing_filename)
 wb = load_workbook(excel_path)
-print(wb.sheetnames)
 # Select the sheet
 sheet = wb['SecOps Roster 2025 Jul Aug']
 
