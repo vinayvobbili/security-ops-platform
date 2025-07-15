@@ -1,10 +1,10 @@
 import ipaddress
-from datetime import datetime, timedelta
-from urllib.parse import quote
-import threading
-import time
 import logging
 import re
+import threading
+import time
+from datetime import datetime, timedelta
+from urllib.parse import quote
 
 import pandas
 import requests
@@ -24,10 +24,10 @@ import src.components.oncall as oncall
 from config import get_config
 from data.data_maps import azdo_projects, azdo_orgs, azdo_area_paths
 from services import xsoar, azdo
+from services.approved_testing_utils import add_approved_testing_entry
 from services.crowdstrike import CrowdStrikeClient
 from services.xsoar import ListHandler, TicketHandler
 from src.utils.logging_utils import log_activity
-from services.approved_testing_utils import add_approved_testing_entry
 
 CONFIG = get_config()
 webex_api = WebexAPI(CONFIG.webex_bot_access_token_toodles)
@@ -1203,6 +1203,7 @@ class CreateAZDOWorkItem(Command):
             parent_url = None
             assignee = None
             area_path = None
+            iteration = None
             inputs = attachment_actions.inputs
             wit_title = inputs['wit_title']
             wit_type = inputs['wit_type']
@@ -1217,6 +1218,7 @@ class CreateAZDOWorkItem(Command):
                 assignee = CONFIG.resp_eng_auto_lead
                 area_path = azdo_area_paths['re']
                 parent_url = CONFIG.azdo_rea_parent_url
+                iteration = CONFIG.azdo_rea_iteration
             elif project == 'reo':
                 assignee = CONFIG.resp_eng_ops_lead
                 area_path = azdo_area_paths['re']
@@ -1229,7 +1231,8 @@ class CreateAZDOWorkItem(Command):
                 submitter=submitter_display_name,
                 assignee=assignee,
                 parent_url=parent_url,
-                area_path=area_path
+                area_path=area_path,
+                iteration=iteration
             )
             azdo_wit_url = f'https://dev.azure.com/{azdo_orgs.get(project)}/{quote(azdo_projects.get(project))}/_workitems/edit/{wit_id}'
             wit_type = wit_type.replace('%20', ' ')

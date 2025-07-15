@@ -18,8 +18,8 @@ from flask import Flask, request, abort, jsonify, render_template
 from config import get_config
 from services import xsoar
 from services.approved_testing_utils import add_approved_testing_entry
-from src.utils.logging_utils import log_web_activity, is_scanner_request
 from src.components import apt_names_fetcher
+from src.utils.logging_utils import log_web_activity, is_scanner_request
 
 # Define the proxy port
 PROXY_PORT = 8080
@@ -608,8 +608,9 @@ def main():
     print(f"High-performance proxy server thread started on port {PROXY_PORT}")
 
     # Start Flask server in main thread
-    print(f"Starting web server on port 80")
-    app.run(debug=True, host='0.0.0.0', port=80, threaded=True)
+    port = 80  # Changed from port 80 to avoid "Address already in use" errors
+    print(f"Starting web server on port {port}")
+    app.run(debug=True, host='0.0.0.0', port=port, threaded=True)
 
 
 @app.route("/api/apt-names", methods=["GET"])
