@@ -13,7 +13,7 @@ from services.service_now import enrich_host_report
 from services.tanium import Computer, TaniumClient
 
 # Setup logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 # Configuration
@@ -38,11 +38,11 @@ COUNTRIES_FILE = DATA_DIR / "countries_by_code.json"
 # Load country data
 try:
     with open(COUNTRIES_FILE, 'r') as f:
-        COUNTRY_NAMES_BY_ABBREVIATION = json.load(f)
-    logger.info(f"Loaded {len(COUNTRY_NAMES_BY_ABBREVIATION)} country codes from {COUNTRIES_FILE}")
+        COUNTRY_NAMES_BY_CODE = json.load(f)
+    logger.info(f"Loaded {len(COUNTRY_NAMES_BY_CODE)} country codes from {COUNTRIES_FILE}")
 except Exception as e:
     logger.error(f"Error loading country data: {e}")
-    COUNTRY_NAMES_BY_ABBREVIATION = {}
+    COUNTRY_NAMES_BY_CODE = {}
 
 
 def get_tanium_hosts_without_ring_tag(filename) -> str:
@@ -399,14 +399,19 @@ def _guess_country_from_hostname(computer: Computer) -> tuple[str, str]:
     computer_name = computer.name
     computer_name_lower = computer_name.lower()
 
+    # Debug logging for country code extraction
+    logger.debug(f"Guessing country for hostname: {computer_name}")
+    country_code = computer_name[:2].upper()
+    logger.debug(f"Extracted country code: {country_code}")
+    country_name = COUNTRY_NAMES_BY_CODE.get(country_code, '')
+    logger.debug(f"Country name found: {country_name}")
+
     # 1. If osDomain is 'pmli' (not available in Tanium, skip)
     # 2. If hostname starts with 'vmvdi' or team name
     if computer_name_lower.startswith('vmvdi') or (hasattr(CONFIG, 'team_name') and computer_name_lower.startswith(CONFIG.team_name.lower())):
         return 'United States', f"Country guessed from VMVDI/{CONFIG.team_name if hasattr(CONFIG, 'team_name') else ''} in hostname"
 
     # 3. Infer from first two letters of hostname
-    country_code = computer_name[:2].upper()
-    country_name = COUNTRY_NAMES_BY_ABBREVIATION.get(country_code, '')
     if country_name:
         return country_name, f"Country guessed from first two letters of hostname: {country_code} -> {country_name}"
 

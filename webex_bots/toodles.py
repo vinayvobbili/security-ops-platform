@@ -1765,7 +1765,7 @@ class GetCompanyHolidays(Command):
             "Independence Day": "🎆",
             "Labor Day": "💼",
             "Thanksgiving Day": "🦃",
-            "Day After Thanksgiving*": "🍂",
+            "Day After Thanksgiving": "🍂",
             "Christmas Day": "🎄"
         }
 
