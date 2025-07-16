@@ -9,7 +9,7 @@ webex_api = WebexAPI(access_token=CONFIG.webex_bot_access_token_soar)
 
 def start(room_id):
     ticket_handler = TicketHandler()
-    query = '-status:closed -category:job type:METCIRT metcirtincidentnotificationsla.runStatus:running metcirtincidentnotificationsla.slaStatus:risk'
+    query = '-status:closed -category:job type:METCIRT metcirtincidentnotificationsla.runStatus:running metcirtincidentnotificationsla.slaStatus:2'
     # query = '-category:job type:METCIRT timetorespond.runStatus:running'
     tickets = ticket_handler.get_tickets(query)
     if not tickets:
