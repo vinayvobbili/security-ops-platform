@@ -100,7 +100,6 @@ class TicketHandler:
 
     def create_in_dev(self, payload):
         """Create a new incident in dev XSOAR"""
-        print(f"Importing prod ticket# {payload.get('id')}")
 
         # Clean payload for dev creation
         for key in ['id', 'phase', 'status']:
