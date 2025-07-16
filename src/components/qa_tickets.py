@@ -85,10 +85,10 @@ def generate(room_id):
                 'thirdparty': 'unknown'
             }
         }
-        qa_ticket = ticket_handler.create_in_dev(new_ticket_payload)
+        qa_ticket = ticket_handler.create(new_ticket_payload)
         qa_ticket_url = CONFIG.xsoar_prod_ui_base_url + "/Custom/caseinfoid/" + qa_ticket['id']
         webex_api.messages.create(room_id,
-                                  markdown=f"Hello <@personEmail:{owner}>👋🏾 \n [X#{qa_ticket['id']}]({qa_ticket_url}) has been assigned to you for QA\nSource ticket-->\nID: [X#{source_ticket['id']}]({qa_ticket_url})\nType: {source_ticket['type']}\nImpact: {impact}")
+                                  markdown=f"Hello <@personEmail:{owner}>👋🏾\n[X#{qa_ticket['id']}]({qa_ticket_url}) has been assigned to you for QA\nSource ticket-->\nID: [X#{source_ticket['id']}]({qa_ticket_url})\nType: {source_ticket['type']}\nImpact: {impact}")
         lead_index += 1
     qa_leads = qa_leads[lead_index % len(qa_leads):] + qa_leads[:lead_index % len(qa_leads)]
     save_qa_leads(qa_leads, leads_path)
