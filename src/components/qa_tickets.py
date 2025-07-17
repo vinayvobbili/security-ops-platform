@@ -49,49 +49,52 @@ def save_qa_leads(leads, leads_path):
 
 
 def generate(room_id):
-    ticket_handler = TicketHandler()
-    query = 'status:closed -category:job type:METCIRT -owner:""'
-    period = {
-        "byFrom": "days",
-        "fromValue": 0
-    }
-
-    tickets = ticket_handler.get_tickets(query, period)
-    if not tickets:
-        print("No tickets found creating QA ticket.")
-        return
-
-    tickets_by_impact = {}
-    for ticket in tickets:
-        impact = ticket['CustomFields'].get('impact', 'Unknown')
-        tickets_by_impact.setdefault(impact, []).append(ticket)
-
-    qa_leads, leads_path = load_qa_leads()
-    lead_index = 0
-    for impact, group in tickets_by_impact.items():
-        source_ticket = random.choice(group)
-        owner = qa_leads[lead_index % len(qa_leads)]
-        new_ticket_payload = {
-            'type': 'METCIRT Ticket QA',
-            'owner': owner,
-            'name': source_ticket.get('name'),
-            'details': source_ticket.get('details'),
-            'CustomFields': {
-                'detectionsource': source_ticket.get('CustomFields').get('detectionsource'),
-                'isusercontacted': False,
-                'securitycategory': 'CAT-7: Investigation',
-                'businessservicesprovided': 'Unknown',
-                'isbusinessimpacted': 'No',
-                'thirdparty': 'unknown'
-            }
+    try:
+        ticket_handler = TicketHandler()
+        query = 'status:closed -category:job type:METCIRT -owner:""'
+        period = {
+            "byFrom": "days",
+            "fromValue": 0
         }
-        qa_ticket = ticket_handler.create(new_ticket_payload)
-        qa_ticket_url = CONFIG.xsoar_prod_ui_base_url + "/Custom/caseinfoid/" + qa_ticket['id']
-        webex_api.messages.create(room_id,
-                                  markdown=f"Hello <@personEmail:{owner}>👋🏾\n[X#{qa_ticket['id']}]({qa_ticket_url}) has been assigned to you for QA\nSource ticket-->\nID: [X#{source_ticket['id']}]({qa_ticket_url})\nType: {source_ticket['type']}\nImpact: {impact}")
-        lead_index += 1
-    qa_leads = qa_leads[lead_index % len(qa_leads):] + qa_leads[:lead_index % len(qa_leads)]
-    save_qa_leads(qa_leads, leads_path)
+
+        tickets = ticket_handler.get_tickets(query, period)
+        if not tickets:
+            print("No tickets found creating QA ticket.")
+            return
+
+        tickets_by_impact = {}
+        for ticket in tickets:
+            impact = ticket['CustomFields'].get('impact', 'Unknown')
+            tickets_by_impact.setdefault(impact, []).append(ticket)
+
+        qa_leads, leads_path = load_qa_leads()
+        lead_index = 0
+        for impact, group in tickets_by_impact.items():
+            source_ticket = random.choice(group)
+            owner = qa_leads[lead_index % len(qa_leads)]
+            new_ticket_payload = {
+                'type': 'METCIRT Ticket QA',
+                'owner': owner,
+                'name': source_ticket.get('name'),
+                'details': source_ticket.get('details'),
+                'CustomFields': {
+                    'detectionsource': source_ticket.get('CustomFields').get('detectionsource'),
+                    'isusercontacted': False,
+                    'securitycategory': 'CAT-7: Investigation',
+                    'businessservicesprovided': 'Unknown',
+                    'isbusinessimpacted': 'No',
+                    'thirdparty': 'unknown'
+                }
+            }
+            qa_ticket = ticket_handler.create(new_ticket_payload)
+            qa_ticket_url = CONFIG.xsoar_prod_ui_base_url + "/Custom/caseinfoid/" + qa_ticket['id']
+            webex_api.messages.create(room_id,
+                                      markdown=f"Hello <@personEmail:{owner}>👋🏾\n[X#{qa_ticket['id']}]({qa_ticket_url}) has been assigned to you for QA\nSource ticket-->\nID: [X#{source_ticket['id']}]({qa_ticket_url})\nType: {source_ticket['type']}\nImpact: {impact}")
+            lead_index += 1
+        qa_leads = qa_leads[lead_index % len(qa_leads):] + qa_leads[:lead_index % len(qa_leads)]
+        save_qa_leads(qa_leads, leads_path)
+    except Exception as e:
+        print(f"Error while generating QA tickets: {e}")
 
 
 if __name__ == "__main__":
