@@ -545,8 +545,8 @@ class ReportHandler:
         return f"""
 Summary:
 - Total hosts processed: {stats.get('total_hosts', 0)}
-- Hosts found in CrowdStrike: {stats.get('hosts_with_device_id', 0)}
-- Hosts tagged: {stats.get('hosts_with_tags', 0)}
+- Hosts tagged successfully: {stats.get('hosts_with_tags', 0)}
+- Hosts currently without a Ring tag: {stats.get('total_hosts', 0) - stats.get('hosts_with_tags', 0)}
 
 Timing:
 - Fetching and initializing hosts: {ReportHandler.format_duration(timings.get('fetch_duration', 0))}
