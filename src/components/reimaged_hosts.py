@@ -61,7 +61,7 @@ def get_details():
                 "hostname": hostname,
                 "created": created,
                 "TUC": tuc,
-                "Re-image Count": custom_fields.get("reimagecount")
+                "count": custom_fields.get("reimagecount")
             })
         # Calculate mean TUC in seconds, then convert to d/h/m
         mtuc = None
