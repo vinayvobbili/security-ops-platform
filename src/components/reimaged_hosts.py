@@ -37,7 +37,7 @@ def get_details():
                 except Exception:
                     pass
             hostname = None
-            tuc = 0
+            tuc = 'Unknown'
             custom_fields = t.get("CustomFields", {})
             if isinstance(custom_fields, dict):
                 hostname = custom_fields.get("hostname")
@@ -60,7 +60,8 @@ def get_details():
                 "name": t.get("name"),
                 "hostname": hostname,
                 "created": created,
-                "TUC": tuc
+                "TUC": tuc,
+                "Re-image Count": custom_fields.get("reimagecount")
             })
         # Calculate mean TUC in seconds, then convert to d/h/m
         mtuc = None
@@ -77,7 +78,13 @@ def get_details():
 
 
 def main():
-    print(get_details())
+    from tabulate import tabulate
+    details = get_details()
+    if "tickets" in details:
+        print(tabulate(details["tickets"], headers="keys", tablefmt="grid"))
+        print(f"MTUC: {details.get('MTUC')}")
+    else:
+        print(details)
 
 
 if __name__ == "__main__":
