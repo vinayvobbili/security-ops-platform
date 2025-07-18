@@ -10,7 +10,7 @@ from services import phish_fort
 from src import helper_methods
 from src.charts import mttr_mttc, outflow, lifespan, heatmap, sla_breaches, aging_tickets, inflow, qradar_rule_efficacy, de_stories, days_since_incident, re_stories, threatcon_level, vectra_volume, \
     crowdstrike_volume, threat_tippers, crowdstrike_efficacy
-from src.components import oncall, approved_security_testing, thithi, orphaned_tickets, response_sla_risk_tickets, containment_sla_risk_tickets, incident_declaration_sla_risk, qa_tickets
+from src.components import oncall, approved_security_testing, thithi, orphaned_tickets, response_sla_risk_tickets, containment_sla_risk_tickets, qa_tickets
 from src.utils.fs_utils import make_dir_for_todays_charts
 
 logging.basicConfig(level=logging.ERROR)
@@ -27,28 +27,28 @@ def main():
     Main function to run the scheduled jobs.
     """
     # run once to test
-    print("Running once to test the scheduler...")
-    make_dir_for_todays_charts(helper_methods.CHARTS_DIR_PATH)
-    aging_tickets.make_chart()
-    crowdstrike_efficacy.make_chart()
-    crowdstrike_volume.make_chart()
-    days_since_incident.make_chart()
-    de_stories.make_chart()
-    heatmap.create_choropleth_map()
-    inflow.make_chart()
-    lifespan.make_chart()
-    mttr_mttc.make_chart()
-    outflow.make_chart()
-    qradar_rule_efficacy.make_chart()
-    re_stories.make_chart()
-    sla_breaches.make_chart()
-    threat_tippers.make_chart()
-    threatcon_level.make_chart()
-    vectra_volume.make_chart()
-    secops.announce_shift_change('afternoon', config.webex_room_id_vinay_test_space)
-    # qradar_rule_efficacy.send_charts()
-    # phish_fort.fetch_and_report_incidents()
-    aging_tickets.send_report(config.webex_room_id_vinay_test_space)
+    # print("Running once to test the scheduler...")
+    # make_dir_for_todays_charts(helper_methods.CHARTS_DIR_PATH)
+    # aging_tickets.make_chart()
+    # crowdstrike_efficacy.make_chart()
+    # crowdstrike_volume.make_chart()
+    # days_since_incident.make_chart()
+    # de_stories.make_chart()
+    # heatmap.create_choropleth_map()
+    # inflow.make_chart()
+    # lifespan.make_chart()
+    # mttr_mttc.make_chart()
+    # outflow.make_chart()
+    # qradar_rule_efficacy.make_chart()
+    # re_stories.make_chart()
+    # sla_breaches.make_chart()
+    # threat_tippers.make_chart()
+    # threatcon_level.make_chart()
+    # vectra_volume.make_chart()
+    # secops.announce_shift_change('afternoon', config.webex_room_id_vinay_test_space)
+    # # qradar_rule_efficacy.send_charts()
+    # # phish_fort.fetch_and_report_incidents()
+    # aging_tickets.send_report(config.webex_room_id_vinay_test_space)
 
     # schedule
     print("Starting the scheduler...")
@@ -98,7 +98,7 @@ def main():
     schedule.every().tuesday.at("23:55", eastern).do(qa_tickets.generate, config.webex_room_id_qa_tickets)
     schedule.every().wednesday.at("23:55", eastern).do(qa_tickets.generate, config.webex_room_id_qa_tickets)
     schedule.every().thursday.at("23:55", eastern).do(qa_tickets.generate, config.webex_room_id_qa_tickets)
-    schedule.every().friday.at("23:55", eastern).do(qa_tickets.generate, config.webex_room_id_qa_tickets)
+    # schedule.every().friday.at("23:55", eastern).do(qa_tickets.generate, config.webex_room_id_qa_tickets)
     schedule.every(1).minutes.do(lambda: response_sla_risk_tickets.start(config.webex_room_id_response_sla_risk))
     schedule.every(3).minutes.do(lambda: containment_sla_risk_tickets.start(config.webex_room_id_containment_sla_risk))
     # schedule.every().hour.at(":00").do(lambda: incident_declaration_sla_risk.start(config.webex_room_id_response_sla_risk))
