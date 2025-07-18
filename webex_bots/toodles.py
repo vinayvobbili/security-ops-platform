@@ -1590,7 +1590,7 @@ class ContainmentStatusCS(Command):
         else:
             host_name_cs = attachment_actions.inputs['host_name_cs'].strip()
 
-        host_name_cs = host_name_cs.replace("METCIRT_Bot status", "").strip()
+        host_name_cs = host_name_cs.replace("METCIRT_Toodles status", "").strip()
         if host_name_cs is None or host_name_cs == "":
             return "Please enter a host name and try again"
 
