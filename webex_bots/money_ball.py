@@ -1,8 +1,8 @@
 import os
 import unittest
 from datetime import datetime
-from tabulate import tabulate
 
+from tabulate import tabulate
 from webex_bot.models.command import Command
 from webex_bot.webex_bot import WebexBot
 from webexteamssdk import WebexTeamsAPI
@@ -173,13 +173,11 @@ class ReimagedHostDetails(Command):
 
 
 class HelpCommand(Command):
-    def __init__(self, bot):
-        super().__init__(command_keyword="help", help_message="List all commands and their help messages.")
-        self.bot = bot
+    def __init__(self):
+        super().__init__(command_keyword="help", help_message="List all commands and their help messages.", exact_command_keyword_match=False)
 
     def execute(self, message, attachment_actions, activity):
-        commands = getattr(self.bot, "commands", [])
-        keywords = list({cmd.command_keyword for cmd in commands})
+        keywords = ["aging", "mttr_mttc", "sla_breach", "outflow", "threatcon_level", "reimaged_hosts", "inflow", "help"]
         keywords.sort()
         return f"{activity['actor']['displayName']}, here are the available commands:\n" + "\n".join(keywords)
 
@@ -206,7 +204,7 @@ def main():
     bot.add_command(Outflow())
     bot.add_command(ThreatconLevel())
     bot.add_command(ReimagedHostDetails())
-    bot.add_command(HelpCommand(bot))
+    bot.add_command(HelpCommand())
     # bot.add_command(GetAgingTicketsByOwnerReport())
 
     print("MoneyBall is up and running...")
