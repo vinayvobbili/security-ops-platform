@@ -151,7 +151,7 @@ class GetAgingTicketsByOwnerReport(Command):
 
 class ReimagedHostDetails(Command):
     def __init__(self):
-        super().__init__(command_keyword="reimaged_hosts", help_message="", exact_command_keyword_match=True)
+        super().__init__(command_keyword="reimaged_hosts", help_message="", exact_command_keyword_match=False)
 
     @log_activity(config.webex_bot_access_token_moneyball, "moneyball_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
@@ -162,12 +162,12 @@ class ReimagedHostDetails(Command):
         for t in tickets:
             table_data.append([
                 t.get('id', ''),
-                t.get('name', ''),
                 t.get('hostname', ''),
                 t.get('created', ''),
-                t.get('TUC', '')
+                t.get('TUC', ''),
+                t.get('name', ''),
             ])
-        table_str = tabulate(table_data, headers=["ID", "Name", "Hostname", "Created", "TUC"], tablefmt="github")
+        table_str = tabulate(table_data, headers=["ID", "Hostname", "Created", "TUC", "Name", ], tablefmt="github")
         return f"{activity['actor']['displayName']}, here are the details of the reimaged hosts YTD. MTUC: {mtuc}\n```\n{table_str}\n```"
 
 
