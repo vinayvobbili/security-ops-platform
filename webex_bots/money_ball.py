@@ -165,7 +165,7 @@ class ReimagedHostDetails(Command):
                 t.get('hostname', ''),
                 t.get('created', ''),
                 t.get('TUC', ''),
-                t.get('Re-image Count', ''),
+                t.get('count', ''),
                 t.get('name', ''),
             ])
         table_str = tabulate(table_data, headers=["ID", "Hostname", "Created", "TUC", "Count", "Name", ], tablefmt="github")
