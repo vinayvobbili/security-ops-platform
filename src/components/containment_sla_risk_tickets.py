@@ -1,5 +1,6 @@
 from webexpythonsdk import WebexAPI
-import datetime
+from datetime import datetime
+import pytz
 
 from config import get_config
 from services.xsoar import TicketHandler
@@ -26,14 +27,16 @@ def start(room_id):
             time_remaining = 'N/A'
             if due_date_str:
                 try:
-                    due_date = datetime.datetime.strptime(due_date_str, "%Y-%m-%dT%H:%M:%S.%fZ")
-                    now = datetime.datetime.utcnow()
-                    delta = due_date - now
+                    due_date = datetime.strptime(due_date_str, "%Y-%m-%dT%H:%M:%S.%fZ")
+                    eastern = pytz.timezone('US/Eastern')
+                    now_et = datetime.now(eastern)
+                    now_utc = now_et.astimezone(pytz.utc)
+                    delta = due_date - now_utc
                     minutes = int(delta.total_seconds() // 60)
                     if minutes < 0:
                         minutes = 0
                     time_remaining = f"{minutes} mins"
-                except Exception as e:
+                except Exception:
                     time_remaining = 'N/A'
             if ticket_owner:
                 mention = f"<@personEmail:{ticket_owner}>"
