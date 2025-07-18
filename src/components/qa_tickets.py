@@ -72,21 +72,32 @@ def generate(room_id):
         for impact, group in tickets_by_impact.items():
             source_ticket = random.choice(group)
             owner = qa_leads[lead_index % len(qa_leads)]
+            detectionsource = source_ticket.get('CustomFields').get('detectionsource', 'Unknown')
+            if not detectionsource:
+                detectionsource = 'Unknown'
             new_ticket_payload = {
                 'type': 'METCIRT Ticket QA',
                 'owner': owner,
                 'name': source_ticket.get('name'),
                 'details': source_ticket.get('details'),
                 'CustomFields': {
-                    'detectionsource': source_ticket.get('CustomFields').get('detectionsource'),
+                    'detectionsource': detectionsource,
                     'isusercontacted': False,
                     'securitycategory': 'CAT-7: Investigation',
                     'businessservicesprovided': 'Unknown',
-                    'isbusinessimpacted': 'No',
+                    'isbusinessimpacted': False,
                     'thirdparty': 'unknown'
                 }
             }
+            print(f"new_ticket_payload: {new_ticket_payload}")  # Debug: print payload before sending
             qa_ticket = ticket_handler.create(new_ticket_payload)
+            print(f"qa_ticket: {qa_ticket}")  # Debug: print the created ticket object
+            if isinstance(qa_ticket, dict) and 'error' in qa_ticket:
+                print(f"Ticket creation failed: {qa_ticket['error']}")
+                continue
+            if 'id' not in qa_ticket:
+                print("Ticket creation failed: No 'id' in response.")
+                continue
             qa_ticket_url = CONFIG.xsoar_prod_ui_base_url + "/Custom/caseinfoid/" + qa_ticket['id']
             webex_api.messages.create(room_id,
                                       markdown=f"Hello <@personEmail:{owner}>👋🏾\n[X#{qa_ticket['id']}]({qa_ticket_url}) has been assigned to you for QA\nSource ticket-->\nID: [X#{source_ticket['id']}]({qa_ticket_url})\nType: {source_ticket['type']}\nImpact: {impact}")
@@ -94,7 +105,11 @@ def generate(room_id):
         qa_leads = qa_leads[lead_index % len(qa_leads):] + qa_leads[:lead_index % len(qa_leads)]
         save_qa_leads(qa_leads, leads_path)
     except Exception as e:
+        import traceback
         print(f"Error while generating QA tickets: {e}")
+        traceback.print_exc()
+        if hasattr(e, 'response') and hasattr(e.response, 'text'):
+            print(f"API response: {e.response.text}")
 
 
 if __name__ == "__main__":
