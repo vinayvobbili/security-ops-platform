@@ -1,7 +1,7 @@
 import os
 import unittest
 from datetime import datetime
-from unittest.mock import patch
+from tabulate import tabulate
 
 from webex_bot.models.command import Command
 from webex_bot.webex_bot import WebexBot
@@ -9,6 +9,7 @@ from webexteamssdk import WebexTeamsAPI
 
 from config import get_config
 from src.charts import aging_tickets
+from src.components import reimaged_hosts
 from src.utils.logging_utils import log_activity
 
 # Load configuration
@@ -148,6 +149,28 @@ class GetAgingTicketsByOwnerReport(Command):
         aging_tickets.send_report(room_id)
 
 
+class ReimagedHostDetails(Command):
+    def __init__(self):
+        super().__init__(command_keyword="reimaged_hosts", help_message="", exact_command_keyword_match=True)
+
+    @log_activity(config.webex_bot_access_token_moneyball, "moneyball_activity_log.csv")
+    def execute(self, message, attachment_actions, activity):
+        details = reimaged_hosts.get_details()
+        tickets = details.get("tickets", [])
+        mtuc = details.get("MTUC", "N/A")
+        table_data = []
+        for t in tickets:
+            table_data.append([
+                t.get('id', ''),
+                t.get('name', ''),
+                t.get('hostname', ''),
+                t.get('created', ''),
+                t.get('TUC', '')
+            ])
+        table_str = tabulate(table_data, headers=["ID", "Name", "Hostname", "Created", "TUC"], tablefmt="github")
+        return f"{activity['actor']['displayName']}, here are the details of the reimaged hosts YTD. MTUC: {mtuc}\n```\n{table_str}\n```"
+
+
 def main():
     """Initialize and run the Webex bot."""
 
@@ -169,6 +192,7 @@ def main():
     bot.add_command(Inflow())
     bot.add_command(Outflow())
     bot.add_command(ThreatconLevel())
+    bot.add_command(ReimagedHostDetails())
     # bot.add_command(GetAgingTicketsByOwnerReport())
 
     print("MoneyBall is up and running...")
