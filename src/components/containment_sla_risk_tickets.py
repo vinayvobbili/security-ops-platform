@@ -1,4 +1,5 @@
 from webexpythonsdk import WebexAPI
+import datetime
 
 from config import get_config
 from services.xsoar import TicketHandler
@@ -20,8 +21,26 @@ def start(room_id):
             incident_url = CONFIG.xsoar_prod_ui_base_url + '/Custom/caseinfoid/' + ticket.get('id')
             ticket_id = ticket.get('id')
             ticket_name = ticket.get('name') or ticket.get('title') or 'No Title'
-            message.append(f"- [**{ticket_id}**]({incident_url}) - {ticket_name}")
-        markdown_header = "## ⚠️ Tickets at risk of Containment SLA breach 🚨"
+            ticket_owner = ticket.get('owner')
+            due_date_str = ticket.get('CustomFields').get('timetocontain').get('dueDate')
+            time_remaining = 'N/A'
+            if due_date_str:
+                try:
+                    due_date = datetime.datetime.strptime(due_date_str, "%Y-%m-%dT%H:%M:%S.%fZ")
+                    now = datetime.datetime.utcnow()
+                    delta = due_date - now
+                    minutes = int(delta.total_seconds() // 60)
+                    if minutes < 0:
+                        minutes = 0
+                    time_remaining = f"{minutes} mins"
+                except Exception as e:
+                    time_remaining = 'N/A'
+            if ticket_owner:
+                mention = f"<@personEmail:{ticket_owner}>"
+            else:
+                mention = "(No owner assigned)"
+            message.append(f"{mention} - [**{ticket_id}**]({incident_url}) - {ticket_name} ⏳ Act within the next {time_remaining}")
+        markdown_header = "## ⚠️ Tickets at risk of breaching Containment SLA 🚨"
         markdown_message = "\n".join(message)
         webex_api.messages.create(
             roomId=room_id,
