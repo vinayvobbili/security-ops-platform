@@ -321,27 +321,31 @@ body {
 
 .particle {
     position: absolute;
-    width: 4px;
-    height: 4px;
-    background: rgba(255, 255, 255, 0.3);
+    width: 8px; /* Increased from 6px to 8px */
+    height: 8px;
+    background: rgba(255, 255, 255, 0.9); /* Increased opacity from 0.7 to 0.9 */
     border-radius: 50%;
-    animation: float 6s ease-in-out infinite;
+    animation: float 10s ease-in-out infinite; /* Slower for more visible movement */
+    bottom: -10px;
+    box-shadow: 0 0 4px rgba(255, 255, 255, 0.5); /* Added glow effect */
 }
 
 @keyframes float {
-    0%, 100% {
+    0% {
         transform: translateY(0px) rotate(0deg);
         opacity: 0;
+        bottom: -10px;
     }
-    10% {
-        opacity: 1;
+    5% {
+        opacity: 0.9; /* Faster fade-in */
     }
-    90% {
-        opacity: 1;
+    95% {
+        opacity: 0.9; /* Longer visibility */
     }
     100% {
         transform: translateY(-100vh) rotate(360deg);
         opacity: 0;
+        bottom: 100vh;
     }
 }
 

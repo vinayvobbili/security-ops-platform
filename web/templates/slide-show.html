@@ -80,13 +80,6 @@
         }
     });
 
-    // Hide dropdown when clicking outside
-    document.addEventListener('click', function (e) {
-        if (!input.contains(e.target) && !dropdown.contains(e.target)) {
-            hideDropdown();
-        }
-    });
-
     // Close burger menu when clicking outside
     document.addEventListener('click', function (e) {
         var burgerMenu = document.getElementById('burgerMenu');
@@ -119,16 +112,19 @@
         }
     });
 
-    // Particle effect initialization
+    // Floating particle effect initialization
     document.addEventListener('DOMContentLoaded', function () {
         var particles = document.getElementById('particles');
-        for (var i = 0; i < 100; i++) {
-            var particle = document.createElement('div');
-            particle.className = 'particle';
-            particle.style.left = Math.random() * 100 + 'vw';
-            particle.style.animationDuration = Math.random() * 3 + 2 + 's';
-            particle.style.opacity = Math.random();
-            particles.appendChild(particle);
+        if (particles) {
+            for (var i = 0; i < 100; i++) {
+                var particle = document.createElement('div');
+                particle.className = 'particle';
+                particle.style.left = Math.random() * 100 + 'vw';
+                particle.style.animationDelay = Math.random() * 6 + 's';
+                particle.style.animationDuration = (Math.random() * 3 + 3) + 's';
+                particle.style.opacity = Math.random() * 0.6 + 0.2;
+                particles.appendChild(particle);
+            }
         }
     });
 </script>
