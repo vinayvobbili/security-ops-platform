@@ -278,7 +278,7 @@ body {
     right: 20px;
 }
 
-/* Enhanced Audio Controls with Acme styling */
+/* Enhanced Audio Controls with Acme styling - Made more prominent */
 .audio-controls {
     position: fixed;
     top: 20px;
@@ -287,25 +287,37 @@ body {
 }
 
 .audio-controls button {
-    background: rgba(0, 70, 173, 0.3);
-    border: 2px solid rgba(0, 166, 81, 0.5);
+    background: rgba(0, 70, 173, 0.8); /* Increased opacity from 0.3 to 0.8 */
+    border: 3px solid var(--acme-green); /* Thicker border from 2px to 3px */
     border-radius: 50%;
-    padding: 12px;
+    padding: 15px; /* Increased padding from 12px to 15px */
     cursor: pointer;
     backdrop-filter: blur(10px);
     transition: all 0.3s ease;
-    width: 45px;
-    height: 45px;
+    width: 55px; /* Increased from 45px */
+    height: 55px; /* Increased from 45px */
     display: flex;
     align-items: center;
     justify-content: center;
+    box-shadow: 0 4px 15px rgba(0, 166, 81, 0.4); /* Added shadow for prominence */
 }
 
 .audio-controls button:hover {
-    background: rgba(0, 166, 81, 0.4);
-    transform: scale(1.1);
-    box-shadow: 0 5px 20px rgba(0, 166, 81, 0.6);
-    border-color: var(--acme-green);
+    background: rgba(0, 166, 81, 0.9); /* Increased hover opacity */
+    transform: scale(1.2); /* Increased scale from 1.1 to 1.2 */
+    box-shadow: 0 8px 25px rgba(0, 166, 81, 0.8); /* Enhanced hover shadow */
+    border-color: white; /* White border on hover for contrast */
+}
+
+.music-icon {
+    width: 28px; /* Increased from 22px */
+    height: 28px; /* Increased from 22px */
+    filter: invert(1);
+    transition: all 0.3s ease;
+}
+
+.audio-controls button:hover .music-icon {
+    transform: scale(1.2); /* Increased icon scale on hover */
 }
 
 /* Floating particles background effect */
