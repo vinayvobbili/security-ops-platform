@@ -1,22 +1,26 @@
 import ipaddress
-import logging
+import logging.handlers
 import re
+import signal
+import sys
 import threading
 import time
 from datetime import datetime, timedelta
+from pathlib import Path
 from urllib.parse import quote
+from zoneinfo import ZoneInfo
 
 import pandas
 import requests
 import webexpythonsdk.models.cards.inputs as INPUTS
 import webexpythonsdk.models.cards.options as OPTIONS
-from pytz import timezone
 from tabulate import tabulate
 from webex_bot.models.command import Command
 from webex_bot.webex_bot import WebexBot
 from webexpythonsdk import WebexAPI
 from webexpythonsdk.models.cards import (
-    Colors, TextBlock, FontWeight, Column, AdaptiveCard, ColumnSet, HorizontalAlignment, ActionSet, ActionStyle
+    Colors, TextBlock, FontWeight, Column, AdaptiveCard, ColumnSet, HorizontalAlignment, ActionSet, ActionStyle,
+    options
 )
 from webexpythonsdk.models.cards.actions import Submit
 
@@ -30,7 +34,36 @@ from services.xsoar import ListHandler, TicketHandler
 from src.utils.logging_utils import log_activity
 
 CONFIG = get_config()
+ROOT_DIRECTORY = Path(__file__).parent.parent
+
+# Ensure logs directory exists
+(ROOT_DIRECTORY / "logs").mkdir(exist_ok=True)
+
+# Setup logging with rotation and better formatting
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.handlers.RotatingFileHandler(
+            ROOT_DIRECTORY / "logs" / "toodles.log",
+            maxBytes=10 * 1024 * 1024,  # 10MB
+            backupCount=5
+        ),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
+
 webex_api = WebexAPI(CONFIG.webex_bot_access_token_toodles)
+
+# Global variables
+shutdown_requested = False
+HEALTH_CHECK_INTERVAL = 300  # 5 minutes
+last_health_check = time.time()
+bot_start_time: datetime | None = None
+
+# Timezone constant for consistent usage
+EASTERN_TZ = ZoneInfo("America/New_York")
 
 approved_testing_list_name: str = f"{CONFIG.team_name}_Approved_Testing"
 approved_testing_master_list_name: str = f"{CONFIG.team_name}_Approved_Testing_MASTER"
@@ -1460,7 +1493,7 @@ class AddApprovedTestingEntry(Command):
         submitter = activity['actor']['emailAddress']
         expiry_date = attachment_actions.inputs['expiry_date']
         if attachment_actions.inputs['callback_keyword'] == 'add_approved_testing' and expiry_date == "":
-            expiry_date = (datetime.now(timezone('US/Eastern')) + timedelta(days=1)).strftime("%Y-%m-%d")
+            expiry_date = (datetime.now(EASTERN_TZ) + timedelta(days=1)).strftime("%Y-%m-%d")
         submit_date = datetime.now().strftime("%m/%d/%Y")
         try:
             add_approved_testing_entry(
@@ -1734,18 +1767,6 @@ class FetchXSOARTickets(Command):
         return message
 
 
-# Set up a logger for message length tracking
-logger = logging.getLogger("toodles_message_length")
-logger.setLevel(logging.INFO)
-
-# Optionally, add a file handler or stream handler if not already present
-if not logger.hasHandlers():
-    handler = logging.StreamHandler()
-    formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
-    handler.setFormatter(formatter)
-    logger.addHandler(handler)
-
-
 class GetCompanyHolidays(Command):
     def __init__(self):
         super().__init__(
@@ -1848,44 +1869,159 @@ class GetCompanyHolidays(Command):
         return title + "\n".join(output_lines) + note
 
 
+def signal_handler(_sig, _frame):
+    """Handle signals for graceful shutdown."""
+    global shutdown_requested
+    shutdown_requested = True
+    logger.info("Shutdown requested. Cleaning up and exiting...")
+    sys.exit(0)
+
+
+class BotStatusCommand(Command):
+    """Command to check bot health and status."""
+
+    def __init__(self):
+        super().__init__(
+            command_keyword="bot_status",
+            help_message="🔍 Check bot health and status",
+            delete_previous_message=True,
+        )
+
+    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles, log_file_name="toodles_activity_log.csv")
+    def execute(self, message, attachment_actions, activity):
+        global bot_start_time, last_health_check
+
+        room_id = attachment_actions.roomId
+        current_time = datetime.now(EASTERN_TZ)
+
+        # Calculate uptime
+        if bot_start_time:
+            uptime = current_time - bot_start_time
+            uptime_str = f"{uptime.days}d {uptime.seconds // 3600}h {(uptime.seconds // 60) % 60}m"
+        else:
+            uptime_str = "Unknown"
+
+        # Health check info
+        health_status = "🟢 Healthy" if (time.time() - last_health_check) < HEALTH_CHECK_INTERVAL else "🟡 Warning"
+
+        # Format current time with timezone
+        tz_name = "EST" if current_time.dst().total_seconds() == 0 else "EDT"
+
+        # Create status card
+        status_card = AdaptiveCard(
+            body=[
+                TextBlock(
+                    text="🤖 Toodles Bot Status",
+                    color=options.Colors.GOOD,
+                    size=options.FontSize.LARGE,
+                    weight=options.FontWeight.BOLDER,
+                    horizontalAlignment=HorizontalAlignment.CENTER
+                ),
+                ColumnSet(
+                    columns=[
+                        Column(
+                            width="stretch",
+                            items=[
+                                TextBlock(text="📊 **Status Information**", weight=options.FontWeight.BOLDER),
+                                TextBlock(text=f"Status: {health_status}"),
+                                TextBlock(text=f"Uptime: {uptime_str}"),
+                                TextBlock(text=f"Last Check: {current_time.strftime(f'%Y-%m-%d %H:%M:%S {tz_name}')}")
+                            ]
+                        )
+                    ]
+                )
+            ]
+        )
+
+        webex_api.messages.create(
+            roomId=room_id,
+            text="Bot Status Information",
+            attachments=[{"contentType": "application/vnd.microsoft.card.adaptive", "content": status_card.to_dict()}]
+        )
+
+
+def run_bot_with_reconnection():
+    """Run the bot with automatic reconnection on failures."""
+    global bot_start_time
+    bot_start_time = datetime.now(EASTERN_TZ)  # Make bot_start_time timezone-aware
+
+    max_retries = 5
+    retry_delay = 30  # Start with 30 seconds
+    max_delay = 300  # Max delay of 5 minutes
+
+    for attempt in range(max_retries):
+        try:
+            logger.info(f"Starting Webex bot (attempt {attempt + 1}/{max_retries})")
+
+            bot = WebexBot(
+                CONFIG.webex_bot_access_token_toodles,
+                bot_name="🛠️ Hello from Toodles! 👋",
+                approved_rooms=[CONFIG.webex_room_id_vinay_test_space, CONFIG.webex_room_id_gosc_t2, CONFIG.webex_room_id_threatcon_collab],
+                log_level="ERROR",
+                threads=True,
+                bot_help_subtitle="🔧 Your friendly toolbox bot! Pick a tool to get started!"
+            )
+
+            # Add all commands to the bot
+            bot.add_command(GetApprovedTestingCard())
+            bot.add_command(GetCurrentApprovedTestingEntries())
+            bot.add_command(AddApprovedTestingEntry())
+            bot.add_command(RemoveApprovedTestingEntry())
+            bot.add_command(Who())
+            bot.add_command(Rotation())
+            bot.add_command(ContainmentStatusCS())
+            bot.add_command(Review())
+            bot.add_command(GetNewXTicketForm())
+            bot.add_command(CreateXSOARTicket())
+            bot.add_command(IOC())
+            bot.add_command(IOCHunt())
+            bot.add_command(URLs())
+            bot.add_command(ThreatHuntCard())
+            bot.add_command(CreateThreatHunt())
+            bot.add_command(CreateAZDOWorkItem())
+            bot.add_command(GetAllOptions())
+            bot.add_command(ImportTicket())
+            bot.add_command(CreateTuningRequest())
+            bot.add_command(GetSearchXSOARCard())
+            bot.add_command(FetchXSOARTickets())
+            bot.add_command(GetCompanyHolidays())
+            bot.add_command(BotStatusCommand())
+
+            print("🛠️ Toodles is up and running with enhanced features...")
+            logger.info(f"Bot started successfully at {bot_start_time}")
+
+            # Start the bot
+            bot.run()
+
+            # If we reach here, the bot stopped normally
+            logger.info("Bot stopped normally")
+            break
+
+        except KeyboardInterrupt:
+            logger.info("Bot stopped by user")
+            break
+        except Exception as e:
+            logger.error(f"Bot crashed with error: {e}")
+
+            if attempt < max_retries - 1:
+                logger.info(f"Restarting bot in {retry_delay} seconds...")
+                time.sleep(retry_delay)
+                retry_delay = min(retry_delay * 2, max_delay)  # Exponential backoff
+            else:
+                logger.error("Max retries exceeded. Bot will not restart.")
+                raise
+
+
 def main():
+    # Register signal handlers for graceful shutdown
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+
     # Start keepalive thread
     threading.Thread(target=keepalive_ping, daemon=True).start()
 
-    bot = WebexBot(
-        CONFIG.webex_bot_access_token_toodles,
-        bot_name="Hello from Toodles!",
-        approved_rooms=[CONFIG.webex_room_id_vinay_test_space, CONFIG.webex_room_id_gosc_t2, CONFIG.webex_room_id_threatcon_collab],
-        log_level="ERROR",
-        threads=True,
-        bot_help_subtitle="Pick a tool!"
-    )
-
-    bot.add_command(GetApprovedTestingCard())
-    bot.add_command(GetCurrentApprovedTestingEntries())
-    bot.add_command(AddApprovedTestingEntry())
-    bot.add_command(RemoveApprovedTestingEntry())
-    bot.add_command(Who())
-    bot.add_command(Rotation())
-    bot.add_command(ContainmentStatusCS())
-    bot.add_command(Review())
-    bot.add_command(GetNewXTicketForm())
-    bot.add_command(CreateXSOARTicket())
-    bot.add_command(IOC())
-    bot.add_command(IOCHunt())
-    bot.add_command(URLs())
-    bot.add_command(ThreatHuntCard())
-    bot.add_command(CreateThreatHunt())
-    bot.add_command(CreateAZDOWorkItem())
-    bot.add_command(GetAllOptions())
-    bot.add_command(ImportTicket())
-    bot.add_command(CreateTuningRequest())
-    bot.add_command(GetSearchXSOARCard())
-    bot.add_command(FetchXSOARTickets())
-    bot.add_command(GetCompanyHolidays())
-
-    print("Toodles is up and running...")
-    bot.run()
+    # Run bot with automatic reconnection
+    run_bot_with_reconnection()
 
 
 if __name__ in ('__main__', '__builtin__', 'builtins'):
