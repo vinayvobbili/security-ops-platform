@@ -170,7 +170,7 @@ def generate_plot(tickets):
     now_eastern = datetime.now(eastern).strftime('%m/%d/%Y %I:%M %p %Z')
 
     # Add background box for timestamp
-    plt.text(0.02, 0.02, f"Generated: {now_eastern}",
+    plt.text(0.02, 0.02, f"Generated@ {now_eastern}",
              transform=trans, ha='left', va='bottom',
              fontsize=10, color='#1A237E', fontweight='bold',
              bbox=dict(boxstyle="round,pad=0.4", facecolor='white', alpha=0.9, edgecolor='#1A237E', linewidth=1.5))
