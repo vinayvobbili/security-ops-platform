@@ -510,10 +510,10 @@ def run_bot_with_reconnection():
             bot = WebexBot(
                 CONFIG.webex_bot_access_token_jarvais,
                 approved_rooms=[CONFIG.webex_room_id_epp_tagging, CONFIG.webex_room_id_vinay_test_space],
-                bot_name="🤖 Jarvais - Ring Tagging Assistant",
+                bot_name="🤖 Jarvais 👋🏾\n The Ring Tagging Assistant",
                 threads=True,
                 log_level="ERROR",
-                bot_help_subtitle="🏷️ Your friendly neighborhood tagging bot! Say 'Hi' for help."
+                bot_help_subtitle="🏷️ Your friendly neighborhood tagging bot! Click a button to start!"
             )
 
             # Add commands to the bot
