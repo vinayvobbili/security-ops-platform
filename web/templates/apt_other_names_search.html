@@ -5,6 +5,15 @@
     <title>APT Other Names Search</title>
     <link rel="stylesheet" href="/static/css/apt_other_names_results.css">
     <style>
+        /* Acme Brand Colors */
+        :root {
+            --acme-blue: #0046AD;
+            --acme-green: #00A651;
+            --acme-light-blue: #4A8BC2;
+            --acme-dark-blue: #003875;
+            --acme-gray: #F5F5F5;
+        }
+
         .autocomplete-container {
             position: relative;
             display: inline-block;
@@ -17,31 +26,31 @@
             left: 0;
             right: 0;
             background: white;
-            border: 1px solid #ccc;
+            border: 1px solid var(--acme-green);
             border-top: none;
             max-height: 400px;
             overflow-y: auto;
             z-index: 1000;
             display: none;
-            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15); /* Enhanced shadow */
-            border-radius: 0 0 8px 8px; /* Rounded bottom corners */
+            box-shadow: 0 8px 25px rgba(0, 70, 173, 0.15); /* Acme blue shadow */
+            border-radius: 0 0 8px 8px;
         }
 
         .autocomplete-item {
             padding: 12px 16px;
             cursor: pointer;
-            border-bottom: 1px solid #f0f0f0;
+            border-bottom: 1px solid var(--acme-gray);
             font-size: 14px;
-            transition: all 0.2s ease; /* Smooth hover transitions */
+            transition: all 0.2s ease;
             position: relative;
         }
 
         .autocomplete-item:hover,
         .autocomplete-item.highlighted {
-            background: linear-gradient(135deg, #e8f4fd 0%, #f0f8ff 100%); /* Gradient highlight */
-            color: #2c5aa0;
-            transform: translateX(4px); /* Subtle slide effect */
-            border-left: 3px solid #4a90e2; /* Accent border */
+            background: linear-gradient(135deg, var(--acme-blue) 0%, var(--acme-green) 100%); /* Acme gradient */
+            color: white;
+            transform: translateX(4px);
+            border-left: 3px solid var(--acme-green);
         }
 
         .autocomplete-item:last-child {
@@ -69,18 +78,18 @@
             padding: 12px 16px;
             padding-right: 40px;
             position: relative;
-            border: 2px solid #ddd;
+            border: 2px solid var(--acme-light-blue);
             border-radius: 8px;
             font-size: 16px;
             transition: all 0.3s ease;
-            background: linear-gradient(145deg, #ffffff, #f8f9fa);
+            background: linear-gradient(145deg, #ffffff, var(--acme-gray));
         }
 
         #common_name:focus {
-            border-color: #4a90e2;
-            box-shadow: 0 0 20px rgba(74, 144, 226, 0.3);
+            border-color: var(--acme-blue);
+            box-shadow: 0 0 20px rgba(0, 70, 173, 0.3); /* Acme blue glow */
             outline: none;
-            transform: translateY(-2px); /* Lift effect */
+            transform: translateY(-2px);
         }
 
         .dropdown-indicator {
@@ -88,7 +97,7 @@
             right: 12px;
             top: 50%;
             transform: translateY(-50%);
-            color: #666;
+            color: var(--acme-light-blue);
             pointer-events: auto;
             font-size: 14px;
             transition: all 0.3s ease;
@@ -96,25 +105,25 @@
         }
 
         .dropdown-indicator:hover {
-            color: #4a90e2;
-            transform: translateY(-50%) rotate(180deg); /* Rotate on hover */
+            color: var(--acme-green);
+            transform: translateY(-50%) rotate(180deg);
         }
 
         .help-text {
             font-size: 12px;
-            color: #666;
+            color: var(--acme-dark-blue);
             margin-top: 6px;
             font-style: italic;
             padding: 8px 12px;
-            background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+            background: linear-gradient(135deg, var(--acme-gray), #e8f4fd);
             border-radius: 6px;
-            border-left: 3px solid #4a90e2;
+            border-left: 3px solid var(--acme-green);
             animation: fadeIn 0.5s ease-in;
         }
 
-        /* Add subtle pulse animation to search button */
+        /* Acme branded search button */
         button[type="submit"] {
-            background: linear-gradient(135deg, #4a90e2, #357abd);
+            background: linear-gradient(135deg, var(--acme-blue), var(--acme-green));
             color: white;
             border: none;
             padding: 12px 24px;
@@ -123,14 +132,14 @@
             font-weight: 600;
             cursor: pointer;
             transition: all 0.3s ease;
-            box-shadow: 0 4px 15px rgba(74, 144, 226, 0.3);
+            box-shadow: 0 4px 15px rgba(0, 70, 173, 0.3);
             margin-top: 10px;
         }
 
         button[type="submit"]:hover {
             transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(74, 144, 226, 0.4);
-            background: linear-gradient(135deg, #357abd, #2c5aa0);
+            box-shadow: 0 8px 25px rgba(0, 166, 81, 0.4);
+            background: linear-gradient(135deg, var(--acme-green), var(--acme-dark-blue));
         }
 
         button[type="submit"]:active {
@@ -165,37 +174,38 @@
             }
         }
 
-        /* Add subtle background pattern */
+        /* Acme branded background */
         .container {
-            background: radial-gradient(circle at 20% 80%, rgba(74, 144, 226, 0.05) 0%, transparent 50%),
-            radial-gradient(circle at 80% 20%, rgba(74, 144, 226, 0.05) 0%, transparent 50%);
+            background: radial-gradient(circle at 20% 80%, rgba(0, 70, 173, 0.05) 0%, transparent 50%),
+            radial-gradient(circle at 80% 20%, rgba(0, 166, 81, 0.05) 0%, transparent 50%);
             padding: 30px;
             border-radius: 12px;
             min-height: 60vh;
         }
 
-        /* Enhance the form with better spacing and styling */
+        /* Enhanced form with Acme styling */
         form {
-            background: rgba(255, 255, 255, 0.9);
+            background: rgba(255, 255, 255, 0.95);
             padding: 25px;
             border-radius: 12px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+            box-shadow: 0 10px 30px rgba(0, 70, 173, 0.08);
             backdrop-filter: blur(10px);
+            border: 1px solid rgba(0, 166, 81, 0.2);
         }
 
         label {
             font-weight: 600;
-            color: #333;
+            color: var(--acme-dark-blue);
             margin-bottom: 8px;
             display: block;
         }
 
-        /* Add loading spinner animation */
+        /* Acme branded loading spinner */
         .spinner {
             width: 20px;
             height: 20px;
-            border: 2px solid #f3f3f3;
-            border-top: 2px solid #4a90e2;
+            border: 2px solid var(--acme-gray);
+            border-top: 2px solid var(--acme-green);
             border-radius: 50%;
             animation: spin 0.8s linear infinite;
             display: inline-block;
@@ -211,33 +221,53 @@
             }
         }
 
-        /* Add hover effect to the music button */
+        /* Enhanced nav music button with Acme colors */
         .nav-music button:hover {
             transform: scale(1.1);
             transition: transform 0.2s ease;
+            background: rgba(0, 166, 81, 0.1);
+            border-radius: 50%;
         }
 
-        /* Style the checkbox area better */
+        /* Style the checkbox area with Acme colors */
         label[for="should_include_metadata"] {
             display: flex;
             align-items: center;
             margin: 15px 0;
             font-weight: 500;
+            color: var(--acme-dark-blue);
         }
 
         #should_include_metadata {
             margin-right: 8px;
             transform: scale(1.2);
+            accent-color: var(--acme-green);
         }
 
-        /* Title styling */
+        /* Acme branded title */
         h1 {
-            color: #2c5aa0;
+            color: var(--acme-blue);
             text-align: center;
             margin-bottom: 25px;
             font-size: 2.2em;
             font-weight: 700;
-            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
+            text-shadow: 2px 2px 4px rgba(0, 70, 173, 0.1);
+        }
+
+        /* Acme branded top navigation */
+        .top-nav {
+            background: rgba(0, 70, 173, 0.9);
+            backdrop-filter: blur(15px);
+            border-bottom: 2px solid var(--acme-green);
+        }
+
+        /* Enhanced body background with Acme colors */
+        body {
+            background: linear-gradient(135deg, var(--acme-blue) 0%, var(--acme-light-blue) 50%, var(--acme-green) 100%);
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            min-height: 100vh;
         }
     </style>
 </head>
