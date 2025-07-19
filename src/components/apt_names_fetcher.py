@@ -387,6 +387,58 @@ def get_all_apt_groups_by_region(file_path: str = '../../data/transient/de/APTAK
         return {}
 
 
+def get_all_apt_names(file_path: str = '../../data/transient/de/APTAKAcleaned.xlsx') -> List[str]:
+    """
+    Get all unique APT common names from all region sheets for use as dropdown values.
+
+    Args:
+        file_path (str): Path to the Excel file.
+
+    Returns:
+        List[str]: Sorted list of unique APT common names.
+    """
+    try:
+        xl = pd.ExcelFile(file_path)
+        apt_names = set()
+
+        region_sheets = [sheet for sheet in xl.sheet_names if is_region_sheet(sheet)]
+        logger.info(f"Extracting APT names from {len(region_sheets)} region sheets")
+
+        for sheet_name in region_sheets:
+            try:
+                df = xl.parse(sheet_name, header=None)
+
+                # Validate sheet structure
+                if not validate_sheet_structure(df):
+                    logger.warning(f"Sheet '{sheet_name}' doesn't have expected structure, skipping...")
+                    continue
+
+                # Get APT names from data rows (starting from row 3, index 2)
+                data_rows = df.iloc[2:]
+
+                for idx, row in data_rows.iterrows():
+                    # Check if column A (common name) has a value
+                    if pd.notna(row.iloc[0]) and str(row.iloc[0]).strip():
+                        apt_name = str(row.iloc[0]).strip()
+                        # Only add non-empty names
+                        if apt_name:
+                            apt_names.add(apt_name)
+
+            except Exception as e:
+                logger.error(f"Error processing sheet '{sheet_name}': {str(e)}")
+                continue
+
+        # Convert to sorted list
+        apt_names_list = sorted(list(apt_names))
+        logger.info(f"Found {len(apt_names_list)} unique APT names")
+
+        return apt_names_list
+
+    except Exception as e:
+        logger.error(f"Error reading file: {str(e)}")
+        return []
+
+
 def print_workbook_summary(file_path: str = '../../data/transient/de/APTAKAcleaned.xlsx'):
     """
     Print a comprehensive summary of the workbook, focusing only on region sheets.
@@ -483,3 +535,8 @@ if __name__ == "__main__":
     info = get_workbook_info(file_path)
     print(f"Found {len(info['companies'])} companies across {len(info['regions'])} regions")
     print(f"Processed {len(info['region_sheets'])} region sheets, skipped {len(info['skipped_sheets'])} non-region sheets")
+
+    print("\n=== TESTING: Get all APT names ===")
+    apt_names = get_all_apt_names(file_path)
+    print(f"Found {len(apt_names)} unique APT names for dropdown")
+    print(apt_names[:10])  # Show first 10 names as a sample
