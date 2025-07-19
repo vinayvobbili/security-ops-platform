@@ -8,6 +8,14 @@
     <link rel="icon" href="{{ url_for('static', filename='icons/metrics-dashboard-icon.ico') }}" type="image/x-icon">
 </head>
 <body>
+<!-- Loading overlay -->
+<div class="loading-overlay" id="loadingOverlay">
+    <div class="loading-spinner"></div>
+</div>
+
+<!-- Floating particles background -->
+<div class="particles" id="particles"></div>
+
 <!-- Top Navigation Bar -->
 <div class="top-nav">
     <div class="nav-burger" onclick="toggleMenu()">
@@ -81,6 +89,30 @@
             pausePlayButton.src = "/static/icons/pause-solid.svg";
         }
     }
+
+    // Hide loading overlay after content is fully loaded
+    window.addEventListener('load', function () {
+        var loadingOverlay = document.getElementById('loadingOverlay');
+        if (loadingOverlay) {
+            loadingOverlay.style.opacity = '0';
+            setTimeout(function () {
+                loadingOverlay.style.display = 'none';
+            }, 500);
+        }
+    });
+
+    // Particle effect initialization
+    document.addEventListener('DOMContentLoaded', function () {
+        var particles = document.getElementById('particles');
+        for (var i = 0; i < 100; i++) {
+            var particle = document.createElement('div');
+            particle.className = 'particle';
+            particle.style.left = Math.random() * 100 + 'vw';
+            particle.style.animationDuration = Math.random() * 3 + 2 + 's';
+            particle.style.opacity = Math.random();
+            particles.appendChild(particle);
+        }
+    });
 </script>
 </body>
 </html>
