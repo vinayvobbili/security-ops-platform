@@ -319,12 +319,7 @@ def send_chart(room_id, display_name, chart_name, chart_filename):
             )
             return
 
-        # Use Eastern time for user display
-        current_time_eastern = datetime.now(EASTERN_TZ)
-        tz_name = "EST" if current_time_eastern.dst().total_seconds() == 0 else "EDT"
-
-        success_msg = f"📊 **{display_name}, here's the latest {chart_name} chart!**\n\n"
-        success_msg += f"📅 **Generated:** {current_time_eastern.strftime(f'%Y-%m-%d %H:%M:%S {tz_name}')}"
+        success_msg = f"📊 **{display_name}, here's the latest {chart_name} chart!**"
 
         webex_api.messages.create(
             roomId=room_id,
