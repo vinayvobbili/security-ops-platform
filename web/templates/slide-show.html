@@ -80,6 +80,24 @@
         }
     });
 
+    // Hide dropdown when clicking outside
+    document.addEventListener('click', function (e) {
+        if (!input.contains(e.target) && !dropdown.contains(e.target)) {
+            hideDropdown();
+        }
+    });
+
+    // Close burger menu when clicking outside
+    document.addEventListener('click', function (e) {
+        var burgerMenu = document.getElementById('burgerMenu');
+        var navBurger = document.querySelector('.nav-burger');
+
+        // Check if the click was outside the menu and burger button
+        if (burgerMenu && !burgerMenu.contains(e.target) && !navBurger.contains(e.target)) {
+            burgerMenu.style.display = 'none';
+        }
+    });
+
     function restartSlideshow() {
         currentSlide = 0;
         updateSlider();
