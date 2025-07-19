@@ -65,6 +65,78 @@ bot_start_time: datetime | None = None
 # Timezone constant for consistent usage
 EASTERN_TZ = ZoneInfo("America/New_York")
 
+# Fun toodles-themed messages and features
+TOODLES_MESSAGES = [
+    "🛠️ Fixing things faster than you can say 'toodles'!",
+    "🔧 Engineering magic in progress...",
+    "⚡ Supercharging your workflow!",
+    "🎯 Targeting peak efficiency!",
+    "🚀 Launching productivity rockets!",
+    "🧠 Brain-powering your operations!",
+    "⚙️ Fine-tuning the digital machinery!",
+    "🎪 Orchestrating a symphony of solutions!",
+    "🏃‍♂️ Running at warp speed through tasks!",
+    "✨ Sprinkling some automation fairy dust!"
+]
+
+ACHIEVEMENT_MESSAGES = {
+    "ticket_master": "🎫 **Ticket Master!** You've handled {count} tickets today!",
+    "early_responder": "🌅 **Early Responder!** Up and running before the sun!",
+    "night_shift": "🌙 **Night Shift Hero!** Keeping watch while others sleep!",
+    "weekend_warrior": "⚔️ **Weekend Warrior!** Dedication that never rests!",
+    "efficiency_expert": "⚡ **Efficiency Expert!** Speed and precision combined!",
+    "problem_solver": "🧩 **Problem Solver!** No challenge too complex!"
+}
+
+TOODLES_GREETINGS = [
+    "👋 the notification service is here to help!",
+    "🎉 Ready to tackle some tickets!",
+    "🔥 Let's get this workflow blazing!",
+    "⚡ Powered up and ready to go!",
+    "🚀 Mission control, standing by!"
+]
+
+
+def get_random_toodles_message():
+    """Get a random fun toodles message."""
+    import random
+    return random.choice(TOODLES_MESSAGES)
+
+
+def get_random_greeting():
+    """Get a random toodles greeting."""
+    import random
+    return random.choice(TOODLES_GREETINGS)
+
+
+def get_achievement_message(activity_type, count=1):
+    """Generate achievement messages based on usage patterns."""
+    import random
+    current_time = datetime.now(EASTERN_TZ)
+    hour = current_time.hour
+    weekday = current_time.weekday()
+
+    achievements = []
+
+    # Time-based achievements
+    if 5 <= hour <= 8:
+        achievements.append(ACHIEVEMENT_MESSAGES["early_responder"])
+    elif 22 <= hour or hour <= 2:
+        achievements.append(ACHIEVEMENT_MESSAGES["night_shift"])
+
+    # Weekend achievement
+    if weekday >= 5:  # Saturday = 5, Sunday = 6
+        achievements.append(ACHIEVEMENT_MESSAGES["weekend_warrior"])
+
+    # Activity-based achievements
+    if activity_type == "ticket" and count >= 5:
+        achievements.append(ACHIEVEMENT_MESSAGES["ticket_master"].format(count=count))
+    elif activity_type == "efficiency":
+        achievements.append(ACHIEVEMENT_MESSAGES["efficiency_expert"])
+
+    return achievements if achievements else [random.choice(list(ACHIEVEMENT_MESSAGES.values()))]
+
+
 approved_testing_list_name: str = f"{CONFIG.team_name}_Approved_Testing"
 approved_testing_master_list_name: str = f"{CONFIG.team_name}_Approved_Testing_MASTER"
 

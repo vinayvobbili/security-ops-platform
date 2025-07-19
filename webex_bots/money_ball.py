@@ -1,5 +1,6 @@
 import logging.handlers
 import os
+import random
 import signal
 import sys
 import threading
@@ -56,6 +57,25 @@ bot_start_time: datetime | None = None
 
 # Timezone constant for consistent usage
 EASTERN_TZ = ZoneInfo("America/New_York")
+
+
+# Fun chart-related messages and achievements
+CHART_MESSAGES = [
+    "📊 Chart magic in progress...",
+    "🎨 Creating visual masterpieces...",
+    "📈 Turning data into art...",
+    "🎯 Targeting chart perfection...",
+    "🔥 Brewing some hot metrics..."
+]
+
+ACHIEVEMENT_MESSAGES = {
+    "first_time": "🎉 **First Timer!** Welcome to the MoneyBall experience!",
+    "chart_collector": "📊 **Chart Collector!** You've requested {count} charts today!",
+    "data_explorer": "🕵️ **Data Explorer!** You're diving deep into the metrics!",
+    "weekend_warrior": "⚔️ **Weekend Warrior!** Working hard even on weekends!",
+    "early_bird": "🐦 **Early Bird!** Up bright and early for some data insights!",
+    "night_owl": "🦉 **Night Owl!** Burning the midnight oil with metrics!"
+}
 
 
 # Define command classes
@@ -277,6 +297,84 @@ class BotStatusCommand(Command):
         )
 
 
+class QuickActionsCommand(Command):
+    """Quick actions dashboard for common MoneyBall operations."""
+
+    def __init__(self):
+        super().__init__(
+            command_keyword="dashboard",
+            help_message="📋 Quick Actions Dashboard",
+            delete_previous_message=True,
+        )
+
+    @log_activity(config.webex_bot_access_token_moneyball, "moneyball_activity_log.csv")
+    def execute(self, message, attachment_actions, activity):
+        current_time = datetime.now(EASTERN_TZ)
+        hour = current_time.hour
+
+        # Time-based greeting
+        if 5 <= hour < 12:
+            greeting = f"🌅 Good morning, {activity['actor']['displayName']}!"
+        elif 12 <= hour < 17:
+            greeting = f"☀️ Good afternoon, {activity['actor']['displayName']}!"
+        elif 17 <= hour < 21:
+            greeting = f"🌆 Good evening, {activity['actor']['displayName']}!"
+        else:
+            greeting = f"🌙 Working late, {activity['actor']['displayName']}?"
+
+        dashboard_card = AdaptiveCard(
+            body=[
+                TextBlock(
+                    text="📊 MoneyBall Quick Actions",
+                    color=options.Colors.ACCENT,
+                    size=options.FontSize.LARGE,
+                    weight=options.FontWeight.BOLDER,
+                    horizontalAlignment=HorizontalAlignment.CENTER
+                ),
+                TextBlock(
+                    text=greeting,
+                    wrap=True,
+                    horizontalAlignment=HorizontalAlignment.CENTER
+                ),
+                ColumnSet(
+                    columns=[
+                        Column(
+                            width="stretch",
+                            items=[
+                                TextBlock(text="🎯 **Most Popular Charts**", weight=options.FontWeight.BOLDER),
+                                TextBlock(text="• Aging Tickets 📈"),
+                                TextBlock(text="• MTTR/MTTC ⏱️"),
+                                TextBlock(text="• SLA Breaches ⚠️"),
+                                TextBlock(text="• Heat Map 🔥")
+                            ]
+                        ),
+                        Column(
+                            width="stretch",
+                            items=[
+                                TextBlock(text="📊 **Flow Analysis**", weight=options.FontWeight.BOLDER),
+                                TextBlock(text="• Inflow Trends 📥"),
+                                TextBlock(text="• Outflow Metrics 📤"),
+                                TextBlock(text="• ThreatCon Level 🚨"),
+                                TextBlock(text="• QRadar Efficacy 🛡️")
+                            ]
+                        )
+                    ]
+                ),
+                TextBlock(
+                    text=f"💡 **Pro Tip:** Use the buttons above to quickly access your most-used charts!",
+                    wrap=True,
+                    color=options.Colors.ACCENT
+                )
+            ]
+        )
+
+        webex_api.messages.create(
+            roomId=attachment_actions.roomId,
+            text="MoneyBall Dashboard",
+            attachments=[{"contentType": "application/vnd.microsoft.card.adaptive", "content": dashboard_card.to_dict()}]
+        )
+
+
 def keepalive_ping():
     """Keep the bot connection alive with periodic pings."""
     global last_health_check
@@ -376,6 +474,7 @@ def run_bot_with_reconnection():
             bot.add_command(ReimagedHostDetails())
             bot.add_command(GetAgingTicketsByOwnerReport())
             bot.add_command(BotStatusCommand())
+            bot.add_command(QuickActionsCommand())
             bot.add_command(HelpCommand())
 
             print("📊 MoneyBall is up and running with enhanced features...")
@@ -401,6 +500,38 @@ def run_bot_with_reconnection():
             else:
                 logger.error("Max retries exceeded. Bot will not restart.")
                 raise
+
+
+def get_random_chart_message():
+    """Get a random fun chart loading message."""
+    return random.choice(CHART_MESSAGES)
+
+
+def get_achievement_message(user_name, chart_count=1):
+    """Generate achievement messages based on usage patterns."""
+    current_time = datetime.now(EASTERN_TZ)
+    hour = current_time.hour
+    weekday = current_time.weekday()
+
+    achievements = []
+
+    # Time-based achievements
+    if 5 <= hour <= 8:
+        achievements.append(ACHIEVEMENT_MESSAGES["early_bird"])
+    elif 22 <= hour or hour <= 2:
+        achievements.append(ACHIEVEMENT_MESSAGES["night_owl"])
+
+    # Weekend achievement
+    if weekday >= 5:  # Saturday = 5, Sunday = 6
+        achievements.append(ACHIEVEMENT_MESSAGES["weekend_warrior"])
+
+    # Chart count achievements
+    if chart_count >= 5:
+        achievements.append(ACHIEVEMENT_MESSAGES["chart_collector"].format(count=chart_count))
+    elif chart_count == 1:
+        achievements.append(ACHIEVEMENT_MESSAGES["first_time"])
+
+    return achievements
 
 
 def main():

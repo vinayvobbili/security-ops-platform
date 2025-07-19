@@ -1,5 +1,6 @@
 import json
 import logging.handlers
+import random
 import signal
 import sys
 import threading
@@ -70,6 +71,22 @@ ICONS_BY_COLOR = {
     'orange': '🟠',
     'red': '🔴'
 }
+
+# Fun ThreatCon related messages
+THREATCON_MESSAGES = {
+    "green": ["🌿 All clear! Smooth sailing ahead!", "🍃 Peaceful waters, captain!", "☘️ Green means go!"],
+    "yellow": ["⚠️ Caution advised, stay alert!", "🟡 Moderate threat detected!", "🚧 Proceed with awareness!"],
+    "orange": ["🚨 Elevated threat level!", "🔥 High alert status!", "⚡ Heightened security mode!"],
+    "red": ["🚩 MAXIMUM ALERT! All hands on deck!", "🔴 CRITICAL THREAT LEVEL!", "⭐ Emergency protocols active!"]
+}
+
+BARNACLES_QUOTES = [
+    "⚓ Anchors aweigh!",
+    "🌊 Steady as she goes!",
+    "🧭 Charting the course ahead!",
+    "⛵ Full speed ahead!",
+    "🏴‍☠️ Yo ho ho and a bottle of... data!"
+]
 
 
 def keepalive_ping():
@@ -403,6 +420,13 @@ class SaveThreatcon(Command):
             )
             logger.info(f"ThreatCon level updated to {level} by {activity['actor']['displayName']}")
 
+            # Send a fun ThreatCon-related message
+            fun_message = get_threatcon_message(level)
+            webex_api.messages.create(
+                toPersonEmail=activity['actor']['id'],
+                text=fun_message
+            )
+
         except Exception as e:
             error_msg = f"❌ Failed to save ThreatCon level: {str(e)}"
             logger.error(error_msg)
@@ -567,6 +591,16 @@ class AnnounceThreatcon(Command):
                 )
             except Exception as msg_error:
                 logger.error(f"Failed to send error message: {msg_error}")
+
+
+def get_random_barnacles_quote():
+    """Get a random nautical quote."""
+    return random.choice(BARNACLES_QUOTES)
+
+
+def get_threatcon_message(level):
+    """Get a themed message for ThreatCon levels."""
+    return random.choice(THREATCON_MESSAGES.get(level, THREATCON_MESSAGES["green"]))
 
 
 def run_bot_with_reconnection():

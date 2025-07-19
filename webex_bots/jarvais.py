@@ -3,6 +3,7 @@ import threading
 import time
 import sys
 import signal
+import random
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 from pathlib import Path
@@ -55,6 +56,25 @@ bot_start_time: datetime | None = None
 
 # Timezone constant for consistent usage
 EASTERN_TZ = ZoneInfo("America/New_York")
+
+# Fun loading messages
+LOADING_MESSAGES = [
+    "🔮 Consulting the digital crystal ball...",
+    "🧙‍♂️ Casting data summoning spells...",
+    "🚀 Launching rockets to data planet...",
+    "🕵️‍♂️ Investigating the mysteries of your data...",
+    "🎯 Targeting the perfect metrics...",
+    "🧠 Teaching AI to count really, really fast...",
+    "☕ Brewing fresh analytics (with extra caffeine)...",
+    "🎪 Orchestrating a spectacular data circus...",
+    "🏃‍♂️ Running marathons through databases...",
+    "🎨 Painting beautiful charts with data brushes..."
+]
+
+
+def get_random_loading_message():
+    """Get a random fun loading message."""
+    return random.choice(LOADING_MESSAGES)
 
 
 def send_report(room_id, filename, message) -> None:
@@ -212,9 +232,10 @@ class CSHostsWithoutRingTag(Command):
     @log_activity(bot_access_token=CONFIG.webex_bot_access_token_jarvais, log_file_name="jarvais_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
         room_id = attachment_actions.roomId
+        loading_msg = get_random_loading_message()
         webex_api.messages.create(
             roomId=room_id,
-            markdown=f"Hello {activity['actor']['displayName']}! I've started the report generation process for CS Hosts without a Ring Tag. It is running in the background and will complete in about 5 mins."
+            markdown=f"Hello {activity['actor']['displayName']}! {loading_msg}\n\n🏷️ **CS Hosts Ring Tag Report**\nEstimated completion: ~5 minutes ⏰"
         )
         lock_path = ROOT_DIRECTORY / "src" / "epp" / "cs_hosts_without_ring_tag.lock"
         with fasteners.InterProcessLock(lock_path):
