@@ -19,68 +19,225 @@
             background: white;
             border: 1px solid #ccc;
             border-top: none;
-            max-height: 400px; /* Increased from 200px */
+            max-height: 400px;
             overflow-y: auto;
             z-index: 1000;
             display: none;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); /* Added shadow for better visibility */
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15); /* Enhanced shadow */
+            border-radius: 0 0 8px 8px; /* Rounded bottom corners */
         }
 
         .autocomplete-item {
-            padding: 12px; /* Increased from 10px for better touch targets */
+            padding: 12px 16px;
             cursor: pointer;
-            border-bottom: 1px solid #eee;
+            border-bottom: 1px solid #f0f0f0;
             font-size: 14px;
+            transition: all 0.2s ease; /* Smooth hover transitions */
+            position: relative;
         }
 
         .autocomplete-item:hover,
         .autocomplete-item.highlighted {
-            background-color: #e8f4fd; /* Better highlight color */
+            background: linear-gradient(135deg, #e8f4fd 0%, #f0f8ff 100%); /* Gradient highlight */
+            color: #2c5aa0;
+            transform: translateX(4px); /* Subtle slide effect */
+            border-left: 3px solid #4a90e2; /* Accent border */
         }
 
         .autocomplete-item:last-child {
             border-bottom: none;
+            border-radius: 0 0 8px 8px;
+        }
+
+        /* Add APT icon before each item */
+        .autocomplete-item::before {
+            content: "🎯";
+            margin-right: 8px;
+            opacity: 0.7;
+            transition: all 0.2s ease;
+        }
+
+        .autocomplete-item:hover::before,
+        .autocomplete-item.highlighted::before {
+            opacity: 1;
+            transform: scale(1.1);
         }
 
         #common_name {
             width: 100%;
             box-sizing: border-box;
-            padding-right: 30px; /* Make room for dropdown indicator */
+            padding: 12px 16px;
+            padding-right: 40px;
             position: relative;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: all 0.3s ease;
+            background: linear-gradient(145deg, #ffffff, #f8f9fa);
+        }
+
+        #common_name:focus {
+            border-color: #4a90e2;
+            box-shadow: 0 0 20px rgba(74, 144, 226, 0.3);
+            outline: none;
+            transform: translateY(-2px); /* Lift effect */
         }
 
         .dropdown-indicator {
             position: absolute;
-            right: 8px;
+            right: 12px;
             top: 50%;
             transform: translateY(-50%);
             color: #666;
-            pointer-events: none;
-            font-size: 12px;
+            pointer-events: auto;
+            font-size: 14px;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .dropdown-indicator:hover {
+            color: #4a90e2;
+            transform: translateY(-50%) rotate(180deg); /* Rotate on hover */
         }
 
         .help-text {
             font-size: 12px;
             color: #666;
-            margin-top: 4px;
+            margin-top: 6px;
             font-style: italic;
+            padding: 8px 12px;
+            background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+            border-radius: 6px;
+            border-left: 3px solid #4a90e2;
+            animation: fadeIn 0.5s ease-in;
         }
 
-        /* Animate dropdown appearance */
+        /* Add subtle pulse animation to search button */
+        button[type="submit"] {
+            background: linear-gradient(135deg, #4a90e2, #357abd);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(74, 144, 226, 0.3);
+            margin-top: 10px;
+        }
+
+        button[type="submit"]:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(74, 144, 226, 0.4);
+            background: linear-gradient(135deg, #357abd, #2c5aa0);
+        }
+
+        button[type="submit"]:active {
+            transform: translateY(0);
+        }
+
+        /* Animate dropdown appearance with slide down */
         .autocomplete-dropdown.show {
             display: block;
-            animation: slideDown 0.2s ease-out;
+            animation: slideDownFade 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
-        @keyframes slideDown {
+        @keyframes slideDownFade {
             from {
                 opacity: 0;
-                transform: translateY(-10px);
+                transform: translateY(-15px) scale(0.95);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
             }
             to {
                 opacity: 1;
                 transform: translateY(0);
             }
+        }
+
+        /* Add subtle background pattern */
+        .container {
+            background: radial-gradient(circle at 20% 80%, rgba(74, 144, 226, 0.05) 0%, transparent 50%),
+            radial-gradient(circle at 80% 20%, rgba(74, 144, 226, 0.05) 0%, transparent 50%);
+            padding: 30px;
+            border-radius: 12px;
+            min-height: 60vh;
+        }
+
+        /* Enhance the form with better spacing and styling */
+        form {
+            background: rgba(255, 255, 255, 0.9);
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+            backdrop-filter: blur(10px);
+        }
+
+        label {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 8px;
+            display: block;
+        }
+
+        /* Add loading spinner animation */
+        .spinner {
+            width: 20px;
+            height: 20px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #4a90e2;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            display: inline-block;
+            margin-left: 10px;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* Add hover effect to the music button */
+        .nav-music button:hover {
+            transform: scale(1.1);
+            transition: transform 0.2s ease;
+        }
+
+        /* Style the checkbox area better */
+        label[for="should_include_metadata"] {
+            display: flex;
+            align-items: center;
+            margin: 15px 0;
+            font-weight: 500;
+        }
+
+        #should_include_metadata {
+            margin-right: 8px;
+            transform: scale(1.2);
+        }
+
+        /* Title styling */
+        h1 {
+            color: #2c5aa0;
+            text-align: center;
+            margin-bottom: 25px;
+            font-size: 2.2em;
+            font-weight: 700;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
         }
     </style>
 </head>
@@ -233,7 +390,7 @@
     if (dropdownIndicator) {
         dropdownIndicator.style.cursor = 'pointer';
         dropdownIndicator.style.pointerEvents = 'auto';
-        dropdownIndicator.addEventListener('click', function(e) {
+        dropdownIndicator.addEventListener('click', function (e) {
             e.preventDefault();
             e.stopPropagation();
             input.focus();
@@ -279,17 +436,17 @@
 
         if (wasPlaying) {
             // Don't auto-play, but prepare for user interaction
-            audio.addEventListener('canplay', function() {
+            audio.addEventListener('canplay', function () {
                 if (localStorage.getItem('apt-music-playing') === 'true') {
-                    audio.play().then(function() {
+                    audio.play().then(function () {
                         // Only change icon to playing after music actually starts
                         icon.src = '/static/icons/volume-high-solid.svg';
-                    }).catch(function() {
+                    }).catch(function () {
                         // If autoplay fails, keep muted icon
                         icon.src = '/static/icons/volume-xmark-solid.svg';
                     });
                 }
-            }, { once: true });
+            }, {once: true});
         } else {
             // Ensure audio is paused
             audio.pause();
