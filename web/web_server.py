@@ -658,7 +658,19 @@ def api_apt_other_names():
 @log_web_activity
 def apt_other_names_search():
     """Render the APT Other Names search form page."""
-    return render_template("apt_other_names_search.html")
+    # Get all APT names for dropdown
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    file_path = os.path.join(base_dir, '../data/transient/de/APTAKAcleaned.xlsx')
+    file_path = os.path.abspath(file_path)
+
+    try:
+        apt_names = apt_names_fetcher.get_all_apt_names(file_path)
+        app.logger.info(f"[APT Search] Loaded {len(apt_names)} APT names for dropdown")
+    except Exception as e:
+        app.logger.error(f"[APT Search] Error loading APT names: {str(e)}")
+        apt_names = []
+
+    return render_template("apt_other_names_search.html", apt_names=apt_names)
 
 
 if __name__ == "__main__":
