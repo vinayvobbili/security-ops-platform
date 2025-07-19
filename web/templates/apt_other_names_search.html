@@ -4,6 +4,85 @@
     <meta charset="UTF-8">
     <title>APT Other Names Search</title>
     <link rel="stylesheet" href="/static/css/apt_other_names_results.css">
+    <style>
+        .autocomplete-container {
+            position: relative;
+            display: inline-block;
+            width: 100%;
+        }
+
+        .autocomplete-dropdown {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: white;
+            border: 1px solid #ccc;
+            border-top: none;
+            max-height: 400px; /* Increased from 200px */
+            overflow-y: auto;
+            z-index: 1000;
+            display: none;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); /* Added shadow for better visibility */
+        }
+
+        .autocomplete-item {
+            padding: 12px; /* Increased from 10px for better touch targets */
+            cursor: pointer;
+            border-bottom: 1px solid #eee;
+            font-size: 14px;
+        }
+
+        .autocomplete-item:hover,
+        .autocomplete-item.highlighted {
+            background-color: #e8f4fd; /* Better highlight color */
+        }
+
+        .autocomplete-item:last-child {
+            border-bottom: none;
+        }
+
+        #common_name {
+            width: 100%;
+            box-sizing: border-box;
+            padding-right: 30px; /* Make room for dropdown indicator */
+            position: relative;
+        }
+
+        .dropdown-indicator {
+            position: absolute;
+            right: 8px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #666;
+            pointer-events: none;
+            font-size: 12px;
+        }
+
+        .help-text {
+            font-size: 12px;
+            color: #666;
+            margin-top: 4px;
+            font-style: italic;
+        }
+
+        /* Animate dropdown appearance */
+        .autocomplete-dropdown.show {
+            display: block;
+            animation: slideDown 0.2s ease-out;
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+    </style>
 </head>
 <body>
 <div class="top-nav">
@@ -21,7 +100,12 @@
     <h1>APT Other Names Search</h1>
     <form id="searchForm" action="/api/apt-other-names" method="get">
         <label for="common_name">APT Common Name:</label>
-        <input type="text" id="common_name" name="common_name" value="{{ common_name }}" required>
+        <div class="autocomplete-container">
+            <input type="text" id="common_name" name="common_name" value="{{ common_name }}" required autocomplete="off" placeholder="Start typing to see suggestions...">
+            <span class="dropdown-indicator">▼</span>
+            <div id="autocomplete-dropdown" class="autocomplete-dropdown"></div>
+        </div>
+        <div class="help-text">💡 Start typing any APT name to see autocomplete suggestions (e.g., "APT", "Lazarus", "28")</div>
         <label for="should_include_metadata">
             <input type="checkbox" id="should_include_metadata" name="should_include_metadata" value="true" {% if should_include_metadata %}checked{% endif %}>
             Include Metadata
@@ -32,8 +116,138 @@
 </div>
 <script src="/static/js/apt_other_names_results.js"></script>
 <script>
+    // APT names data from server
+    const aptNames = {{ apt_names | tojson }};
+
     document.getElementById('searchForm').addEventListener('submit', function () {
         document.getElementById('spinner').style.display = 'inline-block';
+    });
+
+    // Autocomplete functionality
+    const input = document.getElementById('common_name');
+    const dropdown = document.getElementById('autocomplete-dropdown');
+    let highlightedIndex = -1;
+    let filteredNames = [];
+
+    function showDropdown(names) {
+        dropdown.innerHTML = '';
+        filteredNames = names;
+
+        if (names.length === 0) {
+            dropdown.style.display = 'none';
+            return;
+        }
+
+        names.forEach((name) => {
+            const item = document.createElement('div');
+            item.className = 'autocomplete-item';
+            item.textContent = name;
+            item.addEventListener('click', () => {
+                input.value = name;
+                dropdown.style.display = 'none';
+                highlightedIndex = -1;
+            });
+            dropdown.appendChild(item);
+        });
+
+        dropdown.style.display = 'block';
+        highlightedIndex = -1;
+    }
+
+    function hideDropdown() {
+        dropdown.style.display = 'none';
+        highlightedIndex = -1;
+    }
+
+    function updateHighlight() {
+        const items = dropdown.querySelectorAll('.autocomplete-item');
+        items.forEach((item, index) => {
+            item.classList.toggle('highlighted', index === highlightedIndex);
+        });
+    }
+
+    input.addEventListener('input', function () {
+        const value = this.value.toLowerCase().trim();
+
+        if (value === '') {
+            // Show more APT names when input is empty (increased to match dropdown click)
+            const allNames = aptNames.slice(0, 30); // Increased from 20 to 30
+            showDropdown(allNames);
+            return;
+        }
+
+        const filtered = aptNames.filter(name =>
+            name.toLowerCase().includes(value)
+        ).slice(0, 15); // Increased from 10 to 15 for better selection
+
+        showDropdown(filtered);
+    });
+
+    input.addEventListener('keydown', function (e) {
+        const items = dropdown.querySelectorAll('.autocomplete-item');
+
+        switch (e.key) {
+            case 'ArrowDown':
+                e.preventDefault();
+                highlightedIndex = Math.min(highlightedIndex + 1, items.length - 1);
+                updateHighlight();
+                break;
+
+            case 'ArrowUp':
+                e.preventDefault();
+                highlightedIndex = Math.max(highlightedIndex - 1, -1);
+                updateHighlight();
+                break;
+
+            case 'Enter':
+                if (highlightedIndex >= 0 && items[highlightedIndex]) {
+                    e.preventDefault();
+                    input.value = items[highlightedIndex].textContent;
+                    hideDropdown();
+                }
+                break;
+
+            case 'Escape':
+                hideDropdown();
+                break;
+        }
+    });
+
+    input.addEventListener('focus', function () {
+        // Don't automatically show dropdown on focus
+        // Only show if there's already text in the input
+        const value = this.value.toLowerCase().trim();
+
+        if (value !== '') {
+            // Show filtered results if there's already text
+            const filtered = aptNames.filter(name =>
+                name.toLowerCase().includes(value)
+            ).slice(0, 15);
+            showDropdown(filtered);
+        }
+        // If empty, wait for user to click dropdown arrow or start typing
+    });
+
+    // Make the dropdown indicator clickable to show all options
+    const dropdownIndicator = document.querySelector('.dropdown-indicator');
+    if (dropdownIndicator) {
+        dropdownIndicator.style.cursor = 'pointer';
+        dropdownIndicator.style.pointerEvents = 'auto';
+        dropdownIndicator.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            input.focus();
+            // Show more names when clicking the dropdown arrow for better browsing
+            const allNames = aptNames.slice(0, 30); // Increased from 20 to 30
+            showDropdown(allNames);
+        });
+    }
+
+    // Hide dropdown when clicking outside
+    document.addEventListener('click', function (e) {
+        if (!input.contains(e.target) && !dropdown.contains(e.target)) {
+            hideDropdown();
+        }
     });
 
     function toggleAptAudio() {
@@ -52,27 +266,45 @@
         }
     }
 
-    // On page load, restore music state
-    document.addEventListener('DOMContentLoaded', function() {
+    // On page load, always start with muted icon for better UX
+    document.addEventListener('DOMContentLoaded', function () {
         var audio = document.getElementById('apt-music');
         var icon = document.getElementById('apt-music-icon');
+
+        // Always start with muted icon on page load for clean appearance
+        icon.src = '/static/icons/volume-xmark-solid.svg';
+
+        // Check if music was playing in previous session
         var wasPlaying = localStorage.getItem('apt-music-playing') === 'true';
+
         if (wasPlaying) {
-            audio.play().then(function() {
-                icon.src = '/static/icons/volume-high-solid.svg';
-            }).catch(function(){});
+            // Don't auto-play, but prepare for user interaction
+            audio.addEventListener('canplay', function() {
+                if (localStorage.getItem('apt-music-playing') === 'true') {
+                    audio.play().then(function() {
+                        // Only change icon to playing after music actually starts
+                        icon.src = '/static/icons/volume-high-solid.svg';
+                    }).catch(function() {
+                        // If autoplay fails, keep muted icon
+                        icon.src = '/static/icons/volume-xmark-solid.svg';
+                    });
+                }
+            }, { once: true });
         } else {
-            icon.src = '/static/icons/volume-xmark-solid.svg';
+            // Ensure audio is paused
+            audio.pause();
         }
-        // Save current time on navigation away
-        window.addEventListener('beforeunload', function() {
-            localStorage.setItem('apt-music-current-time', audio.currentTime);
-        });
+
         // Restore current time if available
         var savedTime = parseFloat(localStorage.getItem('apt-music-current-time'));
         if (!isNaN(savedTime)) {
             audio.currentTime = savedTime;
         }
+
+        // Save current time on navigation away
+        window.addEventListener('beforeunload', function () {
+            localStorage.setItem('apt-music-current-time', audio.currentTime.toString());
+        });
     });
 </script>
 </body>
