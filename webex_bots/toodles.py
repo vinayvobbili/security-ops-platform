@@ -689,7 +689,7 @@ APPROVED_TESTING_CARD = {
                         }
                     ]
                 }
-            ]
+            ],
         },
         {
             "type": "ColumnSet",
@@ -1554,15 +1554,17 @@ def announce_new_threat_hunt(ticket_no, ticket_title, incident_url, person_id):
 
 
 def keepalive_ping():
+    global last_health_check
     wait = 60  # Start with 1 minute
     max_wait = 1800  # Max wait: 30 minutes
     while True:
         try:
-            # Lightweight API call to keep the connection alive
             webex_api.people.me()
+            last_health_check = time.time()  # Update on successful ping
             wait = 240  # Reset to normal interval (4 min) after success
         except Exception as e:
             logger.warning(f"Keepalive ping failed: {e}. Retrying in {wait} seconds.")
+            # Don't update last_health_check on failure - this will trigger warning status
             time.sleep(wait)
             wait = min(wait * 2, max_wait)  # Exponential backoff, capped at max_wait
             continue
@@ -1577,7 +1579,7 @@ class Who(Command):
             command_keyword="who",
             help_message="On-Call",
             card=None,
-            delete_previous_message=True
+            delete_previous_message=False  # Keep the welcome card visible
         )
 
     @log_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles, log_file_name="toodles_activity_log.csv")
@@ -1592,7 +1594,7 @@ class Rotation(Command):
         super().__init__(
             command_keyword="rotation",
             card=None,
-            delete_previous_message=True
+            delete_previous_message=False  # Keep the welcome card visible
         )
 
     @log_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles, log_file_name="toodles_activity_log.csv")
@@ -1640,7 +1642,7 @@ class GetAllOptions(Command):
             command_keyword="options",
             help_message="More Commands",
             card=all_options_card,
-            delete_previous_message=True
+            delete_previous_message=False  # Keep the welcome card visible
         )
 
     def execute(self, message, attachment_actions, activity):
@@ -1901,13 +1903,24 @@ class BotStatusCommand(Command):
         else:
             uptime_str = "Unknown"
 
-        # Health check info
-        health_status = "🟢 Healthy" if (time.time() - last_health_check) < HEALTH_CHECK_INTERVAL else "🟡 Warning"
+        # Health check info with better explanations
+        time_since_last_check = time.time() - last_health_check
+        if time_since_last_check < HEALTH_CHECK_INTERVAL:
+            health_status = "🟢 Healthy"
+            health_detail = "Webex connection stable"
+        else:
+            health_status = "🟡 Warning"
+            minutes_overdue = int((time_since_last_check - HEALTH_CHECK_INTERVAL) / 60)
+            health_detail = f"Webex API connection issues detected ({minutes_overdue}min ago)"
 
         # Format current time with timezone
         tz_name = "EST" if current_time.dst().total_seconds() == 0 else "EDT"
 
-        # Create status card
+        # Format last health check time
+        last_check_time = datetime.fromtimestamp(last_health_check, EASTERN_TZ)
+        last_check_str = last_check_time.strftime(f'%H:%M:%S {tz_name}')
+
+        # Create status card with enhanced details
         status_card = AdaptiveCard(
             body=[
                 TextBlock(
@@ -1924,8 +1937,10 @@ class BotStatusCommand(Command):
                             items=[
                                 TextBlock(text="📊 **Status Information**", weight=options.FontWeight.BOLDER),
                                 TextBlock(text=f"Status: {health_status}"),
+                                TextBlock(text=f"Details: {health_detail}"),
                                 TextBlock(text=f"Uptime: {uptime_str}"),
-                                TextBlock(text=f"Last Check: {current_time.strftime(f'%Y-%m-%d %H:%M:%S {tz_name}')}")
+                                TextBlock(text=f"Last Health Check: {last_check_str}"),
+                                TextBlock(text=f"Current Time: {current_time.strftime(f'%Y-%m-%d %H:%M:%S {tz_name}')}")
                             ]
                         )
                     ]
