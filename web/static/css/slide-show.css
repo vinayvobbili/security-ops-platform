@@ -151,7 +151,7 @@ body {
     box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
     transition: transform 0.3s ease;
     max-width: calc(100vw - 40px); /* Account for padding */
-    max-height: calc(100vh - 130px); /* Account for nav and padding */
+    max-height: calc(100vh - 200px); /* Increased space for bottom nav controls */
     width: auto; /* Maintain aspect ratio */
     height: auto; /* Maintain aspect ratio */
     object-fit: contain; /* Ensure full image is visible */
