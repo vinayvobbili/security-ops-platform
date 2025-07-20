@@ -1,6 +1,24 @@
 <?xml version="1.0" encoding="utf-8"?><!-- Uploaded to: SVG Repo, www.svgrepo.com, Generator: SVG Repo Mixer Tools -->
-<svg width="800px" height="800px" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-<path d="M5 12H20" stroke="#000000" stroke-width="2" stroke-linecap="round"/>
-<path d="M5 17H20" stroke="#000000" stroke-width="2" stroke-linecap="round"/>
-<path d="M5 7H20" stroke="#000000" stroke-width="2" stroke-linecap="round"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="32" height="32">
+  <!-- Top bun -->
+  <path d="M25 120c0-52.4 42.6-95 95-95h272c52.4 0 95 42.6 95 95 0 13.3-10.7 24-24 24H49c-13.3 0-24-10.7-24-24z" fill="#D2691E"/>
+
+  <!-- Sesame seeds -->
+  <circle cx="120" cy="80" r="5" fill="#F5DEB3"/>
+  <circle cx="180" cy="70" r="4" fill="#F5DEB3"/>
+  <circle cx="250" cy="85" r="5" fill="#F5DEB3"/>
+  <circle cx="320" cy="75" r="4" fill="#F5DEB3"/>
+  <circle cx="380" cy="90" r="5" fill="#F5DEB3"/>
+
+  <!-- Lettuce (Acme Green) -->
+  <path d="M60 180h392c13.3 0 24 10.7 24 24s-10.7 24-24 24H60c-13.3 0-24-10.7-24-24s10.7-24 24-24z" fill="#68B92F"/>
+
+  <!-- Meat patty -->
+  <path d="M40 260h432c13.3 0 24 10.7 24 24v16c0 13.3-10.7 24-24 24H40c-13.3 0-24-10.7-24-24v-16c0-13.3 10.7-24 24-24z" fill="#8B4513"/>
+
+  <!-- Cheese -->
+  <path d="M50 340h412c13.3 0 24 10.7 24 24s-10.7 24-24 24H256l-20 20-20-20H50c-13.3 0-24-10.7-24-24s10.7-24 24-24z" fill="#FFD700"/>
+
+  <!-- Bottom bun -->
+  <path d="M49 420h414c13.3 0 24 10.7 24 24 0 26.5-21.5 48-48 48H73c-26.5 0-48-21.5-48-48 0-13.3 10.7-24 24-24z" fill="#D2691E"/>
 </svg>
