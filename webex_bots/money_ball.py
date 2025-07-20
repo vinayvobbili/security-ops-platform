@@ -58,7 +58,6 @@ bot_start_time: datetime | None = None
 # Timezone constant for consistent usage
 EASTERN_TZ = ZoneInfo("America/New_York")
 
-
 # Fun chart-related messages and achievements
 CHART_MESSAGES = [
     "📊 Chart magic in progress...",
@@ -81,7 +80,7 @@ ACHIEVEMENT_MESSAGES = {
 # Define command classes
 class DetectionEngineeringStories(Command):
     def __init__(self):
-        super().__init__(command_keyword="det_eng", help_message="DE Stories")
+        super().__init__(command_keyword="det_eng", help_message="")
 
     @log_activity(config.webex_bot_access_token_moneyball, "moneyball_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
@@ -90,7 +89,7 @@ class DetectionEngineeringStories(Command):
 
 class ResponseEngineeringStories(Command):
     def __init__(self):
-        super().__init__(command_keyword="resp_eng", help_message="RE Stories")
+        super().__init__(command_keyword="resp_eng", help_message="")
 
     @log_activity(config.webex_bot_access_token_moneyball, "moneyball_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
@@ -101,7 +100,7 @@ class MttrMttc(Command):
     """Webex Bot command to display a graph of mean times to respond and contain."""
 
     def __init__(self):
-        super().__init__(command_keyword="mttr_mttc", help_message="MTTR-MTTC")
+        super().__init__(command_keyword="mttr_mttc", help_message="MTTR-MTTC ⏱️")
 
     @log_activity(config.webex_bot_access_token_moneyball, "moneyball_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
@@ -112,7 +111,7 @@ class AgingTickets(Command):
     """Webex Bot command to display a graph of aging tickets."""
 
     def __init__(self):
-        super().__init__(command_keyword="aging", help_message="Aging Tickets")
+        super().__init__(command_keyword="aging", help_message="Aging Tickets 📈")
 
     @log_activity(config.webex_bot_access_token_moneyball, "moneyball_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
@@ -123,7 +122,7 @@ class SlaBreaches(Command):
     """Webex Bot command to display a graph of SLA breaches."""
 
     def __init__(self):
-        super().__init__(command_keyword="sla_breach", help_message="SLA Breaches")
+        super().__init__(command_keyword="sla_breach", help_message="SLA Breaches ⚠️")
 
     @log_activity(config.webex_bot_access_token_moneyball, "moneyball_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
@@ -133,7 +132,7 @@ class SlaBreaches(Command):
 class Outflow(Command):
 
     def __init__(self):
-        super().__init__(command_keyword="outflow", help_message="Outflow")
+        super().__init__(command_keyword="outflow", help_message="Outflow 📤")
 
     @log_activity(config.webex_bot_access_token_moneyball, "moneyball_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
@@ -143,7 +142,7 @@ class Outflow(Command):
 class Inflow(Command):
 
     def __init__(self):
-        super().__init__(command_keyword="inflow", help_message="Inflow")
+        super().__init__(command_keyword="inflow", help_message="Inflow 📥")
 
     @log_activity(config.webex_bot_access_token_moneyball, "moneyball_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
@@ -153,7 +152,7 @@ class Inflow(Command):
 
 class HeatMap(Command):
     def __init__(self):
-        super().__init__(command_keyword="heat_map", help_message="Heat Map")
+        super().__init__(command_keyword="heat_map", help_message="Heat Map 🔥")
 
     @log_activity(config.webex_bot_access_token_moneyball, "moneyball_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
@@ -162,7 +161,7 @@ class HeatMap(Command):
 
 class ThreatconLevel(Command):
     def __init__(self):
-        super().__init__(command_keyword="threatcon_level", help_message="Threatcon Level")
+        super().__init__(command_keyword="threatcon_level", help_message="Threatcon Level 🚨")
 
     @log_activity(config.webex_bot_access_token_moneyball, "moneyball_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
@@ -171,7 +170,7 @@ class ThreatconLevel(Command):
 
 class QRadarRuleEfficacy(Command):
     def __init__(self):
-        super().__init__(command_keyword="efficacy", help_message="QR Rule Efficacy")
+        super().__init__(command_keyword="efficacy", help_message="")
 
     @log_activity(config.webex_bot_access_token_moneyball, "moneyball_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
@@ -180,7 +179,7 @@ class QRadarRuleEfficacy(Command):
 
 class GetAgingTicketsByOwnerReport(Command):
     def __init__(self):
-        super().__init__(command_keyword="aging_tickets_by_owner_report", help_message="Aging Tickets by Owner Report", exact_command_keyword_match=True)
+        super().__init__(command_keyword="aging_tickets_by_owner_report", help_message="", exact_command_keyword_match=True)
 
     @log_activity(config.webex_bot_access_token_moneyball, "moneyball_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
@@ -227,7 +226,7 @@ class BotStatusCommand(Command):
     def __init__(self):
         super().__init__(
             command_keyword="bot_status",
-            help_message="🔍 Check bot health and status",
+            help_message="Bot health 🏥",
             delete_previous_message=True,
         )
 
@@ -294,84 +293,6 @@ class BotStatusCommand(Command):
             roomId=room_id,
             text="Bot Status Information",
             attachments=[{"contentType": "application/vnd.microsoft.card.adaptive", "content": status_card.to_dict()}]
-        )
-
-
-class QuickActionsCommand(Command):
-    """Quick actions dashboard for common MoneyBall operations."""
-
-    def __init__(self):
-        super().__init__(
-            command_keyword="dashboard",
-            help_message="📋 Quick Actions Dashboard",
-            delete_previous_message=True,
-        )
-
-    @log_activity(config.webex_bot_access_token_moneyball, "moneyball_activity_log.csv")
-    def execute(self, message, attachment_actions, activity):
-        current_time = datetime.now(EASTERN_TZ)
-        hour = current_time.hour
-
-        # Time-based greeting
-        if 5 <= hour < 12:
-            greeting = f"🌅 Good morning, {activity['actor']['displayName']}!"
-        elif 12 <= hour < 17:
-            greeting = f"☀️ Good afternoon, {activity['actor']['displayName']}!"
-        elif 17 <= hour < 21:
-            greeting = f"🌆 Good evening, {activity['actor']['displayName']}!"
-        else:
-            greeting = f"🌙 Working late, {activity['actor']['displayName']}?"
-
-        dashboard_card = AdaptiveCard(
-            body=[
-                TextBlock(
-                    text="📊 MoneyBall Quick Actions",
-                    color=options.Colors.ACCENT,
-                    size=options.FontSize.LARGE,
-                    weight=options.FontWeight.BOLDER,
-                    horizontalAlignment=HorizontalAlignment.CENTER
-                ),
-                TextBlock(
-                    text=greeting,
-                    wrap=True,
-                    horizontalAlignment=HorizontalAlignment.CENTER
-                ),
-                ColumnSet(
-                    columns=[
-                        Column(
-                            width="stretch",
-                            items=[
-                                TextBlock(text="🎯 **Most Popular Charts**", weight=options.FontWeight.BOLDER),
-                                TextBlock(text="• Aging Tickets 📈"),
-                                TextBlock(text="• MTTR/MTTC ⏱️"),
-                                TextBlock(text="• SLA Breaches ⚠️"),
-                                TextBlock(text="• Heat Map 🔥")
-                            ]
-                        ),
-                        Column(
-                            width="stretch",
-                            items=[
-                                TextBlock(text="📊 **Flow Analysis**", weight=options.FontWeight.BOLDER),
-                                TextBlock(text="• Inflow Trends 📥"),
-                                TextBlock(text="• Outflow Metrics 📤"),
-                                TextBlock(text="• ThreatCon Level 🚨"),
-                                TextBlock(text="• QRadar Efficacy 🛡️")
-                            ]
-                        )
-                    ]
-                ),
-                TextBlock(
-                    text=f"💡 **Pro Tip:** Use the buttons above to quickly access your most-used charts!",
-                    wrap=True,
-                    color=options.Colors.ACCENT
-                )
-            ]
-        )
-
-        webex_api.messages.create(
-            roomId=attachment_actions.roomId,
-            text="MoneyBall Dashboard",
-            attachments=[{"contentType": "application/vnd.microsoft.card.adaptive", "content": dashboard_card.to_dict()}]
         )
 
 
@@ -467,14 +388,13 @@ def run_bot_with_reconnection():
             bot.add_command(Inflow())
             bot.add_command(Outflow())
             bot.add_command(ThreatconLevel())
-            bot.add_command(DetectionEngineeringStories())
-            bot.add_command(ResponseEngineeringStories())
+            # bot.add_command(DetectionEngineeringStories())
+            # bot.add_command(ResponseEngineeringStories())
             bot.add_command(HeatMap())
-            bot.add_command(QRadarRuleEfficacy())
+            # bot.add_command(QRadarRuleEfficacy())
             bot.add_command(ReimagedHostDetails())
             bot.add_command(GetAgingTicketsByOwnerReport())
             bot.add_command(BotStatusCommand())
-            bot.add_command(QuickActionsCommand())
             bot.add_command(HelpCommand())
 
             print("📊 MoneyBall is up and running with enhanced features...")
