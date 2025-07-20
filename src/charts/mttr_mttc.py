@@ -1,11 +1,17 @@
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
+import sys
 
 import matplotlib.transforms as transforms
+import matplotlib.patches as patches
 import numpy as np
 from matplotlib import pyplot as plt
 from pytz import timezone
+
+# Add the project root to Python path
+project_root = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(project_root))
 
 from config import get_config
 from services.xsoar import TicketHandler
@@ -91,6 +97,13 @@ def get_tickets_by_periods(tickets):
 
 
 def save_mttr_mttc_chart(ticket_slas_by_periods):
+    # Set up enhanced plot style
+    plt.style.use('seaborn-v0_8-whitegrid')
+
+    # Configure matplotlib fonts
+    import matplotlib
+    matplotlib.rcParams['font.family'] = ['DejaVu Sans', 'Arial Unicode MS', 'Arial']
+
     # Calculate metrics in minutes for each period
     thirty_days_total_ticket_count = ticket_slas_by_periods['Past 30 days'].total_ticket_count
     seven_days_total_ticket_count = ticket_slas_by_periods['Past 7 days'].total_ticket_count
@@ -113,11 +126,22 @@ def save_mttr_mttc_chart(ticket_slas_by_periods):
         }
     }
 
-    # Width of each bar and positions of the bars
-    width = 0.25
+    # Enhanced figure with better proportions and styling
+    fig, ax = plt.subplots(figsize=(12, 8), facecolor='#f8f9fa')
+    fig.patch.set_facecolor('#f8f9fa')
+
+    # Width of each bar and positions - make bars narrower
+    width = 0.2  # Narrower bars (was 0.25)
     x = np.arange(2)  # Two groups: MTTR and MTTC
 
-    # Create bars and store their container objects
+    # Vibrant color palette
+    colors = {
+        '30days': '#00FF80',  # Bright Green for 30 days
+        '7days': '#FF6B40',  # Bright Orange for 7 days
+        'yesterday': '#4080FF'  # Bright Blue for yesterday
+    }
+
+    # Create bars with enhanced styling
     mttr_yesterday = metrics['MTTR']['Yesterday']
     mttr_7days = metrics['MTTR']['Past 7 days']
     mttr_30days = metrics['MTTR']['Past 30 days']
@@ -125,56 +149,110 @@ def save_mttr_mttc_chart(ticket_slas_by_periods):
     mttc_7days = metrics['MTTC']['Past 7 days']
     mttc_30days = metrics['MTTC']['Past 30 days']
 
-    # Adjust figure size here
-    fig, ax = plt.subplots(figsize=(8, 6))
+    bar1 = ax.bar(x - width, [mttr_30days, mttc_30days], width,
+                  label=f'Past 30 days ({thirty_days_total_ticket_count})',
+                  color=colors['30days'], edgecolor='white', linewidth=1.5, alpha=0.95)
+    bar2 = ax.bar(x, [mttr_7days, mttc_7days], width,
+                  label=f'Past 7 days ({seven_days_total_ticket_count})',
+                  color=colors['7days'], edgecolor='white', linewidth=1.5, alpha=0.95)
+    bar3 = ax.bar(x + width, [mttr_yesterday, mttc_yesterday], width,
+                  label=f'Yesterday ({yesterday_total_ticket_count})',
+                  color=colors['yesterday'], edgecolor='white', linewidth=1.5, alpha=0.95)
 
-    bar1 = ax.bar(x - width, [mttr_30days, mttc_30days], width, label=f'Past 30 days ({thirty_days_total_ticket_count})', color='#2ca02c')
-    bar2 = ax.bar(x, [mttr_7days, mttc_7days], width, label=f'Past 7 days ({seven_days_total_ticket_count})', color='#ff7f0e')
-    bar3 = ax.bar(x + width, [mttr_yesterday, mttc_yesterday], width, label=f'Yesterday ({yesterday_total_ticket_count})', color='#1f77b4')
+    # Enhanced axes styling
+    ax.set_facecolor('#ffffff')
+    ax.grid(True, alpha=0.2, linestyle='--', linewidth=0.8)
+    ax.set_axisbelow(True)
 
-    # Get x-axis limits
+    # Style the spines
+    for spine in ax.spines.values():
+        spine.set_color('#CCCCCC')
+        spine.set_linewidth(1.5)
+
+    # Get x-axis limits for SLA lines
     xmin, xmax = ax.get_xlim()
-    ymin, ymax = ax.get_ylim()
-
-    # Calculate midpoint for half-width lines
     midpoint = xmin + (xmax - xmin) / 2
 
-    # Draw the hlines from the midpoint to the edges
-    ax.hlines(y=3, xmin=xmin, xmax=midpoint, color='r', linestyle='-', label='Response SLA')
-    ax.hlines(y=15, xmin=midpoint, xmax=xmax, color='g', linestyle='-', label='Containment SLA')
+    # Enhanced SLA lines with better colors
+    ax.hlines(y=3, xmin=xmin, xmax=midpoint, color='#FF1744', linestyle='-', linewidth=3, label='Response SLA')
+    ax.hlines(y=15, xmin=midpoint, xmax=xmax, color='#00C853', linestyle='-', linewidth=3, label='Containment SLA')
 
-    # Add a thin black border around the figure
-    fig.patch.set_edgecolor('black')
-    fig.patch.set_linewidth(5)
+    # Enhanced border
+    border_width = 4
+    fig.patch.set_edgecolor('#1A237E')
+    fig.patch.set_linewidth(border_width)
 
-    # Transform coordinates to figure coordinates (bottom-left is 0,0)
-    trans = transforms.blended_transform_factory(fig.transFigure, ax.transAxes)  # gets transform object
+    # Enhanced timestamp with modern styling
+    trans = transforms.blended_transform_factory(fig.transFigure, fig.transFigure)
     now_eastern = datetime.now(eastern).strftime('%m/%d/%Y %I:%M %p %Z')
-    plt.text(0.1, -0.15, now_eastern, transform=trans, ha='left', va='bottom', fontsize=10)
-    plt.text(0.7, -0.15, '(*) Ticket counts that period', transform=trans, ha='left', va='bottom', fontsize=10)  # uses transform object instead of xmin, ymin
 
-    # Customize the plot
-    ax.set_ylabel('Minutes', fontdict={'fontsize': 12, 'fontweight': 'bold'})
-    ax.set_title(f'Mean Time To', fontdict={'fontsize': 12, 'fontweight': 'bold'})
+    plt.text(0.02, 0.02, f"Generated@ {now_eastern}",
+             transform=trans, ha='left', va='bottom',
+             fontsize=10, color='#1A237E', fontweight='bold',
+             bbox=dict(boxstyle="round,pad=0.4", facecolor='white', alpha=0.9, edgecolor='#1A237E', linewidth=1.5))
+
+    # Enhanced titles and labels
+    plt.suptitle('Mean Time To',
+                 fontsize=20, fontweight='bold', color='#1A237E', y=0.95)
+    ax.set_ylabel('Minutes', fontsize=14, fontweight='bold', color='#1A237E')
     ax.set_xticks(x)
-    ax.set_xticklabels(['Respond', 'Contain'], fontdict={'fontsize': 12, 'fontweight': 'bold'})
-    ax.legend(loc='upper left')
+    ax.set_xticklabels(['Respond', 'Contain'], fontsize=12, fontweight='bold', color='#1A237E')
 
-    ax.set_yticks(np.arange(0, 16, 1))
+    # Enhanced legend
+    legend = ax.legend(loc='upper left', frameon=True, fancybox=True, shadow=True,
+                       title_fontsize=12, fontsize=10)
+    legend.get_frame().set_facecolor('white')
+    legend.get_frame().set_alpha(0.95)
+    legend.get_frame().set_edgecolor('#1A237E')
+    legend.get_frame().set_linewidth(2)
 
-    # Add value labels on top of each bar using the bar container objects
+    # Enhanced y-axis - dynamically scale based on data
+    all_values = [mttr_yesterday, mttr_7days, mttr_30days, mttc_yesterday, mttc_7days, mttc_30days]
+    max_value = max([v for v in all_values if v > 0], default=15)  # Use 15 as minimum if no data
+    max_y = max(max_value * 1.2, 16)  # Add 20% headroom, minimum of 16
+
+    # Create appropriate tick intervals based on the data range
+    if max_y <= 20:
+        tick_interval = 1
+    elif max_y <= 50:
+        tick_interval = 2
+    elif max_y <= 100:
+        tick_interval = 5
+    else:
+        tick_interval = 10
+
+    ax.set_yticks(np.arange(0, int(max_y) + tick_interval, tick_interval))
+    ax.set_ylim(0, max_y)
+    ax.tick_params(axis='y', colors='#1A237E', labelsize=10, width=1.5)
+
+    # Enhanced value labels with black circles
     for bars in [bar1, bar2, bar3]:
         for bar in bars:
             height = bar.get_height()
-            ax.text(bar.get_x() + bar.get_width() / 2., height / 2,
-                    f'{height:.1f}',
-                    ha='center', va='bottom', fontdict={'fontsize': 14, 'fontweight': 'bold'})
+            if height > 0:
+                ax.text(bar.get_x() + bar.get_width() / 2., height / 2,
+                        f'{height:.1f}',
+                        ha='center', va='center',
+                        fontsize=12, color='white', fontweight='bold',
+                        bbox=dict(boxstyle="circle,pad=0.2", facecolor='black', alpha=0.8, edgecolor='white', linewidth=1))
 
-    # Adjust layout to prevent label clipping
+    # Add GS-DnR watermark
+    fig.text(0.99, 0.01, 'GS-DnR',
+             ha='right', va='bottom', fontsize=10,
+             alpha=0.7, color='#3F51B5', style='italic', fontweight='bold')
+
+    # Add explanatory note
+    plt.text(0.02, 0.08, '(*) Ticket counts for that period',
+             transform=trans, ha='left', va='bottom',
+             fontsize=9, color='#666666', style='italic')
+
+    # Enhanced layout
     plt.tight_layout()
+    plt.subplots_adjust(top=0.88, bottom=0.15, left=0.08, right=0.95)
 
     today_date = datetime.now().strftime('%m-%d-%Y')
     OUTPUT_PATH = root_directory / "web" / "static" / "charts" / today_date / "MTTR MTTC.png"
+    OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
     plt.savefig(OUTPUT_PATH)
     plt.close(fig)
 
