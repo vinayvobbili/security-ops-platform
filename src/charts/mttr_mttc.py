@@ -97,8 +97,8 @@ def get_tickets_by_periods(tickets):
 
 
 def save_mttr_mttc_chart(ticket_slas_by_periods):
-    # Set up enhanced plot style
-    plt.style.use('seaborn-v0_8-whitegrid')
+    # Set up enhanced plot style without grids
+    plt.style.use('default')
 
     # Configure matplotlib fonts
     import matplotlib
@@ -127,55 +127,78 @@ def save_mttr_mttc_chart(ticket_slas_by_periods):
     }
 
     # Enhanced figure with better proportions and styling
-    fig, ax = plt.subplots(figsize=(12, 8), facecolor='#f8f9fa')
+    fig, ax1 = plt.subplots(figsize=(12, 8), facecolor='#f8f9fa')
     fig.patch.set_facecolor('#f8f9fa')
 
+    # Create second y-axis for containment
+    ax2 = ax1.twinx()
+
     # Width of each bar and positions - make bars narrower
-    width = 0.2  # Narrower bars (was 0.25)
-    x = np.arange(2)  # Two groups: MTTR and MTTC
+    width = 0.25
+    x = np.array([0])  # Single position since we're plotting separately
 
     # Vibrant color palette
     colors = {
-        '30days': '#00FF80',  # Bright Green for 30 days
+        '30days': '#4CAF50',  # Muted Green for 30 days (Material Design green)
         '7days': '#FF6B40',  # Bright Orange for 7 days
         'yesterday': '#4080FF'  # Bright Blue for yesterday
     }
 
-    # Create bars with enhanced styling
+    # Extract MTTR values for response (left side)
     mttr_yesterday = metrics['MTTR']['Yesterday']
     mttr_7days = metrics['MTTR']['Past 7 days']
     mttr_30days = metrics['MTTR']['Past 30 days']
+
+    # Extract MTTC values for containment (right side)
     mttc_yesterday = metrics['MTTC']['Yesterday']
     mttc_7days = metrics['MTTC']['Past 7 days']
     mttc_30days = metrics['MTTC']['Past 30 days']
 
-    bar1 = ax.bar(x - width, [mttr_30days, mttc_30days], width,
-                  label=f'Past 30 days ({thirty_days_total_ticket_count})',
-                  color=colors['30days'], edgecolor='white', linewidth=1.5, alpha=0.95)
-    bar2 = ax.bar(x, [mttr_7days, mttc_7days], width,
-                  label=f'Past 7 days ({seven_days_total_ticket_count})',
-                  color=colors['7days'], edgecolor='white', linewidth=1.5, alpha=0.95)
-    bar3 = ax.bar(x + width, [mttr_yesterday, mttc_yesterday], width,
-                  label=f'Yesterday ({yesterday_total_ticket_count})',
-                  color=colors['yesterday'], edgecolor='white', linewidth=1.5, alpha=0.95)
+    # Plot MTTR bars on left y-axis (ax1)
+    bar1 = ax1.bar(x - width, [mttr_30days], width,
+                   label=f'Past 30 days ({thirty_days_total_ticket_count})',
+                   color=colors['30days'], edgecolor='white', linewidth=1.5, alpha=0.95)
+    bar2 = ax1.bar(x, [mttr_7days], width,
+                   label=f'Past 7 days ({seven_days_total_ticket_count})',
+                   color=colors['7days'], edgecolor='white', linewidth=1.5, alpha=0.95)
+    bar3 = ax1.bar(x + width, [mttr_yesterday], width,
+                   label=f'Yesterday ({yesterday_total_ticket_count})',
+                   color=colors['yesterday'], edgecolor='white', linewidth=1.5, alpha=0.95)
 
-    # Enhanced axes styling
-    ax.set_facecolor('#ffffff')
-    ax.grid(True, alpha=0.2, linestyle='--', linewidth=0.8)
-    ax.set_axisbelow(True)
+    # Plot MTTC bars on right y-axis (ax2) - offset to the right
+    x_contain = np.array([1.5])  # Separate position for containment
+    bar4 = ax2.bar(x_contain - width, [mttc_30days], width,
+                   color=colors['30days'], edgecolor='white', linewidth=1.5, alpha=0.95)
+    bar5 = ax2.bar(x_contain, [mttc_7days], width,
+                   color=colors['7days'], edgecolor='white', linewidth=1.5, alpha=0.95)
+    bar6 = ax2.bar(x_contain + width, [mttc_yesterday], width,
+                   color=colors['yesterday'], edgecolor='white', linewidth=1.5, alpha=0.95)
+
+    # Enhanced axes styling for both y-axes
+    ax1.set_facecolor('#ffffff')
+    ax1.grid(False)  # Explicitly disable grid for ax1
+    ax1.set_axisbelow(True)
+
+    ax2.grid(False)  # Explicitly disable grid for ax2
 
     # Style the spines
-    for spine in ax.spines.values():
+    for spine in ax1.spines.values():
+        spine.set_color('#CCCCCC')
+        spine.set_linewidth(1.5)
+    for spine in ax2.spines.values():
         spine.set_color('#CCCCCC')
         spine.set_linewidth(1.5)
 
-    # Get x-axis limits for SLA lines
-    xmin, xmax = ax.get_xlim()
-    midpoint = xmin + (xmax - xmin) / 2
+    # Enhanced SLA lines - each line only in its own section
+    # Response SLA line only over the Respond section
+    respond_left = -0.4  # Left edge of respond section
+    respond_right = 0.4  # Right edge of respond section
+    ax1.hlines(y=3, xmin=respond_left, xmax=respond_right, color='#FF1744', linestyle='-', linewidth=3, label='Response SLA (3 min)')
 
-    # Enhanced SLA lines with better colors
-    ax.hlines(y=3, xmin=xmin, xmax=midpoint, color='#FF1744', linestyle='-', linewidth=3, label='Response SLA')
-    ax.hlines(y=15, xmin=midpoint, xmax=xmax, color='#00C853', linestyle='-', linewidth=3, label='Containment SLA')
+    # Containment SLA line only over the Contain section
+    contain_left = 1.1  # Left edge of contain section
+    contain_right = 1.9  # Right edge of contain section
+    ax2.hlines(y=15, xmin=contain_left, xmax=contain_right, color='#4CAF50', linestyle='-', linewidth=3, label='Containment SLA (15 min)')
 
     # Enhanced border
     border_width = 4
@@ -194,47 +217,78 @@ def save_mttr_mttc_chart(ticket_slas_by_periods):
     # Enhanced titles and labels
     plt.suptitle('Mean Time To',
                  fontsize=20, fontweight='bold', color='#1A237E', y=0.95)
-    ax.set_ylabel('Minutes', fontsize=14, fontweight='bold', color='#1A237E')
-    ax.set_xticks(x)
-    ax.set_xticklabels(['Respond', 'Contain'], fontsize=12, fontweight='bold', color='#1A237E')
 
-    # Enhanced legend
-    legend = ax.legend(loc='upper left', frameon=True, fancybox=True, shadow=True,
-                       title_fontsize=12, fontsize=10)
+    # Set y-axis labels with different colors
+    ax1.set_ylabel('Minutes', fontsize=14, fontweight='bold', color='#FF1744')
+    ax2.set_ylabel('Minutes', fontsize=14, fontweight='bold', color='#4CAF50')  # Changed to match the muted green
+
+    # Set x-axis
+    ax1.set_xticks([0, 1.5])
+    ax1.set_xticklabels(['Respond', 'Contain'], fontsize=12, fontweight='bold', color='#1A237E')
+
+    # Dynamic scaling for MTTR (left y-axis)
+    mttr_values = [mttr_yesterday, mttr_7days, mttr_30days]
+    max_mttr = max([v for v in mttr_values if v > 0], default=5)
+    max_y1 = max(max_mttr * 1.3, 6)  # Add 30% headroom, minimum of 6
+
+    if max_y1 <= 10:
+        tick_interval1 = 0.5
+    elif max_y1 <= 20:
+        tick_interval1 = 1
+    else:
+        tick_interval1 = 2
+
+    ax1.set_yticks(np.arange(0, max_y1 + tick_interval1, tick_interval1))
+    ax1.set_ylim(0, max_y1)
+    ax1.tick_params(axis='y', colors='#FF1744', labelsize=10, width=1.5)
+
+    # Dynamic scaling for MTTC (right y-axis)
+    mttc_values = [mttc_yesterday, mttc_7days, mttc_30days]
+    max_mttc = max([v for v in mttc_values if v > 0], default=15)
+    max_y2 = max(max_mttc * 1.3, 18)  # Add 30% headroom, minimum of 18
+
+    if max_y2 <= 30:
+        tick_interval2 = 2
+    elif max_y2 <= 60:
+        tick_interval2 = 5
+    else:
+        tick_interval2 = 10
+
+    ax2.set_yticks(np.arange(0, max_y2 + tick_interval2, tick_interval2))
+    ax2.set_ylim(0, max_y2)
+    ax2.tick_params(axis='y', colors='#4CAF50', labelsize=10, width=1.5)
+
+    # Enhanced legend combining both axes
+    lines1, labels1 = ax1.get_legend_handles_labels()
+    lines2, labels2 = ax2.get_legend_handles_labels()
+    legend = ax1.legend(lines1 + lines2, labels1 + labels2, loc='upper left',
+                        frameon=True, fancybox=True, shadow=True,
+                        title_fontsize=12, fontsize=10)
     legend.get_frame().set_facecolor('white')
     legend.get_frame().set_alpha(0.95)
     legend.get_frame().set_edgecolor('#1A237E')
     legend.get_frame().set_linewidth(2)
-
-    # Enhanced y-axis - dynamically scale based on data
-    all_values = [mttr_yesterday, mttr_7days, mttr_30days, mttc_yesterday, mttc_7days, mttc_30days]
-    max_value = max([v for v in all_values if v > 0], default=15)  # Use 15 as minimum if no data
-    max_y = max(max_value * 1.2, 16)  # Add 20% headroom, minimum of 16
-
-    # Create appropriate tick intervals based on the data range
-    if max_y <= 20:
-        tick_interval = 1
-    elif max_y <= 50:
-        tick_interval = 2
-    elif max_y <= 100:
-        tick_interval = 5
-    else:
-        tick_interval = 10
-
-    ax.set_yticks(np.arange(0, int(max_y) + tick_interval, tick_interval))
-    ax.set_ylim(0, max_y)
-    ax.tick_params(axis='y', colors='#1A237E', labelsize=10, width=1.5)
 
     # Enhanced value labels with black circles
     for bars in [bar1, bar2, bar3]:
         for bar in bars:
             height = bar.get_height()
             if height > 0:
-                ax.text(bar.get_x() + bar.get_width() / 2., height / 2,
-                        f'{height:.1f}',
-                        ha='center', va='center',
-                        fontsize=12, color='white', fontweight='bold',
-                        bbox=dict(boxstyle="circle,pad=0.2", facecolor='black', alpha=0.8, edgecolor='white', linewidth=1))
+                ax1.text(bar.get_x() + bar.get_width() / 2., height / 2,
+                         f'{height:.1f}',
+                         ha='center', va='center',
+                         fontsize=12, color='white', fontweight='bold',
+                         bbox=dict(boxstyle="circle,pad=0.2", facecolor='black', alpha=0.8, edgecolor='white', linewidth=1))
+
+    for bars in [bar4, bar5, bar6]:
+        for bar in bars:
+            height = bar.get_height()
+            if height > 0:
+                ax2.text(bar.get_x() + bar.get_width() / 2., height / 2,
+                         f'{height:.1f}',
+                         ha='center', va='center',
+                         fontsize=12, color='white', fontweight='bold',
+                         bbox=dict(boxstyle="circle,pad=0.2", facecolor='black', alpha=0.8, edgecolor='white', linewidth=1))
 
     # Add GS-DnR watermark
     fig.text(0.99, 0.01, 'GS-DnR',
@@ -248,7 +302,7 @@ def save_mttr_mttc_chart(ticket_slas_by_periods):
 
     # Enhanced layout
     plt.tight_layout()
-    plt.subplots_adjust(top=0.88, bottom=0.15, left=0.08, right=0.95)
+    plt.subplots_adjust(top=0.88, bottom=0.15, left=0.08, right=0.92)
 
     today_date = datetime.now().strftime('%m-%d-%Y')
     OUTPUT_PATH = root_directory / "web" / "static" / "charts" / today_date / "MTTR MTTC.png"
