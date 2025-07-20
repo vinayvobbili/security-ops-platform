@@ -10,6 +10,7 @@ import matplotlib.transforms as transforms
 import matplotlib.patches as patches
 import pandas as pd
 import pytz
+from webexpythonsdk import WebexAPI
 
 # Add the project root to Python path
 project_root = Path(__file__).parent.parent.parent
@@ -79,21 +80,21 @@ def generate_plot(tickets):
 
         # VIBRANT, GLOSSY color palette with bright, eye-catching colors
         phase_colors = {
-            'Investigation': '#FF0080',      # Hot Pink - urgent attention
-            'Containment': '#00FFFF',        # Cyan - contained state
-            'Eradication': '#0080FF',        # Electric Blue - active work
-            'Recovery': '#00FF40',           # Neon Green - recovery mode
-            'Lessons Learned': '#FFFF00',    # Bright Yellow - learning
-            'Unknown': '#FF40FF',            # Magenta - unknown state
-            'New': '#FF4000',                # Red Orange - new items
-            'In Progress': '#4080FF',        # Sky Blue - in progress
-            'Pending': '#FF8000',            # Orange - pending action
-            'Resolved': '#8000FF',           # Purple - resolved
-            '8. Closure': '#FF1744',         # Bright Red - closure issues
-            'Closure': '#FF1744',            # Bright Red - closure phase
-            '': '#FFA500',                   # Bright Orange - undefined
-            None: '#FFA500',                 # Bright Orange - null
-            'Unassigned': '#808080'          # Gray - unassigned
+            'Investigation': '#FF0080',  # Hot Pink - urgent attention
+            'Containment': '#00FFFF',  # Cyan - contained state
+            'Eradication': '#0080FF',  # Electric Blue - active work
+            'Recovery': '#00FF40',  # Neon Green - recovery mode
+            'Lessons Learned': '#FFFF00',  # Bright Yellow - learning
+            'Unknown': '#FF40FF',  # Magenta - unknown state
+            'New': '#FF4000',  # Red Orange - new items
+            'In Progress': '#4080FF',  # Sky Blue - in progress
+            'Pending': '#FF8000',  # Orange - pending action
+            'Resolved': '#8000FF',  # Purple - resolved
+            '8. Closure': '#FF1744',  # Bright Red - closure issues
+            'Closure': '#FF1744',  # Bright Red - closure phase
+            '': '#FFA500',  # Bright Orange - undefined
+            None: '#FFA500',  # Bright Orange - null
+            'Unassigned': '#808080'  # Gray - unassigned
         }
 
         # Group and count tickets by 'type' and 'phase'
@@ -193,9 +194,9 @@ def generate_plot(tickets):
 
         # Fix title overlap with much better spacing
         plt.suptitle('Aging Tickets',
-                    fontsize=24, fontweight='bold', color='#1A237E', y=0.98)  # Even higher
+                     fontsize=24, fontweight='bold', color='#1A237E', y=0.98)  # Even higher
         plt.title('Tickets created 1+ months ago',
-                 fontsize=16, fontweight='bold', color='#3F51B5', pad=40)  # Much more padding
+                  fontsize=16, fontweight='bold', color='#3F51B5', pad=40)  # Much more padding
 
         # Enhanced axis labels with better colors
         plt.xlabel('Ticket Type', fontsize=14, fontweight='bold', color='#1A237E')
@@ -215,8 +216,8 @@ def generate_plot(tickets):
 
         # Enhanced legend with glossy styling
         legend = plt.legend(title='Phase', loc='upper right',
-                           frameon=True, fancybox=True, shadow=True,
-                           title_fontsize=14, fontsize=12)
+                            frameon=True, fancybox=True, shadow=True,
+                            title_fontsize=14, fontsize=12)
         legend.get_frame().set_facecolor('white')
         legend.get_frame().set_alpha(0.95)
         legend.get_frame().set_edgecolor('#1A237E')
@@ -226,8 +227,8 @@ def generate_plot(tickets):
 
         # Add a more prominent watermark with GS-DnR branding
         fig.text(0.99, 0.01, 'GS-DnR',
-                ha='right', va='bottom', fontsize=10,
-                alpha=0.7, color='#3F51B5', style='italic', fontweight='bold')
+                 ha='right', va='bottom', fontsize=10,
+                 alpha=0.7, color='#3F51B5', style='italic', fontweight='bold')
 
     plt.tight_layout()
     plt.subplots_adjust(top=0.85, bottom=0.15, left=0.08, right=0.95)  # Much more top space
@@ -237,6 +238,57 @@ def generate_plot(tickets):
     output_path.parent.mkdir(parents=True, exist_ok=True)  # Ensure the directory exists
     plt.savefig(output_path)
     plt.close(fig)
+
+
+def generate_daily_summary(tickets) -> str | None:
+    try:
+        if not tickets:
+            return pd.DataFrame(columns=['Owner', 'Count', 'Average Age (days)']).to_markdown(index=False)
+        df = pd.DataFrame(tickets)
+        df['owner'] = df['owner'].astype(str).str.replace('@company.com', '', regex=False)
+        df['created'] = pd.to_datetime(df['created'], errors='coerce')
+        # Drop rows where 'created' could not be parsed
+        df = df.dropna(subset=['created'])
+        # Make both sides timezone-naive for subtraction
+        now = pd.Timestamp.now(tz=eastern).tz_localize(None)
+        df['created'] = df['created'].dt.tz_localize(None)
+        df['age'] = (now - df['created']).dt.days
+        table = df.groupby('owner').agg({'id': 'count', 'age': 'mean'}).reset_index()
+        table = table.rename(columns={'owner': 'Owner', 'id': 'Count', 'age': 'Average Age (days)'})
+        table['Average Age (days)'] = table['Average Age (days)'].round(1)
+        table = table.sort_values(by='Average Age (days)', ascending=False)
+        return table.to_markdown(index=False)
+    except Exception as e:
+        logger.error(f"Error generating daily summary: {e}")
+        return "Error generating report. Please check the logs."
+
+
+def send_report(room_id):
+    try:
+        webex_api = WebexAPI(access_token=config.webex_bot_access_token_soar)
+
+        query = f'-status:closed type:{config.team_name} -type:"{config.team_name} Third Party Compromise"'
+        period = {"byTo": "months", "toValue": 1, "byFrom": "months", "fromValue": None}
+        tickets = TicketHandler().get_tickets(query=query, period=period)
+
+        webex_api.messages.create(
+            roomId=room_id,
+            text=f"Aging Tickets Summary!",
+            markdown=f'Summary (Type={config.team_name}* - TP, Created=1+ months ago)\n ``` \n {generate_daily_summary(tickets)}'
+        )
+
+        query = f'-status:closed type:"{config.team_name} Third Party Compromise"'
+        period = {"byTo": "months", "toValue": 3, "byFrom": "months", "fromValue": None}
+        tickets = TicketHandler().get_tickets(query=query, period=period)
+
+        if tickets:
+            webex_api.messages.create(
+                roomId=room_id,
+                text=f"Aging Tickets Summary!",
+                markdown=f'Summary (Type=Third Party Compromise, Created=3+ months ago)\n ``` \n {generate_daily_summary(tickets)}'
+            )
+    except Exception as e:
+        logger.error(f"Error sending report: {e}")
 
 
 def make_chart():
@@ -258,6 +310,8 @@ def make_chart():
 
 
 def main():
+    room_id = config.webex_room_id_vinay_test_space
+    send_report(room_id)
     make_chart()
 
 
