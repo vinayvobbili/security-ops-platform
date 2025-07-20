@@ -12,6 +12,21 @@ window.addEventListener('resize', updateSlider); // Recalculate on window resize
 function initializeSlider() {
     updateSlider(); // Set initial slide position
     playSlideshow(); // Start auto-sliding
+
+    // Add click event listeners to all slides
+    document.querySelectorAll('.slides figure').forEach(slide => {
+        slide.addEventListener('click', () => {
+            toggleSlideshow();
+        });
+    });
+
+    // Add click event listeners to navigation dots
+    document.querySelectorAll('.nav-dot').forEach(dot => {
+        dot.addEventListener('click', function () {
+            const slideIndex = parseInt(this.getAttribute('data-slide-index'));
+            goToSlide(slideIndex);
+        });
+    });
 }
 
 function playSlideshow() {
@@ -90,11 +105,30 @@ document.addEventListener('DOMContentLoaded', () => {
 
     music.volume = 0.5; // Set initial volume (0.0 to 1.0)
 
+    // Add keyboard event listener for slideshow navigation
+    document.addEventListener('keydown', function (event) {
+        switch (event.code) {
+            case 'ArrowLeft':
+                event.preventDefault();
+                moveSlide(-1);
+                break;
+            case 'ArrowRight':
+                event.preventDefault();
+                moveSlide(1);
+                break;
+            case 'Space':
+                event.preventDefault();
+                toggleSlideshow();
+                break;
+        }
+    });
+
     // Make toggleAudio globally accessible
-    window.toggleAudio = function() {
+    window.toggleAudio = function () {
         if (music.muted) {
             music.muted = false;
-            music.play().catch(() => {}); // Try to play, ignore errors
+            music.play().catch(() => {
+            }); // Try to play, ignore errors
             music_icon.src = '/static/icons/volume-high-solid.svg';
         } else {
             music.muted = true;
