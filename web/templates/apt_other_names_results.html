@@ -31,11 +31,11 @@
     </div>
 </div>
 <div class="container">
-        <h1>APT Other Names Search Results</h1>
-        <div id="results">
-            {% if results and results|length > 0 %}
-                <h2>Other Names for '{{ common_name }}'</h2>
-                {% for item in results %}
+    <h1>APT Other Names Search Results</h1>
+    <div id="results">
+        {% if results and results|length > 0 %}
+            <h2>Other Names for '{{ common_name }}'</h2>
+            {% for item in results %}
                 <div class="apt-result-card">
                     <div class="apt-header">
                         <span class="apt-group">{{ item.common_name }}</span>
@@ -44,10 +44,10 @@
                     </div>
                     <table>
                         <thead>
-                            <tr>
-                                <th>Source</th>
-                                <th>Alternative Name</th>
-                            </tr>
+                        <tr>
+                            <th>Source</th>
+                            <th>Alternative Name</th>
+                        </tr>
                         </thead>
                         <tbody>
                         {% for source, alt_name in item.alternative_names.items() %}
@@ -59,31 +59,31 @@
                         </tbody>
                     </table>
                     {% if should_include_metadata %}
-                    <div class="apt-metadata">
-                        <strong>Total Alternatives:</strong> {{ item.total_alternatives }}<br>
-                        <strong>Row Index:</strong> {{ item.row_index }}<br>
-                        <strong>Companies in Sheet:</strong> {{ item.companies_in_sheet }}<br>
-                        <strong>All Company Columns:</strong> {{ item.all_company_columns }}<br>
-                        <strong>All Row Data:</strong> {{ item.all_row_data }}
-                    </div>
+                        <div class="apt-metadata">
+                            <strong>Total Alternatives:</strong> {{ item.total_alternatives }}<br>
+                            <strong>Row Index:</strong> {{ item.row_index }}<br>
+                            <strong>Companies in Sheet:</strong> {{ item.companies_in_sheet }}<br>
+                            <strong>All Company Columns:</strong> {{ item.all_company_columns }}<br>
+                            <strong>All Row Data:</strong> {{ item.all_row_data }}
+                        </div>
                     {% endif %}
                 </div>
-                {% endfor %}
-            {% else %}
-                <p>No other names found for '{{ common_name }}'.</p>
-            {% endif %}
-        </div>
-        <div style="text-align:center; margin-top: 36px;">
-            <a href="/apt-other-names-search" class="back-to-search-btn">Back to Search</a>
-        </div>
+            {% endfor %}
+        {% else %}
+            <p>No other names found for '{{ common_name }}'.</p>
+        {% endif %}
     </div>
-    <script src="/static/js/apt_other_names_results.js"></script>
-    <script src="/static/js/falling_notes.js"></script>
-    <script>
+    <div style="text-align:center; margin-top: 36px;">
+        <a href="/apt-other-names-search" class="back-to-search-btn">Back to Search</a>
+    </div>
+</div>
+<script src="/static/js/apt_other_names_results.js"></script>
+<script src="/static/js/falling_notes.js"></script>
+<script>
     // Only add event listener if the form exists (prevents error on results page)
     var searchForm = document.getElementById('searchForm');
     if (searchForm) {
-        searchForm.addEventListener('submit', function() {
+        searchForm.addEventListener('submit', function () {
             document.getElementById('spinner').style.display = 'inline-block';
         });
     }
@@ -105,19 +105,20 @@
     }
 
     // On page load, restore music state
-    document.addEventListener('DOMContentLoaded', function() {
+    document.addEventListener('DOMContentLoaded', function () {
         var audio = document.getElementById('apt-music');
         var icon = document.getElementById('apt-music-icon');
         var wasPlaying = localStorage.getItem('apt-music-playing') === 'true';
         if (wasPlaying) {
-            audio.play().then(function() {
+            audio.play().then(function () {
                 icon.src = '/static/icons/volume-high-solid.svg';
-            }).catch(function(){});
+            }).catch(function () {
+            });
         } else {
             icon.src = '/static/icons/volume-xmark-solid.svg';
         }
         // Save current time on navigation away
-        window.addEventListener('beforeunload', function() {
+        window.addEventListener('beforeunload', function () {
             localStorage.setItem('apt-music-current-time', audio.currentTime);
         });
         // Restore current time if available
@@ -126,6 +127,6 @@
             audio.currentTime = savedTime;
         }
     });
-    </script>
+</script>
 </body>
 </html>

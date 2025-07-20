@@ -1,11 +1,16 @@
 // Falling Notes Animation for APT Results Page
-(function() {
+(function () {
     const canvas = document.getElementById('falling-notes-canvas');
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     let width = window.innerWidth;
     let height = window.innerHeight;
     let animationFrameId;
+
+    // Animation control variables
+    let animationStartTime = Date.now();
+    let animationDuration = 2000; // 2 seconds in milliseconds
+    let animationStopped = false;
 
     // Note shapes/colors
     const noteColors = ['#6a11cb', '#2575fc', '#ff6f61', '#43e97b', '#e74c3c', '#fff', '#222'];
@@ -25,6 +30,7 @@
         canvas.width = width;
         canvas.height = height;
     }
+
     window.addEventListener('resize', resizeCanvas);
     resizeCanvas();
 
@@ -108,12 +114,28 @@
     let spawnTimer = 0;
 
     function animate() {
+        // Check if 2 seconds have passed
+        if (Date.now() - animationStartTime > animationDuration) {
+            if (!animationStopped) {
+                animationStopped = true;
+                // Clear the canvas and stop adding new notes
+                ctx.clearRect(0, 0, width, height);
+                // Let existing notes finish falling off screen
+                if (notes.length === 0) {
+                    cancelAnimationFrame(animationFrameId);
+                    return;
+                }
+            }
+        }
+
         ctx.clearRect(0, 0, width, height);
-        // Add new notes
+
+        // Add new notes only if animation hasn't stopped
         spawnTimer++;
-        if (notes.length < maxNotes && spawnTimer % 6 === 0) {
+        if (!animationStopped && notes.length < maxNotes && spawnTimer % 6 === 0) {
             notes.push(createNote());
         }
+
         // Animate notes
         for (let i = notes.length - 1; i >= 0; i--) {
             const note = notes[i];
@@ -126,9 +148,12 @@
                 notes.splice(i, 1);
             }
         }
-        animationFrameId = requestAnimationFrame(animate);
+
+        // Continue animation if there are still notes on screen or if not stopped yet
+        if (!animationStopped || notes.length > 0) {
+            animationFrameId = requestAnimationFrame(animate);
+        }
     }
 
     animate();
 })();
-
