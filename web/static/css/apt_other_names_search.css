@@ -75,6 +75,26 @@
     font-size: 16px;
     transition: all 0.3s ease;
     background: linear-gradient(145deg, #ffffff, var(--acme-gray));
+    position: relative;
+    z-index: 1;
+}
+
+#common_name::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(45deg, transparent, rgba(0, 166, 81, 0.1), transparent);
+    border-radius: 8px;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    pointer-events: none;
+}
+
+#common_name:hover::before {
+    opacity: 1;
 }
 
 #common_name:focus {
@@ -94,88 +114,18 @@
     font-size: 14px;
     transition: all 0.3s ease;
     cursor: pointer;
+    z-index: 10; /* Ensure it's above other elements */
+    user-select: none; /* Prevent text selection */
+    display: block; /* Ensure it's displayed */
+    font-weight: bold; /* Make it more visible */
 }
 
 .dropdown-indicator:hover {
     color: var(--acme-green);
-    transform: translateY(-50%) rotate(180deg);
+    transform: translateY(-50%) rotate(180deg) scale(1.1);
 }
 
-.help-text {
-    font-size: 12px;
-    color: var(--acme-dark-blue);
-    margin-top: 6px;
-    font-style: italic;
-    padding: 8px 12px;
-    background: linear-gradient(135deg, var(--acme-gray), #e8f4fd);
-    border-radius: 6px;
-    border-left: 3px solid var(--acme-green);
-    animation: fadeIn 0.5s ease-in;
-}
-
-/* Acme branded search button */
-button[type="submit"] {
-    background: linear-gradient(135deg, var(--acme-blue), var(--acme-green));
-    color: white;
-    border: none;
-    padding: 12px 24px;
-    border-radius: 8px;
-    font-size: 16px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    box-shadow: 0 4px 15px rgba(0, 70, 173, 0.3);
-    margin: 0;
-}
-
-button[type="submit"]:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 25px rgba(0, 166, 81, 0.4);
-    background: linear-gradient(135deg, var(--acme-green), var(--acme-dark-blue));
-}
-
-button[type="submit"]:active {
-    transform: translateY(0);
-}
-
-/* Animate dropdown appearance with slide down */
-.autocomplete-dropdown.show {
-    display: block;
-    animation: slideDownFade 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-@keyframes slideDownFade {
-    from {
-        opacity: 0;
-        transform: translateY(-15px) scale(0.95);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0) scale(1);
-    }
-}
-
-@keyframes fadeIn {
-    from {
-        opacity: 0;
-        transform: translateY(10px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-/* Acme branded background */
-.container {
-    background: radial-gradient(circle at 20% 80%, rgba(0, 70, 173, 0.05) 0%, transparent 50%),
-    radial-gradient(circle at 80% 20%, rgba(0, 166, 81, 0.05) 0%, transparent 50%);
-    padding: 30px;
-    border-radius: 12px;
-    min-height: 60vh;
-}
-
-/* Enhanced form with Acme styling */
+/* Enhanced form with Acme styling and visual interest */
 form {
     background: rgba(255, 255, 255, 0.95);
     padding: 25px;
@@ -183,24 +133,41 @@ form {
     box-shadow: 0 10px 30px rgba(0, 70, 173, 0.08);
     backdrop-filter: blur(10px);
     border: 1px solid rgba(0, 166, 81, 0.2);
-    max-width: 800px; /* Decreased from default width */
-    margin: 0 auto; /* Center the form */
+    max-width: 800px;
+    margin: 0 auto;
+    position: relative;
+    overflow: hidden;
+    animation: slideInUp 0.6s ease-out;
 }
 
-label {
-    font-weight: 600;
-    color: var(--acme-dark-blue);
-    margin-bottom: 8px;
-    display: block;
+/* Add floating particles background to form */
+form::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background:
+        radial-gradient(circle at 20% 20%, rgba(0, 166, 81, 0.05) 0%, transparent 50%),
+        radial-gradient(circle at 80% 80%, rgba(0, 70, 173, 0.05) 0%, transparent 50%),
+        radial-gradient(circle at 60% 30%, rgba(74, 139, 194, 0.03) 0%, transparent 50%);
+    pointer-events: none;
+    animation: float 6s ease-in-out infinite;
 }
 
-/* Controls row - put sliders and button on same line */
-.controls-row {
-    display: flex;
-    align-items: center;
-    gap: 30px;
-    margin: 20px 0;
-    flex-wrap: wrap; /* Allow wrapping on smaller screens */
+/* Add subtle geometric patterns */
+form::after {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: url("data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23E6F3FF' fill-opacity='0.1'%3E%3Cpath d='M20 20c0 11.046-8.954 20-20 20v20h20V20z'/%3E%3C/g%3E%3C/svg%3E") repeat;
+    pointer-events: none;
+    opacity: 0.3;
+    animation: rotate 20s linear infinite;
 }
 
 /* Acme branded loading spinner */
@@ -390,6 +357,239 @@ h1 {
     font-size: 2.2em;
     font-weight: 700;
     text-shadow: 2px 2px 4px rgba(0, 70, 173, 0.1);
+    position: relative;
+    animation: titleGlow 3s ease-in-out infinite alternate;
+}
+
+h1::before {
+    content: '';
+    position: absolute;
+    top: -5px;
+    left: -5px;
+    right: -5px;
+    bottom: -5px;
+    background: linear-gradient(45deg, var(--acme-blue), var(--acme-green), var(--acme-blue));
+    border-radius: 8px;
+    z-index: -1;
+    opacity: 0;
+    animation: titleBackground 4s ease-in-out infinite;
+}
+
+/* Enhanced help text with pulse animation */
+.help-text {
+    font-size: 12px;
+    color: var(--acme-dark-blue);
+    margin-top: 6px;
+    font-style: italic;
+    padding: 8px 12px;
+    background: linear-gradient(135deg, var(--acme-gray), #e8f4fd);
+    border-radius: 6px;
+    border-left: 3px solid var(--acme-green);
+    animation: fadeIn 0.5s ease-in, subtlePulse 4s ease-in-out infinite;
+    position: relative;
+    overflow: hidden;
+}
+
+.help-text::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: linear-gradient(45deg, transparent, rgba(0, 166, 81, 0.1), transparent);
+    animation: shimmer 3s ease-in-out infinite;
+    pointer-events: none;
+}
+
+/* Enhanced controls row with stagger animation */
+.controls-row {
+    display: flex;
+    align-items: center;
+    gap: 30px;
+    margin: 20px 0;
+    flex-wrap: wrap;
+    animation: slideInStagger 0.8s ease-out 0.3s both;
+}
+
+/* Add hover effects to slider containers */
+.metadata-slider-container,
+.response-format-container {
+    transition: all 0.3s ease;
+    border-radius: 8px;
+    padding: 8px;
+    position: relative;
+}
+
+.metadata-slider-container:hover,
+.response-format-container:hover {
+    background: rgba(0, 166, 81, 0.05);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 70, 173, 0.1);
+}
+
+/* Enhanced button with more dramatic effects */
+button[type="submit"] {
+    background: linear-gradient(135deg, var(--acme-blue), var(--acme-green));
+    color: white;
+    border: none;
+    padding: 12px 24px;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(0, 70, 173, 0.3);
+    margin: 0;
+    position: relative;
+    overflow: hidden;
+    animation: buttonPulse 2s ease-in-out infinite;
+}
+
+button[type="submit"]::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+    transition: left 0.5s ease;
+}
+
+button[type="submit"]:hover::before {
+    left: 100%;
+}
+
+/* Animate dropdown appearance with slide down */
+.autocomplete-dropdown.show {
+    display: block;
+    animation: slideDownFade 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes slideDownFade {
+    from {
+        opacity: 0;
+        transform: translateY(-15px) scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes slideInUp {
+    from {
+        opacity: 0;
+        transform: translateY(30px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes slideInStagger {
+    from {
+        opacity: 0;
+        transform: translateX(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+@keyframes float {
+    0%, 100% {
+        transform: translateY(0px);
+    }
+    50% {
+        transform: translateY(-10px);
+    }
+}
+
+@keyframes rotate {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@keyframes floatAcross {
+    from {
+        transform: translateX(-100px);
+    }
+    to {
+        transform: translateX(calc(100vw + 100px));
+    }
+}
+
+@keyframes floatAcrossReverse {
+    from {
+        transform: translateX(100px);
+    }
+    to {
+        transform: translateX(calc(-100vw - 100px));
+    }
+}
+
+@keyframes titleGlow {
+    from {
+        text-shadow: 2px 2px 4px rgba(0, 70, 173, 0.1);
+    }
+    to {
+        text-shadow: 2px 2px 8px rgba(0, 70, 173, 0.3), 0 0 20px rgba(0, 166, 81, 0.1);
+    }
+}
+
+@keyframes titleBackground {
+    0%, 100% {
+        opacity: 0;
+    }
+    50% {
+        opacity: 0.1;
+    }
+}
+
+@keyframes subtlePulse {
+    0%, 100% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.01);
+    }
+}
+
+@keyframes shimmer {
+    0% {
+        transform: translateX(-100%) translateY(-100%) rotate(45deg);
+    }
+    100% {
+        transform: translateX(100%) translateY(100%) rotate(45deg);
+    }
+}
+
+@keyframes buttonPulse {
+    0%, 100% {
+        box-shadow: 0 4px 15px rgba(0, 70, 173, 0.3);
+    }
+    50% {
+        box-shadow: 0 6px 20px rgba(0, 166, 81, 0.4);
+    }
 }
 
 /* Acme branded top navigation */
@@ -438,4 +638,46 @@ body {
     padding: 70px 0 0 0; /* Add top padding for fixed nav */
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     min-height: 100vh;
+}
+
+/* Enhanced container with dynamic background */
+.container {
+    background:
+        radial-gradient(circle at 20% 80%, rgba(0, 70, 173, 0.08) 0%, transparent 50%),
+        radial-gradient(circle at 80% 20%, rgba(0, 166, 81, 0.08) 0%, transparent 50%),
+        radial-gradient(circle at 40% 40%, rgba(74, 139, 194, 0.05) 0%, transparent 60%);
+    padding: 30px;
+    border-radius: 12px;
+    min-height: 60vh;
+    position: relative;
+    overflow: hidden;
+}
+
+.container::before {
+    content: '🎯 🔍 📊 💼 🌐';
+    position: absolute;
+    top: 10%;
+    left: -100px;
+    font-size: 24px;
+    opacity: 0.1;
+    animation: floatAcross 15s linear infinite;
+    pointer-events: none;
+}
+
+.container::after {
+    content: '🛡️ 🔒 📈 ⚡ 🎨';
+    position: absolute;
+    bottom: 10%;
+    right: -100px;
+    font-size: 20px;
+    opacity: 0.1;
+    animation: floatAcrossReverse 18s linear infinite;
+    pointer-events: none;
+}
+
+label {
+    font-weight: 600;
+    color: var(--acme-dark-blue);
+    margin-bottom: 8px;
+    display: block;
 }
