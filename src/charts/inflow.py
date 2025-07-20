@@ -10,6 +10,7 @@ import numpy as np
 import pandas as pd
 import pytz
 from matplotlib import transforms
+from matplotlib.patches import FancyBboxPatch
 
 # Add the project root to Python path
 project_root = Path(__file__).parent.parent.parent
@@ -71,7 +72,7 @@ def create_stacked_bar_chart(df, x_label, y_label, title):
     colors = [severity_colors.get(str(sev), "#6B7280") for sev in available_severities]
 
     # Plot the stacked bar chart with enhanced styling
-    bars = df_pivot.plot(kind='bar', stacked=True, ax=ax, color=colors, width=0.6,
+    bars = df_pivot.plot(kind='bar', stacked=True, ax=ax, color=colors, width=0.25,
                         edgecolor="white", linewidth=1.5, alpha=0.95)
 
     # Enhanced axes styling
@@ -103,7 +104,7 @@ def create_stacked_bar_chart(df, x_label, y_label, title):
             if height > 0:
                 ax.text(bar.get_x() + bar.get_width() / 2, bar.get_y() + height / 2,
                        f'{int(height)}', ha='center', va='center',
-                       color='white', fontsize=10, fontweight='bold',
+                       color='white', fontsize=14, fontweight='bold',
                        bbox=dict(boxstyle="circle,pad=0.2", facecolor='black',
                                alpha=0.8, edgecolor='white', linewidth=1))
 
@@ -121,8 +122,29 @@ def create_stacked_bar_chart(df, x_label, y_label, title):
 
     # Enhanced border
     border_width = 4
-    fig.patch.set_edgecolor('#1A237E')
-    fig.patch.set_linewidth(border_width)
+
+    # Create a rounded rectangular border that extends to the very edge
+    # Remove the standard border to avoid conflicts
+    fig.patch.set_edgecolor('none')  # Remove default border
+    fig.patch.set_linewidth(0)
+
+    # Calculate the exact position to ensure the border appears correctly at the corners
+    fig_width, fig_height = fig.get_size_inches()
+    corner_radius = 15  # Adjust this value to control the roundness of corners
+
+    # Add a custom FancyBboxPatch that extends to the full figure bounds
+    fancy_box = FancyBboxPatch(
+        (0, 0),  # Start at figure bounds
+        width=1.0, height=1.0,  # Full figure dimensions
+        boxstyle=f"round,pad=0,rounding_size={corner_radius / max(fig_width * fig.dpi, fig_height * fig.dpi)}",
+        edgecolor='#1A237E',  # Deep blue border
+        facecolor='none',
+        linewidth=border_width,
+        transform=fig.transFigure,
+        zorder=1000,  # Ensure it's on top of other elements
+        clip_on=False  # Don't clip the border
+    )
+    fig.patches.append(fancy_box)
 
     plt.tight_layout()
     return fig
@@ -192,7 +214,7 @@ def plot_yesterday():
     today_date = datetime.now().strftime('%m-%d-%Y')
     OUTPUT_PATH = root_directory / "web" / "static" / "charts" / today_date / "Inflow Yesterday.png"
     OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
-    plt.savefig(OUTPUT_PATH, format='png', bbox_inches='tight', pad_inches=0.2, dpi=300)
+    plt.savefig(OUTPUT_PATH, format='png', bbox_inches=None, pad_inches=0, dpi=300)
     plt.close(fig)
 
     execution_time = time.time() - start_time
