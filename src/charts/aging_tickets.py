@@ -1,13 +1,12 @@
 import logging
+import sys
 from datetime import datetime
 from pathlib import Path
 from typing import List, Dict, Any
-import numpy as np
-import sys
 
 import matplotlib.pyplot as plt
 import matplotlib.transforms as transforms
-import matplotlib.patches as patches
+import numpy as np
 import pandas as pd
 import pytz
 from webexpythonsdk import WebexAPI
@@ -74,10 +73,6 @@ def generate_plot(tickets):
                 bbox=dict(boxstyle="round,pad=0.5", facecolor='white', alpha=0.8, edgecolor='#2E8B57', linewidth=2))
         ax.axis('off')
     else:
-        # Debug: Print phase data to understand the issue
-        print(f"Debug - Unique phases: {df['phase'].unique()}")
-        print(f"Debug - Phase counts: {df['phase'].value_counts()}")
-
         # VIBRANT, GLOSSY color palette with bright, eye-catching colors
         phase_colors = {
             'Investigation': '#FF0080',  # Hot Pink - urgent attention
@@ -99,8 +94,6 @@ def generate_plot(tickets):
 
         # Group and count tickets by 'type' and 'phase'
         grouped_data = df.groupby(['type', 'phase']).size().unstack(fill_value=0)
-        print(f"Debug - Grouped data columns: {grouped_data.columns.tolist()}")
-        print(f"Debug - Grouped data:\n{grouped_data}")
 
         # Sort types by total count in descending order
         grouped_data['total'] = grouped_data.sum(axis=1)
@@ -126,9 +119,6 @@ def generate_plot(tickets):
                 colors_for_plot.append('#FF1744')  # Bright Red for closure
             else:
                 colors_for_plot.append(phase_colors.get(phase, '#808080'))
-
-        print(f"Debug - Colors being used: {colors_for_plot}")
-        print(f"Debug - Phases in data: {grouped_data.columns.tolist()}")
 
         # Enhanced plotting with MUCH NARROWER bars and NO shadows
         bars = grouped_data.plot(
