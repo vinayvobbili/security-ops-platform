@@ -104,24 +104,21 @@
         }
     }
 
-    // On page load, restore music state
+    // On page load, DON'T auto-start music - only restore icon state
     document.addEventListener('DOMContentLoaded', function () {
         var audio = document.getElementById('apt-music');
         var icon = document.getElementById('apt-music-icon');
-        var wasPlaying = localStorage.getItem('apt-music-playing') === 'true';
-        if (wasPlaying) {
-            audio.play().then(function () {
-                icon.src = '/static/icons/volume-high-solid.svg';
-            }).catch(function () {
-            });
-        } else {
-            icon.src = '/static/icons/volume-xmark-solid.svg';
-        }
+
+        // Always start with muted icon - don't autoplay music
+        icon.src = '/static/icons/volume-xmark-solid.svg';
+        audio.pause(); // Ensure audio is paused
+
         // Save current time on navigation away
         window.addEventListener('beforeunload', function () {
             localStorage.setItem('apt-music-current-time', audio.currentTime);
         });
-        // Restore current time if available
+
+        // Restore current time if available (but don't play)
         var savedTime = parseFloat(localStorage.getItem('apt-music-current-time'));
         if (!isNaN(savedTime)) {
             audio.currentTime = savedTime;

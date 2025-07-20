@@ -146,28 +146,19 @@ document.addEventListener('DOMContentLoaded', function() {
     // Make toggleAptAudio globally available
     window.toggleAptAudio = toggleAptAudio;
 
-    // Audio initialization
+    // Audio initialization - DON'T auto-start music
     var audio = document.getElementById('apt-music');
     var icon = document.getElementById('apt-music-icon');
 
+    // Always start with muted icon - don't auto-play music
     icon.src = '/static/icons/volume-xmark-solid.svg';
+    audio.pause(); // Ensure audio is paused
 
-    var wasPlaying = localStorage.getItem('apt-music-playing') === 'true';
+    // Remove auto-start behavior - music should only play when manually clicked
+    // var wasPlaying = localStorage.getItem('apt-music-playing') === 'true';
+    // if (wasPlaying) { ... } // REMOVED AUTO-START LOGIC
 
-    if (wasPlaying) {
-        audio.addEventListener('canplay', function () {
-            if (localStorage.getItem('apt-music-playing') === 'true') {
-                audio.play().then(function () {
-                    icon.src = '/static/icons/volume-high-solid.svg';
-                }).catch(function () {
-                    icon.src = '/static/icons/volume-xmark-solid.svg';
-                });
-            }
-        }, {once: true});
-    } else {
-        audio.pause();
-    }
-
+    // Restore current time if available (but don't play)
     var savedTime = parseFloat(localStorage.getItem('apt-music-current-time'));
     if (!isNaN(savedTime)) {
         audio.currentTime = savedTime;
