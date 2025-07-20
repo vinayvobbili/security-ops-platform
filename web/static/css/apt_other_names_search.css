@@ -1,0 +1,441 @@
+/* APT Other Names Search Page Styles - Acme Branded */
+:root {
+    --acme-blue: #0046AD;
+    --acme-green: #00A651;
+    --acme-light-blue: #4A8BC2;
+    --acme-dark-blue: #003875;
+    --acme-gray: #F5F5F5;
+}
+
+.autocomplete-container {
+    position: relative;
+    display: inline-block;
+    width: 100%;
+}
+
+.autocomplete-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: white;
+    border: 1px solid var(--acme-green);
+    border-top: none;
+    max-height: 400px;
+    overflow-y: auto;
+    z-index: 1000;
+    display: none;
+    box-shadow: 0 8px 25px rgba(0, 70, 173, 0.15);
+    border-radius: 0 0 8px 8px;
+}
+
+.autocomplete-item {
+    padding: 12px 16px;
+    cursor: pointer;
+    border-bottom: 1px solid var(--acme-gray);
+    font-size: 14px;
+    transition: all 0.2s ease;
+    position: relative;
+}
+
+.autocomplete-item:hover,
+.autocomplete-item.highlighted {
+    background: linear-gradient(135deg, var(--acme-blue) 0%, var(--acme-green) 100%);
+    color: white;
+    transform: translateX(4px);
+    border-left: 3px solid var(--acme-green);
+}
+
+.autocomplete-item:last-child {
+    border-bottom: none;
+    border-radius: 0 0 8px 8px;
+}
+
+.autocomplete-item::before {
+    content: "🎯";
+    margin-right: 8px;
+    opacity: 0.7;
+    transition: all 0.2s ease;
+}
+
+.autocomplete-item:hover::before,
+.autocomplete-item.highlighted::before {
+    opacity: 1;
+    transform: scale(1.1);
+}
+
+#common_name {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 12px 16px;
+    padding-right: 40px;
+    position: relative;
+    border: 2px solid var(--acme-light-blue);
+    border-radius: 8px;
+    font-size: 16px;
+    transition: all 0.3s ease;
+    background: linear-gradient(145deg, #ffffff, var(--acme-gray));
+}
+
+#common_name:focus {
+    border-color: var(--acme-blue);
+    box-shadow: 0 0 20px rgba(0, 70, 173, 0.3);
+    outline: none;
+    transform: translateY(-2px);
+}
+
+.dropdown-indicator {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--acme-light-blue);
+    pointer-events: auto;
+    font-size: 14px;
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+
+.dropdown-indicator:hover {
+    color: var(--acme-green);
+    transform: translateY(-50%) rotate(180deg);
+}
+
+.help-text {
+    font-size: 12px;
+    color: var(--acme-dark-blue);
+    margin-top: 6px;
+    font-style: italic;
+    padding: 8px 12px;
+    background: linear-gradient(135deg, var(--acme-gray), #e8f4fd);
+    border-radius: 6px;
+    border-left: 3px solid var(--acme-green);
+    animation: fadeIn 0.5s ease-in;
+}
+
+/* Acme branded search button */
+button[type="submit"] {
+    background: linear-gradient(135deg, var(--acme-blue), var(--acme-green));
+    color: white;
+    border: none;
+    padding: 12px 24px;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(0, 70, 173, 0.3);
+    margin: 0;
+}
+
+button[type="submit"]:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(0, 166, 81, 0.4);
+    background: linear-gradient(135deg, var(--acme-green), var(--acme-dark-blue));
+}
+
+button[type="submit"]:active {
+    transform: translateY(0);
+}
+
+/* Animate dropdown appearance with slide down */
+.autocomplete-dropdown.show {
+    display: block;
+    animation: slideDownFade 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes slideDownFade {
+    from {
+        opacity: 0;
+        transform: translateY(-15px) scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Acme branded background */
+.container {
+    background: radial-gradient(circle at 20% 80%, rgba(0, 70, 173, 0.05) 0%, transparent 50%),
+    radial-gradient(circle at 80% 20%, rgba(0, 166, 81, 0.05) 0%, transparent 50%);
+    padding: 30px;
+    border-radius: 12px;
+    min-height: 60vh;
+}
+
+/* Enhanced form with Acme styling */
+form {
+    background: rgba(255, 255, 255, 0.95);
+    padding: 25px;
+    border-radius: 12px;
+    box-shadow: 0 10px 30px rgba(0, 70, 173, 0.08);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(0, 166, 81, 0.2);
+    max-width: 800px; /* Decreased from default width */
+    margin: 0 auto; /* Center the form */
+}
+
+label {
+    font-weight: 600;
+    color: var(--acme-dark-blue);
+    margin-bottom: 8px;
+    display: block;
+}
+
+/* Controls row - put sliders and button on same line */
+.controls-row {
+    display: flex;
+    align-items: center;
+    gap: 30px;
+    margin: 20px 0;
+    flex-wrap: wrap; /* Allow wrapping on smaller screens */
+}
+
+/* Acme branded loading spinner */
+.spinner {
+    width: 20px;
+    height: 20px;
+    border: 2px solid var(--acme-gray);
+    border-top: 2px solid var(--acme-green);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    display: inline-block;
+    margin-left: 10px;
+}
+
+@keyframes spin {
+    0% {
+        transform: rotate(0deg);
+    }
+    100% {
+        transform: rotate(360deg);
+    }
+}
+
+/* Enhanced nav music button with Acme colors */
+.nav-music button:hover {
+    transform: scale(1.1);
+    transition: transform 0.2s ease;
+    background: rgba(0, 166, 81, 0.1);
+    border-radius: 50%;
+}
+
+/* Response Format Slider Styles */
+.response-format-container {
+    display: flex;
+    align-items: center;
+    gap: 4px; /* Decreased from 8px */
+    height: 30px;
+}
+
+.response-format-label {
+    font-weight: 500;
+    color: var(--acme-dark-blue);
+    font-size: 14px;
+    white-space: nowrap;
+    line-height: 30px;
+    min-width: 120px; /* Consistent label width */
+}
+
+.slider-container {
+    display: flex;
+    align-items: center;
+    gap: 6px; /* Decreased from 10px */
+}
+
+.slider-option {
+    font-weight: 500;
+    color: var(--acme-dark-blue);
+    font-size: 14px;
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+
+.slider-option.active {
+    color: var(--acme-green);
+    font-weight: 700;
+}
+
+.response-format-slider {
+    position: relative;
+    width: 60px;
+    height: 30px;
+    background: var(--acme-gray);
+    border-radius: 15px;
+    border: 2px solid var(--acme-light-blue);
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
+    flex-shrink: 0;
+}
+
+.response-format-slider::before {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 22px;
+    height: 22px;
+    background: linear-gradient(135deg, var(--acme-blue), var(--acme-green));
+    border-radius: 50%;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 2px 6px rgba(0, 70, 173, 0.3);
+}
+
+.response-format-slider.json::before {
+    transform: translateX(30px);
+    background: linear-gradient(135deg, var(--acme-green), var(--acme-dark-blue));
+}
+
+.response-format-slider:hover {
+    border-color: var(--acme-green);
+    box-shadow: 0 0 15px rgba(0, 166, 81, 0.3);
+}
+
+/* Style the metadata slider area with Acme colors */
+.metadata-slider-container {
+    display: flex;
+    align-items: center;
+    gap: 4px; /* Decreased from 8px */
+    height: 30px;
+}
+
+.metadata-slider-label {
+    font-weight: 500;
+    color: var(--acme-dark-blue);
+    font-size: 14px;
+    white-space: nowrap;
+    line-height: 30px;
+    min-width: 120px; /* Consistent label width */
+}
+
+.metadata-slider-option {
+    font-weight: 500;
+    color: var(--acme-dark-blue);
+    font-size: 14px;
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+
+.metadata-slider-option.active {
+    color: var(--acme-green);
+    font-weight: 700;
+}
+
+.metadata-slider {
+    position: relative;
+    width: 60px;
+    height: 30px;
+    background: var(--acme-gray);
+    border-radius: 15px;
+    border: 2px solid var(--acme-light-blue);
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
+    flex-shrink: 0;
+}
+
+.metadata-slider::before {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 22px;
+    height: 22px;
+    background: linear-gradient(135deg, var(--acme-blue), var(--acme-green));
+    border-radius: 50%;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 2px 6px rgba(0, 70, 173, 0.3);
+}
+
+.metadata-slider.yes::before {
+    transform: translateX(30px);
+    background: linear-gradient(135deg, var(--acme-green), var(--acme-dark-blue));
+}
+
+.metadata-slider.no::before {
+    transform: translateX(0px);
+    background: linear-gradient(135deg, var(--acme-blue), var(--acme-green));
+}
+
+.metadata-slider:hover {
+    border-color: var(--acme-green);
+    box-shadow: 0 0 15px rgba(0, 166, 81, 0.3);
+}
+
+/* Align button with other form elements */
+.button-container {
+    display: flex;
+    align-items: center;
+    margin-left: auto; /* Push button to the right */
+}
+
+/* Acme branded title */
+h1 {
+    color: var(--acme-blue);
+    text-align: center;
+    margin-bottom: 25px;
+    font-size: 2.2em;
+    font-weight: 700;
+    text-shadow: 2px 2px 4px rgba(0, 70, 173, 0.1);
+}
+
+/* Acme branded top navigation */
+.top-nav {
+    background: rgba(0, 70, 173, 0.9);
+    backdrop-filter: blur(15px);
+    border-bottom: 2px solid var(--acme-green);
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 1000;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 20px;
+}
+
+.nav-home {
+    display: flex;
+    align-items: center;
+}
+
+.nav-music {
+    margin-left: auto !important;
+}
+
+.nav-music button {
+    background: none !important;
+    border: none !important;
+    cursor: pointer !important;
+    padding: 8px !important;
+    border-radius: 50%;
+    transition: all 0.3s ease;
+}
+
+.nav-music button:hover {
+    transform: scale(1.1);
+    background: rgba(0, 166, 81, 0.1) !important;
+}
+
+/* Add top padding to body to account for fixed navigation */
+body {
+    background: linear-gradient(135deg, var(--acme-blue) 0%, var(--acme-light-blue) 50%, var(--acme-green) 100%);
+    margin: 0;
+    padding: 70px 0 0 0; /* Add top padding for fixed nav */
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    min-height: 100vh;
+}
