@@ -11,7 +11,7 @@ webex_bot==1.0.4
 twilio==9.6.5
 
 # Web Framework
-streamlit==1.27.0
+# streamlit==1.37.0
 Flask==3.0.3
 altair==5.2.0
 
@@ -39,7 +39,7 @@ pyarrow==21.0.0
 orjson==3.11.0
 
 # Image Processing
-pillow==9.5.0
+pillow==11.3.0
 pytesseract
 Cartopy
 fonttools==4.59.0
