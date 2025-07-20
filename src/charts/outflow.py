@@ -1,6 +1,7 @@
 import json
 import os
 import re
+import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -11,6 +12,10 @@ from PIL import Image
 from matplotlib import transforms
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 from matplotlib.ticker import MaxNLocator
+
+# Add the project root to Python path
+project_root = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(project_root))
 
 from config import get_config
 from services.xsoar import TicketHandler
@@ -53,6 +58,13 @@ def create_graph(tickets):
         print("No tickets to plot.")
         return
 
+    # Set up enhanced plot style without grids
+    plt.style.use('default')
+
+    # Configure matplotlib fonts
+    import matplotlib
+    matplotlib.rcParams['font.family'] = ['DejaVu Sans', 'Arial Unicode MS', 'Arial']
+
     # Process data
     df = pd.DataFrame(tickets)
 
@@ -87,22 +99,23 @@ def create_graph(tickets):
     mid_index = len(sorted_sources) // 2
     pyramid_sources = sorted_sources[mid_index::-1] + sorted_sources[mid_index + 1:]
 
-    # Define Colors for impacts
+    # Define Colors for impacts with enhanced professional palette
     impact_colors = {
-        "Malicious True Positive": "#ff0000",  # Red
-        "Confirmed": "#ffa500",  # Orange
-        "Detected": "#ffd700",  # Gold
-        "Prevented": "#bfa100",  # Dark Yellow
-        "Ignore": "#000000",  # Black
-        "Testing": "#90ee90",  # Light Green
-        "Security Testing": "#006400",  # Dark Green
-        "False Positive": "#d3d3d3",  # Light Gray
-        "Benign True Positive": "#808080",  # Gray
-        "Unknown": "#add8e6"  # Light Blue
+        "Malicious True Positive": "#DC2626",  # Modern red
+        "Confirmed": "#EA580C",  # Modern orange
+        "Detected": "#CA8A04",  # Modern amber
+        "Prevented": "#16A34A",  # Modern green
+        "Ignore": "#1F2937",  # Dark gray
+        "Testing": "#10B981",  # Emerald
+        "Security Testing": "#059669",  # Dark emerald
+        "False Positive": "#9CA3AF",  # Light gray
+        "Benign True Positive": "#6B7280",  # Medium gray
+        "Unknown": "#3B82F6"  # Modern blue
     }
 
-    # Create figure and axis
-    fig, ax = plt.subplots(figsize=(14, 10))
+    # Enhanced figure with better proportions and styling
+    fig, ax = plt.subplots(figsize=(14, 10), facecolor='#f8f9fa')
+    fig.patch.set_facecolor('#f8f9fa')
 
     # Plot data
     bottom = [0] * len(pyramid_sources)
@@ -127,23 +140,19 @@ def create_graph(tickets):
             else:
                 counts.append(0)
 
-        bars = ax.barh(pyramid_sources, counts, height=0.5, left=bottom, label=impact, color=impact_colors.get(impact, "#808080"), edgecolor="black", linewidth=0.3)
+        bars = ax.barh(pyramid_sources, counts, height=0.6, left=bottom, label=impact,
+                       color=impact_colors.get(impact, "#6B7280"),
+                       edgecolor="white", linewidth=1.5, alpha=0.95)
 
-        # Add Value Labels
+        # Enhanced value labels with black circles (matching MTTR style)
         for i, count in enumerate(counts):
             if count > 0:
                 x_pos = bottom[i] + count / 2
 
-                # Get the bar color
-                bar_color = bars[i].get_facecolor()
-                # Convert RGB to grayscale to estimate brightness
-                r, g, b, _ = bar_color
-                brightness = (0.299 * r + 0.587 * g + 0.114 * b)
-
-                # Use white text for dark backgrounds, black for light backgrounds
-                text_color = 'white' if brightness < 0.5 else 'black'
-
-                ax.text(x_pos, i, str(count), ha='center', va='center', color=text_color, fontsize=12, fontweight='bold')
+                ax.text(x_pos, i, str(count), ha='center', va='center',
+                        color='white', fontsize=10, fontweight='bold',
+                        bbox=dict(boxstyle="circle,pad=0.2", facecolor='black',
+                                  alpha=0.8, edgecolor='white', linewidth=1))
 
         bottom = [b + c for b, c in zip(bottom, counts)]
 
@@ -179,37 +188,68 @@ def create_graph(tickets):
                     except Exception as e:
                         print(f"Error adding logo {logo_filename}: {e}")
 
+    # Enhanced axes styling
+    ax.set_facecolor('#ffffff')
+    ax.grid(False)  # Explicitly disable grid
+    ax.set_axisbelow(True)
+
+    # Style the spines
+    for spine in ax.spines.values():
+        spine.set_color('#CCCCCC')
+        spine.set_linewidth(1.5)
+
     ax.xaxis.set_major_locator(MaxNLocator(integer=True))
 
     # Extend the x-axis
     max_x_value = max(bottom)
     ax.set_xlim((0, max_x_value * 1.1))  # Extend 10% beyond the maximum x-value
 
-    # Add labels and title
+    # Enhanced border
+    border_width = 4
+    fig.patch.set_edgecolor('#1A237E')
+    fig.patch.set_linewidth(border_width)
+
+    # Enhanced titles and labels
+    plt.suptitle(f'Outflow Yesterday ({len(tickets)})',
+                 fontsize=20, fontweight='bold', color='#1A237E', y=0.95)
+
+    # Add labels with enhanced styling
     ax.set_yticks(range(len(pyramid_sources)))
-    ax.set_yticklabels(pyramid_sources, fontsize=12)
-    ax.set_ylabel('Ticket Type - Detection Source', fontweight='bold', fontsize=12)
-    ax.set_xlabel('Alert Counts', fontweight='bold', fontsize=10, labelpad=10)
+    ax.set_yticklabels(pyramid_sources, fontsize=10, color='#1A237E')
+    ax.set_ylabel('Ticket Type - Detection Source', fontweight='bold', fontsize=12, color='#1A237E')
+    ax.set_xlabel('Alert Counts', fontweight='bold', fontsize=12, labelpad=10, color='#1A237E')
 
-    ax.set_title(f'Outflow Yesterday ({len(tickets)})', fontweight='bold', fontsize=12)
-    ax.legend(title='Impact', loc='upper right', fontsize=10, title_fontproperties={'weight': 'bold', 'size': 10})
+    # Enhanced legend
+    legend = ax.legend(title='Impact', loc='upper right', frameon=True, fancybox=True, shadow=True,
+                       title_fontsize=12, fontsize=10)
+    legend.get_frame().set_facecolor('white')
+    legend.get_frame().set_alpha(0.95)
+    legend.get_frame().set_edgecolor('#1A237E')
+    legend.get_frame().set_linewidth(2)
 
-    # Add a thin black border around the figure
-    fig.patch.set_edgecolor('black')
-    fig.patch.set_linewidth(5)
-
-    # Add the current time to the chart
-    now_eastern = datetime.now(eastern).strftime('%m/%d/%Y %I:%M %p %Z')
+    # Enhanced timestamp with modern styling - moved to left end
     trans = transforms.blended_transform_factory(fig.transFigure, fig.transFigure)
-    plt.text(0.08, 0.03, now_eastern, ha='left', va='bottom', fontsize=10, transform=trans)
+    now_eastern = datetime.now(eastern).strftime('%m/%d/%Y %I:%M %p %Z')
+
+    plt.text(-0.1, 0.02, f"Generated@ {now_eastern}",
+             transform=trans, ha='left', va='bottom',
+             fontsize=10, color='#1A237E', fontweight='bold',
+             bbox=dict(boxstyle="round,pad=0.4", facecolor='white', alpha=0.9,
+                       edgecolor='#1A237E', linewidth=1.5))
+
+    # Add GS-DnR watermark
+    fig.text(0.99, 0.01, 'GS-DnR',
+             ha='right', va='bottom', fontsize=10,
+             alpha=0.7, color='#3F51B5', style='italic', fontweight='bold')
 
     # Adjust layout
     plt.tight_layout()
+    plt.subplots_adjust(top=0.88, bottom=0.15, left=0.08, right=0.92)
 
     today_date = datetime.now().strftime('%m-%d-%Y')
     output_path = ROOT_DIRECTORY / "web" / "static" / "charts" / today_date / "Outflow.png"
     output_path.parent.mkdir(parents=True, exist_ok=True)  # Ensure the directory exists
-    plt.savefig(output_path)
+    plt.savefig(output_path, format='png', bbox_inches='tight', pad_inches=0.2, dpi=300)
     plt.close(fig)
 
 

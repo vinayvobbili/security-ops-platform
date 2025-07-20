@@ -1,5 +1,6 @@
 import json
 import re
+import sys
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -9,6 +10,10 @@ import numpy as np
 import pandas as pd
 import pytz
 from matplotlib import transforms
+
+# Add the project root to Python path
+project_root = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(project_root))
 
 from config import get_config
 from services.xsoar import TicketHandler
@@ -28,17 +33,61 @@ with open(DETECTION_SOURCE_NAMES_ABBREVIATION_FILE, 'r') as f:
 
 def create_stacked_bar_chart(df, x_label, y_label, title):
     """Creates a stacked bar chart from a pandas DataFrame."""
-    fig, ax = plt.subplots(figsize=(20, 12))
+    # Set up enhanced plot style without grids
+    plt.style.use('default')
+
+    # Configure matplotlib fonts
+    import matplotlib
+    matplotlib.rcParams['font.family'] = ['DejaVu Sans', 'Arial Unicode MS', 'Arial']
+
+    # Enhanced figure with better proportions and styling
+    fig, ax = plt.subplots(figsize=(14, 10), facecolor='#f8f9fa')
+    fig.patch.set_facecolor('#f8f9fa')
 
     # Pivot the DataFrame to get the counts of each severity per source
     df_pivot = df.pivot_table(index='source', columns='severity', values='count', fill_value=0)
 
-    # Plot the stacked bar chart with lighter shades
-    bars = df_pivot.plot(kind='bar', stacked=True, ax=ax, color=['#6989e8', '#ffbb78', '#98df8a', '#ff9896'], width=0.3)
+    # Enhanced color palette for severity levels (updated to handle all common severity values)
+    severity_colors = {
+        "Critical": "#DC2626",      # Modern red
+        "High": "#EA580C",          # Modern orange
+        "Medium": "#CA8A04",        # Modern amber
+        "Low": "#16A34A",           # Modern green
+        "Informational": "#3B82F6", # Modern blue
+        "Info": "#3B82F6",          # Modern blue (alternative name)
+        "Unknown": "#6B7280",       # Medium gray
+        # Handle numeric severity levels
+        "4": "#DC2626",             # Critical - red
+        "3": "#EA580C",             # High - orange
+        "2": "#CA8A04",             # Medium - amber
+        "1": "#16A34A",             # Low - green
+        "0": "#3B82F6",             # Informational - blue
+        # Handle any other values
+        "": "#6B7280"               # Empty/null - gray
+    }
 
-    ax.set_xlabel(x_label)
-    ax.set_ylabel(y_label)
-    ax.set_title(title, fontweight='bold', fontsize=12)
+    # Get available severities and assign colors
+    available_severities = df_pivot.columns.tolist()
+    colors = [severity_colors.get(str(sev), "#6B7280") for sev in available_severities]
+
+    # Plot the stacked bar chart with enhanced styling
+    bars = df_pivot.plot(kind='bar', stacked=True, ax=ax, color=colors, width=0.6,
+                        edgecolor="white", linewidth=1.5, alpha=0.95)
+
+    # Enhanced axes styling
+    ax.set_facecolor('#ffffff')
+    ax.grid(False)  # Explicitly disable grid
+    ax.set_axisbelow(True)
+
+    # Style the spines
+    for spine in ax.spines.values():
+        spine.set_color('#CCCCCC')
+        spine.set_linewidth(1.5)
+
+    # Enhanced labels and title
+    ax.set_xlabel(x_label, fontweight='bold', fontsize=12, color='#1A237E', labelpad=10)
+    ax.set_ylabel(y_label, fontweight='bold', fontsize=12, color='#1A237E')
+    ax.set_title(title, fontweight='bold', fontsize=20, color='#1A237E', pad=20)
 
     # Increase the y-axis limit a few units over the max value
     max_value = df_pivot.sum(axis=1).max()
@@ -47,14 +96,34 @@ def create_stacked_bar_chart(df, x_label, y_label, title):
     # Ensure y-ticks are integers
     ax.yaxis.set_major_locator(plt.MaxNLocator(integer=True))
 
-    # Add count labels on top of each stack
+    # Enhanced value labels with black circles (matching outflow style)
     for container in bars.containers:
         for bar in container:
             height = bar.get_height()
             if height > 0:
-                ax.text(bar.get_x() + bar.get_width() / 2, bar.get_y() + height / 2, f'{int(height)}', ha='center', va='center', fontsize=10, fontweight='bold')
+                ax.text(bar.get_x() + bar.get_width() / 2, bar.get_y() + height / 2,
+                       f'{int(height)}', ha='center', va='center',
+                       color='white', fontsize=10, fontweight='bold',
+                       bbox=dict(boxstyle="circle,pad=0.2", facecolor='black',
+                               alpha=0.8, edgecolor='white', linewidth=1))
 
-    plt.xticks(rotation=45, ha='right')
+    # Enhanced legend
+    legend = ax.legend(title='Severity', loc='upper right', frameon=True, fancybox=True, shadow=True,
+                      title_fontsize=12, fontsize=10)
+    legend.get_frame().set_facecolor('white')
+    legend.get_frame().set_alpha(0.95)
+    legend.get_frame().set_edgecolor('#1A237E')
+    legend.get_frame().set_linewidth(2)
+
+    # Enhanced x-axis labels
+    ax.set_xticklabels(df_pivot.index, rotation=45, ha='right', fontsize=10, color='#1A237E')
+    ax.tick_params(axis='y', labelsize=10, colors='#1A237E')
+
+    # Enhanced border
+    border_width = 4
+    fig.patch.set_edgecolor('#1A237E')
+    fig.patch.set_linewidth(border_width)
+
     plt.tight_layout()
     return fig
 
@@ -98,22 +167,32 @@ def plot_yesterday():
     # Count the occurrences of each source and severity
     source_severity_counts = df.groupby(['source', 'severity']).size().reset_index(name='count')
 
-    # Create the stacked bar chart
+    # Create the stacked bar chart with enhanced styling
     fig = create_stacked_bar_chart(source_severity_counts, "Detection Source", "Number of Alerts", f"Inflow Yesterday ({len(tickets)})")
 
-    # Add a thin black border around the figure
-    fig.patch.set_edgecolor('black')
-    fig.patch.set_linewidth(5)
-
-    # Add the current time to the chart
-    now_eastern = datetime.now(eastern).strftime('%m/%d/%Y %I:%M %p %Z')
+    # Enhanced timestamp with modern styling - moved to left end (matching outflow style)
     trans = transforms.blended_transform_factory(fig.transFigure, fig.transFigure)
-    plt.text(0.08, 0.03, now_eastern, ha='left', va='bottom', fontsize=10, transform=trans)
+    now_eastern = datetime.now(eastern).strftime('%m/%d/%Y %I:%M %p %Z')
+
+    plt.text(0.01, 0.02, f"Generated@ {now_eastern}",
+             transform=trans, ha='left', va='bottom',
+             fontsize=10, color='#1A237E', fontweight='bold',
+             bbox=dict(boxstyle="round,pad=0.4", facecolor='white', alpha=0.9,
+                      edgecolor='#1A237E', linewidth=1.5))
+
+    # Add GS-DnR watermark (matching outflow style)
+    fig.text(0.99, 0.01, 'GS-DnR',
+             ha='right', va='bottom', fontsize=10,
+             alpha=0.7, color='#3F51B5', style='italic', fontweight='bold')
+
+    # Adjust layout
+    plt.tight_layout()
+    plt.subplots_adjust(top=0.88, bottom=0.15, left=0.08, right=0.92)
 
     today_date = datetime.now().strftime('%m-%d-%Y')
     OUTPUT_PATH = root_directory / "web" / "static" / "charts" / today_date / "Inflow Yesterday.png"
     OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(OUTPUT_PATH)
+    plt.savefig(OUTPUT_PATH, format='png', bbox_inches='tight', pad_inches=0.2, dpi=300)
     plt.close(fig)
 
     execution_time = time.time() - start_time
@@ -482,8 +561,10 @@ def create_combined_chart(expected_months, month_labels, x, ticket_types, ticket
     trans = transforms.blended_transform_factory(fig.transFigure, fig.transFigure)
     plt.text(0.05, 0.01, now_eastern, ha='left', va='bottom', fontsize=11, transform=trans)
 
+    # Save the figure
+    OUTPUT_PATH = output_dir / "Inflow Past 12 Months.png"
     plt.tight_layout()
-    fig.savefig(output_dir / "Inflow Past 12 Months.png")
+    fig.savefig(OUTPUT_PATH)
     plt.close(fig)
 
 
@@ -554,8 +635,10 @@ def create_impact_chart(expected_months, month_labels, x, CUSTOM_IMPACT_ORDER, i
     trans = transforms.blended_transform_factory(fig.transFigure, fig.transFigure)
     plt.text(0.05, 0.01, now_eastern, ha='left', va='bottom', fontsize=11, transform=trans)
 
+    # Save the figure
+    OUTPUT_PATH = output_dir / "Inflow Past 12 Months - Impact Only.png"
     plt.tight_layout()
-    fig.savefig(output_dir / "Inflow Past 12 Months - Impact Only.png")
+    fig.savefig(OUTPUT_PATH)
     plt.close(fig)
 
 
@@ -626,8 +709,10 @@ def create_ticket_type_chart(expected_months, month_labels, x, ticket_types, tic
     trans = transforms.blended_transform_factory(fig.transFigure, fig.transFigure)
     plt.text(0.05, 0.01, now_eastern, ha='left', va='bottom', fontsize=10, transform=trans)
 
+    # Save the figure
+    OUTPUT_PATH = output_dir / "Inflow Past 12 Months - Ticket Type Only.png"
     plt.tight_layout()
-    fig.savefig(output_dir / "Inflow Past 12 Months - Ticket Type Only.png")
+    fig.savefig(OUTPUT_PATH)
     plt.close(fig)
 
 
@@ -642,4 +727,4 @@ def make_chart():
 
 
 if __name__ == '__main__':
-    plot_past_60_days()
+    plot_yesterday()
