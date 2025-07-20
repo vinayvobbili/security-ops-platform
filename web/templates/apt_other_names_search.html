@@ -133,7 +133,7 @@
             cursor: pointer;
             transition: all 0.3s ease;
             box-shadow: 0 4px 15px rgba(0, 70, 173, 0.3);
-            margin-top: 10px;
+            margin: 0;
         }
 
         button[type="submit"]:hover {
@@ -236,12 +236,96 @@
             margin: 15px 0;
             font-weight: 500;
             color: var(--metlife-dark-blue);
+            height: 30px; /* Match slider height for consistent alignment */
+            line-height: 30px; /* Ensure text baseline matches */
+            font-size: 14px; /* Match slider label font size */
         }
 
         #should_include_metadata {
             margin-right: 8px;
             transform: scale(1.2);
             accent-color: var(--metlife-green);
+            position: relative;
+            top: -1px; /* Fine-tune vertical position */
+        }
+
+        /* Response Format Slider Styles */
+        .response-format-container {
+            margin: 15px 0;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            height: 30px; /* Explicit height for perfect alignment */
+        }
+
+        .response-format-label {
+            font-weight: 500;
+            color: var(--metlife-dark-blue);
+            font-size: 14px;
+            white-space: nowrap;
+            line-height: 30px; /* Match container height */
+        }
+
+        .slider-container {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .slider-option {
+            font-weight: 500;
+            color: var(--metlife-dark-blue);
+            font-size: 14px;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .slider-option.active {
+            color: var(--metlife-green);
+            font-weight: 700;
+        }
+
+        .response-format-slider {
+            position: relative;
+            width: 60px;
+            height: 30px;
+            background: var(--metlife-gray);
+            border-radius: 15px;
+            border: 2px solid var(--metlife-light-blue);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
+            flex-shrink: 0;
+        }
+
+        .response-format-slider::before {
+            content: '';
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 22px;
+            height: 22px;
+            background: linear-gradient(135deg, var(--metlife-blue), var(--metlife-green));
+            border-radius: 50%;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 2px 6px rgba(0, 70, 173, 0.3);
+        }
+
+        .response-format-slider.json::before {
+            transform: translateX(30px);
+            background: linear-gradient(135deg, var(--metlife-green), var(--metlife-dark-blue));
+        }
+
+        .response-format-slider:hover {
+            border-color: var(--metlife-green);
+            box-shadow: 0 0 15px rgba(0, 166, 81, 0.3);
+        }
+
+        /* Align button with other form elements */
+        .button-container {
+            margin: 15px 0;
+            display: flex;
+            align-items: center;
         }
 
         /* MetLife branded title */
@@ -297,8 +381,19 @@
             <input type="checkbox" id="should_include_metadata" name="should_include_metadata" value="true" {% if should_include_metadata %}checked{% endif %}>
             Include Metadata
         </label>
-        <button type="submit">Search</button>
-        <div id="spinner" class="spinner" style="display:none;"></div>
+        <div class="response-format-container">
+            <span class="response-format-label">Response Format:</span>
+            <div class="slider-container">
+                <div class="slider-option active" data-value="html">HTML</div>
+                <div class="response-format-slider html" id="responseFormatSlider"></div>
+                <div class="slider-option" data-value="json">JSON</div>
+            </div>
+            <input type="hidden" id="response_format" name="response_format" value="html">
+        </div>
+        <div class="button-container">
+            <button type="submit">Search</button>
+            <div id="spinner" class="spinner" style="display:none;"></div>
+        </div>
     </form>
 </div>
 <script src="/static/js/apt_other_names_results.js"></script>
@@ -491,6 +586,50 @@
         // Save current time on navigation away
         window.addEventListener('beforeunload', function () {
             localStorage.setItem('apt-music-current-time', audio.currentTime.toString());
+        });
+    });
+
+    // Response format slider functionality
+    const responseFormatSlider = document.getElementById('responseFormatSlider');
+    const sliderOptions = document.querySelectorAll('.slider-option');
+
+    // Add click handler to the slider itself
+    responseFormatSlider.addEventListener('click', function() {
+        const currentValue = document.getElementById('response_format').value;
+        const newValue = currentValue === 'html' ? 'json' : 'html';
+
+        // Update active class for slider options
+        sliderOptions.forEach(opt => opt.classList.remove('active'));
+        document.querySelector(`[data-value="${newValue}"]`).classList.add('active');
+
+        // Move the slider knob
+        if (newValue === 'json') {
+            responseFormatSlider.classList.add('json');
+        } else {
+            responseFormatSlider.classList.remove('json');
+        }
+
+        // Update hidden input value
+        document.getElementById('response_format').value = newValue;
+    });
+
+    sliderOptions.forEach(option => {
+        option.addEventListener('click', function () {
+            const value = this.getAttribute('data-value');
+
+            // Update active class for slider options
+            sliderOptions.forEach(opt => opt.classList.remove('active'));
+            this.classList.add('active');
+
+            // Move the slider knob
+            if (value === 'json') {
+                responseFormatSlider.classList.add('json');
+            } else {
+                responseFormatSlider.classList.remove('json');
+            }
+
+            // Update hidden input value
+            document.getElementById('response_format').value = value;
         });
     });
 </script>
