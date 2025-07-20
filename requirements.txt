@@ -1,6 +1,6 @@
 # Core Data Processing
 pandas==2.3.1
-numpy
+numpy==1.26.4
 pytz
 python-dateutil
 
@@ -11,9 +11,9 @@ webex_bot==1.0.4
 twilio==9.6.5
 
 # Web Framework
-streamlit==1.47.0
-Flask
-altair
+streamlit==1.27.0
+Flask==3.0.3
+altair==5.2.0
 
 # HTTP/Network
 requests==2.32.4
@@ -39,7 +39,7 @@ pyarrow==21.0.0
 orjson==3.11.0
 
 # Image Processing
-pillow==11.3.0
+pillow==9.5.0
 pytesseract
 Cartopy
 fonttools==4.59.0
