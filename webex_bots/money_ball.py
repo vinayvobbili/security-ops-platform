@@ -58,7 +58,7 @@ bot_start_time: datetime | None = None
 # Timezone constant for consistent usage
 EASTERN_TZ = ZoneInfo("America/New_York")
 
-# Fun chart-related messages and achievements
+# Fun chart-related messages
 CHART_MESSAGES = [
     "📊 Chart magic in progress...",
     "🎨 Creating visual masterpieces...",
@@ -66,15 +66,6 @@ CHART_MESSAGES = [
     "🎯 Targeting chart perfection...",
     "🔥 Brewing some hot metrics..."
 ]
-
-ACHIEVEMENT_MESSAGES = {
-    "first_time": "🎉 **First Timer!** Welcome to the MoneyBall experience!",
-    "chart_collector": "📊 **Chart Collector!** You've requested {count} charts today!",
-    "data_explorer": "🕵️ **Data Explorer!** You're diving deep into the metrics!",
-    "weekend_warrior": "⚔️ **Weekend Warrior!** Working hard even on weekends!",
-    "early_bird": "🐦 **Early Bird!** Up bright and early for some data insights!",
-    "night_owl": "🦉 **Night Owl!** Burning the midnight oil with metrics!"
-}
 
 
 # Define command classes
@@ -338,7 +329,11 @@ def send_chart(room_id, display_name, chart_name, chart_filename):
             )
             return
 
-        success_msg = f"📊 **{display_name}, here's the latest {chart_name} chart!**"
+        # Add fun loading message
+        loading_message = get_random_chart_message()
+
+        # Build the success message
+        success_msg = f"{loading_message}\n\n📊 **{display_name}, here's the latest {chart_name} chart!**"
 
         webex_api.messages.create(
             roomId=room_id,
@@ -425,33 +420,6 @@ def run_bot_with_reconnection():
 def get_random_chart_message():
     """Get a random fun chart loading message."""
     return random.choice(CHART_MESSAGES)
-
-
-def get_achievement_message(user_name, chart_count=1):
-    """Generate achievement messages based on usage patterns."""
-    current_time = datetime.now(EASTERN_TZ)
-    hour = current_time.hour
-    weekday = current_time.weekday()
-
-    achievements = []
-
-    # Time-based achievements
-    if 5 <= hour <= 8:
-        achievements.append(ACHIEVEMENT_MESSAGES["early_bird"])
-    elif 22 <= hour or hour <= 2:
-        achievements.append(ACHIEVEMENT_MESSAGES["night_owl"])
-
-    # Weekend achievement
-    if weekday >= 5:  # Saturday = 5, Sunday = 6
-        achievements.append(ACHIEVEMENT_MESSAGES["weekend_warrior"])
-
-    # Chart count achievements
-    if chart_count >= 5:
-        achievements.append(ACHIEVEMENT_MESSAGES["chart_collector"].format(count=chart_count))
-    elif chart_count == 1:
-        achievements.append(ACHIEVEMENT_MESSAGES["first_time"])
-
-    return achievements
 
 
 def main():
