@@ -26,7 +26,7 @@ body {
     background: rgba(0, 70, 173, 0.9); /* MetLife blue with transparency */
     backdrop-filter: blur(15px);
     border-bottom: 2px solid var(--metlife-green);
-    padding: 12px 20px;
+    padding: 12px 15px; /* Reduced right padding to move burger left */
     position: fixed;
     top: 0;
     left: 0;
@@ -37,10 +37,11 @@ body {
 
 .nav-burger {
     cursor: pointer;
-    padding: 8px;
+    padding: 10px; /* Increased padding for bigger clickable area */
     border-radius: 8px;
     transition: all 0.3s ease;
     display: inline-block;
+    margin-left: -5px; /* Move burger slightly left */
 }
 
 .nav-burger:hover {
@@ -49,9 +50,8 @@ body {
 }
 
 .nav-icon {
-    width: 28px;
-    height: 28px;
-    filter: invert(1);
+    width: 34px; /* Increased from 28px for better visibility */
+    height: 34px; /* Increased from 28px for better visibility */
     transition: transform 0.3s ease;
 }
 
@@ -63,7 +63,7 @@ body {
 .burger-menu-content {
     position: absolute;
     top: 100%;
-    left: 20px;
+    left: 0; /* Moved to very left - changed from 20px to 0 */
     background: rgba(255, 255, 255, 0.98);
     backdrop-filter: blur(20px);
     border-radius: 12px;
@@ -281,43 +281,44 @@ body {
 /* Enhanced Audio Controls with MetLife styling - Made more prominent */
 .audio-controls {
     position: fixed;
-    top: 20px;
-    right: 20px;
+    top: 10px; /* Moved further up - reduced from 15px to 10px */
+    right: 10px; /* Moved further right - reduced from 15px to 10px */
     z-index: 2000;
 }
 
 .audio-controls button {
-    background: rgba(0, 70, 173, 0.8); /* Increased opacity from 0.3 to 0.8 */
-    border: 3px solid var(--metlife-green); /* Thicker border from 2px to 3px */
+    background: rgba(0, 70, 173, 0.8);
+    border: 3px solid var(--metlife-green);
     border-radius: 50%;
-    padding: 15px; /* Increased padding from 12px to 15px */
+    padding: 10px; /* Reduced padding from 15px to 10px for smaller circle */
     cursor: pointer;
     backdrop-filter: blur(10px);
     transition: all 0.3s ease;
-    width: 55px; /* Increased from 45px */
-    height: 55px; /* Increased from 45px */
+    width: 45px; /* Reduced from 55px to 45px for smaller circle */
+    height: 45px; /* Reduced from 55px to 45px for smaller circle */
     display: flex;
     align-items: center;
     justify-content: center;
-    box-shadow: 0 4px 15px rgba(0, 166, 81, 0.4); /* Added shadow for prominence */
+    box-shadow: 0 4px 15px rgba(0, 166, 81, 0.4);
 }
 
 .audio-controls button:hover {
-    background: rgba(0, 166, 81, 0.9); /* Increased hover opacity */
-    transform: scale(1.2); /* Increased scale from 1.1 to 1.2 */
-    box-shadow: 0 8px 25px rgba(0, 166, 81, 0.8); /* Enhanced hover shadow */
-    border-color: white; /* White border on hover for contrast */
+    background: rgba(0, 166, 81, 0.9);
+    transform: scale(1.2) rotate(15deg); /* Added rotation magic like hamburger */
+    box-shadow: 0 8px 25px rgba(0, 166, 81, 0.8);
+    border-color: white;
 }
 
 .music-icon {
-    width: 28px; /* Increased from 22px */
-    height: 28px; /* Increased from 22px */
+    width: 28px;
+    height: 28px;
     filter: invert(1);
     transition: all 0.3s ease;
 }
 
 .audio-controls button:hover .music-icon {
-    transform: scale(1.2); /* Increased icon scale on hover */
+    transform: scale(1.2) rotate(-15deg); /* Counter-rotate the icon for extra magic */
+    filter: invert(1) drop-shadow(0 0 8px rgba(255, 255, 255, 0.8)); /* Add glow effect */
 }
 
 /* Floating particles background effect */
