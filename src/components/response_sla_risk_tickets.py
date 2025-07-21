@@ -111,20 +111,33 @@ def process_ticket(ticket):
         return 0, ticket, timetorespond  # Treat as urgent if we can't calculate
 
 
-def build_ticket_message(minutes_remaining, ticket, timetorespond, shift_lead):
+def build_ticket_message(minutes_remaining, ticket, timetorespond, index):
     """Build formatted message for a single ticket."""
     ticket_id = ticket.get('id')
     ticket_name = ticket.get('name') or ticket.get('title') or 'No Title'
+    ticket_owner = ticket.get('owner')
     incident_url = CONFIG.xsoar_prod_ui_base_url + '/Custom/caseinfoid/' + ticket_id
-    sla_minutes = timetorespond.get('sla', 'Unknown')
 
-    # Get urgency indicators
-    urgency_emoji = get_urgency_emoji(minutes_remaining)
-    time_remaining_text = format_time_remaining(minutes_remaining)
+    # Format owner information
+    if ticket_owner:
+        owner_text = ticket_owner.split('@')[0]  # Remove domain part if email
+    else:
+        owner_text = "Unassigned"
+
+    # Format time remaining
+    if minutes_remaining <= 0:
+        time_text = "OVERDUE"
+    else:
+        hours = minutes_remaining // 60
+        mins = minutes_remaining % 60
+        if hours > 0:
+            time_text = f"{hours}h {mins}m"
+        else:
+            time_text = f"{minutes_remaining} min{'s' if minutes_remaining != 1 else ''}"
 
     return (
-        f"{urgency_emoji} [**{ticket_id}**]({incident_url}) - {ticket_name}\n"
-        f"   └─ **SLA:** {sla_minutes} mins | **Time remaining:** {time_remaining_text} | **Shift Lead:** {shift_lead}"
+        f"{index}. [{ticket_id}]({incident_url}) - {ticket_name}\n"
+        f"   {owner_text}, act within {time_text}"
     )
 
 
@@ -178,37 +191,19 @@ def start(room_id):
 
         # Build messages for each ticket
         messages = []
-        for minutes_remaining, ticket, timetorespond in processed_tickets:
-            message = build_ticket_message(minutes_remaining, ticket, timetorespond, shift_lead)
+        for index, (minutes_remaining, ticket, timetorespond) in enumerate(processed_tickets, start=1):
+            message = build_ticket_message(minutes_remaining, ticket, timetorespond, index)
             messages.append(message)
 
-        # Create header with urgency metrics
-        urgent_count = sum(1 for minutes, _, _ in processed_tickets if minutes <= CRITICAL_THRESHOLD)
-        total_count = len(processed_tickets)
-
-        if urgent_count > 0:
-            header_emoji = "🚨"
-            urgency_text = f"({urgent_count} critically urgent)"
-        else:
-            header_emoji = "⚠️"
-            urgency_text = ""
-
-        # Compose final message
-        markdown_header = (
-            f"## {header_emoji} Tickets at risk of Response SLA breach {urgency_text}\n"
-            f"**Shift Lead:** {shift_lead} | **Total tickets at risk:** {total_count}"
-        )
+        # Create simplified header
+        markdown_header = "🚨 Tickets at risk of breaching Response SLA"
         markdown_message = "\n\n".join(messages)
-        footer = (
-            f"\n\n---\n💡 **Action required:** {shift_lead}, please review and take immediate action "
-            f"on tickets marked with 🚨 or 🔥 (≤{CRITICAL_THRESHOLD} min{'s' if CRITICAL_THRESHOLD != 1 else ''} remaining)"
-        )
 
         # Send notification
         webex_api.messages.create(
             roomId=room_id,
-            text=f"Tickets at risk of breaching response SLA - {total_count} tickets",
-            markdown=f"{markdown_header}\n\n{markdown_message}{footer}"
+            text=f"Tickets at risk of breaching response SLA - {len(processed_tickets)} tickets",
+            markdown=f"{markdown_header}\n\n{markdown_message}"
         )
 
     except Exception as e:
