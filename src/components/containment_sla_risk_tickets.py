@@ -19,9 +19,18 @@ WARNING_THRESHOLD = 2  # Warning urgency if <= 2 minutes remaining
 
 
 def parse_due_date(due_date_str):
-    """Parse due date string with multiple format support."""
+    """Parse due date string with multiple format support, including nanoseconds."""
     if not due_date_str:
         return None
+
+    # Handle nanosecond precision by truncating to microseconds
+    if '.' in due_date_str:
+        date_part, frac_part = due_date_str.split('.', 1)
+        if 'Z' in frac_part:
+            frac_digits, z = frac_part.split('Z', 1)
+            # Truncate or pad to 6 digits for microseconds
+            frac_digits = (frac_digits + '000000')[:6]
+            due_date_str = f"{date_part}.{frac_digits}Z"
 
     formats = [
         "%Y-%m-%dT%H:%M:%S.%fZ",  # With microseconds
@@ -33,8 +42,9 @@ def parse_due_date(due_date_str):
             return datetime.strptime(due_date_str, fmt).replace(tzinfo=pytz.utc)
         except ValueError:
             continue
-
-    raise ValueError(f"Unable to parse date format: {due_date_str}")
+    # If parsing fails, log and return None
+    logger.error(f"Unable to parse date format: {due_date_str}")
+    return None
 
 
 def calculate_minutes_remaining(due_date_utc):
