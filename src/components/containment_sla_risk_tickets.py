@@ -48,10 +48,10 @@ def parse_due_date(due_date_str):
 
 
 def calculate_minutes_remaining(due_date_utc):
-    """Calculate minutes remaining until SLA breach."""
+    """Calculate seconds remaining until SLA breach."""
     now_utc = datetime.now(pytz.utc)
     delta = due_date_utc - now_utc
-    return int(delta.total_seconds() // 60)
+    return int(delta.total_seconds())
 
 
 def format_time_remaining(minutes):
@@ -87,19 +87,19 @@ def process_ticket(ticket):
     try:
         if due_date_str:
             due_date_utc = parse_due_date(due_date_str)
-            minutes_remaining = calculate_minutes_remaining(due_date_utc)
+            seconds_remaining = calculate_minutes_remaining(due_date_utc)
         else:
             logger.warning(f"No due date found for ticket {ticket_id}")
-            minutes_remaining = 0  # Treat as urgent if no due date
+            seconds_remaining = 0  # Treat as urgent if no due date
 
-        return minutes_remaining, ticket, timetocontain
+        return seconds_remaining, ticket, timetocontain
 
     except Exception as e:
         logger.error(f"Error processing ticket {ticket_id}: {e}")
         return 0, ticket, timetocontain  # Treat as urgent if we can't calculate
 
 
-def build_ticket_message(minutes_remaining, ticket, timetocontain, index):
+def build_ticket_message(seconds_remaining, ticket, timetocontain, index):
     """Build formatted message for a single ticket."""
     ticket_id = ticket.get('id')
     ticket_name = ticket.get('name') or ticket.get('title') or 'No Title'
@@ -108,15 +108,34 @@ def build_ticket_message(minutes_remaining, ticket, timetocontain, index):
 
     # Format owner information
     if ticket_owner:
-        owner_text = ticket_owner.split('@')[0]  # Remove domain part if email
+        # Use Webex person email format to make it clickable
+        if '@' in ticket_owner:
+            owner_text = f"<@personEmail:{ticket_owner}>"
+        else:
+            # If it's just a username, assume it's the part before @ and add domain if needed
+            owner_text = ticket_owner
     else:
         owner_text = "Unassigned"
 
     # Format time remaining
-    if minutes_remaining <= 0:
-        time_text = "OVERDUE"
+    if seconds_remaining <= 0:
+        # Calculate overdue time in minutes and seconds
+        total_overdue_seconds = abs(seconds_remaining)
+        overdue_minutes = total_overdue_seconds // 60
+        overdue_seconds = total_overdue_seconds % 60
+
+        if overdue_minutes > 0:
+            time_text = f"OVERDUE by {overdue_minutes} min{'s' if overdue_minutes != 1 else ''} {overdue_seconds} sec{'s' if overdue_seconds != 1 else ''}"
+        else:
+            time_text = f"OVERDUE by {overdue_seconds} sec{'s' if overdue_seconds != 1 else ''}"
     else:
-        time_text = f"{minutes_remaining} min{'s' if minutes_remaining != 1 else ''}"
+        # Convert seconds to minutes for display when not overdue
+        minutes = seconds_remaining // 60
+        seconds = seconds_remaining % 60
+        if minutes > 0:
+            time_text = f"the next {minutes} min{'s' if minutes != 1 else ''} {seconds} sec{'s' if seconds != 1 else ''}"
+        else:
+            time_text = f"the next {seconds} sec{'s' if seconds != 1 else ''}"
 
     return (
         f"{index}. [{ticket_id}]({incident_url}) - {ticket_name}\n"
@@ -144,20 +163,20 @@ def start(room_id):
         # Process all tickets and calculate urgency
         processed_tickets = []
         for ticket in tickets:
-            minutes_remaining, ticket_data, timetocontain = process_ticket(ticket)
-            processed_tickets.append((minutes_remaining, ticket_data, timetocontain))
+            seconds_remaining, ticket_data, timetocontain = process_ticket(ticket)
+            processed_tickets.append((seconds_remaining, ticket_data, timetocontain))
 
         # Sort by urgency (least time remaining first)
         processed_tickets.sort(key=lambda x: x[0])
 
         # Build messages for each ticket
         messages = []
-        for index, (minutes_remaining, ticket, timetocontain) in enumerate(processed_tickets, start=1):
-            message = build_ticket_message(minutes_remaining, ticket, timetocontain, index)
+        for index, (seconds_remaining, ticket, timetocontain) in enumerate(processed_tickets, start=1):
+            message = build_ticket_message(seconds_remaining, ticket, timetocontain, index)
             messages.append(message)
 
         # Create simplified header
-        markdown_header = "🚨 Tickets at risk of breaching Containment SLA"
+        markdown_header = "🚨 Tickets at risk of breaching Containment SLA ⏰"
         markdown_message = "\n\n".join(messages)
 
         # Send notification
