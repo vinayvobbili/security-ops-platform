@@ -477,7 +477,7 @@ class GetBotHealth(Command):
     def __init__(self):
         super().__init__(
             command_keyword="bot_status",
-            help_message="Check bot health 🌡️",
+            help_message="Bot Health 🌡️",
             delete_previous_message=True,
         )
 

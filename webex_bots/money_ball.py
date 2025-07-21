@@ -211,7 +211,7 @@ class HelpCommand(Command):
         return f"{activity['actor']['displayName']}, here are the available commands:\n" + "\n".join(keywords)
 
 
-class BotStatusCommand(Command):
+class GetBotHealth(Command):
     """Command to check bot health and status."""
 
     def __init__(self):
@@ -389,7 +389,7 @@ def run_bot_with_reconnection():
             # bot.add_command(QRadarRuleEfficacy())
             bot.add_command(ReimagedHostDetails())
             bot.add_command(GetAgingTicketsByOwnerReport())
-            bot.add_command(BotStatusCommand())
+            bot.add_command(GetBotHealth())
             bot.add_command(HelpCommand())
 
             print("📊 MoneyBall is up and running with enhanced features...")
