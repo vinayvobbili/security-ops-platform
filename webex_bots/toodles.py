@@ -1326,7 +1326,7 @@ class CreateAZDOWorkItem(Command):
     def __init__(self):
         super().__init__(
             command_keyword="azdo_wit",
-            help_message="Create AZDO Work Item",
+            help_message="Create AZDO Work Item 💼",
             card=AZDO_CARD,
             delete_previous_message=True
         )
@@ -1412,7 +1412,7 @@ class GetApprovedTestingCard(Command):
     def __init__(self):
         super().__init__(
             command_keyword="testing",
-            help_message="Submit Approved Testing",
+            help_message="Submit Approved Testing 🧪",
             card=APPROVED_TESTING_CARD,
             delete_previous_message=True
         )
@@ -1679,7 +1679,7 @@ class Who(Command):
     def __init__(self):
         super().__init__(
             command_keyword="who",
-            help_message="On-Call",
+            help_message="On-Call ☎️",
             card=None,
             delete_previous_message=False  # Keep the welcome card visible
         )
@@ -1981,13 +1981,13 @@ def signal_handler(_sig, _frame):
     sys.exit(0)
 
 
-class BotStatusCommand(Command):
+class GetBotHealth(Command):
     """Command to check bot health and status."""
 
     def __init__(self):
         super().__init__(
             command_keyword="bot_status",
-            help_message="🔍 Check Health 🩺",
+            help_message="Check Health 🩺",
             delete_previous_message=True,
         )
 
@@ -2102,7 +2102,7 @@ def run_bot_with_reconnection():
             bot.add_command(GetSearchXSOARCard())
             bot.add_command(FetchXSOARTickets())
             bot.add_command(GetCompanyHolidays())
-            bot.add_command(BotStatusCommand())
+            bot.add_command(GetBotHealth())
 
             print("🛠️ Toodles is up and running with enhanced features...")
             logger.info(f"Bot started successfully at {bot_start_time}")
