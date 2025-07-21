@@ -1987,7 +1987,7 @@ class GetBotHealth(Command):
     def __init__(self):
         super().__init__(
             command_keyword="bot_status",
-            help_message="Check Health 🩺",
+            help_message="Check Health 🩺🏥",
             delete_previous_message=True,
         )
 
