@@ -58,12 +58,55 @@ def read_excel_file(file_path: Path) -> pd.DataFrame:
 
 
 def write_excel_file(df: pd.DataFrame, file_path: Path) -> None:
-    """Write DataFrame to an Excel file."""
+    """Write DataFrame to an Excel file with professional formatting."""
     try:
         # Ensure directory exists
         file_path.parent.mkdir(parents=True, exist_ok=True)
-        df.to_excel(file_path, index=False, engine="openpyxl")
-        logger.info(f"Successfully wrote {len(df)} records to {file_path}")
+
+        # Create Excel writer with openpyxl engine
+        with pd.ExcelWriter(file_path, engine="openpyxl") as writer:
+            df.to_excel(writer, index=False, sheet_name="Hosts Without Ring Tags")
+
+            # Get the workbook and worksheet
+            workbook = writer.book
+            worksheet = writer.sheets["Hosts Without Ring Tags"]
+
+            # Format the header row
+            from openpyxl.styles import Font, PatternFill
+            from openpyxl.utils import get_column_letter
+
+            # Bold the header row
+            header_font = Font(bold=True)
+            header_fill = PatternFill(start_color="D3D3D3", end_color="D3D3D3", fill_type="solid")
+
+            for col_num in range(1, len(df.columns) + 1):
+                cell = worksheet.cell(row=1, column=col_num)
+                cell.font = header_font
+                cell.fill = header_fill
+
+            # Freeze the top row
+            worksheet.freeze_panes = "A2"
+
+            # Add autofilter
+            worksheet.auto_filter.ref = f"A1:{get_column_letter(len(df.columns))}{len(df) + 1}"
+
+            # Auto-adjust column widths
+            for column in worksheet.columns:
+                max_length = 0
+                column_letter = get_column_letter(column[0].column)
+
+                for cell in column:
+                    try:
+                        if len(str(cell.value)) > max_length:
+                            max_length = len(str(cell.value))
+                    except:
+                        pass
+
+                # Set a reasonable minimum and maximum width
+                adjusted_width = min(max(max_length + 2, 10), 50)
+                worksheet.column_dimensions[column_letter].width = adjusted_width
+
+        logger.info(f"Successfully wrote {len(df)} records to {file_path} with formatting")
     except PermissionError:
         logger.error(f"Permission denied when writing to {file_path}")
         raise
