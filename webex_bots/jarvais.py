@@ -231,7 +231,7 @@ class CSHostsWithoutRingTag(Command):
     def __init__(self):
         super().__init__(
             command_keyword="cs_no_ring_tag",
-            help_message="Get CS Hosts without a Ring Tag",
+            help_message="Get CS Hosts without a Ring Tag 🛡️💍",
             delete_previous_message=False,  # Keep the command visible for reuse
         )
 
@@ -241,7 +241,7 @@ class CSHostsWithoutRingTag(Command):
         loading_msg = get_random_loading_message()
         webex_api.messages.create(
             roomId=room_id,
-            markdown=f"Hello {activity['actor']['displayName']}! {loading_msg}\n\n🏷️ **Generating a report of CS Hosts Without Ring Tag**\nEstimated completion: ~5 minutes ⏰"
+            markdown=f"Hello {activity['actor']['displayName']}! {loading_msg}\n\n🛡️ **CrowdStrike Hosts Without Ring Tag Report** 🏷️\nEstimated completion: ~5 minutes ⏰"
         )
         lock_path = ROOT_DIRECTORY / "src" / "epp" / "cs_hosts_without_ring_tag.lock"
         with fasteners.InterProcessLock(lock_path):
@@ -288,7 +288,7 @@ class CSHostsWithInvalidRingTags(Command):
     def __init__(self):
         super().__init__(
             command_keyword="cs_invalid_ring_tag",
-            help_message="Get CS Servers with Invalid Ring Tags",
+            help_message="Get CS Servers with Invalid Ring Tags 🛡️❌💍",
             delete_previous_message=True,
         )
 
@@ -390,7 +390,7 @@ class GetTaniumHostsWithoutRingTag(Command):
     def __init__(self):
         super().__init__(
             command_keyword="tanium_hosts_without_ring_tag",
-            help_message="Get Tanium Hosts without a Ring Tag",
+            help_message="Get Tanium Hosts without a Ring Tag 🔍💍",
             delete_previous_message=True,
         )
 
@@ -402,7 +402,7 @@ class GetTaniumHostsWithoutRingTag(Command):
         if not filepath.exists():
             webex_api.messages.create(
                 roomId=room_id,
-                markdown=f"Hello {activity['actor']['displayName']}! I've started the report generation process for Tanium Hosts without a ring tag. It is running in the background and will complete in about 15 mins",
+                markdown=f"Hello {activity['actor']['displayName']}! 🔍 **Tanium Hosts Without Ring Tag Report** 🏷️\n\nI've started the report generation process. It is running in the background and will complete in about 15 mins ⏰",
             )
             lock_path = ROOT_DIRECTORY / "src" / "epp" / "all_tanium_hosts.lock"
             with fasteners.InterProcessLock(lock_path):
@@ -439,7 +439,7 @@ class GetTaniumUnhealthyHosts(Command):
     def __init__(self):
         super().__init__(
             command_keyword="tanium_unhealthy_hosts",
-            help_message="Get Tanium Unhealthy Hosts",
+            help_message="Get Tanium Unhealthy Hosts 🔍🤒",
             delete_previous_message=True,
         )
 
@@ -462,13 +462,13 @@ def signal_handler(_sig, _frame):
     sys.exit(0)
 
 
-class BotStatusCommand(Command):
+class GetBotHealth(Command):
     """Command to check bot health and status."""
 
     def __init__(self):
         super().__init__(
             command_keyword="bot_status",
-            help_message="🔍 Check bot health and status",
+            help_message="Check bot health 🌡️",
             delete_previous_message=True,
         )
 
@@ -569,7 +569,7 @@ def run_bot_with_reconnection():
             bot.add_command(DontRemoveInvalidRings())
             bot.add_command(GetTaniumHostsWithoutRingTag())
             bot.add_command(GetTaniumUnhealthyHosts())
-            bot.add_command(BotStatusCommand())
+            bot.add_command(GetBotHealth())
 
             print("🤖 Jarvais is up and running with enhanced features...")
             logger.info(f"Bot started successfully at {bot_start_time}")
