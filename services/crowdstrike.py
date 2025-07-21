@@ -15,10 +15,14 @@ import tqdm
 
 from falconpy import Hosts, OAuth2
 from config import get_config
+from src.utils.http_utils import get_session
 
 DATA_DIR = Path(__file__).parent.parent / "data" / "transient" / "epp_device_tagging"
 SHOULD_USE_PROXY = True
 CS_FETCH_MAX_WORKERS = 10
+
+# Get robust HTTP session instance
+http_session = get_session()
 
 
 class CrowdStrikeClient:
@@ -71,7 +75,9 @@ class CrowdStrikeClient:
             'client_secret': client_secret
         }
 
-        response = requests.post(url, data=body, verify=False, proxies=self.proxies)
+        response = http_session.post(url, data=body, verify=False, proxies=self.proxies)
+        if response is None:
+            raise requests.exceptions.ConnectionError("Failed to connect after multiple retries")
         response.raise_for_status()
         return response.json()['access_token']
 

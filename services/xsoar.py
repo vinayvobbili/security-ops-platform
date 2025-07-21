@@ -9,9 +9,13 @@ import logging
 import requests
 
 from config import get_config
+from src.utils.http_utils import get_session
 
 CONFIG = get_config()
 log = logging.getLogger(__name__)
+
+# Get robust HTTP session instance
+http_session = get_session()
 
 prod_headers = {
     'Authorization': CONFIG.xsoar_prod_auth_key,
@@ -29,7 +33,9 @@ dev_headers = {
 def get_incident(incident_id):
     """Fetch incident details from prod environment"""
     incident_url = f"{CONFIG.xsoar_prod_api_base_url}/incident/load/{incident_id}"
-    response = requests.get(incident_url, headers=prod_headers, verify=False, timeout=30)
+    response = http_session.get(incident_url, headers=prod_headers, verify=False, timeout=30)
+    if response is None:
+        raise requests.exceptions.ConnectionError("Failed to connect after multiple retries")
     response.raise_for_status()
     return response.json()
 
@@ -70,31 +76,37 @@ class TicketHandler:
         if period:
             payload["filter"]["period"] = period
 
-        response = requests.post(
+        response = http_session.post(
             f"{self.prod_base}/incidents/search",
             headers=prod_headers,
             json=payload,
             timeout=300,
             verify=False
         )
+        if response is None:
+            raise requests.exceptions.ConnectionError("Failed to connect after multiple retries")
         response.raise_for_status()
         return response.json().get('data', [])
 
     def get_entries(self, incident_id):
         """Fetch entries (comments, notes) for a given incident"""
-        response = requests.get(
+        response = http_session.get(
             f"{self.prod_base}/incidents/{incident_id}/entries",
             headers=prod_headers,
             timeout=60,
             verify=False
         )
+        if response is None:
+            raise requests.exceptions.ConnectionError("Failed to connect after multiple retries")
         response.raise_for_status()
         return response.json().get('data', [])
 
     def create(self, payload):
         """Create a new incident in prod XSOAR"""
         payload.update({"all": True, "createInvestigation": True, "force": True})
-        response = requests.post(f"{self.prod_base}/incident", headers=prod_headers, json=payload)
+        response = http_session.post(f"{self.prod_base}/incident", headers=prod_headers, json=payload)
+        if response is None:
+            raise requests.exceptions.ConnectionError("Failed to connect after multiple retries")
         response.raise_for_status()
         return response.json()
 
@@ -107,7 +119,10 @@ class TicketHandler:
 
         payload.update({"all": True, "createInvestigation": True, "force": True})
 
-        response = requests.post(f"{self.dev_base}/incident", headers=dev_headers, json=payload)
+        response = http_session.post(f"{self.dev_base}/incident", headers=dev_headers, json=payload)
+
+        if response is None:
+            return {"error": "Failed to connect after multiple retries"}
 
         if response.ok:
             return response.json()
@@ -121,7 +136,9 @@ class ListHandler:
 
     def get_all_lists(self):
         """Get all lists from XSOAR"""
-        response = requests.get(f"{self.base_url}/lists", headers=prod_headers)
+        response = http_session.get(f"{self.base_url}/lists", headers=prod_headers)
+        if response is None:
+            raise requests.exceptions.ConnectionError("Failed to connect after multiple retries")
         response.raise_for_status()
         return response.json()
 
@@ -152,7 +169,9 @@ class ListHandler:
             "version": list_version
         }
 
-        response = requests.post(f"{self.base_url}/lists/save", headers=prod_headers, json=payload)
+        response = http_session.post(f"{self.base_url}/lists/save", headers=prod_headers, json=payload)
+        if response is None:
+            raise requests.exceptions.ConnectionError("Failed to connect after multiple retries")
         response.raise_for_status()
 
     def save_as_text(self, list_name, list_data):
@@ -165,7 +184,9 @@ class ListHandler:
             "id": list_name,
             "version": list_version
         }
-        response = requests.post(f"{self.base_url}/lists/save", headers=prod_headers, json=payload)
+        response = http_session.post(f"{self.base_url}/lists/save", headers=prod_headers, json=payload)
+        if response is None:
+            raise requests.exceptions.ConnectionError("Failed to connect after multiple retries")
         response.raise_for_status()
 
     def add_item_to_list(self, list_name, new_entry):

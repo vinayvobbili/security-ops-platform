@@ -5,6 +5,7 @@ import signal
 import sys
 import threading
 import time
+import asyncio
 from datetime import datetime, timedelta
 from pathlib import Path
 from urllib.parse import quote
@@ -32,12 +33,33 @@ from services.approved_testing_utils import add_approved_testing_entry
 from services.crowdstrike import CrowdStrikeClient
 from services.xsoar import ListHandler, TicketHandler
 from src.utils.logging_utils import log_activity
+from src.utils.http_utils import get_session
 
 CONFIG = get_config()
 ROOT_DIRECTORY = Path(__file__).parent.parent
 
+# Get robust HTTP session instance
+http_session = get_session()
+
 # Ensure logs directory exists
 (ROOT_DIRECTORY / "logs").mkdir(exist_ok=True)
+
+
+# Custom exception handler for asyncio
+def handle_asyncio_exception(loop, context):
+    """Custom exception handler for asyncio to handle connection errors gracefully"""
+    exception = context.get('exception')
+    if exception:
+        if isinstance(exception, (ConnectionResetError, ConnectionError)):
+            logger.warning(f"Connection error handled gracefully: {exception}")
+            return
+        elif "Connection reset by peer" in str(exception):
+            logger.warning(f"Connection reset error handled: {exception}")
+            return
+
+    # For other exceptions, use default handling
+    logger.error(f"Asyncio exception: {context}")
+
 
 # Setup logging with rotation and better formatting
 logging.basicConfig(
@@ -53,6 +75,14 @@ logging.basicConfig(
     ]
 )
 logger = logging.getLogger(__name__)
+
+# Set custom asyncio exception handler
+try:
+    loop = asyncio.get_event_loop()
+    loop.set_exception_handler(handle_asyncio_exception)
+except RuntimeError:
+    # If no loop is running, set it for when one starts
+    pass
 
 webex_api = WebexAPI(CONFIG.webex_bot_access_token_toodles)
 
@@ -1250,7 +1280,7 @@ class IOCHunt(Command):
         return f"{activity['actor']['displayName']}, A New IOC Hunt has been created in XSOAR. Ticket: [#{ticket_no}]({incident_url})"
 
 
-class ThreatHuntCard(Command):
+class ThreatHunt(Command):
     def __init__(self):
         super().__init__(
             command_keyword="threat",
@@ -2063,7 +2093,7 @@ def run_bot_with_reconnection():
             bot.add_command(IOC())
             bot.add_command(IOCHunt())
             bot.add_command(URLs())
-            bot.add_command(ThreatHuntCard())
+            bot.add_command(ThreatHunt())
             bot.add_command(CreateThreatHunt())
             bot.add_command(CreateAZDOWorkItem())
             bot.add_command(GetAllOptions())
