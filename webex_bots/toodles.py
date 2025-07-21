@@ -2072,11 +2072,11 @@ def run_bot_with_reconnection():
 
             bot = WebexBot(
                 CONFIG.webex_bot_access_token_toodles,
-                bot_name="🛠️ Hello from Toodles! 👋",
+                bot_name="🛠🤖 Hello from Toodles! 👋",
                 approved_rooms=[CONFIG.webex_room_id_vinay_test_space, CONFIG.webex_room_id_gosc_t2, CONFIG.webex_room_id_threatcon_collab],
                 log_level="ERROR",
                 threads=True,
-                bot_help_subtitle="🔧 Your friendly toolbox bot! Pick a tool to get started!"
+                bot_help_subtitle="🔧 Your friendly toolbox bot! 🪚"
             )
 
             # Add all commands to the bot

@@ -557,7 +557,7 @@ def run_bot_with_reconnection():
                 bot_name="🤖 Jarvais 👋🏾\n The Ring Tagging Assistant",
                 threads=True,
                 log_level="ERROR",
-                bot_help_subtitle="🏷️ Your friendly neighborhood tagging bot! Click a button to start!"
+                bot_help_subtitle="🏷️ Your friendly tagging bot! 🔖"
             )
 
             # Add commands to the bot
