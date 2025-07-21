@@ -397,16 +397,25 @@ class GetTaniumHostsWithoutRingTag(Command):
     @log_activity(bot_access_token=CONFIG.webex_bot_access_token_jarvais, log_file_name="jarvais_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
         room_id = attachment_actions.roomId
-        today_date = datetime.now().strftime('%m-%d-%Y')
-        filepath = DATA_DIR / today_date / "all_tanium_hosts.xlsx"
-        if not filepath.exists():
+
+        webex_api.messages.create(
+            roomId=room_id,
+            markdown=f"Hello {activity['actor']['displayName']}! 🔍 **Tanium Hosts Without Ring Tag Report** 🏷️\n\nI've started the report generation process. It is running in the background and will complete in about 15 mins ⏰",
+        )
+
+        lock_path = ROOT_DIRECTORY / "src" / "epp" / "all_tanium_hosts.lock"
+        with fasteners.InterProcessLock(lock_path):
+            filepath = get_tanium_hosts_without_ring_tag(filename="Tanium hosts without ring tag.xlsx")
+
+        # Check if filepath is actually a valid file path or an error message
+        if not filepath or not Path(filepath).exists():
+            # If it's not a valid file path, it's likely an error message
+            error_msg = filepath if filepath else "Unknown error occurred during report generation"
             webex_api.messages.create(
                 roomId=room_id,
-                markdown=f"Hello {activity['actor']['displayName']}! 🔍 **Tanium Hosts Without Ring Tag Report** 🏷️\n\nI've started the report generation process. It is running in the background and will complete in about 15 mins ⏰",
+                markdown=f"Hello {activity['actor']['displayName']}! ❌ **Error generating Tanium hosts report**: {error_msg}"
             )
-            lock_path = ROOT_DIRECTORY / "src" / "epp" / "all_tanium_hosts.lock"
-            with fasteners.InterProcessLock(lock_path):
-                filepath = get_tanium_hosts_without_ring_tag(filename="Tanium hosts without ring tag.xlsx")
+            return
 
         message = f"Hello {activity['actor']['displayName']}! Here's the list of Tanium hosts without a Ring Tag. Ring tags have also been generated for your review. Count = {len(pd.read_excel(filepath))}"
 

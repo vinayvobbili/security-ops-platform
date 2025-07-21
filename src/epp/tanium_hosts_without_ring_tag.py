@@ -58,7 +58,7 @@ def get_tanium_hosts_without_ring_tag(filename) -> str:
         all_hosts_filename = str(all_hosts_file)
     else:
         all_hosts_filename = client.get_and_export_all_computers()
-    if not filename:
+    if not all_hosts_filename:
         logger.warning("No computers retrieved from any instance!")
         return 'No computers retrieved from any instance!'
 
