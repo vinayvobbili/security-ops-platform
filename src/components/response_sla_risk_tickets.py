@@ -36,9 +36,18 @@ def get_current_shift():
 
 
 def parse_due_date(due_date_str):
-    """Parse due date string with multiple format support."""
+    """Parse due date string with multiple format support, including nanoseconds."""
     if not due_date_str:
         return None
+
+    # Handle nanosecond precision by truncating to microseconds
+    if '.' in due_date_str:
+        date_part, frac_part = due_date_str.split('.', 1)
+        if 'Z' in frac_part:
+            frac_digits, z = frac_part.split('Z', 1)
+            # Truncate or pad to 6 digits for microseconds
+            frac_digits = (frac_digits + '000000')[:6]
+            due_date_str = f"{date_part}.{frac_digits}Z"
 
     formats = [
         "%Y-%m-%dT%H:%M:%S.%fZ",  # With microseconds
