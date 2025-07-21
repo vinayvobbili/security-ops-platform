@@ -162,15 +162,22 @@ class Host:
 
     def initialize(self) -> None:
         """Initialize all host data."""
-        self._set_host_details_from_cs()
+        try:
+            self._set_host_details_from_cs()
 
-        if not self.device_id:
-            self.status_message += " No CrowdStrike device ID found."
-            return
+            if not self.device_id:
+                self.status_message += " No CrowdStrike device ID found."
+                return
 
-        self._set_host_details_from_snow()
-        self._normalize_country_data()
-        self._determine_region()
+            self._set_host_details_from_snow()
+            self._normalize_country_data()
+            self._determine_region()
+        except Exception as e:
+            # Catch any unexpected errors during initialization
+            error_msg = f" Error during host initialization: {str(e)}"
+            self.status_message += error_msg
+            logger.error(f"[Host Initialization] Exception for {self.name}: {e}")
+            # Continue processing - don't re-raise the exception
 
     def _set_host_details_from_cs(self) -> None:
         """Retrieve device ID and tags from CrowdStrike."""
@@ -463,7 +470,7 @@ class FileHandler:
     @staticmethod
     def write_results_to_file(hosts: List[Host]) -> str:
         """
-        Writes the results to a new Excel sheet with timestamps.
+        Writes the results to a new Excel sheet with timestamps and professional formatting.
 
         Args:
             hosts: List of Host objects to write to the sheet.
@@ -480,6 +487,7 @@ class FileHandler:
         # Create a new workbook
         workbook = openpyxl.Workbook()
         sheet = workbook.active
+        sheet.title = "EPP Ring Tagging Results"
 
         # Add headers
         headers = [
@@ -504,6 +512,41 @@ class FileHandler:
                 host.new_crowd_strike_tag,
                 host.status_message or ('Ring tag generated' if host.new_crowd_strike_tag else 'No tag generated'),
             ])
+
+        # Apply professional formatting
+        from openpyxl.styles import Font, PatternFill
+        from openpyxl.utils import get_column_letter
+
+        # Format the header row
+        header_font = Font(bold=True)
+        header_fill = PatternFill(start_color="D3D3D3", end_color="D3D3D3", fill_type="solid")
+
+        for col_num in range(1, len(headers) + 1):
+            cell = sheet.cell(row=1, column=col_num)
+            cell.font = header_font
+            cell.fill = header_fill
+
+        # Freeze the top row
+        sheet.freeze_panes = "A2"
+
+        # Add autofilter
+        sheet.auto_filter.ref = f"A1:{get_column_letter(len(headers))}{len(hosts) + 1}"
+
+        # Auto-adjust column widths
+        for column in sheet.columns:
+            max_length = 0
+            column_letter = get_column_letter(column[0].column)
+
+            for cell in column:
+                try:
+                    if len(str(cell.value)) > max_length:
+                        max_length = len(str(cell.value))
+                except:
+                    pass
+
+            # Set a reasonable minimum and maximum width
+            adjusted_width = min(max(max_length + 2, 12), 60)
+            sheet.column_dimensions[column_letter].width = adjusted_width
 
         # Save the workbook
         try:
@@ -643,7 +686,23 @@ def run_workflow(room_id):
     else:
         print("Failed to send report to Webex")
 
-    print(time_report)
+    # Delete the input file after tagging hosts
+    today_date = datetime.now().strftime('%m-%d-%Y')
+    cs_files_dir = TRANSIENT_DIR / 'epp_device_tagging' / today_date
+    cs_files_to_delete = [
+        "all_cs_hosts.xlsx",
+        "unique_cs_hosts.xlsx",
+        "cs_hosts_last_seen_without_ring_tag.xlsx"
+    ]
+
+    for filename in cs_files_to_delete:
+        file_path = cs_files_dir / filename
+        try:
+            if file_path.exists():
+                file_path.unlink()
+                print(f"Deleted CS file: {file_path}")
+        except Exception as e:
+            print(f"Error deleting CS file {filename}: {e}")
 
 
 def main() -> None:
