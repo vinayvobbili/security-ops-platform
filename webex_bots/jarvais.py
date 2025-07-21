@@ -68,7 +68,13 @@ LOADING_MESSAGES = [
     "☕ Brewing fresh analytics (with extra caffeine)...",
     "🎪 Orchestrating a spectacular data circus...",
     "🏃‍♂️ Running marathons through databases...",
-    "🎨 Painting beautiful charts with data brushes..."
+    "🎨 Painting beautiful charts with data brushes...",
+    "🛠️ Assembling data with precision tools...",
+    "🌐 Surfing the waves of information...",
+    "🔎 Zooming in on the tiniest details...",
+    "📦 Unpacking boxes of insights...",
+    "🦾 Deploying robot assistants for your data...",
+    "🧩 Piecing together the data puzzle..."
 ]
 
 
@@ -235,7 +241,7 @@ class CSHostsWithoutRingTag(Command):
         loading_msg = get_random_loading_message()
         webex_api.messages.create(
             roomId=room_id,
-            markdown=f"Hello {activity['actor']['displayName']}! {loading_msg}\n\n🏷️ **CS Hosts Ring Tag Report**\nEstimated completion: ~5 minutes ⏰"
+            markdown=f"Hello {activity['actor']['displayName']}! {loading_msg}\n\n🏷️ **Generating a report of CS Hosts Without Ring Tag**\nEstimated completion: ~5 minutes ⏰"
         )
         lock_path = ROOT_DIRECTORY / "src" / "epp" / "cs_hosts_without_ring_tag.lock"
         with fasteners.InterProcessLock(lock_path):
@@ -256,9 +262,10 @@ class RingTagCSHosts(Command):
     @log_activity(bot_access_token=CONFIG.webex_bot_access_token_jarvais, log_file_name="jarvais_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
         room_id = attachment_actions.roomId
+        loading_msg = get_random_loading_message()
         webex_api.messages.create(
             roomId=room_id,
-            markdown=f"Hello {activity['actor']['displayName']}! I've started the ring tagging process for CS Hosts. It is running in the background and will complete in about 20 mins."
+            markdown=f"Hello {activity['actor']['displayName']}! {loading_msg}\n\n🏷️**I've started ring tagging the CS Hosts and it is running in the background**\nEstimated completion: ~15 minutes ⏰"
         )
         lock_path = ROOT_DIRECTORY / "src" / "epp" / "ring_tag_cs_hosts.lock"
         with fasteners.InterProcessLock(lock_path):
