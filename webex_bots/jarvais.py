@@ -1,12 +1,12 @@
 import logging.handlers
+import random
+import signal
+import sys
 import threading
 import time
-import sys
-import signal
-import random
 from datetime import datetime, timezone
-from zoneinfo import ZoneInfo
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import fasteners
 import pandas as pd
@@ -244,12 +244,26 @@ class CSHostsWithoutRingTag(Command):
             markdown=f"Hello {activity['actor']['displayName']}! {loading_msg}\n\n🛡️ **CrowdStrike Hosts Without Ring Tag Report** 🏷️\nEstimated completion: ~5 minutes ⏰"
         )
         lock_path = ROOT_DIRECTORY / "src" / "epp" / "cs_hosts_without_ring_tag.lock"
-        with fasteners.InterProcessLock(lock_path):
-            cs_hosts_without_ring_tag.generate_report()
-            filename = "cs_hosts_last_seen_without_ring_tag.xlsx"
-            message = 'Unique CS hosts without Ring tags'
-            send_report(room_id, filename, message)
-            seek_approval_to_ring_tag(room_id)
+        try:
+            with fasteners.InterProcessLock(lock_path):
+                cs_hosts_without_ring_tag.generate_report()
+                filename = "cs_hosts_last_seen_without_ring_tag.xlsx"
+                message = 'Unique CS hosts without Ring tags'
+                send_report(room_id, filename, message)
+                seek_approval_to_ring_tag(room_id)
+        except Exception as e:
+            logger.error(f"Error in CSHostsWithoutRingTag execute: {e}")
+            webex_api.messages.create(
+                roomId=room_id,
+                markdown=f"❌ An error occurred while processing your request: {e}"
+            )
+        finally:
+            # Ensure the lock file is removed to prevent stale locks
+            if lock_path.exists():
+                try:
+                    lock_path.unlink()
+                except Exception as e:
+                    logger.error(f"Failed to remove lock file {lock_path}: {e}")
 
 
 class RingTagCSHosts(Command):
@@ -268,8 +282,21 @@ class RingTagCSHosts(Command):
             markdown=f"Hello {activity['actor']['displayName']}! {loading_msg}\n\n🏷️**I've started ring tagging the CS Hosts and it is running in the background**\nEstimated completion: ~15 minutes ⏰"
         )
         lock_path = ROOT_DIRECTORY / "src" / "epp" / "ring_tag_cs_hosts.lock"
-        with fasteners.InterProcessLock(lock_path):
-            ring_tag_cs_hosts.run_workflow(room_id)
+        try:
+            with fasteners.InterProcessLock(lock_path):
+                ring_tag_cs_hosts.run_workflow(room_id)
+        except Exception as e:
+            logger.error(f"Error in RingTagCSHosts execute: {e}")
+            webex_api.messages.create(
+                roomId=room_id,
+                markdown=f"❌ An error occurred while processing your request: {e}"
+            )
+        finally:
+            if lock_path.exists():
+                try:
+                    lock_path.unlink()
+                except Exception as e:
+                    logger.error(f"Failed to remove lock file {lock_path}: {e}")
 
 
 class DontRingTagCSHosts(Command):
@@ -294,35 +321,40 @@ class CSHostsWithInvalidRingTags(Command):
 
     @log_activity(bot_access_token=CONFIG.webex_bot_access_token_jarvais, log_file_name="jarvais_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
-        try:
-            today_date = datetime.now(timezone.utc).strftime('%m-%d-%Y')
-            room_id = attachment_actions.roomId
-            message = 'Unique CS servers with Invalid Ring tags'
-            filename = DATA_DIR / today_date / "cs_servers_with_invalid_ring_tags_only.xlsx"
-            if filename.exists():
-                send_report(room_id, filename, message)
-                seek_approval_to_delete_invalid_ring_tags(room_id)
-                return
+        today_date = datetime.now(timezone.utc).strftime('%m-%d-%Y')
+        room_id = attachment_actions.roomId
+        message = 'Unique CS servers with Invalid Ring tags'
+        filename = DATA_DIR / today_date / "cs_servers_with_invalid_ring_tags_only.xlsx"
+        if filename.exists():
+            send_report(room_id, filename, message)
+            seek_approval_to_delete_invalid_ring_tags(room_id)
+            return
 
-            webex_api.messages.create(
-                roomId=room_id,
-                markdown=f"Hello {activity['actor']['displayName']}! I've started the report generation process for CS Servers with Invalid Ring Tags. It is running in the background and will complete in about 15 mins."
-            )
-            lock_path = ROOT_DIRECTORY / "src" / "epp" / "cs_servers_with_invalid_ring_tags.lock"
+        webex_api.messages.create(
+            roomId=room_id,
+            markdown=f"Hello {activity['actor']['displayName']}! I've started the report generation process for CS Servers with Invalid Ring Tags. It is running in the background and will complete in about 15 mins."
+        )
+        lock_path = ROOT_DIRECTORY / "src" / "epp" / "cs_servers_with_invalid_ring_tags.lock"
+        try:
             with fasteners.InterProcessLock(lock_path):
                 cs_servers_with_invalid_ring_tags.generate_report()
-
                 send_report(room_id, filename, message)
                 seek_approval_to_delete_invalid_ring_tags(room_id)
         except Exception as e:
             logger.error(f"Error in CSHostsWithInvalidRingTags execute: {e}")
             try:
                 webex_api.messages.create(
-                    roomId=attachment_actions.roomId,
+                    roomId=room_id,
                     markdown=f"Sorry, an error occurred while generating the report: {str(e)}"
                 )
             except Exception as msg_error:
                 logger.error(f"Failed to send error message: {msg_error}")
+        finally:
+            if lock_path.exists():
+                try:
+                    lock_path.unlink()
+                except Exception as e:
+                    logger.error(f"Failed to remove lock file {lock_path}: {e}")
 
 
 class DontRemoveInvalidRings(Command):
@@ -354,36 +386,42 @@ class RemoveInvalidRings(Command):
             markdown=f"Hello {activity['actor']['displayName']}! Starting removal of invalid ring tags. This may take a few minutes."
         )
         lock_path = ROOT_DIRECTORY / "src" / "epp" / "drop_invalid_ring_tag_cs_hosts.lock"
-        with fasteners.InterProcessLock(lock_path):
-            try:
-                df = pd.read_excel(report_path)
-                # Prepare list of dicts: device_id and tags to remove
-                hosts_with_tags_to_remove = []
-                for _, row in df.iterrows():
-                    device_id = row.get('host_id')
-                    invalid_tags = row.get('invalid_tags')
-                    if pd.isna(device_id) or pd.isna(invalid_tags):
-                        continue
-                    tags = [tag.strip() for tag in str(invalid_tags).split(',') if tag.strip()]
-                    if tags:
-                        hosts_with_tags_to_remove.append({'device_id': device_id, 'tags': tags})
-                if not hosts_with_tags_to_remove:
+        try:
+            with fasteners.InterProcessLock(lock_path):
+                try:
+                    df = pd.read_excel(report_path)
+                    hosts_with_tags_to_remove = []
+                    for _, row in df.iterrows():
+                        device_id = row.get('host_id')
+                        invalid_tags = row.get('invalid_tags')
+                        if pd.isna(device_id) or pd.isna(invalid_tags):
+                            continue
+                        tags = [tag.strip() for tag in str(invalid_tags).split(',') if tag.strip()]
+                        if tags:
+                            hosts_with_tags_to_remove.append({'device_id': device_id, 'tags': tags})
+                    if not hosts_with_tags_to_remove:
+                        webex_api.messages.create(
+                            roomId=room_id,
+                            markdown="No hosts with invalid tags found to remove."
+                        )
+                        return
+                    ring_tag_cs_hosts.TagManager.remove_tags(hosts_with_tags_to_remove)
                     webex_api.messages.create(
                         roomId=room_id,
-                        markdown="No hosts with invalid tags found to remove."
+                        markdown=f"Invalid ring tags removed from {len(hosts_with_tags_to_remove)} hosts."
                     )
-                    return
-                ring_tag_cs_hosts.TagManager.remove_tags(hosts_with_tags_to_remove)
-                webex_api.messages.create(
-                    roomId=room_id,
-                    markdown=f"Invalid ring tags removed from {len(hosts_with_tags_to_remove)} hosts."
-                )
-            except Exception as e:
-                logger.error(f"Error removing invalid ring tags: {e}")
-                webex_api.messages.create(
-                    roomId=room_id,
-                    markdown=f"Failed to remove invalid ring tags: {str(e)}"
-                )
+                except Exception as e:
+                    logger.error(f"Error removing invalid ring tags: {e}")
+                    webex_api.messages.create(
+                        roomId=room_id,
+                        markdown=f"Failed to remove invalid ring tags: {str(e)}"
+                    )
+        finally:
+            if lock_path.exists():
+                try:
+                    lock_path.unlink()
+                except Exception as e:
+                    logger.error(f"Failed to remove lock file {lock_path}: {e}")
 
 
 class GetTaniumHostsWithoutRingTag(Command):
@@ -404,12 +442,25 @@ class GetTaniumHostsWithoutRingTag(Command):
         )
 
         lock_path = ROOT_DIRECTORY / "src" / "epp" / "all_tanium_hosts.lock"
-        with fasteners.InterProcessLock(lock_path):
-            filepath = get_tanium_hosts_without_ring_tag(filename="Tanium hosts without ring tag.xlsx")
+        filepath = None  # Ensure filepath is always defined
+        try:
+            with fasteners.InterProcessLock(lock_path):
+                filepath = get_tanium_hosts_without_ring_tag(filename="Tanium hosts without ring tag.xlsx")
+        except Exception as e:
+            logger.error(f"Error in GetTaniumHostsWithoutRingTag execute: {e}")
+            webex_api.messages.create(
+                roomId=room_id,
+                markdown=f"❌ An error occurred while processing your request: {e}"
+            )
+            filepath = None
+        finally:
+            if lock_path.exists():
+                try:
+                    lock_path.unlink()
+                except Exception as e:
+                    logger.error(f"Failed to remove lock file {lock_path}: {e}")
 
-        # Check if filepath is actually a valid file path or an error message
         if not filepath or not Path(filepath).exists():
-            # If it's not a valid file path, it's likely an error message
             error_msg = filepath if filepath else "Unknown error occurred during report generation"
             webex_api.messages.create(
                 roomId=room_id,
