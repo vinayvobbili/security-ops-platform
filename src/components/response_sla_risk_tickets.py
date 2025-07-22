@@ -13,10 +13,15 @@ webex_api = WebexAPI(access_token=CONFIG.webex_bot_access_token_soar)
 # Configure logging for better error tracking
 logger = logging.getLogger(__name__)
 
-# Urgency thresholds in minutes for response SLA
+# Urgency thresholds in seconds for response SLA
 # Note: XSOAR only returns tickets with slaStatus:2 (already at risk, typically within 3 mins of breach)
-CRITICAL_THRESHOLD = 1  # Critical urgency if <= 1 minute remaining
-WARNING_THRESHOLD = 2  # Warning urgency if <= 2 minutes remaining
+CRITICAL_THRESHOLD = 60  # Critical urgency if <= 60 seconds remaining
+WARNING_THRESHOLD = 120  # Warning urgency if <= 120 seconds remaining
+
+# Shift time boundaries in minutes from midnight
+MORNING_START = 270  # 04:30
+AFTERNOON_START = 750  # 12:30
+NIGHT_START = 1230  # 20:30
 
 
 def get_current_shift():
@@ -27,9 +32,9 @@ def get_current_shift():
     minute = now.minute
     total_minutes = hour * 60 + minute
     # Morning: 04:30 - 12:29, Afternoon: 12:30 - 20:29, Night: 20:30 - 04:29
-    if 270 <= total_minutes < 750:
+    if MORNING_START <= total_minutes < AFTERNOON_START:
         return 'morning'
-    elif 750 <= total_minutes < 1230:
+    elif AFTERNOON_START <= total_minutes < NIGHT_START:
         return 'afternoon'
     else:
         return 'night'
@@ -63,40 +68,11 @@ def parse_due_date(due_date_str):
     raise ValueError(f"Unable to parse date format: {due_date_str}")
 
 
-def calculate_minutes_remaining(due_date_utc):
+def calculate_seconds_remaining(due_date_utc):
     """Calculate seconds remaining until SLA breach."""
     now_utc = datetime.now(pytz.utc)
     delta = due_date_utc - now_utc
     return int(delta.total_seconds())
-
-
-def format_time_remaining(minutes):
-    """Format time remaining with appropriate urgency indicators."""
-    if minutes <= 0:
-        return "⚠️ **OVERDUE**"
-    elif minutes <= CRITICAL_THRESHOLD:
-        return f"🔴 **{minutes} min{'s' if minutes != 1 else ''}**"
-    elif minutes <= WARNING_THRESHOLD:
-        return f"🟡 **{minutes} min{'s' if minutes != 1 else ''}**"
-    else:
-        hours = minutes // 60
-        mins = minutes % 60
-        if hours > 0:
-            return f"🟢 **{hours}h {mins}m**"
-        else:
-            return f"🟢 **{minutes} mins**"
-
-
-def get_urgency_emoji(minutes):
-    """Get urgency emoji based on time remaining."""
-    if minutes <= 0:
-        return "🚨"
-    elif minutes <= CRITICAL_THRESHOLD:
-        return "🔥"
-    elif minutes <= WARNING_THRESHOLD:
-        return "⚠️"
-    else:
-        return "⏳"
 
 
 def process_ticket(ticket):
@@ -108,7 +84,7 @@ def process_ticket(ticket):
     try:
         if due_date_str:
             due_date_utc = parse_due_date(due_date_str)
-            seconds_remaining = calculate_minutes_remaining(due_date_utc)
+            seconds_remaining = calculate_seconds_remaining(due_date_utc)
         else:
             logger.warning(f"No due date found for ticket {ticket_id}")
             seconds_remaining = 0  # Treat as urgent if no due date
