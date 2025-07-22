@@ -27,7 +27,7 @@ def main():
     Main function to run the scheduled jobs.
     """
     # run once to test
-    print("Running once to test the scheduler...")
+    # print("Running once to test the scheduler...")
     # make_dir_for_todays_charts(helper_methods.CHARTS_DIR_PATH)
     # aging_tickets.make_chart()
     # crowdstrike_efficacy.make_chart()
