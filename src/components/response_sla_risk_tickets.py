@@ -120,23 +120,14 @@ def process_ticket(ticket):
         return 0, ticket, timetorespond  # Treat as urgent if we can't calculate
 
 
-def build_ticket_message(seconds_remaining, ticket, timetorespond, index):
+def build_ticket_message(seconds_remaining, ticket, index, shift_lead):
     """Build formatted message for a single ticket."""
     ticket_id = ticket.get('id')
     ticket_name = ticket.get('name') or ticket.get('title') or 'No Title'
-    ticket_owner = ticket.get('owner')
     incident_url = CONFIG.xsoar_prod_ui_base_url + '/Custom/caseinfoid/' + ticket_id
 
-    # Format owner information
-    if ticket_owner:
-        # Use Webex person email format to make it clickable
-        if '@' in ticket_owner:
-            owner_text = f"<@personEmail:{ticket_owner}>"
-        else:
-            # If it's just a username, assume it's the part before @ and add domain if needed
-            owner_text = ticket_owner
-    else:
-        owner_text = "Unassigned"
+    # Use shift lead instead of ticket owner for response SLA tickets (unassigned)
+    owner_text = shift_lead
 
     # Format time remaining (XSOAR API only returns at-risk tickets, not overdue ones)
     minutes = seconds_remaining // 60
@@ -204,7 +195,7 @@ def start(room_id):
         # Build messages for each ticket
         messages = []
         for index, (seconds_remaining, ticket, timetorespond) in enumerate(processed_tickets, start=1):
-            message = build_ticket_message(seconds_remaining, ticket, timetorespond, index)
+            message = build_ticket_message(seconds_remaining, ticket, index, shift_lead)
             messages.append(message)
 
         # Create simplified header
