@@ -125,8 +125,9 @@ def build_ticket_message(seconds_remaining, ticket, index, shift_lead, due_date_
                 due_date_et = due_date_utc.astimezone(eastern)
                 due_date_formatted = due_date_et.strftime("%Y-%m-%d %H:%M:%S ET")
                 sla_info = f" (SLA due: {due_date_formatted})"
-        except Exception:
+        except (ValueError, AttributeError, TypeError) as e:
             # If parsing fails, don't add SLA info
+            logger.debug(f"Failed to parse or format due date for ticket: {e}")
             pass
 
     return (
