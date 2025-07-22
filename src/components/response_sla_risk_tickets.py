@@ -138,25 +138,14 @@ def build_ticket_message(seconds_remaining, ticket, timetorespond, index):
     else:
         owner_text = "Unassigned"
 
-    # Format time remaining
-    if seconds_remaining <= 0:
-        # Calculate overdue time in minutes and seconds
-        total_overdue_seconds = abs(seconds_remaining)
-        overdue_minutes = total_overdue_seconds // 60
-        overdue_seconds = total_overdue_seconds % 60
+    # Format time remaining (XSOAR API only returns at-risk tickets, not overdue ones)
+    minutes = seconds_remaining // 60
+    seconds = seconds_remaining % 60
 
-        if overdue_minutes > 0:
-            time_text = f"OVERDUE by {overdue_minutes} min{'s' if overdue_minutes != 1 else ''} {overdue_seconds} sec{'s' if overdue_seconds != 1 else ''}"
-        else:
-            time_text = f"OVERDUE by {overdue_seconds} sec{'s' if overdue_seconds != 1 else ''}"
+    if minutes > 0:
+        time_text = f"the next {minutes} min{'s' if minutes != 1 else ''} {seconds} sec{'s' if seconds != 1 else ''}"
     else:
-        # Convert seconds to minutes for display when not overdue
-        minutes = seconds_remaining // 60
-        seconds = seconds_remaining % 60
-        if minutes > 0:
-            time_text = f"the next {minutes} min{'s' if minutes != 1 else ''} {seconds} sec{'s' if seconds != 1 else ''}"
-        else:
-            time_text = f"the next {seconds} sec{'s' if seconds != 1 else ''}"
+        time_text = f"the next {seconds} sec{'s' if seconds != 1 else ''}"
 
     return (
         f"{index}. [{ticket_id}]({incident_url}) - {ticket_name}\n"
