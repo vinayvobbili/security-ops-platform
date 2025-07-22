@@ -113,14 +113,14 @@ def process_ticket(ticket):
             logger.warning(f"No due date found for ticket {ticket_id}")
             seconds_remaining = 0  # Treat as urgent if no due date
 
-        return seconds_remaining, ticket, timetorespond
+        return seconds_remaining, ticket, due_date_str
 
     except Exception as e:
         logger.error(f"Error processing ticket {ticket_id}: {e}")
-        return 0, ticket, timetorespond  # Treat as urgent if we can't calculate
+        return 0, ticket, due_date_str  # Treat as urgent if we can't calculate
 
 
-def build_ticket_message(seconds_remaining, ticket, index, shift_lead):
+def build_ticket_message(seconds_remaining, ticket, index, shift_lead, due_date_str=None):
     """Build formatted message for a single ticket."""
     ticket_id = ticket.get('id')
     ticket_name = ticket.get('name') or ticket.get('title') or 'No Title'
@@ -138,9 +138,24 @@ def build_ticket_message(seconds_remaining, ticket, index, shift_lead):
     else:
         time_text = f"the next {seconds} sec{'s' if seconds != 1 else ''}"
 
+    # Extract SLA due date if available
+    sla_info = ""
+    if due_date_str:
+        try:
+            due_date_utc = parse_due_date(due_date_str)
+            if due_date_utc:
+                # Convert to Eastern Time for display
+                eastern = pytz.timezone('US/Eastern')
+                due_date_et = due_date_utc.astimezone(eastern)
+                due_date_formatted = due_date_et.strftime("%Y-%m-%d %H:%M:%S ET")
+                sla_info = f" (SLA due: {due_date_formatted})"
+        except Exception:
+            # If parsing fails, don't add SLA info
+            pass
+
     return (
         f"{index}. [{ticket_id}]({incident_url}) - {ticket_name}\n"
-        f"   {owner_text}, act within {time_text}"
+        f"   {owner_text}, act within {time_text} {sla_info}"
     )
 
 
@@ -186,16 +201,16 @@ def start(room_id):
         # Process all tickets and calculate urgency
         processed_tickets = []
         for ticket in tickets:
-            seconds_remaining, ticket_data, timetorespond = process_ticket(ticket)
-            processed_tickets.append((seconds_remaining, ticket_data, timetorespond))
+            seconds_remaining, ticket_data, due_date_str = process_ticket(ticket)
+            processed_tickets.append((seconds_remaining, ticket_data, due_date_str))
 
         # Sort by urgency (least time remaining first)
         processed_tickets.sort(key=lambda x: x[0])
 
         # Build messages for each ticket
         messages = []
-        for index, (seconds_remaining, ticket, timetorespond) in enumerate(processed_tickets, start=1):
-            message = build_ticket_message(seconds_remaining, ticket, index, shift_lead)
+        for index, (seconds_remaining, ticket, due_date_str) in enumerate(processed_tickets, start=1):
+            message = build_ticket_message(seconds_remaining, ticket, index, shift_lead, due_date_str)
             messages.append(message)
 
         # Create simplified header
