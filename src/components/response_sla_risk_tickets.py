@@ -110,9 +110,9 @@ def build_ticket_message(seconds_remaining, ticket, index, shift_lead, due_date_
     seconds = seconds_remaining % 60
 
     if minutes > 0:
-        time_text = f"the next {minutes} min{'s' if minutes != 1 else ''} {seconds} sec{'s' if seconds != 1 else ''}"
+        time_text = f"{minutes} min{'s' if minutes != 1 else ''} {seconds} sec{'s' if seconds != 1 else ''}"
     else:
-        time_text = f"the next {seconds} sec{'s' if seconds != 1 else ''}"
+        time_text = f"{seconds} sec{'s' if seconds != 1 else ''}"
 
     # Extract SLA due date if available
     sla_info = ""
@@ -132,7 +132,7 @@ def build_ticket_message(seconds_remaining, ticket, index, shift_lead, due_date_
 
     return (
         f"{index}. [{ticket_id}]({incident_url}) - {ticket_name}\n"
-        f"   {owner_text}, act within {time_text} {sla_info}"
+        f"   {owner_text}, act within the next {time_text} {sla_info}"
     )
 
 
