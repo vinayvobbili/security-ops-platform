@@ -111,9 +111,9 @@ class TaniumInstance:
         self.verify_ssl = verify_ssl
         logger.info(f"Initialized Tanium instance: {self.name}")
 
-    def query(self, gql: str, variables: str = None) -> Dict[str, Any]:
+    def query(self, gql: str, variables: Dict[str, Any] = None) -> Dict[str, Any]:
         """Execute a GraphQL query"""
-        payload = {'query': gql}
+        payload: Dict[str, Any] = {'query': gql}
         if variables:
             payload['variables'] = variables
 
@@ -389,7 +389,7 @@ class TaniumClient:
         if not all_computers:
             logger.warning("No computers retrieved from any instance!")
             return None
-        return self.export_to_excel(all_computers, 'All Tanium Hosts.xlsx')
+        return self.export_to_excel(all_computers, filename or 'All Tanium Hosts.xlsx')
 
     def get_computer_by_name(self, name: str) -> Optional[Computer]:
         """Get a specific computer by name from any instance"""
