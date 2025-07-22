@@ -1,7 +1,8 @@
-from webexpythonsdk import WebexAPI
-from datetime import datetime
-import pytz
 import logging
+from datetime import datetime
+
+import pytz
+from webexpythonsdk import WebexAPI
 
 from config import get_config
 from services.xsoar import TicketHandler
@@ -101,9 +102,9 @@ def build_ticket_message(seconds_remaining, ticket, due_date_str, index):
     seconds = seconds_remaining % 60
 
     if minutes > 0:
-        time_text = f"the next {minutes} min{'s' if minutes != 1 else ''} {seconds} sec{'s' if seconds != 1 else ''}"
+        time_text = f"{minutes} min{'s' if minutes != 1 else ''} {seconds} sec{'s' if seconds != 1 else ''}"
     else:
-        time_text = f"the next {seconds} sec{'s' if seconds != 1 else ''}"
+        time_text = f"{seconds} sec{'s' if seconds != 1 else ''}"
 
     # Extract SLA due date if available
     sla_info = ""
@@ -114,15 +115,16 @@ def build_ticket_message(seconds_remaining, ticket, due_date_str, index):
                 # Convert to Eastern Time for display
                 eastern = pytz.timezone('US/Eastern')
                 due_date_et = due_date_utc.astimezone(eastern)
-                due_date_formatted = due_date_et.strftime("%Y-%m-%d %H:%M:%S ET")
+                due_date_formatted = due_date_et.strftime("%Y-%m-%d %I:%M:%S %p ET")
                 sla_info = f" (SLA due: {due_date_formatted})"
-        except Exception:
+        except (ValueError, AttributeError, TypeError) as e:
             # If parsing fails, don't add SLA info
+            logger.debug(f"Failed to parse or format due date for ticket: {e}")
             pass
 
     return (
         f"{index}. [{ticket_id}]({incident_url}) - {ticket_name}\n"
-        f"   {owner_text}, act within {time_text}{sla_info}"
+        f"   {owner_text}, act within the next {time_text}{sla_info}"
     )
 
 
