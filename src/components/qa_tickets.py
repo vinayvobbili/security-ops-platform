@@ -99,7 +99,7 @@ def generate(room_id):
             new_ticket_payload = {
                 'type': 'METCIRT Ticket QA',
                 'owner': owner,
-                'name': source_ticket.get('name'),
+                'name': 'QA ticket for -' + source_ticket.get('name'),
                 'details': source_ticket.get('details'),
                 'CustomFields': {
                     'detectionsource': detectionsource,
