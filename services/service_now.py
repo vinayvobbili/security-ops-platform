@@ -185,7 +185,7 @@ class ServiceNowClient:
         """Get process changes from ServiceNow custom endpoint."""
         base_url = config.snow_base_url.rstrip('/')
         endpoint = f"{base_url}/api/x_metli_acme_it/process/changes"
-        endpoint = 'https://acmeprod.service-now.com/api/x_metli_acme_it/process/changes'
+        # endpoint = 'https://acmeprod.service-now.com/api/x_metli_acme_it/process/changes'
         headers = self.token_manager.get_auth_headers()
         try:
             response = requests.get(endpoint, headers=headers, params=params, timeout=10, verify=False)
