@@ -272,7 +272,7 @@ class Host:
         if self.country == 'US':
             self.region = 'US'
         elif self.country == 'Japan':
-            self.region = 'Japan'
+            self.region = 'JAPAN'
 
         if not self.region:
             self.status_message += " Region could not be determined."
