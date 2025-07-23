@@ -268,12 +268,6 @@ class Host:
         """Determine the region based on country with special case handling."""
         self.region = REGIONS_BY_COUNTRY.get(self.country, '')
 
-        # Special cases per requirements
-        if self.country == 'US':
-            self.region = 'US'
-        elif self.country == 'Japan':
-            self.region = 'JAPAN'
-
         if not self.region:
             self.status_message += " Region could not be determined."
 
