@@ -620,10 +620,10 @@ def run_bot_with_reconnection():
                 bot_token,
                 approved_rooms=[],
                 approved_users=config.barnacles_approved_users.split(','),
-                bot_name="⚓ the alert triage service 🤖\n The Captain's Assistant",
+                bot_name="⚓ the alert triage service 🤖\n The Captain's Assistant 👩🏻‍⚕️",
                 threads=True,
                 log_level="ERROR",
-                bot_help_subtitle="🚨 Your ThreatCon and management notes assistant! Click a button to start!"
+                bot_help_subtitle="Click a button to start! 🎬"
             )
 
             # Add commands to the bot
