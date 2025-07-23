@@ -29,9 +29,11 @@ import os
 import random
 
 from webexpythonsdk import WebexAPI
+from tabulate import tabulate
 
 from config import get_config
 from services.xsoar import TicketHandler
+from datetime import datetime
 
 CONFIG = get_config()
 webex_api = WebexAPI(access_token=CONFIG.webex_bot_access_token_soar)
@@ -48,19 +50,36 @@ def save_qa_leads(leads, leads_path):
         json.dump(leads, f, indent=4)
 
 
+def summarize_tickets_by_impact(tickets):
+    summary = {}
+    for ticket in tickets:
+        impact = ticket['CustomFields'].get('impact', 'Unknown')
+        summary[impact] = summary.get(impact, 0) + 1
+    return summary
+
+
+def format_summary_message(summary, total):
+    table = [(impact, count) for impact, count in summary.items()]
+    md_table = tabulate(table, headers=["Impact", "Count"], tablefmt="github")
+    return f"**Tickets Closed Today: {total}**\n\n```\n{md_table}\n```"
+
+
 def generate(room_id):
     try:
         ticket_handler = TicketHandler()
-        query = 'status:closed -category:job type:METCIRT -owner:""'
-        period = {
-            "byFrom": "days",
-            "fromValue": 0
-        }
+        today = datetime.now().strftime('%Y-%m-%dT00:00:00 -0400')
+        query = f'status:closed -category:job type:METCIRT -owner:"" closed:>="{today}"'
 
-        tickets = ticket_handler.get_tickets(query, period)
+        tickets = ticket_handler.get_tickets(query)
         if not tickets:
-            print("No tickets found creating QA ticket.")
+            print("No METCIRT tickets were closed today. Not creating QA tickets today...")
             return
+        # --- Summary logic ---
+        summary = summarize_tickets_by_impact(tickets)
+        total = len(tickets)
+        summary_message = format_summary_message(summary, total)
+        webex_api.messages.create(room_id, markdown=summary_message)
+        # --- End summary logic ---
 
         tickets_by_impact = {}
         for ticket in tickets:
@@ -70,6 +89,8 @@ def generate(room_id):
         qa_leads, leads_path = load_qa_leads()
         lead_index = 0
         for impact, group in tickets_by_impact.items():
+            if impact == 'Security Testing':
+                continue  # Skip QA ticket creation for 'Security Testing' impact
             source_ticket = random.choice(group)
             owner = qa_leads[lead_index % len(qa_leads)]
             detectionsource = source_ticket.get('CustomFields').get('detectionsource', 'Unknown')
