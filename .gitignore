@@ -5,3 +5,4 @@ __pycache__/
 web/static/charts/*
 data/transient/*
 scheduler.pid
+web/static/audio

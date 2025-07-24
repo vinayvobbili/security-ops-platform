@@ -4,18 +4,6 @@
     <meta charset="UTF-8">
     <title>APT Other Names Results</title>
     <link rel="stylesheet" href="/static/css/apt_other_names_results.css">
-    <style>
-        /* Overlay canvas for falling notes */
-        #falling-notes-canvas {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100vw;
-            height: 100vh;
-            pointer-events: none;
-            z-index: 100;
-        }
-    </style>
 </head>
 <body>
 <canvas id="falling-notes-canvas"></canvas>
@@ -24,10 +12,8 @@
         <img src="{{ url_for('static', filename='icons/home.svg') }}" alt="Home" class="nav-icon" style="width:32px;height:32px;">
     </a>
     <div class="nav-music" style="margin-left:auto;">
-        <button type="button" onclick="toggleAptAudio()" style="background:none;border:none;cursor:pointer;padding:0 8px;">
-            <img src="/static/icons/volume-xmark-solid.svg" alt="Music Icon" class="music-icon" id="apt-music-icon" style="width:32px;height:32px;">
-        </button>
-        <audio id="apt-music" src="/static/audio/the-best-jazz-club-in-new-orleans-164472.mp3" loop></audio>
+        <audio id="music" src="" loop muted></audio>
+        <img src="/static/icons/volume-xmark-solid.svg" alt="Unmute Icon" class="music-icon" id="music-icon" onclick="toggleAudio()">
     </div>
 </div>
 <div class="container">
@@ -77,6 +63,7 @@
         <a href="/apt-other-names-search" class="back-to-search-btn">Back to Search</a>
     </div>
 </div>
+<script src="/static/js/common.js"></script>
 <script src="/static/js/apt_other_names_results.js"></script>
 <script src="/static/js/falling_notes.js"></script>
 <script>
@@ -87,43 +74,8 @@
             document.getElementById('spinner').style.display = 'inline-block';
         });
     }
-
-    function toggleAptAudio() {
-        var audio = document.getElementById('apt-music');
-        var icon = document.getElementById('apt-music-icon');
-        if (audio.paused) {
-            audio.play();
-            icon.src = '/static/icons/volume-high-solid.svg';
-            // Save state
-            localStorage.setItem('apt-music-playing', 'true');
-        } else {
-            audio.pause();
-            icon.src = '/static/icons/volume-xmark-solid.svg';
-            // Save state
-            localStorage.setItem('apt-music-playing', 'false');
-        }
-    }
-
-    // On page load, DON'T auto-start music - only restore icon state
-    document.addEventListener('DOMContentLoaded', function () {
-        var audio = document.getElementById('apt-music');
-        var icon = document.getElementById('apt-music-icon');
-
-        // Always start with muted icon - don't autoplay music
-        icon.src = '/static/icons/volume-xmark-solid.svg';
-        audio.pause(); // Ensure audio is paused
-
-        // Save current time on navigation away
-        window.addEventListener('beforeunload', function () {
-            localStorage.setItem('apt-music-current-time', audio.currentTime);
-        });
-
-        // Restore current time if available (but don't play)
-        var savedTime = parseFloat(localStorage.getItem('apt-music-current-time'));
-        if (!isNaN(savedTime)) {
-            audio.currentTime = savedTime;
-        }
-    });
+    // Initialize random music logic
+    initRandomMusic();
 </script>
 </body>
 </html>
