@@ -3,6 +3,7 @@ import http.client
 import http.server
 import ipaddress
 import os
+import random
 import select
 import socket
 import socketserver
@@ -13,7 +14,7 @@ from typing import List, Dict
 from urllib.parse import urlsplit
 
 import pytz
-from flask import Flask, request, abort, jsonify, render_template
+from flask import Flask, request, abort, jsonify, render_template, send_from_directory
 
 from config import get_config
 from services import xsoar
@@ -671,6 +672,16 @@ def apt_other_names_search():
         apt_names = []
 
     return render_template("apt_other_names_search.html", apt_names=apt_names)
+
+
+@app.route('/api/random-audio', methods=['GET'])
+def random_audio():
+    """Return a random mp3 filename from the static/audio directory."""
+    audio_dir = os.path.join(os.path.dirname(__file__), 'static', 'audio')
+    files = [f for f in os.listdir(audio_dir) if f.endswith('.mp3')]
+    if not files:
+        return jsonify({'error': 'No audio files found'}), 404
+    return jsonify({'filename': random.choice(files)})
 
 
 if __name__ == "__main__":
