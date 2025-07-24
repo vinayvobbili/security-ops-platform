@@ -11,10 +11,8 @@
         <img src="{{ url_for('static', filename='icons/home.svg') }}" alt="Home" class="nav-icon" style="width:32px;height:32px;">
     </a>
     <div class="nav-music" style="margin-left:auto;">
-        <button type="button" onclick="toggleAptAudio()" style="background:none;border:none;cursor:pointer;padding:0 8px;">
-            <img src="/static/icons/volume-xmark-solid.svg" alt="Music Icon" class="music-icon" id="apt-music-icon" style="width:32px;height:32px;">
-        </button>
-        <audio id="apt-music" src="/static/audio/the-best-jazz-club-in-new-orleans-164472.mp3" loop></audio>
+        <audio id="music" src="" loop muted></audio>
+        <img src="/static/icons/volume-xmark-solid.svg" alt="Unmute Icon" class="music-icon" id="music-icon" onclick="toggleAudio()">
     </div>
 </div>
 <div class="container">
@@ -57,6 +55,10 @@
     // Make APT names data available globally for the search script
     window.aptNames = {{ apt_names | tojson }};
 </script>
+<script src="/static/js/common.js"></script>
 <script src="/static/js/apt_other_names_search.js"></script>
+<script>
+    initRandomMusic();
+</script>
 </body>
 </html>

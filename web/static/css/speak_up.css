@@ -11,6 +11,32 @@ body {
     );
     position: relative;
     overflow: hidden;
+    padding-top: 56px; /* Added padding to prevent content from being hidden under the fixed nav */
+}
+
+/* Navigation styles */
+.top-nav {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 48px;
+    display: flex;
+    align-items: flex-start;
+    z-index: 1000;
+}
+
+.nav-home {
+    position: relative;
+    margin-left: 8px;
+    margin-top: 8px;
+    z-index: 2;
+}
+
+.nav-icon {
+    width: 28px;
+    height: 28px;
+    cursor: pointer;
 }
 
 /* Wavy background decoration */

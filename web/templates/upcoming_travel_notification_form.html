@@ -73,28 +73,32 @@
     </form>
 
 </div>
+<audio id="music" src="" loop muted></audio>
+<img src="/static/icons/volume-xmark-solid.svg" alt="Unmute Icon" class="music-icon" id="music-icon" onclick="toggleAudio()">
+<script src="{{ url_for('static', filename='js/common.js') }}"></script>
 <script src="{{ url_for('static', filename='js/upcoming_travel_notification_form.js') }}"></script>
 <script>
-// Toast notification for feedback
-function showToast(message, isError = false) {
-    const toast = document.getElementById('toast');
-    toast.textContent = message;
-    toast.style.background = isError ? '#d9534f' : '#28a745';
-    toast.style.display = 'block';
-    setTimeout(() => { toast.style.display = 'none'; }, 3000);
-}
-// Example: showToast('Submitted successfully!');
+    initRandomMusic();
+    // Toast notification for feedback
+    function showToast(message, isError = false) {
+        const toast = document.getElementById('toast');
+        toast.textContent = message;
+        toast.style.background = isError ? '#d9534f' : '#28a745';
+        toast.style.display = 'block';
+        setTimeout(() => { toast.style.display = 'none'; }, 3000);
+    }
+    // Example: showToast('Submitted successfully!');
 
-// Add form feedback
-const form = document.getElementById('travelForm');
-form.addEventListener('submit', function(e) {
-    e.preventDefault();
-    // Simulate AJAX submit
-    setTimeout(() => {
-        showToast('Travel notification submitted!', false);
-        form.reset();
-    }, 500);
-});
+    // Add form feedback
+    const form = document.getElementById('travelForm');
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        // Simulate AJAX submit
+        setTimeout(() => {
+            showToast('Travel notification submitted!', false);
+            form.reset();
+        }, 500);
+    });
 </script>
 </body>
 </html>
