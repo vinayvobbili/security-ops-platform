@@ -375,3 +375,23 @@ label {
     height: 28px;
     cursor: pointer;
 }
+
+.music-icon {
+    width: 32px;
+    height: 32px;
+    cursor: pointer;
+    position: fixed;
+    top: 16px;
+    right: 24px;
+    z-index: 1100;
+    background: rgba(255, 255, 255, 0.7);
+    border-radius: 50%;
+    padding: 4px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    transition: background 0.2s, transform 0.2s;
+}
+
+.music-icon:hover {
+    background: rgba(0, 70, 173, 0.15);
+    transform: scale(1.08) rotate(-10deg);
+}
