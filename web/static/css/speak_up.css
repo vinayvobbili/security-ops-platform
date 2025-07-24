@@ -14,31 +14,6 @@ body {
     padding-top: 56px; /* Added padding to prevent content from being hidden under the fixed nav */
 }
 
-/* Navigation styles */
-.top-nav {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 48px;
-    display: flex;
-    align-items: flex-start;
-    z-index: 1000;
-}
-
-.nav-home {
-    position: relative;
-    margin-left: 8px;
-    margin-top: 8px;
-    z-index: 2;
-}
-
-.nav-icon {
-    width: 28px;
-    height: 28px;
-    cursor: pointer;
-}
-
 /* Wavy background decoration */
 body::before,
 body::after {
@@ -252,4 +227,24 @@ button:hover {
 
 #response a:hover {
     text-decoration: underline;
+}
+
+.music-icon {
+    width: 32px;
+    height: 32px;
+    cursor: pointer;
+    position: fixed;
+    top: 16px;
+    right: 24px;
+    z-index: 1100;
+    background: rgba(255,255,255,0.7);
+    border-radius: 50%;
+    padding: 4px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    transition: background 0.2s, transform 0.2s;
+}
+
+.music-icon:hover {
+    background: rgba(0,70,173,0.15);
+    transform: scale(1.08) rotate(-10deg);
 }

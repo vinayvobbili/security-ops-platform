@@ -592,45 +592,6 @@ button[type="submit"]:hover::before {
     }
 }
 
-/* Acme branded top navigation */
-.top-nav {
-    background: rgba(0, 70, 173, 0.9);
-    backdrop-filter: blur(15px);
-    border-bottom: 2px solid var(--acme-green);
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    z-index: 1000;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 10px 20px;
-}
-
-.nav-home {
-    display: flex;
-    align-items: center;
-}
-
-.nav-music {
-    margin-left: auto !important;
-}
-
-.nav-music button {
-    background: none !important;
-    border: none !important;
-    cursor: pointer !important;
-    padding: 8px !important;
-    border-radius: 50%;
-    transition: all 0.3s ease;
-}
-
-.nav-music button:hover {
-    transform: scale(1.1);
-    background: rgba(0, 166, 81, 0.1) !important;
-}
-
 /* Add top padding to body to account for fixed navigation */
 body {
     background: linear-gradient(135deg, var(--acme-blue) 0%, var(--acme-light-blue) 50%, var(--acme-green) 100%);

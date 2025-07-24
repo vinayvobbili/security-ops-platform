@@ -1,0 +1,45 @@
+/* Common navigation styles for all templates */
+.top-nav {
+    background: rgba(0, 70, 173, 0.9);
+    backdrop-filter: blur(15px);
+    border-bottom: 2px solid #00A651;
+    padding: 12px 15px;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 1000;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+}
+
+.nav-home {
+    cursor: pointer;
+    padding: 0;
+    border-radius: 50%;
+    transition: all 0.3s ease;
+    display: inline-block;
+    margin-left: 0;
+    background: none;
+    position: fixed;
+    top: 16px;
+    left: 24px;
+    z-index: 1100;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+
+.nav-home:hover {
+    background: rgba(255, 255, 255, 0.2);
+    transform: scale(1.05);
+}
+
+.nav-icon {
+    width: 64px;
+    height: 64px;
+    transition: transform 0.3s ease;
+}
+
+.nav-home:hover .nav-icon {
+    transform: rotate(-15deg) scale(1.1);
+}
