@@ -110,24 +110,68 @@ class TicketHandler:
         response.raise_for_status()
         return response.json()
 
-    def create_in_dev(self, payload):
-        """Create a new incident in dev XSOAR"""
+    def link_tickets(self, parent_ticket_id, link_ticket_id):
 
-        # Clean payload for dev creation
-        for key in ['id', 'phase', 'status']:
-            payload.pop(key, None)
+        """
+        Links the source ticket to the newly created QA ticket in XSOAR.
+        """
+        if not link_ticket_id or not parent_ticket_id:
+            log.error("Ticket ID or QA Ticket ID is empty. Cannot link tickets.")
+            return None
+        log.info(f"Linking ticket {link_ticket_id} to QA ticket {parent_ticket_id}")
+        payload = {
+            "id": "",
+            "version": 0,
+            "investigationId": parent_ticket_id,
+            "data": "!linkIncidents",
+            "args": {
+                "linkedIncidentIDs": {
+                    "simple": link_ticket_id
+                }
+            },
+            "markdown": False,
+        }
+        response = http_session.post(f"{self.prod_base}/xsoar/entry", headers=prod_headers, json=payload)
+        return response.json()
 
-        payload.update({"all": True, "createInvestigation": True, "force": True})
+    def add_participant(self, ticket_id, participant_email_address):
+        """
+        Adds a participant to the incident.
+        """
+        if not ticket_id or not participant_email_address:
+            log.error("Ticket ID or participant email is empty. Cannot add participant.")
+            return None
+        log.info(f"Adding participant {participant_email_address} to ticket {ticket_id}")
+        payload = {
+            "id": "",
+            "version": 0,
+            "investigationId": ticket_id,
+            "data": f"@{participant_email_address}",
+            "args": None,
+            "markdown": False,
+        }
+        response = http_session.post(f"{self.prod_base}/xsoar/entry", headers=prod_headers, json=payload)
+        return response.json()
 
-        response = http_session.post(f"{self.dev_base}/incident", headers=dev_headers, json=payload)
 
-        if response is None:
-            return {"error": "Failed to connect after multiple retries"}
+def create_in_dev(self, payload):
+    """Create a new incident in dev XSOAR"""
 
-        if response.ok:
-            return response.json()
-        else:
-            return {"error": response.text}
+    # Clean payload for dev creation
+    for key in ['id', 'phase', 'status']:
+        payload.pop(key, None)
+
+    payload.update({"all": True, "createInvestigation": True, "force": True})
+
+    response = http_session.post(f"{self.dev_base}/incident", headers=dev_headers, json=payload)
+
+    if response is None:
+        return {"error": "Failed to connect after multiple retries"}
+
+    if response.ok:
+        return response.json()
+    else:
+        return {"error": response.text}
 
 
 class ListHandler:
@@ -201,4 +245,6 @@ if __name__ == "__main__":
     # print(destination_ticket_number, destination_ticket_link)
     list_handler = ListHandler()
     ticket_handler = TicketHandler()
-    print(ticket_handler.get_tickets("id:717407"))
+    # print(ticket_handler.get_tickets("id:717407"))
+    # print(ticket_handler.link_tickets('1345807', '1345822'))
+    print(ticket_handler.add_participant('1345807', 'tyler.brescia@company.com'))
