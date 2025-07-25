@@ -153,25 +153,24 @@ class TicketHandler:
         response = http_session.post(f"{self.prod_base}/xsoar/entry", headers=prod_headers, json=payload)
         return response.json()
 
+    def create_in_dev(self, payload):
+        """Create a new incident in dev XSOAR"""
 
-def create_in_dev(self, payload):
-    """Create a new incident in dev XSOAR"""
+        # Clean payload for dev creation
+        for key in ['id', 'phase', 'status']:
+            payload.pop(key, None)
 
-    # Clean payload for dev creation
-    for key in ['id', 'phase', 'status']:
-        payload.pop(key, None)
+        payload.update({"all": True, "createInvestigation": True, "force": True})
 
-    payload.update({"all": True, "createInvestigation": True, "force": True})
+        response = http_session.post(f"{self.dev_base}/incident", headers=dev_headers, json=payload)
 
-    response = http_session.post(f"{self.dev_base}/incident", headers=dev_headers, json=payload)
+        if response is None:
+            return {"error": "Failed to connect after multiple retries"}
 
-    if response is None:
-        return {"error": "Failed to connect after multiple retries"}
-
-    if response.ok:
-        return response.json()
-    else:
-        return {"error": response.text}
+        if response.ok:
+            return response.json()
+        else:
+            return {"error": response.text}
 
 
 class ListHandler:
