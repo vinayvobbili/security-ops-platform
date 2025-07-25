@@ -28,6 +28,7 @@ import json
 import os
 import random
 
+import requests
 from webexpythonsdk import WebexAPI
 from tabulate import tabulate
 
@@ -38,15 +39,16 @@ from datetime import datetime
 CONFIG = get_config()
 webex_api = WebexAPI(access_token=CONFIG.webex_bot_access_token_soar)
 
+qa_leads_file_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'data', 'transient', 're', 'qa_leads.json')
+
 
 def load_qa_leads():
-    leads_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'data', 'transient', 're', 'qa_leads.json')
-    with open(leads_path, 'r') as f:
-        return json.load(f), leads_path
+    with open(qa_leads_file_path, 'r') as f:
+        return json.load(f), qa_leads_file_path
 
 
-def save_qa_leads(leads, leads_path):
-    with open(leads_path, 'w') as f:
+def save_qa_leads(leads):
+    with open(qa_leads_file_path, 'w') as f:
         json.dump(leads, f, indent=4)
 
 
@@ -119,12 +121,14 @@ def generate(room_id):
             if 'id' not in qa_ticket:
                 print("Ticket creation failed: No 'id' in response.")
                 continue
+            ticket_handler.link_tickets(qa_ticket['id'], source_ticket['id'])
+            ticket_handler.add_participant(qa_ticket['id'], source_ticket['owner'])
             qa_ticket_url = CONFIG.xsoar_prod_ui_base_url + "/Custom/caseinfoid/" + qa_ticket['id']
             webex_api.messages.create(room_id,
                                       markdown=f"Hello <@personEmail:{owner}>👋🏾\n[X#{qa_ticket['id']}]({qa_ticket_url}) has been assigned to you for QA\nSource ticket-->\nID: [X#{source_ticket['id']}]({qa_ticket_url})\nType: {source_ticket['type']}\nImpact: {impact}")
             lead_index += 1
         qa_leads = qa_leads[lead_index % len(qa_leads):] + qa_leads[:lead_index % len(qa_leads)]
-        save_qa_leads(qa_leads, leads_path)
+        save_qa_leads(qa_leads)
     except Exception as e:
         import traceback
         print(f"Error while generating QA tickets: {e}")
