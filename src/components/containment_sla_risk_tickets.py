@@ -52,7 +52,13 @@ def calculate_seconds_remaining(due_date_utc):
     """Calculate seconds remaining until SLA breach."""
     now_utc = datetime.now(pytz.utc)
     delta = due_date_utc - now_utc
-    return int(delta.total_seconds())
+    seconds_remaining = int(delta.total_seconds())
+
+    # If already past due date, return 0 (breached)
+    if seconds_remaining < 0:
+        return 0
+
+    return seconds_remaining
 
 
 def process_ticket(ticket):
@@ -61,11 +67,22 @@ def process_ticket(ticket):
     timetocontain = ticket.get('CustomFields', {}).get('timetocontain', {})
     due_date_str = timetocontain.get('dueDate')
 
+    # Check if SLA is already breached
+    breach_triggered = timetocontain.get('breachTriggered', False)
+    run_status = timetocontain.get('runStatus', '')
+
     try:
+        # If already breached or ended, treat as 0 seconds remaining
+        if breach_triggered or run_status == 'ended':
+            return 0, ticket, due_date_str
+
         if due_date_str:
             due_date_utc = parse_due_date(due_date_str)
             if due_date_utc:
                 seconds_remaining = calculate_seconds_remaining(due_date_utc)
+                # Double-check: if calculation shows past due, return 0
+                if seconds_remaining < 0:
+                    seconds_remaining = 0
             else:
                 seconds_remaining = 0  # Treat as urgent if parsing fails
         else:
@@ -86,6 +103,11 @@ def build_ticket_message(seconds_remaining, ticket, due_date_str, index):
     ticket_owner = ticket.get('owner')
     incident_url = CONFIG.xsoar_prod_ui_base_url + '/Custom/caseinfoid/' + ticket_id
 
+    # Check if ticket has breached
+    timetocontain = ticket.get('CustomFields', {}).get('timetocontain', {})
+    breach_triggered = timetocontain.get('breachTriggered', False)
+    run_status = timetocontain.get('runStatus', '')
+
     # Format owner information
     if ticket_owner:
         # Use Webex person email format to make it clickable
@@ -97,14 +119,16 @@ def build_ticket_message(seconds_remaining, ticket, due_date_str, index):
     else:
         owner_text = "Unassigned"
 
-    # Format time remaining (XSOAR API only returns at-risk tickets, not overdue ones)
-    minutes = seconds_remaining // 60
-    seconds = seconds_remaining % 60
-
-    if minutes > 0:
-        time_text = f"{minutes} min{'s' if minutes != 1 else ''} {seconds} sec{'s' if seconds != 1 else ''}"
+    # Format time remaining or breach status
+    if breach_triggered or run_status == 'ended' or seconds_remaining == 0:
+        time_text = "⚠️ **SLA BREACHED**"
     else:
-        time_text = f"{seconds} sec{'s' if seconds != 1 else ''}"
+        minutes = seconds_remaining // 60
+        seconds = seconds_remaining % 60
+        if minutes > 0:
+            time_text = f"{minutes} min{'s' if minutes != 1 else ''} {seconds} sec{'s' if seconds != 1 else ''}"
+        else:
+            time_text = f"{seconds} sec{'s' if seconds != 1 else ''}"
 
     # Extract SLA due date if available
     sla_info = ""
@@ -122,10 +146,16 @@ def build_ticket_message(seconds_remaining, ticket, due_date_str, index):
             logger.debug(f"Failed to parse or format due date for ticket: {e}")
             pass
 
-    return (
-        f"{index}. [{ticket_id}]({incident_url}) - {ticket_name}\n"
-        f"   {owner_text}, act within the next {time_text}{sla_info}"
-    )
+    if breach_triggered or run_status == 'ended' or seconds_remaining == 0:
+        return (
+            f"{index}. [{ticket_id}]({incident_url}) - {ticket_name}\n"
+            f"   {owner_text}, {time_text}{sla_info}"
+        )
+    else:
+        return (
+            f"{index}. [{ticket_id}]({incident_url}) - {ticket_name}\n"
+            f"   {owner_text}, act within the next {time_text}{sla_info}"
+        )
 
 
 def start(room_id):
