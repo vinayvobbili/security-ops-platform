@@ -46,7 +46,7 @@ http_session = get_session()
 
 
 # Custom exception handler for asyncio
-def handle_asyncio_exception(loop, context):
+def handle_asyncio_exception(_, context):
     """Custom exception handler for asyncio to handle connection errors gracefully"""
     exception = context.get('exception')
     if exception:
@@ -1951,7 +1951,7 @@ class GetCompanyHolidays(Command):
             if i == today_holiday_idx:
                 h = f"🎊 **{h}** 🎊 (TODAY!)"
                 style = None  # Don't italicize today's holiday
-            # Handle next future holiday
+            # Handle next holiday
             elif i == next_holiday_idx:
                 if next_holiday_date:
                     days_until = (next_holiday_date - today).days
