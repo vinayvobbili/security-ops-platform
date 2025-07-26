@@ -21,6 +21,7 @@ from webexpythonsdk.models.cards import (
 from config import get_config
 from services import azdo
 from services.xsoar import TicketHandler, ListHandler
+from src.components import oncall
 
 # Set up logging for tenacity retries
 logger = logging.getLogger("tenacity.retry")
@@ -61,6 +62,7 @@ def get_staffing_data(day_name, shift_name):
     staffing_data = {}
     for team, cell_names in shift_cell_names.items():
         staffing_data[team] = [sheet[cell_name].value for cell_name in cell_names if sheet[cell_name].value != '\xa0']
+    staffing_data['On-Call'] = [oncall.get_on_call_person_name()]
     return staffing_data
 
 
@@ -295,7 +297,7 @@ def main():
     Main function to run the scheduled jobs.
     """
     room_id = config.webex_room_id_vinay_test_space
-    announce_shift_change('morning', room_id, sleep_time=0)
+    announce_shift_change('afternoon', room_id, sleep_time=0)
     # announce_previous_shift_performance(room_id, 'night')
 
 
