@@ -104,6 +104,33 @@ def get_on_call_person() -> str:
         return "_(unknown)_"
 
 
+def get_on_call_person_name() -> str:
+    """
+    Gets the formatted string for the current on-call person from XSOAR lists.
+
+    Returns:
+        Formatted string "**Name** (email@example.com)" or "_(unknown)_" on failure.
+    """
+    try:
+        # Use IANA timezone database name for reliability with DST
+        tz = timezone('America/New_York')
+        today = datetime.now(tz)
+        # Calculate the date of the most recent Monday (could be today)
+        last_monday_date = today.date() - timedelta(days=today.weekday())
+        last_monday_str = last_monday_date.strftime('%Y-%m-%d')
+
+        on_call_details = _get_on_call_details_by_monday_date(last_monday_str)
+
+        if on_call_details:
+            return on_call_details['name']
+        else:
+            log.error(f"Could not determine on-call person for week of {last_monday_str}")
+            return "_(unknown)_"
+    except Exception as e:
+        log.error(f"Unexpected error in get_on_call_person: {e}", exc_info=True)
+        return "_(unknown)_"
+
+
 def alert_change():
     """Sends a Webex notification about the upcoming on-call person."""
     try:
