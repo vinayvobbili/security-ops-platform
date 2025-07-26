@@ -173,7 +173,7 @@ def seek_approval_to_ring_tag(room_id):
         actions=[
             Submit(title="No!", data={"callback_keyword": "dont_ring_tag_cs_hosts"},
                    style=options.ActionStyle.DESTRUCTIVE),
-            Submit(title="Yes! Put a Ring On It!", data={"callback_keyword": "ring_tag_cs_hosts"},
+            Submit(title="Yes! Put a 💍 On It!", data={"callback_keyword": "ring_tag_cs_hosts"},
                    style=options.ActionStyle.POSITIVE)
         ]
     )
