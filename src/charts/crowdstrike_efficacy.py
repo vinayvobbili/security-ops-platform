@@ -187,10 +187,10 @@ def send_charts() -> None:
     recipient_email = CONFIG.efficacy_charts_receiver
     files = ['CrowdStrike Detection Efficacy-Quarter.png', 'CrowdStrike Detection Efficacy-Month.png', 'CrowdStrike Detection Efficacy-Week.png']
     today_date = datetime.now().strftime('%m-%d-%Y')
-    OUTPUT_DIR = ROOT_DIRECTORY / "web" / "static" / "charts" / today_date
+    output_dir = ROOT_DIRECTORY / "web" / "static" / "charts" / today_date
     try:
         for file in files:
-            webex.messages.create(toPersonEmail=recipient_email, files=[f'{OUTPUT_DIR / file}'])
+            webex.messages.create(toPersonEmail=recipient_email, files=[f'{output_dir / file}'])
         log.info(f"Chart sent to {recipient_email}")
     except Exception as e:
         log.error(f"Error sending chart: {e}", exc_info=True)
