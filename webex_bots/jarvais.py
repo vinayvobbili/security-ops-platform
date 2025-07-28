@@ -454,12 +454,15 @@ class GetTaniumHostsWithoutRingTag(Command):
     @log_activity(bot_access_token=CONFIG.webex_bot_access_token_jarvais, log_file_name="jarvais_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
         room_id = attachment_actions.roomId
-
+        loading_msg = get_random_loading_message()
         webex_api.messages.create(
             roomId=room_id,
-            markdown=f"Hello {activity['actor']['displayName']}! 🔍 **Tanium Hosts Without Ring Tag Report** 🏷️\n\nI've started the report generation process. It is running in the background and will complete in about 15 mins ⏰",
+            markdown=(
+                f"Hello {activity['actor']['displayName']}! {loading_msg}\n\n"
+                "🔍 **Tanium Hosts Without Ring Tag Report** 🏷️\n"
+                "Estimated completion: ~15 minutes ⏰"
+            )
         )
-
         lock_path = ROOT_DIRECTORY / "src" / "epp" / "all_tanium_hosts.lock"
         filepath = None  # Ensure filepath is always defined
         try:
