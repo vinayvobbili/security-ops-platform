@@ -614,7 +614,7 @@ class GetTaniumHostsWithLowerCaseJapanRingTag(Command):
         room_id = attachment_actions.roomId
         loading_msg = get_random_loading_message()
         today_date = datetime.now(timezone.utc).strftime('%m-%d-%Y')
-        filename = f"Tanium Hosts with 'FalconGroupingTags_JapanWksRing*.xlsx"
+        filename = f"Tanium Hosts with FalconGroupingTags_JapanWksRing*.xlsx"
         filepath = DATA_DIR / today_date / filename
         if filepath.exists():
             webex_api.messages.create(
