@@ -64,7 +64,32 @@ CHART_MESSAGES = [
     "🎨 Creating visual masterpieces...",
     "📈 Turning data into art...",
     "🎯 Targeting chart perfection...",
-    "🔥 Brewing some hot metrics..."
+    "🔥 Brewing some hot metrics...",
+    "🧙‍♂️ Summoning the chart wizard...",
+    "🚀 Launching your data to new heights...",
+    "🕵️‍♂️ Investigating the secrets of your numbers...",
+    "🧠 Crunching numbers with AI brainpower...",
+    "☕ Brewing up a fresh pot of analytics...",
+    "🧩 Piecing together the data puzzle...",
+    "🛠️ Assembling your chart masterpiece...",
+    "🌈 Adding color to your metrics...",
+    "🦄 Searching for unicorn insights...",
+    "🦉 Consulting the wise chart owl...",
+    "🧊 Chilling with cool visualizations...",
+    "🦖 Digging up data fossils...",
+    "🧗‍♂️ Climbing the mountain of information...",
+    "🛸 Beaming up your data to the cloud...",
+    "🦋 Transforming raw data into beauty...",
+    "🧹 Sweeping up data dust...",
+    "🧲 Attracting the most relevant facts...",
+    "🦜 Parroting back the best results...",
+    "🦩 Flamingling with fancy metrics...",
+    "🦦 Otterly focused on your chart...",
+    "🦔 Prickling through the data haystack...",
+    "🎩 Pulling insights out of a hat...",
+    "🎢 Riding the rollercoaster of trends...",
+    "🎬 Directing a blockbuster data story...",
+    "🎻 Orchestrating a symphony of stats..."
 ]
 
 

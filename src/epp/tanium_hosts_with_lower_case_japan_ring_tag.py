@@ -33,7 +33,6 @@ def get_tanium_hosts_with_japan_ring_tag():
         with pd.ExcelWriter(output_path, engine='openpyxl') as writer:
             out_df.to_excel(writer, index=False, sheet_name='Hosts')
             worksheet = writer.sheets['Hosts']
-            # Bold header, freeze header, add filter, set column width
             from openpyxl.styles import Font
             if out_df.shape[1] > 0:
                 for cell in worksheet[1]:
@@ -43,6 +42,9 @@ def get_tanium_hosts_with_japan_ring_tag():
                 for col in worksheet.columns:
                     max_length = max(len(str(cell.value)) if cell.value else 0 for cell in col)
                     worksheet.column_dimensions[col[0].column_letter].width = min(max_length + 2, 50)
+            else:
+                # If no columns, just leave the empty sheet
+                pass
         return filtered_hosts
     else:
         client = TaniumClient()
@@ -53,7 +55,14 @@ def get_tanium_hosts_with_japan_ring_tag():
             if any(tag.startswith('FalconGroupingTags/JapanWksRing') for tag in tags):
                 filtered_hosts.append(host)
         # Save filtered hosts to spreadsheet with formatting, even if empty
-        out_df = pd.DataFrame(filtered_hosts)
+        if filtered_hosts:
+            out_df = pd.DataFrame(filtered_hosts)
+        else:
+            # If no results, try to get columns from hosts if possible
+            if hosts and hasattr(hosts[0], '__dict__'):
+                out_df = pd.DataFrame(columns=hosts[0].__dict__.keys())
+            else:
+                out_df = pd.DataFrame()
         with pd.ExcelWriter(output_path, engine='openpyxl') as writer:
             out_df.to_excel(writer, index=False, sheet_name='Hosts')
             worksheet = writer.sheets['Hosts']
@@ -66,6 +75,9 @@ def get_tanium_hosts_with_japan_ring_tag():
                 for col in worksheet.columns:
                     max_length = max(len(str(cell.value)) if cell.value else 0 for cell in col)
                     worksheet.column_dimensions[col[0].column_letter].width = min(max_length + 2, 50)
+            else:
+                # If no columns, just leave the empty sheet
+                pass
         return filtered_hosts
 
 
