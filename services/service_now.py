@@ -12,8 +12,12 @@ import requests
 from tqdm import tqdm
 import concurrent.futures
 from filelock import FileLock
+import urllib3
 
 from config import get_config
+
+# Disable InsecureRequestWarning for unverified HTTPS requests
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
