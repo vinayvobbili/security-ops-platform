@@ -74,7 +74,22 @@ LOADING_MESSAGES = [
     "🔎 Zooming in on the tiniest details...",
     "📦 Unpacking boxes of insights...",
     "🦾 Deploying robot assistants for your data...",
-    "🧩 Piecing together the data puzzle..."
+    "🧩 Piecing together the data puzzle...",
+    "🛰️ Beaming up your data to the cloud...",
+    "🦉 Consulting the wise data owl...",
+    "🧬 Sequencing the DNA of your datasets...",
+    "🦄 Searching for unicorns in your data...",
+    "🧊 Chilling with cool analytics...",
+    "🦖 Digging up data fossils...",
+    "🧗‍♂️ Climbing the mountain of information...",
+    "🛸 Abducting anomalies for analysis...",
+    "🦋 Transforming raw data into insights...",
+    "🧹 Sweeping up data dust...",
+    "🧲 Attracting the most relevant facts...",
+    "🦜 Parroting back the best results...",
+    "🦩 Flamingling with fancy metrics...",
+    "🦦 Otterly focused on your request...",
+    "🦔 Prickling through the data haystack..."
 ]
 
 
@@ -616,6 +631,7 @@ class GetTaniumHostsWithLowerCaseJapanRingTag(Command):
         today_date = datetime.now(timezone.utc).strftime('%m-%d-%Y')
         filename = f"Tanium Hosts with FalconGroupingTags_JapanWksRing*.xlsx"
         filepath = DATA_DIR / today_date / filename
+        lock_path = ROOT_DIRECTORY / "src" / "epp" / "tanium_hosts_with_lower_case_japan_ring_tag.lock"
         if filepath.exists():
             webex_api.messages.create(
                 roomId=room_id,
@@ -632,20 +648,27 @@ class GetTaniumHostsWithLowerCaseJapanRingTag(Command):
             )
         )
         try:
-            from src.epp import tanium_hosts_with_lower_case_japan_ring_tag
-            tanium_hosts_with_lower_case_japan_ring_tag.get_tanium_hosts_with_japan_ring_tag()
-            if filepath.exists():
-                webex_api.messages.create(
-                    roomId=room_id,
-                    markdown=f"Here's the list of Tanium hosts with lower-case Japan Ring Tag.",
-                    files=[str(filepath)]
-                )
+            with fasteners.InterProcessLock(lock_path):
+                from src.epp import tanium_hosts_with_lower_case_japan_ring_tag
+                tanium_hosts_with_lower_case_japan_ring_tag.get_tanium_hosts_with_japan_ring_tag()
+                if filepath.exists():
+                    webex_api.messages.create(
+                        roomId=room_id,
+                        markdown=f"Here's the list of Tanium hosts with lower-case Japan Ring Tag.",
+                        files=[str(filepath)]
+                    )
         except Exception as e:
             logger.error(f"Error generating Tanium hosts with lower-case Japan Ring Tag report: {e}")
             webex_api.messages.create(
                 roomId=room_id,
                 markdown=f"❌ An error occurred while generating the report: {e}"
             )
+        finally:
+            if lock_path.exists():
+                try:
+                    lock_path.unlink()
+                except Exception as e:
+                    logger.error(f"Failed to remove lock file {lock_path}: {e}")
 
 
 def run_bot_with_reconnection():
