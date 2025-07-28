@@ -324,20 +324,17 @@ class TaniumClient:
             results[instance.name] = instance.validate_token()
         return results
 
-    def get_all_computers(self, limit: Optional[int] = None) -> List[Computer]:
-        """Get computers from all instances"""
+    def _get_all_computers(self, limit: Optional[int] = None) -> List[Computer]:
+        """Get computers from all instances (private)."""
         all_computers = []
-
         for instance in self.instances:
             if not instance.validate_token():
                 logger.warning(f"Invalid token for {instance.name}, skipping...")
                 continue
-
             logger.info(f"Fetching computers from {instance.name}...")
             computers = instance.get_computers(limit)
             all_computers.extend(computers)
             logger.info(f"Retrieved {len(computers)} computers from {instance.name}")
-
         return all_computers
 
     def _get_output_path(self, filename: Optional[str] = None) -> Path:
@@ -383,17 +380,23 @@ class TaniumClient:
             raise
 
     def get_and_export_all_computers(self, filename: Optional[str] = None) -> Optional[str]:
-        """Get all computers from all instances and export to Excel"""
-        all_computers = self.get_all_computers()
-
+        """Get all computers from all instances and export to Excel, using cache if available."""
+        # Determine today's output path
+        today = datetime.now().strftime('%m-%d-%Y')
+        default_filename = filename or 'All Tanium Hosts.xlsx'
+        output_path = Path(__file__).parent.parent / "data" / "transient" / "epp_device_tagging" / today / default_filename
+        if output_path.exists():
+            logger.info(f"Using cached file: {output_path}")
+            return str(output_path)
+        all_computers = self._get_all_computers()
         if not all_computers:
             logger.warning("No computers retrieved from any instance!")
             return None
-        return self.export_to_excel(all_computers, filename or 'All Tanium Hosts.xlsx')
+        return self.export_to_excel(all_computers, default_filename)
 
     def get_computer_by_name(self, name: str) -> Optional[Computer]:
         """Get a specific computer by name from any instance"""
-        all_computers = self.get_all_computers(limit=TaniumInstance.DEFAULT_SEARCH_LIMIT)
+        all_computers = self._get_all_computers(limit=TaniumInstance.DEFAULT_SEARCH_LIMIT)
         return next((c for c in all_computers if c.name.lower() == name.lower()), None)
 
     def add_custom_tag_to_computer(self, computer_name: str, tag: str, instance_name: str) -> bool:
