@@ -268,7 +268,7 @@ def enrich_host_report(input_file):
     # Detect hostname column
     hostname_col = None
     for col in df.columns:
-        if 'hostname' in col.lower():
+        if 'hostname' in str(col).lower():
             hostname_col = col
             break
 
@@ -291,7 +291,7 @@ def enrich_host_report(input_file):
 
     def enrich_single_host(hostname):
         details = client.get_host_details(hostname)
-        short_hostname = hostname.split('.')[0].lower() if hostname and isinstance(hostname, str) else ""
+        short_hostname = str(hostname).split('.')[0].lower() if hostname and isinstance(hostname, str) else ""
         return short_hostname, details
 
     max_workers = 10  # Safe parallelism, tune as needed
@@ -324,9 +324,8 @@ def enrich_host_report(input_file):
     for idx, row in df.iterrows():
         hostname = row[hostname_col]
         if not isinstance(hostname, str):
-            continue
-
-        short_hostname = hostname.split('.')[0].lower()
+            hostname = str(hostname)
+        short_hostname = hostname.split('.')[0].lower() if hostname else ""
         if short_hostname in snow_data:
             result = snow_data[short_hostname]
             # If there is an error, always set category to empty string
