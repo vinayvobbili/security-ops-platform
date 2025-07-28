@@ -2,6 +2,7 @@ from services.tanium import TaniumClient
 from pathlib import Path
 import pandas as pd
 from datetime import datetime
+from tqdm import tqdm
 
 
 def get_tanium_hosts_with_japan_ring_tag():
@@ -47,7 +48,7 @@ def get_tanium_hosts_with_japan_ring_tag():
         client = TaniumClient()
         hosts = client.get_and_export_all_computers()
         filtered_hosts = []
-        for host in hosts:
+        for host in tqdm(hosts, desc="Filtering hosts"):  # Show progress bar
             tags = getattr(host, 'custom_tags', [])
             if any(tag.startswith('FalconGroupingTags/JapanWksRing') for tag in tags):
                 filtered_hosts.append(host)
