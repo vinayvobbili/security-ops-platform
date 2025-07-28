@@ -605,7 +605,7 @@ class GetTaniumHostsWithLowerCaseJapanRingTag(Command):
     def __init__(self):
         super().__init__(
             command_keyword="lower_japan",
-            help_message="Get Tanium Hosts with Lower Case Japan Ring Tag 🔍🔡🇯🇵",
+            help_message="Get Tanium Hosts- Lower Case Japan Ring Tag 🔍🔡🇯🇵",
             delete_previous_message=True,
         )
 
