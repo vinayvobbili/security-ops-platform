@@ -241,7 +241,11 @@ class CSHostsWithoutRingTag(Command):
         loading_msg = get_random_loading_message()
         webex_api.messages.create(
             roomId=room_id,
-            markdown=f"Hello {activity['actor']['displayName']}! {loading_msg}\n\n🛡️ **CrowdStrike Hosts Without Ring Tag Report** 🏷️\nEstimated completion: ~5 minutes ⏰"
+            markdown=(
+                f"Hello {activity['actor']['displayName']}! {loading_msg}\n\n"
+                "🛡️ **CrowdStrike Hosts Without Ring Tag Report** 🏷️\n"
+                "Estimated completion: ~5 minutes ⏰"
+            )
         )
         lock_path = ROOT_DIRECTORY / "src" / "epp" / "cs_hosts_without_ring_tag.lock"
         try:
@@ -583,7 +587,6 @@ class GetBotHealth(Command):
                                 TextBlock(text=f"Details: {health_detail}"),
                                 TextBlock(text=f"Uptime: {uptime_str}"),
                                 TextBlock(text=f"Last Health Check: {last_check_str}"),
-                                TextBlock(text=f"Current Time: {current_time.strftime(f'%Y-%m-%d %H:%M:%S {tz_name}')}")
                             ]
                         )
                     ]
@@ -596,6 +599,53 @@ class GetBotHealth(Command):
             text="Bot Status Information",
             attachments=[{"contentType": "application/vnd.microsoft.card.adaptive", "content": status_card.to_dict()}]
         )
+
+
+class GetTaniumHostsWithLowerCaseJapanRingTag(Command):
+    def __init__(self):
+        super().__init__(
+            command_keyword="lower_japan",
+            help_message="Get Tanium Hosts with Lower Case Japan Ring Tag 🔍🔡🇯🇵",
+            delete_previous_message=True,
+        )
+
+    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_jarvais, log_file_name="jarvais_activity_log.csv")
+    def execute(self, message, attachment_actions, activity):
+        room_id = attachment_actions.roomId
+        loading_msg = get_random_loading_message()
+        today_date = datetime.now(timezone.utc).strftime('%m-%d-%Y')
+        filename = f"Tanium Hosts with 'FalconGroupingTags_JapanWksRing*.xlsx"
+        filepath = DATA_DIR / today_date / filename
+        if filepath.exists():
+            webex_api.messages.create(
+                roomId=room_id,
+                markdown=f"Hello {activity['actor']['displayName']}! Here's the list of Tanium hosts with lower-case Japan Ring Tag.",
+                files=[str(filepath)]
+            )
+            return
+        webex_api.messages.create(
+            roomId=room_id,
+            markdown=(
+                f"Hello {activity['actor']['displayName']}! {loading_msg}\n\n"
+                "🔡 **Tanium Hosts With Lower-case Japan Ring Tag Report** 🏷️\n"
+                "Estimated completion: ~5 minutes ⏰"
+            )
+        )
+        try:
+            from src.epp import tanium_hosts_with_lower_case_japan_ring_tag
+            tanium_hosts_with_lower_case_japan_ring_tag.get_tanium_hosts_with_japan_ring_tag()
+            if filepath.exists():
+                webex_api.messages.create(
+                    roomId=room_id,
+                    markdown=f"Here's the list of Tanium hosts with lower-case Japan Ring Tag.",
+                    files=[str(filepath)]
+                )
+        except Exception as e:
+            logger.error(f"Error generating Tanium hosts with lower-case Japan Ring Tag report: {e}")
+            webex_api.messages.create(
+                roomId=room_id,
+                markdown=f"❌ An error occurred while generating the report: {e}"
+            )
 
 
 def run_bot_with_reconnection():
@@ -628,6 +678,7 @@ def run_bot_with_reconnection():
             bot.add_command(RemoveInvalidRings())
             bot.add_command(DontRemoveInvalidRings())
             bot.add_command(GetTaniumHostsWithoutRingTag())
+            bot.add_command(GetTaniumHostsWithLowerCaseJapanRingTag())
             bot.add_command(GetTaniumUnhealthyHosts())
             bot.add_command(GetBotHealth())
 

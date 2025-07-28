@@ -335,8 +335,15 @@ def _normalize_environment(environment: Union[str, List[str], None]) -> str:
     if not environment:
         return ""
     if isinstance(environment, list):
-        return environment[0].lower().strip() if environment else ""
-    return str(environment).lower().strip()
+        value = environment[0] if environment else ""
+    else:
+        value = environment
+    # Handle float and other non-string types safely
+    if isinstance(value, float) or isinstance(value, int):
+        value = str(value)
+    if isinstance(value, str):
+        return value.lower().strip()
+    return ""
 
 
 def _guess_country_from_hostname(computer: Computer) -> tuple[str, str]:
