@@ -70,7 +70,7 @@ TOKEN_FILE = Path(__file__).parent.parent / "data/transient/service_now_access_t
 DATA_DIR = Path(__file__).parent.parent / "data/transient/epp_device_tagging"
 
 
-def rate_limit(calls_per_second=10):  # Increased from 5 to 10
+def rate_limit(calls_per_second=10):
     """Rate limiting decorator to prevent API throttling."""
     min_interval = 1.0 / calls_per_second
     last_called = [0.0]
@@ -266,15 +266,15 @@ class ServiceNowClient:
         # Optimized session with higher connection pooling
         self.session = requests.Session()
         retry_strategy = Retry(
-            total=2,  # Reduced from 3 to 2 for faster failure
-            backoff_factor=0.5,  # Reduced from 1 to 0.5
+            total=2,
+            backoff_factor=0.3,
             status_forcelist=[429, 500, 502, 503, 504],
             allowed_methods=["HEAD", "GET", "OPTIONS"]
         )
         adapter = HTTPAdapter(
             max_retries=retry_strategy,
-            pool_connections=20,  # Increased from 10
-            pool_maxsize=50  # Increased from 20
+            pool_connections=30,
+            pool_maxsize=100
         )
         self.session.mount("http://", adapter)
         self.session.mount("https://", adapter)
@@ -301,7 +301,7 @@ class ServiceNowClient:
 
         return {"name": hostname, "status": "Not Found"}
 
-    @rate_limit(calls_per_second=15)  # Increased rate limit
+    @rate_limit(calls_per_second=25)  # Increased rate limit
     def _search_endpoint(self, endpoint, hostname):
         """Search a specific endpoint for hostname."""
         headers = self.token_manager.get_auth_headers()
@@ -312,7 +312,7 @@ class ServiceNowClient:
                 endpoint,
                 headers=headers,
                 params=params,
-                timeout=15,  # Reduced from 30 to 15
+                timeout=10,
                 verify=False
             )
 
@@ -324,7 +324,7 @@ class ServiceNowClient:
                 return {"name": hostname, "status": "Authorization Error", "category": "", "error": "HTTP 403"}
             elif response.status_code == 429:
                 logger.warning(f"Rate limited for {hostname}")
-                time.sleep(1)  # Brief pause on rate limit
+                time.sleep(0.5)
                 return {"name": hostname, "status": "Rate Limited", "category": "", "error": "HTTP 429"}
             elif response.status_code >= 500:
                 logger.warning(f"Server error for {hostname}: {response.status_code}")
@@ -358,22 +358,8 @@ class ServiceNowClient:
             logger.error(f"JSON decode error for {hostname}: {str(e)}")
             return {"name": hostname, "error": "Invalid JSON response", "status": "ServiceNow API Error", "category": ""}
 
-    def get_process_changes(self, params=None):
-        """Get process changes from ServiceNow custom endpoint."""
-        base_url = config.snow_base_url.rstrip('/')
-        endpoint = f"{base_url}/api/x_metli_acme_it/process/changes"
-        headers = self.token_manager.get_auth_headers()
 
-        try:
-            response = self.session.get(endpoint, headers=headers, params=params, timeout=30, verify=False)
-            response.raise_for_status()
-            return response.json()
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Error fetching process changes: {str(e)}")
-            return {"error": str(e), "status": "ServiceNow API Error"}
-
-
-# Async version for even better performance
+# Optimized Async version
 class AsyncServiceNowClient:
     def __init__(self, token_manager=None):
         if token_manager is None:
@@ -388,11 +374,11 @@ class AsyncServiceNowClient:
         base_url = config.snow_base_url.rstrip('/')
         self.server_url = f"{base_url}/itsm-compute/compute/instances"
         self.workstation_url = f"{base_url}/itsm-compute/compute/computers"
-        self.semaphore = asyncio.Semaphore(15)  # Limit concurrent requests
+        self.semaphore = asyncio.Semaphore(50)  # Increased concurrent requests
 
     async def get_host_details(self, session, hostname):
         """Get host details asynchronously."""
-        async with self.semaphore:  # Limit concurrency
+        async with self.semaphore:
             if not hostname or not isinstance(hostname, str):
                 return {"name": str(hostname) if hostname is not None else "unknown", "status": "Invalid Hostname"}
 
@@ -418,7 +404,7 @@ class AsyncServiceNowClient:
         params = {'name': hostname}
 
         try:
-            timeout = aiohttp.ClientTimeout(total=10)  # Shorter timeout for async
+            timeout = aiohttp.ClientTimeout(total=8)
             async with session.get(
                     endpoint,
                     headers=headers,
@@ -427,7 +413,7 @@ class AsyncServiceNowClient:
                     ssl=False
             ) as response:
                 if response.status == 429:
-                    await asyncio.sleep(0.1)  # Very brief pause
+                    await asyncio.sleep(0.05)
                     return {"name": hostname, "error": "HTTP 429 Too Many Requests", "status": "ServiceNow API Error", "category": ""}
                 elif response.status == 401:
                     return {"name": hostname, "error": "HTTP 401 Unauthorized", "status": "ServiceNow API Error", "category": ""}
@@ -457,7 +443,7 @@ class AsyncServiceNowClient:
             return {"name": hostname, "error": str(e), "status": "ServiceNow API Error", "category": ""}
 
 
-def process_in_batches(items, batch_size=100):
+def process_in_batches(items, batch_size=500):  # Increased batch size
     """Process items in batches to manage memory usage."""
     for i in range(0, len(items), batch_size):
         yield items[i:i + batch_size]
@@ -485,7 +471,7 @@ def validate_input_file(filepath):
 
 
 async def enrich_host_report_async(input_file):
-    """Asynchronous version of host enrichment for maximum performance."""
+    """Optimized asynchronous version with true concurrency."""
     try:
         validate_input_file(input_file)
 
@@ -532,56 +518,77 @@ async def enrich_host_report_async(input_file):
             logger.warning("No valid hostnames found in input file")
             return input_file
 
-        # Use async client for better performance
+        # Use async client for maximum performance
         client = AsyncServiceNowClient()
         snow_data = {}
 
-        # Configure aiohttp session with optimized settings
+        # Optimized aiohttp session
         connector = aiohttp.TCPConnector(
-            limit=100,  # Total connection pool size
-            limit_per_host=20,  # Connections per host
-            ttl_dns_cache=300,  # DNS cache TTL
+            limit=200,  # Increased total connection pool
+            limit_per_host=50,  # Increased connections per host
+            ttl_dns_cache=300,
             use_dns_cache=True,
-            keepalive_timeout=30,
+            keepalive_timeout=60,
             enable_cleanup_closed=True
         )
 
-        timeout = aiohttp.ClientTimeout(total=300, connect=10)  # 5 minute total, 10 sec connect
+        timeout = aiohttp.ClientTimeout(total=600, connect=5)  # 10 min total, 5 sec connect
 
         async with aiohttp.ClientSession(
                 connector=connector,
                 timeout=timeout
         ) as session:
-            # Process all hostnames concurrently with semaphore limiting
-            tasks = []
-            for hostname in hostnames:
-                task = client.get_host_details(session, hostname)
-                tasks.append((hostname, task))
 
-            # Process with progress tracking
-            results = []
-            for hostname, task in tqdm(tasks, desc="Creating async tasks"):
-                results.append((hostname, task))
+            # Process in smaller batches to avoid overwhelming the API
+            batch_size = 1000  # Process 1000 at a time
+            total_batches = (len(hostnames) + batch_size - 1) // batch_size
 
-            # Execute all tasks
-            logger.info("Executing async requests...")
-            completed_results = []
+            for batch_num, hostname_batch in enumerate(process_in_batches(hostnames, batch_size), 1):
+                logger.info(f"Processing batch {batch_num}/{total_batches} ({len(hostname_batch)} hosts)")
 
-            for hostname, task in tqdm(results, desc="Processing hosts"):
-                try:
-                    result = await task
-                    short_hostname = hostname.split('.')[0].lower()
-                    snow_data[short_hostname] = result
-                    completed_results.append((short_hostname, result))
-                except Exception as e:
-                    logger.error(f"Error processing {hostname}: {e}")
-                    short_hostname = hostname.split('.')[0].lower()
-                    snow_data[short_hostname] = {
-                        "name": hostname,
-                        "error": str(e),
-                        "status": "Processing Error",
-                        "category": ""
-                    }
+                # Create all tasks for this batch
+                tasks = []
+                for hostname in hostname_batch:
+                    task = client.get_host_details(session, hostname)
+                    tasks.append((hostname, task))
+
+                # Execute all tasks in this batch concurrently
+                batch_results = await asyncio.gather(
+                    *[task for _, task in tasks],
+                    return_exceptions=True
+                )
+
+                # Process results
+                for i, (hostname, _) in enumerate(tasks):
+                    try:
+                        result = batch_results[i]
+                        if isinstance(result, Exception):
+                            logger.error(f"Error processing {hostname}: {result}")
+                            result = {
+                                "name": hostname,
+                                "error": str(result),
+                                "status": "Processing Error",
+                                "category": ""
+                            }
+
+                        short_hostname = hostname.split('.')[0].lower()
+                        snow_data[short_hostname] = result
+
+                    except Exception as e:
+                        logger.error(f"Error processing {hostname}: {e}")
+                        short_hostname = hostname.split('.')[0].lower()
+                        snow_data[short_hostname] = {
+                            "name": hostname,
+                            "error": str(e),
+                            "status": "Processing Error",
+                            "category": ""
+                        }
+
+                # Small delay between batches to be respectful to the API
+                if batch_num < total_batches:
+                    await asyncio.sleep(0.1)
+
+                logger.info(f"Completed batch {batch_num}/{total_batches} - Total processed: {len(snow_data)}")
 
         if not snow_data:
             logger.error("No ServiceNow data collected, cannot enrich report")
@@ -641,12 +648,214 @@ async def enrich_host_report_async(input_file):
         raise
 
 
-def enrich_host_report(input_file, use_async=True):
-    """Enhanced host enrichment with option for async processing."""
-    if use_async:
-        return asyncio.run(enrich_host_report_async(input_file))
+def enrich_host_report_multithreaded(input_file):
+    """High-performance multithreaded version as alternative to async."""
+    try:
+        validate_input_file(input_file)
 
-    # Optimized synchronous version
+        today = datetime.now().strftime('%m-%d-%Y')
+        input_name = Path(input_file).name
+        output_file = DATA_DIR / today / f"Enriched {input_name}"
+
+        if output_file.exists():
+            logger.info(f"Enriched file already exists: {output_file}")
+            return output_file
+
+        logger.info(f"Reading input file: {input_file}")
+        df = pd.read_excel(input_file, engine="openpyxl", dtype=str)
+
+        # Detect hostname column
+        hostname_col = None
+        for col in df.columns:
+            if 'hostname' in str(col).lower():
+                hostname_col = col
+                break
+
+        if not hostname_col:
+            logger.error("Could not find hostname column in the input file")
+            return input_file
+
+        logger.info(f"Using column '{hostname_col}' for hostnames")
+
+        # Clean the dataframe
+        initial_count = len(df)
+        df = df.dropna(subset=[hostname_col])
+        df = df[df[hostname_col].str.strip() != '']
+        logger.info(f"Removed {initial_count - len(df)} rows with empty hostnames")
+
+        # Extract hostnames
+        hostnames = []
+        for h in df[hostname_col].tolist():
+            if h is not None and str(h).strip() not in ['nan', 'NaN', 'none', 'None', 'null', 'NULL', '']:
+                hostname_str = str(h).strip()
+                hostnames.append(hostname_str)
+
+        logger.info(f"Processing {len(hostnames)} valid hostnames from {input_file}")
+
+        if not hostnames:
+            logger.warning("No valid hostnames found in input file")
+            return input_file
+
+        # Create multiple clients for better concurrency
+        num_clients = 5
+        clients = [ServiceNowClient() for _ in range(num_clients)]
+        snow_data = {}
+        data_lock = threading.Lock()
+
+        def enrich_single_host(hostname, client_idx=0):
+            try:
+                client = clients[client_idx % len(clients)]
+                details = client.get_host_details(hostname)
+                short_hostname = hostname.split('.')[0].lower()
+
+                with data_lock:
+                    snow_data[short_hostname] = details
+
+                return short_hostname, details
+            except Exception as e:
+                logger.error(f"Error enriching host {hostname}: {e}")
+                short_hostname = hostname.split('.')[0].lower()
+                error_result = {
+                    "name": hostname,
+                    "error": str(e),
+                    "status": "Processing Error",
+                    "category": ""
+                }
+
+                with data_lock:
+                    snow_data[short_hostname] = error_result
+
+                return short_hostname, error_result
+
+        # Process with much higher concurrency
+        max_workers = 50  # Significantly increased
+
+        logger.info(f"Starting multithreaded processing with {max_workers} workers")
+
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            # Submit all tasks at once for maximum concurrency
+            future_to_hostname = {}
+
+            for i, hostname in enumerate(hostnames):
+                future = executor.submit(enrich_single_host, hostname, i)
+                future_to_hostname[future] = hostname
+
+            # Process completed tasks with progress bar
+            completed = 0
+            total = len(future_to_hostname)
+
+            with tqdm(total=total, desc="Processing hosts") as pbar:
+                for future in as_completed(future_to_hostname, timeout=1800):  # 30 min timeout
+                    try:
+                        short_hostname, details = future.result(timeout=30)
+                        completed += 1
+                        pbar.update(1)
+
+                        # Log progress every 1000 hosts
+                        if completed % 1000 == 0:
+                            logger.info(f"Processed {completed}/{total} hosts ({completed / total * 100:.1f}%)")
+
+                    except concurrent.futures.TimeoutError:
+                        hostname = future_to_hostname[future]
+                        logger.error(f"Timeout processing host {hostname}")
+                        short_hostname = hostname.split('.')[0].lower()
+
+                        with data_lock:
+                            snow_data[short_hostname] = {
+                                "name": hostname,
+                                "error": "Processing timeout",
+                                "status": "Processing Error",
+                                "category": ""
+                            }
+                        completed += 1
+                        pbar.update(1)
+
+                    except Exception as e:
+                        hostname = future_to_hostname[future]
+                        logger.error(f"Exception processing host {hostname}: {e}")
+                        short_hostname = hostname.split('.')[0].lower()
+
+                        with data_lock:
+                            snow_data[short_hostname] = {
+                                "name": hostname,
+                                "error": str(e),
+                                "status": "Processing Error",
+                                "category": ""
+                            }
+                        completed += 1
+                        pbar.update(1)
+
+        if not snow_data:
+            logger.error("No ServiceNow data collected, cannot enrich report")
+            return input_file
+
+        # Add ServiceNow data to the original dataframe
+        logger.info(f"Retrieved data for {len(snow_data)} hosts from ServiceNow")
+
+        snow_columns = ['id', 'ciClass', 'environment', 'lifecycleStatus', 'country',
+                        'supportedCountry', 'operatingSystem', 'category', 'status', 'error']
+
+        for col in snow_columns:
+            df[f'SNOW_{col}'] = None
+
+        # Add ServiceNow data to each row
+        for idx, row in df.iterrows():
+            hostname = row[hostname_col]
+            if hostname and str(hostname).strip() not in ['nan', 'NaN', 'none', 'None', 'null', 'NULL', '']:
+                short_hostname = hostname.split('.')[0].lower()
+            else:
+                short_hostname = ""
+
+            if short_hostname in snow_data:
+                result = snow_data[short_hostname]
+                if result.get('status') == 'ServiceNow API Error':
+                    df.at[idx, 'SNOW_category'] = ''
+                for col in snow_columns:
+                    if col in result and not (col == 'category' and result.get('status') == 'ServiceNow API Error'):
+                        df.at[idx, f'SNOW_{col}'] = result[col]
+
+        # Save results
+        output_file.parent.mkdir(parents=True, exist_ok=True)
+
+        with pd.ExcelWriter(output_file, engine="openpyxl") as writer:
+            df.to_excel(writer, index=False)
+
+            # Auto-adjust column widths
+            worksheet = writer.sheets['Sheet1']
+            for i, column in enumerate(df.columns):
+                max_length = max(
+                    df[column].astype(str).apply(len).max(),
+                    len(str(column))
+                ) + 2
+                column_width = min(max_length, 50)
+                worksheet.column_dimensions[worksheet.cell(row=1, column=i + 1).column_letter].width = column_width
+
+        success_count = len([v for v in snow_data.values() if v.get('status') != 'ServiceNow API Error'])
+        error_count = len(snow_data) - success_count
+
+        logger.info(f"Successfully enriched report saved to {output_file}")
+        logger.info(f"Enrichment summary: {success_count} successful, {error_count} errors out of {len(snow_data)} total")
+
+        return output_file
+
+    except Exception as e:
+        logger.error(f"Error in enrich_host_report_multithreaded: {e}")
+        raise
+
+
+def enrich_host_report(input_file, use_async=True, use_multithreaded=False):
+    """Enhanced host enrichment with multiple optimization strategies."""
+    if use_multithreaded:
+        return enrich_host_report_multithreaded(input_file)
+    elif use_async:
+        return asyncio.run(enrich_host_report_async(input_file))
+    else:
+        # Fallback to original synchronous method
+        return enrich_host_report_sync(input_file)
+
+
+def enrich_host_report_sync(input_file):
+    """Original synchronous version (kept as fallback)."""
     try:
         validate_input_file(input_file)
 
@@ -711,22 +920,20 @@ def enrich_host_report(input_file, use_async=True):
                 }
 
         # Optimized batch processing
-        batch_size = 100  # Larger batches
-        max_workers = min(20, len(hostnames))  # More workers
+        batch_size = 200
+        max_workers = min(30, len(hostnames))
 
         for batch_num, batch in enumerate(process_in_batches(hostnames, batch_size), 1):
             logger.info(f"Processing batch {batch_num}/{(len(hostnames) + batch_size - 1) // batch_size}")
 
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
-                # Submit all tasks
                 future_to_hostname = {
                     executor.submit(enrich_single_host, hostname): hostname
                     for hostname in batch
                 }
 
-                # Process completed tasks
                 for future in tqdm(
-                        as_completed(future_to_hostname, timeout=300),  # 5 minute timeout
+                        as_completed(future_to_hostname, timeout=600),
                         total=len(future_to_hostname),
                         desc=f"Enriching batch {batch_num}"
                 ):
@@ -809,36 +1016,25 @@ def enrich_host_report(input_file, use_async=True):
         return output_file
 
     except Exception as e:
-        logger.error(f"Error in enrich_host_report: {e}")
+        logger.error(f"Error in enrich_host_report_sync: {e}")
         raise
 
 
 if __name__ == "__main__":
     try:
-        client = ServiceNowClient()
+        # Example usage - choose your preferred method
+        input_file_path = "your_input_file.xlsx"
 
-        hostname = "JP2NKTQL3.alico.corp"
-        logger.info(f"Looking up {hostname}...")
+        # Option 1: Use optimized async version (recommended for maximum speed)
+        output_file = enrich_host_report(input_file_path, use_async=True)
 
-        details = client.get_host_details(hostname)
-        if details:
-            print(f"Name: {details.get('name')}")
-            print(f"IP: {details.get('ipAddress')}")
-            print(f"Category: {details.get('category')}")
-            print(f"OS: {details.get('operatingSystem')}")
-            print(f"Country: {details.get('country')}")
-            print(f"Status: {details.get('state')}")
-            print(f"Domain: {details.get('osDomain')}")
-            print(f"Environment: {details.get('environment')}")
-            if 'status' in details:
-                print(f"SNOW Status: {details.get('status')}")
-            if 'error' in details:
-                print(f"SNOW Error: {details.get('error')}")
-        else:
-            print("Host not found")
+        # Option 2: Use multithreaded version (good alternative)
+        # output_file = enrich_host_report(input_file_path, use_multithreaded=True)
 
-        changes = client.get_process_changes()
-        print(changes)
+        # Option 3: Use synchronous version (fallback)
+        # output_file = enrich_host_report(input_file_path, use_async=False)
+
+        print(f"Enrichment completed. Output saved to: {output_file}")
 
     except Exception as e:
         logger.error(f"Error in main: {e}")
