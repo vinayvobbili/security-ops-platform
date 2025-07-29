@@ -1,6 +1,5 @@
 import json
 import logging.config
-import os
 from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
@@ -55,7 +54,6 @@ logger = logging.getLogger(__name__)
 
 # Configuration
 CONFIG = get_config()
-DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
 
 # Constants for ring distribution
 RING_1_PERCENT = 0.10  # 10% of workstations in Ring 1
@@ -145,7 +143,7 @@ def calculate_ring_sizes(total):
         return [ring_1, ring_2, ring_3, ring_4]
 
 
-def get_tanium_hosts_without_ring_tag(filename) -> str:
+def get_tanium_hosts_without_ring_tag(filename, test_limit=None) -> str:
     """Get computers without ECM tag from all instances and export to Excel"""
     try:
         today = datetime.now().strftime('%m-%d-%Y')
@@ -182,13 +180,14 @@ def get_tanium_hosts_without_ring_tag(filename) -> str:
                 if not row:
                     continue
 
+                # Ensure row has enough elements for direct indexing up to index 5 (6 columns)
                 if len(row) < 6:
-                    logger.warning(f"Row {row_num}: Insufficient columns ({len(row)}/6 expected)")
+                    logger.warning(f"Row {row_num}: Insufficient columns ({len(row)}/6 expected), skipping. Row: {row}")
                     continue
 
                 # Validate critical fields before creating Computer object
                 if not row[0]:  # name is required
-                    logger.warning(f"Row {row_num}: Missing computer name, skipping")
+                    logger.warning(f"Row {row_num}: Missing computer name, skipping. Row: {row}")
                     continue
 
                 try:
@@ -226,69 +225,135 @@ def get_tanium_hosts_without_ring_tag(filename) -> str:
 
         logger.info(f"Successfully loaded {len(all_computers)} computers from Tanium")
 
-        computers_without_ring_tag = [c for c in all_computers if not c.has_epp_ring_tag()]
+        # Filter computers without ring tag and apply the test_limit
+        filtered_computers_without_ring_tag = [c for c in all_computers if not c.has_epp_ring_tag()]
+        if test_limit is not None and test_limit > 0:
+            computers_without_ring_tag = filtered_computers_without_ring_tag[:test_limit]
+            print(f'Found {len(filtered_computers_without_ring_tag)} Tanium hosts without ring tag, limiting to {len(computers_without_ring_tag)} for test.')
+        else:
+            computers_without_ring_tag = filtered_computers_without_ring_tag
+            print(f'Found {len(computers_without_ring_tag)} Tanium hosts without ring tag')
+
         computers_without_ring_tag_filename = client.export_to_excel(computers_without_ring_tag, filename)
 
-        print(f'Found {len(computers_without_ring_tag)} Tanium hosts without ring tag')
         print('Starting enrichment of these hosts with ServiceNow data')
 
-        enriched_report = enrich_host_report(computers_without_ring_tag_filename)
+        enriched_report_from_service_now = enrich_host_report(computers_without_ring_tag_filename)
 
-        # Load and process the enriched report
-        df_enriched = pd.read_excel(enriched_report, dtype=str, engine='openpyxl')
-        df_enriched['Region'] = None
-        df_enriched['Was Country Guessed'] = False
+        # Load the report that has been enriched by ServiceNow.
+        # This df_enriched will have SNOW_ prefixed columns, and SNOW_country will be blank if it was 'nan'.
+        df_enriched = pd.read_excel(enriched_report_from_service_now, dtype=str, engine='openpyxl')
 
-        if DEBUG:
-            debug_sample_size = min(10, len(df_enriched))
-            print(f"\n=== DEBUGGING FIRST {debug_sample_size} ROWS ===")
-            for index, row in df_enriched.head(debug_sample_size).iterrows():
-                country_from_snow = row.get('SNOW_country')
-                hostname = row.get('Hostname')
-                print(f"\nRow {index}:")
-                print(f"  Hostname: '{hostname}'")
-                print(f"  SNOW_country: '{country_from_snow}' (type: {type(country_from_snow)})")
-                print(f"  will guess country: {not is_valid_country(country_from_snow)}")
-                if hostname:
-                    dummy_computer = Computer(name=hostname, id="", ip="", eidLastSeen="", source="")
-                    guessed_country, explanation = _guess_country_from_hostname(dummy_computer)
-                    print(f"  would guess: '{guessed_country}' ({explanation})")
-            print(f"=== END DEBUG ===\n")
+        # Initialize 'Region' and 'Was Country Guessed' columns in df_enriched
+        # If 'Country' column already exists from the Tanium export, this will overwrite it.
+        # If not, it will create it.
+        # Ensure 'Country' column is of type object to hold strings
+        if 'Country' not in df_enriched.columns:
+            df_enriched['Country'] = ''
+        else:
+            # Clean 'nan' from the existing 'Country' column directly when loading, if it originated from Tanium
+            df_enriched['Country'] = df_enriched['Country'].apply(lambda x: '' if pd.isna(x) or str(x).lower() == 'nan' else str(x))
 
-        # Process each row for country and region assignment
-        for index, row in df_enriched.iterrows():
+        df_enriched['Region'] = ''  # Initialize Region column
+        df_enriched['Was Country Guessed'] = 'No'  # Initialize as 'No' string
+
+        debug_sample_size = min(10, len(df_enriched))
+        print(f"\n=== DEBUGGING FIRST {debug_sample_size} ROWS ===")
+        for index, row in df_enriched.head(debug_sample_size).iterrows():
             country_from_snow = row.get('SNOW_country')
             hostname = row.get('Hostname')
+            print(f"\nRow {index}:")
+            print(f"  Hostname: '{hostname}'")
+            print(f"  SNOW_country: '{country_from_snow}' (type: {type(country_from_snow)})")
+            print(f"  will guess country: {not is_valid_country(country_from_snow)}")
+            if hostname:
+                dummy_computer = Computer(name=hostname, id="", ip="", eidLastSeen="", source="")
+                guessed_country, explanation = _guess_country_from_hostname(dummy_computer)
+                print(f"  would guess: '{guessed_country}' ({explanation})")
+        print(f"=== END DEBUG ===\n")
+
+        # Process each row for country and region assignment and update Computer objects and df_enriched
+        for index, row in df_enriched.iterrows():
+            country_from_snow = row.get('SNOW_country')  # This will be blank if service_now.py cleared 'nan'
+            hostname = row.get('Hostname')
+            tanium_id = row.get('ID')  # Get Tanium ID to find the correct Computer object
 
             country_to_use = None
             was_country_guessed = False
+            determined_region = ''
 
+            # Logic to determine the country to use (SNOW > Guessed)
             if is_valid_country(country_from_snow):
                 country_to_use = country_from_snow
             elif hostname and str(hostname).strip():
                 dummy_computer = Computer(name=str(hostname), id="", ip="", eidLastSeen="", source="")
                 guessed_country, _ = _guess_country_from_hostname(dummy_computer)
-                if guessed_country:
+                if guessed_country and is_valid_country(guessed_country):  # Ensure guessed country is valid
                     country_to_use = guessed_country
                     was_country_guessed = True
 
+            # Determine region based on country_to_use
             if country_to_use:
-                region = REGIONS_BY_COUNTRY.get(country_to_use, '')
-                df_enriched.at[index, 'Region'] = region
-                df_enriched.at[index, 'Was Country Guessed'] = was_country_guessed
+                determined_region = REGIONS_BY_COUNTRY.get(country_to_use, '')
 
-        # Save the DataFrame with the new columns
-        enriched_report_with_region = Path(enriched_report).parent / "Tanium hosts without ring tag - enriched with SNOW data.xlsx"
+            # Find the corresponding Computer object in the list that will be passed to generate_ring_tags
+            computer = next((c for c in computers_without_ring_tag if c.id == tanium_id), None)
+
+            if computer:
+                # Update the DATAFRAME `df_enriched` columns
+                # These columns will be saved to the intermediate Excel file
+                df_enriched.at[index, 'Country'] = country_to_use if country_to_use else ''
+                df_enriched.at[index, 'Region'] = determined_region
+                df_enriched.at[index, 'Was Country Guessed'] = 'Yes' if was_country_guessed else 'No'
+
+                # --- ADD THESE DEBUG PRINTS ---
+                print(f"DEBUG: After df_enriched.at for index {index}:")
+                print(f"  df_enriched.at[index, 'Country']: '{df_enriched.at[index, 'Country']}'")
+                print(f"  df_enriched.at[index, 'Region']: '{df_enriched.at[index, 'Region']}'")
+                print(f"  df_enriched.at[index, 'Was Country Guessed']: '{df_enriched.at[index, 'Was Country Guessed']}'")
+                print(f"  (Expected: Country='{country_to_use}', Region='{determined_region}', Guessed='{'Yes' if was_country_guessed else 'No'}')")
+                # --- END DEBUG PRINTS ---
+
+                # Also update the Computer OBJECT's attributes directly
+                # These attributes are what `generate_ring_tags` will read when it iterates over `computers_without_ring_tag`
+                computer.category = row.get('SNOW_category', '')
+                computer.environment = row.get('SNOW_environment', '')
+                computer.country = country_to_use if country_to_use else ''  # CRITICAL FIX: Set Computer object's country
+                computer.region = determined_region  # Set region on the Computer object
+                computer.was_country_guessed = was_country_guessed  # Set was_country_guessed on the Computer object
+
+                # Ensure initial SNOW comments are transferred to the Computer object's status
+                # If 'SNOW_comments' doesn't exist or is empty, ensure computer.status is initialized.
+                if 'SNOW_comments' in row and row['SNOW_comments'] and str(row['SNOW_comments']).lower() != 'nan':
+                    computer.status = str(row['SNOW_comments'])
+                elif not hasattr(computer, 'status') or computer.status is None:
+                    computer.status = ''  # Initialize if no valid SNOW comments
+
+                # --- ADD THESE DEBUG PRINTS ---
+                print(f"  Computer object country: '{computer.country}'")
+                print(f"  Computer object was_country_guessed: '{computer.was_country_guessed}'")
+                print(f"  Computer object status: '{getattr(computer, 'status', '')}'")  # Check status as well
+                print(f"--- END DEBUGGING ROW {index} ---")
+                # --- END DEBUG PRINTS ---
+            else:
+                logger.warning(f"Could not find Computer object for Tanium ID: {tanium_id} in list for enrichment updates.")
+
+        # Save the DataFrame with the new 'Country', 'Region', 'Was Country Guessed' columns
+        # This Excel file is what generate_ring_tags will read.
+        enriched_report_with_region = Path(enriched_report_from_service_now).parent / "Tanium hosts without ring tag - enriched with SNOW data.xlsx"
         df_enriched.to_excel(enriched_report_with_region, index=False, engine='openpyxl')
 
         # Generate Ring tags
+        # generate_ring_tags reads the Excel file, but also relies on the Computer objects
+        # if it's designed to iterate over them directly.
+        # The key is that the Excel file now has the correct 'Country' and 'Was Country Guessed' columns.
         tagged_report = generate_ring_tags(str(enriched_report_with_region))
 
         print(f'Completed enrichment and tag generation. The full report can be found at {tagged_report}')
         return tagged_report
 
     except Exception as e:
-        logger.error(f"Error in get_tanium_hosts_without_ring_tag: {e}")
+        logger.error(f"Error in get_tanium_hosts_without_ring_tag: {e}", exc_info=True)
         return f'Error: {e}'
 
 
@@ -299,6 +364,8 @@ def generate_ring_tags(filename: str) -> str:
         validate_input_file(filename)
 
         # Read the enriched data
+        # This df should contain the 'Country', 'Region', 'Was Country Guessed' columns
+        # correctly populated by get_tanium_hosts_without_ring_tag.
         df = pd.read_excel(filename, dtype=str, engine='openpyxl')
         logger.info(f"Processing {len(df)} computers for ring tag generation")
 
@@ -328,23 +395,38 @@ def generate_ring_tags(filename: str) -> str:
                 custom_tags=custom_tags
             )
 
-            # Set enrichment attributes
+            # --- CRITICAL CORRECTIONS HERE ---
+            # Use the 'Country' column from the DataFrame, which should now contain the guessed country or SNOW country
+            setattr(computer, "country", str(row.get('Country', '')).strip())  # Use 'Country', NOT 'SNOW_country'
+
+            # Use the 'Region' column from the DataFrame
             setattr(computer, "region", str(row.get('Region', '')).strip())
-            setattr(computer, "country", str(row.get('SNOW_country', '')).strip())
+
+            # Use the 'SNOW_environment' and 'SNOW_category' for environment and category
             setattr(computer, "environment", str(row.get('SNOW_environment', 'Production')).strip())
             setattr(computer, "category", str(row.get('SNOW_category', '')).strip())
-            setattr(computer, "was_country_guessed", row.get('Was Country Guessed', False))
+
+            # Use the 'Was Country Guessed' column from the DataFrame and convert to boolean
+            was_guessed_str = str(row.get('Was Country Guessed', 'No')).strip().lower()
+            setattr(computer, "was_country_guessed", was_guessed_str == 'yes')  # Convert 'Yes'/'No' string to boolean
+
             setattr(computer, "new_tag", None)
-            setattr(computer, "status", "")
+
+            # Initialize status from SNOW_comments if available and not 'nan'
+            snow_comments = str(row.get('SNOW_comments', '')).strip()
+            if snow_comments.lower() == 'nan':
+                setattr(computer, "status", "")
+            else:
+                setattr(computer, "status", snow_comments)
 
             # Classify as server or workstation
-            category = str(row.get('SNOW_category', '')).strip().lower()
+            category = getattr(computer, "category", "").strip().lower()  # Use the category just set on computer object
             if category in ("server", "srv"):
                 servers.append(computer)
             elif category == "workstation":
                 workstations.append(computer)
             else:
-                setattr(computer, "status", "Category missing or unknown - skipping")
+                _append_status(computer, "Category missing or unknown - skipping")
 
         logger.info(f"Classified {len(servers)} servers and {len(workstations)} workstations")
         _process_workstations(workstations)
@@ -380,23 +462,30 @@ def generate_ring_tags(filename: str) -> str:
             region = getattr(computer, "region", "")
             new_tag = getattr(computer, "new_tag", None)
 
+            # Determine the base comment based on tag generation status
             if not region:
                 new_tag = None
                 _append_status(computer, "Region missing. Ring tag couldn't be generated")
             elif new_tag:
                 _append_status(computer, "Ring tag generated successfully")
 
+            # Now, append the "Country was guessed" message if applicable
+            if getattr(computer, "was_country_guessed", False):  # This attribute is now a boolean
+                # Only append if it's not already part of the status (case-insensitive check)
+                if "country was guessed" not in getattr(computer, "status", "").lower():
+                    _append_status(computer, "Country was guessed")
+
             output_ws.append([
                 computer.name,
                 computer.id,
                 computer_category,
                 getattr(computer, "environment", ""),
-                getattr(computer, "country", ""),
+                getattr(computer, "country", ""),  # This is now correctly populated from the 'Country' column of the intermediate DF
                 region,
-                "Yes" if getattr(computer, "was_country_guessed", False) else "No",
+                "Yes" if getattr(computer, "was_country_guessed", False) else "No",  # This correctly converts boolean back to string "Yes"/"No"
                 current_tags,
                 new_tag,
-                getattr(computer, "status", "")
+                getattr(computer, "status", "")  # Directly use the computer's consolidated status
             ])
 
         # Set column widths
@@ -543,7 +632,7 @@ def _append_status(computer: Computer, message: str) -> None:
 def main():
     """Main entry point."""
     try:
-        result = get_tanium_hosts_without_ring_tag(filename="Tanium hosts without Ring tag.xlsx")
+        result = get_tanium_hosts_without_ring_tag(filename="Tanium hosts without Ring tag.xlsx", test_limit=10)
         logger.info(f"Process completed successfully: {result}")
     except Exception as e:
         logger.error(f"Process failed: {e}")
