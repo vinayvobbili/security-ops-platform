@@ -1,20 +1,14 @@
 import base64
 import json
-import logging.config
+import logging
 import time
 import os
-import threading
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
-from functools import wraps
-import asyncio
-import aiohttp
 
 import pandas as pd
 import requests
-from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
 from tqdm import tqdm
 import concurrent.futures
 from filelock import FileLock
@@ -25,87 +19,12 @@ from config import get_config
 # Disable InsecureRequestWarning for unverified HTTPS requests
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-# Setup enhanced logging
-LOGGING_CONFIG = {
-    'version': 1,
-    'disable_existing_loggers': False,
-    'formatters': {
-        'detailed': {
-            'format': '%(asctime)s - %(name)s - %(levelname)s - %(funcName)s:%(lineno)d - %(message)s'
-        },
-        'simple': {
-            'format': '%(levelname)s - %(message)s'
-        }
-    },
-    'handlers': {
-        'console': {
-            'class': 'logging.StreamHandler',
-            'level': 'INFO',
-            'formatter': 'simple'
-        },
-        'file': {
-            'class': 'logging.handlers.RotatingFileHandler',
-            'level': 'DEBUG',
-            'formatter': 'detailed',
-            'filename': 'servicenow_client.log',
-            'maxBytes': 10485760,  # 10MB
-            'backupCount': 5,
-            'encoding': 'utf-8'
-        }
-    },
-    'loggers': {
-        '': {  # root logger
-            'handlers': ['console', 'file'],
-            'level': 'DEBUG',
-            'propagate': False
-        }
-    }
-}
-
-logging.config.dictConfig(LOGGING_CONFIG)
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 config = get_config()
 TOKEN_FILE = Path(__file__).parent.parent / "data/transient/service_now_access_token.json"
 DATA_DIR = Path(__file__).parent.parent / "data/transient/epp_device_tagging"
-
-
-def rate_limit(calls_per_second=10):
-    """Rate limiting decorator to prevent API throttling."""
-    min_interval = 1.0 / calls_per_second
-    last_called = [0.0]
-    lock = threading.Lock()
-
-    def decorator(func):
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-            with lock:
-                elapsed = time.time() - last_called[0]
-                left_to_wait = min_interval - elapsed
-                if left_to_wait > 0:
-                    time.sleep(left_to_wait)
-                ret = func(*args, **kwargs)
-                last_called[0] = time.time()
-                return ret
-
-        return wrapper
-
-    return decorator
-
-
-def validate_config():
-    """Validate that all required configuration is present."""
-    required_fields = ['snow_base_url', 'snow_functional_account_id', 'snow_functional_account_password', 'snow_client_key']
-    missing = []
-
-    for field in required_fields:
-        if not hasattr(config, field) or not getattr(config, field):
-            missing.append(field)
-
-    if missing:
-        raise ValueError(f"Missing required configuration: {', '.join(missing)}")
-
-    logger.info("ServiceNow configuration validation passed")
 
 
 class ServiceNowTokenManager:
@@ -117,30 +36,21 @@ class ServiceNowTokenManager:
         self.access_token = None
         self.refresh_token = None
         self.token_expiry = None
-        self._lock = threading.Lock()
         self._load_token()
 
     def _load_token(self):
-        """Load token from file if it exists and is valid."""
         if TOKEN_FILE.exists():
             logger.info(f"Loading token from {TOKEN_FILE}")
-            try:
-                with open(TOKEN_FILE, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-                    self.access_token = data.get('access_token')
-                    self.refresh_token = data.get('refresh_token')
-                    self.token_expiry = data.get('token_expiry')
+            with open(TOKEN_FILE) as f:
+                data = json.load(f)
+                self.access_token = data.get('access_token')
+                self.refresh_token = data.get('refresh_token')
+                self.token_expiry = data.get('token_expiry')
 
-                    if self.token_expiry and time.time() < (self.token_expiry - 60):
-                        logger.info("Loaded valid token from file")
-                        return
-            except (json.JSONDecodeError, IOError) as e:
-                logger.warning(f"Could not load token from file: {e}")
-
-        self._get_new_token()
+        if not self.access_token or (self.token_expiry and time.time() >= self.token_expiry):
+            self._get_new_token()
 
     def _save_token(self):
-        """Save token to file with proper locking."""
         TOKEN_FILE.parent.mkdir(parents=True, exist_ok=True)
         data = {
             'access_token': self.access_token,
@@ -149,26 +59,16 @@ class ServiceNowTokenManager:
         }
         lock_path = str(TOKEN_FILE) + '.lock'
         temp_path = str(TOKEN_FILE) + '.tmp'
-
-        logger.info(f"Saving token to {TOKEN_FILE}")
-        try:
-            with FileLock(lock_path, timeout=30):
-                with open(temp_path, 'w', encoding='utf-8') as f:
-                    json.dump(data, f, indent=2)
-                    f.flush()
-                    os.fsync(f.fileno())
-                os.replace(temp_path, TOKEN_FILE)
-            logger.info(f"Token saved successfully to {TOKEN_FILE}")
-        except Exception as e:
-            logger.error(f"Failed to save token: {e}")
-            if Path(temp_path).exists():
-                try:
-                    Path(temp_path).unlink()
-                except:
-                    pass
+        logger.info(f"Saving token to {TOKEN_FILE} (using lock {lock_path})")
+        with FileLock(lock_path):
+            with open(temp_path, 'w') as f:
+                json.dump(data, f, indent=2)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(temp_path, TOKEN_FILE)
+        logger.info(f"Token saved to {TOKEN_FILE}")
 
     def _get_new_token(self):
-        """Get a new token from ServiceNow."""
         url = f"{self.instance_url}/authorization/token"
         auth = base64.b64encode(f"{self.username}:{self.password}".encode()).decode()
         headers = {
@@ -177,21 +77,13 @@ class ServiceNowTokenManager:
             'X-IBM-Client-Id': self.client_id
         }
 
-        try:
-            logger.info("Requesting new token from ServiceNow")
-            response = requests.get(url, headers=headers, auth=(self.username, self.password), timeout=30, verify=False)
-            response.raise_for_status()
-            self._update_token(response.json())
-            self._save_token()
-            logger.info("Successfully obtained new token")
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Failed to get new token: {e}")
-            raise
+        response = requests.get(url, headers=headers, auth=(self.username, self.password))
+        response.raise_for_status()
+        self._update_token(response.json())
+        self._save_token()
 
     def _refresh_token(self):
-        """Refresh the current token or get a new one."""
         if not self.refresh_token:
-            logger.info("No refresh token available, getting new token")
             self._get_new_token()
             return
 
@@ -199,39 +91,27 @@ class ServiceNowTokenManager:
         headers = {'Content-Type': 'application/json', 'X-IBM-Client-Id': self.client_id}
         data = {'refresh_token': self.refresh_token}
 
-        try:
-            logger.info("Refreshing token")
-            response = requests.post(url, headers=headers, json=data, timeout=30, verify=False)
-            if response.status_code == 200:
-                self._update_token(response.json())
-                self._save_token()
-                logger.info("Successfully refreshed token")
-            else:
-                logger.warning(f"Token refresh failed with status {response.status_code}, getting new token")
-                self._get_new_token()
-        except requests.exceptions.RequestException as e:
-            logger.warning(f"Token refresh failed: {e}, getting new token")
+        response = requests.post(url, headers=headers, json=data)
+        if response.status_code == 200:
+            self._update_token(response.json())
+            self._save_token()
+        else:
             self._get_new_token()
 
     def _update_token(self, token_data):
-        """Update token data from API response."""
         self.access_token = token_data.get('access_token')
         self.refresh_token = token_data.get('refresh_token')
-        expires_in = token_data.get('expires_in', 1800)
-        self.token_expiry = time.time() + expires_in
-        logger.debug(f"Token updated, expires in {expires_in} seconds")
+        self.token_expiry = time.time() + token_data.get('expires_in', 1800)
 
     def get_auth_headers(self):
-        """Get authentication headers, refreshing token if necessary."""
-        with self._lock:
-            if not self.token_expiry or time.time() >= (self.token_expiry - 60):
-                self._refresh_token()
+        if not self.token_expiry or time.time() >= self.token_expiry:
+            self._refresh_token()
 
-            return {
-                'Authorization': f"Bearer {self.access_token}",
-                'Accept': 'application/json',
-                'X-IBM-Client-Id': self.client_id
-            }
+        return {
+            'Authorization': f"Bearer {self.access_token}",
+            'Accept': 'application/json',
+            'X-IBM-Client-Id': self.client_id
+        }
 
 
 def _parse_discovery_date(item):
@@ -243,16 +123,11 @@ def _parse_discovery_date(item):
     try:
         return datetime.strptime(date_str, '%m-%d-%Y %I:%M %p')
     except (ValueError, TypeError):
-        try:
-            return datetime.strptime(date_str, '%Y-%m-%d %H:%M:%S')
-        except (ValueError, TypeError):
-            logger.debug(f"Could not parse discovery date: {date_str}")
-            return datetime(1970, 1, 1)
+        return datetime(1970, 1, 1)
 
 
 class ServiceNowClient:
     def __init__(self):
-        validate_config()
         self.token_manager = ServiceNowTokenManager(
             instance_url=config.snow_base_url,
             username=config.snow_functional_account_id,
@@ -263,75 +138,37 @@ class ServiceNowClient:
         self.server_url = f"{base_url}/itsm-compute/compute/instances"
         self.workstation_url = f"{base_url}/itsm-compute/compute/computers"
 
-        # Optimized session with higher connection pooling
-        self.session = requests.Session()
-        retry_strategy = Retry(
-            total=2,
-            backoff_factor=0.3,
-            status_forcelist=[429, 500, 502, 503, 504],
-            allowed_methods=["HEAD", "GET", "OPTIONS"]
-        )
-        adapter = HTTPAdapter(
-            max_retries=retry_strategy,
-            pool_connections=30,
-            pool_maxsize=100
-        )
-        self.session.mount("http://", adapter)
-        self.session.mount("https://", adapter)
-
     def get_host_details(self, hostname):
         """Get host details by hostname, checking servers first then workstations."""
+        # Safely handle hostname that might be None or not a string
         if not hostname or not isinstance(hostname, str):
             logger.warning(f"Invalid hostname provided: {hostname}")
             return {"name": str(hostname) if hostname is not None else "unknown", "status": "Invalid Hostname"}
 
-        hostname = hostname.split('.')[0]
+        hostname = hostname.split('.')[0]  # Remove domain
 
         # Try servers first
         host_details = self._search_endpoint(self.server_url, hostname)
-        if host_details and 'error' not in host_details:
+        if host_details:
             host_details['category'] = 'server'
             return host_details
 
         # Try workstations
         host_details = self._search_endpoint(self.workstation_url, hostname)
-        if host_details and 'error' not in host_details:
+        if host_details:
             host_details['category'] = 'workstation'
             return host_details
 
         return {"name": hostname, "status": "Not Found"}
 
-    @rate_limit(calls_per_second=25)  # Increased rate limit
     def _search_endpoint(self, endpoint, hostname):
         """Search a specific endpoint for hostname."""
         headers = self.token_manager.get_auth_headers()
         params = {'name': hostname}
 
         try:
-            response = self.session.get(
-                endpoint,
-                headers=headers,
-                params=params,
-                timeout=10,
-                verify=False
-            )
-
-            if response.status_code == 401:
-                logger.warning(f"Authentication error for {hostname}")
-                return {"name": hostname, "status": "Authentication Error", "category": "", "error": "HTTP 401"}
-            elif response.status_code == 403:
-                logger.warning(f"Authorization error for {hostname}")
-                return {"name": hostname, "status": "Authorization Error", "category": "", "error": "HTTP 403"}
-            elif response.status_code == 429:
-                logger.warning(f"Rate limited for {hostname}")
-                time.sleep(0.5)
-                return {"name": hostname, "status": "Rate Limited", "category": "", "error": "HTTP 429"}
-            elif response.status_code >= 500:
-                logger.warning(f"Server error for {hostname}: {response.status_code}")
-                return {"name": hostname, "status": "Server Error", "category": "", "error": f"HTTP {response.status_code}"}
-            elif response.status_code != 200:
-                logger.warning(f"Unexpected status code for {hostname}: {response.status_code}")
-                return {"name": hostname, "status": f"HTTP {response.status_code}", "category": "", "error": f"HTTP {response.status_code}"}
+            response = requests.get(endpoint, headers=headers, params=params, timeout=2, verify=False)
+            response.raise_for_status()
 
             data = response.json()
             items = data.get('items', data) if isinstance(data, dict) else data
@@ -339,31 +176,33 @@ class ServiceNowClient:
             if not items:
                 return None
 
+            # Return most recently discovered item
             if len(items) > 1:
                 items = sorted(items, key=_parse_discovery_date, reverse=True)
-                logger.debug(f"Multiple items found for {hostname}, using most recent")
 
             return items[0]
-
-        except requests.exceptions.Timeout:
-            logger.error(f"Timeout fetching details for {hostname}")
-            return {"name": hostname, "error": "Request timeout", "status": "ServiceNow API Error", "category": ""}
-        except requests.exceptions.ConnectionError:
-            logger.error(f"Connection error fetching details for {hostname}")
-            return {"name": hostname, "error": "Connection error", "status": "ServiceNow API Error", "category": ""}
         except requests.exceptions.RequestException as e:
             logger.error(f"Error fetching details for {hostname}: {str(e)}")
             return {"name": hostname, "error": str(e), "status": "ServiceNow API Error", "category": ""}
-        except json.JSONDecodeError as e:
-            logger.error(f"JSON decode error for {hostname}: {str(e)}")
-            return {"name": hostname, "error": "Invalid JSON response", "status": "ServiceNow API Error", "category": ""}
+
+    def get_process_changes(self, params=None):
+        """Get process changes from ServiceNow custom endpoint."""
+        base_url = config.snow_base_url.rstrip('/')
+        endpoint = f"{base_url}/api/x_metli_acme_it/process/changes"
+        # endpoint = 'https://acmeprod.service-now.com/api/x_metli_acme_it/process/changes'
+        headers = self.token_manager.get_auth_headers()
+        try:
+            response = requests.get(endpoint, headers=headers, params=params, timeout=10, verify=False)
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Error fetching process changes: {str(e)}")
+            return {"error": str(e), "status": "ServiceNow API Error"}
 
 
-# Optimized Async version
 class AsyncServiceNowClient:
     def __init__(self, token_manager=None):
         if token_manager is None:
-            validate_config()
             token_manager = ServiceNowTokenManager(
                 instance_url=config.snow_base_url,
                 username=config.snow_functional_account_id,
@@ -374,668 +213,179 @@ class AsyncServiceNowClient:
         base_url = config.snow_base_url.rstrip('/')
         self.server_url = f"{base_url}/itsm-compute/compute/instances"
         self.workstation_url = f"{base_url}/itsm-compute/compute/computers"
-        self.semaphore = asyncio.Semaphore(50)  # Increased concurrent requests
 
     async def get_host_details(self, session, hostname):
-        """Get host details asynchronously."""
-        async with self.semaphore:
-            if not hostname or not isinstance(hostname, str):
-                return {"name": str(hostname) if hostname is not None else "unknown", "status": "Invalid Hostname"}
-
-            hostname_short = hostname.split('.')[0]
-
-            # Try servers first
-            result = await self._search_endpoint(session, self.server_url, hostname_short)
-            if result and 'error' not in result:
-                result['category'] = 'server'
-                return result
-
-            # Try workstations
-            result = await self._search_endpoint(session, self.workstation_url, hostname_short)
-            if result and 'error' not in result:
-                result['category'] = 'workstation'
-                return result
-
-            return {"name": hostname_short, "status": "Not Found"}
+        if not hostname or not isinstance(hostname, str):
+            return {"name": str(hostname) if hostname is not None else "unknown", "status": "Invalid Hostname"}
+        hostname_short = hostname.split('.')[0]
+        # Try servers first
+        result = await self._search_endpoint(session, self.server_url, hostname_short)
+        if result:
+            result['category'] = 'server'
+            return result
+        # Try workstations
+        result = await self._search_endpoint(session, self.workstation_url, hostname_short)
+        if result:
+            result['category'] = 'workstation'
+            return result
+        return {"name": hostname_short, "status": "Not Found"}
 
     async def _search_endpoint(self, session, endpoint, hostname):
-        """Search a specific endpoint for hostname asynchronously."""
         headers = self.token_manager.get_auth_headers()
         params = {'name': hostname}
-
         try:
-            timeout = aiohttp.ClientTimeout(total=8)
-            async with session.get(
-                    endpoint,
-                    headers=headers,
-                    params=params,
-                    timeout=timeout,
-                    ssl=False
-            ) as response:
+            async with session.get(endpoint, headers=headers, params=params, timeout=10, verify_ssl=False) as response:
                 if response.status == 429:
-                    await asyncio.sleep(0.05)
+                    # Explicitly capture HTTP 429 Too Many Requests
                     return {"name": hostname, "error": "HTTP 429 Too Many Requests", "status": "ServiceNow API Error", "category": ""}
-                elif response.status == 401:
-                    return {"name": hostname, "error": "HTTP 401 Unauthorized", "status": "ServiceNow API Error", "category": ""}
-                elif response.status == 403:
-                    return {"name": hostname, "error": "HTTP 403 Forbidden", "status": "ServiceNow API Error", "category": ""}
-                elif response.status >= 500:
-                    return {"name": hostname, "error": f"HTTP {response.status} Server Error", "status": "ServiceNow API Error", "category": ""}
-                elif response.status != 200:
+                if response.status != 200:
                     return None
-
                 data = await response.json()
                 items = data.get('items', data) if isinstance(data, dict) else data
-
                 if not items:
                     return None
-
                 if len(items) > 1:
                     items = sorted(items, key=_parse_discovery_date, reverse=True)
-
                 return items[0]
-
-        except asyncio.TimeoutError:
-            logger.error(f"Async timeout for {hostname}")
-            return {"name": hostname, "error": "Request timeout", "status": "ServiceNow API Error", "category": ""}
         except Exception as e:
-            logger.error(f"Async error for {hostname}: {str(e)}")
             return {"name": hostname, "error": str(e), "status": "ServiceNow API Error", "category": ""}
 
 
-def process_in_batches(items, batch_size=500):  # Increased batch size
-    """Process items in batches to manage memory usage."""
-    for i in range(0, len(items), batch_size):
-        yield items[i:i + batch_size]
+def enrich_host_report(input_file):
+    """Enrich host data with ServiceNow details (synchronous version)."""
+    today = datetime.now().strftime('%m-%d-%Y')
+    input_name = Path(input_file).name
+    output_file = DATA_DIR / today / f"Enriched {input_name}"
 
-
-def validate_input_file(filepath):
-    """Validate input file before processing."""
-    file_path = Path(filepath)
-
-    if not file_path.exists():
-        raise FileNotFoundError(f"Input file not found: {filepath}")
-
-    if not str(filepath).lower().endswith(('.xlsx', '.xls')):
-        raise ValueError("Input file must be an Excel file (.xlsx or .xls)")
-
-    try:
-        df = pd.read_excel(filepath, nrows=1, engine='openpyxl')
-        if df.empty:
-            raise ValueError("Input file appears to be empty")
-    except Exception as e:
-        raise ValueError(f"Cannot read input file: {e}")
-
-    logger.info(f"Input file validation passed: {filepath}")
-    return True
-
-
-async def enrich_host_report_async(input_file):
-    """Optimized asynchronous version with true concurrency."""
-    try:
-        validate_input_file(input_file)
-
-        today = datetime.now().strftime('%m-%d-%Y')
-        input_name = Path(input_file).name
-        output_file = DATA_DIR / today / f"Enriched {input_name}"
-
-        if output_file.exists():
-            logger.info(f"Enriched file already exists: {output_file}")
-            return output_file
-
-        logger.info(f"Reading input file: {input_file}")
-        df = pd.read_excel(input_file, engine="openpyxl", dtype=str)
-
-        # Detect hostname column
-        hostname_col = None
-        for col in df.columns:
-            if 'hostname' in str(col).lower():
-                hostname_col = col
-                break
-
-        if not hostname_col:
-            logger.error("Could not find hostname column in the input file")
-            return input_file
-
-        logger.info(f"Using column '{hostname_col}' for hostnames")
-
-        # Clean the dataframe
-        initial_count = len(df)
-        df = df.dropna(subset=[hostname_col])
-        df = df[df[hostname_col].str.strip() != '']
-        logger.info(f"Removed {initial_count - len(df)} rows with empty hostnames")
-
-        # Extract valid hostnames
-        hostnames = []
-        for h in df[hostname_col].tolist():
-            if h is not None and str(h).strip() not in ['nan', 'NaN', 'none', 'None', 'null', 'NULL', '']:
-                hostname_str = str(h).strip()
-                hostnames.append(hostname_str)
-
-        logger.info(f"Processing {len(hostnames)} valid hostnames from {input_file}")
-
-        if not hostnames:
-            logger.warning("No valid hostnames found in input file")
-            return input_file
-
-        # Use async client for maximum performance
-        client = AsyncServiceNowClient()
-        snow_data = {}
-
-        # Optimized aiohttp session
-        connector = aiohttp.TCPConnector(
-            limit=200,  # Increased total connection pool
-            limit_per_host=50,  # Increased connections per host
-            ttl_dns_cache=300,
-            use_dns_cache=True,
-            keepalive_timeout=60,
-            enable_cleanup_closed=True
-        )
-
-        timeout = aiohttp.ClientTimeout(total=600, connect=5)  # 10 min total, 5 sec connect
-
-        async with aiohttp.ClientSession(
-                connector=connector,
-                timeout=timeout
-        ) as session:
-
-            # Process in smaller batches to avoid overwhelming the API
-            batch_size = 1000  # Process 1000 at a time
-            total_batches = (len(hostnames) + batch_size - 1) // batch_size
-
-            for batch_num, hostname_batch in enumerate(process_in_batches(hostnames, batch_size), 1):
-                logger.info(f"Processing batch {batch_num}/{total_batches} ({len(hostname_batch)} hosts)")
-
-                # Create all tasks for this batch
-                tasks = []
-                for hostname in hostname_batch:
-                    task = client.get_host_details(session, hostname)
-                    tasks.append((hostname, task))
-
-                # Execute all tasks in this batch concurrently
-                batch_results = await asyncio.gather(
-                    *[task for _, task in tasks],
-                    return_exceptions=True
-                )
-
-                # Process results
-                for i, (hostname, _) in enumerate(tasks):
-                    try:
-                        result = batch_results[i]
-                        if isinstance(result, Exception):
-                            logger.error(f"Error processing {hostname}: {result}")
-                            result = {
-                                "name": hostname,
-                                "error": str(result),
-                                "status": "Processing Error",
-                                "category": ""
-                            }
-
-                        short_hostname = hostname.split('.')[0].lower()
-                        snow_data[short_hostname] = result
-
-                    except Exception as e:
-                        logger.error(f"Error processing {hostname}: {e}")
-                        short_hostname = hostname.split('.')[0].lower()
-                        snow_data[short_hostname] = {
-                            "name": hostname,
-                            "error": str(e),
-                            "status": "Processing Error",
-                            "category": ""
-                        }
-
-                # Small delay between batches to be respectful to the API
-                if batch_num < total_batches:
-                    await asyncio.sleep(0.1)
-
-                logger.info(f"Completed batch {batch_num}/{total_batches} - Total processed: {len(snow_data)}")
-
-        if not snow_data:
-            logger.error("No ServiceNow data collected, cannot enrich report")
-            return input_file
-
-        # Add ServiceNow data to the original dataframe
-        logger.info(f"Retrieved data for {len(snow_data)} hosts from ServiceNow")
-
-        snow_columns = ['id', 'ciClass', 'environment', 'lifecycleStatus', 'country',
-                        'supportedCountry', 'operatingSystem', 'category', 'status', 'error']
-
-        for col in snow_columns:
-            df[f'SNOW_{col}'] = None
-
-        # Add ServiceNow data to each row
-        for idx, row in df.iterrows():
-            hostname = row[hostname_col]
-            if hostname and str(hostname).strip() not in ['nan', 'NaN', 'none', 'None', 'null', 'NULL', '']:
-                short_hostname = hostname.split('.')[0].lower()
-            else:
-                short_hostname = ""
-
-            if short_hostname in snow_data:
-                result = snow_data[short_hostname]
-                if result.get('status') == 'ServiceNow API Error':
-                    df.at[idx, 'SNOW_category'] = ''
-                for col in snow_columns:
-                    if col in result and not (col == 'category' and result.get('status') == 'ServiceNow API Error'):
-                        df.at[idx, f'SNOW_{col}'] = result[col]
-
-        # Save results
-        output_file.parent.mkdir(parents=True, exist_ok=True)
-
-        with pd.ExcelWriter(output_file, engine="openpyxl") as writer:
-            df.to_excel(writer, index=False)
-
-            # Auto-adjust column widths
-            worksheet = writer.sheets['Sheet1']
-            for i, column in enumerate(df.columns):
-                max_length = max(
-                    df[column].astype(str).apply(len).max(),
-                    len(str(column))
-                ) + 2
-                column_width = min(max_length, 50)
-                worksheet.column_dimensions[worksheet.cell(row=1, column=i + 1).column_letter].width = column_width
-
-        success_count = len([v for v in snow_data.values() if v.get('status') != 'ServiceNow API Error'])
-        error_count = len(snow_data) - success_count
-
-        logger.info(f"Successfully enriched report saved to {output_file}")
-        logger.info(f"Enrichment summary: {success_count} successful, {error_count} errors out of {len(snow_data)} total")
-
+    if output_file.exists():
+        logger.info(f"Enriched file already exists: {output_file}")
         return output_file
 
-    except Exception as e:
-        logger.error(f"Error in enrich_host_report_async: {e}")
-        raise
+    # Read input data
+    logger.info(f"Reading input file: {input_file}")
+    df = pd.read_excel(input_file, engine="openpyxl")
 
+    # Detect hostname column
+    hostname_col = None
+    for col in df.columns:
+        if 'hostname' in str(col).lower():
+            hostname_col = col
+            break
 
-def enrich_host_report_multithreaded(input_file):
-    """High-performance multithreaded version as alternative to async."""
-    try:
-        validate_input_file(input_file)
+    if not hostname_col:
+        logger.error("Could not find hostname column in the input file")
+        return input_file
 
-        today = datetime.now().strftime('%m-%d-%Y')
-        input_name = Path(input_file).name
-        output_file = DATA_DIR / today / f"Enriched {input_name}"
+    logger.info(f"Using column '{hostname_col}' for hostnames")
 
-        if output_file.exists():
-            logger.info(f"Enriched file already exists: {output_file}")
-            return output_file
+    # Clean the dataframe: remove rows with empty hostnames
+    df = df.dropna(subset=[hostname_col])
 
-        logger.info(f"Reading input file: {input_file}")
-        df = pd.read_excel(input_file, engine="openpyxl", dtype=str)
+    # Extract hostnames and filter out any None or empty values
+    hostnames = [h for h in df[hostname_col].tolist() if h and isinstance(h, str)]
+    logger.info(f"Processing {len(hostnames)} valid hostnames from {input_file}")
 
-        # Detect hostname column
-        hostname_col = None
-        for col in df.columns:
-            if 'hostname' in str(col).lower():
-                hostname_col = col
-                break
+    client = ServiceNowClient()
+    snow_data = {}
+    errors_occurred = False
 
-        if not hostname_col:
-            logger.error("Could not find hostname column in the input file")
-            return input_file
+    def enrich_single_host(hostname):
+        details = client.get_host_details(hostname)
+        short_hostname = str(hostname).split('.')[0].lower() if hostname and isinstance(hostname, str) else ""
+        return short_hostname, details
 
-        logger.info(f"Using column '{hostname_col}' for hostnames")
+    max_workers = 20  # Safe parallelism, tune as needed
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {executor.submit(enrich_single_host, hostname): hostname for hostname in hostnames}
+        for idx, future in enumerate(tqdm(concurrent.futures.as_completed(futures), total=len(futures), desc="Enriching hosts with ServiceNow"), 1):
+            short_hostname, details = future.result()
+            if details:
+                snow_data[short_hostname] = details
+            if details and 'error' in details:
+                errors_occurred = True
+            if idx % 100 == 0 or idx == len(futures):
+                logger.info(f"Enriched {idx}/{len(futures)} hosts with ServiceNow data...")
 
-        # Clean the dataframe
-        initial_count = len(df)
-        df = df.dropna(subset=[hostname_col])
-        df = df[df[hostname_col].str.strip() != '']
-        logger.info(f"Removed {initial_count - len(df)} rows with empty hostnames")
+    if not snow_data:
+        logger.error("No ServiceNow data collected, cannot enrich report")
+        return input_file
 
-        # Extract hostnames
-        hostnames = []
-        for h in df[hostname_col].tolist():
-            if h is not None and str(h).strip() not in ['nan', 'NaN', 'none', 'None', 'null', 'NULL', '']:
-                hostname_str = str(h).strip()
-                hostnames.append(hostname_str)
+    # Add ServiceNow data to the original dataframe
+    logger.info(f"Retrieved data for {len(snow_data)} hosts from ServiceNow")
 
-        logger.info(f"Processing {len(hostnames)} valid hostnames from {input_file}")
+    # Create new columns for ServiceNow data
+    snow_columns = ['id', 'ciClass', 'environment', 'lifecycleStatus', 'country',
+                    'supportedCountry', 'operatingSystem', 'category', 'status', 'error']
 
-        if not hostnames:
-            logger.warning("No valid hostnames found in input file")
-            return input_file
+    for col in snow_columns:
+        df[f'SNOW_{col}'] = None
 
-        # Create multiple clients for better concurrency
-        num_clients = 5
-        clients = [ServiceNowClient() for _ in range(num_clients)]
-        snow_data = {}
-        data_lock = threading.Lock()
+    # For each row in the dataframe, add the ServiceNow data
+    for idx, row in df.iterrows():
+        hostname = row[hostname_col]
+        if not isinstance(hostname, str):
+            hostname = str(hostname)
+        short_hostname = hostname.split('.')[0].lower() if hostname else ""
+        if short_hostname in snow_data:
+            result = snow_data[short_hostname]
+            # If there is an error, always set category to empty string
+            if result.get('status') == 'ServiceNow API Error':
+                df.at[idx, 'SNOW_category'] = ''
+            for col in snow_columns:
+                if col in result and not (col == 'category' and result.get('status') == 'ServiceNow API Error'):
+                    df.at[idx, f'SNOW_{col}'] = result[col]
 
-        def enrich_single_host(hostname, client_idx=0):
-            try:
-                client = clients[client_idx % len(clients)]
-                details = client.get_host_details(hostname)
-                short_hostname = hostname.split('.')[0].lower()
+    # Save results with adjusted column widths
+    output_file.parent.mkdir(parents=True, exist_ok=True)
 
-                with data_lock:
-                    snow_data[short_hostname] = details
+    with pd.ExcelWriter(output_file, engine="openpyxl") as writer:
+        df.to_excel(writer, index=False)
 
-                return short_hostname, details
-            except Exception as e:
-                logger.error(f"Error enriching host {hostname}: {e}")
-                short_hostname = hostname.split('.')[0].lower()
-                error_result = {
-                    "name": hostname,
-                    "error": str(e),
-                    "status": "Processing Error",
-                    "category": ""
-                }
+        # Auto-adjust column widths for better readability
+        worksheet = writer.sheets['Sheet1']
+        for i, column in enumerate(df.columns):
+            # Set column width based on content
+            max_length = max(
+                df[column].astype(str).apply(len).max(),
+                len(str(column))
+            ) + 2  # add a little extra space
 
-                with data_lock:
-                    snow_data[short_hostname] = error_result
+            # Cap the width at a reasonable maximum to prevent overly wide columns
+            column_width = min(max_length, 30)
 
-                return short_hostname, error_result
+            # Convert to Excel's character width
+            worksheet.column_dimensions[worksheet.cell(row=1, column=i + 1).column_letter].width = column_width
 
-        # Process with much higher concurrency
-        max_workers = 50  # Significantly increased
-
-        logger.info(f"Starting multithreaded processing with {max_workers} workers")
-
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            # Submit all tasks at once for maximum concurrency
-            future_to_hostname = {}
-
-            for i, hostname in enumerate(hostnames):
-                future = executor.submit(enrich_single_host, hostname, i)
-                future_to_hostname[future] = hostname
-
-            # Process completed tasks with progress bar
-            completed = 0
-            total = len(future_to_hostname)
-
-            with tqdm(total=total, desc="Processing hosts") as pbar:
-                for future in as_completed(future_to_hostname, timeout=1800):  # 30 min timeout
-                    try:
-                        short_hostname, details = future.result(timeout=30)
-                        completed += 1
-                        pbar.update(1)
-
-                        # Log progress every 1000 hosts
-                        if completed % 1000 == 0:
-                            logger.info(f"Processed {completed}/{total} hosts ({completed / total * 100:.1f}%)")
-
-                    except concurrent.futures.TimeoutError:
-                        hostname = future_to_hostname[future]
-                        logger.error(f"Timeout processing host {hostname}")
-                        short_hostname = hostname.split('.')[0].lower()
-
-                        with data_lock:
-                            snow_data[short_hostname] = {
-                                "name": hostname,
-                                "error": "Processing timeout",
-                                "status": "Processing Error",
-                                "category": ""
-                            }
-                        completed += 1
-                        pbar.update(1)
-
-                    except Exception as e:
-                        hostname = future_to_hostname[future]
-                        logger.error(f"Exception processing host {hostname}: {e}")
-                        short_hostname = hostname.split('.')[0].lower()
-
-                        with data_lock:
-                            snow_data[short_hostname] = {
-                                "name": hostname,
-                                "error": str(e),
-                                "status": "Processing Error",
-                                "category": ""
-                            }
-                        completed += 1
-                        pbar.update(1)
-
-        if not snow_data:
-            logger.error("No ServiceNow data collected, cannot enrich report")
-            return input_file
-
-        # Add ServiceNow data to the original dataframe
-        logger.info(f"Retrieved data for {len(snow_data)} hosts from ServiceNow")
-
-        snow_columns = ['id', 'ciClass', 'environment', 'lifecycleStatus', 'country',
-                        'supportedCountry', 'operatingSystem', 'category', 'status', 'error']
-
-        for col in snow_columns:
-            df[f'SNOW_{col}'] = None
-
-        # Add ServiceNow data to each row
-        for idx, row in df.iterrows():
-            hostname = row[hostname_col]
-            if hostname and str(hostname).strip() not in ['nan', 'NaN', 'none', 'None', 'null', 'NULL', '']:
-                short_hostname = hostname.split('.')[0].lower()
-            else:
-                short_hostname = ""
-
-            if short_hostname in snow_data:
-                result = snow_data[short_hostname]
-                if result.get('status') == 'ServiceNow API Error':
-                    df.at[idx, 'SNOW_category'] = ''
-                for col in snow_columns:
-                    if col in result and not (col == 'category' and result.get('status') == 'ServiceNow API Error'):
-                        df.at[idx, f'SNOW_{col}'] = result[col]
-
-        # Save results
-        output_file.parent.mkdir(parents=True, exist_ok=True)
-
-        with pd.ExcelWriter(output_file, engine="openpyxl") as writer:
-            df.to_excel(writer, index=False)
-
-            # Auto-adjust column widths
-            worksheet = writer.sheets['Sheet1']
-            for i, column in enumerate(df.columns):
-                max_length = max(
-                    df[column].astype(str).apply(len).max(),
-                    len(str(column))
-                ) + 2
-                column_width = min(max_length, 50)
-                worksheet.column_dimensions[worksheet.cell(row=1, column=i + 1).column_letter].width = column_width
-
-        success_count = len([v for v in snow_data.values() if v.get('status') != 'ServiceNow API Error'])
-        error_count = len(snow_data) - success_count
-
-        logger.info(f"Successfully enriched report saved to {output_file}")
-        logger.info(f"Enrichment summary: {success_count} successful, {error_count} errors out of {len(snow_data)} total")
-
-        return output_file
-
-    except Exception as e:
-        logger.error(f"Error in enrich_host_report_multithreaded: {e}")
-        raise
-
-
-def enrich_host_report(input_file, use_async=True, use_multithreaded=False):
-    """Enhanced host enrichment with multiple optimization strategies."""
-    if use_multithreaded:
-        return enrich_host_report_multithreaded(input_file)
-    elif use_async:
-        return asyncio.run(enrich_host_report_async(input_file))
+    if errors_occurred:
+        logger.warning(f"Enriched report saved with some errors to {output_file}")
     else:
-        # Fallback to original synchronous method
-        return enrich_host_report_sync(input_file)
-
-
-def enrich_host_report_sync(input_file):
-    """Original synchronous version (kept as fallback)."""
-    try:
-        validate_input_file(input_file)
-
-        today = datetime.now().strftime('%m-%d-%Y')
-        input_name = Path(input_file).name
-        output_file = DATA_DIR / today / f"Enriched {input_name}"
-
-        if output_file.exists():
-            logger.info(f"Enriched file already exists: {output_file}")
-            return output_file
-
-        logger.info(f"Reading input file: {input_file}")
-        df = pd.read_excel(input_file, engine="openpyxl", dtype=str)
-
-        # Detect hostname column
-        hostname_col = None
-        for col in df.columns:
-            if 'hostname' in str(col).lower():
-                hostname_col = col
-                break
-
-        if not hostname_col:
-            logger.error("Could not find hostname column in the input file")
-            return input_file
-
-        logger.info(f"Using column '{hostname_col}' for hostnames")
-
-        # Clean the dataframe
-        initial_count = len(df)
-        df = df.dropna(subset=[hostname_col])
-        df = df[df[hostname_col].str.strip() != '']
-        logger.info(f"Removed {initial_count - len(df)} rows with empty hostnames")
-
-        # Extract hostnames
-        hostnames = []
-        for h in df[hostname_col].tolist():
-            if h is not None and str(h).strip() not in ['nan', 'NaN', 'none', 'None', 'null', 'NULL', '']:
-                hostname_str = str(h).strip()
-                hostnames.append(hostname_str)
-
-        logger.info(f"Processing {len(hostnames)} valid hostnames from {input_file}")
-
-        if not hostnames:
-            logger.warning("No valid hostnames found in input file")
-            return input_file
-
-        client = ServiceNowClient()
-        snow_data = {}
-
-        def enrich_single_host(hostname):
-            try:
-                details = client.get_host_details(hostname)
-                short_hostname = hostname.split('.')[0].lower()
-                return short_hostname, details
-            except Exception as e:
-                logger.error(f"Error enriching host {hostname}: {e}")
-                return hostname.split('.')[0].lower(), {
-                    "name": hostname,
-                    "error": str(e),
-                    "status": "Processing Error",
-                    "category": ""
-                }
-
-        # Optimized batch processing
-        batch_size = 200
-        max_workers = min(30, len(hostnames))
-
-        for batch_num, batch in enumerate(process_in_batches(hostnames, batch_size), 1):
-            logger.info(f"Processing batch {batch_num}/{(len(hostnames) + batch_size - 1) // batch_size}")
-
-            with ThreadPoolExecutor(max_workers=max_workers) as executor:
-                future_to_hostname = {
-                    executor.submit(enrich_single_host, hostname): hostname
-                    for hostname in batch
-                }
-
-                for future in tqdm(
-                        as_completed(future_to_hostname, timeout=600),
-                        total=len(future_to_hostname),
-                        desc=f"Enriching batch {batch_num}"
-                ):
-                    try:
-                        short_hostname, details = future.result(timeout=30)
-                        if details:
-                            snow_data[short_hostname] = details
-                    except concurrent.futures.TimeoutError:
-                        hostname = future_to_hostname[future]
-                        logger.error(f"Timeout processing host {hostname}")
-                        short_hostname = hostname.split('.')[0].lower()
-                        snow_data[short_hostname] = {
-                            "name": hostname,
-                            "error": "Processing timeout",
-                            "status": "Processing Error",
-                            "category": ""
-                        }
-                    except Exception as e:
-                        hostname = future_to_hostname[future]
-                        logger.error(f"Exception processing host {hostname}: {e}")
-                        short_hostname = hostname.split('.')[0].lower()
-                        snow_data[short_hostname] = {
-                            "name": hostname,
-                            "error": str(e),
-                            "status": "Processing Error",
-                            "category": ""
-                        }
-
-        if not snow_data:
-            logger.error("No ServiceNow data collected, cannot enrich report")
-            return input_file
-
-        # Add ServiceNow data to the original dataframe
-        logger.info(f"Retrieved data for {len(snow_data)} hosts from ServiceNow")
-
-        snow_columns = ['id', 'ciClass', 'environment', 'lifecycleStatus', 'country',
-                        'supportedCountry', 'operatingSystem', 'category', 'status', 'error']
-
-        for col in snow_columns:
-            df[f'SNOW_{col}'] = None
-
-        # Add ServiceNow data to each row
-        for idx, row in df.iterrows():
-            hostname = row[hostname_col]
-            if hostname and str(hostname).strip() not in ['nan', 'NaN', 'none', 'None', 'null', 'NULL', '']:
-                short_hostname = hostname.split('.')[0].lower()
-            else:
-                short_hostname = ""
-
-            if short_hostname in snow_data:
-                result = snow_data[short_hostname]
-                if result.get('status') == 'ServiceNow API Error':
-                    df.at[idx, 'SNOW_category'] = ''
-                for col in snow_columns:
-                    if col in result and not (col == 'category' and result.get('status') == 'ServiceNow API Error'):
-                        df.at[idx, f'SNOW_{col}'] = result[col]
-
-        # Save results
-        output_file.parent.mkdir(parents=True, exist_ok=True)
-
-        with pd.ExcelWriter(output_file, engine="openpyxl") as writer:
-            df.to_excel(writer, index=False)
-
-            # Auto-adjust column widths
-            worksheet = writer.sheets['Sheet1']
-            for i, column in enumerate(df.columns):
-                max_length = max(
-                    df[column].astype(str).apply(len).max(),
-                    len(str(column))
-                ) + 2
-                column_width = min(max_length, 50)
-                worksheet.column_dimensions[worksheet.cell(row=1, column=i + 1).column_letter].width = column_width
-
-        success_count = len([v for v in snow_data.values() if v.get('status') != 'ServiceNow API Error'])
-        error_count = len(snow_data) - success_count
-
         logger.info(f"Successfully enriched report saved to {output_file}")
-        logger.info(f"Enrichment summary: {success_count} successful, {error_count} errors out of {len(snow_data)} total")
 
-        return output_file
-
-    except Exception as e:
-        logger.error(f"Error in enrich_host_report_sync: {e}")
-        raise
+    return output_file
 
 
 if __name__ == "__main__":
-    try:
-        # Example usage - choose your preferred method
-        input_file_path = "your_input_file.xlsx"
+    client = ServiceNowClient()
 
-        # Option 1: Use optimized async version (recommended for maximum speed)
-        output_file = enrich_host_report(input_file_path, use_async=True)
+    hostname = "JP2NKTQL3.alico.corp"
+    logger.info(f"Looking up {hostname}...")
 
-        # Option 2: Use multithreaded version (good alternative)
-        # output_file = enrich_host_report(input_file_path, use_multithreaded=True)
+    details = client.get_host_details(hostname)
+    if details:
+        print(f"Name: {details.get('name')}")
+        print(f"IP: {details.get('ipAddress')}")
+        print(f"Category: {details.get('category')}")
+        print(f"OS: {details.get('operatingSystem')}")
+        print(f"Country: {details.get('country')}")
+        print(f"Status: {details.get('state')}")
+        print(f"Domain: {details.get('osDomain')}")
+        print(f"Environment: {details.get('environment')}")
+        if 'status' in details:
+            print(f"SNOW Status: {details.get('status')}")
+        if 'error' in details:
+            print(f"SNOW Error: {details.get('error')}")
+    else:
+        print("Host not found")
 
-        # Option 3: Use synchronous version (fallback)
-        # output_file = enrich_host_report(input_file_path, use_async=False)
-
-        print(f"Enrichment completed. Output saved to: {output_file}")
-
-    except Exception as e:
-        logger.error(f"Error in main: {e}")
-        raise
+    changes = client.get_process_changes()
+    print(changes)
