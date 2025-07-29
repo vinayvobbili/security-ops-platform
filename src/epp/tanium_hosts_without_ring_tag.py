@@ -262,15 +262,10 @@ def get_tanium_hosts_without_ring_tag(filename, test_limit=None) -> str:
         for index, row in df_enriched.head(debug_sample_size).iterrows():
             country_from_snow = row.get('SNOW_country')
             hostname = row.get('Hostname')
-            print(f"\nRow {index}:")
-            print(f"  Hostname: '{hostname}'")
-            print(f"  SNOW_country: '{country_from_snow}' (type: {type(country_from_snow)})")
-            print(f"  will guess country: {not is_valid_country(country_from_snow)}")
             if hostname:
                 dummy_computer = Computer(name=hostname, id="", ip="", eidLastSeen="", source="")
                 guessed_country, explanation = _guess_country_from_hostname(dummy_computer)
                 print(f"  would guess: '{guessed_country}' ({explanation})")
-        print(f"=== END DEBUG ===\n")
 
         # Process each row for country and region assignment and update Computer objects and df_enriched
         for index, row in df_enriched.iterrows():
@@ -306,14 +301,6 @@ def get_tanium_hosts_without_ring_tag(filename, test_limit=None) -> str:
                 df_enriched.at[index, 'Region'] = determined_region
                 df_enriched.at[index, 'Was Country Guessed'] = 'Yes' if was_country_guessed else 'No'
 
-                # --- ADD THESE DEBUG PRINTS ---
-                print(f"DEBUG: After df_enriched.at for index {index}:")
-                print(f"  df_enriched.at[index, 'Country']: '{df_enriched.at[index, 'Country']}'")
-                print(f"  df_enriched.at[index, 'Region']: '{df_enriched.at[index, 'Region']}'")
-                print(f"  df_enriched.at[index, 'Was Country Guessed']: '{df_enriched.at[index, 'Was Country Guessed']}'")
-                print(f"  (Expected: Country='{country_to_use}', Region='{determined_region}', Guessed='{'Yes' if was_country_guessed else 'No'}')")
-                # --- END DEBUG PRINTS ---
-
                 # Also update the Computer OBJECT's attributes directly
                 # These attributes are what `generate_ring_tags` will read when it iterates over `computers_without_ring_tag`
                 computer.category = row.get('SNOW_category', '')
@@ -328,13 +315,6 @@ def get_tanium_hosts_without_ring_tag(filename, test_limit=None) -> str:
                     computer.status = str(row['SNOW_comments'])
                 elif not hasattr(computer, 'status') or computer.status is None:
                     computer.status = ''  # Initialize if no valid SNOW comments
-
-                # --- ADD THESE DEBUG PRINTS ---
-                print(f"  Computer object country: '{computer.country}'")
-                print(f"  Computer object was_country_guessed: '{computer.was_country_guessed}'")
-                print(f"  Computer object status: '{getattr(computer, 'status', '')}'")  # Check status as well
-                print(f"--- END DEBUGGING ROW {index} ---")
-                # --- END DEBUG PRINTS ---
             else:
                 logger.warning(f"Could not find Computer object for Tanium ID: {tanium_id} in list for enrichment updates.")
 
@@ -403,7 +383,12 @@ def generate_ring_tags(filename: str) -> str:
             setattr(computer, "region", str(row.get('Region', '')).strip())
 
             # Use the 'SNOW_environment' and 'SNOW_category' for environment and category
-            setattr(computer, "environment", str(row.get('SNOW_environment', 'Production')).strip())
+            # FIX: Clean up nan values for environment
+            environment_value = str(row.get('SNOW_environment', '')).strip()
+            if environment_value.lower() in ['nan', 'none', 'null', '']:
+                environment_value = ''  # No default, just empty
+            setattr(computer, "environment", environment_value)
+
             setattr(computer, "category", str(row.get('SNOW_category', '')).strip())
 
             # Use the 'Was Country Guessed' column from the DataFrame and convert to boolean
@@ -475,11 +460,16 @@ def generate_ring_tags(filename: str) -> str:
                 if "country was guessed" not in getattr(computer, "status", "").lower():
                     _append_status(computer, "Country was guessed")
 
+            # FIX: Clean up environment value for display
+            environment_display = getattr(computer, "environment", "")
+            if environment_display.lower() in ['nan', 'none', 'null']:
+                environment_display = ""  # Show empty instead of nan
+
             output_ws.append([
                 computer.name,
                 computer.id,
                 computer_category,
-                getattr(computer, "environment", ""),
+                environment_display,  # Use cleaned environment value
                 getattr(computer, "country", ""),  # This is now correctly populated from the 'Country' column of the intermediate DF
                 region,
                 "Yes" if getattr(computer, "was_country_guessed", False) else "No",  # This correctly converts boolean back to string "Yes"/"No"
