@@ -237,6 +237,11 @@ def announce_shift_change(shift_name, room_id, sleep_time=30):
         staffing_data = get_staffing_data(day_name, shift_name)
         staffing_data['SA'][0] = staffing_data['SA'][0] + ' (Lead)'
 
+        # Pad staffing_data lists to the same length
+        max_len = max(len(v) for v in staffing_data.values())
+        for k, v in staffing_data.items():
+            staffing_data[k] = [(i if i is not None else '') for i in v] + [''] * (max_len - len(v))
+
         # Convert staffing_data to a table with the first column as headers
         headers = list(staffing_data.keys())
         shift_data_table = list(zip(*staffing_data.values()))
