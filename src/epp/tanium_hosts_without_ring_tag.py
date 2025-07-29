@@ -1,5 +1,4 @@
 import json
-import logging
 import logging.config
 import os
 from collections import defaultdict
@@ -172,6 +171,9 @@ def get_tanium_hosts_without_ring_tag(filename) -> str:
         all_computers = []
 
         # Use read_only mode for better memory efficiency
+        wb = None
+        error_message = None
+
         try:
             wb = openpyxl.load_workbook(all_hosts_filename, read_only=True, data_only=True)
             ws = wb.active
@@ -206,12 +208,17 @@ def get_tanium_hosts_without_ring_tag(filename) -> str:
 
         except Exception as e:
             logger.error(f"Error reading Excel file {all_hosts_filename}: {e}")
-            return f'Error reading Excel file: {e}'
+            error_message = f'Error reading Excel file: {e}'
         finally:
-            try:
-                wb.close()
-            except:
-                pass
+            if wb is not None:
+                try:
+                    wb.close()
+                except:
+                    pass
+
+        # Return error after cleanup if one occurred
+        if error_message:
+            return error_message
 
         if not all_computers:
             logger.warning("No valid computers retrieved from any instance!")
