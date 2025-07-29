@@ -1686,7 +1686,8 @@ class Who(Command):
 
     @log_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles, log_file_name="toodles_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
-        return f"{activity['actor']['displayName']}, the DnR On-call person is {oncall.get_on_call_person()}"
+        on_call_person = oncall.get_on_call_person()
+        return f"{activity['actor']['displayName']}, the DnR On-call person is {on_call_person.get('name')} - {on_call_person.get('email_address')} - {on_call_person.get('phone_number')}"
 
 
 class Rotation(Command):
