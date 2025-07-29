@@ -467,7 +467,7 @@ class GetTaniumHostsWithoutRingTag(Command):
         filepath = None  # Ensure filepath is always defined
         try:
             with fasteners.InterProcessLock(lock_path):
-                filepath = get_tanium_hosts_without_ring_tag(filename="Tanium hosts without ring tag.xlsx", test_limit=100)
+                filepath = get_tanium_hosts_without_ring_tag(filename="Tanium hosts without ring tag.xlsx", test_limit=None)
         except Exception as e:
             logger.error(f"Error in GetTaniumHostsWithoutRingTag execute: {e}")
             webex_api.messages.create(
