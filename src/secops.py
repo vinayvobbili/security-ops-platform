@@ -62,7 +62,7 @@ def get_staffing_data(day_name, shift_name):
     staffing_data = {}
     for team, cell_names in shift_cell_names.items():
         staffing_data[team] = [sheet[cell_name].value for cell_name in cell_names if sheet[cell_name].value != '\xa0']
-    staffing_data['On-Call'] = [oncall.get_on_call_person_name()]
+    staffing_data['On-Call'] = [oncall.get_on_call_person()['name'] + ' (' + oncall.get_on_call_person()['phone_number'] + ')']
     return staffing_data
 
 
@@ -99,12 +99,12 @@ def announce_previous_shift_performance(room_id, shift_name):
             query=BASE_QUERY + ' status:closed',
             period=period
         )
-        print([ticket.get('id') for ticket in outflow])
+
         malicious_true_positives = incident_fetcher.get_tickets(
             query=BASE_QUERY + ' status:closed impact:"Malicious True Positive"',
             period=period
         )
-        print([ticket.get('id') for ticket in malicious_true_positives])
+
         response_sla_breaches = incident_fetcher.get_tickets(
             query=BASE_QUERY + ' timetorespond.slaStatus:late',
             period=period

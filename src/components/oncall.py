@@ -71,18 +71,19 @@ def _get_on_call_details_by_monday_date(monday_date_str: str) -> Optional[Dict[s
         log.warning(f"No analyst details found for name: {on_call_name}")
         return None
     on_call_email_address = analyst_entry['email_address']
+    on_call_phone_number = analyst_entry['phone_number']
 
-    return {'name': on_call_name, 'email': on_call_email_address}
+    return {'name': on_call_name, 'email_address': on_call_email_address, 'phone_number': on_call_phone_number}
 
 
 # --- Core Functions ---
 
-def get_on_call_person() -> str:
+def get_on_call_person() -> dict[str, str]:
     """
     Gets the formatted string for the current on-call person from XSOAR lists.
 
     Returns:
-        Formatted string "**Name** (email@example.com)" or "_(unknown)_" on failure.
+        Formatted string "**Name** (email@example.com)" or {} on failure.
     """
     try:
         # Use IANA timezone database name for reliability with DST
@@ -95,40 +96,13 @@ def get_on_call_person() -> str:
         on_call_details = _get_on_call_details_by_monday_date(last_monday_str)
 
         if on_call_details:
-            return f"**{on_call_details['name']}** ({on_call_details['email']})"
+            return on_call_details
         else:
             log.error(f"Could not determine on-call person for week of {last_monday_str}")
-            return "_(unknown)_"
+            return {}
     except Exception as e:
         log.error(f"Unexpected error in get_on_call_person: {e}", exc_info=True)
-        return "_(unknown)_"
-
-
-def get_on_call_person_name() -> str:
-    """
-    Gets the formatted string for the current on-call person from XSOAR lists.
-
-    Returns:
-        Formatted string "**Name** (email@example.com)" or "_(unknown)_" on failure.
-    """
-    try:
-        # Use IANA timezone database name for reliability with DST
-        tz = timezone('America/New_York')
-        today = datetime.now(tz)
-        # Calculate the date of the most recent Monday (could be today)
-        last_monday_date = today.date() - timedelta(days=today.weekday())
-        last_monday_str = last_monday_date.strftime('%Y-%m-%d')
-
-        on_call_details = _get_on_call_details_by_monday_date(last_monday_str)
-
-        if on_call_details:
-            return on_call_details['name']
-        else:
-            log.error(f"Could not determine on-call person for week of {last_monday_str}")
-            return "_(unknown)_"
-    except Exception as e:
-        log.error(f"Unexpected error in get_on_call_person: {e}", exc_info=True)
-        return "_(unknown)_"
+        return {}
 
 
 def alert_change():
