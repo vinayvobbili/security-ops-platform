@@ -1,9 +1,15 @@
+"""
+Tanium Host Processing - Clean Architecture Refactor
+Following SOLID principles and Clean Code practices
+"""
+
 import json
-import logging.config
+import logging
 from collections import defaultdict
+from dataclasses import dataclass, replace
 from datetime import datetime
 from pathlib import Path
-from typing import List, Union
+from typing import List, Dict, Tuple, Optional, Protocol
 
 import openpyxl
 import pandas as pd
@@ -12,142 +18,123 @@ from config import get_config
 from services.service_now import enrich_host_report
 from services.tanium import Computer, TaniumClient
 
-# Setup enhanced logging
-LOGGING_CONFIG = {
-    'version': 1,
-    'disable_existing_loggers': False,
-    'formatters': {
-        'detailed': {
-            'format': '%(asctime)s - %(name)s - %(levelname)s - %(funcName)s:%(lineno)d - %(message)s'
-        },
-        'simple': {
-            'format': '%(levelname)s - %(message)s'
-        }
-    },
-    'handlers': {
-        'console': {
-            'class': 'logging.StreamHandler',
-            'level': 'INFO',
-            'formatter': 'simple'
-        },
-        'file': {
-            'class': 'logging.handlers.RotatingFileHandler',
-            'level': 'DEBUG',
-            'formatter': 'detailed',
-            'filename': 'tanium_enrichment.log',
-            'maxBytes': 10485760,  # 10MB
-            'backupCount': 5,
-            'encoding': 'utf-8'
-        }
-    },
-    'loggers': {
-        '': {  # root logger
-            'handlers': ['console', 'file'],
-            'level': 'DEBUG',
-            'propagate': False
-        }
-    }
-}
 
-logging.config.dictConfig(LOGGING_CONFIG)
-logger = logging.getLogger(__name__)
+# ============================================================================
+# Domain Models (Clean, focused data structures)
+# ============================================================================
 
-# Configuration
-CONFIG = get_config()
+@dataclass
+class ProcessingConfig:
+    """Configuration for ring processing"""
+    ring_1_percent: float = 0.10
+    ring_2_percent: float = 0.20
+    ring_3_percent: float = 0.30
+    ring_1_envs: set = None
+    ring_2_envs: set = None
+    ring_3_envs: set = None
 
-# Constants for ring distribution
-RING_1_PERCENT = 0.10  # 10% of workstations in Ring 1
-RING_2_PERCENT = 0.20  # 20% of workstations in Ring 2
-RING_3_PERCENT = 0.30  # 30% of workstations in Ring 3
-# Remaining 40% in Ring 4
-
-# Environment-based ring assignment for servers
-RING_1_ENVS = {'dev', 'development', 'sandbox', 'lab', 'poc', 'integration', 'int'}
-RING_2_ENVS = {'test', 'testing', 'qa'}
-RING_3_ENVS = {'stage', 'staging', 'uat', 'pre-prod', 'preprod', 'dr', 'qa/dr'}
-# All other environments (including production) go to Ring 4
-
-# Data directories and files
-DATA_DIR = Path(__file__).parent.parent.parent / "data"
-COUNTRIES_FILE = DATA_DIR / "countries_by_code.json"
-REGIONS_FILE = DATA_DIR / "regions_by_country.json"
-
-# Load country and region data with error handling
-try:
-    with open(COUNTRIES_FILE, 'r', encoding='utf-8') as f:
-        COUNTRY_NAMES_BY_CODE = json.load(f)
-    logger.info(f"Loaded {len(COUNTRY_NAMES_BY_CODE)} country codes from {COUNTRIES_FILE}")
-except FileNotFoundError:
-    logger.error(f"Country codes file not found: {COUNTRIES_FILE}")
-    COUNTRY_NAMES_BY_CODE = {}
-except json.JSONDecodeError as e:
-    logger.error(f"Invalid JSON in country codes file: {e}")
-    COUNTRY_NAMES_BY_CODE = {}
-
-try:
-    with open(REGIONS_FILE, 'r', encoding='utf-8') as f:
-        REGIONS_BY_COUNTRY = json.load(f)
-    logger.info(f"Loaded {len(REGIONS_BY_COUNTRY)} country-region mappings from {REGIONS_FILE}")
-except FileNotFoundError:
-    logger.error(f"Regions file not found: {REGIONS_FILE}")
-    REGIONS_BY_COUNTRY = {}
-except json.JSONDecodeError as e:
-    logger.error(f"Invalid JSON in regions file: {e}")
-    REGIONS_BY_COUNTRY = {}
+    def __post_init__(self):
+        if self.ring_1_envs is None:
+            self.ring_1_envs = {'dev', 'development', 'sandbox', 'lab', 'poc', 'integration', 'int'}
+        if self.ring_2_envs is None:
+            self.ring_2_envs = {'test', 'testing', 'qa'}
+        if self.ring_3_envs is None:
+            self.ring_3_envs = {'stage', 'staging', 'uat', 'pre-prod', 'preprod', 'dr', 'qa/dr'}
 
 
-def validate_input_file(filepath):
-    """Validate input file before processing."""
-    file_path = Path(filepath)
+@dataclass
+class EnrichedComputer:
+    """Computer with enrichment data - immutable where possible"""
+    computer: Computer
+    country: str = ""
+    region: str = ""
+    environment: str = ""
+    category: str = ""
+    was_country_guessed: bool = False
+    status: str = ""
+    ring_tag: Optional[str] = None
 
-    if not file_path.exists():
-        raise FileNotFoundError(f"Input file not found: {filepath}")
+    @property
+    def is_workstation(self) -> bool:
+        return self.category.lower() == "workstation"
 
-    if not str(filepath).lower().endswith(('.xlsx', '.xls')):
-        raise ValueError("Input file must be an Excel file (.xlsx or .xls)")
+    @property
+    def is_server(self) -> bool:
+        return self.category.lower() in ("server", "srv")
 
-    # Check if file is readable
-    try:
-        df = pd.read_excel(filepath, nrows=1, engine='openpyxl')
-        if df.empty:
-            raise ValueError("Input file appears to be empty")
-    except Exception as e:
-        raise ValueError(f"Cannot read input file: {e}")
-
-    logger.info(f"Input file validation passed: {filepath}")
-    return True
-
-
-def is_valid_country(country_val):
-    """Check if country value is valid (not null, nan, empty, etc.)"""
-    if pd.isna(country_val) or country_val is None:
-        return False
-    country_str = str(country_val).strip()
-    return country_str and country_str.lower() not in ['nan', 'none', 'null', '']
+    def add_status(self, message: str) -> 'EnrichedComputer':
+        """Return new instance with appended status (immutable pattern)"""
+        new_status = f"{self.status}; {message}" if self.status else message
+        return replace(self, status=new_status)
 
 
-def calculate_ring_sizes(total):
-    """Calculate ring distribution sizes based on total count."""
-    if total == 1:
-        return [0, 0, 0, 1]  # Single machine goes to Ring 4
-    elif total == 2:
-        return [0, 0, 1, 1]  # Split between Ring 3 and 4
-    elif total <= 5:
-        return [0, 1, 1, total - 2]  # Minimal Ring 2 and 3
-    else:
-        # Use percentage-based distribution
-        ring_1 = max(1, int(RING_1_PERCENT * total))
-        ring_2 = max(1, int(RING_2_PERCENT * total))
-        ring_3 = max(1, int(RING_3_PERCENT * total))
-        ring_4 = total - ring_1 - ring_2 - ring_3
-        return [ring_1, ring_2, ring_3, ring_4]
+# ============================================================================
+# Protocols (Interface Segregation Principle)
+# ============================================================================
+
+class DataLoader(Protocol):
+    """Interface for loading data"""
+
+    def load_tanium_computers(self, test_limit: Optional[int] = None) -> List[Computer]:
+        ...
+
+    def load_country_mappings(self) -> Dict[str, str]:
+        ...
+
+    def load_region_mappings(self) -> Dict[str, str]:
+        ...
 
 
-def get_tanium_hosts_without_ring_tag(filename, test_limit=None) -> str:
-    """Get computers without ECM tag from all instances and export to Excel"""
-    try:
+class ComputerEnricher(Protocol):
+    """Interface for enriching computer data"""
+
+    def enrich_computers(self, computers: List[Computer]) -> List[EnrichedComputer]:
+        ...
+
+
+class CountryResolver(Protocol):
+    """Interface for resolving countries"""
+
+    def resolve_country(self, computer: Computer, snow_country: str) -> Tuple[str, bool]:
+        ...
+
+
+class RegionResolver(Protocol):
+    """Interface for resolving regions"""
+
+    def resolve_region(self, country: str) -> str:
+        ...
+
+
+class RingTagGenerator(Protocol):
+    """Interface for generating ring tags"""
+
+    def generate_tags(self, computers: List[EnrichedComputer]) -> List[EnrichedComputer]:
+        ...
+
+
+class ReportExporter(Protocol):
+    """Interface for exporting reports"""
+
+    def export_to_excel(self, computers: List[EnrichedComputer], output_path: Path) -> str:
+        ...
+
+
+# ============================================================================
+# Concrete Implementations (Single Responsibility Principle)
+# ============================================================================
+
+class TaniumDataLoader:
+    """Loads data from various sources"""
+
+    def __init__(self, data_dir: Path):
+        self.data_dir = data_dir
+        self.logger = logging.getLogger(__name__)
+
+    def load_tanium_computers(self, test_limit: Optional[int] = None) -> List[Computer]:
+        """Load computers from Tanium, handling all the Excel parsing complexity"""
         today = datetime.now().strftime('%m-%d-%Y')
-        output_dir = Path(__file__).parent.parent.parent / "data" / "transient" / "epp_device_tagging" / today
+        output_dir = self.data_dir / "transient" / "epp_device_tagging" / today
         output_dir.mkdir(parents=True, exist_ok=True)
         all_hosts_file = output_dir / "All Tanium Hosts.xlsx"
 
@@ -155,474 +142,551 @@ def get_tanium_hosts_without_ring_tag(filename, test_limit=None) -> str:
 
         if all_hosts_file.exists():
             all_hosts_filename = str(all_hosts_file)
-            logger.info(f"Using existing hosts file: {all_hosts_filename}")
+            self.logger.info(f"Using existing hosts file: {all_hosts_filename}")
         else:
             all_hosts_filename = client.get_and_export_all_computers()
 
         if not all_hosts_filename:
-            logger.warning("No computers retrieved from any instance!")
-            return 'No computers retrieved from any instance!'
+            raise ValueError("No computers retrieved from any instance!")
 
-        # Validate the file before processing
-        validate_input_file(all_hosts_filename)
+        computers = self._parse_excel_file(all_hosts_filename)
 
-        all_computers = []
+        # Filter and limit
+        filtered_computers = [c for c in computers if not c.has_epp_ring_tag()]
+        if test_limit is not None and test_limit > 0:
+            filtered_computers = filtered_computers[:test_limit]
 
-        # Use read_only mode for better memory efficiency
+        self.logger.info(f"Loaded {len(filtered_computers)} computers without ring tags")
+        return filtered_computers
+
+    def _parse_excel_file(self, filename: str) -> List[Computer]:
+        """Parse Excel file into Computer objects"""
+        self._validate_input_file(filename)
+        computers = []
         wb = None
-        error_message = None
 
         try:
-            wb = openpyxl.load_workbook(all_hosts_filename, read_only=True, data_only=True)
+            wb = openpyxl.load_workbook(filename, read_only=True, data_only=True)
             ws = wb.active
 
             for row_num, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
-                if not row:
+                if not row or len(row) < 6:
                     continue
 
-                # Ensure row has enough elements for direct indexing up to index 5 (6 columns)
-                if len(row) < 6:
-                    logger.warning(f"Row {row_num}: Insufficient columns ({len(row)}/6 expected), skipping. Row: {row}")
-                    continue
-
-                # Validate critical fields before creating Computer object
                 if not row[0]:  # name is required
-                    logger.warning(f"Row {row_num}: Missing computer name, skipping. Row: {row}")
                     continue
 
                 try:
-                    all_computers.append(
+                    computers.append(
                         Computer(
-                            name=str(row[0]).strip() if row[0] is not None else "",
-                            id=str(row[1]).strip() if row[1] is not None else "",
-                            ip=str(row[2]).strip() if row[2] is not None else "",
+                            name=str(row[0]).strip(),
+                            id=str(row[1]).strip() if row[1] else "",
+                            ip=str(row[2]).strip() if row[2] else "",
                             eidLastSeen=row[3],
-                            source=str(row[4]).strip() if row[4] is not None else "",
+                            source=str(row[4]).strip() if row[4] else "",
                             custom_tags=[tag.strip() for tag in str(row[5]).split(',') if tag.strip()] if row[5] else []
                         )
                     )
-                except (IndexError, TypeError, ValueError) as e:
-                    logger.warning(f"Error processing row {row_num} {row}: {e}")
-                    continue
-
+                except Exception as e:
+                    self.logger.warning(f"Error processing row {row_num}: {e}")
         except Exception as e:
-            logger.error(f"Error reading Excel file {all_hosts_filename}: {e}")
-            error_message = f'Error reading Excel file: {e}'
+            self.logger.error(f"Error loading Excel file: {e}")
         finally:
             if wb is not None:
-                try:
-                    wb.close()
-                except:
-                    pass
+                wb.close()
 
-        # Return error after cleanup if one occurred
-        if error_message:
-            return error_message
+        return computers
 
-        if not all_computers:
-            logger.warning("No valid computers retrieved from any instance!")
-            return 'No valid computers retrieved from any instance!'
+    @staticmethod
+    def _validate_input_file(filepath: str):
+        """Validate input file before processing"""
+        file_path = Path(filepath)
+        if not file_path.exists():
+            raise FileNotFoundError(f"Input file not found: {filepath}")
+        if not str(filepath).lower().endswith(('.xlsx', '.xls')):
+            raise ValueError("Input file must be an Excel file")
 
-        logger.info(f"Successfully loaded {len(all_computers)} computers from Tanium")
+    def load_country_mappings(self) -> Dict[str, str]:
+        """Load country code to name mappings"""
+        return self._load_json_file(self.data_dir / "countries_by_code.json")
 
-        # Filter computers without ring tag and apply the test_limit
-        filtered_computers_without_ring_tag = [c for c in all_computers if not c.has_epp_ring_tag()]
-        if test_limit is not None and test_limit > 0:
-            computers_without_ring_tag = filtered_computers_without_ring_tag[:test_limit]
-            print(f'Found {len(filtered_computers_without_ring_tag)} Tanium hosts without ring tag, limiting to {len(computers_without_ring_tag)} for test.')
-        else:
-            computers_without_ring_tag = filtered_computers_without_ring_tag
-            print(f'Found {len(computers_without_ring_tag)} Tanium hosts without ring tag')
+    def load_region_mappings(self) -> Dict[str, str]:
+        """Load country to region mappings"""
+        return self._load_json_file(self.data_dir / "regions_by_country.json")
 
-        computers_without_ring_tag_filename = client.export_to_excel(computers_without_ring_tag, filename)
-
-        print('Starting enrichment of these hosts with ServiceNow data')
-
-        enriched_report_from_service_now = enrich_host_report(computers_without_ring_tag_filename)
-
-        # Load the report that has been enriched by ServiceNow.
-        # This df_enriched will have SNOW_ prefixed columns, and SNOW_country will be blank if it was 'nan'.
-        df_enriched = pd.read_excel(enriched_report_from_service_now, dtype=str, engine='openpyxl')
-
-        # Initialize 'Region' and 'Was Country Guessed' columns in df_enriched
-        # If 'Country' column already exists from the Tanium export, this will overwrite it.
-        # If not, it will create it.
-        # Ensure 'Country' column is of type object to hold strings
-        if 'Country' not in df_enriched.columns:
-            df_enriched['Country'] = ''
-        else:
-            # Clean 'nan' from the existing 'Country' column directly when loading, if it originated from Tanium
-            df_enriched['Country'] = df_enriched['Country'].apply(lambda x: '' if pd.isna(x) or str(x).lower() == 'nan' else str(x))
-
-        df_enriched['Region'] = ''  # Initialize Region column
-        df_enriched['Was Country Guessed'] = 'No'  # Initialize as 'No' string
-
-        debug_sample_size = min(10, len(df_enriched))
-        print(f"\n=== DEBUGGING FIRST {debug_sample_size} ROWS ===")
-        for index, row in df_enriched.head(debug_sample_size).iterrows():
-            country_from_snow = row.get('SNOW_country')
-            hostname = row.get('Hostname')
-            if hostname:
-                dummy_computer = Computer(name=hostname, id="", ip="", eidLastSeen="", source="")
-                guessed_country, explanation = _guess_country_from_hostname(dummy_computer)
-                print(f"  would guess: '{guessed_country}' ({explanation})")
-
-        # Process each row for country and region assignment and update Computer objects and df_enriched
-        for index, row in df_enriched.iterrows():
-            country_from_snow = row.get('SNOW_country')  # This will be blank if service_now.py cleared 'nan'
-            hostname = row.get('Hostname')
-            tanium_id = row.get('ID')  # Get Tanium ID to find the correct Computer object
-
-            country_to_use = None
-            was_country_guessed = False
-            determined_region = ''
-
-            # Logic to determine the country to use (SNOW > Guessed)
-            if is_valid_country(country_from_snow):
-                country_to_use = country_from_snow
-            elif hostname and str(hostname).strip():
-                dummy_computer = Computer(name=str(hostname), id="", ip="", eidLastSeen="", source="")
-                guessed_country, _ = _guess_country_from_hostname(dummy_computer)
-                if guessed_country and is_valid_country(guessed_country):  # Ensure guessed country is valid
-                    country_to_use = guessed_country
-                    was_country_guessed = True
-
-            # Determine region based on country_to_use
-            # FIX: Handle case where country is not in REGIONS_BY_COUNTRY mapping
-            if country_to_use:
-                determined_region = REGIONS_BY_COUNTRY.get(country_to_use, '')
-                # If region lookup returns None or nan-like values, set to empty
-                if determined_region is None or pd.isna(determined_region):
-                    determined_region = ''
-                    # If no region mapping exists, clear the country as well
-                    logger.warning(f"No region mapping found for country '{country_to_use}' - clearing both country and region")
-                    country_to_use = ''
-                    was_country_guessed = False
-
-            # Find the corresponding Computer object in the list that will be passed to generate_ring_tags
-            computer = next((c for c in computers_without_ring_tag if c.id == tanium_id), None)
-
-            if computer:
-                # Update the DATAFRAME `df_enriched` columns
-                # These columns will be saved to the intermediate Excel file
-                df_enriched.at[index, 'Country'] = country_to_use if country_to_use else ''
-                df_enriched.at[index, 'Region'] = determined_region
-                df_enriched.at[index, 'Was Country Guessed'] = 'Yes' if was_country_guessed else 'No'
-
-                # Also update the Computer OBJECT's attributes directly
-                # These attributes are what `generate_ring_tags` will read when it iterates over `computers_without_ring_tag`
-                computer.category = row.get('SNOW_category', '')
-                computer.environment = row.get('SNOW_environment', '')
-                computer.country = country_to_use if country_to_use else ''  # CRITICAL FIX: Set Computer object's country
-                computer.region = determined_region  # Set region on the Computer object
-                computer.was_country_guessed = was_country_guessed  # Set was_country_guessed on the Computer object
-
-                # Ensure initial SNOW comments are transferred to the Computer object's status
-                # If 'SNOW_comments' doesn't exist or is empty, ensure computer.status is initialized.
-                if 'SNOW_comments' in row and row['SNOW_comments'] and str(row['SNOW_comments']).lower() != 'nan':
-                    computer.status = str(row['SNOW_comments'])
-                elif not hasattr(computer, 'status') or computer.status is None:
-                    computer.status = ''  # Initialize if no valid SNOW comments
-            else:
-                logger.warning(f"Could not find Computer object for Tanium ID: {tanium_id} in list for enrichment updates.")
-
-        # Save the DataFrame with the new 'Country', 'Region', 'Was Country Guessed' columns
-        # This Excel file is what generate_ring_tags will read.
-        enriched_report_with_region = Path(enriched_report_from_service_now).parent / "Tanium hosts without ring tag - enriched with SNOW data.xlsx"
-        df_enriched.to_excel(enriched_report_with_region, index=False, engine='openpyxl')
-
-        # Generate Ring tags
-        # generate_ring_tags reads the Excel file, but also relies on the Computer objects
-        # if it's designed to iterate over them directly.
-        # The key is that the Excel file now has the correct 'Country' and 'Was Country Guessed' columns.
-        tagged_report = generate_ring_tags(str(enriched_report_with_region))
-
-        print(f'Completed enrichment and tag generation. The full report can be found at {tagged_report}')
-        return tagged_report
-
-    except Exception as e:
-        logger.error(f"Error in get_tanium_hosts_without_ring_tag: {e}", exc_info=True)
-        return f'Error: {e}'
+    def _load_json_file(self, filepath: Path) -> Dict[str, str]:
+        """Generic JSON file loader with error handling"""
+        try:
+            with open(filepath, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            self.logger.info(f"Loaded {len(data)} entries from {filepath}")
+            return data
+        except FileNotFoundError:
+            self.logger.error(f"File not found: {filepath}")
+            return {}
+        except json.JSONDecodeError as e:
+            self.logger.error(f"Invalid JSON in {filepath}: {e}")
+            return {}
 
 
-def generate_ring_tags(filename: str) -> str:
-    """Generate ring tags for a list of computers and export to Excel."""
-    try:
-        # Validate input file
-        validate_input_file(filename)
+class ServiceNowComputerEnricher:
+    """Enriches computers with ServiceNow data"""
 
-        # Read the enriched data with proper handling of nan values
-        # Use keep_default_na=False to prevent 'nan' strings from being treated as NaN
-        df = pd.read_excel(filename, dtype=str, engine='openpyxl', keep_default_na=False, na_values=[''])
-        logger.info(f"Processing {len(df)} computers for ring tag generation")
+    def __init__(self, temp_dir: Path):
+        self.temp_dir = temp_dir
+        self.logger = logging.getLogger(__name__)
 
-        workstations = []
-        servers = []
+    def enrich_computers(self, computers: List[Computer]) -> List[EnrichedComputer]:
+        """Enrich computers with ServiceNow data"""
+        # Export computers to Excel for ServiceNow enrichment
+        client = TaniumClient()
+        temp_filename = self.temp_dir / "temp_computers_for_enrichment.xlsx"
+        computers_file = client.export_to_excel(computers, str(temp_filename))
 
-        # Convert DataFrame rows to Computer objects and classify them
-        for index, row in df.iterrows():
-            name = str(row.get('Hostname', '')).strip()
-            if not name:
-                logger.warning(f"Row {index}: Missing hostname, skipping")
+        # Enrich with ServiceNow
+        enriched_file = enrich_host_report(computers_file)
+
+        # Parse enriched data back
+        df = pd.read_excel(enriched_file, dtype=str, engine='openpyxl', keep_default_na=False, na_values=[''])
+
+        enriched_computers = []
+        for _, row in df.iterrows():
+            # Find original computer
+            tanium_id = str(row.get('ID', '')).strip()
+            original_computer = next((c for c in computers if c.id == tanium_id), None)
+
+            if original_computer:
+                enriched_computers.append(
+                    EnrichedComputer(
+                        computer=original_computer,
+                        country="",
+                        region="",
+                        environment=self._clean_value(row.get('SNOW_environment', '')),
+                        category=self._clean_value(row.get('SNOW_category', '')),
+                        was_country_guessed=False,
+                        status=self._clean_value(row.get('SNOW_comments', '')),
+                        ring_tag=None
+                    )
+                )
+
+        return enriched_computers
+
+    @staticmethod
+    def _clean_value(value) -> str:
+        """Clean nan/null values"""
+        if not value or str(value).lower() in ['nan', 'none', 'null']:
+            return ""
+        return str(value).strip()
+
+
+class SmartCountryResolver:
+    """Resolves countries using multiple strategies"""
+
+    def __init__(self, country_mappings: Dict[str, str], config):
+        self.country_mappings = country_mappings
+        self.config = config
+        self.logger = logging.getLogger(__name__)
+
+    def resolve_country(self, computer: Computer, snow_country: str) -> Tuple[str, bool]:
+        """Resolve country with fallback strategies"""
+        # Priority 1: Valid ServiceNow country
+        if self._is_valid_country(snow_country):
+            return snow_country, False
+
+        # Priority 2: Guess from hostname
+        guessed_country, _ = self._guess_country_from_hostname(computer)
+        if self._is_valid_country(guessed_country):
+            return guessed_country, True
+
+        return "", False
+
+    @staticmethod
+    def _is_valid_country(country: str) -> bool:
+        """Check if country value is valid"""
+        if not country or pd.isna(country):
+            return False
+        country_str = str(country).strip()
+        return country_str and country_str.lower() not in ['nan', 'none', 'null', '']
+
+    def _guess_country_from_hostname(self, computer: Computer) -> Tuple[str, str]:
+        """Guess country from hostname using various strategies"""
+        name = computer.name.strip().lower()
+        if not name:
+            return '', 'Empty hostname'
+
+        # Strategy 1: Special prefixes
+        if name.startswith('vmvdi'):
+            return 'United States', "VMVDI prefix"
+
+        if hasattr(self.config, 'team_name') and name.startswith(self.config.team_name.lower()):
+            return 'United States', f"{self.config.team_name} prefix"
+
+        # Strategy 2: Country code from first 2 characters
+        if len(name) >= 2:
+            country_code = name[:2].upper()
+            country_name = self.country_mappings.get(country_code, '')
+            if country_name:
+                return country_name, f"Country code {country_code}"
+
+        # Strategy 3: Leading digit suggests Korea
+        if name[0].isdigit():
+            return 'Korea', "Leading digit"
+
+        # Strategy 4: Check tags for country indicators
+        for tag in getattr(computer, 'custom_tags', []):
+            tag_upper = str(tag).upper()
+            for code, country_name in self.country_mappings.items():
+                if code in tag_upper or country_name.upper() in tag_upper:
+                    return country_name, f"Tag: {tag}"
+
+        return '', 'No indicators found'
+
+
+class SafeRegionResolver:
+    """Resolves regions with proper error handling"""
+
+    def __init__(self, region_mappings: Dict[str, str]):
+        self.region_mappings = region_mappings
+        self.logger = logging.getLogger(__name__)
+
+    def resolve_region(self, country: str) -> str:
+        """Resolve region from country with proper error handling"""
+        if not country:
+            return ""
+
+        region = self.region_mappings.get(country, "")
+        if not region or region is None or pd.isna(region):
+            self.logger.warning(f"No region mapping found for country: {country}")
+            return ""
+
+        return str(region).strip()
+
+
+class SmartRingTagGenerator:
+    """Generates ring tags following business rules"""
+
+    def __init__(self, config: ProcessingConfig):
+        self.config = config
+        self.logger = logging.getLogger(__name__)
+
+    def generate_tags(self, computers: List[EnrichedComputer]) -> List[EnrichedComputer]:
+        """Generate ring tags for all computers"""
+        workstations = [c for c in computers if c.is_workstation]
+        servers = [c for c in computers if c.is_server]
+        other = [c for c in computers if not c.is_workstation and not c.is_server]
+
+        # Process each category
+        tagged_workstations = self._process_workstations(workstations)
+        tagged_servers = self._process_servers(servers)
+        tagged_other = [c.add_status("Category missing or unknown - skipping") for c in other]
+
+        return tagged_workstations + tagged_servers + tagged_other
+
+    def _process_workstations(self, workstations: List[EnrichedComputer]) -> List[EnrichedComputer]:
+        """Process workstations by region/country groups"""
+        if not workstations:
+            return []
+
+        # Group by region and country
+        groups = defaultdict(list)
+        for ws in workstations:
+            if ws.region:  # Only process if region exists
+                groups[(ws.region, ws.country)].append(ws)
+
+        tagged_computers = []
+
+        # Process each group
+        for (region, country), group in groups.items():
+            ring_sizes = self._calculate_ring_sizes(len(group))
+
+            # Sort by last seen date
+            sorted_group = sorted(group, key=lambda c: (c.computer.eidLastSeen is None, c.computer.eidLastSeen))
+
+            # Assign ring tags
+            current_index = 0
+            for ring, size in enumerate(ring_sizes, start=1):
+                for _ in range(size):
+                    if current_index < len(sorted_group):
+                        computer = sorted_group[current_index]
+                        tagged_computer = EnrichedComputer(
+                            computer=computer.computer,
+                            country=computer.country,
+                            region=computer.region,
+                            environment=computer.environment,
+                            category=computer.category,
+                            was_country_guessed=computer.was_country_guessed,
+                            status=computer.status,
+                            ring_tag=f"EPP_ECMTag_{region}_Wks_Ring{ring}"
+                        ).add_status("Ring tag generated successfully")
+
+                        if computer.was_country_guessed:
+                            tagged_computer = tagged_computer.add_status("Country was guessed")
+
+                        tagged_computers.append(tagged_computer)
+                        current_index += 1
+
+        # Add computers without regions
+        for ws in workstations:
+            if not ws.region:
+                tagged_computers.append(ws.add_status("Region missing. Ring tag couldn't be generated"))
+
+        return tagged_computers
+
+    def _process_servers(self, servers: List[EnrichedComputer]) -> List[EnrichedComputer]:
+        """Process servers based on environment"""
+        tagged_servers = []
+
+        for server in servers:
+            if not server.region:
+                tagged_servers.append(server.add_status("Region missing. Ring tag couldn't be generated"))
                 continue
 
-            computer_id = str(row.get('ID', '')).strip()
-            ip = str(row.get('IP Address', '')).strip()
-            eid_last_seen = row.get('Last Seen')
-            source = str(row.get('Source', '')).strip()
-            current_tags_str = str(row.get('Current Tags', ''))
-            custom_tags = [tag.strip() for tag in current_tags_str.split(',') if tag.strip()]
+            env = self._normalize_environment(server.environment)
 
-            computer = Computer(
-                name=name,
-                id=computer_id,
-                ip=ip,
-                eidLastSeen=eid_last_seen,
-                source=source,
-                custom_tags=custom_tags
-            )
-
-            # Set attributes from DataFrame columns
-            # Since we used keep_default_na=False, 'nan' strings should be preserved as strings
-            # and we can check for them explicitly
-            country_val = row.get('Country', '')
-            setattr(computer, "country", '' if country_val == 'nan' else str(country_val).strip())
-
-            region_val = row.get('Region', '')
-            setattr(computer, "region", '' if region_val == 'nan' else str(region_val).strip())
-
-            env_val = row.get('SNOW_environment', '')
-            setattr(computer, "environment", '' if env_val == 'nan' else str(env_val).strip())
-
-            cat_val = row.get('SNOW_category', '')
-            setattr(computer, "category", '' if cat_val == 'nan' else str(cat_val).strip())
-
-            # Use the 'Was Country Guessed' column from the DataFrame and convert to boolean
-            was_guessed_str = str(row.get('Was Country Guessed', 'No')).strip().lower()
-            setattr(computer, "was_country_guessed", was_guessed_str == 'yes')
-
-            setattr(computer, "new_tag", None)
-
-            # Initialize status from SNOW_comments
-            status_val = row.get('SNOW_comments', '')
-            setattr(computer, "status", '' if status_val == 'nan' else str(status_val).strip())
-
-            # Classify as server or workstation
-            category = getattr(computer, "category", "").strip().lower()
-            if category in ("server", "srv"):
-                servers.append(computer)
-            elif category == "workstation":
-                workstations.append(computer)
+            if env in self.config.ring_1_envs:
+                ring = 1
+            elif env in self.config.ring_2_envs:
+                ring = 2
+            elif env in self.config.ring_3_envs:
+                ring = 3
             else:
-                _append_status(computer, "Category missing or unknown - skipping")
+                ring = 4
 
-        logger.info(f"Classified {len(servers)} servers and {len(workstations)} workstations")
-        _process_workstations(workstations)
-        _process_servers(servers)
+            tagged_server = EnrichedComputer(
+                computer=server.computer,
+                country=server.country,
+                region=server.region,
+                environment=server.environment,
+                category=server.category,
+                was_country_guessed=server.was_country_guessed,
+                status=server.status,
+                ring_tag=f"EPP_ECMTag_{server.region}_SRV_Ring{ring}"
+            ).add_status("Ring tag generated successfully")
 
-        # Create output Excel file
-        output_wb = openpyxl.Workbook()
-        output_ws = output_wb.active
-        output_ws.title = "Ring Assignments"
+            if server.was_country_guessed:
+                tagged_server = tagged_server.add_status("Country was guessed")
+
+            tagged_servers.append(tagged_server)
+
+        return tagged_servers
+
+    def _calculate_ring_sizes(self, total: int) -> List[int]:
+        """Calculate ring distribution sizes"""
+        if total == 1:
+            return [0, 0, 0, 1]
+        elif total == 2:
+            return [0, 0, 1, 1]
+        elif total <= 5:
+            return [0, 1, 1, total - 2]
+        else:
+            ring_1 = max(1, int(self.config.ring_1_percent * total))
+            ring_2 = max(1, int(self.config.ring_2_percent * total))
+            ring_3 = max(1, int(self.config.ring_3_percent * total))
+            ring_4 = total - ring_1 - ring_2 - ring_3
+            return [ring_1, ring_2, ring_3, ring_4]
+
+    @staticmethod
+    def _normalize_environment(environment: str) -> str:
+        """Normalize environment string"""
+        if not environment:
+            return ""
+        return str(environment).lower().strip()
+
+
+class ExcelReportExporter:
+    """Exports enriched computers to Excel reports"""
+
+    def __init__(self):
+        self.logger = logging.getLogger(__name__)
+
+    def export_to_excel(self, computers: List[EnrichedComputer], output_path: Path) -> str:
+        """Export computers to Excel with proper formatting"""
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Ring Assignments"
+
+        # Headers
         headers = [
             "Computer Name", "Tanium ID", "Category", "Environment",
-            "Country", "Region", "Was Country Guessed", "Current Tags", "Generated Tag", "Comments"
+            "Country", "Region", "Was Country Guessed", "Current Tags",
+            "Generated Tag", "Comments"
         ]
-        output_ws.append(headers)
+        ws.append(headers)
 
+        # Make headers bold
         from openpyxl.styles import Font
-        for cell in output_ws[1]:
+        for cell in ws[1]:
             cell.font = Font(bold=True, size=14)
 
-        # Add data rows
-        for computer in workstations + servers:
+        # Add data
+        for computer in computers:
             current_tags = ""
-            if hasattr(computer, "custom_tags") and computer.custom_tags:
-                filtered_tags = [tag for tag in computer.custom_tags if tag and str(tag).lower() != "nan"]
-                current_tags = ", ".join(filtered_tags) if filtered_tags else ""
+            if hasattr(computer.computer, "custom_tags") and computer.computer.custom_tags:
+                filtered_tags = [tag for tag in computer.computer.custom_tags
+                                 if tag and str(tag).lower() != "nan"]
+                current_tags = ", ".join(filtered_tags)
 
-            computer_category = getattr(computer, "category", "")
-            if computer_category.lower() == "workstation":
-                computer_category = "Workstation"
-            elif computer_category.lower() in ("server", "srv"):
-                computer_category = "Server"
+            category_display = "Workstation" if computer.is_workstation else "Server" if computer.is_server else computer.category
 
-            region = getattr(computer, "region", "")
-            new_tag = getattr(computer, "new_tag", None)
-
-            # Determine the base comment based on tag generation status
-            if not region:
-                new_tag = None
-                _append_status(computer, "Region missing. Ring tag couldn't be generated")
-            elif new_tag:
-                _append_status(computer, "Ring tag generated successfully")
-
-            # Now, append the "Country was guessed" message if applicable
-            if getattr(computer, "was_country_guessed", False):
-                if "country was guessed" not in getattr(computer, "status", "").lower():
-                    _append_status(computer, "Country was guessed")
-
-            output_ws.append([
-                computer.name,
-                computer.id,
-                computer_category,
-                getattr(computer, "environment", ""),
-                getattr(computer, "country", ""),
-                region,
-                "Yes" if getattr(computer, "was_country_guessed", False) else "No",
+            ws.append([
+                computer.computer.name,
+                computer.computer.id,
+                category_display,
+                computer.environment,
+                computer.country,
+                computer.region,
+                "Yes" if computer.was_country_guessed else "No",
                 current_tags,
-                new_tag,
-                getattr(computer, "status", "")
+                computer.ring_tag or "",
+                computer.status
             ])
 
-        # Set column widths
+        # Format columns
         column_widths = {
             'A': 40, 'B': 25, 'C': 18, 'D': 22, 'E': 22,
             'F': 18, 'G': 14, 'H': 50, 'I': 28, 'J': 80
         }
         for col, width in column_widths.items():
-            output_ws.column_dimensions[col].width = width
+            ws.column_dimensions[col].width = width
 
-        output_ws.auto_filter.ref = f"A1:J{len(workstations) + len(servers) + 1}"
-        output_ws.freeze_panes = "A2"
+        # Add filters and freeze panes
+        ws.auto_filter.ref = f"A1:J{len(computers) + 1}"
+        ws.freeze_panes = "A2"
 
-        timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-        output_path = Path(filename).parent / f"Tanium hosts without ring tag - enriched with SNOW data and with tags generated - {timestamp}.xlsx"
-        output_wb.save(output_path)
+        # Save file
+        wb.save(output_path)
 
-        # Log summary
-        generated_tag_count = sum(1 for c in workstations + servers if getattr(c, "new_tag", None))
-        generated_tag_workstations = sum(1 for c in workstations if getattr(c, 'new_tag', None))
-        generated_tag_servers = sum(1 for c in servers if getattr(c, 'new_tag', None))
-
-        logger.info(f"Generated ring tags for {generated_tag_count} computers: {generated_tag_workstations} workstations and {generated_tag_servers} servers")
+        self.logger.info(f"Exported {len(computers)} computers to {output_path}")
         return str(output_path)
 
-    except Exception as e:
-        logger.error(f"Error in generate_ring_tags: {e}")
-        raise
+
+# ============================================================================
+# Main Orchestrator (Dependency Inversion Principle)
+# ============================================================================
+
+class TaniumRingTagProcessor:
+    """Main orchestrator following Clean Architecture principles"""
+
+    def __init__(self,
+                 data_loader: DataLoader,
+                 enricher: ComputerEnricher,
+                 country_resolver: CountryResolver,
+                 region_resolver: RegionResolver,
+                 tag_generator: RingTagGenerator,
+                 report_exporter: ReportExporter):
+        self.data_loader = data_loader
+        self.enricher = enricher
+        self.country_resolver = country_resolver
+        self.region_resolver = region_resolver
+        self.tag_generator = tag_generator
+        self.report_exporter = report_exporter
+        self.logger = logging.getLogger(__name__)
+
+    def process_hosts_without_ring_tags(self, test_limit: Optional[int] = None) -> str:
+        """Main processing pipeline - clean and readable"""
+        try:
+            # Step 1: Load raw data
+            self.logger.info("Loading Tanium computers...")
+            computers = self.data_loader.load_tanium_computers(test_limit)
+
+            # Step 2: Enrich with ServiceNow data
+            self.logger.info("Enriching with ServiceNow data...")
+            enriched_computers = self.enricher.enrich_computers(computers)
+
+            # Step 3: Resolve countries and regions
+            self.logger.info("Resolving countries and regions...")
+            final_computers = []
+            for comp in enriched_computers:
+                # Resolve country
+                country, was_guessed = self.country_resolver.resolve_country(
+                    comp.computer,
+                    comp.country  # This would be from SNOW
+                )
+
+                # Resolve region
+                region = self.region_resolver.resolve_region(country) if country else ""
+
+                # Create final enriched computer
+                final_comp = EnrichedComputer(
+                    computer=comp.computer,
+                    country=country,
+                    region=region,
+                    environment=comp.environment,
+                    category=comp.category,
+                    was_country_guessed=was_guessed,
+                    status=comp.status,
+                    ring_tag=None
+                )
+                final_computers.append(final_comp)
+
+            # Step 4: Generate ring tags
+            self.logger.info("Generating ring tags...")
+            tagged_computers = self.tag_generator.generate_tags(final_computers)
+
+            # Step 5: Export report
+            self.logger.info("Exporting final report...")
+            timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+            output_path = Path(f"Tanium_Ring_Tags_Report_{timestamp}.xlsx")
+
+            report_path = self.report_exporter.export_to_excel(tagged_computers, output_path)
+
+            # Log summary
+            generated_count = sum(1 for c in tagged_computers if c.ring_tag)
+            self.logger.info(f"Generated ring tags for {generated_count}/{len(tagged_computers)} computers")
+
+            return report_path
+
+        except Exception as e:
+            self.logger.error(f"Processing failed: {e}", exc_info=True)
+            raise
 
 
-def _process_workstations(workstations: List[Computer]) -> None:
-    """Assign ring tags to workstations based on region and country."""
-    region_country_groups = defaultdict(list)
-    for ws in workstations:
-        region = getattr(ws, "region", "")
-        country = getattr(ws, "country", "")
-        if region:
-            region_country_groups[(region, country)].append(ws)
+# ============================================================================
+# Factory/Builder (Dependency Injection)
+# ============================================================================
 
-    for (region, country), ws_group in region_country_groups.items():
-        total = len(ws_group)
-        if total == 0:
-            continue
+def create_processor() -> TaniumRingTagProcessor:
+    """Factory method to create fully configured processor"""
+    config = get_config()
+    data_dir = Path(__file__).parent.parent.parent / "data"
+    temp_dir = data_dir / "transient" / "epp_device_tagging" / datetime.now().strftime('%m-%d-%Y')
+    temp_dir.mkdir(parents=True, exist_ok=True)
 
-        ring_sizes = calculate_ring_sizes(total)
-        logger.debug(f"Region {region}, Country {country}: {total} workstations, ring sizes: {ring_sizes}")
+    # Create all dependencies
+    data_loader = TaniumDataLoader(data_dir)
+    country_mappings = data_loader.load_country_mappings()
+    region_mappings = data_loader.load_region_mappings()
 
-        # Sort by last seen date (None/null values go to the end)
-        ws_group.sort(key=lambda c: (c.eidLastSeen is None, c.eidLastSeen))
+    enricher = ServiceNowComputerEnricher(temp_dir)
+    country_resolver = SmartCountryResolver(country_mappings, config)
+    region_resolver = SafeRegionResolver(region_mappings)
+    tag_generator = SmartRingTagGenerator(ProcessingConfig())
+    report_exporter = ExcelReportExporter()
 
-        current_index = 0
-        for ring, size in enumerate(ring_sizes, start=1):
-            for i in range(size):
-                if current_index < len(ws_group):
-                    setattr(ws_group[current_index], "new_tag", f"EPP_ECMTag_{region}_Wks_Ring{ring}")
-                    current_index += 1
-
-
-def _process_servers(servers: List[Computer]) -> None:
-    """Process servers and assign ring tags based on environment."""
-    for server in servers:
-        env = _normalize_environment(getattr(server, "environment", ""))
-        region = getattr(server, "region", "Unknown")
-
-        if env in RING_1_ENVS:
-            ring = 1
-        elif env in RING_2_ENVS:
-            ring = 2
-        elif env in RING_3_ENVS:
-            ring = 3
-        else:  # production or unknown
-            ring = 4
-
-        setattr(server, "new_tag", f"EPP_ECMTag_{region}_SRV_Ring{ring}")
+    return TaniumRingTagProcessor(
+        data_loader=data_loader,
+        enricher=enricher,
+        country_resolver=country_resolver,
+        region_resolver=region_resolver,
+        tag_generator=tag_generator,
+        report_exporter=report_exporter
+    )
 
 
-def _normalize_environment(environment: Union[str, List[str], None]) -> str:
-    """Normalize environment data to a single string value."""
-    if not environment:
-        return ""
-    if isinstance(environment, list):
-        value = environment[0] if environment else ""
-    else:
-        value = environment
-    # Always convert to string before lower/strip
-    return str(value).lower().strip()
-
-
-def _guess_country_from_hostname(computer: Computer) -> tuple[str, str]:
-    """Enhanced country guessing with better fallback logic."""
-    computer_name = computer.name.strip()
-    if not computer_name:
-        return '', 'Empty hostname'
-
-    computer_name_lower = computer_name.lower()
-
-    # Priority 1: Special prefixes
-    if computer_name_lower.startswith('vmvdi'):
-        return 'United States', "Country guessed from VMVDI prefix"
-
-    if hasattr(CONFIG, 'team_name') and computer_name_lower.startswith(CONFIG.team_name.lower()):
-        return 'United States', f"Country guessed from {CONFIG.team_name} prefix"
-
-    # Priority 2: Country code from first 2 characters
-    if len(computer_name) >= 2:
-        country_code = computer_name[:2].upper()
-        country_name = COUNTRY_NAMES_BY_CODE.get(country_code, '')
-        if country_name:
-            return country_name, f"Country code {country_code} from hostname"
-
-    # Priority 3: Leading digit suggests Korea (based on current logic)
-    if computer_name[0].isdigit():
-        return 'Korea', "Country guessed from leading digit in hostname"
-
-    # Priority 4: VM prefix with US tag validation
-    if computer_name_lower.startswith('vm'):
-        for tag in getattr(computer, 'custom_tags', []):
-            tag_str = str(tag).upper()
-            if 'US' in tag_str or 'SENSORGROUPTAGS/US' in tag_str:
-                return 'United States', "Country guessed from VM prefix + US tag"
-
-    # Priority 5: Check tags for country indicators
-    for tag in getattr(computer, 'custom_tags', []):
-        tag_upper = str(tag).upper()
-        for code, name in COUNTRY_NAMES_BY_CODE.items():
-            if code in tag_upper or name.upper() in tag_upper:
-                return name, f"Country found in tag: {tag}"
-
-    return '', 'No country indicators found'
-
-
-def _append_status(computer: Computer, message: str) -> None:
-    """Append a status message to a computer object."""
-    if not message:
-        return
-
-    current_status = getattr(computer, "status", "")
-    if current_status and message not in current_status:
-        setattr(computer, "status", f"{current_status}; {message}")
-    elif not current_status:
-        setattr(computer, "status", message)
-
+# ============================================================================
+# Main Entry Point
+# ============================================================================
 
 def main():
-    """Main entry point."""
+    """Clean main entry point"""
+    logging.basicConfig(level=logging.INFO)
+
     try:
-        result = get_tanium_hosts_without_ring_tag(filename="Tanium hosts without Ring tag.xlsx", test_limit=10)
-        logger.info(f"Process completed successfully: {result}")
+        processor = create_processor()
+        result = processor.process_hosts_without_ring_tags(test_limit=10)
+        print(f"Processing completed successfully: {result}")
     except Exception as e:
-        logger.error(f"Process failed: {e}")
+        logging.error(f"Processing failed: {e}")
         raise
 
 
