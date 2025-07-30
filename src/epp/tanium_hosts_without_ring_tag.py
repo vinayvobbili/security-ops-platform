@@ -29,6 +29,10 @@ from config import get_config
 from services.service_now import enrich_host_report
 from services.tanium import Computer, TaniumClient
 
+# Force the root logger to DEBUG level to ensure all debug logs are shown,
+# regardless of how the module is imported or called.
+logging.getLogger().setLevel(logging.DEBUG)
+
 
 # ============================================================================
 # Domain Models (Clean, focused data structures)
@@ -164,6 +168,8 @@ class TaniumDataLoader:
 
         # Filter and limit
         filtered_computers = [c for c in computers if not c.has_epp_ring_tag() and not c.has_epp_power_mode_tag()]
+        # TODO: comment out the line below after testing
+        # filtered_computers = [c for c in filtered_computers if c.name.startswith("MININT")]
 
         if test_limit is not None and test_limit > 0:
             filtered_computers = filtered_computers[:test_limit]
@@ -361,56 +367,47 @@ class SmartCountryResolver:
         return is_valid
 
     def _guess_country_from_hostname(self, computer: Computer) -> Tuple[str, str]:
-        """Guess country from hostname using various strategies, with debug logging"""
+        """Guess country from hostname using various strategies, with print statements for debugging"""
         name = computer.name.strip().lower()
-        self.logger.debug(f"Guessing country for host: {computer.name}")
+        print(f"Guessing country for host: {computer.name}")
         if not name:
-            self.logger.debug("Empty hostname, cannot guess country.")
+            print("Empty hostname, cannot guess country.")
             return '', 'Empty hostname'
 
         # Strategy 1.1: Special prefixes
         if name.startswith('vmvdi'):
-            self.logger.debug("Matched VMVDI prefix -> United States")
+            print("Matched VMVDI prefix -> United States")
             return 'United States', "VMVDI prefix"
 
         if hasattr(self.config, 'team_name') and name.startswith(self.config.team_name.lower()):
-            self.logger.debug(f"Matched team_name prefix -> United States")
+            print(f"Matched team_name prefix -> United States")
             return 'United States', f"{self.config.team_name} prefix"
 
         # Strategy 1.2: TK prefix for Korea (case-insensitive)
         if name.lower().startswith('tk'):
-            self.logger.debug("Matched TK prefix -> Korea")
+            print("Matched TK prefix -> Korea")
             return 'Korea', "TK prefix"
 
         # Strategy 1.3: METLAP or PMDESK prefix for India PMLI (case insensitive)
         if name.lower().startswith('metlap') or name.lower().startswith('pmdesk'):
-            self.logger.debug("Matched METLAP/PMDESK prefix -> India PMLI")
+            print("Matched METLAP/PMDESK prefix -> India PMLI")
             return 'India PMLI', "METLAP/PMDESK prefix"
 
         # Strategy 2: Country code from first 2 characters
         if len(name) >= 2:
             country_code = name[:2].upper()
             country_name = self.country_mappings.get(country_code, '')
-            self.logger.debug(f"Checking country code: {country_code} -> {country_name}")
+            print(f"Checking country code: {country_code} -> {country_name}")
             if country_name:
-                self.logger.debug(f"Matched country code {country_code} -> {country_name}")
+                print(f"Matched country code {country_code} -> {country_name}")
                 return country_name, f"Country code {country_code}"
 
         # Strategy 3: Leading digit suggests Korea
         if name[0].isdigit():
-            self.logger.debug("Leading digit in hostname -> Korea")
+            print("Leading digit in hostname -> Korea")
             return 'Korea', "Leading digit"
 
-        # Strategy 4: Check tags for country indicators
-        for tag in getattr(computer, 'custom_tags', []):
-            tag_upper = str(tag).upper()
-            self.logger.debug(f"Checking tag: {tag_upper}")
-            for code, country_name in self.country_mappings.items():
-                if code in tag_upper or country_name.upper() in tag_upper:
-                    self.logger.debug(f"Matched tag {tag_upper} -> {country_name}")
-                    return country_name, f"Tag: {tag}"
-
-        self.logger.debug("No indicators found for country guess.")
+        print("No indicators found for country guess.")
         return '', 'No indicators found'
 
 
@@ -751,11 +748,11 @@ def create_processor() -> TaniumRingTagProcessor:
 
 def main():
     """Clean main entry point"""
-    logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(level=logging.DEBUG)
 
     try:
         processor = create_processor()
-        report_path = processor.process_hosts_without_ring_tags(test_limit=10)
+        report_path = processor.process_hosts_without_ring_tags(test_limit=100)
         print(f"Processing completed successfully: {report_path}")
     except Exception as e:
         logging.error(f"Processing failed: {e}")
