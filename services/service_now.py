@@ -367,8 +367,8 @@ def enrich_host_report(input_file):
 if __name__ == "__main__":
     client = ServiceNowClient()
 
-    hostname = "JP38CKVL3.alico.corp"
-    logger.info(f"Looking up {hostname}...")
+    hostname = "axscgpar6301"
+    logger.info(f"Looking up in SNOW: {hostname}...")
 
     details = client.get_host_details(hostname)
     if details:
