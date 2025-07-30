@@ -692,8 +692,8 @@ def main():
 
     try:
         processor = create_processor()
-        result = processor.process_hosts_without_ring_tags(test_limit=10)
-        print(f"Processing completed successfully: {result}")
+        report_path = processor.process_hosts_without_ring_tags(test_limit=10)
+        print(f"Processing completed successfully: {report_path}")
     except Exception as e:
         logging.error(f"Processing failed: {e}")
         raise

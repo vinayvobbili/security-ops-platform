@@ -21,7 +21,7 @@ from webexteamssdk import WebexTeamsAPI
 
 from config import get_config
 from src.epp import ring_tag_cs_hosts, cs_hosts_without_ring_tag, cs_servers_with_invalid_ring_tags
-from src.epp.tanium_hosts_without_ring_tag import get_tanium_hosts_without_ring_tag
+from src.epp.tanium_hosts_without_ring_tag import create_processor
 from src.utils.logging_utils import log_activity
 
 CONFIG = get_config()
@@ -467,7 +467,9 @@ class GetTaniumHostsWithoutRingTag(Command):
         filepath = None  # Ensure filepath is always defined
         try:
             with fasteners.InterProcessLock(lock_path):
-                filepath = get_tanium_hosts_without_ring_tag(filename="Tanium hosts without ring tag.xlsx", test_limit=None)
+                processor = create_processor()
+                report_path = processor.process_hosts_without_ring_tags(test_limit=None)
+                filepath = report_path  # Use the returned report path
         except Exception as e:
             logger.error(f"Error in GetTaniumHostsWithoutRingTag execute: {e}")
             webex_api.messages.create(
