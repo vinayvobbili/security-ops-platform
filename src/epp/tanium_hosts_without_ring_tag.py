@@ -288,8 +288,16 @@ def get_tanium_hosts_without_ring_tag(filename, test_limit=None) -> str:
                     was_country_guessed = True
 
             # Determine region based on country_to_use
+            # FIX: Handle case where country is not in REGIONS_BY_COUNTRY mapping
             if country_to_use:
                 determined_region = REGIONS_BY_COUNTRY.get(country_to_use, '')
+                # If region lookup returns None or nan-like values, set to empty
+                if determined_region is None or pd.isna(determined_region):
+                    determined_region = ''
+                    # If no region mapping exists, clear the country as well
+                    logger.warning(f"No region mapping found for country '{country_to_use}' - clearing both country and region")
+                    country_to_use = ''
+                    was_country_guessed = False
 
             # Find the corresponding Computer object in the list that will be passed to generate_ring_tags
             computer = next((c for c in computers_without_ring_tag if c.id == tanium_id), None)
@@ -343,10 +351,9 @@ def generate_ring_tags(filename: str) -> str:
         # Validate input file
         validate_input_file(filename)
 
-        # Read the enriched data
-        # This df should contain the 'Country', 'Region', 'Was Country Guessed' columns
-        # correctly populated by get_tanium_hosts_without_ring_tag.
-        df = pd.read_excel(filename, dtype=str, engine='openpyxl')
+        # Read the enriched data with proper handling of nan values
+        # Use keep_default_na=False to prevent 'nan' strings from being treated as NaN
+        df = pd.read_excel(filename, dtype=str, engine='openpyxl', keep_default_na=False, na_values=[''])
         logger.info(f"Processing {len(df)} computers for ring tag generation")
 
         workstations = []
@@ -375,37 +382,33 @@ def generate_ring_tags(filename: str) -> str:
                 custom_tags=custom_tags
             )
 
-            # --- CRITICAL CORRECTIONS HERE ---
-            # Use the 'Country' column from the DataFrame, which should now contain the guessed country or SNOW country
-            setattr(computer, "country", str(row.get('Country', '')).strip())  # Use 'Country', NOT 'SNOW_country'
+            # Set attributes from DataFrame columns
+            # Since we used keep_default_na=False, 'nan' strings should be preserved as strings
+            # and we can check for them explicitly
+            country_val = row.get('Country', '')
+            setattr(computer, "country", '' if country_val == 'nan' else str(country_val).strip())
 
-            # Use the 'Region' column from the DataFrame
-            setattr(computer, "region", str(row.get('Region', '')).strip())
+            region_val = row.get('Region', '')
+            setattr(computer, "region", '' if region_val == 'nan' else str(region_val).strip())
 
-            # Use the 'SNOW_environment' and 'SNOW_category' for environment and category
-            # FIX: Clean up nan values for environment
-            environment_value = str(row.get('SNOW_environment', '')).strip()
-            if environment_value.lower() in ['nan', 'none', 'null', '']:
-                environment_value = ''  # No default, just empty
-            setattr(computer, "environment", environment_value)
+            env_val = row.get('SNOW_environment', '')
+            setattr(computer, "environment", '' if env_val == 'nan' else str(env_val).strip())
 
-            setattr(computer, "category", str(row.get('SNOW_category', '')).strip())
+            cat_val = row.get('SNOW_category', '')
+            setattr(computer, "category", '' if cat_val == 'nan' else str(cat_val).strip())
 
             # Use the 'Was Country Guessed' column from the DataFrame and convert to boolean
             was_guessed_str = str(row.get('Was Country Guessed', 'No')).strip().lower()
-            setattr(computer, "was_country_guessed", was_guessed_str == 'yes')  # Convert 'Yes'/'No' string to boolean
+            setattr(computer, "was_country_guessed", was_guessed_str == 'yes')
 
             setattr(computer, "new_tag", None)
 
-            # Initialize status from SNOW_comments if available and not 'nan'
-            snow_comments = str(row.get('SNOW_comments', '')).strip()
-            if snow_comments.lower() == 'nan':
-                setattr(computer, "status", "")
-            else:
-                setattr(computer, "status", snow_comments)
+            # Initialize status from SNOW_comments
+            status_val = row.get('SNOW_comments', '')
+            setattr(computer, "status", '' if status_val == 'nan' else str(status_val).strip())
 
             # Classify as server or workstation
-            category = getattr(computer, "category", "").strip().lower()  # Use the category just set on computer object
+            category = getattr(computer, "category", "").strip().lower()
             if category in ("server", "srv"):
                 servers.append(computer)
             elif category == "workstation":
@@ -455,27 +458,21 @@ def generate_ring_tags(filename: str) -> str:
                 _append_status(computer, "Ring tag generated successfully")
 
             # Now, append the "Country was guessed" message if applicable
-            if getattr(computer, "was_country_guessed", False):  # This attribute is now a boolean
-                # Only append if it's not already part of the status (case-insensitive check)
+            if getattr(computer, "was_country_guessed", False):
                 if "country was guessed" not in getattr(computer, "status", "").lower():
                     _append_status(computer, "Country was guessed")
-
-            # FIX: Clean up environment value for display
-            environment_display = getattr(computer, "environment", "")
-            if environment_display.lower() in ['nan', 'none', 'null']:
-                environment_display = ""  # Show empty instead of nan
 
             output_ws.append([
                 computer.name,
                 computer.id,
                 computer_category,
-                environment_display,  # Use cleaned environment value
-                getattr(computer, "country", ""),  # This is now correctly populated from the 'Country' column of the intermediate DF
+                getattr(computer, "environment", ""),
+                getattr(computer, "country", ""),
                 region,
-                "Yes" if getattr(computer, "was_country_guessed", False) else "No",  # This correctly converts boolean back to string "Yes"/"No"
+                "Yes" if getattr(computer, "was_country_guessed", False) else "No",
                 current_tags,
                 new_tag,
-                getattr(computer, "status", "")  # Directly use the computer's consolidated status
+                getattr(computer, "status", "")
             ])
 
         # Set column widths
