@@ -1,4 +1,9 @@
 """
+Business Purpose:
+This script processes host data from Tanium, enriches it with country, region, environment, and category information, and applies ring tags to hosts based on configurable business rules. The results support reporting, compliance, and operational decision-making for host management and environment segmentation. The implementation follows clean architecture and SOLID principles for maintainability and extensibility.
+"""
+
+"""
 Tanium Host Processing - Clean Architecture Refactor
 Following SOLID principles and Clean Code practices
 """
@@ -250,17 +255,42 @@ class ServiceNowComputerEnricher:
         # Parse enriched data back
         df = pd.read_excel(enriched_file, dtype=str, engine='openpyxl', keep_default_na=False, na_values=[''])
 
+        # Debug: Log available columns
+        self.logger.info(f"Available columns in enriched file: {list(df.columns)}")
+
+        # Debug: Show sample data for first few rows
+        if len(df) > 0:
+            self.logger.info(f"Sample row data: {df.iloc[0].to_dict()}")
+
         enriched_computers = []
-        for _, row in df.iterrows():
+        for idx, row in df.iterrows():
             # Find original computer
             tanium_id = str(row.get('ID', '')).strip()
             original_computer = next((c for c in computers if c.id == tanium_id), None)
 
             if original_computer:
+                # Extract the ServiceNow country - check common column names
+                snow_country = ""
+                possible_country_columns = ['SNOW_country', 'country', 'Country', 'COUNTRY', 'snow_country', 'SNOW_Country']
+
+                for col in possible_country_columns:
+                    if col in row and row.get(col):
+                        snow_country = self._clean_value(row.get(col))
+                        if snow_country:  # Use the first non-empty value found
+                            self.logger.debug(f"Found country '{snow_country}' in column '{col}' for host {original_computer.name}")
+                            break
+
+                if not snow_country:
+                    self.logger.debug(f"No country found in SNOW data for host {original_computer.name}")
+                    # Debug: show what country-related data we do have
+                    country_data = {col: row.get(col) for col in row.index if 'country' in col.lower()}
+                    if country_data:
+                        self.logger.debug(f"Country-related columns for {original_computer.name}: {country_data}")
+
                 enriched_computers.append(
                     EnrichedComputer(
                         computer=original_computer,
-                        country="",
+                        country=snow_country,
                         region="",
                         environment=self._clean_value(row.get('SNOW_environment', '')),
                         category=self._clean_value(row.get('SNOW_category', '')),
@@ -269,6 +299,10 @@ class ServiceNowComputerEnricher:
                         ring_tag=''
                     )
                 )
+
+        # Summary logging
+        computers_with_snow_country = sum(1 for c in enriched_computers if c.country)
+        self.logger.info(f"Enriched {len(enriched_computers)} computers, {computers_with_snow_country} have SNOW country data")
 
         return enriched_computers
 
@@ -290,16 +324,23 @@ class SmartCountryResolver:
 
     def resolve_country(self, computer: Computer, snow_country: str) -> Tuple[str, bool]:
         """Resolve country with fallback strategies"""
-        print(f'SNOW country of host {computer.name}: {snow_country}')
+        self.logger.debug(f'Processing host {computer.name}:')
+        self.logger.debug(f'  SNOW country: "{snow_country}" (type: {type(snow_country)})')
+
         # Priority 1: Valid ServiceNow country
         if self._is_valid_country(snow_country):
+            self.logger.debug(f'  Using SNOW country: {snow_country}')
             return snow_country, False
 
+        self.logger.debug(f'  SNOW country invalid, trying hostname guessing...')
+
         # Priority 2: Guess from hostname
-        guessed_country, _ = self._guess_country_from_hostname(computer)
+        guessed_country, reason = self._guess_country_from_hostname(computer)
         if self._is_valid_country(guessed_country):
+            self.logger.debug(f'  Guessed country: {guessed_country} (reason: {reason})')
             return guessed_country, True
 
+        self.logger.debug(f'  No country could be determined')
         return "", False
 
     @staticmethod
@@ -308,7 +349,10 @@ class SmartCountryResolver:
         if not country or pd.isna(country):
             return False
         country_str = str(country).strip()
-        return country_str and country_str.lower() not in ['nan', 'none', 'null', '']
+        is_valid = country_str and country_str.lower() not in ['nan', 'none', 'null', '']
+
+        # Debug logging could be added here too if needed
+        return is_valid
 
     def _guess_country_from_hostname(self, computer: Computer) -> Tuple[str, str]:
         """Guess country from hostname using various strategies"""
