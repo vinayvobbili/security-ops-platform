@@ -369,45 +369,45 @@ class SmartCountryResolver:
     def _guess_country_from_hostname(self, computer: Computer) -> Tuple[str, str]:
         """Guess country from hostname using various strategies, with print statements for debugging"""
         name = computer.name.strip().lower()
-        print(f"Guessing country for host: {computer.name}")
+        # print(f"Guessing country for host: {computer.name}")
         if not name:
-            print("Empty hostname, cannot guess country.")
+            # print("Empty hostname, cannot guess country.")
             return '', 'Empty hostname'
 
         # Strategy 1.1: Special prefixes
         if name.startswith('vmvdi'):
-            print("Matched VMVDI prefix -> United States")
+            # print("Matched VMVDI prefix -> United States")
             return 'United States', "VMVDI prefix"
 
         if hasattr(self.config, 'team_name') and name.startswith(self.config.team_name.lower()):
-            print(f"Matched team_name prefix -> United States")
+            # print(f"Matched team_name prefix -> United States")
             return 'United States', f"{self.config.team_name} prefix"
 
         # Strategy 1.2: TK prefix for Korea (case-insensitive)
         if name.lower().startswith('tk'):
-            print("Matched TK prefix -> Korea")
+            # print("Matched TK prefix -> Korea")
             return 'Korea', "TK prefix"
 
         # Strategy 1.3: METLAP or PMDESK prefix for India PMLI (case insensitive)
         if name.lower().startswith('metlap') or name.lower().startswith('pmdesk'):
-            print("Matched METLAP/PMDESK prefix -> India PMLI")
+            # print("Matched METLAP/PMDESK prefix -> India PMLI")
             return 'India PMLI', "METLAP/PMDESK prefix"
 
         # Strategy 2: Country code from first 2 characters
         if len(name) >= 2:
             country_code = name[:2].upper()
             country_name = self.country_mappings.get(country_code, '')
-            print(f"Checking country code: {country_code} -> {country_name}")
+            # print(f"Checking country code: {country_code} -> {country_name}")
             if country_name:
-                print(f"Matched country code {country_code} -> {country_name}")
+                # print(f"Matched country code {country_code} -> {country_name}")
                 return country_name, f"Country code {country_code}"
 
         # Strategy 3: Leading digit suggests Korea
         if name[0].isdigit():
-            print("Leading digit in hostname -> Korea")
+            # print("Leading digit in hostname -> Korea")
             return 'Korea', "Leading digit"
 
-        print("No indicators found for country guess.")
+        # print("No indicators found for country guess.")
         return '', 'No indicators found'
 
 
