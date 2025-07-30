@@ -318,7 +318,7 @@ def enrich_host_report(input_file):
                     'supportedCountry', 'operatingSystem', 'category', 'status', 'error']
 
     for col in snow_columns:
-        df[f'SNOW_{col}'] = None
+        df[f'SNOW_{col}'] = ''
 
     # For each row in the dataframe, add the ServiceNow data
     for idx, row in df.iterrows():
@@ -367,7 +367,7 @@ def enrich_host_report(input_file):
 if __name__ == "__main__":
     client = ServiceNowClient()
 
-    hostname = "JP2NKTQL3.alico.corp"
+    hostname = "JP38CKVL3.alico.corp"
     logger.info(f"Looking up {hostname}...")
 
     details = client.get_host_details(hostname)

@@ -101,7 +101,7 @@ def generate(room_id):
             new_ticket_payload = {
                 'type': 'METCIRT Ticket QA',
                 'owner': owner,
-                'name': 'QA ticket for -' + source_ticket.get('name'),
+                'name': 'QA ticket for --> ' + source_ticket.get('name'),
                 'details': source_ticket.get('details'),
                 'CustomFields': {
                     'detectionsource': detectionsource,
@@ -124,8 +124,9 @@ def generate(room_id):
             ticket_handler.link_tickets(qa_ticket['id'], source_ticket['id'])
             ticket_handler.add_participant(qa_ticket['id'], source_ticket['owner'])
             qa_ticket_url = CONFIG.xsoar_prod_ui_base_url + "/Custom/caseinfoid/" + qa_ticket['id']
+            source_ticket_url = CONFIG.xsoar_prod_ui_base_url + "/Custom/caseinfoid/" + source_ticket['id']
             webex_api.messages.create(room_id,
-                                      markdown=f"Hello <@personEmail:{owner}>👋🏾\n[X#{qa_ticket['id']}]({qa_ticket_url}) has been assigned to you for QA\nSource ticket-->\nID: [X#{source_ticket['id']}]({qa_ticket_url})\nType: {source_ticket['type']}\nImpact: {impact}")
+                                      markdown=f"Hello <@personEmail:{owner}>👋🏾\n[X#{qa_ticket['id']}]({qa_ticket_url}) has been assigned to you for QA\nSource ticket-->\nID: [X#{source_ticket['id']}]({source_ticket_url})\nType: {source_ticket['type']}\nImpact: {impact}")
             lead_index += 1
         qa_leads = qa_leads[lead_index % len(qa_leads):] + qa_leads[:lead_index % len(qa_leads)]
         save_qa_leads(qa_leads)

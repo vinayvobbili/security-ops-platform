@@ -266,7 +266,7 @@ class ServiceNowComputerEnricher:
                         category=self._clean_value(row.get('SNOW_category', '')),
                         was_country_guessed=False,
                         status=self._clean_value(row.get('SNOW_comments', '')),
-                        ring_tag=None
+                        ring_tag=''
                     )
                 )
 
@@ -290,6 +290,7 @@ class SmartCountryResolver:
 
     def resolve_country(self, computer: Computer, snow_country: str) -> Tuple[str, bool]:
         """Resolve country with fallback strategies"""
+        print(f'SNOW country of host {computer.name}: {snow_country}')
         # Priority 1: Valid ServiceNow country
         if self._is_valid_country(snow_country):
             return snow_country, False
@@ -624,7 +625,7 @@ class TaniumRingTagProcessor:
                     category=comp.category,
                     was_country_guessed=was_guessed,
                     status=comp.status,
-                    ring_tag=None
+                    ring_tag=''
                 )
                 final_computers.append(final_comp)
 
