@@ -1,6 +1,12 @@
 """
 Business Purpose:
-This script processes host data from Tanium, enriches it with country, region, environment, and category information, and applies ring tags to hosts based on configurable business rules. The results support reporting, compliance, and operational decision-making for host management and environment segmentation. The implementation follows clean architecture and SOLID principles for maintainability and extensibility.
+This script automates the processing and enrichment of host data from Tanium, supporting IT operations, compliance, and reporting. Key business logic includes:
+
+- Loading raw host data from Tanium as the initial step in the workflow.
+- Enriching host data with country, region, environment, and category information using ServiceNow and custom rules.
+- Applying "ring" tags to hosts based on configurable percentage distributions (e.g., 10% Ring 1, 20% Ring 2, 30% Ring 3, remainder Ring 4), enabling phased rollouts and risk segmentation.
+- Guessing country information for hosts when not available from ServiceNow, using hostname patterns and tag analysis, and clearly marking when a country is guessed.
+- Exporting results to Excel for further analysis, reporting, and operational use.
 """
 
 """
