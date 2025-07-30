@@ -6,12 +6,12 @@ Usage:
     client = TaniumClient()
     filename = client.get_and_export_all_computers()
 """
-
+import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional, Dict, Any, Iterator, Callable
+from typing import List, Optional, Dict, Any, Iterator, Literal
 
 import pandas as pd
 import requests
@@ -356,7 +356,8 @@ class TaniumClient(ABC):
         return self.instance.remove_custom_tag(computer_name, tag)
 
     # Export Operations
-    def _get_cached_file_path(self, filename: Optional[str] = None) -> Path:
+    @staticmethod
+    def _get_cached_file_path(filename: Optional[str] = None) -> Path:
         """Get path for cached file"""
         today = datetime.now().strftime('%m-%d-%Y')
         default_filename = filename or 'All Tanium Hosts.xlsx'
@@ -369,7 +370,7 @@ class TaniumClient(ABC):
         return output_path
 
     def export_to_excel(self, all_computers: List[Computer], filename: Optional[str] = None,
-                        engine: str = 'openpyxl') -> str:
+                        engine: Literal["openpyxl", "odf", "xlsxwriter", "auto"] | None = 'openpyxl') -> str:
         """Export computers data to Excel file with single sheet"""
         output_path = self._get_output_path(filename)
 
@@ -387,7 +388,7 @@ class TaniumClient(ABC):
         try:
             df = pd.DataFrame(data)
             sheet_name = 'Computers'
-
+            # Use the engine parameter value
             with pd.ExcelWriter(output_path, engine=engine) as writer:
                 df.to_excel(writer, sheet_name=sheet_name, index=False)
 
@@ -477,6 +478,25 @@ def main():
     instance_name = 'cloud'  # 'cloud' or 'onprem'
 
     try:
+        onprem_client = TaniumOnPremClient()
+        onprem_token_valid = onprem_client.validate_token()
+
+        cloud_client = TaniumCloudClient()
+        cloud_token_valid = cloud_client.validate_token()
+
+        # Only proceed if at least one token is valid
+        if not any([onprem_token_valid, cloud_token_valid]):
+            logger.error("No valid tokens found. Exiting.")
+            return 1
+
+        # Export all computers
+        filename = onprem_client.get_and_export_all_computers()
+        if filename:
+            logger.info(f"Data exported to: {filename}")
+        else:
+            logger.warning("No data to export")
+
+
         # Choose client based on instance_name
         if instance_name.lower() == 'cloud':
             client = TaniumCloudClient()
