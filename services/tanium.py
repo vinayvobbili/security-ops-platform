@@ -17,11 +17,12 @@ import pandas as pd
 import requests
 import tqdm
 import urllib3
+from urllib3.exceptions import InsecureRequestWarning
 
 from config import get_config
 
 # Disable SSL warnings for on-prem connections
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+urllib3.disable_warnings(InsecureRequestWarning)
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -89,6 +90,10 @@ class Computer:
     def has_epp_ring_tag(self) -> bool:
         """Check if computer has an EPP Ring tag"""
         return any(tag.startswith('EPP') and 'Ring' in tag for tag in self.custom_tags)
+
+    def has_epp_power_mode_tag(self) -> bool:
+        """Check if computer has an EPP Power Mode tag EPP_POWERMODE (case-insensitive)"""
+        return any(str(tag).upper() == "EPP_POWERMODE" for tag in self.custom_tags)
 
 
 class TaniumAPIError(Exception):

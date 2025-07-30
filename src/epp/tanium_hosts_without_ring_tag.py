@@ -152,7 +152,8 @@ class TaniumDataLoader:
         computers = self._parse_excel_file(all_hosts_filename)
 
         # Filter and limit
-        filtered_computers = [c for c in computers if not c.has_epp_ring_tag()]
+        filtered_computers = [c for c in computers if not c.has_epp_ring_tag() and not c.has_epp_power_mode_tag()]
+
         if test_limit is not None and test_limit > 0:
             filtered_computers = filtered_computers[:test_limit]
 
@@ -314,12 +315,20 @@ class SmartCountryResolver:
         if not name:
             return '', 'Empty hostname'
 
-        # Strategy 1: Special prefixes
+        # Strategy 1.1: Special prefixes
         if name.startswith('vmvdi'):
             return 'United States', "VMVDI prefix"
 
         if hasattr(self.config, 'team_name') and name.startswith(self.config.team_name.lower()):
             return 'United States', f"{self.config.team_name} prefix"
+
+        # Strategy 1.2: TK prefix for Korea (case-insensitive)
+        if name.lower().startswith('tk'):
+            return 'Korea', "TK prefix"
+
+        # Strategy 1.3: METLAP or PMDESK prefix for India PMLI (case insensitive)
+        if name.lower().startswith('metlap') or name.lower().startswith('pmdesk'):
+            return 'India PMLI', "METLAP/PMDESK prefix"
 
         # Strategy 2: Country code from first 2 characters
         if len(name) >= 2:
