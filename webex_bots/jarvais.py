@@ -33,7 +33,7 @@ DATA_DIR = ROOT_DIRECTORY / "data" / "transient" / "epp_device_tagging"
 
 # Setup logging with rotation and better formatting
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
         logging.handlers.RotatingFileHandler(
