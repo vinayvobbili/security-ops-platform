@@ -621,61 +621,6 @@ class GetBotHealth(Command):
         )
 
 
-class GetTaniumHostsWithLowerCaseJapanRingTag(Command):
-    def __init__(self):
-        super().__init__(
-            command_keyword="lower_japan",
-            help_message="Get Tanium Hosts- Lower Case Japan Ring Tag 🔍🔡🇯🇵",
-            delete_previous_message=True,
-        )
-
-    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_jarvais, log_file_name="jarvais_activity_log.csv")
-    def execute(self, message, attachment_actions, activity):
-        room_id = attachment_actions.roomId
-        loading_msg = get_random_loading_message()
-        today_date = datetime.now(timezone.utc).strftime('%m-%d-%Y')
-        filename = f"Tanium Hosts with FalconGroupingTags_JapanWksRing*.xlsx"
-        filepath = DATA_DIR / today_date / filename
-        lock_path = ROOT_DIRECTORY / "src" / "epp" / "tanium_hosts_with_lower_case_japan_ring_tag.lock"
-        if filepath.exists():
-            webex_api.messages.create(
-                roomId=room_id,
-                markdown=f"Hello {activity['actor']['displayName']}! Here's the list of Tanium hosts with lower-case Japan Ring Tag.",
-                files=[str(filepath)]
-            )
-            return
-        webex_api.messages.create(
-            roomId=room_id,
-            markdown=(
-                f"Hello {activity['actor']['displayName']}! {loading_msg}\n\n"
-                "🔡 **Tanium Hosts With Lower-case Japan Ring Tag Report** 🏷️\n"
-                "Estimated completion: ~5 minutes ⏰"
-            )
-        )
-        try:
-            with fasteners.InterProcessLock(lock_path):
-                from src.epp import tanium_hosts_with_lower_case_japan_ring_tag
-                tanium_hosts_with_lower_case_japan_ring_tag.get_tanium_hosts_with_japan_ring_tag()
-                if filepath.exists():
-                    webex_api.messages.create(
-                        roomId=room_id,
-                        markdown=f"Here's the list of Tanium hosts with lower-case Japan Ring Tag.",
-                        files=[str(filepath)]
-                    )
-        except Exception as e:
-            logger.error(f"Error generating Tanium hosts with lower-case Japan Ring Tag report: {e}")
-            webex_api.messages.create(
-                roomId=room_id,
-                markdown=f"❌ An error occurred while generating the report: {e}"
-            )
-        finally:
-            if lock_path.exists():
-                try:
-                    lock_path.unlink()
-                except Exception as e:
-                    logger.error(f"Failed to remove lock file {lock_path}: {e}")
-
-
 def run_bot_with_reconnection():
     """Run the bot with automatic reconnection on failures."""
     global bot_start_time
@@ -706,7 +651,6 @@ def run_bot_with_reconnection():
             bot.add_command(RemoveInvalidRings())
             bot.add_command(DontRemoveInvalidRings())
             bot.add_command(GetTaniumHostsWithoutRingTag())
-            bot.add_command(GetTaniumHostsWithLowerCaseJapanRingTag())
             bot.add_command(GetTaniumUnhealthyHosts())
             bot.add_command(GetBotHealth())
 
