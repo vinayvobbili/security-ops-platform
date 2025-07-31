@@ -198,6 +198,7 @@ class StackedBarChart:
         ax.set_ylim(0, max_value + 3)
         ax.yaxis.set_major_locator(plt.MaxNLocator(integer=True))
 
+        self.styler.add_border(fig)
         return fig
 
     def _add_value_labels(self, ax) -> None:
