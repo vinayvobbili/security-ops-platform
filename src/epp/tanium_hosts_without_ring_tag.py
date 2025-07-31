@@ -8,6 +8,7 @@ This script automates the processing and enrichment of host data from Tanium, su
 - Guessing country information for hosts when not available from ServiceNow, using hostname patterns and tag analysis, and clearly marking when a country is guessed.
 - Exporting results to Excel for further analysis, reporting, and operational use.
 """
+import os
 
 """
 Tanium Host Processing - Clean Architecture Refactor
@@ -694,10 +695,14 @@ class TaniumRingTagProcessor:
 
             # Step 5: Export report
             self.logger.info("Exporting final report...")
-            timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-            output_path = Path(f"Tanium_Ring_Tags_Report_{timestamp}.xlsx")
+            date_format = '%m-%d-%Y'
+            today_date = datetime.now().strftime(date_format)
+            root_directory = Path(__file__).parent.parent.parent
+            output_dir = root_directory / "web" / "static" / "charts" / today_date
+            os.makedirs(output_dir, exist_ok=True)
+            output_path = os.path.join(output_dir, "Tanium_Ring_Tags_Report.xlsx")
 
-            report_path = self.report_exporter.export_to_excel(tagged_computers, output_path)
+            report_path = self.report_exporter.export_to_excel(tagged_computers, Path(output_path))
 
             # Log summary
             generated_count = sum(1 for c in tagged_computers if c.ring_tag)
