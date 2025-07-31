@@ -1,3 +1,4 @@
+import asyncio
 import ipaddress
 import logging.handlers
 import re
@@ -5,7 +6,6 @@ import signal
 import sys
 import threading
 import time
-import asyncio
 from datetime import datetime, timedelta
 from pathlib import Path
 from urllib.parse import quote
@@ -32,8 +32,8 @@ from services import xsoar, azdo
 from services.approved_testing_utils import add_approved_testing_entry
 from services.crowdstrike import CrowdStrikeClient
 from services.xsoar import ListHandler, TicketHandler
-from src.utils.logging_utils import log_activity
 from src.utils.http_utils import get_session
+from src.utils.logging_utils import log_activity
 
 CONFIG = get_config()
 ROOT_DIRECTORY = Path(__file__).parent.parent
@@ -2073,7 +2073,7 @@ def run_bot_with_reconnection():
 
             bot = WebexBot(
                 CONFIG.webex_bot_access_token_toodles,
-                bot_name="🛠🤖 Hello from Toodles! 👋",
+                bot_name="🛠🤖 Toodles! 👋",
                 approved_rooms=[CONFIG.webex_room_id_vinay_test_space, CONFIG.webex_room_id_gosc_t2, CONFIG.webex_room_id_threatcon_collab],
                 log_level="ERROR",
                 threads=True,
