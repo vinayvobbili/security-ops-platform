@@ -6,12 +6,12 @@ Usage:
     client = TaniumClient()
     filename = client.get_and_export_all_computers()
 """
+
 import logging
-from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional, Dict, Any, Iterator, Literal
+from typing import List, Optional, Dict, Any, Iterator
 
 import pandas as pd
 import requests
@@ -103,18 +103,17 @@ class TaniumAPIError(Exception):
 
 class TaniumInstance:
     """Represents a single Tanium instance (cloud or on-prem)"""
-    NO_TAGS_PLACEHOLDER = '[No Tags]'
+    DEFAULT_PAGE_SIZE = 5000
+    DEFAULT_SEARCH_LIMIT = 500
+    NO_TAGS_PLACEHOLDER = ''
 
-    def __init__(self, name: str, server_url: str, token: str, verify_ssl: bool = True,
-                 page_size: int = 5000, search_limit: int = 500):
+    def __init__(self, name: str, server_url: str, token: str, verify_ssl: bool = True):
         self.name = name
         self.server_url = server_url.rstrip('/')
         self.token = token
         self.headers = {'session': self.token}
         self.graphql_url = f"{self.server_url}/plugin/products/gateway/graphql"
         self.verify_ssl = verify_ssl
-        self.page_size = page_size
-        self.search_limit = search_limit
         logger.info(f"Initialized Tanium instance: {self.name}")
 
     def query(self, gql: str, variables: Dict[str, Any] = None) -> Dict[str, Any]:
@@ -147,29 +146,6 @@ class TaniumInstance:
             logger.error(f"Request failed for {self.name}: {e}")
             raise TaniumAPIError(f"Request failed: {e}")
 
-    def validate_token(self) -> bool:
-        """Validate the API token"""
-        try:
-            response = requests.post(
-                f"{self.server_url}/api/v2/session/validate",
-                json={'session': self.token},
-                headers=self.headers,
-                verify=self.verify_ssl,
-                timeout=10
-            )
-
-            if response.status_code == 200:
-                logger.info(f"✓ {self.name} token is valid")
-                return True
-
-            logger.warning(f"Token validation failed for {self.name}: {response.status_code}")
-            return False
-
-        except Exception as e:
-            logger.error(f"Error validating token for {self.name}: {e}")
-            return False
-
-    # Computer Retrieval Operations
     def get_computers(self, limit: Optional[int] = None) -> List[Computer]:
         """Fetch all computers with their custom tags"""
         try:
@@ -187,7 +163,7 @@ class TaniumInstance:
 
         with tqdm.tqdm(desc=f"Fetching computers from {self.name}", unit="host") as pbar:
             while True:
-                variables = {'first': self.page_size}
+                variables = {'first': self.DEFAULT_PAGE_SIZE}
                 if after_cursor:
                     variables['after'] = after_cursor
 
@@ -234,24 +210,42 @@ class TaniumInstance:
             tags.extend([tag for tag in values if tag != self.NO_TAGS_PLACEHOLDER])
         return tags
 
-    def find_computer_by_name(self, computer_name: str) -> Optional[Computer]:
-        """Find a computer by name in this instance"""
-        computers = self.get_computers(limit=self.search_limit)
-        return next((c for c in computers if c.name.lower() == computer_name.lower()), None)
+    def validate_token(self) -> bool:
+        """Validate the API token"""
+        try:
+            response = requests.post(
+                f"{self.server_url}/api/v2/session/validate",
+                json={'session': self.token},
+                headers=self.headers,
+                verify=self.verify_ssl,
+                timeout=10
+            )
 
-    # Tag Operations
+            if response.status_code == 200:
+                logger.info(f"✓ {self.name} token is valid")
+                return True
+
+            logger.warning(f"Token validation failed for {self.name}: {response.status_code}")
+            return False
+
+        except Exception as e:
+            logger.error(f"Error validating token for {self.name}: {e}")
+            return False
+
     def add_custom_tag(self, computer_name: str, tag: str) -> bool:
         """Add a custom tag to a computer"""
         try:
-            computer = self.find_computer_by_name(computer_name)
+            # First, find the computer to get its ID
+            computer = self._find_computer_by_name(computer_name)
             if not computer:
                 logger.warning(f"Computer '{computer_name}' not found in {self.name}")
                 return False
 
+            # Execute the add tag mutation
             variables = {'endpointId': computer.id, 'tag': tag}
             result = self.query(ADD_TAG_MUTATION, variables)
-            success = result.get('data', {}).get('addCustomTag', {}).get('success', False)
 
+            success = result.get('data', {}).get('addCustomTag', {}).get('success', False)
             if success:
                 logger.info(f"Successfully added tag '{tag}' to '{computer_name}' in {self.name}")
             else:
@@ -267,11 +261,13 @@ class TaniumInstance:
     def remove_custom_tag(self, computer_name: str, tag: str) -> bool:
         """Remove a custom tag from a computer"""
         try:
-            computer = self.find_computer_by_name(computer_name)
+            # First, find the computer to get its ID
+            computer = self._find_computer_by_name(computer_name)
             if not computer:
                 logger.warning(f"Computer '{computer_name}' not found in {self.name}")
                 return False
 
+            # Execute the remove tag mutation
             variables = {'endpointId': computer.id, 'tag': tag}
             result = self.query(REMOVE_TAG_MUTATION, variables)
 
@@ -288,89 +284,72 @@ class TaniumInstance:
             logger.error(f"Error removing tag '{tag}' from '{computer_name}' in {self.name}: {e}")
             return False
 
+    def _find_computer_by_name(self, computer_name: str) -> Optional[Computer]:
+        """Find a computer by name in this instance"""
+        computers = self.get_computers(limit=self.DEFAULT_SEARCH_LIMIT)
+        return next((c for c in computers if c.name.lower() == computer_name.lower()), None)
 
-class TaniumClient(ABC):
-    """Abstract base client for managing a single Tanium instance"""
+
+class TaniumClient:
+    """Main client for managing multiple Tanium instances"""
     DEFAULT_FILENAME = "all_tanium_hosts.xlsx"
 
     def __init__(self, config: Any = None):
         self.config = config or get_config()
-        self.instance = self._create_instance()
-        if self.instance:
-            logger.info(f"Initialized {self.__class__.__name__} for instance: {self.instance.name}")
-        else:
-            logger.warning(f"No instance configured for {self.__class__.__name__}")
+        self.instances = []
+        self._setup_instances()
+        logger.info(f"Initialized TaniumClient with {len(self.instances)} instances")
 
-    @abstractmethod
-    def _create_instance(self) -> Optional[TaniumInstance]:
-        """Create the instance for this client type"""
-        pass
+    def _setup_instances(self):
+        """Initialize cloud and on-prem instances"""
+        # Cloud instance (verify SSL for cloud)
+        if hasattr(self.config, 'tanium_cloud_api_url') and self.config.tanium_cloud_api_url and self.config.tanium_cloud_api_token:
+            cloud_instance = TaniumInstance(
+                "Cloud",
+                self.config.tanium_cloud_api_url,
+                self.config.tanium_cloud_api_token,
+                verify_ssl=True
+            )
+            self.instances.append(cloud_instance)
 
-    def validate_token(self) -> bool:
-        """Validate token for this instance"""
-        if not self.instance:
-            return False
-        return self.instance.validate_token()
+        # On-prem instance (disable SSL verification for on-prem)
+        if hasattr(self.config, 'tanium_onprem_api_url') and self.config.tanium_onprem_api_url and self.config.tanium_onprem_api_token:
+            onprem_instance = TaniumInstance(
+                "On-Prem",
+                self.config.tanium_onprem_api_url,
+                self.config.tanium_onprem_api_token,
+                verify_ssl=False
+            )
+            self.instances.append(onprem_instance)
 
-    # Computer Retrieval Operations
-    def get_all_computers(self, limit: Optional[int] = None) -> List[Computer]:
-        """Get computers from this instance"""
-        if not self.instance or not self.instance.validate_token():
-            logger.warning(f"Cannot fetch computers: invalid instance or token")
-            return []
+    def validate_all_tokens(self) -> Dict[str, bool]:
+        """Validate tokens for all instances"""
+        results = {}
+        for instance in self.instances:
+            results[instance.name] = instance.validate_token()
+        return results
 
-        logger.info(f"Fetching computers from {self.instance.name}...")
-        computers = self.instance.get_computers(limit)
-        logger.info(f"Retrieved {len(computers)} computers from {self.instance.name}")
-        return computers
-
-    def get_computer_by_name(self, name: str) -> Optional[Computer]:
-        """Get a specific computer by name from this instance"""
-        if not self.instance or not self.instance.validate_token():
-            return None
-        return self.instance.find_computer_by_name(name)
-
-    # Tag Operations
-    def add_custom_tag_to_computer(self, computer_name: str, tag: str) -> bool:
-        """Add a custom tag to a computer in this instance"""
-        if not self.instance:
-            logger.error("No instance configured for this client")
-            return False
-
-        if not self.instance.validate_token():
-            logger.error(f"Invalid token for {self.instance.name}")
-            return False
-
-        return self.instance.add_custom_tag(computer_name, tag)
-
-    def remove_custom_tag_from_computer(self, computer_name: str, tag: str) -> bool:
-        """Remove a custom tag from a computer in this instance"""
-        if not self.instance:
-            logger.error("No instance configured for this client")
-            return False
-
-        if not self.instance.validate_token():
-            logger.error(f"Invalid token for {self.instance.name}")
-            return False
-
-        return self.instance.remove_custom_tag(computer_name, tag)
-
-    # Export Operations
-    @staticmethod
-    def _get_cached_file_path(filename: Optional[str] = None) -> Path:
-        """Get path for cached file"""
-        today = datetime.now().strftime('%m-%d-%Y')
-        default_filename = filename or 'All Tanium Hosts.xlsx'
-        return Path(__file__).parent.parent / "data" / "transient" / "epp_device_tagging" / today / default_filename
+    def _get_all_computers(self, limit: Optional[int] = None) -> List[Computer]:
+        """Get computers from all instances (private)."""
+        all_computers = []
+        for instance in self.instances:
+            if not instance.validate_token():
+                logger.warning(f"Invalid token for {instance.name}, skipping...")
+                continue
+            logger.info(f"Fetching computers from {instance.name}...")
+            computers = instance.get_computers(limit)
+            all_computers.extend(computers)
+            logger.info(f"Retrieved {len(computers)} computers from {instance.name}")
+        return all_computers
 
     def _get_output_path(self, filename: Optional[str] = None) -> Path:
         """Get the output path for Excel export"""
-        output_path = self._get_cached_file_path(filename)
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        return output_path
+        today = datetime.now().strftime('%m-%d-%Y')
+        output_dir = Path(__file__).parent.parent / "data" / "transient" / "epp_device_tagging" / today
+        output_dir.mkdir(parents=True, exist_ok=True)
+        return output_dir / (filename or self.DEFAULT_FILENAME)
 
-    def export_to_excel(self, all_computers: List[Computer], filename: Optional[str] = None,
-                        engine: Literal["openpyxl", "odf", "xlsxwriter", "auto"] | None = 'openpyxl') -> str:
+    def export_to_excel(self, all_computers: List[Computer], filename: Optional[str] = None) -> str:
         """Export computers data to Excel file with single sheet"""
         output_path = self._get_output_path(filename)
 
@@ -388,8 +367,8 @@ class TaniumClient(ABC):
         try:
             df = pd.DataFrame(data)
             sheet_name = 'Computers'
-            # Use the engine parameter value
-            with pd.ExcelWriter(output_path, engine=engine) as writer:
+
+            with pd.ExcelWriter(output_path, engine='openpyxl') as writer:
                 df.to_excel(writer, sheet_name=sheet_name, index=False)
 
                 # Auto-adjust column widths
@@ -406,136 +385,104 @@ class TaniumClient(ABC):
             raise
 
     def get_and_export_all_computers(self, filename: Optional[str] = None) -> Optional[str]:
-        """Get all computers from this instance and export to Excel, using cache if available."""
-        cached_path = self._get_cached_file_path(filename)
-        if cached_path.exists():
-            logger.info(f"Using cached file: {cached_path}")
-            return str(cached_path)
-
-        all_computers = self.get_all_computers()
+        """Get all computers from all instances and export to Excel, using cache if available."""
+        # Determine today's output path
+        today = datetime.now().strftime('%m-%d-%Y')
+        default_filename = filename or 'All Tanium Hosts.xlsx'
+        output_path = Path(__file__).parent.parent / "data" / "transient" / "epp_device_tagging" / today / default_filename
+        if output_path.exists():
+            logger.info(f"Using cached file: {output_path}")
+            return str(output_path)
+        all_computers = self._get_all_computers()
         if not all_computers:
-            logger.warning("No computers retrieved from instance!")
+            logger.warning("No computers retrieved from any instance!")
             return None
+        return self.export_to_excel(all_computers, default_filename)
 
-        return self.export_to_excel(all_computers, filename)
+    def get_computer_by_name(self, name: str) -> Optional[Computer]:
+        """Get a specific computer by name from any instance"""
+        all_computers = self._get_all_computers(limit=TaniumInstance.DEFAULT_SEARCH_LIMIT)
+        return next((c for c in all_computers if c.name.lower() == name.lower()), None)
 
+    def add_custom_tag_to_computer(self, computer_name: str, tag: str, instance_name: str) -> bool:
+        """Add a custom tag to a computer in a specific instance"""
+        instance = self._get_instance_by_name(instance_name)
+        if not instance:
+            logger.error(f"Instance '{instance_name}' not found")
+            return False
 
-class TaniumCloudClient(TaniumClient):
-    """Client for managing Tanium Cloud instance"""
+        if not instance.validate_token():
+            logger.error(f"Invalid token for {instance.name}")
+            return False
 
-    def _create_instance(self) -> Optional[TaniumInstance]:
-        """Create cloud instance if configuration is available"""
-        if not self._has_cloud_config():
-            logger.warning("Cloud configuration not found")
-            return None
+        return instance.add_custom_tag(computer_name, tag)
 
-        return TaniumInstance(
-            "Cloud",
-            self.config.tanium_cloud_api_url,
-            self.config.tanium_cloud_api_token,
-            verify_ssl=True,
-            page_size=getattr(self.config, 'cloud_page_size', 5000),
-            search_limit=getattr(self.config, 'cloud_search_limit', 500)
-        )
+    def remove_custom_tag_from_computer(self, computer_name: str, tag: str, instance_name: str) -> bool:
+        """Remove a custom tag from a computer in a specific instance"""
+        instance = self._get_instance_by_name(instance_name)
+        if not instance:
+            logger.error(f"Instance '{instance_name}' not found")
+            return False
 
-    def _has_cloud_config(self) -> bool:
-        """Check if cloud configuration is available"""
-        return (hasattr(self.config, 'tanium_cloud_api_url') and
-                self.config.tanium_cloud_api_url and
-                self.config.tanium_cloud_api_token)
+        if not instance.validate_token():
+            logger.error(f"Invalid token for {instance.name}")
+            return False
 
+        return instance.remove_custom_tag(computer_name, tag)
 
-class TaniumOnPremClient(TaniumClient):
-    """Client for managing Tanium On-Prem instance"""
+    def _get_instance_by_name(self, instance_name: str) -> Optional[TaniumInstance]:
+        """Get a Tanium instance by name"""
+        return next((i for i in self.instances if i.name.lower() == instance_name.lower()), None)
 
-    def _create_instance(self) -> Optional[TaniumInstance]:
-        """Create on-prem instance if configuration is available"""
-        if not self._has_onprem_config():
-            logger.warning("On-Prem configuration not found")
-            return None
+    def list_available_instances(self) -> List[str]:
+        """Get list of available instance names"""
+        return [instance.name for instance in self.instances]
 
-        return TaniumInstance(
-            "On-Prem",
-            self.config.tanium_onprem_api_url,
-            self.config.tanium_onprem_api_token,
-            verify_ssl=False,
-            page_size=getattr(self.config, 'onprem_page_size', 5000),
-            search_limit=getattr(self.config, 'onprem_search_limit', 500)
-        )
+    def add_custom_tag_to_computer_all_instances(self, computer_name: str, tag: str) -> Dict[str, bool]:
+        """Add a custom tag to a computer across all instances"""
+        results = {}
+        for instance in self.instances:
+            if not instance.validate_token():
+                logger.warning(f"Invalid token for {instance.name}, skipping...")
+                results[instance.name] = False
+                continue
+            results[instance.name] = instance.add_custom_tag(computer_name, tag)
+        return results
 
-    def _has_onprem_config(self) -> bool:
-        """Check if on-prem configuration is available"""
-        return (hasattr(self.config, 'tanium_onprem_api_url') and
-                self.config.tanium_onprem_api_url and
-                self.config.tanium_onprem_api_token)
+    def remove_custom_tag_from_computer_all_instances(self, computer_name: str, tag: str) -> Dict[str, bool]:
+        """Remove a custom tag from a computer across all instances"""
+        results = {}
+        for instance in self.instances:
+            if not instance.validate_token():
+                logger.warning(f"Invalid token for {instance.name}, skipping...")
+                results[instance.name] = False
+                continue
+            results[instance.name] = instance.remove_custom_tag(computer_name, tag)
+        return results
 
 
 def main():
     """Main function to demonstrate usage"""
-    # Test parameters - easy to modify in PyCharm
-    computer_name = "SampleHost"
-    tag = "TestTag"
-    instance_name = 'cloud'  # 'cloud' or 'onprem'
-
     try:
-        onprem_client = TaniumOnPremClient()
-        onprem_token_valid = onprem_client.validate_token()
+        client = TaniumClient()
 
-        cloud_client = TaniumCloudClient()
-        cloud_token_valid = cloud_client.validate_token()
+        # Validate all tokens first
+        token_status = client.validate_all_tokens()
 
         # Only proceed if at least one token is valid
-        if not any([onprem_token_valid, cloud_token_valid]):
+        if not any(token_status.values()):
             logger.error("No valid tokens found. Exiting.")
             return 1
 
         # Export all computers
-        filename = onprem_client.get_and_export_all_computers()
+        filename = client.get_and_export_all_computers()
         if filename:
             logger.info(f"Data exported to: {filename}")
         else:
             logger.warning("No data to export")
 
-
-        # Choose client based on instance_name
-        if instance_name.lower() == 'cloud':
-            client = TaniumCloudClient()
-            logger.info("Using cloud client for testing")
-        else:
-            client = TaniumOnPremClient()
-            logger.info("Using on-prem client for testing")
-
-        # Validate token first
-        if not client.validate_token():
-            logger.error(f"No valid token found for {instance_name} client. Exiting.")
-            return 1
-
-        # Test tag operations
-        logger.info(f"Testing operations on '{computer_name}' with tag '{tag}'")
-
-        # Add tag
-        result = client.add_custom_tag_to_computer(computer_name, tag)
-        if result:
-            logger.info(f"Successfully added tag '{tag}' to '{computer_name}'")
-        else:
-            logger.warning(f"Failed to add tag '{tag}' to '{computer_name}'")
-
-        # Optionally test removal (uncomment to test)
-        # remove_result = client.remove_custom_tag_from_computer(computer_name, tag)
-        # logger.info(f"Remove operation result: {remove_result}")
-
-        # Optionally test computer lookup (uncomment to test)
-        # computer = client.get_computer_by_name(computer_name)
-        # if computer:
-        #     logger.info(f"Found computer: {computer.name} with tags: {computer.custom_tags}")
-        # else:
-        #     logger.info(f"Computer '{computer_name}' not found")
-
-        return 0
-
     except Exception as e:
         logger.error(f"Error during execution: {e}")
-        return 1
 
 
 if __name__ == "__main__":
