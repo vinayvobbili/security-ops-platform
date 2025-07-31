@@ -204,8 +204,9 @@ def save_sla_breaches_chart(ticket_slas_by_periods):
     ax1.set_xticklabels(['Response', 'Containment'], fontsize=12, fontweight='bold', color='#1A237E')
     ax1.set_xlim(-0.5, 1.5)  # Better spacing around the groups
 
-    # Enhanced legend - only show for the left axis since both use same periods
+    # Move legend to top right outside chart area with horizontal gap
     legend = ax1.legend(title='Period (Ticket Count)', loc='upper left',
+                        bbox_to_anchor=(1.08, 1),  # increased horizontal offset for gap
                         frameon=True, fancybox=True, shadow=True,
                         title_fontsize=12, fontsize=10)
     legend.get_frame().set_facecolor('white')
