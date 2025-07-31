@@ -94,68 +94,95 @@ def save_sla_breaches_chart(ticket_slas_by_periods):
     seven_days_ticket_count = ticket_slas_by_periods['Past 7 days'].total_ticket_count
     yesterday_ticket_count = ticket_slas_by_periods['Yesterday'].total_ticket_count
 
-    metrics = {
-        'Response SLA Breaches': {
-            'Yesterday': ticket_slas_by_periods['Yesterday'].response_sla_breach_count,
-            'Past 7 days': ticket_slas_by_periods['Past 7 days'].response_sla_breach_count,
-            'Past 30 days': ticket_slas_by_periods['Past 30 days'].response_sla_breach_count
-        },
-        'Containment SLA Breaches': {
-            'Yesterday': ticket_slas_by_periods['Yesterday'].containment_sla_breach_count,
-            'Past 7 days': ticket_slas_by_periods['Past 7 days'].containment_sla_breach_count,
-            'Past 30 days': ticket_slas_by_periods['Past 30 days'].containment_sla_breach_count
-        }
-    }
+    # Prepare data for dual Y-axis grouped bar chart
+    response_breaches = [
+        ticket_slas_by_periods['Past 30 days'].response_sla_breach_count,
+        ticket_slas_by_periods['Past 7 days'].response_sla_breach_count,
+        ticket_slas_by_periods['Yesterday'].response_sla_breach_count
+    ]
+
+    containment_breaches = [
+        ticket_slas_by_periods['Past 30 days'].containment_sla_breach_count,
+        ticket_slas_by_periods['Past 7 days'].containment_sla_breach_count,
+        ticket_slas_by_periods['Yesterday'].containment_sla_breach_count
+    ]
+
+    ticket_counts = [thirty_days_ticket_count, seven_days_ticket_count, yesterday_ticket_count]
 
     # Enhanced figure with better proportions and styling
-    fig, ax = plt.subplots(figsize=(12, 8), facecolor='#f8f9fa')
+    fig, ax1 = plt.subplots(figsize=(12, 8), facecolor='#f8f9fa')
     fig.patch.set_facecolor('#f8f9fa')
 
-    # Width of each bar and positions of the bars
-    width = 0.15  # Reduced from 0.25 to make bars narrower
-    x = np.array([0, 0.8])  # Reduced gap from 1.2 to 0.8 to bring groups closer
+    # Create second y-axis
+    ax2 = ax1.twinx()
 
-    # Professional color palette (matching MTTR/MTTC chart)
+    # Width of each bar and positions
+    width = 0.18  # Slightly wider bars
+    # Position the groups: Response at x=0, Containment at x=1.0 (closer together)
+    x_response = np.array([0])
+    x_containment = np.array([1.0])
+
+    # Professional color palette (matching the original)
     colors = {
-        '30days': '#4CAF50',  # Muted Green for 30 days
+        '30days': '#4CAF50',  # Green for 30 days
         '7days': '#FF6B40',  # Orange for 7 days
         'yesterday': '#4080FF'  # Blue for yesterday
     }
 
-    # Create bars and store their container objects
-    response_breaches_yesterday = metrics['Response SLA Breaches']['Yesterday']
-    response_breaches_7days = metrics['Response SLA Breaches']['Past 7 days']
-    response_breaches_30days = metrics['Response SLA Breaches']['Past 30 days']
-    containment_breaches_yesterday = metrics['Containment SLA Breaches']['Yesterday']
-    containment_breaches_7days = metrics['Containment SLA Breaches']['Past 7 days']
-    containment_breaches_30days = metrics['Containment SLA Breaches']['Past 30 days']
+    # Response SLA bars (left Y-axis)
+    bars_resp_30 = ax1.bar(x_response - width, [response_breaches[0]], width,
+                           label=f'Past 30 days ({thirty_days_ticket_count})',
+                           color=colors['30days'], edgecolor='white', linewidth=1.5, alpha=0.95)
+    bars_resp_7 = ax1.bar(x_response, [response_breaches[1]], width,
+                          label=f'Past 7 days ({seven_days_ticket_count})',
+                          color=colors['7days'], edgecolor='white', linewidth=1.5, alpha=0.95)
+    bars_resp_yesterday = ax1.bar(x_response + width, [response_breaches[2]], width,
+                                  label=f'Yesterday ({yesterday_ticket_count})',
+                                  color=colors['yesterday'], edgecolor='white', linewidth=1.5, alpha=0.95)
 
-    bar1 = ax.bar(x - width, [response_breaches_30days, containment_breaches_30days], width,
-                  label=f'Past 30 days ({thirty_days_ticket_count})',
-                  color=colors['30days'], edgecolor='white', linewidth=1.5, alpha=0.95)
-    bar2 = ax.bar(x, [response_breaches_7days, containment_breaches_7days], width,
-                  label=f'Past 7 days ({seven_days_ticket_count})',
-                  color=colors['7days'], edgecolor='white', linewidth=1.5, alpha=0.95)
-    bar3 = ax.bar(x + width, [response_breaches_yesterday, containment_breaches_yesterday], width,
-                  label=f'Yesterday ({yesterday_ticket_count})',
-                  color=colors['yesterday'], edgecolor='white', linewidth=1.5, alpha=0.95)
+    # Containment SLA bars (right Y-axis)
+    bars_cont_30 = ax2.bar(x_containment - width, [containment_breaches[0]], width,
+                           color=colors['30days'], edgecolor='white', linewidth=1.5, alpha=0.95)
+    bars_cont_7 = ax2.bar(x_containment, [containment_breaches[1]], width,
+                          color=colors['7days'], edgecolor='white', linewidth=1.5, alpha=0.95)
+    bars_cont_yesterday = ax2.bar(x_containment + width, [containment_breaches[2]], width,
+                                  color=colors['yesterday'], edgecolor='white', linewidth=1.5, alpha=0.95)
 
     # Enhanced axes styling
-    ax.set_facecolor('#ffffff')
-    ax.grid(False)  # Explicitly disable grid
-    ax.set_axisbelow(True)
+    ax1.set_facecolor('#ffffff')
+    ax1.grid(False)
+    ax2.grid(False)
+    ax1.set_axisbelow(True)
 
-    # Style the spines
-    for spine in ax.spines.values():
-        spine.set_color('#CCCCCC')
-        spine.set_linewidth(1.5)
+    # Style the spines - make left axis blue, right axis orange
+    ax1.spines['left'].set_color('#4080FF')
+    ax1.spines['left'].set_linewidth(2)
+    ax2.spines['right'].set_color('#FF6B40')
+    ax2.spines['right'].set_linewidth(2)
+
+    # Style other spines
+    for spine in ['top', 'bottom']:
+        ax1.spines[spine].set_color('#CCCCCC')
+        ax1.spines[spine].set_linewidth(1.5)
+
+    # Color the y-axis ticks to match the data
+    ax1.tick_params(axis='y', colors='#4080FF', labelsize=11, width=2)  # Blue for Response
+    ax2.tick_params(axis='y', colors='#FF6B40', labelsize=11, width=2)  # Orange for Containment
+    ax1.tick_params(axis='x', colors='#1A237E', labelsize=12)
+
+    # Set Y-axis limits starting from 0 with some padding for better visualization
+    max_response = max(response_breaches) if max(response_breaches) > 0 else 1
+    max_containment = max(containment_breaches) if max(containment_breaches) > 0 else 1
+
+    ax1.set_ylim(0, max_response * 1.1)  # 10% padding above max value
+    ax2.set_ylim(0, max_containment * 1.1)  # 10% padding above max value
 
     # Enhanced border
     border_width = 4
     fig.patch.set_edgecolor('#1A237E')
     fig.patch.set_linewidth(border_width)
 
-    # Enhanced timestamp with modern styling
+    # Enhanced timestamp
     trans = transforms.blended_transform_factory(fig.transFigure, fig.transFigure)
     now_eastern = datetime.now(eastern).strftime('%m/%d/%Y %I:%M %p %Z')
 
@@ -168,30 +195,48 @@ def save_sla_breaches_chart(ticket_slas_by_periods):
     plt.suptitle('SLA Breaches by Response & Containment',
                  fontsize=20, fontweight='bold', color='#1A237E', y=0.95)
 
-    # Customize the plot
-    ax.set_ylabel('Breach Count', fontsize=14, fontweight='bold', color='#1A237E')
-    ax.set_xticks(x)
-    ax.set_xticklabels(['Response', 'Containment'], fontsize=12, fontweight='bold', color='#1A237E')
+    # Y-axis labels with matching colors
+    ax1.set_ylabel('Response SLA Breaches', fontsize=14, fontweight='bold', color='#4080FF')
+    ax2.set_ylabel('Containment SLA Breaches', fontsize=14, fontweight='bold', color='#FF6B40')
 
-    # Enhanced legend - moved to upper left to avoid crowding with bars
-    legend = ax.legend(title='Period (Ticket Count)', loc='upper left',
-                       frameon=True, fancybox=True, shadow=True,
-                       title_fontsize=12, fontsize=10)
+    # X-axis setup
+    ax1.set_xticks([0, 1.0])
+    ax1.set_xticklabels(['Response', 'Containment'], fontsize=12, fontweight='bold', color='#1A237E')
+    ax1.set_xlim(-0.5, 1.5)  # Better spacing around the groups
+
+    # Enhanced legend - only show for the left axis since both use same periods
+    legend = ax1.legend(title='Period (Ticket Count)', loc='upper left',
+                        frameon=True, fancybox=True, shadow=True,
+                        title_fontsize=12, fontsize=10)
     legend.get_frame().set_facecolor('white')
     legend.get_frame().set_alpha(0.95)
     legend.get_frame().set_edgecolor('#1A237E')
     legend.get_frame().set_linewidth(2)
 
-    # Enhanced value labels with black circles
-    for bars in [bar1, bar2, bar3]:
+    # Enhanced value labels with black circles - separate for each axis
+    # Response bars (use ax1 coordinates)
+    response_bars = [bars_resp_30, bars_resp_7, bars_resp_yesterday]
+    for bars in response_bars:
         for bar in bars:
             height = bar.get_height()
-            # Always show label, even if height is 0
-            ax.text(bar.get_x() + bar.get_width() / 2., height / 2 if height > 0 else 0.5,
-                    f'{int(height)}',
-                    ha='center', va='center',
-                    fontsize=12, color='white', fontweight='bold',
-                    bbox=dict(boxstyle="circle,pad=0.2", facecolor='black', alpha=0.8, edgecolor='white', linewidth=1))
+            # Position label in center of bar
+            ax1.text(bar.get_x() + bar.get_width() / 2., height / 2 if height > 0 else 0.5,
+                     f'{int(height)}',
+                     ha='center', va='center',
+                     fontsize=12, color='white', fontweight='bold',
+                     bbox=dict(boxstyle="circle,pad=0.2", facecolor='black', alpha=0.8, edgecolor='white', linewidth=1))
+
+    # Containment bars (use ax2 coordinates)
+    containment_bars = [bars_cont_30, bars_cont_7, bars_cont_yesterday]
+    for bars in containment_bars:
+        for bar in bars:
+            height = bar.get_height()
+            # Position label in center of bar using ax2 coordinate system
+            ax2.text(bar.get_x() + bar.get_width() / 2., height / 2 if height > 0 else 0.5,
+                     f'{int(height)}',
+                     ha='center', va='center',
+                     fontsize=12, color='white', fontweight='bold',
+                     bbox=dict(boxstyle="circle,pad=0.2", facecolor='black', alpha=0.8, edgecolor='white', linewidth=1))
 
     # Add GS-DnR watermark
     fig.text(0.99, 0.01, 'GS-DnR',
@@ -204,13 +249,12 @@ def save_sla_breaches_chart(ticket_slas_by_periods):
              fontsize=9, color='#666666', style='italic')
 
     # Enhanced layout
-    plt.tight_layout()
-    plt.subplots_adjust(top=0.88, bottom=0.15, left=0.08, right=0.92)
+    plt.subplots_adjust(top=0.85, bottom=0.20, left=0.12, right=0.88)
 
     today_date = datetime.now().strftime('%m-%d-%Y')
     output_path = root_directory / "web" / "static" / "charts" / today_date / "SLA Breaches.png"
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    plt.savefig(output_path)
+    plt.savefig(output_path, dpi=300, bbox_inches='tight')
     plt.close(fig)
 
 
