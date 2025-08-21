@@ -54,20 +54,13 @@ query getEndpoints($first: Int, $after: Cursor) {
 }
 """
 
-ADD_TAG_MUTATION = """
-mutation addCustomTag($endpointId: String!, $tag: String!) {
-  addCustomTag(input: {endpointId: $endpointId, tag: $tag}) {
-    success
-    message
-  }
-}
-"""
-
-REMOVE_TAG_MUTATION = """
-mutation removeCustomTag($endpointId: String!, $tag: String!) {
-  removeCustomTag(input: {endpointId: $endpointId, tag: $tag}) {
-    success
-    message
+UPDATE_TAGS_MUTATION = """
+mutation assetUpdateEndpointsUsingEid($input: AssetUpdateEndpointsUsingEidInput!) {
+  assetUpdateEndpointsUsingEid(input: $input) {
+    updatedEndpoints {
+      id
+      name
+    }
   }
 }
 """
@@ -232,62 +225,92 @@ class TaniumInstance:
             logger.error(f"Error validating token for {self.name}: {e}")
             return False
 
+    def update_custom_tags_by_id(self, tanium_id: str, tags: List[str]) -> bool:
+        """Update the complete set of custom tags for a computer using its Tanium ID directly"""
+        try:
+            variables = {
+                "input": {
+                    "sourceName": "Custom",
+                    "entityNames": ["Custom Tags"],
+                    "assets": [{
+                        "eid": tanium_id,
+                        "entities": [{
+                            "name": "Custom Tags",
+                            "values": tags  # Complete list of tags to set
+                        }]
+                    }]
+                }
+            }
+            result = self.query(UPDATE_TAGS_MUTATION, variables)
+
+            # Check if the mutation was successful by looking for updatedEndpoints
+            updated_endpoints = result.get('data', {}).get('assetUpdateEndpointsUsingEid', {}).get('updatedEndpoints', [])
+            success = len(updated_endpoints) > 0
+
+            if success:
+                logger.info(f"Successfully updated tags for computer ID '{tanium_id}' in {self.name}: {tags}")
+            else:
+                logger.error(f"Failed to update tags for computer ID '{tanium_id}' in {self.name}: No endpoints were updated")
+
+            return success
+
+        except Exception as e:
+            logger.error(f"Error updating tags for computer ID '{tanium_id}' in {self.name}: {e}")
+            return False
+
+    def get_computer_by_id(self, tanium_id: str) -> Optional[Computer]:
+        """Get a computer by its Tanium ID"""
+        computers = self.get_computers(limit=self.DEFAULT_SEARCH_LIMIT)
+        return next((c for c in computers if c.id == tanium_id), None)
+
+    def find_computer_by_name(self, computer_name: str) -> Optional[Computer]:
+        """Find a computer by name in this instance"""
+        computers = self.get_computers(limit=self.DEFAULT_SEARCH_LIMIT)
+        return next((c for c in computers if c.name.lower() == computer_name.lower()), None)
+
     def add_custom_tag(self, computer_name: str, tag: str) -> bool:
-        """Add a custom tag to a computer"""
+        """Add a custom tag to a computer by name"""
         try:
             # First, find the computer to get its ID
-            computer = self._find_computer_by_name(computer_name)
+            computer = self.find_computer_by_name(computer_name)
             if not computer:
                 logger.warning(f"Computer '{computer_name}' not found in {self.name}")
                 return False
 
-            # Execute the add tag mutation
-            variables = {'endpointId': computer.id, 'tag': tag}
-            result = self.query(ADD_TAG_MUTATION, variables)
+            # Check if tag already exists
+            if tag in computer.custom_tags:
+                logger.info(f"Tag '{tag}' already exists on computer '{computer_name}' in {self.name}")
+                return True
 
-            success = result.get('data', {}).get('addCustomTag', {}).get('success', False)
-            if success:
-                logger.info(f"Successfully added tag '{tag}' to '{computer_name}' in {self.name}")
-            else:
-                message = result.get('data', {}).get('addCustomTag', {}).get('message', 'Unknown error')
-                logger.error(f"Failed to add tag '{tag}' to '{computer_name}' in {self.name}: {message}")
-
-            return success
+            # Add the new tag to existing tags
+            updated_tags = computer.custom_tags + [tag]
+            return self.update_custom_tags_by_id(computer.id, updated_tags)
 
         except Exception as e:
             logger.error(f"Error adding tag '{tag}' to '{computer_name}' in {self.name}: {e}")
             return False
 
     def remove_custom_tag(self, computer_name: str, tag: str) -> bool:
-        """Remove a custom tag from a computer"""
+        """Remove a custom tag from a computer by name"""
         try:
             # First, find the computer to get its ID
-            computer = self._find_computer_by_name(computer_name)
+            computer = self.find_computer_by_name(computer_name)
             if not computer:
                 logger.warning(f"Computer '{computer_name}' not found in {self.name}")
                 return False
 
-            # Execute the remove tag mutation
-            variables = {'endpointId': computer.id, 'tag': tag}
-            result = self.query(REMOVE_TAG_MUTATION, variables)
+            # Check if the tag exists
+            if tag not in computer.custom_tags:
+                logger.info(f"Tag '{tag}' not found on computer '{computer_name}' in {self.name}")
+                return True  # Consider it successful since tag is already not there
 
-            success = result.get('data', {}).get('removeCustomTag', {}).get('success', False)
-            if success:
-                logger.info(f"Successfully removed tag '{tag}' from '{computer_name}' in {self.name}")
-            else:
-                message = result.get('data', {}).get('removeCustomTag', {}).get('message', 'Unknown error')
-                logger.error(f"Failed to remove tag '{tag}' from '{computer_name}' in {self.name}: {message}")
-
-            return success
+            # Remove the tag from existing tags
+            updated_tags = [t for t in computer.custom_tags if t != tag]
+            return self.update_custom_tags_by_id(computer.id, updated_tags)
 
         except Exception as e:
             logger.error(f"Error removing tag '{tag}' from '{computer_name}' in {self.name}: {e}")
             return False
-
-    def _find_computer_by_name(self, computer_name: str) -> Optional[Computer]:
-        """Find a computer by name in this instance"""
-        computers = self.get_computers(limit=self.DEFAULT_SEARCH_LIMIT)
-        return next((c for c in computers if c.name.lower() == computer_name.lower()), None)
 
 
 class TaniumClient:
@@ -404,32 +427,6 @@ class TaniumClient:
         all_computers = self._get_all_computers(limit=TaniumInstance.DEFAULT_SEARCH_LIMIT)
         return next((c for c in all_computers if c.name.lower() == name.lower()), None)
 
-    def add_custom_tag_to_computer(self, computer_name: str, tag: str, instance_name: str) -> bool:
-        """Add a custom tag to a computer in a specific instance"""
-        instance = self._get_instance_by_name(instance_name)
-        if not instance:
-            logger.error(f"Instance '{instance_name}' not found")
-            return False
-
-        if not instance.validate_token():
-            logger.error(f"Invalid token for {instance.name}")
-            return False
-
-        return instance.add_custom_tag(computer_name, tag)
-
-    def remove_custom_tag_from_computer(self, computer_name: str, tag: str, instance_name: str) -> bool:
-        """Remove a custom tag from a computer in a specific instance"""
-        instance = self._get_instance_by_name(instance_name)
-        if not instance:
-            logger.error(f"Instance '{instance_name}' not found")
-            return False
-
-        if not instance.validate_token():
-            logger.error(f"Invalid token for {instance.name}")
-            return False
-
-        return instance.remove_custom_tag(computer_name, tag)
-
     def _get_instance_by_name(self, instance_name: str) -> Optional[TaniumInstance]:
         """Get a Tanium instance by name"""
         return next((i for i in self.instances if i.name.lower() == instance_name.lower()), None)
@@ -438,27 +435,171 @@ class TaniumClient:
         """Get list of available instance names"""
         return [instance.name for instance in self.instances]
 
-    def add_custom_tag_to_computer_all_instances(self, computer_name: str, tag: str) -> Dict[str, bool]:
-        """Add a custom tag to a computer across all instances"""
-        results = {}
-        for instance in self.instances:
-            if not instance.validate_token():
-                logger.warning(f"Invalid token for {instance.name}, skipping...")
-                results[instance.name] = False
-                continue
-            results[instance.name] = instance.add_custom_tag(computer_name, tag)
-        return results
+    def add_custom_tag_to_computer(self, tanium_id: str, tag: str, instance_name: str = None) -> Dict[str, Any]:
+        """Add a custom tag to a computer using its Tanium ID"""
 
-    def remove_custom_tag_from_computer_all_instances(self, computer_name: str, tag: str) -> Dict[str, bool]:
-        """Remove a custom tag from a computer across all instances"""
-        results = {}
-        for instance in self.instances:
+        # If instance is specified, use it directly
+        if instance_name:
+            instance = self._get_instance_by_name(instance_name)
+            if not instance:
+                return {
+                    'success': False,
+                    'message': f"Instance '{instance_name}' not found. Available instances: {self.list_available_instances()}",
+                    'instance': None
+                }
+
             if not instance.validate_token():
-                logger.warning(f"Invalid token for {instance.name}, skipping...")
-                results[instance.name] = False
-                continue
-            results[instance.name] = instance.remove_custom_tag(computer_name, tag)
-        return results
+                return {
+                    'success': False,
+                    'message': f"Invalid token for instance '{instance_name}'",
+                    'instance': instance_name
+                }
+
+            # Get current tags and add the new one
+            computer = instance.get_computer_by_id(tanium_id)
+            if not computer:
+                return {
+                    'success': False,
+                    'message': f"Computer with ID '{tanium_id}' not found in {instance_name}",
+                    'instance': instance_name
+                }
+
+            # Check if tag already exists
+            if tag in computer.custom_tags:
+                return {
+                    'success': True,
+                    'message': f"Tag '{tag}' already exists on computer ID: {tanium_id} in {instance_name}",
+                    'instance': instance_name
+                }
+
+            # Add the new tag to existing tags
+            updated_tags = computer.custom_tags + [tag]
+            success = instance.update_custom_tags_by_id(tanium_id, updated_tags)
+
+            return {
+                'success': success,
+                'message': f"Tag {'applied' if success else 'failed'} to computer ID: {tanium_id} in {instance_name}",
+                'instance': instance_name
+            }
+
+        # Try all instances if no instance specified
+        else:
+            for instance in self.instances:
+                if not instance.validate_token():
+                    continue
+
+                # Get current tags and add the new one
+                computer = instance.get_computer_by_id(tanium_id)
+                if not computer:
+                    continue  # Computer not in this instance, try next
+
+                # Check if tag already exists
+                if tag in computer.custom_tags:
+                    return {
+                        'success': True,
+                        'message': f"Tag '{tag}' already exists on computer ID: {tanium_id} in {instance.name}",
+                        'instance': instance.name
+                    }
+
+                # Add the new tag to existing tags
+                updated_tags = computer.custom_tags + [tag]
+                success = instance.update_custom_tags_by_id(tanium_id, updated_tags)
+
+                if success:
+                    return {
+                        'success': True,
+                        'message': f"Tag applied to computer ID: {tanium_id} in {instance.name}",
+                        'instance': instance.name
+                    }
+
+            return {
+                'success': False,
+                'message': f"Failed to apply tag to computer ID: {tanium_id} in any instance",
+                'instance': None
+            }
+
+    def remove_custom_tag_from_computer(self, computer_name: str, tanium_id: str, tag: str, instance_name: str = None) -> Dict[str, Any]:
+        """Remove a custom tag from a computer using its Tanium ID, with fallback to search all instances"""
+
+        # If instance is specified, use it directly
+        if instance_name:
+            instance = self._get_instance_by_name(instance_name)
+            if not instance:
+                return {
+                    'success': False,
+                    'message': f"Instance '{instance_name}' not found. Available instances: {self.list_available_instances()}",
+                    'instance': None
+                }
+
+            if not instance.validate_token():
+                return {
+                    'success': False,
+                    'message': f"Invalid token for instance '{instance_name}'",
+                    'instance': instance_name
+                }
+
+            # Get current tags and remove the specified one
+            computer = instance.get_computer_by_id(tanium_id)
+            if not computer:
+                return {
+                    'success': False,
+                    'message': f"Computer with ID '{tanium_id}' not found in {instance_name}",
+                    'instance': instance_name
+                }
+
+            # Check if the tag exists
+            if tag not in computer.custom_tags:
+                return {
+                    'success': True,
+                    'message': f"Tag '{tag}' not found on computer ID: {tanium_id} in {instance_name} (already removed)",
+                    'instance': instance_name
+                }
+
+            # Remove the tag from existing tags
+            updated_tags = [t for t in computer.custom_tags if t != tag]
+            success = instance.update_custom_tags_by_id(tanium_id, updated_tags)
+
+            return {
+                'success': success,
+                'message': f"Tag {'removed' if success else 'failed to remove'} from {computer_name} (ID: {tanium_id}) in {instance_name}",
+                'instance': instance_name
+            }
+
+        # Fallback: try all instances if no instance specified
+        else:
+            for instance in self.instances:
+                if not instance.validate_token():
+                    continue
+
+                # Get current tags and remove the specified one
+                computer = instance.get_computer_by_id(tanium_id)
+                if not computer:
+                    continue  # Computer not in this instance, try next
+
+                # Check if the tag exists
+                if tag not in computer.custom_tags:
+                    return {
+                        'success': True,
+                        'message': f"Tag '{tag}' not found on computer ID: {tanium_id} in {instance.name} (already removed)",
+                        'instance': instance.name
+                    }
+
+                # Remove the tag from existing tags
+                updated_tags = [t for t in computer.custom_tags if t != tag]
+                success = instance.update_custom_tags_by_id(tanium_id, updated_tags)
+
+                if success:
+                    return {
+                        'success': True,
+                        'message': f"Tag removed from {computer_name} (ID: {tanium_id}) in {instance.name}",
+                        'instance': instance.name
+                    }
+
+            return {
+                'success': False,
+                'message': f"Failed to remove tag from {computer_name} (ID: {tanium_id}) in any instance",
+                'instance': None
+            }
 
 
 def main():
@@ -474,12 +615,20 @@ def main():
             logger.error("No valid tokens found. Exiting.")
             return 1
 
-        # Export all computers
-        filename = client.get_and_export_all_computers()
-        if filename:
-            logger.info(f"Data exported to: {filename}")
-        else:
-            logger.warning("No data to export")
+        # # Export all computers
+        # filename = client.get_and_export_all_computers()
+        # if filename:
+        #     logger.info(f"Data exported to: {filename}")
+        # else:
+        #     logger.warning("No data to export")
+
+        # Test: Tag a single host - now uses only Tanium ID
+        test_tanium_id = "678351"  # Replace with actual Tanium ID from the report
+        test_tag = "EPP_ECMTag_US_SRV_Ring1"
+
+        # Clean API - only requires the essential data
+        tag_result = client.add_custom_tag_to_computer(test_tanium_id, test_tag)
+        logger.info(f"Tagging result for computer ID {test_tanium_id} with tag '{test_tag}': {tag_result}")
 
     except Exception as e:
         logger.error(f"Error during execution: {e}")
