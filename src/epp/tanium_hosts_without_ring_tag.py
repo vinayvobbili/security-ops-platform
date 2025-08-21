@@ -575,9 +575,9 @@ class ExcelReportExporter:
         ws = wb.active
         ws.title = "Ring Assignments"
 
-        # Headers
+        # Headers - Added "Source" column
         headers = [
-            "Computer Name", "Tanium ID", "Category", "Environment",
+            "Computer Name", "Tanium ID", "Source", "Category", "Environment",
             "Country", "Region", "Was Country Guessed", "Current Tags",
             "Generated Tag", "Comments"
         ]
@@ -601,6 +601,7 @@ class ExcelReportExporter:
             ws.append([
                 computer.computer.name,
                 computer.computer.id,
+                computer.computer.source,  # Added Source column
                 category_display,
                 computer.environment,
                 computer.country,
@@ -611,16 +612,25 @@ class ExcelReportExporter:
                 computer.status
             ])
 
-        # Format columns
+        # Format columns - Updated column widths to accommodate new column
         column_widths = {
-            'A': 40, 'B': 25, 'C': 18, 'D': 22, 'E': 22,
-            'F': 18, 'G': 14, 'H': 50, 'I': 28, 'J': 80
+            'A': 40,  # Computer Name
+            'B': 25,  # Tanium ID
+            'C': 12,  # Source
+            'D': 18,  # Category
+            'E': 22,  # Environment
+            'F': 22,  # Country
+            'G': 18,  # Region
+            'H': 14,  # Was Country Guessed
+            'I': 50,  # Current Tags
+            'J': 28,  # Generated Tag
+            'K': 80  # Comments
         }
         for col, width in column_widths.items():
             ws.column_dimensions[col].width = width
 
-        # Add filters and freeze panes
-        ws.auto_filter.ref = f"A1:J{len(computers) + 1}"
+        # Add filters and freeze panes - Updated range to include new column
+        ws.auto_filter.ref = f"A1:K{len(computers) + 1}"
         ws.freeze_panes = "A2"
 
         # Save file
