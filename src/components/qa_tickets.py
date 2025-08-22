@@ -27,14 +27,13 @@ Dependencies:
 import json
 import os
 import random
+from datetime import datetime, timedelta
 
-import requests
-from webexpythonsdk import WebexAPI
 from tabulate import tabulate
+from webexpythonsdk import WebexAPI
 
 from config import get_config
 from services.xsoar import TicketHandler
-from datetime import datetime
 
 CONFIG = get_config()
 webex_api = WebexAPI(access_token=CONFIG.webex_bot_access_token_soar)
@@ -63,18 +62,23 @@ def summarize_tickets_by_impact(tickets):
 def format_summary_message(summary, total):
     table = [(impact, count) for impact, count in summary.items()]
     md_table = tabulate(table, headers=["Impact", "Count"], tablefmt="github")
-    return f"**Tickets Closed Today: {total}**\n\n```\n{md_table}\n```"
+    return f"**Tickets Closed This Week: {total}**\n\n```\n{md_table}\n```"
 
 
 def generate(room_id):
     try:
         ticket_handler = TicketHandler()
-        today = datetime.now().strftime('%Y-%m-%dT00:00:00 -0400')
-        query = f'status:closed -category:job type:METCIRT -owner:"" closed:>="{today}"'
+        # Calculate the start of the week (previous Sunday)
+        # Since this script runs on Saturday, we go back 6 days to get to Sunday
+        today = datetime.now()
+        week_start = today - timedelta(days=6)  # Saturday (6) back to Sunday (0)
+        week_start_str = week_start.strftime('%Y-%m-%dT00:00:00 -0400')
+
+        query = f'status:closed -category:job type:METCIRT -owner:"" closed:>="{week_start_str}"'
 
         tickets = ticket_handler.get_tickets(query)
         if not tickets:
-            print("No METCIRT tickets were closed today. Not creating QA tickets today...")
+            print("No METCIRT tickets were closed this week. Not creating QA tickets this week...")
             return
         # --- Summary logic ---
         summary = summarize_tickets_by_impact(tickets)
