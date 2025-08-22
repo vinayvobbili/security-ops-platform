@@ -157,7 +157,7 @@ class TicketHandler:
         """Create a new incident in dev XSOAR"""
 
         # Clean payload for dev creation
-        for key in ['id', 'phase', 'status']:
+        for key in ['id', 'phase', 'status', 'roles']:
             payload.pop(key, None)
 
         payload.update({"all": True, "createInvestigation": True, "force": True})
