@@ -1,6 +1,8 @@
 # webex_bot.py - Using webex_bot library with WebSockets
 import logging
 import re
+import signal
+import sys
 from datetime import datetime
 from typing import Union
 
@@ -11,7 +13,7 @@ from webex_bot.webex_bot import WebexBot
 
 from config import get_config
 # Import your enhanced RAG model
-from services.my_model import initialize_model_and_agent, ask, warmup
+from services.my_model import initialize_model_and_agent, ask, warmup, shutdown_handler
 
 CONFIG = get_config()
 
@@ -33,6 +35,7 @@ if not WEBEX_ACCESS_TOKEN:
 # Global variables for bot state
 bot_ready = False
 initialization_time: Union[datetime, None] = None
+bot_instance = None  # Store bot instance for clean shutdown
 
 
 class RAGBotCommands:
@@ -282,8 +285,42 @@ def create_webex_bot():
 
 # --- Main Application ---
 
+def graceful_shutdown():
+    """Perform graceful shutdown of all bot components"""
+    global bot_ready, bot_instance
+
+    logger.info("🛑 Initiating graceful shutdown...")
+
+    try:
+        # Mark bot as not ready to prevent new requests
+        bot_ready = False
+
+        # Stop the WebEx bot if it exists
+        if bot_instance:
+            logger.info("Stopping WebEx bot connection...")
+            try:
+                # If the bot has a stop method, call it
+                if hasattr(bot_instance, 'stop'):
+                    bot_instance.stop()
+                elif hasattr(bot_instance, 'disconnect'):
+                    bot_instance.disconnect()
+            except Exception as e:
+                logger.warning(f"Error stopping WebEx bot: {e}")
+
+        # Call the model's shutdown handler
+        logger.info("Calling model shutdown handler...")
+        shutdown_handler()
+
+        logger.info("✅ Graceful shutdown completed")
+
+    except Exception as e:
+        logger.error(f"Error during graceful shutdown: {e}", exc_info=True)
+
+
 def main():
     """Main application entry point"""
+    global bot_instance
+
     logger.info("🤖 Starting Webex RAG Bot with WebSocket connection...")
 
     # Initialize the RAG model first
@@ -294,21 +331,27 @@ def main():
     try:
         # Create and start the WebEx bot
         logger.info("🌐 Creating WebEx bot connection...")
-        bot = create_webex_bot()
+        bot_instance = create_webex_bot()
 
         logger.info("✅ Bot created successfully")
         logger.info(f"📧 Bot email: {WEBEX_BOT_EMAIL}")
         logger.info("🔗 Connecting to Webex via WebSocket...")
 
         # Start the bot (this will block and run forever)
-        bot.run()
+        bot_instance.run()
 
     except KeyboardInterrupt:
-        logger.info("🛑 Bot stopped by user")
+        logger.info("🛑 Bot stopped by user (Ctrl+C)")
+        graceful_shutdown()
         return 0
     except Exception as e:
         logger.error(f"❌ Bot error: {e}", exc_info=True)
+        graceful_shutdown()
         return 1
+    finally:
+        # Ensure cleanup happens regardless of how we exit
+        if 'bot_instance' in globals() and bot_instance:
+            graceful_shutdown()
 
 
 # --- Development/Testing Functions ---
@@ -355,5 +398,21 @@ if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == "test":
         test_bot_locally()
     else:
-        exit_code = main()
-        sys.exit(exit_code)
+        # Enhanced signal handler for clean shutdown
+        def signal_handler(sig, frame):
+            logger.info(f"Signal {sig} received, initiating graceful shutdown...")
+            graceful_shutdown()
+            logger.info("Shutdown complete, exiting...")
+            sys.exit(0)
+
+        # Register signal handlers
+        signal.signal(signal.SIGINT, signal_handler)
+        signal.signal(signal.SIGTERM, signal_handler)
+
+        try:
+            exit_code = main()
+            sys.exit(exit_code)
+        except Exception as e:
+            logger.error(f"Fatal error in main: {e}", exc_info=True)
+            graceful_shutdown()
+            sys.exit(1)
