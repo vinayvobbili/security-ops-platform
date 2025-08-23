@@ -398,7 +398,7 @@ def get_weather_info(city: str) -> str:
         return weather_info
 
     except requests.exceptions.HTTPError as e:
-        if response.status_code == 404:
+        if hasattr(e, 'response') and e.response.status_code == 404:
             return f"Weather data not available for '{city}'. Please check the city name and try again."
         else:
             return _get_mock_weather(city)
@@ -514,17 +514,59 @@ def get_device_details_cs(hostname: str) -> str:
 
 
 # --- RAG Helper Functions ---
+def verify_specific_document_loading():
+    """Verify that the specific document is loaded and indexed properly"""
+    import os
+    from langchain_community.document_loaders import UnstructuredWordDocumentLoader
+
+    target_doc = "GDnR_Blocking_Network_Access_Control _10022024.docx"
+    doc_path = os.path.join(PDF_DIRECTORY_PATH, target_doc)
+
+    logging.info(f"Checking specific document: {target_doc}")
+
+    if not os.path.exists(doc_path):
+        logging.error(f"Target document not found: {doc_path}")
+        return False
+
+    try:
+        # Test loading the specific document
+        loader = UnstructuredWordDocumentLoader(doc_path)
+        docs = loader.load()
+
+        if docs:
+            content = docs[0].page_content
+            logging.info(f"Successfully loaded target document: {len(content)} characters")
+            logging.info(f"Content preview: {content[:200]}")
+
+            # Check if content contains relevant keywords
+            keywords = ["network", "access", "control", "block", "firewall"]
+            found_keywords = [kw for kw in keywords if kw.lower() in content.lower()]
+            logging.info(f"Keywords found in target document: {found_keywords}")
+
+            return True
+        else:
+            logging.error("Target document loaded but no content extracted")
+            return False
+
+    except Exception as e:
+        logging.error(f"Error loading target document: {e}")
+        return False
+
+
 def _load_documents_from_folder(folder_path: str):
     """
-    Loads documents from a folder, supporting PDF and Word (.doc, .docx) files.
-    Returns a list of Document objects.
+    Enhanced document loading with specific verification for target document.
     """
     documents = []
     pdf_loaded = False
+    target_doc_loaded = False
 
     if not os.path.exists(folder_path):
         logging.warning(f"Folder does not exist: {folder_path}")
         return documents
+
+    # First, verify our target document can be loaded
+    verify_specific_document_loading()
 
     for fname in os.listdir(folder_path):
         fpath = os.path.join(folder_path, fname)
@@ -543,16 +585,34 @@ def _load_documents_from_folder(folder_path: str):
             elif ext in [".doc", ".docx"]:
                 loader = UnstructuredWordDocumentLoader(fpath)
                 doc_content = loader.load()
+
+                # Special handling for our target document
+                if "GDnR_Blocking_Network_Access_Control" in fname:
+                    if doc_content:
+                        target_doc_loaded = True
+                        logging.info(f"✅ Successfully loaded TARGET document: {fname}")
+                        logging.info(f"Target document content length: {len(doc_content[0].page_content) if doc_content else 0}")
+                    else:
+                        logging.error(f"❌ TARGET document loaded but no content: {fname}")
+
                 documents.extend(doc_content)
                 logging.info(f"Loaded Word document: {fname}")
         except Exception as e:
             logging.error(f"Failed to load {fname}: {e}")
+            if "GDnR_Blocking_Network_Access_Control" in fname:
+                logging.error(f"❌ CRITICAL: Failed to load TARGET document: {fname}")
+
+    # Log final status
+    if target_doc_loaded:
+        logging.info("✅ TARGET document successfully loaded and will be indexed")
+    else:
+        logging.error("❌ TARGET document was NOT loaded - this explains why it's not found in searches")
 
     return documents
 
 
 def _build_and_save_vector_store(pdf_folder_path: str, index_path: str, current_embeddings):
-    """Build and save the vector store from documents"""
+    """Build and save the vector store from documents with improved chunking for better detail retrieval"""
     if not os.path.exists(pdf_folder_path):
         logging.warning(f"PDF directory '{pdf_folder_path}' does not exist. Skipping vector store build.")
         return False
@@ -571,14 +631,15 @@ def _build_and_save_vector_store(pdf_folder_path: str, index_path: str, current_
 
     logging.info(f"Loaded {len(documents)} documents.")
 
-    # Split documents into chunks
+    # Enhanced text splitting for better content preservation
     text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=1000,
-        chunk_overlap=200,
-        length_function=len
+        chunk_size=1500,  # Increased from 1000 to preserve more context
+        chunk_overlap=300,  # Increased from 200 for better continuity
+        length_function=len,
+        separators=["\n\n", "\n", ". ", "! ", "? ", " ", ""]  # Better splitting points
     )
     texts = text_splitter.split_documents(documents)
-    logging.info(f"Split into {len(texts)} text chunks.")
+    logging.info(f"Split into {len(texts)} text chunks with improved chunking strategy.")
 
     # Create vector store
     logging.info("Creating vector store with FAISS and Ollama embeddings...")
@@ -676,52 +737,92 @@ def initialize_model_and_agent():
 
         # Add RAG tool if vector store is available
         if vector_store:
-            vector_store_retriever = vector_store.as_retriever(search_kwargs={"k": 3})
+            # Increase retrieval context for more detailed responses
+            vector_store_retriever = vector_store.as_retriever(search_kwargs={"k": 5})  # Increased from 3 to 5
             rag_tool = create_retriever_tool(
                 vector_store_retriever,
                 "search_local_documents",
-                "Searches and returns information from local PDF and Word documents. Use this for questions about policies, reports, or specific documented information."
+                "Searches and returns information from local PDF and Word documents. Use this for questions about policies, reports, or specific documented information. This tool returns detailed content from relevant documents."
             )
             all_tools.append(rag_tool)
             logging.info("RAG tool (search_local_documents) initialized and added to agent tools.")
         else:
             logging.warning("Vector store not available. RAG tool for documents will not be available to the agent.")
 
-        # Define the ReAct agent prompt
-        prompt_template = """
-        Answer the following questions as best you can. You have access to the following tools:
+        # Define the ReAct agent prompt - optimized for comprehensive responses with better control
+        prompt_template = """You are an expert security documentation assistant. Your PRIMARY mission is to provide COMPREHENSIVE, DETAILED operational guidance by searching local security documents first, then providing expert knowledge.
 
-        {tools}
+CRITICAL EXECUTION RULES - FOLLOW THESE EXACTLY:
+1. ALWAYS start by using the search_local_documents tool with the user's main keywords
+2. If the first search yields limited results, try ONE additional search with related terms
+3. After maximum 2 searches, you MUST provide a comprehensive answer based on available information
+4. DO NOT continue searching indefinitely - provide your best response after 2 search attempts
+5. If documents are found, extract ALL relevant details and quote specific procedures
+6. If no relevant documents are found, provide expert security guidance based on best practices
 
-        Use the following format:
+RESPONSE CONSTRUCTION REQUIREMENTS:
+When documents are found:
+- Start with: "Based on [Document Name]..."
+- Include complete step-by-step procedures with numbered steps
+- Quote important warnings, requirements, and contact information
+- Include ALL tools, URLs, teams, and technical details mentioned
+- Add quality control steps and verification procedures
+- Include timeline requirements and escalation procedures
 
-        Question: the input question you must answer
-        Thought: you should always think about what to do
-        Action: the action to take, should be one of [{tool_names}]
-        Action Input: the input to the action
-        Observation: the result of the action
-        ... (this Thought/Action/Action Input/Observation can repeat N times)
-        Thought: I now know the final answer
-        Final Answer: the final answer to the original input question
+When documents are not found or limited:
+- Start with: "Based on security best practices..."
+- Provide comprehensive procedural guidance using industry standards
+- Include general security tools and methodologies
+- Provide clear step-by-step instructions
+- Include common verification steps and quality controls
+- Add relevant warnings and considerations
 
-        Begin!
+SEARCH STRATEGY (Maximum 2 attempts):
+- First search: Use main keywords from user question
+- Second search (if needed): Use 2-3 related technical terms
+- Then STOP searching and provide comprehensive response
 
-        Question: {input}
-        Thought:{agent_scratchpad}
-        """
+FORMATTING FOR MAXIMUM CLARITY:
+- Use clear headers (##) for major sections
+- Use bullet points (•) for lists and requirements  
+- Use numbered lists (1., 2., 3.) for sequential procedures
+- Bold important warnings, tools, and key information
+- Include specific technical details and configurations
+- Provide complete operational context
+
+You have access to the following tools:
+
+{tools}
+
+Use the following format:
+
+Question: the input question you must answer
+Thought: you should always think about what to do
+Action: the action to take, should be one of [{tool_names}]
+Action Input: the input to the action
+Observation: the result of the action
+... (this Thought/Action/Action Input/Observation can repeat N times)
+Thought: I now know the final answer
+Final Answer: the final answer to the original input question
+
+Begin!
+
+Question: {input}
+Thought:{agent_scratchpad}"""
+
         prompt = ChatPromptTemplate.from_template(prompt_template)
 
         # Create the ReAct agent
         agent = create_react_agent(llm, all_tools, prompt)
 
-        # Create agent executor
+        # Create agent executor with proper configuration
         agent_executor = AgentExecutor(
             agent=agent,
             tools=all_tools,
             verbose=True,
             handle_parsing_errors=True,
-            max_iterations=10,  # Prevent infinite loops
-            early_stopping_method="generate"
+            max_iterations=6,  # Reduced to prevent infinite loops
+            return_intermediate_steps=False
         )
 
         logging.info("Langchain Agent Executor initialized successfully with all tools.")
@@ -773,6 +874,60 @@ def reindex_pdfs_and_update_agent():
     else:
         logging.error("Failed to re-build vector store during re-index. Agent not updated.")
         return False
+
+
+def force_rebuild_vector_store():
+    """Force rebuild the vector store from scratch with better error handling"""
+    global vector_store_retriever, agent_executor
+
+    logging.info("Force rebuilding vector store...")
+
+    if not embeddings_ollama:
+        logging.error("Embeddings not initialized. Cannot rebuild vector store.")
+        return False
+
+    # Remove existing index if it exists
+    if os.path.exists(FAISS_INDEX_PATH):
+        try:
+            import shutil
+            shutil.rmtree(FAISS_INDEX_PATH)
+            logging.info("Removed existing FAISS index")
+        except Exception as e:
+            logging.error(f"Failed to remove existing index: {e}")
+
+    # Rebuild vector store
+    success = _build_and_save_vector_store(PDF_DIRECTORY_PATH, FAISS_INDEX_PATH, embeddings_ollama)
+    if success:
+        logging.info("Vector store rebuilt successfully. Reinitializing agent...")
+        # Reset global variables to force reinitialization
+        vector_store_retriever = None
+        agent_executor = None
+        return initialize_model_and_agent()
+    else:
+        logging.error("Failed to rebuild vector store")
+        return False
+
+
+# --- Additional debugging function ---
+def test_document_search(query: str = "network access control"):
+    """Test the document search functionality directly"""
+    if not vector_store_retriever:
+        return "Vector store not initialized"
+
+    try:
+        # Test direct retrieval
+        docs = vector_store_retriever.get_relevant_documents(query)
+        if docs:
+            result = f"Found {len(docs)} relevant documents for query '{query}':\n\n"
+            for i, doc in enumerate(docs[:3], 1):  # Show top 3
+                content = doc.page_content[:200] + "..." if len(doc.page_content) > 200 else doc.page_content
+                source = doc.metadata.get('source', 'Unknown')
+                result += f"{i}. Source: {source}\nContent: {content}\n\n"
+            return result
+        else:
+            return f"No documents found for query '{query}'"
+    except Exception as e:
+        return f"Error testing document search: {e}"
 
 
 # --- Performance Monitoring ---
@@ -1004,11 +1159,11 @@ class PerformanceMonitor:
                 'system_memory_total_gb': 0
             }
 
-    def get_queries_per_hour(self, hours_back: int = 24) -> Dict[str, int]:
+    def get_queries_per_hour(self) -> Dict[str, int]:
         """Get query volume for the last N hours"""
         with self._lock:
             current_time = datetime.now()
-            cutoff_time = current_time - timedelta(hours=hours_back)
+            cutoff_time = current_time - timedelta(hours=24)
             cutoff_hour = cutoff_time.strftime("%Y-%m-%d-%H")
 
             return {
@@ -1018,7 +1173,7 @@ class PerformanceMonitor:
 
     def get_total_queries_24h(self) -> int:
         """Get total queries in the last 24 hours"""
-        queries_per_hour = self.get_queries_per_hour(24)
+        queries_per_hour = self.get_queries_per_hour()
         return sum(queries_per_hour.values())
 
     def get_stats(self) -> Dict:
@@ -1155,17 +1310,16 @@ def ask(user_message: str, user_id: str = "default", room_id: str = "default") -
             performance_monitor.record_cache_hit()  # Quick response, count as cache hit
             return "I didn't receive a message. Please ask me something!"
 
-        # Determine query type for better tracking
+        # Determine query type for better tracking (simplified)
         message_lower = cleaned_message.lower()
         if any(word in message_lower for word in ['weather', 'temperature', 'forecast']):
             query_type = "weather"
-        elif any(word in message_lower for word in ['status', 'health', 'check']):
-            query_type = "status"
-        elif any(word in message_lower for word in ['help', 'commands', 'what can you do']):
-            query_type = "help"
-        elif any(word in message_lower for word in ['containment', 'device', 'hostname', 'crowdstrike']):
+        elif any(word in message_lower for word in ['containment', 'device', 'hostname']) and 'crowdstrike' in message_lower:
             query_type = "crowdstrike"
-        elif any(word in message_lower for word in ['document', 'search', 'policy', 'information']):
+        elif message_lower in ['status', 'health', 'health check', 'help', 'commands', 'what can you do', 'what can you do?', 'metrics', 'performance', 'stats', 'metrics summary', 'quick stats']:
+            query_type = "status"
+        else:
+            # Default to RAG for all other queries - let the agent decide which tools to use
             query_type = "rag"
 
         # Start performance tracking with correct query type
@@ -1316,7 +1470,7 @@ def get_performance_report() -> str:
         report += "\n• No query data available yet"
 
     # Add hourly breakdown
-    hourly_queries = performance_monitor.get_queries_per_hour(24)
+    hourly_queries = performance_monitor.get_queries_per_hour()
     if hourly_queries:
         report += f"\n\n### 📅 Hourly Query Volume (Last 24h)"
         recent_hours = sorted(hourly_queries.keys())[-12:]  # Show last 12 hours
