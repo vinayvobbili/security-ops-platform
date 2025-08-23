@@ -269,7 +269,8 @@ def create_webex_bot():
     # Create custom bot instance that catches all messages
     bot = CatchAllWebexBot(
         teams_bot_token=WEBEX_ACCESS_TOKEN,
-        approved_rooms=[],  # Empty list means all rooms
+        approved_rooms=[CONFIG.webex_room_id_vinay_test_space],  # Empty list means all rooms
+        approved_domains=['company.com'],
         bot_name="RAG Bot"
     )
 
