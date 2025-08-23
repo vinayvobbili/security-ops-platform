@@ -4,6 +4,9 @@ import logging
 import requests
 import json
 import re
+import threading
+from datetime import datetime, timedelta
+from collections import defaultdict
 
 from typing import Dict, List, Optional
 
@@ -38,8 +41,124 @@ llm = None
 embeddings_ollama = None
 vector_store_retriever = None
 agent_executor = None
-user_sessions: Dict[str, List[Dict]] = {}  # Session management
 crowdstrike_client: Optional[CrowdStrikeClient] = None  # CrowdStrike client instance
+
+
+# Thread-safe session management
+class SessionManager:
+    """Thread-safe session management for multiple users"""
+
+    def __init__(self, session_timeout_hours: int = 24, max_interactions_per_user: int = 10):
+        self._sessions: Dict[str, List[Dict]] = {}
+        self._lock = threading.RLock()  # Reentrant lock for nested calls
+        self._session_timeout = timedelta(hours=session_timeout_hours)
+        self._max_interactions = max_interactions_per_user
+        self._last_cleanup = datetime.now()
+
+    def add_interaction(self, user_id: str, query: str, response: str) -> None:
+        """Add a query-response pair to user's session (thread-safe)"""
+        with self._lock:
+            current_time = datetime.now()
+
+            # Initialize user session if it doesn't exist
+            if user_id not in self._sessions:
+                self._sessions[user_id] = []
+
+            # Add new interaction
+            self._sessions[user_id].append({
+                'query': query,
+                'response': response,
+                'timestamp': current_time.isoformat(),
+                'datetime': current_time  # For internal use
+            })
+
+            # Trim to max interactions
+            if len(self._sessions[user_id]) > self._max_interactions:
+                self._sessions[user_id] = self._sessions[user_id][-self._max_interactions:]
+
+            # Periodic cleanup of expired sessions
+            if current_time - self._last_cleanup > timedelta(hours=1):
+                self._cleanup_expired_sessions()
+                self._last_cleanup = current_time
+
+    def get_context(self, user_id: str, limit: int = 3) -> str:
+        """Get recent conversation context for a user (thread-safe)"""
+        with self._lock:
+            if user_id not in self._sessions:
+                return ""
+
+            # Filter out expired interactions
+            current_time = datetime.now()
+            valid_interactions = [
+                interaction for interaction in self._sessions[user_id]
+                if current_time - interaction['datetime'] < self._session_timeout
+            ]
+
+            # Update the session with only valid interactions
+            self._sessions[user_id] = valid_interactions
+
+            # Get recent interactions
+            recent_interactions = valid_interactions[-limit:]
+            context_parts = []
+
+            for interaction in recent_interactions:
+                # Truncate long queries/responses for context
+                query_snippet = interaction['query'][:100]
+                response_snippet = interaction['response'][:100]
+                context_parts.append(f"Previous Q: {query_snippet}")
+                context_parts.append(f"Previous A: {response_snippet}")
+
+            return "\n".join(context_parts) if context_parts else ""
+
+    def _cleanup_expired_sessions(self) -> None:
+        """Remove expired sessions and interactions (called with lock held)"""
+        current_time = datetime.now()
+        users_to_remove = []
+
+        for user_id, interactions in self._sessions.items():
+            # Filter out expired interactions
+            valid_interactions = [
+                interaction for interaction in interactions
+                if current_time - interaction['datetime'] < self._session_timeout
+            ]
+
+            if valid_interactions:
+                self._sessions[user_id] = valid_interactions
+            else:
+                users_to_remove.append(user_id)
+
+        # Remove users with no valid interactions
+        for user_id in users_to_remove:
+            del self._sessions[user_id]
+
+        if users_to_remove:
+            logging.info(f"Cleaned up expired sessions for {len(users_to_remove)} users")
+
+    def get_stats(self) -> Dict[str, int]:
+        """Get session statistics (thread-safe)"""
+        with self._lock:
+            current_time = datetime.now()
+            active_users = 0
+            total_interactions = 0
+
+            for user_id, interactions in self._sessions.items():
+                valid_interactions = [
+                    interaction for interaction in interactions
+                    if current_time - interaction['datetime'] < self._session_timeout
+                ]
+                if valid_interactions:
+                    active_users += 1
+                    total_interactions += len(valid_interactions)
+
+            return {
+                'active_users': active_users,
+                'total_interactions': total_interactions,
+                'total_users_ever': len(self._sessions)
+            }
+
+
+# Initialize global session manager
+session_manager = SessionManager(session_timeout_hours=24, max_interactions_per_user=10)
 
 
 # --- Utility Functions ---
@@ -660,33 +779,12 @@ def reindex_pdfs_and_update_agent():
 # --- Session Management ---
 def add_to_session(user_id: str, query: str, response: str):
     """Add query and response to user session"""
-    if user_id not in user_sessions:
-        user_sessions[user_id] = []
-
-    user_sessions[user_id].append({
-        'query': query,
-        'response': response,
-        'timestamp': logging.Formatter().formatTime(logging.LogRecord('', 0, '', 0, '', (), None))
-    })
-
-    # Keep only last 10 interactions to prevent memory bloat
-    if len(user_sessions[user_id]) > 10:
-        user_sessions[user_id] = user_sessions[user_id][-10:]
+    session_manager.add_interaction(user_id, query, response)
 
 
 def get_session_context(user_id: str, limit: int = 3) -> str:
     """Get recent conversation context for a user"""
-    if user_id not in user_sessions:
-        return ""
-
-    recent_interactions = user_sessions[user_id][-limit:]
-    context_parts = []
-
-    for interaction in recent_interactions:
-        context_parts.append(f"Previous Q: {interaction['query'][:100]}")
-        context_parts.append(f"Previous A: {interaction['response'][:100]}")
-
-    return "\n".join(context_parts) if context_parts else ""
+    return session_manager.get_context(user_id, limit)
 
 
 # --- Main Function for User Queries ---
@@ -701,6 +799,23 @@ def ask(user_query: str, user_id: Optional[str] = None, room_id: Optional[str] =
     # Handle special commands
     if user_query.lower() in ['status', 'health', 'ping']:
         return health_check()
+
+    # Handle greeting messages
+    if user_query.lower() in ['hello', 'hi', 'hey', 'greetings', 'good morning', 'good afternoon', 'good evening']:
+        greeting_response = ("👋 **Hello! I am Pokedex, your friendly neighborhood Q&A bot.**\n\n"
+                             "## 🎯 What I'm trained on:\n"
+                             "• GDnR documents and company policies\n"
+                             "• Technical documentation and procedures\n\n"
+                             "## 🛠️ Tools I have access to:\n"
+                             "• 🔒 **CrowdStrike** - Device status, containment, and security info\n"
+                             "• 🌤️ **Weather** - Current conditions for various cities\n"
+                             "• 🧮 **Calculator** - Mathematical calculations\n"
+                             "• 📄 **Document Search** - Search through uploaded PDFs and Word docs\n"
+                             "• 🌐 **API Calls** - Make requests to internal endpoints\n\n"
+                             "## ⚠️ Important Note:\n"
+                             "I don't have access to the general internet, but I can help with internal resources and tools!\n\n"
+                             "💬 **Ready to help!** Feel free to ask me anything or type `help` to see all available commands.")
+        return greeting_response
 
     if user_query.lower() in ['help', 'commands']:
         help_text = ("🤖 **Available Commands:**\n"
