@@ -25,6 +25,7 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
 from langchain_community.document_loaders import UnstructuredWordDocumentLoader
 
+from config import get_config
 # CrowdStrike integration
 from services.crowdstrike import CrowdStrikeClient
 
@@ -37,6 +38,7 @@ FAISS_INDEX_PATH = os.path.join(os.path.dirname(__file__), "..", "faiss_index_ol
 PERFORMANCE_DATA_PATH = os.path.join(os.path.dirname(__file__), "..", "performance_data.json")
 OLLAMA_LLM_MODEL_NAME = "qwen2.5:14b"
 OLLAMA_EMBEDDING_MODEL_NAME = "nomic-embed-text"
+CONFIG = get_config()
 
 # --- Global Variables ---
 llm = None
@@ -335,29 +337,97 @@ atexit.register(shutdown_handler)
 signal.signal(signal.SIGTERM, lambda signum, frame: shutdown_handler())
 signal.signal(signal.SIGINT, lambda signum, frame: shutdown_handler())
 
-
 # --- Tool Definitions ---
+import requests
+
+
 @tool
 def get_weather_info(city: str) -> str:
     """
-    Get current weather information for a specific city.
+    Get current weather information for a specific city using OpenWeatherMap free API.
     Use this tool when asked about weather conditions.
     """
-    weather_data = {
-        "san francisco": "Sunny, 68°F, light breeze from the west",
-        "new york": "Cloudy, 45°F, chance of rain later",
-        "london": "Rainy, 52°F, heavy clouds and drizzle",
-        "tokyo": "Clear, 72°F, humid with light winds",
-        "paris": "Partly cloudy, 59°F, gentle breeze",
-        "sydney": "Sunny, 75°F, clear skies",
-        "berlin": "Overcast, 48°F, light wind"
+    # Using OpenWeatherMap free API - 1000 calls/day limit
+    api_key = CONFIG.open_weather_map_api_key  # You'll need to get a free API key from openweathermap.org
+    base_url = "http://api.openweathermap.org/data/2.5/weather"
+
+    try:
+        # Make API request
+        params = {
+            'q': city,
+            'appid': api_key,
+            'units': 'imperial'  # For Fahrenheit, use 'metric' for Celsius
+        }
+
+        response = requests.get(base_url, params=params, timeout=10)
+
+        if response.status_code == 401:
+            # Fallback to mock data if no API key is configured
+            return _get_mock_weather(city)
+
+        response.raise_for_status()
+        data = response.json()
+
+        # Extract weather information
+        location = data['name']
+        country = data['sys']['country']
+        weather = data['weather'][0]
+        main = data['main']
+        wind = data.get('wind', {})
+
+        # Format the weather information
+        weather_info = f"Current weather in {location}, {country}: "
+        weather_info += f"{weather['description'].title()}, "
+        weather_info += f"{main['temp']:.0f}°F "
+
+        if 'feels_like' in main:
+            weather_info += f"(feels like {main['feels_like']:.0f}°F), "
+
+        weather_info += f"humidity {main['humidity']}%"
+
+        if wind.get('speed'):
+            # Convert m/s to mph
+            wind_mph = wind['speed'] * 2.237
+            wind_dir = wind.get('deg', 0)
+            # Convert degrees to cardinal direction
+            directions = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE",
+                          "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"]
+            dir_index = int((wind_dir + 11.25) / 22.5) % 16
+            weather_info += f", wind {wind_mph:.0f} mph {directions[dir_index]}"
+
+        return weather_info
+
+    except requests.exceptions.HTTPError as e:
+        if response.status_code == 404:
+            return f"Weather data not available for '{city}'. Please check the city name and try again."
+        else:
+            return _get_mock_weather(city)
+    except requests.exceptions.RequestException as e:
+        # Fallback to mock data on network error
+        return _get_mock_weather(city)
+    except KeyError as e:
+        return _get_mock_weather(city)
+    except Exception as e:
+        return _get_mock_weather(city)
+
+
+def _get_mock_weather(city: str) -> str:
+    """Fallback mock weather data when API is not available"""
+    mock_data = {
+        "new york": "Cloudy, 45°F, humidity 70%, wind 8 mph NW",
+        "london": "Rainy, 52°F, humidity 85%, wind 12 mph SW",
+        "tokyo": "Clear, 72°F, humidity 60%, wind 5 mph E",
+        "paris": "Partly cloudy, 59°F, humidity 65%, wind 6 mph W",
+        "sydney": "Sunny, 75°F, humidity 55%, wind 10 mph SE",
+        "san francisco": "Sunny, 68°F, humidity 70%, wind 15 mph W",
+        "berlin": "Overcast, 48°F, humidity 80%, wind 7 mph N"
     }
+
     city_lower = city.lower()
-    if city_lower in weather_data:
-        return f"Current weather in {city}: {weather_data[city_lower]}"
+    if city_lower in mock_data:
+        return f"Current weather in {city}: {mock_data[city_lower]} (Note: Using sample data - configure OpenWeatherMap API key for live data)"
     else:
-        available_cities = ", ".join(weather_data.keys())
-        return f"Weather data not available for {city}. I have data for: {available_cities}"
+        return f"Weather data not available for '{city}'. Supported sample cities: {', '.join(mock_data.keys())}"
 
 
 # --- CrowdStrike Tools ---
