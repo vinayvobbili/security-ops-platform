@@ -7,7 +7,7 @@ import re
 
 from typing import Dict, List, Optional
 
-from langchain_ollama import ChatOllama
+from langchain_ollama import ChatOllama, OllamaEmbeddings
 from langchain_core.tools import tool
 # --- Agent related imports ---
 from langchain.agents import AgentExecutor, create_react_agent  # Modern way to create ReAct agents
@@ -18,7 +18,6 @@ from langchain.tools.retriever import create_retriever_tool  # To wrap RAG as a 
 # RAG specific imports
 from langchain_community.document_loaders import PyPDFDirectoryLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_community.embeddings import OllamaEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain_community.document_loaders import UnstructuredWordDocumentLoader
 
