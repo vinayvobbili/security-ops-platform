@@ -326,65 +326,6 @@ def calculate_math(expression: str) -> str:
         return f"Math error: {str(e)}"
 
 
-@tool
-def call_api_endpoint(endpoint: str, method: str = "GET", params: dict = None) -> str:
-    """
-    Make API calls to various external endpoints.
-    Use this tool when asked to fetch data from a specific URL or API.
-    Args:
-        endpoint: The API endpoint URL
-        method: HTTP method (GET, POST, etc.)
-        params: Parameters to send with the request (for POST/PUT)
-    """
-    # Timeout for API calls
-    timeout = 10
-
-    try:
-        headers = {
-            'Content-Type': 'application/json',
-            'User-Agent': 'Python-Agent/1.0'
-        }
-
-        logging.info(f"Making {method} request to: {endpoint}")
-
-        if method.upper() == "GET":
-            response = requests.get(endpoint, params=params, headers=headers, timeout=timeout)
-        elif method.upper() == "POST":
-            response = requests.post(endpoint, json=params, headers=headers, timeout=timeout)
-        elif method.upper() == "PUT":
-            response = requests.put(endpoint, json=params, headers=headers, timeout=timeout)
-        elif method.upper() == "DELETE":
-            response = requests.delete(endpoint, headers=headers, timeout=timeout)
-        else:
-            return f"Unsupported HTTP method: {method}"
-
-        result = f"Status Code: {response.status_code}\n"
-
-        try:
-            json_data = response.json()
-            # Limit response size
-            json_str = json.dumps(json_data, indent=2)
-            if len(json_str) > 1000:
-                json_str = json_str[:950] + "...\n[Response truncated]"
-            result += f"JSON Response:\n{json_str}"
-        except json.JSONDecodeError:
-            text_response = response.text[:800]
-            if len(response.text) > 800:
-                text_response += "...\n[Response truncated]"
-            result += f"Text Response: {text_response}"
-        except Exception as e:
-            result += f"Error processing response: {str(e)}"
-
-        return result
-
-    except requests.exceptions.Timeout:
-        return f"Request timed out after {timeout} seconds"
-    except requests.exceptions.RequestException as e:
-        return f"Network error: {str(e)}"
-    except Exception as e:
-        return f"Error: {str(e)}"
-
-
 # --- CrowdStrike Tools ---
 @tool
 def get_device_containment_status(hostname: str) -> str:
@@ -635,7 +576,7 @@ def initialize_model_and_agent():
                 logging.error(f"Could not create PDF directory {PDF_DIRECTORY_PATH}: {e}")
 
         # Initialize base tools
-        all_tools = [get_weather_info, calculate_math, call_api_endpoint]
+        all_tools = [get_weather_info, calculate_math]
 
         # Add CrowdStrike tools if available
         if crowdstrike_client:
@@ -809,8 +750,7 @@ def ask(user_query: str, user_id: Optional[str] = None, room_id: Optional[str] =
                              "• 🔒 **CrowdStrike** - Device status, containment, and security info\n"
                              "• 🌤️ **Weather** - Current conditions for various cities\n"
                              "• 🧮 **Calculator** - Mathematical calculations\n"
-                             "• 📄 **Document Search** - Search through uploaded PDFs and Word docs\n"
-                             "• 🌐 **API Calls** - Make requests to internal endpoints\n\n"
+                             "• 📄 **Document Search** - Search through uploaded PDFs and Word docs\n\n"
                              "## ⚠️ Important Note:\n"
                              "I don't have access to the general internet, but I can help with internal resources and tools!\n\n"
                              "💬 **Ready to help!** Feel free to ask me anything or type `help` to see all available commands.")
@@ -820,8 +760,7 @@ def ask(user_query: str, user_id: Optional[str] = None, room_id: Optional[str] =
         help_text = ("🤖 **Available Commands:**\n"
                      "• Ask me questions about uploaded documents\n"
                      "• Get weather info for cities\n"
-                     "• Perform math calculations\n"
-                     "• Make API calls to external services\n")
+                     "• Perform math calculations\n")
 
         # Add CrowdStrike commands if client is available
         if crowdstrike_client:
