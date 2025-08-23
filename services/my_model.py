@@ -1,11 +1,13 @@
 # /services/my_model.py
 import os
 import logging
-import requests
-import json
 import re
 import threading
+import time
+import psutil
+import json
 from datetime import datetime, timedelta
+from collections import defaultdict, deque
 
 from typing import Dict, List, Optional
 
@@ -32,6 +34,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 # --- Configuration ---
 PDF_DIRECTORY_PATH = os.path.join(os.path.dirname(__file__), "..", "local_pdfs_docs")
 FAISS_INDEX_PATH = os.path.join(os.path.dirname(__file__), "..", "faiss_index_ollama")
+PERFORMANCE_DATA_PATH = os.path.join(os.path.dirname(__file__), "..", "performance_data.json")
 OLLAMA_LLM_MODEL_NAME = "qwen2.5:14b"
 OLLAMA_EMBEDDING_MODEL_NAME = "nomic-embed-text"
 
@@ -41,6 +44,10 @@ embeddings_ollama = None
 vector_store_retriever = None
 agent_executor = None
 crowdstrike_client: Optional[CrowdStrikeClient] = None  # CrowdStrike client instance
+
+# Performance monitor and session manager will be initialized after class definitions
+performance_monitor = None
+session_manager = None
 
 
 # Thread-safe session management
@@ -156,10 +163,6 @@ class SessionManager:
             }
 
 
-# Initialize global session manager
-session_manager = SessionManager(session_timeout_hours=24, max_interactions_per_user=10)
-
-
 # --- Utility Functions ---
 
 def preprocess_message(message: str) -> str:
@@ -252,8 +255,9 @@ def format_for_chat(response: str) -> str:
 
 
 def health_check() -> str:
-    """Quick health check of all components"""
-    status = {
+    """Enhanced health check with performance monitoring"""
+    # Basic component status
+    component_status = {
         'llm': llm is not None,
         'embeddings': embeddings_ollama is not None,
         'agent': agent_executor is not None,
@@ -261,11 +265,75 @@ def health_check() -> str:
         'crowdstrike': crowdstrike_client is not None
     }
 
-    if all(v for v in status.values()):
-        return "🟢 All systems operational"
+    # Get performance stats
+    perf_stats = performance_monitor.get_stats()
+    session_stats = session_manager.get_stats()
+
+    # Check for capacity warnings
+    warning = performance_monitor.get_capacity_warning()
+
+    # Build comprehensive status report
+    if all(v for v in component_status.values()):
+        status_icon = "🟢"
+        status_text = "All systems operational"
     else:
-        issues = [k for k, v in status.items() if not v]
-        return f"🟡 Issues detected: {', '.join(issues)}"
+        status_icon = "🟡"
+        issues = [k for k, v in component_status.items() if not v]
+        status_text = f"Issues detected: {', '.join(issues)}"
+
+    # Add warning if system is under stress
+    if warning:
+        status_icon = "🟠"
+        status_text += f" ⚠️ Capacity warning: {warning}"
+
+    health_report = f"{status_icon} **{status_text}**\n\n"
+
+    # Performance metrics with both current session and lifetime stats
+    health_report += f"## 📊 Performance Metrics\n"
+    health_report += f"• **Current Session Uptime:** {perf_stats['uptime_hours']:.1f} hours\n"
+    health_report += f"• **Total Lifetime Uptime:** {perf_stats['total_uptime_hours']:.1f} hours\n"
+    health_report += f"• **Current Users:** {perf_stats['concurrent_users']} (Peak Ever: {perf_stats['peak_concurrent_users']})\n"
+    health_report += f"• **Queries (24h):** {perf_stats['total_queries_24h']}\n"
+    health_report += f"• **Total Lifetime Queries:** {perf_stats['total_lifetime_queries']}\n"
+    health_report += f"• **Avg Response Time:** {perf_stats['avg_response_time_seconds']}s\n"
+    health_report += f"• **Cache Hit Rate:** {perf_stats['cache_hit_rate']}%\n"
+    health_report += f"• **Session Errors:** {perf_stats['total_errors']} (Lifetime: {perf_stats['total_lifetime_errors']})\n\n"
+
+    # System resources
+    if perf_stats['system']['memory_percent']:
+        health_report += f"## 💻 System Resources\n"
+        health_report += f"• **Memory:** {perf_stats['system']['memory_percent']}% used ({perf_stats['system']['memory_available_gb']}GB free)\n"
+        health_report += f"• **CPU:** {perf_stats['system']['cpu_percent']}%\n"
+        health_report += f"• **Disk:** {perf_stats['system']['disk_percent']}% used ({perf_stats['system']['disk_free_gb']}GB free)\n\n"
+
+    # Session info
+    health_report += f"## 👥 Session Info\n"
+    health_report += f"• **Active Users:** {session_stats['active_users']}\n"
+    health_report += f"• **Total Users Ever:** {session_stats['total_users_ever']}\n"
+    health_report += f"• **Active Interactions:** {session_stats['total_interactions']}"
+
+    return health_report
+
+
+# --- Shutdown Handler ---
+import atexit
+import signal
+
+
+def shutdown_handler():
+    """Save performance data on shutdown"""
+    try:
+        logging.info("Saving performance data before shutdown...")
+        performance_monitor.save_data()
+        logging.info("Performance data saved successfully")
+    except Exception as e:
+        logging.error(f"Error saving performance data on shutdown: {e}")
+
+
+# Register shutdown handlers
+atexit.register(shutdown_handler)
+signal.signal(signal.SIGTERM, lambda signum, frame: shutdown_handler())
+signal.signal(signal.SIGINT, lambda signum, frame: shutdown_handler())
 
 
 # --- Tool Definitions ---
@@ -716,142 +784,577 @@ def reindex_pdfs_and_update_agent():
         return False
 
 
-# --- Session Management ---
-def add_to_session(user_id: str, query: str, response: str):
-    """Add query and response to user session"""
-    session_manager.add_interaction(user_id, query, response)
+# --- Performance Monitoring ---
+class PerformanceMonitor:
+    """Thread-safe performance monitoring for Pokédex with persistent storage"""
+
+    def __init__(self, max_response_time_samples: int = 1000):
+        self._lock = threading.RLock()
+        self._start_time = datetime.now()
+        self._data_file = PERFORMANCE_DATA_PATH
+
+        # Concurrent user tracking
+        self._active_requests: Dict[str, datetime] = {}  # user_id -> start_time
+        self._peak_concurrent_users = 0
+
+        # Response time tracking (keep last 1000 samples)
+        self._response_times = deque(maxlen=max_response_time_samples)
+
+        # Query volume tracking (hourly buckets)
+        self._hourly_queries = defaultdict(int)  # hour_key -> count
+
+        # Error tracking
+        self._error_count = 0
+        self._last_error_time = None
+
+        # Cache hit tracking
+        self._cache_hits = 0
+        self._cache_misses = 0
+
+        # Query type tracking
+        self._query_types = defaultdict(int)
+
+        # Total lifetime stats (persistent across restarts)
+        self._total_lifetime_queries = 0
+        self._total_lifetime_errors = 0
+        self._initial_start_time = datetime.now()
+
+        # Load existing data if available
+        self._load_persistent_data()
+
+    def _load_persistent_data(self) -> None:
+        """Load persistent performance data from file"""
+        try:
+            if os.path.exists(self._data_file):
+                with open(self._data_file, 'r') as f:
+                    data = json.load(f)
+
+                # Restore persistent counters
+                self._peak_concurrent_users = data.get('peak_concurrent_users', 0)
+                self._error_count = data.get('total_errors', 0)
+                self._cache_hits = data.get('cache_hits', 0)
+                self._cache_misses = data.get('cache_misses', 0)
+                self._total_lifetime_queries = data.get('total_lifetime_queries', 0)
+                self._total_lifetime_errors = data.get('total_lifetime_errors', 0)
+
+                # Restore query types
+                if 'query_types' in data:
+                    self._query_types = defaultdict(int, data['query_types'])
+
+                # Restore hourly queries (only recent ones)
+                if 'hourly_queries' in data:
+                    current_time = datetime.now()
+                    cutoff_time = current_time - timedelta(hours=48)
+                    cutoff_hour = cutoff_time.strftime("%Y-%m-%d-%H")
+
+                    for hour, count in data['hourly_queries'].items():
+                        if hour >= cutoff_hour:
+                            self._hourly_queries[hour] = count
+
+                # Restore response times (last 200 samples for faster startup)
+                if 'response_times' in data:
+                    recent_times = data['response_times'][-200:]  # Only keep recent ones
+                    self._response_times.extend(recent_times)
+
+                # Restore timestamps
+                if 'last_error_time' in data and data['last_error_time']:
+                    self._last_error_time = datetime.fromisoformat(data['last_error_time'])
+
+                if 'initial_start_time' in data:
+                    self._initial_start_time = datetime.fromisoformat(data['initial_start_time'])
+
+                logging.info(f"Loaded performance data: {self._total_lifetime_queries} lifetime queries, "
+                             f"{self._error_count} total errors, peak {self._peak_concurrent_users} concurrent users")
+            else:
+                logging.info("No existing performance data found, starting fresh")
+
+        except Exception as e:
+            logging.error(f"Failed to load performance data: {e}")
+            # Continue with defaults if loading fails
+
+    def _save_persistent_data(self) -> None:
+        """Save persistent performance data to file"""
+        try:
+            data = {
+                'peak_concurrent_users': self._peak_concurrent_users,
+                'total_errors': self._error_count,
+                'cache_hits': self._cache_hits,
+                'cache_misses': self._cache_misses,
+                'total_lifetime_queries': self._total_lifetime_queries,
+                'total_lifetime_errors': self._total_lifetime_errors,
+                'query_types': dict(self._query_types),
+                'hourly_queries': dict(self._hourly_queries),
+                'response_times': list(self._response_times),
+                'last_error_time': self._last_error_time.isoformat() if self._last_error_time else None,
+                'initial_start_time': self._initial_start_time.isoformat(),
+                'last_save_time': datetime.now().isoformat()
+            }
+
+            # Ensure directory exists
+            os.makedirs(os.path.dirname(self._data_file), exist_ok=True)
+
+            # Write to temp file first, then move (atomic operation)
+            temp_file = self._data_file + '.tmp'
+            with open(temp_file, 'w') as f:
+                json.dump(data, f, indent=2)
+
+            os.replace(temp_file, self._data_file)
+
+        except Exception as e:
+            logging.error(f"Failed to save performance data: {e}")
+
+    def start_request(self, user_id: str, query_type: str = "general") -> None:
+        """Mark the start of a request for a user"""
+        with self._lock:
+            current_time = datetime.now()
+            self._active_requests[user_id] = current_time
+
+            # Update peak concurrent users
+            concurrent_count = len(self._active_requests)
+            if concurrent_count > self._peak_concurrent_users:
+                self._peak_concurrent_users = concurrent_count
+
+            # Track query volume by hour
+            hour_key = current_time.strftime("%Y-%m-%d-%H")
+            self._hourly_queries[hour_key] += 1
+
+            # Track query types
+            self._query_types[query_type] += 1
+
+            # Increment lifetime counter
+            self._total_lifetime_queries += 1
+
+            # Clean up old hourly data (keep last 48 hours)
+            cutoff_time = current_time - timedelta(hours=48)
+            cutoff_hour = cutoff_time.strftime("%Y-%m-%d-%H")
+
+            hours_to_remove = [
+                hour for hour in self._hourly_queries.keys()
+                if hour < cutoff_hour
+            ]
+            for hour in hours_to_remove:
+                del self._hourly_queries[hour]
+
+    def end_request(self, user_id: str, response_time_seconds: float, error: bool = False) -> None:
+        """Mark the end of a request for a user"""
+        with self._lock:
+            # Remove from active requests
+            if user_id in self._active_requests:
+                del self._active_requests[user_id]
+
+            # Track response time
+            self._response_times.append(response_time_seconds)
+
+            # Track errors
+            if error:
+                self._error_count += 1
+                self._total_lifetime_errors += 1
+                self._last_error_time = datetime.now()
+
+            # Periodically save data (every 10 requests)
+            if self._total_lifetime_queries % 10 == 0:
+                self._save_persistent_data()
+
+    def record_cache_hit(self) -> None:
+        """Record a cache hit"""
+        with self._lock:
+            self._cache_hits += 1
+
+    def record_cache_miss(self) -> None:
+        """Record a cache miss"""
+        with self._lock:
+            self._cache_misses += 1
+
+    def get_concurrent_users(self) -> int:
+        """Get current number of concurrent users"""
+        with self._lock:
+            # Clean up stale requests (older than 5 minutes)
+            current_time = datetime.now()
+            stale_cutoff = current_time - timedelta(minutes=5)
+
+            stale_users = [
+                user_id for user_id, start_time in self._active_requests.items()
+                if start_time < stale_cutoff
+            ]
+
+            for user_id in stale_users:
+                del self._active_requests[user_id]
+
+            return len(self._active_requests)
+
+    def get_average_response_time(self) -> float:
+        """Get average response time in seconds"""
+        with self._lock:
+            if not self._response_times:
+                return 0.0
+            return sum(self._response_times) / len(self._response_times)
+
+    def get_memory_usage(self) -> Dict[str, float]:
+        """Get current memory usage statistics"""
+        try:
+            process = psutil.Process()
+            memory_info = process.memory_info()
+            system_memory = psutil.virtual_memory()
+
+            return {
+                'process_memory_mb': memory_info.rss / 1024 / 1024,
+                'process_memory_percent': process.memory_percent(),
+                'system_memory_percent': system_memory.percent,
+                'system_memory_available_gb': system_memory.available / 1024 / 1024 / 1024,
+                'system_memory_total_gb': system_memory.total / 1024 / 1024 / 1024
+            }
+        except Exception as e:
+            logging.error(f"Error getting memory usage: {e}")
+            return {
+                'process_memory_mb': 0,
+                'process_memory_percent': 0,
+                'system_memory_percent': 0,
+                'system_memory_available_gb': 0,
+                'system_memory_total_gb': 0
+            }
+
+    def get_queries_per_hour(self, hours_back: int = 24) -> Dict[str, int]:
+        """Get query volume for the last N hours"""
+        with self._lock:
+            current_time = datetime.now()
+            cutoff_time = current_time - timedelta(hours=hours_back)
+            cutoff_hour = cutoff_time.strftime("%Y-%m-%d-%H")
+
+            return {
+                hour: count for hour, count in self._hourly_queries.items()
+                if hour >= cutoff_hour
+            }
+
+    def get_total_queries_24h(self) -> int:
+        """Get total queries in the last 24 hours"""
+        queries_per_hour = self.get_queries_per_hour(24)
+        return sum(queries_per_hour.values())
+
+    def get_stats(self) -> Dict:
+        """Get comprehensive performance statistics"""
+        with self._lock:
+            current_time = datetime.now()
+            uptime_hours = (current_time - self._start_time).total_seconds() / 3600
+            total_uptime_hours = (current_time - self._initial_start_time).total_seconds() / 3600
+
+            memory_stats = self.get_memory_usage()
+
+            # Get system stats
+            try:
+                cpu_percent = psutil.cpu_percent(interval=None)
+                disk_usage = psutil.disk_usage('/')
+                disk_percent = (disk_usage.used / disk_usage.total) * 100
+                disk_free_gb = disk_usage.free / 1024 / 1024 / 1024
+            except Exception as e:
+                logging.error(f"Error getting system stats: {e}")
+                cpu_percent = 0
+                disk_percent = 0
+                disk_free_gb = 0
+
+            # Calculate cache hit rate
+            total_cache_operations = self._cache_hits + self._cache_misses
+            cache_hit_rate = (self._cache_hits / total_cache_operations * 100) if total_cache_operations > 0 else 0
+
+            return {
+                'uptime_hours': uptime_hours,
+                'total_uptime_hours': total_uptime_hours,
+                'concurrent_users': self.get_concurrent_users(),
+                'peak_concurrent_users': self._peak_concurrent_users,
+                'avg_response_time_seconds': round(self.get_average_response_time(), 2),
+                'total_queries_24h': self.get_total_queries_24h(),
+                'total_lifetime_queries': self._total_lifetime_queries,
+                'total_response_samples': len(self._response_times),
+                'total_errors': self._error_count,
+                'total_lifetime_errors': self._total_lifetime_errors,
+                'last_error_time': self._last_error_time.isoformat() if self._last_error_time else None,
+                'cache_hit_rate': round(cache_hit_rate, 1),
+                'cache_hits': self._cache_hits,
+                'cache_misses': self._cache_misses,
+                'query_types': dict(self._query_types),
+                'system': {
+                    'memory_percent': round(memory_stats['system_memory_percent'], 1),
+                    'memory_available_gb': round(memory_stats['system_memory_available_gb'], 1),
+                    'memory_total_gb': round(memory_stats['system_memory_total_gb'], 1),
+                    'process_memory_mb': round(memory_stats['process_memory_mb'], 1),
+                    'process_memory_percent': round(memory_stats['process_memory_percent'], 1),
+                    'cpu_percent': round(cpu_percent, 1),
+                    'disk_percent': round(disk_percent, 1),
+                    'disk_free_gb': round(disk_free_gb, 1)
+                }
+            }
+
+    def get_capacity_warning(self) -> Optional[str]:
+        """Check if system is under stress and return warning message"""
+        with self._lock:
+            warnings = []
+
+            # Check concurrent users
+            concurrent = self.get_concurrent_users()
+            if concurrent > 50:
+                warnings.append(f"High concurrent users: {concurrent}")
+
+            # Check memory usage
+            memory_stats = self.get_memory_usage()
+            if memory_stats['system_memory_percent'] > 85:
+                warnings.append(f"High memory usage: {memory_stats['system_memory_percent']:.1f}%")
+
+            # Check response time
+            avg_response = self.get_average_response_time()
+            if avg_response > 10:
+                warnings.append(f"Slow response time: {avg_response:.1f}s")
+
+            # Check error rate (if more than 10 errors in last hour)
+            if self._error_count > 10:
+                warnings.append(f"High error count: {self._error_count}")
+
+            return "; ".join(warnings) if warnings else None
+
+    def save_data(self) -> None:
+        """Manually save performance data (useful for shutdown)"""
+        self._save_persistent_data()
+
+    def reset_stats(self) -> None:
+        """Reset all statistics (useful for testing)"""
+        with self._lock:
+            self._start_time = datetime.now()
+            self._active_requests.clear()
+            self._peak_concurrent_users = 0
+            self._response_times.clear()
+            self._hourly_queries.clear()
+            self._error_count = 0
+            self._last_error_time = None
+            self._cache_hits = 0
+            self._cache_misses = 0
+            self._query_types.clear()
+            self._total_lifetime_queries = 0
+            self._total_lifetime_errors = 0
+            self._initial_start_time = datetime.now()
+
+            # Save the reset state
+            self._save_persistent_data()
 
 
-def get_session_context(user_id: str, limit: int = 3) -> str:
-    """Get recent conversation context for a user"""
-    return session_manager.get_context(user_id, limit)
+# Initialize global performance monitor and session manager after class definitions
+performance_monitor = PerformanceMonitor()
+session_manager = SessionManager(session_timeout_hours=24, max_interactions_per_user=10)
 
 
-# --- Main Function for User Queries ---
-def ask(user_query: str, user_id: Optional[str] = None, room_id: Optional[str] = None) -> str:
+# --- Main Ask Function with Performance Tracking ---
+def ask(user_message: str, user_id: str = "default", room_id: str = "default") -> str:
     """
-    Answer a user's query using the Langchain agent.
-    Enhanced with session management and chat formatting.
+    Main function to process user queries with comprehensive performance tracking.
+
+    Args:
+        user_message: The user's question or command
+        user_id: Unique identifier for the user
+        room_id: Unique identifier for the room/session
+
+    Returns:
+        Formatted response string
     """
-    # Preprocess the query
-    user_query = preprocess_message(user_query)
-
-    # Handle special commands
-    if user_query.lower() in ['status', 'health', 'ping']:
-        return health_check()
-
-    # Handle greeting messages
-    if user_query.lower() in ['hello', 'hi', 'hey', 'greetings', 'good morning', 'good afternoon', 'good evening']:
-        greeting_response = ("👋 **Hello! I am Pokedex, your friendly neighborhood Q&A bot.**\n\n"
-                             "## 🎯 What I'm trained on:\n"
-                             "• GDnR documents and company policies\n"
-                             "• Technical documentation and procedures\n\n"
-                             "## 🛠️ Tools I have access to:\n"
-                             "• 🔒 **CrowdStrike** - Device status, containment, and security info\n"
-                             "• 🌤️ **Weather** - Current conditions for various cities\n"
-                             "• 🧮 **Calculator** - Mathematical calculations\n"
-                             "• 📄 **Document Search** - Search through uploaded PDFs and Word docs\n\n"
-                             "## ⚠️ Important Note:\n"
-                             "I don't have access to the general internet, but I can help with internal resources and tools!\n\n"
-                             "💬 **Ready to help!** Feel free to ask me anything or type `help` to see all available commands.")
-        return greeting_response
-
-    if user_query.lower() in ['help', 'commands']:
-        help_text = ("🤖 **Available Commands:**\n"
-                     "• Ask me questions about uploaded documents\n"
-                     "• Get weather info for cities\n"
-                     "• Perform math calculations\n")
-
-        # Add CrowdStrike commands if client is available
-        if crowdstrike_client:
-            help_text += ("• Check device containment status from CrowdStrike\n"
-                          "• Check device online status from CrowdStrike\n"
-                          "• Get device details from CrowdStrike\n")
-
-        help_text += ("• Type 'status' to check my health\n"
-                      "• Type 'help' to see this message")
-
-        return help_text
-
-    # Check if agent is ready
-    if not agent_executor:
-        logging.warning(f"Agent not ready for user {user_id} in room {room_id}")
-        return "🔄 I'm still starting up. Please try again in a moment."
+    start_time = time.time()
+    error_occurred = False
+    query_type = "general"
 
     try:
-        logging.info(f"Processing query from user {user_id} in room {room_id}: {user_query[:100]}...")
+        # Preprocess the message
+        cleaned_message = preprocess_message(user_message)
 
-        # Add session context if available
-        context = get_session_context(user_id) if user_id else ""
-        enhanced_query = f"{context}\n\nCurrent question: {user_query}" if context else user_query
+        if not cleaned_message.strip():
+            performance_monitor.record_cache_hit()  # Quick response, count as cache hit
+            return "I didn't receive a message. Please ask me something!"
 
-        if hasattr(agent_executor, 'invoke'):
-            response = agent_executor.invoke({"input": enhanced_query})
-            result = response.get("output", "I tried to find an answer but encountered an issue.")
+        # Determine query type for better tracking
+        message_lower = cleaned_message.lower()
+        if any(word in message_lower for word in ['weather', 'temperature', 'forecast']):
+            query_type = "weather"
+        elif any(word in message_lower for word in ['calculate', 'math', '+', '-', '*', '/', '=']):
+            query_type = "math"
+        elif any(word in message_lower for word in ['status', 'health', 'check']):
+            query_type = "status"
+        elif any(word in message_lower for word in ['help', 'commands', 'what can you do']):
+            query_type = "help"
+        elif any(word in message_lower for word in ['containment', 'device', 'hostname', 'crowdstrike']):
+            query_type = "crowdstrike"
+        elif any(word in message_lower for word in ['document', 'search', 'policy', 'information']):
+            query_type = "rag"
 
-            # Format response for chat
-            formatted_result = format_for_chat(result)
+        # Start performance tracking with correct query type
+        performance_monitor.start_request(user_id, query_type)
 
-            # Add to session history
-            if user_id:
-                add_to_session(user_id, user_query, formatted_result)
+        # Handle special commands
+        if message_lower in ['status', 'health', 'health check']:
+            performance_monitor.record_cache_hit()
+            response = health_check()
+        elif message_lower in ['help', 'commands', 'what can you do', 'what can you do?']:
+            performance_monitor.record_cache_hit()
+            response = get_help_message()
+        elif message_lower in ['metrics', 'performance', 'stats']:
+            performance_monitor.record_cache_hit()
+            response = get_performance_report()
+        elif message_lower in ['metrics summary', 'quick stats']:
+            performance_monitor.record_cache_hit()
+            # Format the summary nicely for chat
+            summary = get_metrics_summary()
+            response = f"""## 📊 Quick Metrics Summary
 
-            logging.info(f"Response sent to user {user_id}: {len(formatted_result)} characters")
-            return formatted_result
+• **Concurrent Users:** {summary['concurrent_users']} (Peak: {summary['peak_concurrent_users']})
+• **Avg Response Time:** {summary['avg_response_time_seconds']}s
+• **24h Queries:** {summary['total_queries_24h']}
+• **Memory Usage:** {summary['memory_usage_percent']}%
+• **CPU Usage:** {summary['cpu_usage_percent']}%
+• **Cache Hit Rate:** {summary['cache_hit_rate']}%
+• **Total Errors:** {summary['total_errors']}
+• **Uptime:** {summary['uptime_hours']:.1f} hours
+{f"⚠️ **Warning:** {summary['capacity_warning']}" if summary['capacity_warning'] else "✅ **Status:** All systems normal"}"""
         else:
-            return "⚠️ The agent executor is not properly configured."
+            # Check if we need to initialize the agent
+            if not agent_executor:
+                error_occurred = True
+                return "❌ Bot is not properly initialized. Please contact an administrator."
+
+            # Record cache miss for complex queries
+            performance_monitor.record_cache_miss()
+
+            # Get conversation context
+            context = session_manager.get_context(user_id, limit=3)
+
+            # Prepare the query with context
+            if context:
+                full_query = f"Context from recent conversation:\n{context}\n\nCurrent question: {cleaned_message}"
+            else:
+                full_query = cleaned_message
+
+            # Process with the agent
+            try:
+                result = agent_executor.invoke({"input": full_query})
+                response = result.get('output', 'I encountered an issue processing your request.')
+            except Exception as agent_error:
+                error_occurred = True
+                logging.error(f"Agent execution failed: {agent_error}", exc_info=True)
+                response = f"I encountered an error while processing your request: {str(agent_error)}"
+
+        # Format the response for chat
+        formatted_response = format_for_chat(response)
+
+        # Store interaction in session
+        session_manager.add_interaction(user_id, cleaned_message, formatted_response)
+
+        return formatted_response
 
     except Exception as e:
-        logging.error(f"Error processing query for user {user_id}: {e}", exc_info=True)
+        error_occurred = True
+        logging.error(f"Error in ask function: {e}", exc_info=True)
+        return f"❌ I encountered an unexpected error: {str(e)}"
 
-        # Provide helpful error message based on error type
-        if "connection" in str(e).lower():
-            return "🔌 I'm having trouble connecting to my AI models. Please try again in a moment."
-        elif "timeout" in str(e).lower():
-            return "⏱️ The request took too long to process. Please try a simpler query."
-        else:
-            return "❌ I encountered an error processing your request. Please try rephrasing your question or try again later."
+    finally:
+        # Record performance metrics
+        end_time = time.time()
+        response_time = end_time - start_time
+        performance_monitor.end_request(user_id, response_time, error_occurred)
 
 
-# --- Main Execution ---
-if __name__ == "__main__":
-    print("🚀 Initializing RAG Agent with CrowdStrike integration for direct testing...")
+def get_help_message() -> str:
+    """Generate help message with available commands"""
+    help_text = """🤖 **Available Commands:**
 
-    success = initialize_model_and_agent()
-    if not success:
-        print("❌ Failed to initialize. Please check your Ollama installation and models.")
-        exit(1)
+• **Weather**: Ask about weather in various cities
+  - "What's the weather in Tokyo?"
+  - "Weather in San Francisco"
 
-    # Warm up the model
-    if not warmup():
-        print("⚠️  Model warmup had issues, but continuing...")
+• **Math**: Perform calculations
+  - "Calculate 15 * 23 + 7"
+  - "What is (100 + 50) / 3?"
 
-    if agent_executor:
-        print("\n🧪 Testing Agent (RAG, Tools, and CrowdStrike)")
-        print("=" * 60)
+• **Document Search**: Search local documents and policies
+  - "Search for information about security policies"
+  - "Find documentation about procedures"
 
-        test_queries = [
-            "What is the main policy regarding remote work?",  # RAG test
-            "What's the weather like in London?",  # Weather tool
-            "Calculate (100 / 4) + 51",  # Math tool
-            "Get data from https://httpbin.org/get",  # API tool
-            "What is the containment status of ABC12345?",  # CrowdStrike containment test
-            "Check the online status of XYZ98765",  # CrowdStrike online test
-            "Get device details for TEST12345",  # CrowdStrike details test
-            "What is the capital of France?",  # General knowledge
-            "status"  # Health check
-        ]
+• **CrowdStrike**: Check device status (if available)
+  - "Check containment status for HOSTNAME"
+  - "Is HOSTNAME online?"
+  - "Get device details for HOSTNAME"
 
-        for i, query in enumerate(test_queries, 1):
-            print(f"\n{i}. Q: {query}")
-            print("-" * 30)
-            answer = ask(query, user_id="test_user", room_id="test_room")
-            print(f"A: {answer}")
-            print()
+• **System Status**: Check bot health and performance
+  - "status" or "health check"
+
+• **General Questions**: Ask me anything else!
+  - I can help with general information and conversation
+
+💡 **Tips:**
+- You can ask follow-up questions - I remember our recent conversation
+- Be specific in your questions for better results
+- Use "status" to check my current performance and health"""
+
+    return help_text
+
+
+# --- Additional Metrics Functions ---
+def get_performance_report() -> str:
+    """Generate a detailed performance report"""
+    stats = performance_monitor.get_stats()
+
+    report = f"""## 📊 Detailed Performance Report
+
+### 🕐 Uptime & Usage
+• **System Uptime:** {stats['uptime_hours']:.1f} hours
+• **Current Active Users:** {stats['concurrent_users']}
+• **Peak Concurrent Users:** {stats['peak_concurrent_users']}
+• **Total Queries (24h):** {stats['total_queries_24h']}
+
+### ⚡ Response Performance
+• **Average Response Time:** {stats['avg_response_time_seconds']}s
+• **Total Response Samples:** {stats['total_response_samples']}
+• **Cache Hit Rate:** {stats['cache_hit_rate']}%
+• **Cache Hits:** {stats['cache_hits']}
+• **Cache Misses:** {stats['cache_misses']}
+
+### 🚫 Error Tracking
+• **Total Errors:** {stats['total_errors']}
+• **Last Error:** {stats['last_error_time'] or 'None'}
+
+### 💻 System Resources
+• **System Memory:** {stats['system']['memory_percent']}% used
+• **Available Memory:** {stats['system']['memory_available_gb']}GB
+• **Process Memory:** {stats['system']['process_memory_mb']}MB ({stats['system']['process_memory_percent']}%)
+• **CPU Usage:** {stats['system']['cpu_percent']}%
+• **Disk Usage:** {stats['system']['disk_percent']}% used
+• **Free Disk Space:** {stats['system']['disk_free_gb']}GB
+
+### 📈 Query Types Distribution"""
+
+    # Add query types
+    if stats['query_types']:
+        for query_type, count in stats['query_types'].items():
+            report += f"\n• **{query_type.title()}:** {count} queries"
     else:
-        print("\n❌ Agent executor not initialized. Skipping tests.")
-        print("Please ensure:")
-        print("• Ollama is running")
-        print("• Models 'qwen2.5:14b' and 'nomic-embed-text' are available")
-        print("• CrowdStrike credentials are properly configured")
-        print("• Check the logs above for specific errors")
+        report += "\n• No query data available yet"
+
+    # Add hourly breakdown
+    hourly_queries = performance_monitor.get_queries_per_hour(24)
+    if hourly_queries:
+        report += f"\n\n### 📅 Hourly Query Volume (Last 24h)"
+        recent_hours = sorted(hourly_queries.keys())[-12:]  # Show last 12 hours
+        for hour in recent_hours:
+            hour_display = datetime.strptime(hour, "%Y-%m-%d-%H").strftime("%m/%d %H:00")
+            report += f"\n• **{hour_display}:** {hourly_queries[hour]} queries"
+
+    return report
+
+
+def get_metrics_summary() -> Dict:
+    """Get a summary of key metrics for API/programmatic access"""
+    stats = performance_monitor.get_stats()
+
+    return {
+        'concurrent_users': stats['concurrent_users'],
+        'peak_concurrent_users': stats['peak_concurrent_users'],
+        'avg_response_time_seconds': stats['avg_response_time_seconds'],
+        'total_queries_24h': stats['total_queries_24h'],
+        'memory_usage_percent': stats['system']['memory_percent'],
+        'cpu_usage_percent': stats['system']['cpu_percent'],
+        'cache_hit_rate': stats['cache_hit_rate'],
+        'total_errors': stats['total_errors'],
+        'uptime_hours': stats['uptime_hours'],
+        'capacity_warning': performance_monitor.get_capacity_warning()
+    }
