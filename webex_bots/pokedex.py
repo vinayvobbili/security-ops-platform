@@ -2,7 +2,6 @@
 import logging
 import re
 import signal
-import sys
 from datetime import datetime
 from typing import Union
 
@@ -295,18 +294,6 @@ def graceful_shutdown():
         # Mark bot as not ready to prevent new requests
         bot_ready = False
 
-        # Stop the WebEx bot if it exists
-        if bot_instance:
-            logger.info("Stopping WebEx bot connection...")
-            try:
-                # If the bot has a stop method, call it
-                if hasattr(bot_instance, 'stop'):
-                    bot_instance.stop()
-                elif hasattr(bot_instance, 'disconnect'):
-                    bot_instance.disconnect()
-            except Exception as e:
-                logger.warning(f"Error stopping WebEx bot: {e}")
-
         # Call the model's shutdown handler
         logger.info("Calling model shutdown handler...")
         shutdown_handler()
@@ -404,6 +391,7 @@ if __name__ == "__main__":
             graceful_shutdown()
             logger.info("Shutdown complete, exiting...")
             sys.exit(0)
+
 
         # Register signal handlers
         signal.signal(signal.SIGINT, signal_handler)
