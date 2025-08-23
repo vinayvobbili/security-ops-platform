@@ -360,166 +360,87 @@ def get_weather_info(city: str) -> str:
         return f"Weather data not available for {city}. I have data for: {available_cities}"
 
 
-@tool
-def calculate_math(expression: str) -> str:
-    """
-    Calculate basic math expressions safely.
-    Use this tool for mathematical calculations.
-    Example: '2 + 3 * 4' or '(10 + 5) / 3'
-    """
-    try:
-        # Enhanced security check
-        allowed_chars = set('0123456789+-*/.() ')
-        expression_clean = expression.replace(' ', '')
-
-        if not expression.strip():
-            return "Error: Empty expression provided."
-
-        if not all(c in allowed_chars for c in expression_clean):
-            return "Error: Invalid expression. Only basic math operations (+, -, *, /, parentheses) and numbers are allowed."
-
-        # Additional security: check for dangerous patterns
-        dangerous_patterns = ['__', 'import', 'exec', 'eval', 'open', 'file']
-        if any(pattern in expression.lower() for pattern in dangerous_patterns):
-            return "Error: Expression contains prohibited content."
-
-        result = eval(expression)
-        return f"Calculation: {expression} = {result}"
-
-    except ZeroDivisionError:
-        return "Error: Division by zero is not allowed."
-    except SyntaxError:
-        return "Error: Invalid mathematical expression syntax."
-    except Exception as e:
-        return f"Math error: {str(e)}"
-
-
 # --- CrowdStrike Tools ---
 @tool
 def get_device_containment_status(hostname: str) -> str:
-    """
-    Get the containment status of a device from CrowdStrike by hostname.
-    Use this tool when asked about device containment, isolation, or security status.
-    Args:
-        hostname: The hostname/computer name to check
-    """
+    """Get the containment status of a device from CrowdStrike by hostname."""
     if not crowdstrike_client:
         return "Error: CrowdStrike service is not initialized."
 
-    try:
-        logging.info(f"Checking containment status for hostname: {hostname}")
+    hostname = hostname.strip().upper()
+    status = crowdstrike_client.get_device_containment_status(hostname)
 
-        # Clean up hostname (remove spaces, convert to uppercase if needed)
-        hostname = hostname.strip().upper()
+    if status == 'Host not found in CS':
+        return f"Hostname '{hostname}' was not found in CrowdStrike."
 
-        status = crowdstrike_client.get_device_containment_status(hostname)
+    if status:
+        status_descriptions = {
+            'normal': 'Normal - Device is not contained',
+            'containment_pending': 'Containment Pending - Containment action initiated',
+            'contained': 'Contained - Device is isolated from network',
+            'lift_containment_pending': 'Lift Containment Pending - Uncontainment action initiated'
+        }
+        description = status_descriptions.get(status, f'Unknown status: {status}')
+        return f"Containment status for '{hostname}': {description}"
 
-        if status == 'Host not found in CS':
-            return f"Hostname '{hostname}' was not found in CrowdStrike."
-        elif status:
-            # Map CrowdStrike status codes to readable descriptions
-            status_descriptions = {
-                'normal': 'Normal - Device is not contained',
-                'containment_pending': 'Containment Pending - Containment action initiated',
-                'contained': 'Contained - Device is isolated from network',
-                'lift_containment_pending': 'Lift Containment Pending - Uncontainment action initiated'
-            }
-            description = status_descriptions.get(status, f'Unknown status: {status}')
-            return f"Containment status for '{hostname}': {description}"
-        else:
-            return f"Unable to retrieve containment status for hostname '{hostname}'."
-
-    except Exception as e:
-        logging.error(f"Error checking containment status for {hostname}: {e}")
-        return f"Error retrieving containment status for '{hostname}': {str(e)}"
+    return f"Unable to retrieve containment status for hostname '{hostname}'."
 
 
 @tool
 def get_device_online_status(hostname: str) -> str:
-    """
-    Get the online status of a device from CrowdStrike by hostname.
-    Use this tool when asked about device connectivity or online state.
-    Args:
-        hostname: The hostname/computer name to check
-    """
+    """Get the online status of a device from CrowdStrike by hostname."""
     if not crowdstrike_client:
         return "Error: CrowdStrike service is not initialized."
 
-    try:
-        logging.info(f"Checking online status for hostname: {hostname}")
+    hostname = hostname.strip().upper()
+    status = crowdstrike_client.get_device_online_state(hostname)
 
-        # Clean up hostname
-        hostname = hostname.strip().upper()
+    if status:
+        status_descriptions = {
+            'online': 'Online - Device is currently connected',
+            'offline': 'Offline - Device is not currently connected',
+            'unknown': 'Unknown - Connection status unclear'
+        }
+        description = status_descriptions.get(status, f'Status: {status}')
+        return f"Online status for '{hostname}': {description}"
 
-        status = crowdstrike_client.get_device_online_state(hostname)
-
-        if status:
-            status_descriptions = {
-                'online': 'Online - Device is currently connected',
-                'offline': 'Offline - Device is not currently connected',
-                'unknown': 'Unknown - Connection status unclear'
-            }
-            description = status_descriptions.get(status, f'Status: {status}')
-            return f"Online status for '{hostname}': {description}"
-        else:
-            return f"Unable to retrieve online status for hostname '{hostname}'. Device may not exist in CrowdStrike."
-
-    except Exception as e:
-        logging.error(f"Error checking online status for {hostname}: {e}")
-        return f"Error retrieving online status for '{hostname}': {str(e)}"
+    return f"Unable to retrieve online status for hostname '{hostname}'. Device may not exist in CrowdStrike."
 
 
 @tool
 def get_device_details_cs(hostname: str) -> str:
-    """
-    Get detailed information about a device from CrowdStrike by hostname.
-    Use this tool when asked for comprehensive device information, details, or properties.
-    Args:
-        hostname: The hostname/computer name to get details for
-    """
+    """Get detailed information about a device from CrowdStrike by hostname."""
     if not crowdstrike_client:
         return "Error: CrowdStrike service is not initialized."
 
-    try:
-        logging.info(f"Getting device details for hostname: {hostname}")
+    hostname = hostname.strip().upper()
+    device_id = crowdstrike_client.get_device_id(hostname)
 
-        # Clean up hostname
-        hostname = hostname.strip().upper()
+    if not device_id:
+        return f"Hostname '{hostname}' was not found in CrowdStrike."
 
-        # First get device ID
-        device_id = crowdstrike_client.get_device_id(hostname)
-        if not device_id:
-            return f"Hostname '{hostname}' was not found in CrowdStrike."
+    details = crowdstrike_client.get_device_details(device_id)
 
-        # Get detailed information
-        details = crowdstrike_client.get_device_details(device_id)
+    if details:
+        info_parts = [
+            f"Device Details for '{hostname}':",
+            f"• Device ID: {device_id}",
+            f"• Status: {details.get('status', 'Unknown')}",
+            f"• Last Seen: {details.get('last_seen', 'Unknown')}",
+            f"• OS Version: {details.get('os_version', 'Unknown')}",
+            f"• Product Type: {details.get('product_type_desc', 'Unknown')}",
+            f"• Chassis Type: {details.get('chassis_type_desc', 'Unknown')}",
+        ]
 
-        if details:
-            # Format key information for chat display
-            info_parts = [
-                f"Device Details for '{hostname}':",
-                f"• Device ID: {device_id}",
-                f"• Status: {details.get('status', 'Unknown')}",
-                f"• Last Seen: {details.get('last_seen', 'Unknown')}",
-                f"• OS Version: {details.get('os_version', 'Unknown')}",
-                f"• Product Type: {details.get('product_type_desc', 'Unknown')}",
-                f"• Chassis Type: {details.get('chassis_type_desc', 'Unknown')}",
-            ]
-
-            # Add tags if available
-            tags = details.get('tags', [])
-            if tags:
-                info_parts.append(f"• Tags: {', '.join(tags)}")
-            else:
-                info_parts.append("• Tags: None")
-
-            return "\n".join(info_parts)
+        tags = details.get('tags', [])
+        if tags:
+            info_parts.append(f"• Tags: {', '.join(tags)}")
         else:
-            return f"Unable to retrieve detailed information for hostname '{hostname}'."
+            info_parts.append("• Tags: None")
 
-    except Exception as e:
-        logging.error(f"Error getting device details for {hostname}: {e}")
-        return f"Error retrieving device details for '{hostname}': {str(e)}"
+        return "\n".join(info_parts)
+
+    return f"Unable to retrieve detailed information for hostname '{hostname}'."
 
 
 # --- RAG Helper Functions ---
@@ -644,7 +565,7 @@ def initialize_model_and_agent():
                 logging.error(f"Could not create PDF directory {PDF_DIRECTORY_PATH}: {e}")
 
         # Initialize base tools
-        all_tools = [get_weather_info, calculate_math]
+        all_tools = [get_weather_info]
 
         # Add CrowdStrike tools if available
         if crowdstrike_client:
@@ -1168,8 +1089,6 @@ def ask(user_message: str, user_id: str = "default", room_id: str = "default") -
         message_lower = cleaned_message.lower()
         if any(word in message_lower for word in ['weather', 'temperature', 'forecast']):
             query_type = "weather"
-        elif any(word in message_lower for word in ['calculate', 'math', '+', '-', '*', '/', '=']):
-            query_type = "math"
         elif any(word in message_lower for word in ['status', 'health', 'check']):
             query_type = "status"
         elif any(word in message_lower for word in ['help', 'commands', 'what can you do']):
@@ -1261,10 +1180,6 @@ def get_help_message() -> str:
 • **Weather**: Ask about weather in various cities
   - "What's the weather in Tokyo?"
   - "Weather in San Francisco"
-
-• **Math**: Perform calculations
-  - "Calculate 15 * 23 + 7"
-  - "What is (100 + 50) / 3?"
 
 • **Document Search**: Search local documents and policies
   - "Search for information about security policies"
