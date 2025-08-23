@@ -6,3 +6,4 @@ web/static/charts/*
 data/transient/*
 scheduler.pid
 web/static/audio
+local_pdfs_docs
