@@ -58,22 +58,78 @@ def preprocess_message(message: str) -> str:
 
 
 def format_for_chat(response: str) -> str:
-    """Format response for chat display"""
+    """Format response for Webex Teams chat display with proper markdown"""
     # Chat message length limit (Webex is ~7439 chars)
     if len(response) > 7400:
         response = response[:7350] + "\n\n*[Response truncated due to length limits]*"
 
-    # Add visual formatting for different types of responses
+    # Enhanced Webex Markdown formatting for different types of responses
     if "Calculation:" in response:
-        response = f"🧮 **Math Result**\n{response}"
+        # Extract the calculation part for better formatting
+        calc_match = re.search(r'Calculation:\s*(.+?)\s*=\s*(.+)', response)
+        if calc_match:
+            expression, result = calc_match.groups()
+            response = f"## 🧮 Math Result\n\n**Expression:** `{expression}`  \n**Result:** `{result}`"
+        else:
+            response = f"## 🧮 Math Result\n\n{response}"
+
     elif "Current weather" in response:
-        response = f"🌤️ **Weather Info**\n{response}"
+        # Format weather info with better structure
+        response = f"## 🌤️ Weather Information\n\n{response}"
+        # Make temperature and conditions stand out
+        response = re.sub(r'(\d+°F)', r'**\1**', response)
+        response = re.sub(r'(Sunny|Cloudy|Rainy|Clear|Overcast|Partly cloudy)', r'**\1**', response)
+
     elif "Status Code:" in response:
-        response = f"🌐 **API Response**\n```\n{response}\n```"
-    elif "Containment status:" in response or "Device ID:" in response:
-        response = f"🔒 **CrowdStrike Info**\n{response}"
+        response = f"## 🌐 API Response\n\n```json\n{response}\n```"
+
+    elif "Containment status:" in response or "Device ID:" in response or "Online status:" in response:
+        response = f"## 🔒 CrowdStrike Information\n\n{response}"
+        # Highlight important status information
+        response = re.sub(r'(Contained|Normal|Online|Offline)', r'**\1**', response)
+        response = re.sub(r'(Device ID:\s*[A-Za-z0-9-]+)', r'**\1**', response)
+
     elif "Error:" in response:
-        response = f"⚠️ **Error**\n{response}"
+        response = f"## ⚠️ Error\n\n{response}"
+
+    elif "Device Details for" in response:
+        # Format device details with better structure
+        lines = response.split('\n')
+        formatted_lines = []
+        for line in lines:
+            if line.startswith('•'):
+                # Make property names bold
+                line = re.sub(r'•\s*([^:]+):', r'• **\1:**', line)
+            formatted_lines.append(line)
+        response = f"## 💻 Device Details\n\n" + '\n'.join(formatted_lines)
+
+    elif response.startswith('🟢') or response.startswith('🟡') or response.startswith('🔴'):
+        # Health check responses
+        response = f"## 🏥 System Status\n\n{response}"
+
+    elif "Available Commands:" in response:
+        # Help command formatting
+        response = response.replace('🤖 **Available Commands:**', '## 🤖 Available Commands')
+        response = re.sub(r'•\s*([^•\n]+)', r'• **\1**', response)
+
+    else:
+        # For general responses, add some structure if it's a longer response
+        if len(response) > 200 and '\n' in response:
+            # If it looks like a structured response, add a header
+            if any(keyword in response.lower() for keyword in ['search', 'found', 'document', 'policy', 'information']):
+                response = f"## 📄 Information Found\n\n{response}"
+            elif any(keyword in response.lower() for keyword in ['answer', 'result', 'solution']):
+                response = f"## 💡 Answer\n\n{response}"
+
+    # General markdown enhancements
+    # Make URLs clickable (if they're not already)
+    response = re.sub(r'(?<![\[(])(https?://[^\s)]+)(?![])])', r'[\1](\1)', response)
+
+    # Enhance bullet points
+    response = re.sub(r'^- ', '• ', response, flags=re.MULTILINE)
+
+    # Make key-value pairs more readable
+    response = re.sub(r'^([A-Za-z\s]+):\s*([^\n]+)$', r'**\1:** \2', response, flags=re.MULTILINE)
 
     return response
 
