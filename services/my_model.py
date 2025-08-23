@@ -6,7 +6,6 @@ import json
 import re
 import threading
 from datetime import datetime, timedelta
-from collections import defaultdict
 
 from typing import Dict, List, Optional
 
