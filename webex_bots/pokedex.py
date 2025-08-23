@@ -58,11 +58,13 @@ class RAGBotCommands:
 
     @staticmethod
     def format_response_for_webex(response: str) -> str:
-        """Format response for Webex Teams"""
+        """Format response for Webex Teams with proper markdown support"""
         # Webex message limit
         if len(response) > 7000:
             response = response[:6900] + "\n\n*[Response truncated for message limits]*"
 
+        # The response is already formatted with proper Webex markdown from format_for_chat
+        # Just ensure it's properly structured for Webex
         return response
 
 
@@ -134,7 +136,7 @@ class AskCommand(Command):
             logger.info(f"Sending response to {teams_message.personEmail}: {len(formatted_response)} chars")
 
             response = Response()
-            response.text = formatted_response
+            response.markdown = formatted_response  # Use markdown instead of text
             return response
 
         except Exception as e:
@@ -239,10 +241,14 @@ class CatchAllWebexBot(WebexBot):
                 # Call card_callback with exact same signature as WebexBot (line 396)
                 response = ask_command.card_callback(message_without_command, teams_message, activity)
 
-                if response and hasattr(response, 'text') and response.text:
-                    # Send the response back to the room
-                    self.teams.messages.create(roomId=teams_message.roomId, text=response.text)
-                    logger.info("Response sent successfully via catch-all handler")
+                if response and (hasattr(response, 'markdown') and response.markdown) or (hasattr(response, 'text') and response.text):
+                    # Send the response back to the room using markdown if available
+                    if hasattr(response, 'markdown') and response.markdown:
+                        self.teams.messages.create(roomId=teams_message.roomId, markdown=response.markdown)
+                        logger.info("Response sent successfully via catch-all handler using markdown")
+                    elif hasattr(response, 'text') and response.text:
+                        self.teams.messages.create(roomId=teams_message.roomId, text=response.text)
+                        logger.info("Response sent successfully via catch-all handler using text")
                 else:
                     logger.warning("AskCommand returned empty or invalid response")
             else:
