@@ -98,7 +98,7 @@ def get_config():
         infoblox_password=os.environ["INFOBLOX_BASE_URL"],
         palo_alto_host=os.environ["PALO_ALTO_HOST"],
         palo_alto_api_key=os.environ["PALO_ALTO_API_KEY"],
-        open_weather_api_key=os.environ["OPEN_WEATHER_API_KEY"],
+        open_weather_map_api_key=os.environ["OPEN_WEATHER_MAP_API_KEY"],
     )
 
 
