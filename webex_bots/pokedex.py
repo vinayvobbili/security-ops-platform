@@ -1,9 +1,14 @@
 # webex_bot.py - Using webex_bot library with WebSockets
+import csv
 import logging
+import os
 import re
 import signal
 from datetime import datetime
+from pathlib import Path
 from typing import Union
+
+from pytz import timezone
 
 from webex_bot.models.command import Command
 from webex_bot.models.response import Response
@@ -13,6 +18,7 @@ from webex_bot.webex_bot import WebexBot
 from config import get_config
 # Import your enhanced RAG model
 from bot.core.my_model import initialize_model_and_agent, ask, warmup, shutdown_handler
+from services.bot_rooms import get_room_name
 
 CONFIG = get_config()
 
@@ -35,6 +41,69 @@ if not WEBEX_ACCESS_TOKEN:
 bot_ready = False
 initialization_time: Union[datetime, None] = None
 bot_instance = None  # Store bot instance for clean shutdown
+
+# Logging configuration
+eastern = timezone('US/Eastern')
+LOG_FILE_DIR = Path(__file__).parent.parent / 'data' / 'transient' / 'logs'
+
+
+def log_conversation(user_name: str, user_prompt: str, bot_response: str, response_time: float, room_name: str):
+    """Log complete conversation (prompt + response) to CSV file for analytics"""
+    try:
+        log_file = LOG_FILE_DIR / "pokedex_conversations.csv"
+        now_eastern = datetime.now(eastern).strftime('%m/%d/%Y %I:%M:%S %p %Z')
+        
+        # Create header if file doesn't exist
+        if not log_file.exists():
+            os.makedirs(LOG_FILE_DIR, exist_ok=True)
+            with open(log_file, "w", newline="") as f:
+                writer = csv.writer(f, quoting=csv.QUOTE_MINIMAL)
+                writer.writerow([
+                    "Person", "User Prompt", "Bot Response", "Response Length", 
+                    "Response Time (s)", "Webex Room", "Message Time"
+                ])
+        
+        # Sanitize data for CSV (remove problematic characters, limit length)
+        sanitized_prompt = user_prompt.replace('\n', ' ').replace('\r', ' ')[:500]
+        sanitized_response = bot_response.replace('\n', ' ').replace('\r', ' ')[:1000]  # Longer limit for responses
+        response_length = len(bot_response)
+        response_time_rounded = round(response_time, 2)
+        
+        # Append conversation
+        with open(log_file, "a", newline="") as f:
+            writer = csv.writer(f, quoting=csv.QUOTE_MINIMAL)
+            writer.writerow([
+                user_name, sanitized_prompt, sanitized_response, response_length,
+                response_time_rounded, room_name, now_eastern
+            ])
+            
+    except Exception as e:
+        logger.error(f"Error logging conversation: {e}")
+
+
+def log_user_prompt(user_name: str, user_prompt: str, room_name: str):
+    """Log user prompts to CSV file for analytics (legacy function)"""
+    try:
+        log_file = LOG_FILE_DIR / "pokedex_user_prompts.csv"
+        now_eastern = datetime.now(eastern).strftime('%m/%d/%Y %I:%M:%S %p %Z')
+        
+        # Create header if file doesn't exist
+        if not log_file.exists():
+            os.makedirs(LOG_FILE_DIR, exist_ok=True)
+            with open(log_file, "w", newline="") as f:
+                writer = csv.writer(f, quoting=csv.QUOTE_MINIMAL)
+                writer.writerow(["Person", "User Prompt", "Webex Room", "Message Time"])
+        
+        # Sanitize prompt for CSV (remove newlines, limit length)
+        sanitized_prompt = user_prompt.replace('\n', ' ').replace('\r', ' ')[:500]
+        
+        # Append user prompt
+        with open(log_file, "a", newline="") as f:
+            writer = csv.writer(f, quoting=csv.QUOTE_MINIMAL)
+            writer.writerow([user_name, sanitized_prompt, room_name, now_eastern])
+            
+    except Exception as e:
+        logger.error(f"Error logging user prompt: {e}")
 
 
 class RAGBotCommands:
@@ -235,6 +304,11 @@ class CatchAllWebexBot(WebexBot):
 
             logger.info(f"Raw message: '{raw_message}', Cleaned: '{message_without_command}'")
 
+            # Prepare for logging
+            user_name = activity.get('actor', {}).get('displayName', 'Unknown')
+            room_name = get_room_name(teams_message.roomId, self.access_token)
+            start_time = datetime.now()
+
             # Call pre_execute with the exact same signature as WebexBot (line 386-388)
             pre_exec_result = ask_command.pre_execute(message_without_command, teams_message, activity)
             if pre_exec_result:
@@ -243,14 +317,25 @@ class CatchAllWebexBot(WebexBot):
                 # Call card_callback with exact same signature as WebexBot (line 396)
                 response = ask_command.card_callback(message_without_command, teams_message, activity)
 
+                # Calculate response time and log conversation
+                end_time = datetime.now()
+                response_time = (end_time - start_time).total_seconds()
+                
+                # Extract response text for logging
+                bot_response_text = ""
                 if response and (hasattr(response, 'markdown') and response.markdown) or (hasattr(response, 'text') and response.text):
-                    # Send the response back to the room using markdown if available
                     if hasattr(response, 'markdown') and response.markdown:
+                        bot_response_text = response.markdown
                         self.teams.messages.create(roomId=teams_message.roomId, markdown=response.markdown)
                         logger.info("Response sent successfully via catch-all handler using markdown")
                     elif hasattr(response, 'text') and response.text:
+                        bot_response_text = response.text
                         self.teams.messages.create(roomId=teams_message.roomId, text=response.text)
                         logger.info("Response sent successfully via catch-all handler using text")
+                    
+                    # Log the complete conversation
+                    log_conversation(user_name, message_without_command, bot_response_text, response_time, room_name)
+                    log_user_prompt(user_name, message_without_command, room_name)  # Keep legacy log
                 else:
                     logger.warning("AskCommand returned empty or invalid response")
             else:
