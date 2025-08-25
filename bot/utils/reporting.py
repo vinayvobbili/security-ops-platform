@@ -10,8 +10,8 @@ import logging
 from datetime import datetime
 from typing import Dict, Optional
 
-from services.performance_monitor import PerformanceMonitor
-from services.session_manager import SessionManager
+from bot.monitoring.performance_monitor import PerformanceMonitor
+from bot.monitoring.session_manager import SessionManager
 
 
 def generate_health_check_report(
