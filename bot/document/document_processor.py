@@ -10,7 +10,7 @@ import os
 import logging
 from typing import List, Optional
 
-from langchain_community.document_loaders import PyPDFDirectoryLoader, UnstructuredWordDocumentLoader
+from langchain_community.document_loaders import PyPDFDirectoryLoader, UnstructuredWordDocumentLoader, UnstructuredExcelLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
 from langchain.tools.retriever import create_retriever_tool
@@ -106,6 +106,24 @@ class DocumentProcessor:
                             
                     documents.extend(doc_content)
                     logging.info(f"Loaded Word document: {fname}")
+                elif ext in [".xlsx", ".xls"]:
+                    loader = UnstructuredExcelLoader(fpath)
+                    doc_content = loader.load()
+                    
+                    # Special handling for contacts Excel file
+                    if "contact" in fname.lower() or "escalation" in fname.lower():
+                        if doc_content:
+                            logging.info(f"✅ Successfully loaded CONTACTS Excel file: {fname}")
+                            logging.info(f"Excel content length: {len(doc_content[0].page_content) if doc_content else 0}")
+                            # Log a preview of the content
+                            if doc_content and doc_content[0].page_content:
+                                preview = doc_content[0].page_content[:500]
+                                logging.info(f"Excel content preview: {preview}...")
+                        else:
+                            logging.error(f"❌ CONTACTS Excel file loaded but no content: {fname}")
+                    
+                    documents.extend(doc_content)
+                    logging.info(f"Loaded Excel document: {fname}")
             except Exception as e:
                 logging.error(f"Failed to load {fname}: {e}")
                 if "GDnR_Blocking_Network_Access_Control" in fname:
