@@ -1,0 +1,14 @@
+{
+  "peak_concurrent_users": 0,
+  "total_errors": 0,
+  "cache_hits": 0,
+  "cache_misses": 0,
+  "total_lifetime_queries": 0,
+  "total_lifetime_errors": 0,
+  "query_types": {},
+  "hourly_queries": {},
+  "response_times": [],
+  "last_error_time": null,
+  "initial_start_time": "2025-08-24T22:55:24.304219",
+  "last_save_time": "2025-08-24T22:55:27.098046"
+}

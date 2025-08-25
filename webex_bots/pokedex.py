@@ -12,7 +12,7 @@ from webex_bot.webex_bot import WebexBot
 
 from config import get_config
 # Import your enhanced RAG model
-from services.my_model import initialize_model_and_agent, ask, warmup, shutdown_handler
+from bot.core.my_model import initialize_model_and_agent, ask, warmup, shutdown_handler
 
 CONFIG = get_config()
 
@@ -286,22 +286,11 @@ def create_webex_bot():
 
 def graceful_shutdown():
     """Perform graceful shutdown of all bot components"""
-    global bot_ready, bot_instance
-
-    logger.info("🛑 Initiating graceful shutdown...")
-
-    try:
-        # Mark bot as not ready to prevent new requests
-        bot_ready = False
-
-        # Call the model's shutdown handler
-        logger.info("Calling model shutdown handler...")
-        shutdown_handler()
-
-        logger.info("✅ Graceful shutdown completed")
-
-    except Exception as e:
-        logger.error(f"Error during graceful shutdown: {e}", exc_info=True)
+    global bot_ready
+    bot_ready = False
+    shutdown_handler()
+    import os
+    os._exit(0)
 
 
 def main():
@@ -330,15 +319,21 @@ def main():
     except KeyboardInterrupt:
         logger.info("🛑 Bot stopped by user (Ctrl+C)")
         graceful_shutdown()
-        return 0
+        # Immediate exit for PyCharm restart
+        import os
+        os._exit(0)
     except Exception as e:
         logger.error(f"❌ Bot error: {e}", exc_info=True)
         graceful_shutdown()
-        return 1
+        import os
+        os._exit(1)
     finally:
         # Ensure cleanup happens regardless of how we exit
         if 'bot_instance' in globals() and bot_instance:
             graceful_shutdown()
+        # Force exit in finally block too
+        import os
+        os._exit(0)
 
 
 # --- Development/Testing Functions ---
@@ -390,7 +385,9 @@ if __name__ == "__main__":
             logger.info(f"Signal {sig} received, initiating graceful shutdown...")
             graceful_shutdown()
             logger.info("Shutdown complete, exiting...")
-            sys.exit(0)
+            # Use os._exit instead of sys.exit for PyCharm compatibility
+            import os
+            os._exit(0)
 
 
         # Register signal handlers
