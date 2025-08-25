@@ -35,7 +35,7 @@ def main():
     
     if rebuild_success:
         print("✅ Document index rebuilt successfully!")
-        print("\n📄 All PDFs and Word docs have been re-processed.")
+        print("\n📄 All PDFs, Word docs, and Excel files have been re-processed.")
         print("🔍 Missing documents should now be searchable.")
     else:
         print("❌ Rebuild failed - check logs for errors")
