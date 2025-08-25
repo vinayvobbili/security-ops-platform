@@ -240,17 +240,60 @@ class DocumentProcessor:
         return self.retriever
 
     def create_rag_tool(self):
-        """Create RAG tool for document search"""
+        """Create RAG tool for document search with source attribution"""
         if not self.retriever:
             logging.error("Retriever not initialized")
             return None
-            
-        rag_tool = create_retriever_tool(
-            self.retriever,
-            "search_local_documents",
-            "Searches and returns information from local PDF and Word documents. Use this for questions about policies, reports, or specific documented information. This tool returns detailed content from relevant documents."
-        )
-        return rag_tool
+        
+        from langchain_core.tools import tool
+        
+        @tool
+        def search_local_documents(query: str) -> str:
+            """
+            Searches and returns information from local PDF and Word documents with source attribution.
+            Use this for questions about policies, reports, or specific documented information.
+            Returns detailed content from relevant documents with clear source references.
+            """
+            try:
+                docs = self.retriever.get_relevant_documents(query)
+                if not docs:
+                    return f"No relevant documents found for query: '{query}'"
+                
+                # Group results by source document
+                sources_content = {}
+                for doc in docs:
+                    source_file = os.path.basename(doc.metadata.get('source', 'Unknown document'))
+                    if source_file not in sources_content:
+                        sources_content[source_file] = []
+                    sources_content[source_file].append(doc.page_content.strip())
+                
+                # Build response with source attribution
+                response_parts = []
+                
+                for source_file, contents in sources_content.items():
+                    # Combine content from same source
+                    combined_content = "\n\n".join(contents[:2])  # Limit to top 2 chunks per source
+                    response_parts.append(f"📄 **From {source_file}:**\n{combined_content}")
+                
+                # Join all sources
+                result = "\n\n" + "\n\n".join(response_parts)
+                
+                # Add source summary at the end
+                source_list = list(sources_content.keys())
+                if len(source_list) == 1:
+                    result += f"\n\n**Source:** {source_list[0]}"
+                else:
+                    result += f"\n\n**Sources:** {', '.join(source_list[:3])}"
+                    if len(source_list) > 3:
+                        result += f" and {len(source_list) - 3} other documents"
+                
+                return result
+                
+            except Exception as e:
+                logging.error(f"Error in document search: {e}")
+                return f"Error searching documents: {str(e)}"
+        
+        return search_local_documents
 
     def test_document_search(self, query: str = "network access control") -> str:
         """Test the document search functionality directly"""
