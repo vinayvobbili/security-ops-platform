@@ -1,0 +1,350 @@
+# /services/state_manager.py
+"""
+State Manager Module
+
+This module provides centralized state management for the security operations bot,
+minimizing global variables and providing a clean interface for component access.
+"""
+
+import os
+import logging
+import atexit
+import signal
+from typing import Optional
+
+from langchain_ollama import ChatOllama, OllamaEmbeddings
+from langchain.agents import AgentExecutor, create_react_agent
+from langchain_core.prompts import ChatPromptTemplate
+
+from config import get_config
+from bot.monitoring.performance_monitor import PerformanceMonitor
+from bot.monitoring.session_manager import SessionManager
+from bot.document.document_processor import DocumentProcessor
+from bot.tools.crowdstrike_tools import CrowdStrikeToolsManager
+from bot.tools.weather_tools import WeatherToolsManager
+
+
+class SecurityBotStateManager:
+    """Centralized state management for the security operations bot"""
+    
+    def __init__(self):
+        # Configuration
+        self.config = get_config()
+        self._setup_paths()
+        self._setup_model_config()
+        
+        # Core components
+        self.llm: Optional[ChatOllama] = None
+        self.embeddings: Optional[OllamaEmbeddings] = None
+        self.agent_executor: Optional[AgentExecutor] = None
+        
+        # Managers
+        self.performance_monitor: Optional[PerformanceMonitor] = None
+        self.session_manager: Optional[SessionManager] = None
+        self.document_processor: Optional[DocumentProcessor] = None
+        self.crowdstrike_manager: Optional[CrowdStrikeToolsManager] = None
+        self.weather_manager: Optional[WeatherToolsManager] = None
+        
+        # Initialization state
+        self.is_initialized = False
+        
+        # Setup shutdown handlers
+        self._setup_shutdown_handlers()
+    
+    def _setup_paths(self):
+        """Setup file paths configuration"""
+        # Go up to project root (bot -> IR)
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+        self.pdf_directory_path = os.path.join(project_root, "local_pdfs_docs")
+        self.faiss_index_path = os.path.join(project_root, "faiss_index_ollama")
+        self.performance_data_path = os.path.join(project_root, "performance_data.json")
+    
+    def _setup_model_config(self):
+        """Setup model configuration"""
+        self.ollama_llm_model_name = "qwen2.5:14b"
+        self.ollama_embedding_model_name = "nomic-embed-text"
+    
+    def _setup_shutdown_handlers(self):
+        """Setup graceful shutdown handlers"""
+        atexit.register(self._shutdown_handler)
+        signal.signal(signal.SIGTERM, lambda signum, frame: self._shutdown_handler())
+        signal.signal(signal.SIGINT, lambda signum, frame: self._shutdown_handler())
+    
+    def initialize_all_components(self) -> bool:
+        """Initialize all components in correct order"""
+        try:
+            logging.info("Starting SecurityBot initialization...")
+            
+            # Initialize core managers first
+            self._initialize_managers()
+            
+            # Initialize AI components
+            if not self._initialize_ai_components():
+                return False
+            
+            # Initialize document processing
+            if not self._initialize_document_processing():
+                logging.warning("Document processing initialization failed, continuing without RAG")
+            
+            # Initialize agent with all tools
+            if not self._initialize_agent():
+                return False
+            
+            self.is_initialized = True
+            logging.info("SecurityBot initialization completed successfully")
+            return True
+            
+        except Exception as e:
+            logging.error(f"Failed to initialize SecurityBot: {e}", exc_info=True)
+            return False
+    
+    def _initialize_managers(self):
+        """Initialize core managers"""
+        # Performance monitoring
+        self.performance_monitor = PerformanceMonitor(
+            max_response_time_samples=1000,
+            data_file_path=self.performance_data_path
+        )
+        
+        # Session management
+        self.session_manager = SessionManager(
+            session_timeout_hours=24,
+            max_interactions_per_user=10
+        )
+        
+        # Document processor
+        self.document_processor = DocumentProcessor(
+            pdf_directory=self.pdf_directory_path,
+            faiss_index_path=self.faiss_index_path
+        )
+        
+        # Tool managers
+        self.crowdstrike_manager = CrowdStrikeToolsManager()
+        self.weather_manager = WeatherToolsManager(
+            api_key=self.config.open_weather_map_api_key
+        )
+        
+        logging.info("Core managers initialized")
+    
+    def _initialize_ai_components(self) -> bool:
+        """Initialize AI components (LLM and embeddings)"""
+        try:
+            logging.info(f"Initializing Langchain model: {self.ollama_llm_model_name}...")
+            self.llm = ChatOllama(model=self.ollama_llm_model_name, temperature=0.1)
+            logging.info(f"Langchain model {self.ollama_llm_model_name} initialized.")
+            
+            logging.info(f"Initializing Ollama embeddings with model: {self.ollama_embedding_model_name}...")
+            self.embeddings = OllamaEmbeddings(model=self.ollama_embedding_model_name)
+            logging.info("Ollama embeddings initialized.")
+            
+            return True
+            
+        except Exception as e:
+            logging.error(f"Failed to initialize AI components: {e}")
+            return False
+    
+    def _initialize_document_processing(self) -> bool:
+        """Initialize document processing and RAG"""
+        try:
+            # Ensure PDF directory exists
+            if not os.path.exists(self.pdf_directory_path):
+                os.makedirs(self.pdf_directory_path)
+                logging.info(f"Created PDF directory for RAG: {self.pdf_directory_path}")
+            
+            # Initialize vector store
+            if self.document_processor.initialize_vector_store(self.embeddings):
+                self.document_processor.create_retriever()
+                logging.info("Document processing initialized successfully")
+                return True
+            else:
+                logging.warning("Document processing initialization failed")
+                return False
+                
+        except Exception as e:
+            logging.error(f"Error initializing document processing: {e}")
+            return False
+    
+    def _initialize_agent(self) -> bool:
+        """Initialize the LangChain agent with all tools"""
+        try:
+            # Collect all available tools
+            all_tools = []
+            
+            # Add weather tools
+            all_tools.extend(self.weather_manager.get_tools())
+            
+            # Add CrowdStrike tools if available
+            if self.crowdstrike_manager.is_available():
+                all_tools.extend(self.crowdstrike_manager.get_tools())
+                logging.info("CrowdStrike tools added to agent.")
+            
+            # Add RAG tool if available
+            if self.document_processor.retriever:
+                rag_tool = self.document_processor.create_rag_tool()
+                if rag_tool:
+                    all_tools.append(rag_tool)
+                    logging.info("RAG tool (search_local_documents) added to agent tools.")
+            
+            # Create agent prompt
+            prompt_template = self._get_agent_prompt_template()
+            prompt = ChatPromptTemplate.from_template(prompt_template)
+            
+            # Create the ReAct agent
+            agent = create_react_agent(self.llm, all_tools, prompt)
+            
+            # Create agent executor
+            self.agent_executor = AgentExecutor(
+                agent=agent,
+                tools=all_tools,
+                verbose=True,
+                handle_parsing_errors=True,
+                max_iterations=12,
+                return_intermediate_steps=False
+            )
+            
+            logging.info("Langchain Agent Executor initialized successfully with all tools.")
+            return True
+            
+        except Exception as e:
+            logging.error(f"Failed to initialize agent: {e}")
+            return False
+    
+    def _get_agent_prompt_template(self) -> str:
+        """Get the agent prompt template"""
+        return """You are a security operations assistant helping SOC analysts.
+
+Search local documents first. If documents provide the answer, use that information directly. Only use other tools if documents don't contain the needed information.
+
+You have access to the following tools:
+
+{tools}
+
+Use the following format:
+
+Question: the input question you must answer
+Thought: you should always think about what to do
+Action: the action to take, should be one of [{tool_names}]
+Action Input: the input to the action
+Observation: the result of the action
+... (this Thought/Action/Action Input/Observation can repeat N times)
+Thought: I now know the final answer
+Final Answer: the final answer to the original input question
+
+Begin!
+
+Question: {input}
+Thought:{agent_scratchpad}"""
+    
+    def _shutdown_handler(self):
+        """Handle graceful shutdown"""
+        try:
+            logging.info("Shutting down SecurityBot...")
+            if self.performance_monitor:
+                self.performance_monitor.save_data()
+                logging.info("Performance data saved")
+            
+            # Force close any HTTP connections
+            if hasattr(self, 'llm') and self.llm:
+                if hasattr(self.llm, 'client'):
+                    try:
+                        self.llm.client.close()
+                    except:
+                        pass
+            
+            logging.info("SecurityBot shutdown completed")
+        except Exception as e:
+            logging.error(f"Error during shutdown: {e}")
+    
+    # Component access methods
+    def get_llm(self) -> Optional[ChatOllama]:
+        """Get LLM instance"""
+        return self.llm
+    
+    def get_embeddings(self) -> Optional[OllamaEmbeddings]:
+        """Get embeddings instance"""
+        return self.embeddings
+    
+    def get_agent_executor(self) -> Optional[AgentExecutor]:
+        """Get agent executor instance"""
+        return self.agent_executor
+    
+    def get_performance_monitor(self) -> Optional[PerformanceMonitor]:
+        """Get performance monitor instance"""
+        return self.performance_monitor
+    
+    def get_session_manager(self) -> Optional[SessionManager]:
+        """Get session manager instance"""
+        return self.session_manager
+    
+    def get_document_processor(self) -> Optional[DocumentProcessor]:
+        """Get document processor instance"""
+        return self.document_processor
+    
+    # Status and health methods
+    def health_check(self) -> dict:
+        """Get comprehensive health check"""
+        if not self.is_initialized:
+            return {"status": "not_initialized", "components": {}}
+        
+        component_status = {
+            'llm': self.llm is not None,
+            'embeddings': self.embeddings is not None,
+            'agent': self.agent_executor is not None,
+            'rag': self.document_processor.retriever is not None if self.document_processor else False,
+            'crowdstrike': self.crowdstrike_manager.is_available() if self.crowdstrike_manager else False
+        }
+        
+        return {
+            "status": "initialized" if all(component_status.values()) else "partial",
+            "components": component_status
+        }
+    
+    def warmup(self) -> bool:
+        """Warm up the model with a simple query"""
+        if not self.is_initialized or not self.agent_executor:
+            return False
+            
+        try:
+            logging.info("Warming up the model...")
+            result = self.agent_executor.invoke({"input": "Hello, are you working?"})
+            if result:
+                logging.info("Model warmup completed successfully")
+                return True
+            else:
+                logging.warning("Model warmup returned empty response")
+                return False
+        except Exception as e:
+            logging.error(f"Model warmup failed: {e}")
+            return False
+    
+    def reset_components(self):
+        """Reset all components (useful for testing)"""
+        logging.info("Resetting all components...")
+        
+        self.llm = None
+        self.embeddings = None
+        self.agent_executor = None
+        
+        if self.performance_monitor:
+            self.performance_monitor.reset_stats()
+        
+        self.is_initialized = False
+        logging.info("All components reset")
+
+
+# Global state manager instance
+_state_manager = None
+
+
+def get_state_manager() -> SecurityBotStateManager:
+    """Get global state manager instance (singleton)"""
+    global _state_manager
+    if _state_manager is None:
+        _state_manager = SecurityBotStateManager()
+    return _state_manager
+
+
+def initialize_security_bot() -> bool:
+    """Initialize the security bot (convenience function)"""
+    state_manager = get_state_manager()
+    return state_manager.initialize_all_components()
