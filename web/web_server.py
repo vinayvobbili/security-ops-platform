@@ -14,6 +14,7 @@ from typing import List, Dict
 from urllib.parse import urlsplit
 
 import pytz
+import requests
 from flask import Flask, request, abort, jsonify, render_template, send_from_directory
 
 from config import get_config
@@ -682,6 +683,93 @@ def random_audio():
     if not files:
         return jsonify({'error': 'No audio files found'}), 404
     return jsonify({'filename': random.choice(files)})
+
+
+@app.route('/xsoar')
+@log_web_activity
+def xsoar_dashboard():
+    """XSOAR incident dashboard"""
+    return render_template('xsoar_dashboard.html')
+
+
+@app.route('/api/xsoar/incidents')
+@log_web_activity
+def api_xsoar_incidents():
+    """API to get XSOAR incidents with search and pagination"""
+    query = request.args.get('query', '')
+    period = request.args.get('period')
+    size = int(request.args.get('size', 50))
+    
+    try:
+        incidents = incident_handler.get_tickets(query, period, size)
+        return jsonify({'success': True, 'incidents': incidents})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/xsoar/incident/<incident_id>')
+@log_web_activity  
+def api_xsoar_incident_detail(incident_id):
+    """API to get XSOAR incident details"""
+    try:
+        incident = xsoar.get_incident(incident_id)
+        entries = incident_handler.get_entries(incident_id)
+        return jsonify({'success': True, 'incident': incident, 'entries': entries})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/xsoar/incident/<incident_id>')
+@log_web_activity
+def xsoar_incident_detail(incident_id):
+    """XSOAR incident detail view"""
+    try:
+        incident = xsoar.get_incident(incident_id)
+        entries = incident_handler.get_entries(incident_id)
+        return render_template('xsoar_incident_detail.html', 
+                             incident=incident, entries=entries)
+    except requests.exceptions.HTTPError as e:
+        return f"XSOAR API Error for incident {incident_id}: HTTP {e.response.status_code} - {e.response.text}", 500
+    except requests.exceptions.ConnectionError as e:
+        return f"Connection Error for incident {incident_id}: {str(e)}", 500
+    except ValueError as e:
+        return f"Invalid JSON response for incident {incident_id}: {str(e)}", 500
+    except Exception as e:
+        return f"Error loading incident {incident_id}: {str(e)}", 500
+
+
+@app.route('/api/xsoar/incident/<incident_id>/entries')
+@log_web_activity  
+def api_xsoar_incident_entries(incident_id):
+    """API to get incident entries/comments"""
+    try:
+        entries = incident_handler.get_entries(incident_id)
+        return jsonify({'success': True, 'entries': entries})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/xsoar/incident/<incident_id>/link', methods=['POST'])
+@log_web_activity
+def api_xsoar_link_incident(incident_id):
+    """API to link incidents"""
+    link_incident_id = request.json.get('link_incident_id')
+    try:
+        result = incident_handler.link_tickets(incident_id, link_incident_id)
+        return jsonify({'success': True, 'result': result})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/xsoar/incident/<incident_id>/participant', methods=['POST'])
+@log_web_activity
+def api_xsoar_add_participant(incident_id):
+    """API to add participant to incident"""
+    email = request.json.get('email')
+    try:
+        result = incident_handler.add_participant(incident_id, email)
+        return jsonify({'success': True, 'result': result})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 if __name__ == "__main__":
