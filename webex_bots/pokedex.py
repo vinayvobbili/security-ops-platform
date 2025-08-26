@@ -275,6 +275,12 @@ class CatchAllWebexBot(WebexBot):
         if hasattr(teams_message, 'personEmail') and teams_message.personEmail == self.bot_display_name:
             logger.info("Ignoring bot's own message")
             return
+        
+        # Don't respond to lorem ipsum demo clearing messages 
+        message_text = getattr(teams_message, 'text', '')
+        if "lorem ipsum" in message_text.lower() and len(message_text) > 500:
+            logger.info("Ignoring lorem ipsum demo clearing message")
+            return
 
         # Also check the actor type to ensure it's from a person, not a bot
         if activity.get('actor', {}).get('type') != 'PERSON':
@@ -323,21 +329,30 @@ class CatchAllWebexBot(WebexBot):
                 
                 # Extract response text for logging
                 bot_response_text = ""
+                response_sent = False
+                
                 if response and (hasattr(response, 'markdown') and response.markdown) or (hasattr(response, 'text') and response.text):
                     if hasattr(response, 'markdown') and response.markdown:
                         bot_response_text = response.markdown
                         self.teams.messages.create(roomId=teams_message.roomId, markdown=response.markdown)
                         logger.info("Response sent successfully via catch-all handler using markdown")
+                        response_sent = True
                     elif hasattr(response, 'text') and response.text:
                         bot_response_text = response.text
                         self.teams.messages.create(roomId=teams_message.roomId, text=response.text)
                         logger.info("Response sent successfully via catch-all handler using text")
+                        response_sent = True
                     
                     # Log the complete conversation
                     log_conversation(user_name, message_without_command, bot_response_text, response_time, room_name)
                     log_user_prompt(user_name, message_without_command, room_name)  # Keep legacy log
-                else:
-                    logger.warning("AskCommand returned empty or invalid response")
+                
+                if not response_sent:
+                    # Check if this was intentionally ignored (empty response for lorem ipsum)
+                    if response and hasattr(response, 'text') and response.text == "":
+                        logger.info("Bot intentionally ignored message (lorem ipsum or demo clearing)")
+                    else:
+                        logger.warning("AskCommand returned empty or invalid response")
             else:
                 logger.info("AskCommand pre_execute returned False, not executing")
 

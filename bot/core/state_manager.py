@@ -17,6 +17,7 @@ from langchain.agents import AgentExecutor, create_react_agent
 from langchain_core.prompts import ChatPromptTemplate
 
 from config import get_config
+from bot.utils.enhanced_config import ModelConfig
 from bot.monitoring.performance_monitor import PerformanceMonitor
 from bot.monitoring.session_manager import SessionManager
 from bot.document.document_processor import DocumentProcessor
@@ -30,8 +31,8 @@ class SecurityBotStateManager:
     def __init__(self):
         # Configuration
         self.config = get_config()
+        self.model_config = ModelConfig()
         self._setup_paths()
-        self._setup_model_config()
         
         # Core components
         self.llm: Optional[ChatOllama] = None
@@ -59,10 +60,6 @@ class SecurityBotStateManager:
         self.faiss_index_path = os.path.join(project_root, "faiss_index_ollama")
         self.performance_data_path = os.path.join(project_root, "performance_data.json")
     
-    def _setup_model_config(self):
-        """Setup model configuration"""
-        self.ollama_llm_model_name = "qwen2.5:14b"
-        self.ollama_embedding_model_name = "nomic-embed-text"
     
     def _setup_shutdown_handlers(self):
         """Setup graceful shutdown handlers"""
@@ -117,6 +114,10 @@ class SecurityBotStateManager:
             pdf_directory=self.pdf_directory_path,
             faiss_index_path=self.faiss_index_path
         )
+        # Set document processor config from centralized config
+        self.document_processor.chunk_size = self.model_config.chunk_size
+        self.document_processor.chunk_overlap = self.model_config.chunk_overlap
+        self.document_processor.retrieval_k = self.model_config.retrieval_k
         
         # Tool managers
         self.crowdstrike_manager = CrowdStrikeToolsManager()
@@ -129,12 +130,12 @@ class SecurityBotStateManager:
     def _initialize_ai_components(self) -> bool:
         """Initialize AI components (LLM and embeddings)"""
         try:
-            logging.info(f"Initializing Langchain model: {self.ollama_llm_model_name}...")
-            self.llm = ChatOllama(model=self.ollama_llm_model_name, temperature=0.1)
-            logging.info(f"Langchain model {self.ollama_llm_model_name} initialized.")
+            logging.info(f"Initializing Langchain model: {self.model_config.llm_model_name}...")
+            self.llm = ChatOllama(model=self.model_config.llm_model_name, temperature=self.model_config.temperature)
+            logging.info(f"Langchain model {self.model_config.llm_model_name} initialized.")
             
-            logging.info(f"Initializing Ollama embeddings with model: {self.ollama_embedding_model_name}...")
-            self.embeddings = OllamaEmbeddings(model=self.ollama_embedding_model_name)
+            logging.info(f"Initializing Ollama embeddings with model: {self.model_config.embedding_model_name}...")
+            self.embeddings = OllamaEmbeddings(model=self.model_config.embedding_model_name)
             logging.info("Ollama embeddings initialized.")
             
             return True
@@ -198,7 +199,7 @@ class SecurityBotStateManager:
                 tools=all_tools,
                 verbose=True,
                 handle_parsing_errors=True,
-                max_iterations=12,
+                max_iterations=self.model_config.max_iterations,
                 return_intermediate_steps=False
             )
             
@@ -226,13 +227,18 @@ CRITICAL: When presenting document search results, be smart about relevance:
 2. **For GENERAL queries** (like "how to handle incidents"): Include more comprehensive content from the search results.
 
 ALWAYS maintain proper source attribution but focus on what directly answers the user's question. Don't include irrelevant sections from documents.
-Never answer security questions from general knowledge alone - always check documents first.
+
+HYBRID APPROACH: If local documents don't contain relevant information, you may provide general security knowledge from your training data, but you MUST:
+- Clearly label it as: "⚠️ **General Security Guidance** (not from local documentation)"
+- Provide helpful, accurate security information
+- Suggest checking with local security team for organization-specific procedures
+- Still prioritize and search documents first
 
 You have access to the following tools:
 
 {tools}
 
-Use the following format:
+Use the following format EXACTLY:
 
 Question: the input question you must answer
 Thought: you should always think about what to do
@@ -242,6 +248,12 @@ Observation: the result of the action
 ... (this Thought/Action/Action Input/Observation can repeat N times)
 Thought: I now know the final answer
 Final Answer: the final answer to the original input question
+
+IMPORTANT: After receiving an Observation, you MUST start your next response with either:
+- "Thought: " (if you need to do more actions)
+- "Final Answer: " (if you have enough information to answer)
+
+Never start a response with just the answer content. Always use the proper format.
 
 Begin!
 

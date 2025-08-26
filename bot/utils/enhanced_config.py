@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 @dataclass
 class ModelConfig:
     """Configuration for AI models"""
-    llm_model_name: str = "qwen2.5:14b"
+    llm_model_name: str = "qwen2.5:32b"
     embedding_model_name: str = "nomic-embed-text"
     temperature: float = 0.1
     max_iterations: int = 6
