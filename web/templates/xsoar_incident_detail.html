@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>XSOAR Incident {{ incident.id }}</title>
+    <link rel="stylesheet" href="/static/css/xsoar_incident_detail.css">
+</head>
+<body>
+<div class="top-nav">
+    <a href="/xsoar" class="nav-home">
+        <img src="{{ url_for('static', filename='icons/home.svg') }}" alt="Back to Dashboard" class="nav-icon">
+    </a>
+    <h1 class="page-title">Incident {{ incident.id }}</h1>
+</div>
+
+<div class="container">
+    <!-- Incident Overview -->
+    <div class="card">
+        <div class="card-header">
+            <h2 class="card-title">
+                <span class="icon">📋</span>
+                Incident Overview
+            </h2>
+        </div>
+        <div class="card-body">
+            <div class="incident-grid">
+                <div class="info-item">
+                    <label>ID:</label>
+                    <span class="value">{{ incident.id }}</span>
+                </div>
+                <div class="info-item">
+                    <label>Name:</label>
+                    <span class="value">{{ incident.name or 'Untitled' }}</span>
+                </div>
+                <div class="info-item">
+                    <label>Type:</label>
+                    <span class="value">{{ incident.type or 'Unknown' }}</span>
+                </div>
+                <div class="info-item">
+                    <label>Status:</label>
+                    <span class="status-badge status-{{ (incident.status or '').lower() }}">
+                        {{ incident.status or 'Unknown' }}
+                    </span>
+                </div>
+                <div class="info-item">
+                    <label>Severity:</label>
+                    <span class="severity-badge severity-{{ (incident.severity or '').lower() }}">
+                        {{ incident.severity or 'Unknown' }}
+                    </span>
+                </div>
+                <div class="info-item">
+                    <label>Owner:</label>
+                    <span class="value">{{ incident.owner or 'Unassigned' }}</span>
+                </div>
+                <div class="info-item">
+                    <label>Created:</label>
+                    <span class="value">{{ incident.created }}</span>
+                </div>
+                <div class="info-item">
+                    <label>Modified:</label>
+                    <span class="value">{{ incident.modified }}</span>
+                </div>
+                {% if incident.closed %}
+                <div class="info-item">
+                    <label>Closed:</label>
+                    <span class="value">{{ incident.closed }}</span>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Incident Details -->
+    {% if incident.details %}
+    <div class="card">
+        <div class="card-header">
+            <h2 class="card-title">
+                <span class="icon">📝</span>
+                Details
+            </h2>
+        </div>
+        <div class="card-body">
+            <div class="details-content">
+                {{ incident.details }}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Custom Fields -->
+    {% if incident.CustomFields %}
+    <div class="card">
+        <div class="card-header">
+            <h2 class="card-title">
+                <span class="icon">⚙️</span>
+                Custom Fields
+            </h2>
+        </div>
+        <div class="card-body">
+            <div class="custom-fields-grid">
+                {% for key, value in incident.CustomFields.items() %}
+                <div class="info-item">
+                    <label>{{ key }}:</label>
+                    <span class="value">{{ value }}</span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Actions -->
+    <div class="card">
+        <div class="card-header">
+            <h2 class="card-title">
+                <span class="icon">⚡</span>
+                Actions
+            </h2>
+        </div>
+        <div class="card-body">
+            <div class="actions-row">
+                <button class="btn btn-primary" onclick="showLinkIncidentModal()">
+                    Link Incident
+                </button>
+                <button class="btn btn-primary" onclick="showAddParticipantModal()">
+                    Add Participant
+                </button>
+                <button class="btn btn-secondary" onclick="refreshEntries()">
+                    Refresh Entries
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Entries/Comments -->
+    <div class="card">
+        <div class="card-header">
+            <h2 class="card-title">
+                <span class="icon">💬</span>
+                Entries <span id="entriesCount" class="count-badge">{{ entries|length }}</span>
+            </h2>
+        </div>
+        <div class="card-body">
+            <div id="entriesContainer" class="entries-container">
+                {% if entries %}
+                    {% for entry in entries %}
+                    <div class="entry-item">
+                        <div class="entry-header">
+                            <div class="entry-user">{{ entry.user or 'System' }}</div>
+                            <div class="entry-date">{{ entry.created }}</div>
+                        </div>
+                        <div class="entry-content">
+                            {{ entry.contents }}
+                        </div>
+                        {% if entry.type %}
+                        <div class="entry-type">Type: {{ entry.type }}</div>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <div class="no-entries">No entries found for this incident.</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Link Incident Modal -->
+<div id="linkIncidentModal" class="modal" style="display: none;">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Link Incident</h3>
+            <span class="close" onclick="closeLinkIncidentModal()">&times;</span>
+        </div>
+        <div class="modal-body">
+            <form id="linkIncidentForm">
+                <div class="form-group">
+                    <label for="linkIncidentId">Incident ID to Link:</label>
+                    <input type="text" id="linkIncidentId" name="linkIncidentId" class="form-control" required>
+                </div>
+                <button type="submit" class="btn btn-primary">Link Incident</button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Add Participant Modal -->
+<div id="addParticipantModal" class="modal" style="display: none;">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Add Participant</h3>
+            <span class="close" onclick="closeAddParticipantModal()">&times;</span>
+        </div>
+        <div class="modal-body">
+            <form id="addParticipantForm">
+                <div class="form-group">
+                    <label for="participantEmail">Participant Email:</label>
+                    <input type="email" id="participantEmail" name="participantEmail" class="form-control" required>
+                </div>
+                <button type="submit" class="btn btn-primary">Add Participant</button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Loading overlay -->
+<div id="loadingOverlay" class="loading-overlay" style="display: none;">
+    <div class="loading-spinner"></div>
+    <p>Processing...</p>
+</div>
+
+<audio id="music" src="" loop muted></audio>
+<img src="/static/icons/volume-xmark-solid.svg" alt="Unmute Icon" class="music-icon" id="music-icon" onclick="toggleAudio()">
+<script src="/static/js/common.js"></script>
+<script src="/static/js/xsoar_incident_detail.js"></script>
+<script>
+    initRandomMusic();
+    
+    // Pass incident ID to JavaScript
+    window.incidentId = '{{ incident.id }}';
+</script>
+</body>
+</html>

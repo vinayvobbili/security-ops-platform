@@ -1,0 +1,297 @@
+@import url('./common.css');
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: linear-gradient(135deg, #0046AD 0%, #003680 100%);
+    margin: 0;
+    padding: 80px 0 0 0;
+    min-height: 100vh;
+    color: #333;
+}
+
+.page-title {
+    color: white;
+    margin: 0;
+    font-size: 1.5rem;
+    font-weight: 600;
+    text-align: center;
+    flex: 1;
+}
+
+.container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+.card {
+    background: rgba(255, 255, 255, 0.95);
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    margin-bottom: 20px;
+    overflow: hidden;
+    backdrop-filter: blur(20px);
+}
+
+.card-header {
+    background: linear-gradient(135deg, #00A651 0%, #00B85A 100%);
+    color: white;
+    padding: 15px 20px;
+    border-bottom: none;
+}
+
+.card-title {
+    margin: 0;
+    font-size: 1.3rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.icon {
+    font-size: 1.2rem;
+}
+
+.card-body {
+    padding: 20px;
+}
+
+.form-row {
+    display: flex;
+    gap: 15px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+}
+
+.form-group {
+    flex: 1;
+    min-width: 200px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: 500;
+    color: #333;
+}
+
+.form-control {
+    width: 100%;
+    padding: 10px 12px;
+    border: 2px solid #e1e5e9;
+    border-radius: 8px;
+    font-size: 14px;
+    transition: all 0.3s ease;
+    background: white;
+    box-sizing: border-box;
+}
+
+.form-control:focus {
+    outline: none;
+    border-color: #00A651;
+    box-shadow: 0 0 0 3px rgba(0, 166, 81, 0.1);
+}
+
+.btn {
+    padding: 12px 24px;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-decoration: none;
+    display: inline-block;
+    text-align: center;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, #00A651 0%, #00B85A 100%);
+    color: white;
+}
+
+.btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 166, 81, 0.3);
+}
+
+.btn-secondary {
+    background: #6c757d;
+    color: white;
+}
+
+.btn-secondary:hover {
+    background: #5a6268;
+    transform: translateY(-1px);
+}
+
+.loading {
+    text-align: center;
+    padding: 40px 20px;
+    color: white;
+}
+
+.loading-spinner {
+    width: 40px;
+    height: 40px;
+    border: 4px solid rgba(255, 255, 255, 0.3);
+    border-top: 4px solid white;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin: 0 auto 15px auto;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.table-container {
+    overflow-x: auto;
+    margin-top: 15px;
+}
+
+.incidents-table {
+    width: 100%;
+    border-collapse: collapse;
+    border-spacing: 0;
+}
+
+.incidents-table th,
+.incidents-table td {
+    padding: 12px 15px;
+    text-align: left;
+    border-bottom: 1px solid #e1e5e9;
+}
+
+.incidents-table th {
+    background-color: #f8f9fa;
+    font-weight: 600;
+    color: #333;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.incidents-table tbody tr {
+    transition: background-color 0.2s ease;
+}
+
+.incidents-table tbody tr:hover {
+    background-color: rgba(0, 166, 81, 0.05);
+}
+
+.status-badge {
+    display: inline-block;
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.status-open { background-color: #28a745; color: white; }
+.status-investigating { background-color: #ffc107; color: #212529; }
+.status-pending { background-color: #17a2b8; color: white; }
+.status-closed { background-color: #6c757d; color: white; }
+
+.severity-badge {
+    display: inline-block;
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.severity-critical { background-color: #dc3545; color: white; }
+.severity-high { background-color: #fd7e14; color: white; }
+.severity-medium { background-color: #ffc107; color: #212529; }
+.severity-low { background-color: #28a745; color: white; }
+.severity-informational { background-color: #17a2b8; color: white; }
+
+.count-badge {
+    background-color: rgba(255, 255, 255, 0.2);
+    color: white;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 0.8rem;
+    font-weight: 500;
+}
+
+.incident-link {
+    color: #00A651;
+    text-decoration: none;
+    font-weight: 500;
+}
+
+.incident-link:hover {
+    text-decoration: underline;
+}
+
+.action-btn {
+    padding: 6px 12px;
+    font-size: 12px;
+    margin-right: 5px;
+}
+
+.error-section {
+    text-align: center;
+    padding: 40px 20px;
+}
+
+.error-card {
+    border-left: 4px solid #dc3545;
+}
+
+.error-card h3 {
+    color: #dc3545;
+    margin-bottom: 10px;
+}
+
+/* Music controls */
+.music-icon {
+    position: fixed;
+    bottom: 30px;
+    right: 30px;
+    width: 50px;
+    height: 50px;
+    cursor: pointer;
+    opacity: 0.7;
+    transition: all 0.3s ease;
+    z-index: 1000;
+    background: rgba(255, 255, 255, 0.9);
+    border-radius: 50%;
+    padding: 12px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+}
+
+.music-icon:hover {
+    opacity: 1;
+    transform: scale(1.1);
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+    .form-row {
+        flex-direction: column;
+    }
+    
+    .form-group {
+        min-width: auto;
+    }
+    
+    .incidents-table {
+        font-size: 14px;
+    }
+    
+    .incidents-table th,
+    .incidents-table td {
+        padding: 8px 10px;
+    }
+    
+    .container {
+        padding: 15px;
+    }
+}
