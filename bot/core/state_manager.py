@@ -217,9 +217,9 @@ ALWAYS search local documents first for ANY question that could be related to se
 
 CRITICAL: When presenting document search results, be smart about relevance:
 
-1. **For SPECIFIC queries** (like "who are contacts for AIX servers"): Extract and present only the relevant information while preserving source attribution format:
-   📄 **From [document_name]:**
-   [Only the specific relevant content that answers the question]
+1. **For SPECIFIC queries** (like "who are contacts for AIX servers"): Extract and present only the relevant information while preserving source attribution format. Present the answer directly without repeating the document name in the body if it appears in the source line:
+   
+   [Relevant content that answers the question]
    
    **Source:** [document_name]
 
