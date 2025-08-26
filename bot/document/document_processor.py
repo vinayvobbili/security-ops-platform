@@ -270,7 +270,7 @@ class DocumentProcessor:
             """
             Searches and returns information from local PDF and Word documents with source attribution.
             Use this for questions about policies, reports, or specific documented information.
-            Returns detailed content from relevant documents with clear source references.
+            Returns relevant content from documents with clear source references.
             """
             try:
                 docs = self.retriever.get_relevant_documents(query)
@@ -283,27 +283,43 @@ class DocumentProcessor:
                     source_file = os.path.basename(doc.metadata.get('source', 'Unknown document'))
                     if source_file not in sources_content:
                         sources_content[source_file] = []
-                    sources_content[source_file].append(doc.page_content.strip())
+                    
+                    # For contact queries, extract only relevant lines
+                    content = doc.page_content.strip()
+                    if any(term in query.lower() for term in ['contact', 'who are', 'email', 'phone']):
+                        # Extract only lines that contain contact information
+                        relevant_lines = []
+                        for line in content.split('\n'):
+                            line = line.strip()
+                            if any(indicator in line.lower() for indicator in ['@', 'email', 'phone', 'contact', 'aix', 'server', 'tech']):
+                                relevant_lines.append(line)
+                        if relevant_lines:
+                            content = '\n'.join(relevant_lines[:10])  # Limit to first 10 relevant lines
+                    
+                    sources_content[source_file].append(content)
                 
                 # Build response with source attribution
                 response_parts = []
                 
                 for source_file, contents in sources_content.items():
-                    # Combine content from same source
-                    combined_content = "\n\n".join(contents[:2])  # Limit to top 2 chunks per source
+                    # Combine content from same source, limiting length
+                    combined_content = "\n\n".join(contents[:1])  # Only use top chunk per source
+                    # Truncate if still too long
+                    if len(combined_content) > 1000:
+                        combined_content = combined_content[:1000] + "..."
                     response_parts.append(f"📄 **From {source_file}:**\n{combined_content}")
                 
                 # Join all sources
-                result = "\n\n" + "\n\n".join(response_parts)
+                result = "\n\n" + "\n\n".join(response_parts[:2])  # Limit to top 2 sources
                 
                 # Add source summary at the end
                 source_list = list(sources_content.keys())
                 if len(source_list) == 1:
                     result += f"\n\n**Source:** {source_list[0]}"
                 else:
-                    result += f"\n\n**Sources:** {', '.join(source_list[:3])}"
-                    if len(source_list) > 3:
-                        result += f" and {len(source_list) - 3} other documents"
+                    result += f"\n\n**Sources:** {', '.join(source_list[:2])}"
+                    if len(source_list) > 2:
+                        result += f" and {len(source_list) - 2} other documents"
                 
                 return result
                 

@@ -132,6 +132,10 @@ def _format_help_response(response: str) -> str:
 
 def _format_general_response(response: str) -> str:
     """Format general responses with appropriate headers"""
+    # Check if response already has source attribution - if so, don't add generic headers
+    if '📄 **From ' in response and '**Sources:**' in response:
+        return response  # Preserve existing source attribution formatting
+    
     if len(response) > 200 and '\n' in response:
         if any(keyword in response.lower() for keyword in ['search', 'found', 'document', 'policy', 'information']):
             return f"## 📄 Information Found\n\n{response}"
