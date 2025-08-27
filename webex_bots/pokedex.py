@@ -386,10 +386,37 @@ def create_webex_bot():
 
 def graceful_shutdown():
     """Perform graceful shutdown of all bot components"""
-    global bot_ready
+    global bot_ready, bot_instance
     bot_ready = False
-    shutdown_handler()
-    import os
+    
+    try:
+        # Try graceful shutdown first
+        shutdown_handler()
+        logger.info("✅ Graceful shutdown completed")
+    except Exception as e:
+        logger.error(f"Error during graceful shutdown: {e}")
+    
+    # Force exit after timeout
+    import os, threading, time
+    def force_exit():
+        time.sleep(2)  # Wait 2 seconds for cleanup
+        logger.info("🔥 Force exiting...")
+        os._exit(0)
+    
+    # Start force exit timer
+    force_exit_thread = threading.Thread(target=force_exit, daemon=True)
+    force_exit_thread.start()
+    
+    # Try to stop WebEx bot connection if it exists
+    if bot_instance:
+        try:
+            logger.info("Stopping WebEx bot connection...")
+            # Force close any websocket connections
+            if hasattr(bot_instance, 'websocket'):
+                bot_instance.websocket.close()
+        except Exception as e:
+            logger.error(f"Error stopping bot: {e}")
+    
     os._exit(0)
 
 
