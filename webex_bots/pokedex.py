@@ -24,23 +24,24 @@ from services.bot_rooms import get_room_name
 
 CONFIG = get_config()
 
+
 def send_ready_notification(init_duration: float, optimization_metrics: dict = None):
-    """Send Webex notification that Optimized Pokedex is ready"""
+    """Send Webex notification that Optimized Pokédex is ready"""
     try:
         webex_api = WebexTeamsAPI(access_token=CONFIG.webex_bot_access_token_pokedex)
-        
+
         # Format duration as hours:minutes:seconds
         hours = int(init_duration // 3600)
         minutes = int((init_duration % 3600) // 60)
         seconds = int(init_duration % 60)
-        
+
         if hours > 0:
             duration_str = f"{hours}h {minutes}m {seconds}s"
         elif minutes > 0:
             duration_str = f"{minutes}m {seconds}s"
         else:
             duration_str = f"{seconds}s"
-        
+
         # Add optimization details if available
         optimization_info = ""
         if optimization_metrics:
@@ -63,12 +64,13 @@ def send_ready_notification(init_duration: float, optimization_metrics: dict = N
 The legendary 70b SOC bot is now online with optimized startup! 🎯"""
 
         webex_api.messages.create(
-            roomId=CONFIG.webex_room_id_vinay_test_space,
+            toPersonEmail=CONFIG.my_email_address,
             markdown=message
         )
         logger.info("✅ Optimized ready notification sent to Webex")
     except Exception as e:
         logger.error(f"Failed to send ready notification: {e}")
+
 
 # Configure logging
 logging.basicConfig(
@@ -83,7 +85,9 @@ WEBEX_BOT_EMAIL = CONFIG.webex_bot_email_pokedex
 
 if not WEBEX_ACCESS_TOKEN:
     logger.error("WEBEX_ACCESS_TOKEN environment variable is required")
-    exit(1)
+    import sys
+
+    sys.exit(1)
 
 # Global variables for bot state
 bot_ready = False
@@ -101,23 +105,23 @@ def log_conversation(user_name: str, user_prompt: str, bot_response: str, respon
     try:
         log_file = LOG_FILE_DIR / "pokedex_conversations.csv"
         now_eastern = datetime.now(eastern).strftime('%m/%d/%Y %I:%M:%S %p %Z')
-        
+
         # Create header if file doesn't exist
         if not log_file.exists():
             os.makedirs(LOG_FILE_DIR, exist_ok=True)
             with open(log_file, "w", newline="") as f:
                 writer = csv.writer(f, quoting=csv.QUOTE_MINIMAL)
                 writer.writerow([
-                    "Person", "User Prompt", "Bot Response", "Response Length", 
+                    "Person", "User Prompt", "Bot Response", "Response Length",
                     "Response Time (s)", "Webex Room", "Message Time"
                 ])
-        
+
         # Sanitize data for CSV (remove problematic characters, limit length)
         sanitized_prompt = user_prompt.replace('\n', ' ').replace('\r', ' ')[:500]
         sanitized_response = bot_response.replace('\n', ' ').replace('\r', ' ')[:1000]  # Longer limit for responses
         response_length = len(bot_response)
         response_time_rounded = round(response_time, 2)
-        
+
         # Append conversation
         with open(log_file, "a", newline="") as f:
             writer = csv.writer(f, quoting=csv.QUOTE_MINIMAL)
@@ -125,7 +129,7 @@ def log_conversation(user_name: str, user_prompt: str, bot_response: str, respon
                 user_name, sanitized_prompt, sanitized_response, response_length,
                 response_time_rounded, room_name, now_eastern
             ])
-            
+
     except Exception as e:
         logger.error(f"Error logging conversation: {e}")
 
@@ -135,22 +139,22 @@ def log_user_prompt(user_name: str, user_prompt: str, room_name: str):
     try:
         log_file = LOG_FILE_DIR / "pokedex_user_prompts.csv"
         now_eastern = datetime.now(eastern).strftime('%m/%d/%Y %I:%M:%S %p %Z')
-        
+
         # Create header if file doesn't exist
         if not log_file.exists():
             os.makedirs(LOG_FILE_DIR, exist_ok=True)
             with open(log_file, "w", newline="") as f:
                 writer = csv.writer(f, quoting=csv.QUOTE_MINIMAL)
                 writer.writerow(["Person", "User Prompt", "Webex Room", "Message Time"])
-        
+
         # Sanitize prompt for CSV (remove newlines, limit length)
         sanitized_prompt = user_prompt.replace('\n', ' ').replace('\r', ' ')[:500]
-        
+
         # Append user prompt
         with open(log_file, "a", newline="") as f:
             writer = csv.writer(f, quoting=csv.QUOTE_MINIMAL)
             writer.writerow([user_name, sanitized_prompt, room_name, now_eastern])
-            
+
     except Exception as e:
         logger.error(f"Error logging user prompt: {e}")
 
@@ -277,32 +281,32 @@ class AskCommand(Command):
 def initialize_bot():
     """Initialize the bot using optimized startup manager"""
     global bot_ready, initialization_time, startup_manager
-    
+
     logger.info("🚀 Starting Optimized Bot Initialization...")
-    
+
     try:
         # Check model availability first
         if not ensure_model_availability():
             logger.error("Required model not available")
             return False
-        
+
         # Get startup manager and run optimized initialization
         startup_manager = get_startup_manager()
         success, total_time = startup_manager.optimized_full_startup()
-        
+
         if success:
             initialization_time = datetime.now()
             bot_ready = True
-            
+
             # Start keep-alive for model persistence
             keep_model_alive()
-            
+
             logger.info(f"✅ Optimized bot initialization completed in {total_time:.1f}s")
             return True
         else:
             logger.error("Optimized bot initialization failed")
             return False
-            
+
     except Exception as e:
         logger.error(f"Optimized initialization failed: {e}", exc_info=True)
         bot_ready = False
@@ -323,7 +327,7 @@ class CatchAllWebexBot(WebexBot):
         if hasattr(teams_message, 'personEmail') and teams_message.personEmail == self.bot_display_name:
             logger.info("Ignoring bot's own message")
             return
-        
+
         # Don't respond to lorem ipsum demo clearing messages 
         message_text = getattr(teams_message, 'text', '')
         if "lorem ipsum" in message_text.lower() and len(message_text) > 500:
@@ -374,11 +378,11 @@ class CatchAllWebexBot(WebexBot):
                 # Calculate response time and log conversation
                 end_time = datetime.now()
                 response_time = (end_time - start_time).total_seconds()
-                
+
                 # Extract response text for logging
                 bot_response_text = ""
                 response_sent = False
-                
+
                 if response and (hasattr(response, 'markdown') and response.markdown) or (hasattr(response, 'text') and response.text):
                     if hasattr(response, 'markdown') and response.markdown:
                         bot_response_text = response.markdown
@@ -390,11 +394,11 @@ class CatchAllWebexBot(WebexBot):
                         self.teams.messages.create(roomId=teams_message.roomId, text=response.text)
                         logger.info("Response sent successfully via catch-all handler using text")
                         response_sent = True
-                    
+
                     # Log the complete conversation
                     log_conversation(user_name, message_without_command, bot_response_text, response_time, room_name)
                     log_user_prompt(user_name, message_without_command, room_name)  # Keep legacy log
-                
+
                 if not response_sent:
                     # Check if this was intentionally ignored (empty response for lorem ipsum)
                     if response and hasattr(response, 'text') and response.text == "":
@@ -436,25 +440,14 @@ def graceful_shutdown():
     """Perform graceful shutdown of all bot components"""
     global bot_ready, bot_instance
     bot_ready = False
-    
+
     try:
         # Try graceful shutdown first
         shutdown_handler()
         logger.info("✅ Graceful shutdown completed")
     except Exception as e:
         logger.error(f"Error during graceful shutdown: {e}")
-    
-    # Force exit after timeout
-    import os, threading, time
-    def force_exit():
-        time.sleep(1)  # Wait only 1 second for cleanup
-        logger.info("🔥 Force exiting after timeout...")
-        os._exit(0)
-    
-    # Start force exit timer
-    force_exit_thread = threading.Thread(target=force_exit, daemon=True)
-    force_exit_thread.start()
-    
+
     # Try to stop WebEx bot connection if it exists
     if bot_instance:
         try:
@@ -464,14 +457,26 @@ def graceful_shutdown():
                 bot_instance.websocket.close()
         except Exception as e:
             logger.error(f"Error stopping bot: {e}")
-    
-    os._exit(0)
+
+    # Force exit after timeout - start timer and let it handle the exit
+    import os, threading, time
+    def force_exit():
+        time.sleep(1)  # Wait only 1 second for cleanup
+        logger.info("🔥 Force exiting after timeout...")
+        os._exit(0)
+
+    # Start force exit timer and return to let it handle the exit
+    force_exit_thread = threading.Thread(target=force_exit, daemon=True)
+    force_exit_thread.start()
+
+    # Function returns here, letting the background thread handle the exit
+    return
 
 
 def main():
     """Main application entry point"""
     global bot_instance
-    
+
     start_time = datetime.now()
     logger.info("🤖 Starting Webex RAG Bot with WebSocket connection...")
 
@@ -488,16 +493,18 @@ def main():
         logger.info("✅ Bot created successfully")
         logger.info(f"📧 Bot email: {WEBEX_BOT_EMAIL}")
         logger.info("🔗 Connecting to Webex via WebSocket...")
-        
+
         # Calculate total initialization time
         end_time = datetime.now()
         init_duration = (end_time - start_time).total_seconds()
-        
+
         print(f"🚀 Pokedex is up and running with llama3.1:70b (optimized startup in {init_duration:.1f}s)...")
         logger.info(f"🚀 Pokedex is up and running with llama3.1:70b (optimized startup in {init_duration:.1f}s)...")
-        
+
         # Send optimized ready notification with metrics
-        optimization_metrics = startup_manager.startup_metrics if startup_manager else {}
+        optimization_metrics = {}
+        if startup_manager and hasattr(startup_manager, 'startup_metrics'):
+            optimization_metrics = startup_manager.startup_metrics
         send_ready_notification(init_duration, optimization_metrics)
 
         # Start the bot (this will block and run forever)
@@ -568,18 +575,18 @@ if __name__ == "__main__":
         test_bot_locally()
     else:
         # Enhanced signal handler for immediate shutdown
-        def signal_handler(sig, frame):
+        def signal_handler(sig, _):
             logger.info(f"🛑 Signal {sig} received, initiating immediate shutdown...")
-            
+
             # Start immediate force exit in background
             import threading, time, os
             def immediate_exit():
                 time.sleep(0.1)  # Extremely short grace period
                 logger.info("🔥 Immediate force exit...")
                 os._exit(0)
-            
+
             threading.Thread(target=immediate_exit, daemon=True).start()
-            
+
             # Try graceful shutdown but don't wait
             try:
                 graceful_shutdown()
