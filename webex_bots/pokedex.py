@@ -30,11 +30,23 @@ def send_ready_notification(init_duration: float):
         # You can use any of your bot tokens for this notification
         webex_api = WebexTeamsAPI(access_token=CONFIG.webex_bot_access_token_pokedex)
         
+        # Format duration as hours:minutes:seconds
+        hours = int(init_duration // 3600)
+        minutes = int((init_duration % 3600) // 60)
+        seconds = int(init_duration % 60)
+        
+        if hours > 0:
+            duration_str = f"{hours}h {minutes}m {seconds}s"
+        elif minutes > 0:
+            duration_str = f"{minutes}m {seconds}s"
+        else:
+            duration_str = f"{seconds}s"
+        
         message = f"""🚀 **the security assistant bot SOC Bot is Ready!**
         
 ✅ **Status:** Fully initialized and running  
 ⚡ **Model:** llama3.1:70b (42GB)  
-⏱️ **Startup Time:** {init_duration:.1f} seconds  
+⏱️ **Startup Time:** {duration_str}  
 🤖 **Ready for:** Security analysis, threat intel, document search  
 
 The legendary 70b SOC bot is now online and ready for demo! 🎯"""
@@ -551,7 +563,7 @@ if __name__ == "__main__":
             # Start immediate force exit in background
             import threading, time, os
             def immediate_exit():
-                time.sleep(0.5)  # Very short grace period
+                time.sleep(0.1)  # Extremely short grace period
                 logger.info("🔥 Immediate force exit...")
                 os._exit(0)
             
