@@ -216,6 +216,8 @@ class SecurityBotStateManager:
 
 ALWAYS search local documents first for ANY question that could be related to security, threats, procedures, or tools. 
 
+For simple greetings or status checks (like "hello", "are you working", "hi"), you can respond directly without using tools.
+
 CRITICAL: When presenting document search results, be smart about relevance:
 
 1. **For SPECIFIC queries** (like "who are contacts for AIX servers"): Extract and present only the relevant information while preserving source attribution format. Present the answer directly without repeating the document name in the body if it appears in the source line:
@@ -238,10 +240,14 @@ You have access to the following tools:
 
 {tools}
 
-Use the following format EXACTLY:
+Use the following format:
 
 Question: the input question you must answer
 Thought: you should always think about what to do
+
+For simple greetings or status checks, you can skip directly to Final Answer.
+
+For security questions requiring tools:
 Action: the action to take, should be one of [{tool_names}]
 Action Input: the input to the action
 Observation: the result of the action
@@ -249,11 +255,9 @@ Observation: the result of the action
 Thought: I now know the final answer
 Final Answer: the final answer to the original input question
 
-IMPORTANT: After receiving an Observation, you MUST start your next response with either:
+IMPORTANT: For questions requiring tools, after receiving an Observation, you MUST start your next response with either:
 - "Thought: " (if you need to do more actions)
 - "Final Answer: " (if you have enough information to answer)
-
-Never start a response with just the answer content. Always use the proper format.
 
 Begin!
 
