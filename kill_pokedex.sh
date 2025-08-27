@@ -1,12 +1,19 @@
 #!/bin/bash
-# Emergency the security assistant bot Bot Killer Script
+# Kill the security assistant bot processes
 
-echo "🔥 Force killing the security assistant bot bot..."
+echo "🛑 Stopping the security assistant bot..."
 
 # Kill by process name
-pkill -f "python.*pokedex.py" && echo "✅ the security assistant bot process killed" || echo "⚠️ No the security assistant bot process found"
+pkill -f "pokedex.py"
 
-# Also kill any hanging Python processes related to the bot
-pkill -f "webex_bots/pokedex.py" && echo "✅ Additional processes killed"
+# Kill by keyword search for more thorough cleanup
+ps aux | grep -i pokedex | grep -v grep | awk '{print $2}' | xargs -r kill -9
 
-echo "🧹 Cleanup complete"
+# Also kill any lingering python processes running webex bot
+ps aux | grep -E "(webex_bots|pokedex)" | grep -v grep | awk '{print $2}' | xargs -r kill -9
+
+echo "✅ the security assistant bot processes terminated"
+
+# Show remaining ollama processes
+echo "📊 Current Ollama status:"
+ollama ps

@@ -17,17 +17,16 @@ from webex_bot.webex_bot import WebexBot
 from webexteamssdk import WebexTeamsAPI
 
 from my_config import get_config
-# Import your enhanced RAG model
-from bot.core.my_model import initialize_model_and_agent, ask, warmup, shutdown_handler
+# Import optimized startup and RAG model
+from bot.core.optimized_startup import get_startup_manager, ensure_model_availability, keep_model_alive
+from bot.core.my_model import ask, shutdown_handler
 from services.bot_rooms import get_room_name
 
 CONFIG = get_config()
 
-def send_ready_notification(init_duration: float):
-    """Send Webex notification that the security assistant bot is ready"""
+def send_ready_notification(init_duration: float, optimization_metrics: dict = None):
+    """Send Webex notification that Optimized the security assistant bot is ready"""
     try:
-        # Use a different bot token to send notification (or use the security assistant bot's own token)
-        # You can use any of your bot tokens for this notification
         webex_api = WebexTeamsAPI(access_token=CONFIG.webex_bot_access_token_pokedex)
         
         # Format duration as hours:minutes:seconds
@@ -42,21 +41,32 @@ def send_ready_notification(init_duration: float):
         else:
             duration_str = f"{seconds}s"
         
+        # Add optimization details if available
+        optimization_info = ""
+        if optimization_metrics:
+            preload_time = optimization_metrics.get('model_preload_time', 0)
+            parallel_time = optimization_metrics.get('parallel_init_time', 0)
+            optimization_info = f"""
+🔧 **Performance Optimizations:**
+• Model pre-load: {preload_time:.1f}s
+• Parallel init: {parallel_time:.1f}s
+• Background RAG loading enabled"""
+
         message = f"""🚀 **the security assistant bot SOC Bot is Ready!**
         
 ✅ **Status:** Fully initialized and running  
-⚡ **Model:** llama3.1:70b (42GB)  
-⏱️ **Startup Time:** {duration_str}  
+⚡ **Model:** llama3.1:70b (42GB) - Optimized
+⏱️ **Startup Time:** {duration_str} ⚡
 🤖 **Ready for:** Security analysis, threat intel, document search  
+{optimization_info}
 
-The legendary 70b SOC bot is now online and ready for demo! 🎯"""
+The legendary 70b SOC bot is now online with optimized startup! 🎯"""
 
-        # Send to your test space
         webex_api.messages.create(
             roomId=CONFIG.webex_room_id_vinay_test_space,
             markdown=message
         )
-        logger.info("✅ Ready notification sent to Webex")
+        logger.info("✅ Optimized ready notification sent to Webex")
     except Exception as e:
         logger.error(f"Failed to send ready notification: {e}")
 
@@ -79,6 +89,7 @@ if not WEBEX_ACCESS_TOKEN:
 bot_ready = False
 initialization_time: Union[datetime, None] = None
 bot_instance = None  # Store bot instance for clean shutdown
+startup_manager = None
 
 # Logging configuration
 eastern = timezone('US/Eastern')
@@ -264,37 +275,36 @@ class AskCommand(Command):
 # --- Bot Initialization ---
 
 def initialize_bot():
-    """Initialize the RAG model and bot"""
-    global bot_ready, initialization_time
-
-    logger.info("🚀 Initializing RAG Bot...")
-
+    """Initialize the bot using optimized startup manager"""
+    global bot_ready, initialization_time, startup_manager
+    
+    logger.info("🚀 Starting Optimized Bot Initialization...")
+    
     try:
-        # Initialize the RAG model
-        logger.info("Initializing RAG model and agent...")
-        success = initialize_model_and_agent()
-
-        if not success:
-            logger.error("Failed to initialize RAG model")
+        # Check model availability first
+        if not ensure_model_availability():
+            logger.error("Required model not available")
             return False
-
-        initialization_time = datetime.now()
-        logger.info("✅ RAG model initialized successfully")
-
-        # Warm up the model
-        logger.info("Warming up model...")
-        if warmup():
-            logger.info("✅ Model warmed up successfully")
+        
+        # Get startup manager and run optimized initialization
+        startup_manager = get_startup_manager()
+        success, total_time = startup_manager.optimized_full_startup()
+        
+        if success:
+            initialization_time = datetime.now()
+            bot_ready = True
+            
+            # Start keep-alive for model persistence
+            keep_model_alive()
+            
+            logger.info(f"✅ Optimized bot initialization completed in {total_time:.1f}s")
+            return True
         else:
-            logger.warning("⚠️ Model warmup had issues, but continuing...")
-
-        bot_ready = True
-        logger.info("🎉 Bot initialization completed!")
-
-        return True
-
+            logger.error("Optimized bot initialization failed")
+            return False
+            
     except Exception as e:
-        logger.error(f"Bot initialization failed: {e}", exc_info=True)
+        logger.error(f"Optimized initialization failed: {e}", exc_info=True)
         bot_ready = False
         return False
 
@@ -479,15 +489,16 @@ def main():
         logger.info(f"📧 Bot email: {WEBEX_BOT_EMAIL}")
         logger.info("🔗 Connecting to Webex via WebSocket...")
         
-        # Calculate initialization time
+        # Calculate total initialization time
         end_time = datetime.now()
         init_duration = (end_time - start_time).total_seconds()
         
-        print(f"🤖 the security assistant bot is up and running with llama3.1:70b (initialized in {init_duration:.1f}s)...")
-        logger.info(f"🤖 the security assistant bot is up and running with llama3.1:70b (initialized in {init_duration:.1f}s)...")
+        print(f"🚀 the security assistant bot is up and running with llama3.1:70b (optimized startup in {init_duration:.1f}s)...")
+        logger.info(f"🚀 the security assistant bot is up and running with llama3.1:70b (optimized startup in {init_duration:.1f}s)...")
         
-        # Send Webex notification that bot is ready
-        send_ready_notification(init_duration)
+        # Send optimized ready notification with metrics
+        optimization_metrics = startup_manager.startup_metrics if startup_manager else {}
+        send_ready_notification(init_duration, optimization_metrics)
 
         # Start the bot (this will block and run forever)
         bot_instance.run()
@@ -515,11 +526,11 @@ def main():
 # --- Development/Testing Functions ---
 
 def test_bot_locally():
-    """Test bot functionality without WebSocket connection"""
-    logger.info("🧪 Testing bot locally...")
+    """Test optimized bot functionality without WebSocket connection"""
+    logger.info("🧪 Testing optimized bot locally...")
 
     if not initialize_bot():
-        logger.error("Failed to initialize bot for testing")
+        logger.error("Failed to initialize optimized bot for testing")
         return
 
     # Test queries
@@ -532,7 +543,7 @@ def test_bot_locally():
     ]
 
     print("\n" + "=" * 60)
-    print("🧪 LOCAL BOT TESTING")
+    print("🧪 OPTIMIZED LOCAL BOT TESTING")
     print("=" * 60)
 
     for i, query in enumerate(test_queries, 1):
