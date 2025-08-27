@@ -151,18 +151,18 @@ def get_last_incident_details():
         today_utc = datetime.now(timezone.utc)  # Ensure both dates are timezone-aware
         return (today_utc - latest_incident_create_date).days, latest_incident_create_date.strftime('%-m/%-d/%Y'), ticket[0].get('id')
     else:
-        return -1  # Or some other value to indicate no incidents found
+        return -1, None, None  # Always return a tuple
 
 
 def make_chart():
     """Update the base image with the current days since last incident"""
-    # Initialize the modifier
-    modifier = CounterImageModifier()
-    days_since_last_incident, last_incident_date, last_incident_id = get_last_incident_details()
-
-    today_date = datetime.now().strftime('%m-%d-%Y')
-    OUTPUT_PATH = ROOT_DIRECTORY / "web" / "static" / "charts" / today_date / "Days Since Last Incident.png"
     try:
+        # Initialize the modifier
+        modifier = CounterImageModifier()
+        days_since_last_incident, last_incident_date, last_incident_id = get_last_incident_details()
+
+        today_date = datetime.now().strftime('%m-%d-%Y')
+        OUTPUT_PATH = ROOT_DIRECTORY / "web" / "static" / "charts" / today_date / "Days Since Last Incident.png"
         modifier.update_counter(
             BASE_IMAGE_PATH,
             days_since_last_incident, last_incident_date, last_incident_id,
@@ -171,7 +171,6 @@ def make_chart():
             font_color="green",
             background_color="#C3D3B8"  # Using hex code for lightgray
         )
-
     except Exception as e:
         print(f"Error: {str(e)}")
 
