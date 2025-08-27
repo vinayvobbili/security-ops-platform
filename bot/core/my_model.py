@@ -157,11 +157,21 @@ Just ask me any security-related question!"""
             if conversation_context:
                 context_prefix = f"Previous conversation:\n{conversation_context}\n\nCurrent question: "
 
-            # Always provide LLM response - let it handle context appropriately
+            # Build contextually appropriate LLM prompt
             if response_parts:  # Has document content
-                llm_prompt = f'{context_prefix}Based on this security documentation, provide 1-2 sentences of key actionable guidance for a SOC analyst. Be very concise.'
+                # First check if documents are actually relevant
+                relevance_check = f'Does this question: "{query}" relate to security operations, incident response, or cybersecurity? Answer only "yes" or "no".'
+                relevance_response = llm.invoke(relevance_check)
+                is_security_related = "yes" in relevance_response.content.lower()
+                
+                if is_security_related:
+                    llm_prompt = f'{context_prefix}Question: "{query}"\n\nBased on the security documentation provided, give a clear, concise response for a SOC analyst.'
+                else:
+                    # Clear response_parts since docs aren't relevant
+                    response_parts.clear()
+                    llm_prompt = f'{context_prefix}Question: "{query}"\n\nThis appears to be a casual question. Provide a brief, friendly response appropriate for a security operations assistant.'
             else:  # No documents found
-                llm_prompt = f'{context_prefix}A SOC analyst asked: "{query}". If this is a security question, provide 1-2 sentences of practical guidance. If it\'s a test/casual question, respond appropriately for a SOC bot. Be very concise.'
+                llm_prompt = f'{context_prefix}A SOC analyst asked: "{query}". If this is a security-related question, provide practical guidance. If it\'s a casual/test question, give a brief, friendly response appropriate for a security operations assistant. Be helpful and professional.'
 
             response = llm.invoke(llm_prompt)
             llm_content = response.content.strip() if hasattr(response, 'content') else str(response).strip()
