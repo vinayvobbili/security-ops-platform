@@ -49,6 +49,7 @@ WEBEX_BOT_EMAIL = CONFIG.webex_bot_email_pokedex
 if not WEBEX_ACCESS_TOKEN:
     logger.error("WEBEX_ACCESS_TOKEN environment variable is required")
     import sys
+
     sys.exit(1)
 
 # Global state
@@ -94,8 +95,6 @@ def log_conversation(user_name: str, user_prompt: str, bot_response: str, respon
         logger.error(f"Error logging conversation: {e}")
 
 
-
-
 def initialize_bot():
     """Initialize the bot components using streamlined approach"""
     global bot_ready
@@ -105,7 +104,7 @@ def initialize_bot():
 
     try:
         logger.info("Initializing streamlined SOC Q&A components...")
-        
+
         if not initialize_model_and_agent():
             logger.error("Failed to initialize streamlined components")
             return False
@@ -159,8 +158,8 @@ class PokeDxBot(WebexBot):
         logger.info(f"Processing message: {getattr(teams_message, 'text', 'NO TEXT')[:50]}...")
 
         # Basic filtering - ignore bot messages and non-person actors
-        if (hasattr(teams_message, 'personEmail') and 
-            teams_message.personEmail == self.bot_display_name):
+        if (hasattr(teams_message, 'personEmail') and
+                teams_message.personEmail == self.bot_display_name):
             return
 
         if activity.get('actor', {}).get('type') != 'PERSON':
@@ -176,7 +175,7 @@ class PokeDxBot(WebexBot):
             # Clean message
             raw_message = teams_message.text or ""
             is_one_on_one = 'ONE_ON_ONE' in activity.get('target', {}).get('tags', [])
-            
+
             if not is_one_on_one:
                 raw_message = raw_message.replace(self.bot_display_name, '').strip()
 
@@ -190,7 +189,7 @@ class PokeDxBot(WebexBot):
             if response_text:
                 end_time = datetime.now()
                 response_time = (end_time - start_time).total_seconds()
-                
+
                 self.teams.messages.create(roomId=teams_message.roomId, markdown=response_text)
                 log_conversation(user_name, raw_message, response_text, response_time, room_name)
 
@@ -216,7 +215,7 @@ def graceful_shutdown():
     """Perform graceful shutdown"""
     global bot_ready, bot_instance
     bot_ready = False
-    
+
     try:
         bot_instance = None
     except:
@@ -248,10 +247,9 @@ def main():
 
         from bot.utils.enhanced_config import ModelConfig
         config = ModelConfig()
-        
+
         print(f"🚀 Pokedex is up and running with {config.llm_model_name} (startup in {init_duration:.1f}s)...")
         logger.info(f"🚀 Pokedex is up and running with {config.llm_model_name} (startup in {init_duration:.1f}s)...")
-
 
         # Start the bot (this will block and run forever)
         bot_instance.run()
@@ -267,11 +265,13 @@ def main():
 
 if __name__ == "__main__":
     import sys
-    
+
+
     def signal_handler(sig, _):
         logger.info(f"🛑 Signal {sig} received, shutting down...")
         graceful_shutdown()
         sys.exit(0)
+
 
     # Register signal handlers
     signal.signal(signal.SIGINT, signal_handler)

@@ -49,14 +49,21 @@ def ask(user_message: str, user_id: str = "default", room_id: str = "default") -
             return "Please ask me a question!"
 
         query = user_message.strip()
-        
+
+        # Remove bot name prefixes if present (common in group chats)
+        bot_names = ['DnR_Pokedex', 'Pokedex', 'pokedex', 'dnr_pokedex']
+        for bot_name in bot_names:
+            if query.lower().startswith(bot_name.lower()):
+                query = query[len(bot_name):].strip()
+                break
+
         # Create unique session key for user + room combination
         session_key = f"{user_id}_{room_id}"
-        
+
         # Get session manager for context
         state_manager = get_state_manager()
         session_manager = state_manager.get_session_manager() if state_manager else None
-        
+
         # Get conversation context if available (use more of the 8K context window)
         conversation_context = ""
         if session_manager:
@@ -163,7 +170,7 @@ Just ask me any security-related question!"""
                 relevance_check = f'Does this question: "{query}" relate to security operations, incident response, or cybersecurity? Answer only "yes" or "no".'
                 relevance_response = llm.invoke(relevance_check)
                 is_security_related = "yes" in relevance_response.content.lower()
-                
+
                 if is_security_related:
                     llm_prompt = f'{context_prefix}Question: "{query}"\n\nBased on the security documentation provided, give a clear, concise response for a SOC analyst.'
                 else:
