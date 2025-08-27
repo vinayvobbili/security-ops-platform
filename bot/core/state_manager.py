@@ -279,20 +279,14 @@ Thought:{agent_scratchpad}"""
     def _shutdown_handler(self):
         """Handle graceful shutdown"""
         try:
-            logging.info("Shutting down SecurityBot...")
             if self.performance_monitor:
                 self.performance_monitor.save_data()
-                logging.info("Performance data saved")
             
-            # Force close any HTTP connections
-            if hasattr(self, 'llm') and self.llm:
-                if hasattr(self.llm, 'client'):
-                    try:
-                        self.llm.client.close()
-                    except:
-                        pass
+            # Clear references to force cleanup
+            self.llm = None
+            self.embeddings = None
+            self.agent_executor = None
             
-            logging.info("SecurityBot shutdown completed")
         except Exception as e:
             logging.error(f"Error during shutdown: {e}")
     

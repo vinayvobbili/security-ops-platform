@@ -16,10 +16,10 @@ from dataclasses import dataclass, field
 @dataclass
 class ModelConfig:
     """Configuration for AI models"""
-    llm_model_name: str = "llama3.1:70b"
+    llm_model_name: str = "qwen2.5:32b"
     embedding_model_name: str = "nomic-embed-text"
     temperature: float = 0.1
-    max_iterations: int = 6
+    max_iterations: int = 2  # Further reduced for 30-second SOC analyst needs
     chunk_size: int = 1500
     chunk_overlap: int = 300
     retrieval_k: int = 5
@@ -33,7 +33,7 @@ class PathConfig:
     faiss_index_path: str = field(init=False)
     performance_data_path: str = field(init=False)
     logs_directory: str = field(init=False)
-    
+
     def __post_init__(self):
         self.pdf_directory = os.path.join(self.base_dir, "local_pdfs_docs")
         self.faiss_index_path = os.path.join(self.base_dir, "faiss_index_ollama")
@@ -90,10 +90,10 @@ class EnhancedConfig:
     performance: PerformanceConfig = field(default_factory=PerformanceConfig)
     security: SecurityConfig = field(default_factory=SecurityConfig)
     api: APIConfig = field(default_factory=APIConfig)
-    
+
     # Legacy compatibility
     open_weather_map_api_key: str = field(init=False)
-    
+
     def __post_init__(self):
         # Legacy compatibility
         self.open_weather_map_api_key = self.api.openweather_api_key
@@ -101,21 +101,21 @@ class EnhancedConfig:
 
 class ConfigManager:
     """Enhanced configuration manager with environment variable support"""
-    
+
     def __init__(self, config_file: str = None):
         self.config_file = config_file or os.path.join(
             os.path.dirname(os.path.dirname(__file__)), "config", "bot_config.json"
         )
         self._config: Optional[EnhancedConfig] = None
-        
+
     def load_config(self) -> EnhancedConfig:
         """Load configuration from file and environment variables"""
         if self._config is not None:
             return self._config
-            
+
         # Start with default config
         config_dict = {}
-        
+
         # Load from file if it exists
         if os.path.exists(self.config_file):
             try:
@@ -125,23 +125,23 @@ class ConfigManager:
                     logging.info(f"Loaded configuration from {self.config_file}")
             except Exception as e:
                 logging.warning(f"Failed to load config file {self.config_file}: {e}")
-        
+
         # Override with environment variables
         env_overrides = self._load_from_environment()
         config_dict.update(env_overrides)
-        
+
         # Create config objects
         self._config = self._create_config_from_dict(config_dict)
-        
+
         # Validate configuration
         self._validate_config()
-        
+
         return self._config
-    
+
     def _load_from_environment(self) -> Dict[str, Any]:
         """Load configuration from environment variables"""
         env_config = {}
-        
+
         # Model configuration
         if os.getenv('OLLAMA_LLM_MODEL'):
             env_config.setdefault('model', {})['llm_model_name'] = os.getenv('OLLAMA_LLM_MODEL')
@@ -149,7 +149,7 @@ class ConfigManager:
             env_config.setdefault('model', {})['embedding_model_name'] = os.getenv('OLLAMA_EMBEDDING_MODEL')
         if os.getenv('MODEL_TEMPERATURE'):
             env_config.setdefault('model', {})['temperature'] = float(os.getenv('MODEL_TEMPERATURE'))
-        
+
         # Path configuration
         if os.getenv('PDF_DIRECTORY'):
             env_config.setdefault('paths', {})['pdf_directory'] = os.getenv('PDF_DIRECTORY')
@@ -157,25 +157,25 @@ class ConfigManager:
             env_config.setdefault('paths', {})['faiss_index_path'] = os.getenv('FAISS_INDEX_PATH')
         if os.getenv('LOGS_DIRECTORY'):
             env_config.setdefault('paths', {})['logs_directory'] = os.getenv('LOGS_DIRECTORY')
-        
+
         # Session configuration
         if os.getenv('SESSION_TIMEOUT_HOURS'):
             env_config.setdefault('session', {})['session_timeout_hours'] = int(os.getenv('SESSION_TIMEOUT_HOURS'))
         if os.getenv('MAX_INTERACTIONS_PER_USER'):
             env_config.setdefault('session', {})['max_interactions_per_user'] = int(os.getenv('MAX_INTERACTIONS_PER_USER'))
-        
+
         # Performance configuration
         if os.getenv('MAX_RESPONSE_TIME_SAMPLES'):
             env_config.setdefault('performance', {})['max_response_time_samples'] = int(os.getenv('MAX_RESPONSE_TIME_SAMPLES'))
         if os.getenv('CONCURRENT_USER_WARNING_THRESHOLD'):
             env_config.setdefault('performance', {})['concurrent_user_warning_threshold'] = int(os.getenv('CONCURRENT_USER_WARNING_THRESHOLD'))
-        
+
         # Security configuration
         if os.getenv('MAX_INPUT_LENGTH'):
             env_config.setdefault('security', {})['max_input_length'] = int(os.getenv('MAX_INPUT_LENGTH'))
         if os.getenv('ENABLE_INPUT_SANITIZATION'):
             env_config.setdefault('security', {})['enable_input_sanitization'] = os.getenv('ENABLE_INPUT_SANITIZATION').lower() == 'true'
-        
+
         # API configuration
         if os.getenv('OPENWEATHER_API_KEY'):
             env_config.setdefault('api', {})['openweather_api_key'] = os.getenv('OPENWEATHER_API_KEY')
@@ -185,9 +185,9 @@ class ConfigManager:
             env_config.setdefault('api', {})['crowdstrike_client_secret'] = os.getenv('CROWDSTRIKE_CLIENT_SECRET')
         if os.getenv('CROWDSTRIKE_BASE_URL'):
             env_config.setdefault('api', {})['crowdstrike_base_url'] = os.getenv('CROWDSTRIKE_BASE_URL')
-        
+
         return env_config
-    
+
     def _create_config_from_dict(self, config_dict: Dict[str, Any]) -> EnhancedConfig:
         """Create EnhancedConfig from dictionary"""
         # Create individual config objects
@@ -197,7 +197,7 @@ class ConfigManager:
         performance_config = PerformanceConfig(**config_dict.get('performance', {}))
         security_config = SecurityConfig(**config_dict.get('security', {}))
         api_config = APIConfig(**config_dict.get('api', {}))
-        
+
         return EnhancedConfig(
             model=model_config,
             paths=paths_config,
@@ -206,30 +206,30 @@ class ConfigManager:
             security=security_config,
             api=api_config
         )
-    
+
     def _validate_config(self):
         """Validate configuration values"""
         if not self._config:
             return
-            
+
         # Validate model configuration
         if self._config.model.temperature < 0 or self._config.model.temperature > 2:
             logging.warning(f"Invalid temperature value: {self._config.model.temperature}, using default")
             self._config.model.temperature = 0.1
-        
+
         # Validate performance thresholds
         if self._config.performance.concurrent_user_warning_threshold < 1:
             logging.warning("Invalid concurrent user warning threshold, using default")
             self._config.performance.concurrent_user_warning_threshold = 50
-        
+
         # Validate security settings
         if self._config.security.max_input_length < 100:
             logging.warning("Max input length too small, using minimum value")
             self._config.security.max_input_length = 100
-        
+
         # Create directories if they don't exist
         self._ensure_directories_exist()
-    
+
     def _ensure_directories_exist(self):
         """Ensure required directories exist"""
         directories = [
@@ -238,7 +238,7 @@ class ConfigManager:
             os.path.dirname(self._config.paths.faiss_index_path),
             os.path.dirname(self._config.paths.performance_data_path)
         ]
-        
+
         for directory in directories:
             if directory and not os.path.exists(directory):
                 try:
@@ -246,16 +246,16 @@ class ConfigManager:
                     logging.info(f"Created directory: {directory}")
                 except OSError as e:
                     logging.error(f"Failed to create directory {directory}: {e}")
-    
+
     def save_config(self, config: EnhancedConfig = None):
         """Save configuration to file"""
         if config is None:
             config = self._config
-            
+
         if not config:
             logging.error("No configuration to save")
             return
-            
+
         try:
             # Convert to dictionary
             config_dict = {
@@ -297,29 +297,29 @@ class ConfigManager:
                     'crowdstrike_base_url': config.api.crowdstrike_base_url
                 }
             }
-            
+
             # Ensure config directory exists
             os.makedirs(os.path.dirname(self.config_file), exist_ok=True)
-            
+
             # Save to file
             with open(self.config_file, 'w') as f:
                 json.dump(config_dict, f, indent=2)
-                
+
             logging.info(f"Configuration saved to {self.config_file}")
-            
+
         except Exception as e:
             logging.error(f"Failed to save configuration: {e}")
-    
+
     def reload_config(self) -> EnhancedConfig:
         """Reload configuration from file and environment"""
         self._config = None
         return self.load_config()
-    
+
     def get_config_summary(self) -> Dict[str, Any]:
         """Get configuration summary for logging/debugging"""
         if not self._config:
             return {}
-            
+
         return {
             'model': {
                 'llm_model': self._config.model.llm_model_name,
