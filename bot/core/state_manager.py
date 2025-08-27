@@ -136,11 +136,18 @@ class SecurityBotStateManager:
         """Initialize AI components (LLM and embeddings)"""
         try:
             logging.info(f"Initializing Langchain model: {self.model_config.llm_model_name}...")
-            self.llm = ChatOllama(model=self.model_config.llm_model_name, temperature=self.model_config.temperature)
+            self.llm = ChatOllama(
+                model=self.model_config.llm_model_name, 
+                temperature=self.model_config.temperature,
+                timeout=300  # Very generous timeout for large models
+            )
             logging.info(f"Langchain model {self.model_config.llm_model_name} initialized.")
             
             logging.info(f"Initializing Ollama embeddings with model: {self.model_config.embedding_model_name}...")
-            self.embeddings = OllamaEmbeddings(model=self.model_config.embedding_model_name)
+            self.embeddings = OllamaEmbeddings(
+                model=self.model_config.embedding_model_name
+                # OllamaEmbeddings doesn't support timeout parameter
+            )
             logging.info("Ollama embeddings initialized.")
             
             return True
