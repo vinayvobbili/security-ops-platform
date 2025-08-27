@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytz
 
-import config
+import my_config as config
 from services.xsoar import TicketHandler
 
 config = config.get_config()

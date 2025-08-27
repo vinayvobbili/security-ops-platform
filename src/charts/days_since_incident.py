@@ -7,7 +7,7 @@ import pytesseract
 import pytz
 from PIL import Image, ImageDraw, ImageFont
 
-import config
+import my_config as config
 from services.xsoar import TicketHandler
 
 eastern = pytz.timezone('US/Eastern')

@@ -16,7 +16,7 @@ from webexpythonsdk import WebexAPI
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-import config
+import my_config as config
 from services.xsoar import TicketHandler
 
 config = config.get_config()
