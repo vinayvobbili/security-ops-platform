@@ -2,7 +2,7 @@ import logging
 import pandas as pd
 import pytz
 from webexpythonsdk import WebexAPI
-import config
+import my_config as config
 from services.xsoar import TicketHandler
 
 config = config.get_config()
