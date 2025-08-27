@@ -1,4 +1,23 @@
-# Pokedex SOC Bot - Clean and reliable version
+# Pokedx SOC Bot - Streamlined Q&A Architecture
+"""
+HIGH LEVEL REQUIREMENTS:
+========================
+1. SOC analyst sends message via Webex
+2. Search local documents first for relevant information
+3. If found, provide answer with proper source attribution
+4. Use available tools (CrowdStrike, weather, etc.) as needed
+5. Supplement with LLM training data with clear disclaimers
+6. Keep responses under 30 seconds for operational needs
+7. Prioritize reliability and speed over sophisticated reasoning
+
+ARCHITECTURE APPROACH:
+=====================
+- Direct document search first (not agent-driven)
+- Simple LLM calls for supplementation (not complex agents)  
+- Synchronous processing in WebX threads
+- Clear error boundaries and timeouts
+- Source attribution for all document-based responses
+"""
 import csv
 import logging
 import os
@@ -11,8 +30,7 @@ from webex_bot.webex_bot import WebexBot
 from webexteamssdk import WebexTeamsAPI
 
 from my_config import get_config
-from bot.core.state_manager import get_state_manager
-from bot.core.my_model import ask, shutdown_handler
+from bot.core.my_model import ask, shutdown_handler, initialize_model_and_agent
 from services.bot_rooms import get_room_name
 
 CONFIG = get_config()
@@ -77,23 +95,26 @@ def log_conversation(user_name: str, user_prompt: str, bot_response: str, respon
 
 
 def send_ready_notification(init_duration: float):
-    """Send Webex notification that Pokedex is ready"""
+    """Send Webex notification that Pokedx is ready"""
     try:
-        webex_api = WebexTeamsAPI(access_token=CONFIG.webex_bot_access_token_pokedex)
+        from bot.utils.enhanced_config import ModelConfig
+        
+        webex_api = WebexTeamsAPI(access_token=CONFIG.webex_bot_access_token_pokedx)
+        config = ModelConfig()
 
         # Format duration
         minutes = int(init_duration // 60)
         seconds = int(init_duration % 60)
         duration_str = f"{minutes}m {seconds}s" if minutes > 0 else f"{seconds}s"
 
-        message = f"""🚀 **Pokedex SOC Bot is Ready!**
+        message = f"""🚀 **Pokedx SOC Bot is Ready!**
         
 ✅ **Status:** Fully initialized and running  
-⚡ **Model:** llama3.1:70b
+⚡ **Model:** {config.llm_model_name}
 ⏱️ **Startup Time:** {duration_str}
 🤖 **Ready for:** Security analysis, threat intel, document search  
 
-The 70b SOC bot is now online and ready! 🎯"""
+The {config.llm_model_name} SOC bot is now online and ready! 🎯"""
 
         webex_api.messages.create(
             toPersonEmail=CONFIG.my_email_address,
@@ -105,27 +126,26 @@ The 70b SOC bot is now online and ready! 🎯"""
 
 
 def initialize_bot():
-    """Initialize the bot components"""
+    """Initialize the bot components using streamlined approach"""
     global bot_ready
 
-    logger.info("🚀 Starting Bot Initialization...")
+    logger.info("🚀 Starting Streamlined Bot Initialization...")
     start_time = datetime.now()
 
     try:
-        logger.info("Initializing core components...")
-        state_manager = get_state_manager()
+        logger.info("Initializing streamlined SOC Q&A components...")
         
-        if not state_manager.initialize_all_components():
-            logger.error("Failed to initialize bot components")
+        if not initialize_model_and_agent():
+            logger.error("Failed to initialize streamlined components")
             return False
 
         bot_ready = True
         total_time = (datetime.now() - start_time).total_seconds()
-        logger.info(f"✅ Bot initialization completed in {total_time:.1f}s")
+        logger.info(f"✅ Streamlined bot initialization completed in {total_time:.1f}s")
         return True
 
     except Exception as e:
-        logger.error(f"Bot initialization failed: {e}", exc_info=True)
+        logger.error(f"Streamlined bot initialization failed: {e}", exc_info=True)
         bot_ready = False
         return False
 
@@ -141,12 +161,16 @@ def process_user_message(user_message: str, teams_message, activity) -> str:
     if not bot_ready:
         return "🔄 I'm still starting up. Please try again in a moment."
 
-    # Get response from model
-    response_text = ask(
-        user_message,
-        user_id=teams_message.personId,
-        room_id=teams_message.roomId
-    )
+    # Get response using streamlined SOC Q&A approach
+    try:
+        response_text = ask(
+            user_message,
+            user_id=teams_message.personId,
+            room_id=teams_message.roomId
+        )
+    except Exception as e:
+        logger.error(f"Error in streamlined SOC Q&A: {e}")
+        return "❌ I encountered an error processing your message. Please try again."
 
     # Format for Webex
     if len(response_text) > 7000:
@@ -219,14 +243,14 @@ def create_webex_bot():
 
 def graceful_shutdown():
     """Perform graceful shutdown"""
-    global bot_ready
+    global bot_ready, bot_instance
     bot_ready = False
-
+    
     try:
         shutdown_handler()
-        logger.info("✅ Graceful shutdown completed")
-    except Exception as e:
-        logger.error(f"Error during graceful shutdown: {e}")
+        bot_instance = None
+    except:
+        pass
 
 
 def main():
@@ -252,8 +276,11 @@ def main():
         # Calculate total initialization time
         init_duration = (datetime.now() - start_time).total_seconds()
 
-        print(f"🚀 Pokedex is up and running with llama3.1:70b (startup in {init_duration:.1f}s)...")
-        logger.info(f"🚀 Pokedex is up and running (startup in {init_duration:.1f}s)...")
+        from bot.utils.enhanced_config import ModelConfig
+        config = ModelConfig()
+        
+        print(f"🚀 Pokedx is up and running with {config.llm_model_name} (startup in {init_duration:.1f}s)...")
+        logger.info(f"🚀 Pokedx is up and running with {config.llm_model_name} (startup in {init_duration:.1f}s)...")
 
         # Send ready notification
         send_ready_notification(init_duration)
