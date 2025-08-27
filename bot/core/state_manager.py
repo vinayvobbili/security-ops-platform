@@ -64,8 +64,13 @@ class SecurityBotStateManager:
     def _setup_shutdown_handlers(self):
         """Setup graceful shutdown handlers"""
         atexit.register(self._shutdown_handler)
-        signal.signal(signal.SIGTERM, lambda signum, frame: self._shutdown_handler())
-        signal.signal(signal.SIGINT, lambda signum, frame: self._shutdown_handler())
+        try:
+            signal.signal(signal.SIGTERM, lambda signum, frame: self._shutdown_handler())
+            signal.signal(signal.SIGINT, lambda signum, frame: self._shutdown_handler())
+        except ValueError:
+            # Signal handlers can only be registered in main thread
+            # This is expected when running in background threads
+            pass
     
     def initialize_all_components(self) -> bool:
         """Initialize all components in correct order"""
