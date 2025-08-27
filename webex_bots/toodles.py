@@ -26,7 +26,7 @@ from webexpythonsdk.models.cards import (
 from webexpythonsdk.models.cards.actions import Submit
 
 import src.components.oncall as oncall
-from config import get_config
+from my_config import get_config
 from data.data_maps import azdo_projects, azdo_orgs, azdo_area_paths
 from services import xsoar, azdo
 from services.approved_testing_utils import add_approved_testing_entry

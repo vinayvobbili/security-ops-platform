@@ -1,6 +1,6 @@
 import requests
 
-from config import get_config
+from my_config import get_config
 
 config = get_config()
 room_id = ''

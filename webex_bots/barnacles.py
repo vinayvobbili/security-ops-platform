@@ -21,7 +21,7 @@ from webexpythonsdk.models.cards import (
 from webexpythonsdk.models.cards.actions import Submit
 from webexteamssdk import WebexTeamsAPI
 
-from config import get_config
+from my_config import get_config
 from src.charts import threatcon_level
 from src.utils.logging_utils import log_activity
 

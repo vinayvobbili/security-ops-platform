@@ -6,7 +6,7 @@ from typing import Dict, Any, Callable, TypeVar
 import pandas as pd
 from webexteamssdk import WebexTeamsAPI
 
-from config import get_config
+from my_config import get_config
 from services import crowdstrike
 from services.service_now import ServiceNowClient
 

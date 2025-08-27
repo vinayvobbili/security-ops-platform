@@ -19,7 +19,7 @@ from webexpythonsdk.models.cards import (
 )
 from webexteamssdk import WebexTeamsAPI
 
-from config import get_config
+from my_config import get_config
 from src.charts import aging_tickets
 from src.components import reimaged_hosts
 from src.utils.logging_utils import log_activity

@@ -8,7 +8,7 @@ from typing import Dict, Any
 
 import requests
 
-from config import get_config
+from my_config import get_config
 
 BASE_URI = "https://api.amp.cisco.com/v3"
 API_TOKEN_URL = "https://visibility.amp.cisco.com/iroh/oauth2/token"

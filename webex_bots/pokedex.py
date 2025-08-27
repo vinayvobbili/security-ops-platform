@@ -15,7 +15,7 @@ from webex_bot.models.response import Response
 # Import the webex_bot library
 from webex_bot.webex_bot import WebexBot
 
-from config import get_config
+from my_config import get_config
 # Import your enhanced RAG model
 from bot.core.my_model import initialize_model_and_agent, ask, warmup, shutdown_handler
 from services.bot_rooms import get_room_name
@@ -396,7 +396,8 @@ def graceful_shutdown():
 def main():
     """Main application entry point"""
     global bot_instance
-
+    
+    start_time = datetime.now()
     logger.info("🤖 Starting Webex RAG Bot with WebSocket connection...")
 
     # Initialize the RAG model first
@@ -412,6 +413,13 @@ def main():
         logger.info("✅ Bot created successfully")
         logger.info(f"📧 Bot email: {WEBEX_BOT_EMAIL}")
         logger.info("🔗 Connecting to Webex via WebSocket...")
+        
+        # Calculate initialization time
+        end_time = datetime.now()
+        init_duration = (end_time - start_time).total_seconds()
+        
+        print(f"🤖 Pokedex is up and running with llama3.1:70b (initialized in {init_duration:.1f}s)...")
+        logger.info(f"🤖 Pokedex is up and running with llama3.1:70b (initialized in {init_duration:.1f}s)...")
 
         # Start the bot (this will block and run forever)
         bot_instance.run()

@@ -1,6 +1,6 @@
 from webexpythonsdk import WebexAPI
 
-from config import get_config
+from my_config import get_config
 from services.xsoar import TicketHandler
 from datetime import datetime
 from tabulate import tabulate

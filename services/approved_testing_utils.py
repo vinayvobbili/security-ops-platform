@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 from pytz import timezone
 from webexteamssdk import WebexTeamsAPI
 
-from config import get_config
+from my_config import get_config
 
 CONFIG = get_config()
 

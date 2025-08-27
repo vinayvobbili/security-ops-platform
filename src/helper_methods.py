@@ -2,7 +2,7 @@ from pathlib import Path
 
 from pytz import timezone
 
-from config import get_config
+from my_config import get_config
 
 eastern = timezone('US/Eastern')
 

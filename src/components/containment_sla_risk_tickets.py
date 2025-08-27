@@ -4,7 +4,7 @@ from datetime import datetime
 import pytz
 from webexpythonsdk import WebexAPI
 
-from config import get_config
+from my_config import get_config
 from services.xsoar import TicketHandler
 
 CONFIG = get_config()

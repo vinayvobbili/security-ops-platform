@@ -26,7 +26,7 @@ from typing import List, Dict, Tuple, Optional, Protocol
 import openpyxl
 import pandas as pd
 
-from config import get_config
+from my_config import get_config
 from services.service_now import enrich_host_report
 from services.tanium import Computer, TaniumClient
 

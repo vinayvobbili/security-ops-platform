@@ -38,7 +38,7 @@ from pytz import timezone
 from tqdm import tqdm
 from webexpythonsdk import WebexAPI
 
-from config import get_config
+from my_config import get_config
 from services.crowdstrike import CrowdStrikeClient
 from services.service_now import ServiceNowClient
 

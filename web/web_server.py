@@ -17,7 +17,7 @@ import pytz
 import requests
 from flask import Flask, request, abort, jsonify, render_template, send_from_directory
 
-from config import get_config
+from my_config import get_config
 from services import xsoar
 from services.approved_testing_utils import add_approved_testing_entry
 from src.components import apt_names_fetcher

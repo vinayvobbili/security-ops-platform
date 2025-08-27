@@ -3,7 +3,7 @@ import time
 from falconpy import Hosts
 from falconpy import OAuth2, RealTimeResponse, RealTimeResponseAdmin
 
-from config import get_config
+from my_config import get_config
 from services.crowdstrike import get_device_id
 
 config = get_config()

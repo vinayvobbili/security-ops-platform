@@ -5,7 +5,7 @@ import pytz
 import schedule
 
 import secops
-from config import get_config
+from my_config import get_config
 from services import phish_fort
 from src import helper_methods
 from src.charts import mttr_mttc, outflow, lifespan, heatmap, sla_breaches, aging_tickets, inflow, qradar_rule_efficacy, de_stories, days_since_incident, re_stories, threatcon_level, vectra_volume, \

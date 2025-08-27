@@ -6,7 +6,7 @@ from urllib.parse import urlparse
 
 import requests
 
-from config import get_config
+from my_config import get_config
 
 CONFIG = get_config()
 

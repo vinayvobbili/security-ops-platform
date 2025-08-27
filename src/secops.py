@@ -18,7 +18,7 @@ from webexpythonsdk.models.cards import (
     AdaptiveCard, HorizontalAlignment, FactSet, Fact
 )
 
-from config import get_config
+from my_config import get_config
 from services import azdo
 from services.xsoar import TicketHandler, ListHandler
 from src.components import oncall
