@@ -30,7 +30,7 @@ from webex_bot.webex_bot import WebexBot
 from webexteamssdk import WebexTeamsAPI
 
 from my_config import get_config
-from bot.core.my_model import ask, shutdown_handler, initialize_model_and_agent
+from bot.core.my_model import ask, initialize_model_and_agent
 from services.bot_rooms import get_room_name
 
 CONFIG = get_config()
@@ -94,35 +94,6 @@ def log_conversation(user_name: str, user_prompt: str, bot_response: str, respon
         logger.error(f"Error logging conversation: {e}")
 
 
-def send_ready_notification(init_duration: float):
-    """Send Webex notification that Pokédex is ready"""
-    try:
-        from bot.utils.enhanced_config import ModelConfig
-        
-        webex_api = WebexTeamsAPI(access_token=CONFIG.webex_bot_access_token_pokedx)
-        config = ModelConfig()
-
-        # Format duration
-        minutes = int(init_duration // 60)
-        seconds = int(init_duration % 60)
-        duration_str = f"{minutes}m {seconds}s" if minutes > 0 else f"{seconds}s"
-
-        message = f"""🚀 **Pokedex SOC Bot is Ready!**
-        
-✅ **Status:** Fully initialized and running  
-⚡ **Model:** {config.llm_model_name}
-⏱️ **Startup Time:** {duration_str}
-🤖 **Ready for:** Security analysis, threat intel, document search  
-
-The {config.llm_model_name} SOC bot is now online and ready! 🎯"""
-
-        webex_api.messages.create(
-            toPersonEmail=CONFIG.my_email_address,
-            markdown=message
-        )
-        logger.info("✅ Ready notification sent to Webex")
-    except Exception as e:
-        logger.error(f"Failed to send ready notification: {e}")
 
 
 def initialize_bot():
@@ -282,8 +253,6 @@ def main():
         print(f"🚀 Pokedex is up and running with {config.llm_model_name} (startup in {init_duration:.1f}s)...")
         logger.info(f"🚀 Pokedex is up and running with {config.llm_model_name} (startup in {init_duration:.1f}s)...")
 
-        # Send ready notification
-        send_ready_notification(init_duration)
 
         # Start the bot (this will block and run forever)
         bot_instance.run()
