@@ -346,6 +346,24 @@ Thought:{agent_scratchpad}"""
             logging.error(f"Model warmup failed: {e}")
             return False
     
+    def fast_warmup(self) -> bool:
+        """Fast warmup using direct LLM call instead of full agent"""
+        if not self.llm:
+            return False
+            
+        try:
+            logging.info("Performing fast warmup...")
+            response = self.llm.invoke("Hello")
+            if response:
+                logging.info("Fast warmup completed successfully")
+                return True
+            else:
+                logging.warning("Fast warmup returned empty response")
+                return False
+        except Exception as e:
+            logging.error(f"Fast warmup failed: {e}")
+            return False
+    
     def reset_components(self):
         """Reset all components (useful for testing)"""
         logging.info("Resetting all components...")
