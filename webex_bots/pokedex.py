@@ -1,4 +1,4 @@
-# Pokedx SOC Bot - Streamlined Q&A Architecture
+# Pokedex SOC Bot - Streamlined Q&A Architecture
 """
 HIGH LEVEL REQUIREMENTS:
 ========================
@@ -95,7 +95,7 @@ def log_conversation(user_name: str, user_prompt: str, bot_response: str, respon
 
 
 def send_ready_notification(init_duration: float):
-    """Send Webex notification that Pokedx is ready"""
+    """Send Webex notification that Pokédex is ready"""
     try:
         from bot.utils.enhanced_config import ModelConfig
         
@@ -107,7 +107,7 @@ def send_ready_notification(init_duration: float):
         seconds = int(init_duration % 60)
         duration_str = f"{minutes}m {seconds}s" if minutes > 0 else f"{seconds}s"
 
-        message = f"""🚀 **Pokedx SOC Bot is Ready!**
+        message = f"""🚀 **Pokedex SOC Bot is Ready!**
         
 ✅ **Status:** Fully initialized and running  
 ⚡ **Model:** {config.llm_model_name}
@@ -150,7 +150,7 @@ def initialize_bot():
         return False
 
 
-def process_user_message(user_message: str, teams_message, activity) -> str:
+def process_user_message(user_message: str, teams_message) -> str:
     """Process user message and return response text"""
     if not user_message.strip():
         return ""
@@ -214,8 +214,8 @@ class PokeDxBot(WebexBot):
             room_name = get_room_name(teams_message.roomId, self.access_token)
             start_time = datetime.now()
 
-            response_text = process_user_message(raw_message, teams_message, activity)
-            
+            response_text = process_user_message(raw_message, teams_message)
+
             if response_text:
                 end_time = datetime.now()
                 response_time = (end_time - start_time).total_seconds()
@@ -279,8 +279,8 @@ def main():
         from bot.utils.enhanced_config import ModelConfig
         config = ModelConfig()
         
-        print(f"🚀 Pokedx is up and running with {config.llm_model_name} (startup in {init_duration:.1f}s)...")
-        logger.info(f"🚀 Pokedx is up and running with {config.llm_model_name} (startup in {init_duration:.1f}s)...")
+        print(f"🚀 Pokedex is up and running with {config.llm_model_name} (startup in {init_duration:.1f}s)...")
+        logger.info(f"🚀 Pokedex is up and running with {config.llm_model_name} (startup in {init_duration:.1f}s)...")
 
         # Send ready notification
         send_ready_notification(init_duration)
