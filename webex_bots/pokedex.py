@@ -218,7 +218,6 @@ def graceful_shutdown():
     bot_ready = False
     
     try:
-        shutdown_handler()
         bot_instance = None
     except:
         pass
