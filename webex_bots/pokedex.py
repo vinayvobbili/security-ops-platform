@@ -27,7 +27,6 @@ from pathlib import Path
 
 from pytz import timezone
 from webex_bot.webex_bot import WebexBot
-from webexteamssdk import WebexTeamsAPI
 
 from my_config import get_config
 from bot.core.my_model import ask, initialize_model_and_agent
