@@ -14,6 +14,7 @@ from webex_bot.models.command import Command
 from webex_bot.models.response import Response
 # Import the webex_bot library
 from webex_bot.webex_bot import WebexBot
+from webexteamssdk import WebexTeamsAPI
 
 from my_config import get_config
 # Import your enhanced RAG model
@@ -21,6 +22,31 @@ from bot.core.my_model import initialize_model_and_agent, ask, warmup, shutdown_
 from services.bot_rooms import get_room_name
 
 CONFIG = get_config()
+
+def send_ready_notification(init_duration: float):
+    """Send Webex notification that Pokedex is ready"""
+    try:
+        # Use a different bot token to send notification (or use Pokedex's own token)
+        # You can use any of your bot tokens for this notification
+        webex_api = WebexTeamsAPI(access_token=CONFIG.webex_bot_access_token_pokedex)
+        
+        message = f"""🚀 **Pokedex SOC Bot is Ready!**
+        
+✅ **Status:** Fully initialized and running  
+⚡ **Model:** llama3.1:70b (42GB)  
+⏱️ **Startup Time:** {init_duration:.1f} seconds  
+🤖 **Ready for:** Security analysis, threat intel, document search  
+
+The legendary 70b SOC bot is now online and ready for demo! 🎯"""
+
+        # Send to your test space
+        webex_api.messages.create(
+            roomId=CONFIG.webex_room_id_vinay_test_space,
+            markdown=message
+        )
+        logger.info("✅ Ready notification sent to Webex")
+    except Exception as e:
+        logger.error(f"Failed to send ready notification: {e}")
 
 # Configure logging
 logging.basicConfig(
@@ -399,8 +425,8 @@ def graceful_shutdown():
     # Force exit after timeout
     import os, threading, time
     def force_exit():
-        time.sleep(2)  # Wait 2 seconds for cleanup
-        logger.info("🔥 Force exiting...")
+        time.sleep(1)  # Wait only 1 second for cleanup
+        logger.info("🔥 Force exiting after timeout...")
         os._exit(0)
     
     # Start force exit timer
@@ -447,6 +473,9 @@ def main():
         
         print(f"🤖 Pokedex is up and running with llama3.1:70b (initialized in {init_duration:.1f}s)...")
         logger.info(f"🤖 Pokedex is up and running with llama3.1:70b (initialized in {init_duration:.1f}s)...")
+        
+        # Send Webex notification that bot is ready
+        send_ready_notification(init_duration)
 
         # Start the bot (this will block and run forever)
         bot_instance.run()
@@ -515,13 +544,24 @@ if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == "test":
         test_bot_locally()
     else:
-        # Enhanced signal handler for clean shutdown
+        # Enhanced signal handler for immediate shutdown
         def signal_handler(sig, frame):
-            logger.info(f"Signal {sig} received, initiating graceful shutdown...")
-            graceful_shutdown()
-            logger.info("Shutdown complete, exiting...")
-            # Use os._exit instead of sys.exit for PyCharm compatibility
-            import os
+            logger.info(f"🛑 Signal {sig} received, initiating immediate shutdown...")
+            
+            # Start immediate force exit in background
+            import threading, time, os
+            def immediate_exit():
+                time.sleep(0.5)  # Very short grace period
+                logger.info("🔥 Immediate force exit...")
+                os._exit(0)
+            
+            threading.Thread(target=immediate_exit, daemon=True).start()
+            
+            # Try graceful shutdown but don't wait
+            try:
+                graceful_shutdown()
+            except:
+                pass
             os._exit(0)
 
 
