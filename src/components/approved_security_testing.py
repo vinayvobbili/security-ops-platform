@@ -1,7 +1,7 @@
 import logging
 from datetime import datetime
 
-from config import get_config
+from my_config import get_config
 from services.xsoar import ListHandler
 
 CONFIG = get_config()

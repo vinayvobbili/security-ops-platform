@@ -3,7 +3,7 @@ from datetime import datetime
 import pytz
 import logging
 
-from config import get_config
+from my_config import get_config
 from services.xsoar import TicketHandler
 from src.secops import get_staffing_data
 

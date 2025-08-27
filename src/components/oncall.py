@@ -5,7 +5,7 @@ from typing import Dict, List, Optional, Any
 from pytz import timezone
 from webexteamssdk import WebexTeamsAPI, ApiError
 
-from config import get_config
+from my_config import get_config
 from services.xsoar import ListHandler
 
 # --- Configuration and Initialization ---

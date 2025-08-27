@@ -32,7 +32,7 @@ from datetime import datetime, timedelta
 from tabulate import tabulate
 from webexpythonsdk import WebexAPI
 
-from config import get_config
+from my_config import get_config
 from services.xsoar import TicketHandler
 
 CONFIG = get_config()
@@ -117,7 +117,7 @@ def generate(room_id):
                 }
             }
             print(f"new_ticket_payload: {new_ticket_payload}")  # Debug: print payload before sending
-            qa_ticket = ticket_handler.create(new_ticket_payload)
+            qa_ticket = ticket_handler.create_in_dev(new_ticket_payload)
             print(f"qa_ticket: {qa_ticket}")  # Debug: print the created ticket object
             if isinstance(qa_ticket, dict) and 'error' in qa_ticket:
                 print(f"Ticket creation failed: {qa_ticket['error']}")

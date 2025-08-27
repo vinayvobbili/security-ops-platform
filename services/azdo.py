@@ -11,7 +11,7 @@ from azure.devops.exceptions import AzureDevOpsClientRequestError
 from azure.devops.v7_0.work_item_tracking.models import Wiql
 from msrest.authentication import BasicAuthentication
 
-from config import get_config
+from my_config import get_config
 from data.data_maps import azdo_projects, azdo_orgs
 from services.xsoar import ListHandler, CONFIG
 

@@ -14,7 +14,7 @@ import concurrent.futures
 from filelock import FileLock
 import urllib3
 
-from config import get_config
+from my_config import get_config
 
 # Disable InsecureRequestWarning for unverified HTTPS requests
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)

@@ -8,7 +8,7 @@ import logging
 
 import requests
 
-from config import get_config
+from my_config import get_config
 from src.utils.http_utils import get_session
 
 CONFIG = get_config()

@@ -7,7 +7,7 @@ from pathlib import Path
 from flask import request
 from pytz import timezone
 
-from config import get_config
+from my_config import get_config
 from services.bot_rooms import get_room_name
 
 eastern = timezone('US/Eastern')

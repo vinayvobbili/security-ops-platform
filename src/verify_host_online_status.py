@@ -1,7 +1,7 @@
 from falconpy import OAuth2, Hosts
 from webexteamssdk import WebexTeamsAPI
 
-from config import get_config
+from my_config import get_config
 from services.crowdstrike import CrowdStrikeClient
 from services.xsoar import ListHandler
 

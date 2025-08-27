@@ -14,7 +14,7 @@ import requests
 import tqdm
 
 from falconpy import Hosts, OAuth2
-from config import get_config
+from my_config import get_config
 from src.utils.http_utils import get_session
 
 DATA_DIR = Path(__file__).parent.parent / "data" / "transient" / "epp_device_tagging"

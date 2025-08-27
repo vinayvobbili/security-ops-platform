@@ -1,7 +1,7 @@
 from vonage import Vonage, Auth
 from vonage_sms import SmsMessage, SmsResponse
 
-from config import get_config
+from my_config import get_config
 
 CONFIG = get_config()
 # Create authentication

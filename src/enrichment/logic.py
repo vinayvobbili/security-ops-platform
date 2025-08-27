@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 from typing import Dict
-from config import get_config
+from my_config import get_config
 
 CONFIG = get_config()
 DATA_DIR = Path(__file__).parent.parent.parent / "data"

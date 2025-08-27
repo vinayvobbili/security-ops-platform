@@ -5,7 +5,7 @@ from bs4 import BeautifulSoup
 from twilio.rest import Client
 from webexpythonsdk import WebexAPI
 
-from config import get_config
+from my_config import get_config
 
 # Configure logging
 logging.basicConfig(

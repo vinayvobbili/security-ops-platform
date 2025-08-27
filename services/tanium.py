@@ -19,7 +19,7 @@ import tqdm
 import urllib3
 from urllib3.exceptions import InsecureRequestWarning
 
-from config import get_config
+from my_config import get_config
 
 # Disable SSL warnings for on-prem connections
 urllib3.disable_warnings(InsecureRequestWarning)

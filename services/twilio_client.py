@@ -1,6 +1,6 @@
 from twilio.rest import Client
 
-from config import get_config
+from my_config import get_config
 
 try:
     CONFIG = get_config()

@@ -2,7 +2,7 @@ import time
 
 from webexteamssdk import WebexTeamsAPI
 
-from config import get_config
+from my_config import get_config
 
 
 def get_messages_from_room(room_id, bot_access_token, max_messages=10):

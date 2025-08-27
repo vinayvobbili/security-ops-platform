@@ -19,7 +19,7 @@ from webexpythonsdk.models.cards import (
 from webexpythonsdk.models.cards.actions import Submit
 from webexteamssdk import WebexTeamsAPI
 
-from config import get_config
+from my_config import get_config
 from src.epp import ring_tag_cs_hosts, cs_hosts_without_ring_tag, cs_servers_with_invalid_ring_tags
 from src.epp.tanium_hosts_without_ring_tag import create_processor
 from src.utils.logging_utils import log_activity

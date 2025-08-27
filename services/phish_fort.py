@@ -8,7 +8,7 @@ from requests.exceptions import RequestException, HTTPError
 from tabulate import tabulate
 from webexpythonsdk import WebexAPI
 
-from config import get_config
+from my_config import get_config
 
 # Configure logging with more details
 logging.basicConfig(

@@ -1,6 +1,6 @@
 from webexteamssdk import WebexTeamsAPI
 
-from config import get_config
+from my_config import get_config
 
 # Load configuration
 config = get_config()

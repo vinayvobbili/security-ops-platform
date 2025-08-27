@@ -16,7 +16,7 @@ from langchain_ollama import ChatOllama, OllamaEmbeddings
 from langchain.agents import AgentExecutor, create_react_agent
 from langchain_core.prompts import ChatPromptTemplate
 
-from config import get_config
+from my_config import get_config
 from bot.utils.enhanced_config import ModelConfig
 from bot.monitoring.performance_monitor import PerformanceMonitor
 from bot.monitoring.session_manager import SessionManager

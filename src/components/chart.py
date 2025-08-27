@@ -5,7 +5,7 @@ import pandas as pd
 from matplotlib import pyplot as plt
 from pytz import timezone
 
-from config import get_config
+from my_config import get_config
 
 config = get_config()
 
