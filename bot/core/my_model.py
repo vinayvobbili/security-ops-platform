@@ -62,6 +62,9 @@ def ask(user_message: str, user_id: str = "default", room_id: str = "default") -
 
         # Get session manager for context
         state_manager = get_state_manager()
+        if state_manager and not state_manager.is_initialized:
+            logging.error("State manager not initialized. Bot must be initialized before use.")
+            return "❌ Bot not ready. Please try again in a moment."
         session_manager = state_manager.get_session_manager() if state_manager else None
 
         # Get conversation context if available (use more of the 8K context window)
@@ -148,48 +151,114 @@ Just ask me any security-related question!"""
         except Exception as e:
             logging.warning(f"Document search failed: {e}")
 
-        # STEP 2: Basic tool check
+        # STEP 2: Tool invocation for specific queries
         query_lower = query.lower()
-        if any(word in query_lower for word in ['weather', 'temperature']):
+        skip_llm = False  # Flag to skip LLM supplementation when we have tool results
+        
+        # Check for device/host queries and extract hostname
+        device_keywords = ['containment', 'isolation', 'status', 'device', 'host']
+        if any(keyword in query_lower for keyword in device_keywords):
+            # Extract hostname from query (look for alphanumeric patterns that could be hostnames)
+            import re
+            # Pattern for typical hostname formats - more flexible to catch various formats
+            hostname_patterns = [
+                r'\b[A-Z][0-9][0-9][A-Z0-9]{6,10}[A-Z0-9]\b',  # C02G7C7LMD6R format
+                r'\b[A-Z0-9][A-Z0-9\-]{5,15}\b',               # General hostname format
+                r'\b[A-Z]{2,4}[0-9]{2,6}[A-Z0-9]{2,6}\b'       # Other common formats
+            ]
+            
+            matches = []
+            for pattern in hostname_patterns:
+                matches.extend(re.findall(pattern, query.upper()))
+                if matches:  # Stop at first successful match
+                    break
+            
+            logging.info(f"Hostname search in query '{query}': found matches {matches}")
+            
+            if matches:
+                hostname = matches[0]  # Take the first match
+                try:
+                    # Get the agent executor to use CrowdStrike tools
+                    agent_executor = state_manager.get_agent_executor() if state_manager else None
+                    logging.info(f"Agent executor available: {agent_executor is not None}")
+                    
+                    if agent_executor and ('containment' in query_lower or 'isolation' in query_lower):
+                        # Call the containment status tool
+                        tool_query = f"What is the containment status of device {hostname}?"
+                        logging.info(f"Invoking agent with query: {tool_query}")
+                        tool_result = agent_executor.invoke({"input": tool_query})
+                        logging.info(f"Agent result: {tool_result}")
+                        if tool_result and 'output' in tool_result:
+                            response_parts.append(f"🛡️ **CrowdStrike Status**\n\n{tool_result['output']}")
+                            logging.info(f"Successfully retrieved containment status for {hostname}")
+                            # Skip LLM supplementation since we have real tool data
+                            skip_llm = True
+                        else:
+                            logging.warning(f"No output in agent result: {tool_result}")
+                    elif agent_executor and ('online' in query_lower or 'status' in query_lower):
+                        # Call the online status tool
+                        tool_query = f"What is the online status of device {hostname}?"
+                        logging.info(f"Invoking agent with query: {tool_query}")
+                        tool_result = agent_executor.invoke({"input": tool_query})
+                        logging.info(f"Agent result: {tool_result}")
+                        if tool_result and 'output' in tool_result:
+                            response_parts.append(f"🛡️ **CrowdStrike Status**\n\n{tool_result['output']}")
+                            logging.info(f"Successfully retrieved online status for {hostname}")
+                            # Skip LLM supplementation since we have real tool data
+                            skip_llm = True
+                        else:
+                            logging.warning(f"No output in agent result: {tool_result}")
+                    else:
+                        if not agent_executor:
+                            logging.warning("Agent executor not available")
+                        else:
+                            logging.info(f"Query didn't match containment/isolation/online patterns: {query_lower}")
+                        response_parts.append(f"🛡️ **Security Tools:** CrowdStrike agent not available for hostname {hostname}")
+                        
+                except Exception as e:
+                    logging.error(f"Failed to invoke CrowdStrike tool for {hostname}: {e}")
+                    response_parts.append(f"🛡️ **Security Tools:** Unable to retrieve status for {hostname} - tool error")
+        
+        elif any(word in query_lower for word in ['weather', 'temperature']):
             response_parts.append("🌤️ **Weather Info:** Please specify a location for weather information.")
-        elif any(word in query_lower for word in ['device', 'host', 'crowdstrike']):
-            response_parts.append("🛡️ **Security Tools:** Please specify device/host for detailed information.")
 
-        # STEP 3: LLM supplementation
-        try:
-            llm = ChatOllama(model=config.llm_model_name, temperature=config.temperature)
+        # STEP 3: LLM supplementation (skip if we have tool results)
+        if not skip_llm:
+            try:
+                llm = ChatOllama(model=config.llm_model_name, temperature=config.temperature)
 
-            # Build prompt with context if available
-            context_prefix = ""
-            if conversation_context:
-                context_prefix = f"Previous conversation:\n{conversation_context}\n\nCurrent question: "
+                # Build prompt with context if available
+                context_prefix = ""
+                if conversation_context:
+                    context_prefix = f"Previous conversation:\n{conversation_context}\n\nCurrent question: "
 
-            # Build contextually appropriate LLM prompt
-            if response_parts:  # Has document content
-                # First check if documents are actually relevant
-                relevance_check = f'Does this question: "{query}" relate to security operations, incident response, or cybersecurity? Answer only "yes" or "no".'
-                relevance_response = llm.invoke(relevance_check)
-                is_security_related = "yes" in relevance_response.content.lower()
+                # Build contextually appropriate LLM prompt
+                if response_parts:  # Has document content
+                    # First check if documents are actually relevant
+                    relevance_check = f'Does this question: "{query}" relate to security operations, incident response, or cybersecurity? Answer only "yes" or "no".'
+                    relevance_response = llm.invoke(relevance_check)
+                    is_security_related = "yes" in relevance_response.content.lower()
 
-                if is_security_related:
-                    llm_prompt = f'{context_prefix}Question: "{query}"\n\nBased on the security documentation provided, give a clear, concise response for a SOC analyst.'
-                else:
-                    # Clear response_parts since docs aren't relevant
-                    response_parts.clear()
-                    llm_prompt = f'{context_prefix}Question: "{query}"\n\nThis appears to be a casual question. Provide a brief, friendly response appropriate for a security operations assistant.'
-            else:  # No documents found
-                llm_prompt = f'{context_prefix}A SOC analyst asked: "{query}". If this is a security-related question, provide practical guidance. If it\'s a casual/test question, give a brief, friendly response appropriate for a security operations assistant. Be helpful and professional.'
+                    if is_security_related:
+                        llm_prompt = f'{context_prefix}Question: "{query}"\n\nBased on the security documentation provided, supplement it with additional context, key insights, or practical guidance that would be valuable for a SOC analyst. Provide a comprehensive but focused response.'
+                    else:
+                        # Clear response_parts since docs aren't relevant
+                        response_parts.clear()
+                        llm_prompt = f'{context_prefix}Question: "{query}"\n\nThis appears to be a casual question. Provide a brief, friendly response appropriate for a security operations assistant.'
+                else:  # No documents found
+                    llm_prompt = f'{context_prefix}A SOC analyst asked: "{query}". If this is a security-related question, provide practical guidance. If it\'s a casual/test question, give a brief, friendly response appropriate for a security operations assistant. Be helpful and professional.'
 
-            response = llm.invoke(llm_prompt)
-            llm_content = response.content.strip() if hasattr(response, 'content') else str(response).strip()
+                response = llm.invoke(llm_prompt)
+                llm_content = response.content.strip() if hasattr(response, 'content') else str(response).strip()
 
-            if llm_content and len(llm_content) < 300:  # Keep it short
-                disclaimer = "⚠️ **General Security Guidance**"
-                supplemental = f"{disclaimer}\n\n{llm_content}"
-                response_parts.append(supplemental)
+                if llm_content:  # Always add LLM content if available
+                    disclaimer = "⚠️ **Additional Context**"
+                    supplemental = f"{disclaimer}\n\n{llm_content}"
+                    response_parts.append(supplemental)
+                    logging.info(f"Added LLM supplementation: {len(llm_content)} chars")
 
-        except Exception as e:
-            logging.warning(f"LLM supplementation failed: {e}")
+            except Exception as e:
+                logging.warning(f"LLM supplementation failed: {e}")
 
         # Return combined response
         if response_parts:
