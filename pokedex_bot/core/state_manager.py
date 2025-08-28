@@ -264,9 +264,12 @@ Use the following format:
 Question: the input question you must answer
 Thought: you should always think about what to do
 
-For simple greetings or status checks, you can skip directly to Final Answer.
+For simple greetings or status checks:
+Thought: This is a simple greeting/status check that doesn't require tools
+Final Answer: [your response]
 
 For security questions requiring tools:
+Thought: I need to use tools to answer this question
 Action: the action to take, should be one of [{tool_names}]
 Action Input: the input to the action (IMPORTANT: for CrowdStrike tools, extract the hostname from the question and pass ONLY the clean hostname like "C02G7C7LMD6R", not "hostname=C02G7C7LMD6R")
 Observation: the result of the action
@@ -274,9 +277,13 @@ Observation: the result of the action
 Thought: I now know the final answer
 Final Answer: the final answer to the original input question
 
-IMPORTANT: For questions requiring tools, after receiving an Observation, you MUST start your next response with either:
-- "Thought: " (if you need to do more actions)
-- "Final Answer: " (if you have enough information to answer)
+IMPORTANT: 
+1. ALWAYS start with "Thought:" - never skip directly to Final Answer
+2. After receiving an Observation, you MUST start your next response with either:
+   - "Thought: " (if you need to do more actions)  
+   - "Final Answer: " (if you have enough information to answer)
+3. DO NOT repeat the same action - if you already got information from a tool, use it in your Final Answer
+4. For single device queries (like containment status), one tool call is sufficient
 
 Begin!
 
