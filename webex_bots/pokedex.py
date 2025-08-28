@@ -23,9 +23,14 @@ import logging
 import logging.handlers
 import os
 import signal
+import sys
 import threading
 from datetime import datetime
 from pathlib import Path
+
+# Add project root to Python path
+PROJECT_ROOT = Path(__file__).parent.parent
+sys.path.insert(0, str(PROJECT_ROOT))
 
 from pytz import timezone
 from webex_bot.webex_bot import WebexBot
@@ -37,7 +42,7 @@ from services.bot_rooms import get_room_name
 CONFIG = get_config()
 
 # Configure logging
-ROOT_DIRECTORY = Path(__file__).parent.parent.parent
+ROOT_DIRECTORY = Path(__file__).parent.parent
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
