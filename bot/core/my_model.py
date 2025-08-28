@@ -67,49 +67,7 @@ def ask(user_message: str, user_id: str = "default", room_id: str = "default") -
         # Get conversation context if available (use more of the 8K context window)
         # conversation_context is available but not currently used in this simplified flow
 
-        # Handle simple commands
-        if query.lower() in ['hello', 'hi']:
-            simple_response = """👋 Hello! I'm your SOC Q&A Assistant
-
-I'm here to help with security operations by searching our local SOC documentation and using available security tools.
-
-🔒 Security Note: I operate in a secure environment with:
-• Access to internal SOC documents and procedures
-• Integration with security tools (CrowdStrike, Tanium, etc.)
-• No internet access - all responses from local resources only
-
-❓ How I can help:
-• Answer questions about security procedures
-• Search SOC documentation and runbooks
-• Check device status and containment
-• Provide step-by-step incident response guidance
-
-Just ask me any security-related question!"""
-            # Store interaction in session
-            if session_manager:
-                try:
-                    session_manager.add_interaction(session_key, query, simple_response)
-                except Exception as e:
-                    logging.warning(f"Failed to store session interaction: {e}")
-            return simple_response
-        elif query.lower() in ['status', 'health']:
-            simple_response = "✅ System online and ready"
-            # Store interaction in session
-            if session_manager:
-                try:
-                    session_manager.add_interaction(session_key, query, simple_response)
-                except Exception as e:
-                    logging.warning(f"Failed to store session interaction: {e}")
-            return simple_response
-        elif query.lower() == 'help':
-            simple_response = "🤖 I can search security documents and provide security guidance."
-            # Store interaction in session
-            if session_manager:
-                try:
-                    session_manager.add_interaction(session_key, query, simple_response)
-                except Exception as e:
-                    logging.warning(f"Failed to store session interaction: {e}")
-            return simple_response
+        # All queries go to LLM agent - no hardcoded bypasses
 
         # STEP 1: Always pass query to LLM agent - let it decide everything
         try:

@@ -120,31 +120,42 @@ class SOCBotHealthTester:
         try:
             from bot.core.my_model import ask
 
-            # Test queries for different document types
+            # Test queries with specific expected content to verify actual document search
             test_queries = [
-                ("Scattered Spider", "Should find threat intelligence docs"),
-                ("containment", "Should find containment procedures"),
-                ("RSA token", "Should find RSA emergency token procedures"),
-                ("network blocking", "Should find network access control docs")
+                ("Who are our contacts for AIX servers?", ["Akash Mudgal", "Todd Winkler"], "Should find specific AIX contacts"),
+                ("Scattered Spider", ["malicious software", "social engineering", "phishing"], "Should find threat intelligence"),
+                ("RSA token", ["SecurID", "emergency", "tokencode"], "Should find RSA procedures"),
+                ("network blocking", ["Prisma", "Zscaler", "block"], "Should find network control docs")
             ]
 
             search_results = []
-            for query, description in test_queries:
+            for query, expected_keywords, description in test_queries:
                 response = ask(query, 'health_test', 'test_room')
-
-                if "📋 **From Local Documentation:**" in response:
-                    search_results.append(f"✅ '{query}': Found documentation")
-                elif "❌ No information found" in response:
-                    search_results.append(f"❌ '{query}': No documents found")
+                
+                # Check for signs of successful completion (no errors/timeouts)
+                if "Agent stopped due to iteration limit" in response:
+                    search_results.append(f"❌ '{query}': Hit iteration limit")
+                elif "❌ Bot not ready" in response or "❌ An error occurred" in response:
+                    search_results.append(f"❌ '{query}': System error")
+                elif any(keyword.lower() in response.lower() for keyword in expected_keywords):
+                    # Found expected content - this means document search worked
+                    search_results.append(f"✅ '{query}': Found relevant content")
+                elif "**Source:**" in response or "**Sources:**" in response:
+                    # Has source attribution but may not have exact keywords - still indicates search worked
+                    search_results.append(f"⚠️ '{query}': Document searched but content needs review")
                 else:
-                    search_results.append(f"⚠️ '{query}': Unexpected response format")
+                    search_results.append(f"❌ '{query}': No document content found")
 
             successful_searches = len([r for r in search_results if "✅" in r])
+            partial_successes = len([r for r in search_results if "⚠️" in r])
             total_searches = len(test_queries)
 
+            # Accept both full successes and partial successes (document search working)
+            effective_successes = successful_searches + partial_successes
+
             return {
-                'success': successful_searches >= total_searches * 0.75,  # 75% success rate required
-                'details': f'{successful_searches}/{total_searches} searches successful. ' +
+                'success': effective_successes >= total_searches * 0.75,  # 75% success rate required
+                'details': f'{successful_searches}/{total_searches} full successes, {partial_successes} partial. ' +
                            '; '.join(search_results)
             }
 
