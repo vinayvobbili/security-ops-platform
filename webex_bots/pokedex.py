@@ -152,35 +152,6 @@ def initialize_bot():
         return False
 
 
-def process_user_message(user_message: str, teams_message) -> str:
-    """Process user message by passing it to LLM agent and return response text"""
-    if not user_message.strip():
-        return ""
-
-    logger.info(f"Processing message from {teams_message.personEmail}: {user_message[:100]}...")
-
-    # Check if bot is ready
-    if not bot_ready:
-        return "🔄 I'm still starting up. Please try again in a moment."
-
-    # Get response from LLM agent
-    try:
-        response_text = ask(
-            user_message,
-            user_id=teams_message.personId,
-            room_id=teams_message.roomId
-        )
-    except Exception as e:
-        logger.error(f"Error in LLM agent processing: {e}")
-        return "❌ I encountered an error processing your message. Please try again."
-
-    # Format for Webex
-    if len(response_text) > 7000:
-        response_text = response_text[:6900] + "\n\n*[Response truncated for message limits]*"
-
-    logger.info(f"Sending response to {teams_message.personEmail}: {len(response_text)} chars")
-    return response_text
-
 
 class PokeDxBot(WebexBot):
     """LLM Agent-powered SOC bot for Webex"""
@@ -211,12 +182,37 @@ class PokeDxBot(WebexBot):
             if not is_one_on_one:
                 raw_message = raw_message.replace(self.bot_display_name, '').strip()
 
-            # Process message
+            # Process message with LLM agent
             user_name = activity.get('actor', {}).get('displayName', 'Unknown')
             room_name = get_room_name(teams_message.roomId, self.access_token)
             start_time = datetime.now()
 
-            response_text = process_user_message(raw_message, teams_message)
+            # Inline message processing logic
+            if not raw_message.strip():
+                return
+
+            logger.info(f"Processing message from {teams_message.personEmail}: {raw_message[:100]}...")
+
+            # Check if bot is ready
+            if not bot_ready:
+                response_text = "🔄 I'm still starting up. Please try again in a moment."
+            else:
+                # Get response from LLM agent
+                try:
+                    response_text = ask(
+                        raw_message,
+                        user_id=teams_message.personId,
+                        room_id=teams_message.roomId
+                    )
+                except Exception as e:
+                    logger.error(f"Error in LLM agent processing: {e}")
+                    response_text = "❌ I encountered an error processing your message. Please try again."
+
+                # Format for Webex
+                if len(response_text) > 7000:
+                    response_text = response_text[:6900] + "\n\n*[Response truncated for message limits]*"
+
+                logger.info(f"Sending response to {teams_message.personEmail}: {len(response_text)} chars")
 
             if response_text:
                 end_time = datetime.now()
