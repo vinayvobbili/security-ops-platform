@@ -108,6 +108,31 @@ def initialize_bot():
             logger.error("Failed to initialize streamlined components")
             return False
 
+        # Run health tests after initialization
+        logger.info("🔬 Running system health tests...")
+        try:
+            from bot.tests.system_health_tests import run_health_tests
+            test_results = run_health_tests()
+            
+            # Check if critical tests passed
+            critical_tests = ['State Manager', 'Document Search', 'LLM Responses']
+            failed_critical = []
+            
+            for test_name in critical_tests:
+                if test_results.get(test_name, {}).get('status') == 'FAIL':
+                    failed_critical.append(test_name)
+            
+            if failed_critical:
+                logger.error(f"❌ Critical tests failed: {', '.join(failed_critical)}")
+                logger.error("Bot may not function correctly. Please check system configuration.")
+                return False
+            else:
+                logger.info("✅ All critical systems healthy - bot ready for use!")
+                
+        except Exception as e:
+            logger.warning(f"⚠️  Health tests could not run: {e}")
+            logger.warning("Proceeding without health validation...")
+
         bot_ready = True
         total_time = (datetime.now() - start_time).total_seconds()
         logger.info(f"✅ Streamlined bot initialization completed in {total_time:.1f}s")

@@ -1,0 +1,28 @@
+[Unit]
+Description=SOC Bot Preloader Service
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=user
+Group=staff
+WorkingDirectory=/Users/user/PycharmProjects/IR
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+Environment=PYTHONPATH=/Users/user/PycharmProjects/IR
+ExecStart=/usr/bin/python3 /Users/user/PycharmProjects/IR/preload_soc_bot.py
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+# Resource limits
+TimeoutStartSec=300
+TimeoutStopSec=30
+
+# Security settings
+NoNewPrivileges=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target
