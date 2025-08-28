@@ -1,4 +1,4 @@
-# Pokedx SOC Bot - LLM Agent Architecture
+# Pokedex SOC Bot - LLM Agent Architecture
 """
 HIGH LEVEL REQUIREMENTS:
 ========================
@@ -20,6 +20,7 @@ ARCHITECTURE APPROACH:
 """
 import csv
 import logging
+import logging.handlers
 import os
 import signal
 import threading
@@ -30,15 +31,24 @@ from pytz import timezone
 from webex_bot.webex_bot import WebexBot
 
 from my_config import get_config
-from bot.core.my_model import ask, initialize_model_and_agent
+from pokedex_bot.core.my_model import ask, initialize_model_and_agent
 from services.bot_rooms import get_room_name
 
 CONFIG = get_config()
 
 # Configure logging
+ROOT_DIRECTORY = Path(__file__).parent.parent.parent
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.handlers.RotatingFileHandler(
+            ROOT_DIRECTORY / "logs" / "pokedex.log",
+            maxBytes=10 * 1024 * 1024,  # 10MB
+            backupCount=5
+        ),
+        logging.StreamHandler()
+    ]
 )
 logger = logging.getLogger(__name__)
 
@@ -99,23 +109,23 @@ def run_health_tests_background():
     """Run health tests in background thread after initialization"""
     try:
         logger.info("🔬 Running system health tests in background...")
-        from bot.tests.system_health_tests import run_health_tests
+        from pokedex_bot.tests.system_health_tests import run_health_tests
         test_results = run_health_tests()
-        
+
         # Check if critical tests passed
         critical_tests = ['State Manager', 'Document Search', 'LLM Responses']
         failed_critical = []
-        
+
         for test_name in critical_tests:
             if test_results.get(test_name, {}).get('status') == 'FAIL':
                 failed_critical.append(test_name)
-        
+
         if failed_critical:
             logger.error(f"❌ Critical tests failed: {', '.join(failed_critical)}")
             logger.error("Bot may not function correctly. Please check system configuration.")
         else:
             logger.info("✅ All critical systems healthy - bot ready for use!")
-            
+
     except Exception as e:
         logger.warning(f"⚠️  Health tests could not run: {e}")
 
@@ -138,12 +148,12 @@ def initialize_bot():
         bot_ready = True
         total_time = (datetime.now() - start_time).total_seconds()
         logger.info(f"✅ Streamlined bot initialization completed in {total_time:.1f}s")
-        
+
         # Run health tests in background thread (non-blocking)
         health_test_thread = threading.Thread(target=run_health_tests_background, daemon=True)
         health_test_thread.start()
         logger.info("🔬 Health tests started in background...")
-        
+
         return True
 
     except Exception as e:
@@ -152,8 +162,7 @@ def initialize_bot():
         return False
 
 
-
-class PokeDxBot(WebexBot):
+class PokeDexBot(WebexBot):
     """LLM Agent-powered SOC bot for Webex"""
 
     def process_incoming_message(self, teams_message, activity):
@@ -231,7 +240,7 @@ class PokeDxBot(WebexBot):
 
 def create_webex_bot():
     """Create and configure the WebexBot instance"""
-    return PokeDxBot(
+    return PokeDexBot(
         teams_bot_token=WEBEX_ACCESS_TOKEN,
         approved_rooms=[CONFIG.webex_room_id_vinay_test_space],
         approved_domains=['company.com'],
@@ -273,7 +282,7 @@ def main():
         # Calculate total initialization time
         init_duration = (datetime.now() - start_time).total_seconds()
 
-        from bot.utils.enhanced_config import ModelConfig
+        from pokedex_bot.utils.enhanced_config import ModelConfig
         config = ModelConfig()
 
         print(f"🚀 Pokedex is up and running with {config.llm_model_name} (startup in {init_duration:.1f}s)...")

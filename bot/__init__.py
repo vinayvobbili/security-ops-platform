@@ -1,1 +1,0 @@
-# SOC Security Operations Bot

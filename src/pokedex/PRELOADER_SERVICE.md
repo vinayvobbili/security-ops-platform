@@ -8,13 +8,13 @@ The SOC Bot Preloader Service keeps all bot components loaded in memory for inst
 ### macOS (Current System)
 ```bash
 # Install as user service
-./install_preloader_service.sh
+./src/pokedex/install_preloader_service.sh
 ```
 
 ### Linux
 ```bash
 # Install as system service (requires root)
-sudo ./install_preloader_service.sh
+sudo ./src/pokedex/install_preloader_service.sh
 ```
 
 ## 📋 Service Management
@@ -76,7 +76,7 @@ sudo journalctl -u soc-bot-preloader -f
 ```bash
 # Test if preloader is working
 python3 -c "
-from bot.core.state_manager import get_state_manager
+from pokedex_bot.core.state_manager import get_state_manager
 sm = get_state_manager()
 print('Initialized:', sm.is_initialized if sm else False)
 print('Health:', sm.health_check() if sm else 'N/A')
@@ -88,7 +88,7 @@ print('Health:', sm.health_check() if sm else 'N/A')
 # Test instant response
 python3 -c "
 import time
-from bot.core.my_model import ask
+from pokedex_bot.core.my_model import ask
 start = time.time()
 response = ask('What is the isolation status of C02G7C7LMD6R?')
 end = time.time()

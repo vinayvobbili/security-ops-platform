@@ -11,7 +11,7 @@ from datetime import datetime
 from typing import Dict, Any
 
 # Add the project root to Python path
-sys.path.append('/Users/user/PycharmProjects/IR')
+sys.path.append('/')
 
 def fetch_metrics() -> Dict[str, Any]:
     """Fetch metrics from the performance monitor"""
