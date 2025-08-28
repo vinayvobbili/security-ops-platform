@@ -65,7 +65,9 @@ def get_device_containment_status_tool(client: CrowdStrikeClient):
         if not client:
             return "Error: CrowdStrike service is not initialized."
 
+        # Tools should receive clean hostnames - agent should do the parsing
         hostname = hostname.strip().upper()
+        
         status = client.get_device_containment_status(hostname)
 
         if status == 'Host not found in CS':
@@ -94,7 +96,9 @@ def get_device_online_status_tool(client: CrowdStrikeClient):
         if not client:
             return "Error: CrowdStrike service is not initialized."
 
+        # Tools should receive clean hostnames - agent should do the parsing
         hostname = hostname.strip().upper()
+        
         status = client.get_device_online_state(hostname)
 
         if status:
@@ -119,7 +123,9 @@ def get_device_details_tool(client: CrowdStrikeClient):
         if not client:
             return "Error: CrowdStrike service is not initialized."
 
+        # Tools should receive clean hostnames - agent should do the parsing
         hostname = hostname.strip().upper()
+        
         device_id = client.get_device_id(hostname)
 
         if not device_id:
