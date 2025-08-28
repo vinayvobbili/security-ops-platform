@@ -19,7 +19,7 @@ class ModelConfig:
     llm_model_name: str = "qwen2.5:32b"
     embedding_model_name: str = "nomic-embed-text"
     temperature: float = 0.1
-    max_iterations: int = 2  # Further reduced for 30-second SOC analyst needs
+    max_iterations: int = 6  # Allow enough iterations for document search + response
     chunk_size: int = 1500
     chunk_overlap: int = 300
     retrieval_k: int = 5
