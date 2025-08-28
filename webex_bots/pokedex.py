@@ -110,6 +110,69 @@ def log_conversation(user_name: str, user_prompt: str, bot_response: str, respon
         logger.error(f"Error logging conversation: {e}")
 
 
+def generate_health_test_report(test_results, failed_critical):
+    """Generate a formatted health test report"""
+    total_tests = len(test_results)
+    passed_tests = sum(1 for result in test_results.values() if result.get('status') == 'PASS')
+    failed_tests = total_tests - passed_tests
+    
+    if failed_critical:
+        status_emoji = "❌"
+        status_text = "CRITICAL FAILURES DETECTED"
+    elif failed_tests > 0:
+        status_emoji = "⚠️"
+        status_text = "SOME TESTS FAILED"
+    else:
+        status_emoji = "✅"
+        status_text = "ALL TESTS PASSED"
+    
+    report = f"""🔬 **Pokedex Health Test Report**
+
+{status_emoji} **Overall Status:** {status_text}
+📊 **Summary:** {passed_tests}/{total_tests} tests passed
+
+"""
+    
+    # Add individual test results
+    for test_name, result in test_results.items():
+        status = result.get('status', 'UNKNOWN')
+        duration = result.get('duration', 0)
+        
+        if status == 'PASS':
+            emoji = "✅"
+        elif status == 'FAIL':
+            emoji = "❌"
+        else:
+            emoji = "⚠️"
+            
+        report += f"{emoji} **{test_name}:** {status} ({duration:.2f}s)\n"
+        
+        # Add error details for failed tests
+        if status == 'FAIL' and 'error' in result:
+            report += f"   └─ Error: {result['error']}\n"
+    
+    # Add critical test warnings
+    if failed_critical:
+        report += f"\n🚨 **Critical systems affected:** {', '.join(failed_critical)}"
+        report += "\n⚠️ Bot functionality may be impaired. Please review system configuration."
+    
+    return report
+
+
+def send_health_test_report(report):
+    """Send health test report to WebX"""
+    global bot_instance
+    try:
+        if bot_instance and hasattr(bot_instance, 'teams'):
+            test_room_id = CONFIG.webex_room_id_vinay_test_space
+            bot_instance.teams.messages.create(roomId=test_room_id, markdown=report)
+            logger.info("Health test report sent to WebX")
+        else:
+            logger.warning("Cannot send health test report - bot not fully initialized")
+    except Exception as e:
+        logger.error(f"Failed to send health test report to WebX: {e}")
+
+
 def run_health_tests_background():
     """Run health tests in background thread after initialization"""
     try:
@@ -125,14 +188,24 @@ def run_health_tests_background():
             if test_results.get(test_name, {}).get('status') == 'FAIL':
                 failed_critical.append(test_name)
 
+        # Generate test report
+        report = generate_health_test_report(test_results, failed_critical)
+        
+        # Log results
         if failed_critical:
             logger.error(f"❌ Critical tests failed: {', '.join(failed_critical)}")
             logger.error("Bot may not function correctly. Please check system configuration.")
         else:
             logger.info("✅ All critical systems healthy - bot ready for use!")
 
+        # Send WebX message with test results
+        send_health_test_report(report)
+
     except Exception as e:
         logger.warning(f"⚠️  Health tests could not run: {e}")
+        # Send error report
+        error_report = f"🔬 **Health Test Report - ERROR**\n\n❌ Health tests could not run: {e}"
+        send_health_test_report(error_report)
 
 
 def initialize_bot():
