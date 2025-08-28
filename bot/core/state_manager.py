@@ -261,7 +261,7 @@ For simple greetings or status checks, you can skip directly to Final Answer.
 
 For security questions requiring tools:
 Action: the action to take, should be one of [{tool_names}]
-Action Input: the input to the action
+Action Input: the input to the action (IMPORTANT: for CrowdStrike tools, extract the hostname from the question and pass ONLY the clean hostname like "C02G7C7LMD6R", not "hostname=C02G7C7LMD6R")
 Observation: the result of the action
 ... (this Thought/Action/Action Input/Observation can repeat N times)
 Thought: I now know the final answer

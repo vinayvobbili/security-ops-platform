@@ -1,10 +1,11 @@
 # /services/my_model.py
 """
-Simple Security Operations RAG Bot
+Security Operations LLM Agent Interface
 
 Core functionality:
-- Initialize Ollama LLM with documents and tools
-- Process user messages and return responses for Webex
+- Initialize LLM agent with document search and security tools
+- Pass user messages to agent for intelligent processing
+- Agent decides what tools to use and how to respond
 
 Created for MetLife Security Operations
 """
@@ -30,16 +31,12 @@ def initialize_model_and_agent():
 
 def ask(user_message: str, user_id: str = "default", room_id: str = "default") -> str:
     """
-    SOC Q&A function following requirements from Pokédex.py:
-    1. Search documents first
-    2. Use tools as needed
-    3. Supplement with LLM (with disclaimers)
-    4. Provide source attribution
+    SOC Q&A function using LLM agent architecture:
+    1. Pass message to LLM agent
+    2. Agent decides what tools/documents are needed
+    3. Agent handles all processing and formatting
+    4. Returns complete response with proper attribution
     """
-    import os
-    from langchain_ollama import ChatOllama, OllamaEmbeddings
-    from langchain_community.vectorstores import FAISS
-    from bot.utils.enhanced_config import ModelConfig
 
     start_time = time.time()
 
@@ -68,9 +65,7 @@ def ask(user_message: str, user_id: str = "default", room_id: str = "default") -
         session_manager = state_manager.get_session_manager() if state_manager else None
 
         # Get conversation context if available (use more of the 8K context window)
-        conversation_context = ""
-        if session_manager:
-            conversation_context = session_manager.get_context(session_key, limit=10)
+        # conversation_context is available but not currently used in this simplified flow
 
         # Handle simple commands
         if query.lower() in ['hello', 'hi']:
@@ -116,155 +111,30 @@ Just ask me any security-related question!"""
                     logging.warning(f"Failed to store session interaction: {e}")
             return simple_response
 
-        response_parts = []
-        config = ModelConfig()
-
-        # STEP 1: Search documents first
+        # STEP 1: Always pass query to LLM agent - let it decide everything
         try:
-            embeddings = OllamaEmbeddings(model=config.embedding_model_name)
-
-            project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-            faiss_path = os.path.join(project_root, "faiss_index_ollama")
-
-            if os.path.exists(faiss_path):
-                document_store = FAISS.load_local(faiss_path, embeddings, allow_dangerous_deserialization=True)
-                docs = document_store.similarity_search(query, k=3)
-
-                if docs:
-                    content_parts = []
-                    sources = set()
-
-                    for doc in docs:
-                        if doc.page_content.strip():
-                            content_parts.append(doc.page_content.strip())
-                            if hasattr(doc, 'metadata') and 'source' in doc.metadata:
-                                sources.add(os.path.basename(doc.metadata['source']))
-
-                    if content_parts:
-                        combined_content = "\n\n".join(content_parts)
-                        source_list = ", ".join(sorted(sources)) if sources else "Local documentation"
-
-                        # Clean and format the documentation content
-                        formatted_content = f"📋 **From Local Documentation:**\n\n{combined_content}\n\n**Source:** {source_list}"
-                        response_parts.append(formatted_content)
-                        logging.info(f"Found docs: {source_list}")
+            agent_executor = state_manager.get_agent_executor() if state_manager else None
+            logging.info(f"Agent executor available: {agent_executor is not None}")
+            
+            if agent_executor:
+                # Let the LLM agent handle everything - document search, tool usage, decisions
+                logging.info(f"Passing query to LLM agent: {query}")
+                agent_result = agent_executor.invoke({"input": query})
+                logging.info(f"Agent result: {agent_result}")
+                
+                if agent_result and 'output' in agent_result:
+                    # Agent handled it completely - store session and return
+                    final_response = agent_result['output']
+                else:
+                    logging.warning(f"No output in agent result: {agent_result}")
+                    final_response = "❌ No response from agent. Please try again."
+            else:
+                logging.error("Agent executor not available - system not properly initialized")
+                final_response = "❌ System not ready. Please try again in a moment."
+                
         except Exception as e:
-            logging.warning(f"Document search failed: {e}")
-
-        # STEP 2: Tool invocation for specific queries
-        query_lower = query.lower()
-        skip_llm = False  # Flag to skip LLM supplementation when we have tool results
-        
-        # Check for device/host queries and extract hostname
-        device_keywords = ['containment', 'isolation', 'status', 'device', 'host']
-        if any(keyword in query_lower for keyword in device_keywords):
-            # Extract hostname from query (look for alphanumeric patterns that could be hostnames)
-            import re
-            # Pattern for typical hostname formats - more flexible to catch various formats
-            hostname_patterns = [
-                r'\b[A-Z][0-9][0-9][A-Z0-9]{6,10}[A-Z0-9]\b',  # C02G7C7LMD6R format
-                r'\b[A-Z0-9][A-Z0-9\-]{5,15}\b',               # General hostname format
-                r'\b[A-Z]{2,4}[0-9]{2,6}[A-Z0-9]{2,6}\b'       # Other common formats
-            ]
-            
-            matches = []
-            for pattern in hostname_patterns:
-                matches.extend(re.findall(pattern, query.upper()))
-                if matches:  # Stop at first successful match
-                    break
-            
-            logging.info(f"Hostname search in query '{query}': found matches {matches}")
-            
-            if matches:
-                hostname = matches[0]  # Take the first match
-                try:
-                    # Get the agent executor to use CrowdStrike tools
-                    agent_executor = state_manager.get_agent_executor() if state_manager else None
-                    logging.info(f"Agent executor available: {agent_executor is not None}")
-                    
-                    if agent_executor and ('containment' in query_lower or 'isolation' in query_lower):
-                        # Call the containment status tool
-                        tool_query = f"What is the containment status of device {hostname}?"
-                        logging.info(f"Invoking agent with query: {tool_query}")
-                        tool_result = agent_executor.invoke({"input": tool_query})
-                        logging.info(f"Agent result: {tool_result}")
-                        if tool_result and 'output' in tool_result:
-                            response_parts.append(f"🛡️ **CrowdStrike Status**\n\n{tool_result['output']}")
-                            logging.info(f"Successfully retrieved containment status for {hostname}")
-                            # Skip LLM supplementation since we have real tool data
-                            skip_llm = True
-                        else:
-                            logging.warning(f"No output in agent result: {tool_result}")
-                    elif agent_executor and ('online' in query_lower or 'status' in query_lower):
-                        # Call the online status tool
-                        tool_query = f"What is the online status of device {hostname}?"
-                        logging.info(f"Invoking agent with query: {tool_query}")
-                        tool_result = agent_executor.invoke({"input": tool_query})
-                        logging.info(f"Agent result: {tool_result}")
-                        if tool_result and 'output' in tool_result:
-                            response_parts.append(f"🛡️ **CrowdStrike Status**\n\n{tool_result['output']}")
-                            logging.info(f"Successfully retrieved online status for {hostname}")
-                            # Skip LLM supplementation since we have real tool data
-                            skip_llm = True
-                        else:
-                            logging.warning(f"No output in agent result: {tool_result}")
-                    else:
-                        if not agent_executor:
-                            logging.warning("Agent executor not available")
-                        else:
-                            logging.info(f"Query didn't match containment/isolation/online patterns: {query_lower}")
-                        response_parts.append(f"🛡️ **Security Tools:** CrowdStrike agent not available for hostname {hostname}")
-                        
-                except Exception as e:
-                    logging.error(f"Failed to invoke CrowdStrike tool for {hostname}: {e}")
-                    response_parts.append(f"🛡️ **Security Tools:** Unable to retrieve status for {hostname} - tool error")
-        
-        elif any(word in query_lower for word in ['weather', 'temperature']):
-            response_parts.append("🌤️ **Weather Info:** Please specify a location for weather information.")
-
-        # STEP 3: LLM supplementation (skip if we have tool results)
-        if not skip_llm:
-            try:
-                llm = ChatOllama(model=config.llm_model_name, temperature=config.temperature)
-
-                # Build prompt with context if available
-                context_prefix = ""
-                if conversation_context:
-                    context_prefix = f"Previous conversation:\n{conversation_context}\n\nCurrent question: "
-
-                # Build contextually appropriate LLM prompt
-                if response_parts:  # Has document content
-                    # First check if documents are actually relevant
-                    relevance_check = f'Does this question: "{query}" relate to security operations, incident response, or cybersecurity? Answer only "yes" or "no".'
-                    relevance_response = llm.invoke(relevance_check)
-                    is_security_related = "yes" in relevance_response.content.lower()
-
-                    if is_security_related:
-                        llm_prompt = f'{context_prefix}Question: "{query}"\n\nBased on the security documentation provided, supplement it with additional context, key insights, or practical guidance that would be valuable for a SOC analyst. Provide a comprehensive but focused response.'
-                    else:
-                        # Clear response_parts since docs aren't relevant
-                        response_parts.clear()
-                        llm_prompt = f'{context_prefix}Question: "{query}"\n\nThis appears to be a casual question. Provide a brief, friendly response appropriate for a security operations assistant.'
-                else:  # No documents found
-                    llm_prompt = f'{context_prefix}A SOC analyst asked: "{query}". If this is a security-related question, provide practical guidance. If it\'s a casual/test question, give a brief, friendly response appropriate for a security operations assistant. Be helpful and professional.'
-
-                response = llm.invoke(llm_prompt)
-                llm_content = response.content.strip() if hasattr(response, 'content') else str(response).strip()
-
-                if llm_content:  # Always add LLM content if available
-                    disclaimer = "⚠️ **Additional Context**"
-                    supplemental = f"{disclaimer}\n\n{llm_content}"
-                    response_parts.append(supplemental)
-                    logging.info(f"Added LLM supplementation: {len(llm_content)} chars")
-
-            except Exception as e:
-                logging.warning(f"LLM supplementation failed: {e}")
-
-        # Return combined response
-        if response_parts:
-            final_response = "\n\n---\n\n".join(response_parts)
-        else:
-            final_response = "❌ No information found. Please rephrase or contact your security team."
+            logging.error(f"Failed to invoke agent: {e}")
+            final_response = "❌ An error occurred. Please try again or contact support."
 
         # Store interaction in session for context continuity
         if session_manager:

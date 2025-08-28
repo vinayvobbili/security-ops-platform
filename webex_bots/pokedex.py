@@ -1,22 +1,22 @@
-# Pokedex SOC Bot - Streamlined Q&A Architecture
+# Pokedx SOC Bot - LLM Agent Architecture
 """
 HIGH LEVEL REQUIREMENTS:
 ========================
 1. SOC analyst sends message via Webex
-2. Search local documents first for relevant information
-3. If found, provide answer with proper source attribution
-4. Use available tools (CrowdStrike, weather, etc.) as needed
-5. Supplement with LLM training data with clear disclaimers
+2. LLM agent decides what's needed: documents, tools, or direct response
+3. Agent searches documents and uses tools as appropriate
+4. Agent provides answers with proper source attribution
+5. Agent supplements with training data when local info insufficient
 6. Keep responses under 30 seconds for operational needs
-7. Prioritize reliability and speed over sophisticated reasoning
+7. Prioritize reliability and intelligent decision-making
 
 ARCHITECTURE APPROACH:
 =====================
-- Direct document search first (not agent-driven)
-- Simple LLM calls for supplementation (not complex agents)  
-- Synchronous processing in WebX threads
-- Clear error boundaries and timeouts
-- Source attribution for all document-based responses
+- LLM agent makes all decisions about tools and document search
+- Agent has access to document search, CrowdStrike tools, weather tools
+- Agent handles parameter extraction, tool selection, and response formatting
+- Synchronous processing in WebX threads with agent-driven intelligence
+- Source attribution handled by agent prompts and tool responses
 """
 import csv
 import logging
@@ -153,7 +153,7 @@ def initialize_bot():
 
 
 def process_user_message(user_message: str, teams_message) -> str:
-    """Process user message and return response text"""
+    """Process user message by passing it to LLM agent and return response text"""
     if not user_message.strip():
         return ""
 
@@ -163,7 +163,7 @@ def process_user_message(user_message: str, teams_message) -> str:
     if not bot_ready:
         return "🔄 I'm still starting up. Please try again in a moment."
 
-    # Get response using streamlined SOC Q&A approach
+    # Get response from LLM agent
     try:
         response_text = ask(
             user_message,
@@ -171,7 +171,7 @@ def process_user_message(user_message: str, teams_message) -> str:
             room_id=teams_message.roomId
         )
     except Exception as e:
-        logger.error(f"Error in streamlined SOC Q&A: {e}")
+        logger.error(f"Error in LLM agent processing: {e}")
         return "❌ I encountered an error processing your message. Please try again."
 
     # Format for Webex
@@ -183,7 +183,7 @@ def process_user_message(user_message: str, teams_message) -> str:
 
 
 class PokeDxBot(WebexBot):
-    """Streamlined Pokedex bot"""
+    """LLM Agent-powered SOC bot for Webex"""
 
     def process_incoming_message(self, teams_message, activity):
         """Process incoming messages"""
