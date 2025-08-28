@@ -29,7 +29,7 @@ fi
 echo "🤖 Starting the security assistant bot bot..."
 source .venv/bin/activate
 export PYTHONPATH="/Users/user/PycharmProjects/IR:$PYTHONPATH"
-python webex_bots/pokedex.py
+python src/pokedex/pokedex.py
 
 # Return to original directory
 cd "$ORIGINAL_DIR" || exit 1
