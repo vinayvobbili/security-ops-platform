@@ -18,7 +18,6 @@ from langchain_core.prompts import ChatPromptTemplate
 
 from my_config import get_config
 from bot.utils.enhanced_config import ModelConfig
-from bot.monitoring.performance_monitor import PerformanceMonitor
 from bot.monitoring.session_manager import SessionManager
 from bot.document.document_processor import DocumentProcessor
 from bot.tools.crowdstrike_tools import CrowdStrikeToolsManager
@@ -40,7 +39,6 @@ class SecurityBotStateManager:
         self.agent_executor: Optional[AgentExecutor] = None
         
         # Managers
-        self.performance_monitor: Optional[PerformanceMonitor] = None
         self.session_manager: Optional[SessionManager] = None
         self.document_processor: Optional[DocumentProcessor] = None
         self.crowdstrike_manager: Optional[CrowdStrikeToolsManager] = None
@@ -58,7 +56,6 @@ class SecurityBotStateManager:
         project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
         self.pdf_directory_path = os.path.join(project_root, "local_pdfs_docs")
         self.faiss_index_path = os.path.join(project_root, "faiss_index_ollama")
-        self.performance_data_path = os.path.join(project_root, "performance_data.json")
     
     
     def _setup_shutdown_handlers(self):
@@ -102,12 +99,6 @@ class SecurityBotStateManager:
     
     def _initialize_managers(self):
         """Initialize core managers"""
-        # Performance monitoring
-        self.performance_monitor = PerformanceMonitor(
-            max_response_time_samples=1000,
-            data_file_path=self.performance_data_path
-        )
-        
         # Session management
         self.session_manager = SessionManager(
             session_timeout_hours=24,
@@ -279,9 +270,6 @@ Thought:{agent_scratchpad}"""
     def _shutdown_handler(self):
         """Handle graceful shutdown"""
         try:
-            if self.performance_monitor:
-                self.performance_monitor.save_data()
-            
             # Clear references to force cleanup
             self.llm = None
             self.embeddings = None
@@ -303,9 +291,6 @@ Thought:{agent_scratchpad}"""
         """Get agent executor instance"""
         return self.agent_executor
     
-    def get_performance_monitor(self) -> Optional[PerformanceMonitor]:
-        """Get performance monitor instance"""
-        return self.performance_monitor
     
     def get_session_manager(self) -> Optional[SessionManager]:
         """Get session manager instance"""
@@ -378,9 +363,6 @@ Thought:{agent_scratchpad}"""
         self.embeddings = None
         self.agent_executor = None
         
-        if self.performance_monitor:
-            self.performance_monitor.reset_stats()
-        
         self.is_initialized = False
         logging.info("All components reset")
 
@@ -395,9 +377,3 @@ def get_state_manager() -> SecurityBotStateManager:
     if _state_manager is None:
         _state_manager = SecurityBotStateManager()
     return _state_manager
-
-
-def initialize_security_bot() -> bool:
-    """Initialize the security bot (convenience function)"""
-    state_manager = get_state_manager()
-    return state_manager.initialize_all_components()
