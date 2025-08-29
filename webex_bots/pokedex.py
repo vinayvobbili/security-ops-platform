@@ -136,7 +136,10 @@ def generate_health_test_report(test_results, failed_critical):
     # Add individual test results
     for test_name, result in test_results.items():
         status = result.get('status', 'UNKNOWN')
-        duration = result.get('duration', 0)
+        duration = result.get('duration', '0.00s')
+        
+        # Duration is already formatted as string (e.g., "2.30s" or "N/A")
+        # Don't try to reformat it
         
         if status == 'PASS':
             emoji = "✅"
@@ -145,7 +148,7 @@ def generate_health_test_report(test_results, failed_critical):
         else:
             emoji = "⚠️"
             
-        report += f"{emoji} **{test_name}:** {status} ({duration:.2f}s)\n"
+        report += f"{emoji} **{test_name}:** {status} ({duration})\n"
         
         # Add error details for failed tests
         if status == 'FAIL' and 'error' in result:
@@ -160,17 +163,25 @@ def generate_health_test_report(test_results, failed_critical):
 
 
 def send_health_test_report(report):
-    """Send health test report to WebX"""
+    """Send health test report directly to user via Webex"""
     global bot_instance
     try:
         if bot_instance and hasattr(bot_instance, 'teams'):
-            test_room_id = CONFIG.webex_room_id_vinay_test_space
-            bot_instance.teams.messages.create(roomId=test_room_id, markdown=report)
-            logger.info("Health test report sent to WebX")
+            # Send direct message to user using configured email
+            user_email = CONFIG.my_email_address
+            bot_instance.teams.messages.create(toPersonEmail=user_email, markdown=report)
+            logger.info(f"Health test report sent directly to {user_email}")
         else:
             logger.warning("Cannot send health test report - bot not fully initialized")
     except Exception as e:
-        logger.error(f"Failed to send health test report to WebX: {e}")
+        logger.error(f"Failed to send health test report to user: {e}")
+        # Fallback to test room if direct message fails
+        try:
+            test_room_id = CONFIG.webex_room_id_vinay_test_space
+            bot_instance.teams.messages.create(roomId=test_room_id, markdown=report)
+            logger.info("Health test report sent to test room as fallback")
+        except Exception as fallback_error:
+            logger.error(f"Fallback to test room also failed: {fallback_error}")
 
 
 def run_health_tests_background():
@@ -227,10 +238,10 @@ def initialize_bot():
         total_time = (datetime.now() - start_time).total_seconds()
         logger.info(f"✅ Streamlined bot initialization completed in {total_time:.1f}s")
 
-        # Run health tests in background thread (non-blocking)
-        health_test_thread = threading.Thread(target=run_health_tests_background, daemon=True)
-        health_test_thread.start()
-        logger.info("🔬 Health tests started in background...")
+        # Run health tests in background thread (non-blocking) - COMMENTED OUT FOR DEBUGGING
+        # health_test_thread = threading.Thread(target=run_health_tests_background, daemon=True)
+        # health_test_thread.start()
+        # logger.info("🔬 Health tests started in background...")
 
         return True
 
@@ -248,11 +259,14 @@ class PokeDexBot(WebexBot):
         logger.info(f"Processing message: {getattr(teams_message, 'text', 'NO TEXT')[:50]}...")
 
         # Basic filtering - ignore bot messages and non-person actors
+        bot_email = WEBEX_BOT_EMAIL  # Use the actual bot email from config
         if (hasattr(teams_message, 'personEmail') and
-                teams_message.personEmail == self.bot_display_name):
+                teams_message.personEmail == bot_email):
+            logger.info(f"Ignoring bot's own message from {bot_email}")
             return
 
         if activity.get('actor', {}).get('type') != 'PERSON':
+            logger.info("Ignoring non-person actor")
             return
 
         # Check user approval
@@ -327,14 +341,28 @@ def create_webex_bot():
 
 
 def graceful_shutdown():
-    """Perform graceful shutdown"""
+    """Perform graceful shutdown with proper websocket cleanup"""
     global bot_ready, bot_instance
     bot_ready = False
 
+    logger.info("🛑 Performing graceful shutdown...")
+    
     try:
+        if bot_instance:
+            # Try to properly close the websocket connection
+            if hasattr(bot_instance, 'stop'):
+                logger.info("Stopping bot instance...")
+                bot_instance.stop()
+            elif hasattr(bot_instance, 'websocket_client'):
+                logger.info("Closing websocket client...")
+                bot_instance.websocket_client.close()
+            
+            # Clear the instance
+            bot_instance = None
+            logger.info("Bot instance cleared")
+    except Exception as e:
+        logger.error(f"Error during graceful shutdown: {e}")
         bot_instance = None
-    except:
-        pass
 
 
 def main():
@@ -344,18 +372,23 @@ def main():
     start_time = datetime.now()
     logger.info("🤖 Starting Pokedex Webex Bot...")
 
-    # Initialize the bot
-    if not initialize_bot():
-        logger.error("❌ Failed to initialize bot. Exiting.")
-        return 1
-
     try:
-        # Create and start the WebEx bot
-        logger.info("🌐 Creating WebEx bot connection...")
+        # Small delay to ensure any previous connections are cleaned up
+        logger.info("⏳ Waiting for any previous connections to clean up...")
+        import time
+        time.sleep(2)
+        
+        # Create Webex bot first (before complex initialization)
+        logger.info("🌐 Creating Webex bot connection...")
         bot_instance = create_webex_bot()
-
         logger.info("✅ Bot created successfully")
         logger.info(f"📧 Bot email: {WEBEX_BOT_EMAIL}")
+
+        # Now initialize the LLM components (after Webex bot creation)
+        logger.info("🧠 Initializing LLM components...")
+        if not initialize_bot():
+            logger.error("❌ Failed to initialize bot. Exiting.")
+            return 1
 
         # Calculate total initialization time
         init_duration = (datetime.now() - start_time).total_seconds()
