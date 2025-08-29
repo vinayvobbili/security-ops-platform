@@ -115,7 +115,7 @@ def generate_health_test_report(test_results, failed_critical):
     total_tests = len(test_results)
     passed_tests = sum(1 for result in test_results.values() if result.get('status') == 'PASS')
     failed_tests = total_tests - passed_tests
-    
+
     if failed_critical:
         status_emoji = "❌"
         status_text = "CRITICAL FAILURES DETECTED"
@@ -125,40 +125,40 @@ def generate_health_test_report(test_results, failed_critical):
     else:
         status_emoji = "✅"
         status_text = "ALL TESTS PASSED"
-    
+
     report = f"""🔬 **Pokedex Health Test Report**
 
 {status_emoji} **Overall Status:** {status_text}
 📊 **Summary:** {passed_tests}/{total_tests} tests passed
 
 """
-    
+
     # Add individual test results
     for test_name, result in test_results.items():
         status = result.get('status', 'UNKNOWN')
         duration = result.get('duration', '0.00s')
-        
+
         # Duration is already formatted as string (e.g., "2.30s" or "N/A")
         # Don't try to reformat it
-        
+
         if status == 'PASS':
             emoji = "✅"
         elif status == 'FAIL':
             emoji = "❌"
         else:
             emoji = "⚠️"
-            
+
         report += f"{emoji} **{test_name}:** {status} ({duration})\n"
-        
+
         # Add error details for failed tests
         if status == 'FAIL' and 'error' in result:
             report += f"   └─ Error: {result['error']}\n"
-    
+
     # Add critical test warnings
     if failed_critical:
         report += f"\n🚨 **Critical systems affected:** {', '.join(failed_critical)}"
         report += "\n⚠️ Bot functionality may be impaired. Please review system configuration."
-    
+
     return report
 
 
@@ -201,7 +201,7 @@ def run_health_tests_background():
 
         # Generate test report
         report = generate_health_test_report(test_results, failed_critical)
-        
+
         # Log results
         if failed_critical:
             logger.error(f"❌ Critical tests failed: {', '.join(failed_critical)}")
@@ -238,10 +238,10 @@ def initialize_bot():
         total_time = (datetime.now() - start_time).total_seconds()
         logger.info(f"✅ Streamlined bot initialization completed in {total_time:.1f}s")
 
-        # Run health tests in background thread (non-blocking) - COMMENTED OUT FOR DEBUGGING
-        # health_test_thread = threading.Thread(target=run_health_tests_background, daemon=True)
-        # health_test_thread.start()
-        # logger.info("🔬 Health tests started in background...")
+        # Run health tests in background thread (non-blocking)
+        health_test_thread = threading.Thread(target=run_health_tests_background, daemon=True)
+        health_test_thread.start()
+        logger.info("🔬 Health tests started in background...")
 
         return True
 
@@ -346,7 +346,7 @@ def graceful_shutdown():
     bot_ready = False
 
     logger.info("🛑 Performing graceful shutdown...")
-    
+
     try:
         if bot_instance:
             # Try to properly close the websocket connection
@@ -356,7 +356,7 @@ def graceful_shutdown():
             elif hasattr(bot_instance, 'websocket_client'):
                 logger.info("Closing websocket client...")
                 bot_instance.websocket_client.close()
-            
+
             # Clear the instance
             bot_instance = None
             logger.info("Bot instance cleared")
@@ -377,7 +377,7 @@ def main():
         logger.info("⏳ Waiting for any previous connections to clean up...")
         import time
         time.sleep(2)
-        
+
         # Create Webex bot first (before complex initialization)
         logger.info("🌐 Creating Webex bot connection...")
         bot_instance = create_webex_bot()
