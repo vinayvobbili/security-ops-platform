@@ -12,84 +12,12 @@ Created for Acme Security Operations
 import logging
 import time
 from pokedex_bot.core.state_manager import get_state_manager
-from pokedx_bot.core.session_manager import get_session_manager
+from pokedex_bot.core.session_manager import get_session_manager
+from pokedex_bot.core.error_recovery import get_recovery_manager, enhanced_agent_wrapper
 
 logging.basicConfig(level=logging.INFO)
 
 
-def cleanup_old_sessions():
-    """Remove sessions older than cleanup interval"""
-    cutoff_time = datetime.now() - session_cleanup_interval
-    sessions_to_remove = []
-
-    for session_key, messages in conversation_sessions.items():
-        if messages and messages[-1]["timestamp"] < cutoff_time:
-            sessions_to_remove.append(session_key)
-
-    for session_key in sessions_to_remove:
-        del conversation_sessions[session_key]
-        logging.debug(f"Cleaned up old session: {session_key}")
-
-
-def add_to_session(session_key: str, role: str, content: str):
-    """Add a message to the session history"""
-    message = {
-        "role": role,
-        "content": content,
-        "timestamp": datetime.now()
-    }
-    conversation_sessions[session_key].append(message)
-
-
-def get_conversation_context(session_key: str, max_messages: int = 20, max_context_chars: int = 4000) -> str:
-    """Get recent conversation history for context, respecting token limits"""
-    messages = conversation_sessions.get(session_key, deque())
-    if not messages:
-        return ""
-
-    # Get recent messages, working backwards to fit within character limit
-    recent_messages = list(messages)
-    context_parts = []
-    total_chars = 0
-
-    # Add messages from most recent backwards, until we hit limits
-    for msg in reversed(recent_messages[-max_messages:]):
-        role = "User" if msg["role"] == "user" else "Assistant"
-        msg_text = f"{role}: {msg['content']}"
-
-        # Check if adding this message would exceed our context limit
-        if total_chars + len(msg_text) + 100 > max_context_chars:  # 100 char buffer
-            break
-
-        context_parts.insert(0, msg_text)  # Insert at beginning to maintain chronological order
-        total_chars += len(msg_text) + 1  # +1 for newline
-
-        # Stop if we have enough messages
-        if len(context_parts) >= max_messages:
-            break
-
-    if context_parts:
-        context = "\n\nPrevious conversation:\n" + "\n".join(context_parts) + "\n\nCurrent question:"
-        logging.debug(f"Context added: {len(context_parts)} messages, {len(context)} chars")
-        return context
-
-    return ""
-
-
-def get_session_info(session_key: str = None) -> dict:
-    """Get session information for debugging"""
-    if session_key:
-        messages = list(conversation_sessions.get(session_key, deque()))
-        return {
-            "session_key": session_key,
-            "message_count": len(messages),
-            "messages": messages
-        }
-    else:
-        return {
-            "total_sessions": len(conversation_sessions),
-            "session_keys": list(conversation_sessions.keys())
-        }
 
 
 def initialize_model_and_agent():
@@ -139,11 +67,14 @@ def ask(user_message: str, user_id: str = "default", room_id: str = "default") -
             logging.error("State manager not initialized. Bot must be initialized before use.")
             return "❌ Bot not ready. Please try again in a moment."
 
+        # Get session manager for persistent sessions
+        session_manager = get_session_manager()
+        
         # Clean up old sessions periodically
-        cleanup_old_sessions()
+        session_manager.cleanup_old_sessions()
 
         # Get conversation context from session history
-        conversation_context = get_conversation_context(session_key)
+        conversation_context = session_manager.get_conversation_context(session_key)
 
         # Quick responses for simple queries (performance optimization)
         simple_query = query.lower().strip()
@@ -169,8 +100,8 @@ I'm here to help with security operations by searching our local SOC documentati
 Just ask me any security-related question!"""
             
             # Store simple interaction in session
-            add_to_session(session_key, "user", query)
-            add_to_session(session_key, "assistant", final_response)
+            session_manager.add_message(session_key, "user", query)
+            session_manager.add_message(session_key, "assistant", final_response)
             
             elapsed = time.time() - start_time
             if elapsed > 25:
@@ -189,21 +120,21 @@ Just ask me any security-related question!"""
                     agent_input = conversation_context + " " + query
                     logging.debug(f"Added conversation context to query")
 
-                # Let the LLM agent handle everything - document search, tool usage, decisions
+                # Let the LLM agent handle everything with enhanced error recovery
                 logging.info(f"Passing query to LLM agent: {query[:100]}...")
-                agent_result = agent_executor.invoke({"input": agent_input})
-                logging.info(f"Agent result received")
-
-                if agent_result and 'output' in agent_result:
-                    # Agent handled it completely - store in session and return
-                    final_response = agent_result['output']
-
+                recovery_manager = get_recovery_manager()
+                
+                try:
+                    final_response = enhanced_agent_wrapper(agent_executor, agent_input, recovery_manager)
                     # Store user message and bot response in session
-                    add_to_session(session_key, "user", query)
-                    add_to_session(session_key, "assistant", final_response)
-                else:
-                    logging.warning(f"No output in agent result: {agent_result}")
-                    final_response = "❌ No response from agent. Please try again."
+                    session_manager.add_message(session_key, "user", query)
+                    session_manager.add_message(session_key, "assistant", final_response)
+                except Exception as e:
+                    logging.error(f"Enhanced agent wrapper failed: {e}")
+                    final_response = recovery_manager.get_fallback_response('general', query)
+                    # Still store the interaction for context
+                    session_manager.add_message(session_key, "user", query)
+                    session_manager.add_message(session_key, "assistant", final_response)
             else:
                 logging.error("Agent executor not available - system not properly initialized")
                 final_response = "❌ System not ready. Please try again in a moment."
