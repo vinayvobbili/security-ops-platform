@@ -238,10 +238,10 @@ def initialize_bot():
         total_time = (datetime.now() - start_time).total_seconds()
         logger.info(f"✅ Streamlined bot initialization completed in {total_time:.1f}s")
 
-        # Run health tests in background thread (non-blocking)
-        health_test_thread = threading.Thread(target=run_health_tests_background, daemon=True)
-        health_test_thread.start()
-        logger.info("🔬 Health tests started in background...")
+        # Health tests disabled for faster startup - run manually when needed
+        # To run health tests: python pokedx_bot/tests/system_health_tests.py
+        # Or use pytest: python -m pytest tests/
+        logger.info("🚀 Bot ready - health tests available on demand")
 
         return True
 
