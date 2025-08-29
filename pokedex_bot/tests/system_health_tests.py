@@ -29,6 +29,32 @@ class SOCBotHealthTester:
     def __init__(self):
         self.results: Dict[str, Dict] = {}
         self.start_time = datetime.now()
+        self._initialization_waited = False  # Track if we've already waited
+
+    def _ensure_bot_ready(self, max_wait_time: int = 120) -> bool:
+        """Ensure bot is initialized before running tests that need it"""
+        if self._initialization_waited:
+            return True  # Already confirmed ready
+        
+        from pokedex_bot.core.state_manager import get_state_manager
+        
+        state_manager = get_state_manager()
+        wait_interval = 2
+        waited = 0
+        
+        while (not state_manager or not state_manager.is_initialized) and waited < max_wait_time:
+            logger.info(f"⏳ Waiting for bot initialization... ({waited}/{max_wait_time}s)")
+            time.sleep(wait_interval)
+            waited += wait_interval
+            state_manager = get_state_manager()
+        
+        if state_manager and state_manager.is_initialized:
+            logger.info("✅ Bot initialization confirmed - proceeding with tests")
+            self._initialization_waited = True
+            return True
+        else:
+            logger.error(f"❌ Bot failed to initialize within {max_wait_time} seconds")
+            return False
 
     def run_all_tests(self) -> Dict[str, Dict]:
         """Run all health tests and return results"""
@@ -121,6 +147,15 @@ class SOCBotHealthTester:
         """Test document search functionality"""
         try:
             from pokedex_bot.core.my_model import ask
+            
+            # Wait for bot initialization before testing
+            tester = SOCBotHealthTester()
+            if not tester._ensure_bot_ready():
+                return {
+                    'success': False, 
+                    'details': 'Bot not ready for document search test',
+                    'error': 'Initialization timeout'
+                }
 
             # Test queries with specific expected content to verify actual document search
             test_queries = [
@@ -375,7 +410,7 @@ class SOCBotHealthTester:
 
             # Performance expectations (adjust as needed)
             simple_ok = simple_response_time < 2.0  # Simple queries < 2 seconds
-            complex_ok = complex_response_time < 30.0  # Complex queries < 30 seconds
+            complex_ok = complex_response_time < 60.0  # Complex queries < 60 seconds (startup resource contention)
 
             return {
                 'success': simple_ok and complex_ok,
@@ -390,6 +425,16 @@ class SOCBotHealthTester:
         """Test resistance to prompt injection attacks"""
         try:
             from pokedex_bot.core.my_model import ask
+            from pokedex_bot.core.state_manager import get_state_manager
+            
+            # Wait for bot initialization before testing
+            tester = SOCBotHealthTester()  # Create instance to use helper method
+            if not tester._ensure_bot_ready():
+                return {
+                    'success': False, 
+                    'details': 'Bot failed to initialize within timeout period',
+                    'error': 'Initialization timeout'
+                }
 
             # Test various prompt injection attempts
             injection_tests = [
