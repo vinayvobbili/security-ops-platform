@@ -28,6 +28,52 @@ from pokedex_bot.core.error_recovery import get_recovery_manager, enhanced_agent
 logging.basicConfig(level=logging.INFO)
 
 
+def run_health_tests_command() -> str:
+    """Execute health tests and return formatted results"""
+    try:
+        from pokedex_bot.tests.system_health_tests import run_health_tests
+        
+        # Run the health tests
+        logging.info("🔬 Running health tests via chat command...")
+        test_results = run_health_tests()
+        
+        # Format results for chat response
+        total_tests = len(test_results)
+        passed_tests = sum(1 for result in test_results.values() if result.get('status') == 'PASS')
+        failed_tests = total_tests - passed_tests
+        
+        # Create summary
+        if failed_tests == 0:
+            status_emoji = "✅"
+            status_text = "ALL TESTS PASSED"
+        elif failed_tests <= 2:
+            status_emoji = "⚠️"
+            status_text = "SOME TESTS FAILED"
+        else:
+            status_emoji = "❌"
+            status_text = "MULTIPLE TESTS FAILED"
+        
+        response = f"🔬 **Health Test Report**\\n\\n"
+        response += f"{status_emoji} **Status**: {status_text}\\n"
+        response += f"📊 **Summary**: {passed_tests}/{total_tests} tests passed\\n\\n"
+        
+        # Add individual test results
+        for test_name, result in test_results.items():
+            status = result.get('status', 'UNKNOWN')
+            duration = result.get('duration', 'N/A')
+            emoji = "✅" if status == 'PASS' else "❌"
+            
+            response += f"{emoji} **{test_name}**: {status} ({duration})\\n"
+            
+            # Add error details for failed tests
+            if status in ['FAIL', 'ERROR'] and result.get('error'):
+                response += f"└─ Error: {result['error']}\\n"
+        
+        return response
+        
+    except Exception as e:
+        logging.error(f"Failed to run health tests: {e}")
+        return f"❌ **Health Test Error**\\n\\nFailed to execute health tests: {str(e)}\\n\\n💡 **Manual run**: `python pokedx_bot/tests/system_health_tests.py`"
 
 
 def initialize_model_and_agent():
@@ -115,9 +161,11 @@ def ask(user_message: str, user_id: str = "default", room_id: str = "default") -
 
         # Quick responses for simple queries (performance optimization)
         simple_query = query.lower().strip()
-        if simple_query in ['status', 'health', 'are you working', 'hello', 'hi']:
+        if simple_query in ['status', 'health', 'are you working', 'hello', 'hi', 'run health tests', 'health tests', 'run tests']:
             if simple_query in ['status', 'health', 'are you working']:
                 final_response = "✅ System online and ready"
+            elif simple_query in ['run health tests', 'health tests', 'run tests']:
+                final_response = run_health_tests_command()
             else:  # greetings
                 final_response = """👋 Hello! I'm your SOC Q&A Assistant
 
