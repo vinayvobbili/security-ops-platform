@@ -151,9 +151,39 @@ def ask(user_message: str, user_id: str = "default", room_id: str = "default") -
         # Get conversation context from session history
         conversation_context = get_conversation_context(session_key)
 
-        # All queries go to LLM agent - no hardcoded bypasses
+        # Quick responses for simple queries (performance optimization)
+        simple_query = query.lower().strip()
+        if simple_query in ['status', 'health', 'are you working', 'hello', 'hi']:
+            if simple_query in ['status', 'health', 'are you working']:
+                final_response = "✅ System online and ready"
+            else:  # greetings
+                final_response = """👋 Hello! I'm your SOC Q&A Assistant
 
-        # STEP 1: Always pass query to LLM agent - let it decide everything
+I'm here to help with security operations by searching our local SOC documentation and using available security tools.
+
+🔒 Security Note: I operate in a secure environment with:
+• Access to internal SOC documents and procedures
+• Integration with security tools (CrowdStrike, Tanium, etc.)
+• No internet access - all responses from local resources only
+
+❓ How I can help:
+• Answer questions about security procedures
+• Search SOC documentation and runbooks
+• Check device status and containment
+• Provide step-by-step incident response guidance
+
+Just ask me any security-related question!"""
+            
+            # Store simple interaction in session
+            add_to_session(session_key, "user", query)
+            add_to_session(session_key, "assistant", final_response)
+            
+            elapsed = time.time() - start_time
+            if elapsed > 25:
+                logging.warning(f"Response took {elapsed:.1f}s")
+            return final_response
+
+        # STEP 1: For complex queries, pass to LLM agent - let it decide everything
         try:
             agent_executor = state_manager.get_agent_executor() if state_manager else None
             logging.info(f"Agent executor available: {agent_executor is not None}")
