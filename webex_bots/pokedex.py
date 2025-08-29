@@ -19,12 +19,10 @@ ARCHITECTURE APPROACH:
 - Source attribution handled by agent prompts and tool responses
 """
 import csv
-import logging
 import logging.handlers
 import os
 import signal
 import sys
-import threading
 from datetime import datetime
 from pathlib import Path
 
@@ -177,9 +175,12 @@ def send_health_test_report(report):
         logger.error(f"Failed to send health test report to user: {e}")
         # Fallback to test room if direct message fails
         try:
-            test_room_id = CONFIG.webex_room_id_vinay_test_space
-            bot_instance.teams.messages.create(roomId=test_room_id, markdown=report)
-            logger.info("Health test report sent to test room as fallback")
+            if bot_instance and hasattr(bot_instance, 'teams'):
+                test_room_id = CONFIG.webex_room_id_vinay_test_space
+                bot_instance.teams.messages.create(roomId=test_room_id, markdown=report)
+                logger.info("Health test report sent to test room as fallback")
+            else:
+                logger.error("Bot instance not available for fallback message")
         except Exception as fallback_error:
             logger.error(f"Fallback to test room also failed: {fallback_error}")
 
@@ -239,7 +240,7 @@ def initialize_bot():
         logger.info(f"✅ Streamlined bot initialization completed in {total_time:.1f}s")
 
         # Health tests disabled for faster startup - run manually when needed
-        # To run health tests: python pokedx_bot/tests/system_health_tests.py
+        # To run health tests: python pokedex_bot/tests/system_health_tests.py
         # Or use pytest: python -m pytest tests/
         logger.info("🚀 Bot ready - health tests available on demand")
 
@@ -323,9 +324,9 @@ class PokeDexBot(WebexBot):
                 try:
                     # If the incoming message has a parentId, use that instead to stay in same thread
                     parent_id = getattr(teams_message, 'parentId', None) or teams_message.id
-                    
+
                     self.teams.messages.create(
-                        roomId=teams_message.roomId, 
+                        roomId=teams_message.roomId,
                         parentId=parent_id,
                         markdown=response_text
                     )

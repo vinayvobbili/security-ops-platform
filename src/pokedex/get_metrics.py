@@ -11,12 +11,13 @@ from datetime import datetime
 from typing import Dict, Any
 
 # Add the project root to Python path
-sys.path.append('/')
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 def fetch_metrics() -> Dict[str, Any]:
     """Fetch metrics from the performance monitor"""
     try:
-        from services.my_model import performance_monitor, session_manager
+        from pokedex_bot.core.my_model import performance_monitor, session_manager
 
         # Get comprehensive stats
         perf_stats = performance_monitor.get_stats()
