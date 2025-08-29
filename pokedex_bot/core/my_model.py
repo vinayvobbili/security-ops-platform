@@ -6,6 +6,16 @@ Core functionality:
 - Initialize LLM agent with document search and security tools
 - Pass user messages to agent for intelligent processing
 - Agent decides what tools to use and how to respond
+- Persistent conversation storage with SQLite database
+- Enhanced error recovery with graceful fallbacks
+- Session management across bot restarts
+
+Features:
+- SQLite-based conversation persistence (30 messages per session)
+- Intelligent retry logic with exponential backoff
+- Context-aware fallback responses when tools fail
+- Automatic session cleanup and health monitoring
+- 4K character context window with token limits
 
 Created for Acme Security Operations
 """
@@ -21,7 +31,17 @@ logging.basicConfig(level=logging.INFO)
 
 
 def initialize_model_and_agent():
-    """Initialize the LLM, embeddings, and agent"""
+    """
+    Initialize the LLM, embeddings, and agent with enhanced capabilities.
+    
+    Initializes:
+    - State manager for LLM and agent components
+    - Session manager for persistent conversation storage
+    - Error recovery manager for graceful failure handling
+    
+    Returns:
+        bool: True if initialization successful, False otherwise
+    """
     state_manager = get_state_manager()
     success = state_manager.initialize_all_components()
 
@@ -35,11 +55,28 @@ def initialize_model_and_agent():
 
 def ask(user_message: str, user_id: str = "default", room_id: str = "default") -> str:
     """
-    SOC Q&A function using LLM agent architecture:
-    1. Pass message to LLM agent
-    2. Agent decides what tools/documents are needed
-    3. Agent handles all processing and formatting
-    4. Returns complete response with proper attribution
+    SOC Q&A function with persistent sessions and enhanced error recovery:
+    
+    1. Retrieves conversation context from persistent SQLite storage
+    2. Passes message to LLM agent with enhanced error handling
+    3. Agent decides what tools/documents are needed with retry logic
+    4. Gracefully handles tool failures with context-aware fallbacks
+    5. Stores conversation in persistent session for future context
+    6. Returns complete response with proper attribution
+    
+    Features:
+    - Persistent conversation context across bot restarts
+    - Enhanced error recovery with intelligent fallbacks
+    - Automatic session cleanup and health monitoring
+    - Fast responses for simple queries (health, greetings)
+    
+    Args:
+        user_message: The user's question or request
+        user_id: Unique identifier for the user (default: "default")
+        room_id: Unique identifier for the chat room (default: "default")
+        
+    Returns:
+        str: Complete response from the SOC assistant
     """
 
     start_time = time.time()
