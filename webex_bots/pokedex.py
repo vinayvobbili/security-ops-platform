@@ -319,7 +319,26 @@ class PokeDexBot(WebexBot):
                 end_time = datetime.now()
                 response_time = (end_time - start_time).total_seconds()
 
-                self.teams.messages.create(roomId=teams_message.roomId, markdown=response_text)
+                # Handle threading - avoid "Cannot reply to a reply" error
+                try:
+                    # If the incoming message has a parentId, use that instead to stay in same thread
+                    parent_id = getattr(teams_message, 'parentId', None) or teams_message.id
+                    
+                    self.teams.messages.create(
+                        roomId=teams_message.roomId, 
+                        parentId=parent_id,
+                        markdown=response_text
+                    )
+                except Exception as thread_error:
+                    # Fallback to non-threaded message if threading fails
+                    if "Cannot reply to a reply" in str(thread_error):
+                        logger.warning("Threading failed, sending as standalone message")
+                        self.teams.messages.create(
+                            roomId=teams_message.roomId,
+                            markdown=response_text
+                        )
+                    else:
+                        raise thread_error
                 log_conversation(user_name, raw_message, response_text, response_time, room_name)
 
         except Exception as e:
