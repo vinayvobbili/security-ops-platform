@@ -11,16 +11,10 @@ Created for Acme Security Operations
 """
 import logging
 import time
-from collections import defaultdict, deque
-from datetime import datetime, timedelta
 from pokedex_bot.core.state_manager import get_state_manager
+from pokedx_bot.core.session_manager import get_session_manager
 
 logging.basicConfig(level=logging.INFO)
-
-# Simple in-memory session storage
-# Format: {session_key: deque([{"role": "user/assistant", "content": str, "timestamp": datetime}, ...])}
-conversation_sessions = defaultdict(lambda: deque(maxlen=30))  # Keep last 30 messages per session
-session_cleanup_interval = timedelta(hours=24)  # Clean up sessions older than 24 hours
 
 
 def cleanup_old_sessions():
