@@ -89,6 +89,7 @@ def get_config():
         tanium_cloud_api_url=os.environ["TANIUM_CLOUD_API_URL"],
         tanium_onprem_api_token=os.environ["TANIUM_ONPREM_API_TOKEN"],
         tanium_onprem_api_url=os.environ["TANIUM_ONPREM_API_URL"],
+        tanium_cloud_api_token_write=os.environ.get("TANIUM_CLOUD_API_TOKEN_WRITE", ""),
         zscaler_base_url=os.environ["ZSCALER_BASE_URL"],
         zscaler_username=os.environ["ZSCALER_USERNAME"],
         zscaler_password=os.environ["ZSCALER_PASSWORD"],
@@ -184,6 +185,7 @@ class Config:
     tanium_cloud_api_url: str
     tanium_onprem_api_token: str
     tanium_onprem_api_url: str
+    tanium_cloud_api_token_write: str
     zscaler_base_url: str
     zscaler_username: str
     zscaler_password: str
