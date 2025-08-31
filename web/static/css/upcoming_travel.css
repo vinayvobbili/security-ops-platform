@@ -15,6 +15,7 @@ body {
     font-family: 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
     margin: 0;
     padding: 20px;
+    padding-top: 76px;
     background-color: var(--light-bg);
     color: var(--dark-text);
     line-height: 1.6;
