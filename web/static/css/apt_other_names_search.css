@@ -596,7 +596,7 @@ button[type="submit"]:hover::before {
 body {
     background: linear-gradient(135deg, var(--acme-blue) 0%, var(--acme-light-blue) 50%, var(--acme-green) 100%);
     margin: 0;
-    padding: 70px 0 0 0; /* Add top padding for fixed nav */
+    padding: 90px 0 0 0; /* Add top padding for fixed nav */
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     min-height: 100vh;
 }
