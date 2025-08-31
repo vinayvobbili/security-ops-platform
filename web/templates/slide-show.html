@@ -54,7 +54,11 @@
 <img id="pausePlayButton" onclick="toggleSlideshow()" src="{{ url_for('static', filename='icons/pause-solid.svg') }}" alt="Pause">
 
 <audio id="music" src="" loop muted></audio>
-<img src="/static/icons/volume-xmark-solid.svg" alt="Unmute Icon" class="music-icon" id="music-icon" onclick="toggleAudio()">
+<div class="audio-controls">
+    <button onclick="toggleAudio()">
+        <img src="/static/icons/volume-xmark-solid.svg" alt="Unmute Icon" class="music-icon" id="music-icon">
+    </button>
+</div>
 <script src="/static/js/common.js"></script>
 <script src="/static/js/slide-show.js"></script>
 <script>
