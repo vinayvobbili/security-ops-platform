@@ -662,6 +662,20 @@ def main():
         test_tag = "Test_Tag_Jarvais"
         write_instance = "Cloud-Write"
         
+        # First, test if write token can read data
+        logger.info("Testing if write token can read computer data...")
+        write_instance_obj = client._get_instance_by_name(write_instance)
+        if write_instance_obj:
+            try:
+                test_computer = write_instance_obj.get_computer_by_id(test_tanium_id)
+                if test_computer:
+                    logger.info(f"✓ Write token CAN read computer data - found: {test_computer.name} with tags: {test_computer.custom_tags}")
+                else:
+                    logger.warning(f"✗ Write token can't find computer ID {test_tanium_id} - might have limited scope")
+            except Exception as e:
+                logger.error(f"✗ Write token CANNOT read computer data: {e}")
+        
+        # Now test tagging
         logger.info(f"Testing direct tagging for {test_hostname} (ID: {test_tanium_id}) with write token...")
         tag_result = client.add_custom_tag_to_computer(
             test_tanium_id, 
@@ -670,9 +684,6 @@ def main():
             check_existing=False  # Skip expensive computer fetch
         )
         logger.info(f"Tagging result for {test_hostname} (ID: {test_tanium_id}) with tag '{test_tag}' using {write_instance}: {tag_result}")
-        
-        # Optional: Only do hostname lookup if needed for verification
-        # hostname_result = client.get_tanium_id_by_hostname(test_hostname, "Cloud")
 
     except Exception as e:
         logger.error(f"Error during execution: {e}")
