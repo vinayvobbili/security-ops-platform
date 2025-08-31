@@ -22,6 +22,7 @@ from dataclasses import dataclass, replace
 from datetime import datetime
 from pathlib import Path
 from typing import List, Dict, Tuple, Optional, Protocol
+from zoneinfo import ZoneInfo
 
 import openpyxl
 import pandas as pd
@@ -33,6 +34,9 @@ from services.tanium import Computer, TaniumClient
 # Force the root logger to DEBUG level to ensure all debug logs are shown,
 # regardless of how the module is imported or called.
 logging.getLogger().setLevel(logging.DEBUG)
+
+# Timezone constant for consistent usage
+EASTERN_TZ = ZoneInfo("America/New_York")
 
 
 # ============================================================================
@@ -149,7 +153,7 @@ class TaniumDataLoader:
 
     def load_tanium_computers(self, test_limit: Optional[int] = None) -> List[Computer]:
         """Load computers from Tanium, handling all the Excel parsing complexity"""
-        today = datetime.now().strftime('%m-%d-%Y')
+        today = datetime.now(EASTERN_TZ).strftime('%m-%d-%Y')
         output_dir = self.data_dir / "transient" / "epp_device_tagging" / today
         output_dir.mkdir(parents=True, exist_ok=True)
         all_hosts_file = output_dir / "All Tanium Hosts.xlsx"
@@ -287,7 +291,7 @@ class ServiceNowComputerEnricher:
                 possible_country_columns = ['SNOW_country', 'country', 'Country', 'COUNTRY', 'snow_country', 'SNOW_Country']
 
                 for col in possible_country_columns:
-                    if col in row and row.get(col):
+                    if col in row.index and pd.notna(row.get(col)) and str(row.get(col)).strip():
                         snow_country = self._clean_value(row.get(col))
                         if snow_country:  # Use the first non-empty value found
                             self.logger.debug(f"Found country '{snow_country}' in column '{col}' for host {original_computer.name}")
@@ -706,7 +710,7 @@ class TaniumRingTagProcessor:
             # Step 5: Export report
             self.logger.info("Exporting final report...")
             date_format = '%m-%d-%Y'
-            today_date = datetime.now().strftime(date_format)
+            today_date = datetime.now(EASTERN_TZ).strftime(date_format)
             root_directory = Path(__file__).parent.parent.parent
             output_dir = root_directory / "web" / "static" / "charts" / today_date
             os.makedirs(output_dir, exist_ok=True)
@@ -733,7 +737,7 @@ def create_processor() -> TaniumRingTagProcessor:
     """Factory method to create fully configured processor"""
     config = get_config()
     data_dir = Path(__file__).parent.parent.parent / "data"
-    temp_dir = data_dir / "transient" / "epp_device_tagging" / datetime.now().strftime('%m-%d-%Y')
+    temp_dir = data_dir / "transient" / "epp_device_tagging" / datetime.now(EASTERN_TZ).strftime('%m-%d-%Y')
     temp_dir.mkdir(parents=True, exist_ok=True)
 
     # Create all dependencies
