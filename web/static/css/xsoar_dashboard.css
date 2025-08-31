@@ -338,13 +338,7 @@ body {
     margin-bottom: 10px;
 }
 
-/* Audio Controls - positioned in top right like other pages */
-.audio-controls {
-    position: fixed;
-    top: 10px;
-    right: 10px;
-    z-index: 2000;
-}
+/* Audio Controls styling */
 
 .audio-controls button {
     background: rgba(0, 70, 173, 0.8);
