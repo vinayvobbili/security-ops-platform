@@ -290,6 +290,22 @@ class TaniumInstance:
         computers = self.get_computers(limit=self.DEFAULT_SEARCH_LIMIT)
         return next((c for c in computers if c.name.lower() == computer_name.lower()), None)
 
+    def get_tanium_id_by_hostname(self, hostname: str) -> Optional[str]:
+        """Get Tanium ID for a computer by hostname"""
+        try:
+            # Search through computers until we find the hostname
+            for computer in self._paginate_computers(limit=None):
+                if computer.name.lower() == hostname.lower():
+                    logger.debug(f"Found hostname '{hostname}' with Tanium ID '{computer.id}' in {self.name}")
+                    return computer.id
+            
+            logger.debug(f"Hostname '{hostname}' not found in {self.name}")
+            return None
+            
+        except Exception as e:
+            logger.error(f"Error finding hostname '{hostname}' in {self.name}: {e}")
+            return None
+
     def add_custom_tag(self, computer_name: str, tag: str) -> bool:
         """Add a custom tag to a computer by name"""
         try:
@@ -356,6 +372,16 @@ class TaniumClient:
                 verify_ssl=True
             )
             self.instances.append(cloud_instance)
+            
+            # Add Cloud Write instance if write token is available
+            if hasattr(self.config, 'tanium_cloud_api_token_write') and self.config.tanium_cloud_api_token_write:
+                cloud_write_instance = TaniumInstance(
+                    "Cloud-Write",
+                    self.config.tanium_cloud_api_url,
+                    self.config.tanium_cloud_api_token_write,
+                    verify_ssl=True
+                )
+                self.instances.append(cloud_write_instance)
 
         # On-prem instance (disable SSL verification for on-prem)
         if hasattr(self.config, 'tanium_onprem_api_url') and self.config.tanium_onprem_api_url and self.config.tanium_onprem_api_token:
@@ -448,6 +474,61 @@ class TaniumClient:
         """Get a specific computer by name from any instance"""
         all_computers = self._get_all_computers(limit=TaniumInstance.DEFAULT_SEARCH_LIMIT)
         return next((c for c in all_computers if c.name.lower() == name.lower()), None)
+
+    def get_tanium_id_by_hostname(self, hostname: str, instance_name: str) -> Optional[Dict[str, str]]:
+        """Get Tanium ID for a computer by hostname in the specified instance"""
+        
+        instance = self._get_instance_by_name(instance_name)
+        if not instance:
+            logger.error(f"Instance '{instance_name}' not found. Available instances: {self.list_available_instances()}")
+            return None
+        
+        if not instance.validate_token():
+            logger.error(f"Invalid token for instance '{instance_name}'")
+            return None
+        
+        tanium_id = instance.get_tanium_id_by_hostname(hostname)
+        if tanium_id:
+            return {
+                'tanium_id': tanium_id,
+                'instance': instance_name,
+                'hostname': hostname
+            }
+        
+        logger.warning(f"Hostname '{hostname}' not found in instance '{instance_name}'")
+        return None
+
+    def search_hostnames_containing(self, search_term: str, instance_name: str, limit: int = 10) -> List[Dict[str, str]]:
+        """Search for hostnames containing the search term (case-insensitive)"""
+        
+        instance = self._get_instance_by_name(instance_name)
+        if not instance:
+            logger.error(f"Instance '{instance_name}' not found. Available instances: {self.list_available_instances()}")
+            return []
+        
+        if not instance.validate_token():
+            logger.error(f"Invalid token for instance '{instance_name}'")
+            return []
+        
+        matches = []
+        try:
+            for computer in instance._paginate_computers(limit=None):
+                if search_term.lower() in computer.name.lower():
+                    matches.append({
+                        'hostname': computer.name,
+                        'tanium_id': computer.id,
+                        'instance': instance_name
+                    })
+                    
+                    if len(matches) >= limit:
+                        break
+            
+            logger.info(f"Found {len(matches)} hostnames containing '{search_term}' in {instance_name}")
+            return matches
+            
+        except Exception as e:
+            logger.error(f"Error searching for hostnames containing '{search_term}' in {instance_name}: {e}")
+            return []
 
     def _get_instance_by_name(self, instance_name: str) -> Optional[TaniumInstance]:
         """Get a Tanium instance by name"""
@@ -575,15 +656,23 @@ def main():
         # else:
         #     logger.warning("No data to export")
 
-        # Test: Tag a single host - now uses only Tanium ID
-        test_tanium_id = "621122"  # Replace with actual Tanium ID from the report
+        # Test: Direct tagging with known Tanium ID (no hostname lookup needed)
+        test_hostname = "uscku1metu03c7l.METNET.NET"
+        test_tanium_id = "621122"  # We already confirmed this ID matches the hostname
         test_tag = "Test_Tag_Jarvais"
-
-        # Clean API - only requires the essential data
-        test_instance = "Cloud"  # or "On-Prem" - specify which instance to use
-        # Use check_existing=False for bulk operations to avoid fetching all computers
-        tag_result = client.add_custom_tag_to_computer(test_tanium_id, test_tag, test_instance, check_existing=False)
-        logger.info(f"Tagging result for computer ID {test_tanium_id} with tag '{test_tag}' in {test_instance}: {tag_result}")
+        write_instance = "Cloud-Write"
+        
+        logger.info(f"Testing direct tagging for {test_hostname} (ID: {test_tanium_id}) with write token...")
+        tag_result = client.add_custom_tag_to_computer(
+            test_tanium_id, 
+            test_tag, 
+            write_instance,
+            check_existing=False  # Skip expensive computer fetch
+        )
+        logger.info(f"Tagging result for {test_hostname} (ID: {test_tanium_id}) with tag '{test_tag}' using {write_instance}: {tag_result}")
+        
+        # Optional: Only do hostname lookup if needed for verification
+        # hostname_result = client.get_tanium_id_by_hostname(test_hostname, "Cloud")
 
     except Exception as e:
         logger.error(f"Error during execution: {e}")
