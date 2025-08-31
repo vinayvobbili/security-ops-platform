@@ -1,4 +1,10 @@
+/* MetLife Brand Colors */
 :root {
+    --metlife-blue: #0046AD;
+    --metlife-green: #00A651;
+    --metlife-light-blue: #4A8BC2;
+    --metlife-dark-blue: #003875;
+    --metlife-gray: #F5F5F5;
     --primary: #4a6cf7;
     --primary-dark: #3b5cde;
     --secondary: #6c4af7;
@@ -10,7 +16,7 @@
 
 body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    background-color: #f8fafc;
+    background: linear-gradient(135deg, var(--metlife-blue) 0%, var(--metlife-light-blue) 50%, var(--metlife-green) 100%);
     margin: 0;
     padding: 0;
     display: flex;
@@ -376,22 +382,6 @@ label {
     cursor: pointer;
 }
 
-.music-icon {
-    width: 32px;
-    height: 32px;
-    cursor: pointer;
-    position: fixed;
-    top: 16px;
-    right: 24px;
-    z-index: 1100;
-    background: rgba(255, 255, 255, 0.7);
-    border-radius: 50%;
-    padding: 4px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-    transition: background 0.2s, transform 0.2s;
-}
+/* Old music icon styles removed - now using common.css audio controls */
 
-.music-icon:hover {
-    background: rgba(0, 70, 173, 0.15);
-    transform: scale(1.08) rotate(-10deg);
-}
+/* Page-specific styles only - burger menu and audio controls come from common.css */
