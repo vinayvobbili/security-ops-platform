@@ -31,9 +31,9 @@ from datetime import datetime
 from enum import Enum
 from pathlib import Path
 from typing import Optional, List, Union, Dict, Callable, TypeVar, cast, Any
+from zoneinfo import ZoneInfo
 
 import openpyxl
-from falconpy import OAuth2, Hosts
 from pytz import timezone
 from tqdm import tqdm
 from webexpythonsdk import WebexAPI
@@ -73,6 +73,9 @@ RING_1_ENVS = {"dev", "poc", "lab", "integration", "development"}  # All values 
 RING_2_ENVS = {"qa", "test"}
 RING_3_ENVS = {"dr"}
 # Ring 4 is for production or unknown environments
+
+# Timezone constant for consistent usage
+EASTERN_TZ = ZoneInfo("America/New_York")
 
 # Ensure directories exist
 TRANSIENT_DIR.mkdir(parents=True, exist_ok=True)
@@ -446,7 +449,7 @@ class FileHandler:
         Returns:
             List of hostnames, or an empty list if the file is not found.
         """
-        today_date = datetime.now().strftime('%m-%d-%Y')
+        today_date = datetime.now(EASTERN_TZ).strftime('%m-%d-%Y')
         input_file = TRANSIENT_DIR / 'epp_device_tagging' / today_date / "cs_hosts_last_seen_without_ring_tag.xlsx"
         try:
             workbook = openpyxl.load_workbook(input_file)
@@ -475,7 +478,7 @@ class FileHandler:
         # Get the current date and time in ET
         et_timezone = timezone('US/Eastern')
         current_time_et = datetime.now(et_timezone).strftime("%m_%d_%Y %I:%M %p %Z")
-        today_date = datetime.now().strftime('%m-%d-%Y')
+        today_date = datetime.now(EASTERN_TZ).strftime('%m-%d-%Y')
         output_file = TRANSIENT_DIR / 'epp_device_tagging' / today_date / f'EPP-Falcon ring tagging {current_time_et}.xlsx'
 
         # Create a new workbook
@@ -523,7 +526,7 @@ class FileHandler:
         # Freeze the top row
         sheet.freeze_panes = "A2"
 
-        # Add autofilter
+        # Add auto filter
         sheet.auto_filter.ref = f"A1:{get_column_letter(len(headers))}{len(hosts) + 1}"
 
         # Auto-adjust column widths

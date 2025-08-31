@@ -16,6 +16,7 @@ import logging
 import re
 from datetime import datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 
@@ -28,6 +29,9 @@ logger = logging.getLogger(__name__)
 
 ROOT_DIRECTORY = Path(__file__).parent.parent.parent
 DATA_DIR = ROOT_DIRECTORY / "data" / "transient" / "epp_device_tagging"
+
+# Timezone constant for consistent usage
+EASTERN_TZ = ZoneInfo("America/New_York")
 
 # Environment to ring mappings (all values must be lowercase)
 RING_1_ENVS = {"dev", "poc", "lab", "integration", "development"}
@@ -88,7 +92,7 @@ def analyze_ring_tags(servers_df):
 
 def generate_report():
     """Generate the complete invalid ring tag analysis report."""
-    today_date = datetime.now().strftime('%m-%d-%Y')
+    today_date = datetime.now(EASTERN_TZ).strftime('%m-%d-%Y')
     output_dir = DATA_DIR / today_date
     output_dir.mkdir(parents=True, exist_ok=True)
 

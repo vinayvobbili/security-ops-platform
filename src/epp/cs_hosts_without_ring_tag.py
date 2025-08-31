@@ -2,9 +2,9 @@ import logging
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, Callable, TypeVar
+from zoneinfo import ZoneInfo
 
 import pandas as pd
-from webexteamssdk import WebexTeamsAPI
 
 from my_config import get_config
 from services import crowdstrike
@@ -26,6 +26,9 @@ CONFIG = get_config()
 
 DEFAULT_CHUNK_SIZE = 500
 
+# Timezone constant for consistent usage
+EASTERN_TZ = ZoneInfo("America/New_York")
+
 
 def get_dated_path(base_dir: Path, filename: str) -> Path:
     """
@@ -38,7 +41,7 @@ def get_dated_path(base_dir: Path, filename: str) -> Path:
     Returns:
         Path with date directory
     """
-    today_date = datetime.now().strftime('%m-%d-%Y')
+    today_date = datetime.now(EASTERN_TZ).strftime('%m-%d-%Y')
     return base_dir / today_date / filename
 
 
@@ -68,7 +71,6 @@ def write_excel_file(df: pd.DataFrame, file_path: Path) -> None:
             df.to_excel(writer, index=False, sheet_name="Hosts Without Ring Tags")
 
             # Get the workbook and worksheet
-            workbook = writer.book
             worksheet = writer.sheets["Hosts Without Ring Tags"]
 
             # Format the header row
@@ -87,7 +89,7 @@ def write_excel_file(df: pd.DataFrame, file_path: Path) -> None:
             # Freeze the top row
             worksheet.freeze_panes = "A2"
 
-            # Add autofilter
+            # Add auto filter
             worksheet.auto_filter.ref = f"A1:{get_column_letter(len(df.columns))}{len(df) + 1}"
 
             # Auto-adjust column widths

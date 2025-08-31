@@ -4,7 +4,7 @@ import signal
 import sys
 import threading
 import time
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -100,7 +100,7 @@ def get_random_loading_message():
 
 def send_report(room_id, filename, message) -> None:
     """Sends the enriched hosts report to a Webex room, including step run times."""
-    today_date = datetime.now(timezone.utc).strftime('%m-%d-%Y')
+    today_date = datetime.now(EASTERN_TZ).strftime('%m-%d-%Y')
     filepath = DATA_DIR / today_date / filename
     hosts_count = len(pd.read_excel(filepath))
 
@@ -121,7 +121,7 @@ def send_report(room_id, filename, message) -> None:
 
 def send_report_with_progress(room_id, filename, message, progress_info=None) -> None:
     """Enhanced report sending with progress information and better formatting."""
-    today_date = datetime.now(timezone.utc).strftime('%m-%d-%Y')
+    today_date = datetime.now(EASTERN_TZ).strftime('%m-%d-%Y')
     filepath = DATA_DIR / today_date / filename
 
     try:
@@ -340,7 +340,7 @@ class CSHostsWithInvalidRingTags(Command):
 
     @log_activity(bot_access_token=CONFIG.webex_bot_access_token_jarvais, log_file_name="jarvais_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
-        today_date = datetime.now(timezone.utc).strftime('%m-%d-%Y')
+        today_date = datetime.now(EASTERN_TZ).strftime('%m-%d-%Y')
         room_id = attachment_actions.roomId
         message = 'Unique CS servers with Invalid Ring tags'
         filename = DATA_DIR / today_date / "cs_servers_with_invalid_ring_tags_only.xlsx"
@@ -398,7 +398,7 @@ class RemoveInvalidRings(Command):
     @log_activity(bot_access_token=CONFIG.webex_bot_access_token_jarvais, log_file_name="jarvais_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
         room_id = attachment_actions.roomId
-        today_date = datetime.now(timezone.utc).strftime('%m-%d-%Y')
+        today_date = datetime.now(EASTERN_TZ).strftime('%m-%d-%Y')
         report_path = DATA_DIR / today_date / "cs_servers_with_invalid_ring_tags_only.xlsx"
         webex_api.messages.create(
             roomId=room_id,
