@@ -5,15 +5,30 @@ async function setRandomAudio() {
     const music = document.getElementById('music');
     const icon = document.getElementById('music-icon');
     if (!music || !icon) return;
-    try {
-        const response = await fetch('/api/random-audio');
-        const data = await response.json();
-        if (data.filename) {
-            music.src = '/static/audio/' + data.filename;
+    
+    // Check if we have a saved audio source from previous navigation
+    const savedSrc = localStorage.getItem('music-src');
+    
+    if (savedSrc) {
+        // Use previously saved audio source to maintain continuity
+        music.src = savedSrc;
+    } else if (!music.src || music.src === window.location.origin + '/') {
+        // Only fetch new random audio if no source exists
+        try {
+            const response = await fetch('/api/random-audio');
+            const data = await response.json();
+            if (data.filename) {
+                const newSrc = '/static/audio/' + data.filename;
+                music.src = newSrc;
+                localStorage.setItem('music-src', newSrc);
+            }
+        } catch (e) {
+            // fallback: keep default src
         }
-    } catch (e) {
-        // fallback: keep default src
     }
+    
+    // Always start muted on page load
+    music.muted = true;
     music.pause();
     icon.src = '/static/icons/volume-xmark-solid.svg';
 }
@@ -34,28 +49,42 @@ function toggleAudio() {
     }
 }
 
-// Enhanced: Persist music state (currentTime, muted, playing) across page navigation
+// Enhanced: Persist music state (currentTime, muted, playing, src) across page navigation
 function persistMusicState() {
     const music = document.getElementById('music');
     if (!music) return;
     localStorage.setItem('music-current-time', music.currentTime);
     localStorage.setItem('music-muted', music.muted);
     localStorage.setItem('music-playing', !music.paused);
+    if (music.src) localStorage.setItem('music-src', music.src);
 }
 
 function restoreMusicState() {
     const music = document.getElementById('music');
     const icon = document.getElementById('music-icon');
     if (!music || !icon) return;
+    
+    // Restore audio position
     const savedTime = parseFloat(localStorage.getItem('music-current-time'));
     if (!isNaN(savedTime)) music.currentTime = savedTime;
-    const muted = localStorage.getItem('music-muted');
-    if (muted !== null) music.muted = (muted === 'true');
-    const playing = localStorage.getItem('music-playing');
-    if (playing === 'true' && !music.muted) {
-        music.play();
-        icon.src = '/static/icons/volume-high-solid.svg';
+    
+    // Check if music was playing before navigation
+    const wasPlaying = localStorage.getItem('music-playing') === 'true';
+    const wasMuted = localStorage.getItem('music-muted') === 'true';
+    
+    if (wasPlaying && !wasMuted) {
+        // Music was playing before navigation - resume but start muted due to browser policy
+        music.muted = false;
+        music.play().then(() => {
+            icon.src = '/static/icons/volume-high-solid.svg';
+        }).catch(() => {
+            // If autoplay fails, stay muted
+            music.muted = true;
+            icon.src = '/static/icons/volume-xmark-solid.svg';
+        });
     } else {
+        // Start muted
+        music.muted = true;
         music.pause();
         icon.src = '/static/icons/volume-xmark-solid.svg';
     }

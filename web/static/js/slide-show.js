@@ -104,6 +104,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const music_icon = document.getElementById('music-icon');
 
     music.volume = 0.5; // Set initial volume (0.0 to 1.0)
+    music.muted = true; // Ensure always starts muted
+    music_icon.src = '/static/icons/volume-xmark-solid.svg'; // Ensure icon shows muted state
 
     // Add keyboard event listener for slideshow navigation
     document.addEventListener('keydown', function (event) {
@@ -123,16 +125,5 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Make toggleAudio globally accessible
-    window.toggleAudio = function () {
-        if (music.muted) {
-            music.muted = false;
-            music.play().catch(() => {
-            }); // Try to play, ignore errors
-            music_icon.src = '/static/icons/volume-high-solid.svg';
-        } else {
-            music.muted = true;
-            music_icon.src = '/static/icons/volume-xmark-solid.svg';
-        }
-    }
+    // Use the common toggleAudio function - no need to override
 });

@@ -312,13 +312,13 @@ body {
 .music-icon {
     width: 28px;
     height: 28px;
-    filter: invert(1);
+    filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.6));
     transition: all 0.3s ease;
 }
 
 .audio-controls button:hover .music-icon {
     transform: scale(1.2) rotate(-15deg); /* Counter-rotate the icon for extra magic */
-    filter: invert(1) drop-shadow(0 0 8px rgba(255, 255, 255, 0.8)); /* Add glow effect */
+    filter: hue-rotate(120deg) saturate(2) brightness(1.3) drop-shadow(0 0 12px rgba(0, 255, 127, 1)); /* Bright green with strong glow */
 }
 
 /* Floating particles background effect */
