@@ -80,13 +80,13 @@ def create_graph(tickets):
     for pattern, replacement in detection_source_codes_by_name.items():
         df['source'] = df['source'].str.replace(pattern, replacement, regex=True, flags=re.IGNORECASE)
 
+    # Simplify to show only ticket types without detection sources
     df['source'] = df.apply(lambda row: row['type']
                             .replace(config.team_name, '').strip()
                             .replace('CrowdStrike Falcon Detection', 'CS Detection').strip()
                             .replace('CrowdStrike Falcon Incident', 'CS Incident').strip()
                             .replace('Prisma Cloud Compute Runtime Alert', 'Prisma Runtime').strip()
-                            .replace('Lost or Stolen Computer', 'Lost/Stolen Device').strip()
-                                        + ' - ' + row['source'], axis=1)
+                            .replace('Lost or Stolen Computer', 'Lost/Stolen Device').strip(), axis=1)
 
     # Count the occurrences of each source and impact
     source_impact_counts = df.groupby(['source', 'impact']).size().reset_index(name='count')
@@ -204,10 +204,23 @@ def create_graph(tickets):
     max_x_value = max(bottom)
     ax.set_xlim((0, max_x_value * 1.1))  # Extend 10% beyond the maximum x-value
 
-    # Enhanced border
+    # Enhanced border with rounded corners like MTTR chart
+    from matplotlib.patches import FancyBboxPatch
     border_width = 4
-    fig.patch.set_edgecolor('#1A237E')
-    fig.patch.set_linewidth(border_width)
+    fig.patch.set_edgecolor('none')
+    fig.patch.set_linewidth(0)
+
+    fancy_box = FancyBboxPatch(
+        (0, 0), width=1.0, height=1.0,
+        boxstyle="round,pad=0,rounding_size=0.01",
+        edgecolor='#1A237E',
+        facecolor='none',
+        linewidth=border_width,
+        transform=fig.transFigure,
+        zorder=1000,
+        clip_on=False
+    )
+    fig.patches.append(fancy_box)
 
     # Enhanced titles and labels
     plt.suptitle(f'Outflow Yesterday ({len(tickets)})',
@@ -216,22 +229,35 @@ def create_graph(tickets):
     # Add labels with enhanced styling
     ax.set_yticks(range(len(pyramid_sources)))
     ax.set_yticklabels(pyramid_sources, fontsize=10, color='#1A237E')
-    ax.set_ylabel('Ticket Type - Detection Source', fontweight='bold', fontsize=12, color='#1A237E')
+    ax.set_ylabel('Ticket Type', fontweight='bold', fontsize=12, color='#1A237E')
     ax.set_xlabel('Alert Counts', fontweight='bold', fontsize=12, labelpad=10, color='#1A237E')
 
-    # Enhanced legend
-    legend = ax.legend(title='Impact', loc='upper right', frameon=True, fancybox=True, shadow=True,
+    # Calculate impact totals for legend
+    impact_totals = df.groupby('impact')['impact'].count().to_dict()
+    
+    # Update legend labels with counts
+    impact_labels = []
+    for impact in sorted_impacts:
+        count = impact_totals.get(impact, 0)
+        impact_labels.append(f"{impact} ({count})")
+    
+    # Enhanced legend positioned outside like MTTR chart
+    legend = ax.legend(impact_labels, title='Impact', loc='upper left', bbox_to_anchor=(1.15, 1),
+                       frameon=True, fancybox=True, shadow=True,
                        title_fontsize=12, fontsize=10)
     legend.get_frame().set_facecolor('white')
     legend.get_frame().set_alpha(0.95)
     legend.get_frame().set_edgecolor('#1A237E')
     legend.get_frame().set_linewidth(2)
+    
+    # Make legend title bold
+    legend.get_title().set_fontweight('bold')
 
     # Enhanced timestamp with modern styling - moved to left end
     trans = transforms.blended_transform_factory(fig.transFigure, fig.transFigure)
     now_eastern = datetime.now(eastern).strftime('%m/%d/%Y %I:%M %p %Z')
 
-    plt.text(-0.1, 0.02, f"Generated@ {now_eastern}",
+    plt.text(0.02, 0.02, f"Generated@ {now_eastern}",
              transform=trans, ha='left', va='bottom',
              fontsize=10, color='#1A237E', fontweight='bold',
              bbox=dict(boxstyle="round,pad=0.4", facecolor='white', alpha=0.9,
@@ -242,9 +268,9 @@ def create_graph(tickets):
              ha='right', va='bottom', fontsize=10,
              alpha=0.7, color='#3F51B5', style='italic', fontweight='bold')
 
-    # Adjust layout
+    # Adjust layout with space for external legend and Y-axis labels
     plt.tight_layout()
-    plt.subplots_adjust(top=0.88, bottom=0.15, left=0.08, right=0.92)
+    plt.subplots_adjust(top=0.88, bottom=0.15, left=0.20, right=0.73)
 
     today_date = datetime.now().strftime('%m-%d-%Y')
     output_path = ROOT_DIRECTORY / "web" / "static" / "charts" / today_date / "Outflow.png"

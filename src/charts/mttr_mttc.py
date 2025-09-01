@@ -1,10 +1,9 @@
+import sys
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
-import sys
 
 import matplotlib.transforms as transforms
-import matplotlib.patches as patches
 import numpy as np
 from matplotlib import pyplot as plt
 from pytz import timezone
@@ -274,8 +273,8 @@ def save_mttr_mttc_chart(ticket_slas_by_periods):
     # Enhanced legend combining both axes - positioned outside
     lines1, labels1 = ax1.get_legend_handles_labels()
     lines2, labels2 = ax2.get_legend_handles_labels()
-    legend = ax1.legend(lines1 + lines2, labels1 + labels2, 
-                        loc='upper left', bbox_to_anchor=(1.01, 1),
+    legend = ax1.legend(lines1 + lines2, labels1 + labels2,
+                        loc='upper left', bbox_to_anchor=(1.15, 1),
                         frameon=True, fancybox=True, shadow=True,
                         title_fontsize=12, fontsize=10)
     legend.get_frame().set_facecolor('white')
@@ -309,14 +308,14 @@ def save_mttr_mttc_chart(ticket_slas_by_periods):
              ha='right', va='bottom', fontsize=10,
              alpha=0.7, color='#3F51B5', style='italic', fontweight='bold')
 
-    # Add explanatory note
-    plt.text(0.02, 0.08, '(*) Ticket counts for that period',
-             transform=trans, ha='left', va='bottom',
+    # Add explanatory note below legend
+    plt.text(1.18, 0.78, 'Ticket counts for that period (*)',
+             transform=ax1.transAxes, ha='left', va='top',
              fontsize=9, color='#666666', style='italic')
 
     # Enhanced layout with space for external legend
     plt.tight_layout()
-    plt.subplots_adjust(top=0.88, bottom=0.15, left=0.08, right=0.75)
+    plt.subplots_adjust(top=0.88, bottom=0.15, left=0.08, right=0.68)
 
     today_date = datetime.now().strftime('%m-%d-%Y')
     OUTPUT_PATH = root_directory / "web" / "static" / "charts" / today_date / "MTTR MTTC.png"
