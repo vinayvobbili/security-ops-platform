@@ -101,15 +101,24 @@ class TicketHandler:
         return False
     
     def _get_cached_tickets(self):
-        """Get cached tickets for today's date"""
+        """Get cached tickets for today's date, creating fresh cache if needed"""
         try:
             # Import here to avoid circular imports
             from src.utils.data_cache import DataCache
             cache = DataCache()
-            cached_data = cache.get_cached_data()
+            
+            # Try to get today's cache first
+            today_str = datetime.now().strftime('%m-%d-%Y')
+            cached_data = cache.get_cached_data(today_str)
+            
+            if cached_data is None:
+                log.info(f"No cache found for {today_str}, fetching fresh data and creating cache")
+                # Create fresh cache for today
+                cached_data = cache.fetch_and_cache_3month_data(today_str)
+            
             return cached_data.get("tickets", []) if cached_data else None
         except Exception as e:
-            log.warning(f"Failed to load cached data: {e}")
+            log.warning(f"Failed to load or create cached data: {e}")
             return None
     
     def _filter_cached_tickets(self, tickets, query, period):
