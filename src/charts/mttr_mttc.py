@@ -200,10 +200,23 @@ def save_mttr_mttc_chart(ticket_slas_by_periods):
     contain_right = 1.9  # Right edge of contain section
     ax2.hlines(y=15, xmin=contain_left, xmax=contain_right, color='#4CAF50', linestyle='-', linewidth=3, label='Containment SLA (15 min)')
 
-    # Enhanced border
+    # Enhanced border with rounded corners
+    from matplotlib.patches import FancyBboxPatch
     border_width = 4
-    fig.patch.set_edgecolor('#1A237E')
-    fig.patch.set_linewidth(border_width)
+    fig.patch.set_edgecolor('none')
+    fig.patch.set_linewidth(0)
+
+    fancy_box = FancyBboxPatch(
+        (0, 0), width=1.0, height=1.0,
+        boxstyle="round,pad=0,rounding_size=0.01",
+        edgecolor='#1A237E',
+        facecolor='none',
+        linewidth=border_width,
+        transform=fig.transFigure,
+        zorder=1000,
+        clip_on=False
+    )
+    fig.patches.append(fancy_box)
 
     # Enhanced timestamp with modern styling
     trans = transforms.blended_transform_factory(fig.transFigure, fig.transFigure)
@@ -258,10 +271,11 @@ def save_mttr_mttc_chart(ticket_slas_by_periods):
     ax2.set_ylim(0, max_y2)
     ax2.tick_params(axis='y', colors='#4CAF50', labelsize=10, width=1.5)
 
-    # Enhanced legend combining both axes
+    # Enhanced legend combining both axes - positioned outside
     lines1, labels1 = ax1.get_legend_handles_labels()
     lines2, labels2 = ax2.get_legend_handles_labels()
-    legend = ax1.legend(lines1 + lines2, labels1 + labels2, loc='upper left',
+    legend = ax1.legend(lines1 + lines2, labels1 + labels2, 
+                        loc='upper left', bbox_to_anchor=(1.01, 1),
                         frameon=True, fancybox=True, shadow=True,
                         title_fontsize=12, fontsize=10)
     legend.get_frame().set_facecolor('white')
@@ -300,14 +314,14 @@ def save_mttr_mttc_chart(ticket_slas_by_periods):
              transform=trans, ha='left', va='bottom',
              fontsize=9, color='#666666', style='italic')
 
-    # Enhanced layout
+    # Enhanced layout with space for external legend
     plt.tight_layout()
-    plt.subplots_adjust(top=0.88, bottom=0.15, left=0.08, right=0.92)
+    plt.subplots_adjust(top=0.88, bottom=0.15, left=0.08, right=0.75)
 
     today_date = datetime.now().strftime('%m-%d-%Y')
     OUTPUT_PATH = root_directory / "web" / "static" / "charts" / today_date / "MTTR MTTC.png"
     OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
-    plt.savefig(OUTPUT_PATH)
+    plt.savefig(OUTPUT_PATH, format="png", dpi=300, bbox_inches='tight', pad_inches=0, facecolor='#f8f9fa')
     plt.close(fig)
 
 
