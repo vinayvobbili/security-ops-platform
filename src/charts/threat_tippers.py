@@ -132,8 +132,17 @@ def plot_stacked_bar_by_priority(ax, summary_data, colors, priority_counts):
             labels.append(f"{priority} ({priority_counts.get(priority, 0)})")
             bottom += np.array(summary_data[priority])
 
-    # Add a legend for the priority chart
-    legend1 = ax.legend(handles, labels, title='Priority', loc='upper left', title_fontproperties={'weight': 'bold'})
+    # Add enhanced legend for the priority chart positioned outside
+    legend1 = ax.legend(handles, labels, title='Priority', loc='upper left', 
+                       bbox_to_anchor=(1.02, 1),
+                       frameon=True, fancybox=True, shadow=True,
+                       title_fontsize=12, fontsize=10)
+    legend1.get_frame().set_facecolor('white')
+    legend1.get_frame().set_alpha(0.95)
+    legend1.get_frame().set_edgecolor('#1A237E')
+    legend1.get_frame().set_linewidth(2)
+    legend1.get_title().set_fontweight('bold')
+    legend1.get_title().set_color('#1A237E')
     ax.add_artist(legend1)  # Add the legend to the axes
 
     return bar_positions
@@ -167,8 +176,17 @@ def plot_stacked_bar_by_action(ax, summary_data, colors, action_counts):
             labels.append(f"{action} ({action_counts.get(action, 0)})")
             bottom += np.array(summary_data[action])
 
-    # Add a legend for the action chart
-    legend2 = ax.legend(handles, labels, title='Action', loc='upper right', title_fontproperties={'weight': 'bold'})
+    # Add enhanced legend for the action chart positioned outside
+    legend2 = ax.legend(handles, labels, title='Action', loc='upper left', 
+                       bbox_to_anchor=(1.02, 0.6),
+                       frameon=True, fancybox=True, shadow=True,
+                       title_fontsize=12, fontsize=10)
+    legend2.get_frame().set_facecolor('white')
+    legend2.get_frame().set_alpha(0.95)
+    legend2.get_frame().set_edgecolor('#1A237E')
+    legend2.get_frame().set_linewidth(2)
+    legend2.get_title().set_fontweight('bold')
+    legend2.get_title().set_color('#1A237E')
     ax.add_artist(legend2)  # Add the legend to the axes
 
     return bar_positions
@@ -208,8 +226,9 @@ def generate_threat_tipper_chart(tippers):
     summary_priority = summary_priority.reindex(all_dates, fill_value=0)
     summary_action = summary_action.reindex(all_dates, fill_value=0)
 
-    # Create figure
-    fig, ax = plt.subplots(figsize=(12, 7))
+    # Create enhanced figure with modern styling
+    fig, ax = plt.subplots(figsize=(16, 10), facecolor='#f8f9fa')
+    fig.patch.set_facecolor('#f8f9fa')
 
     # Plot both charts on the same axes
     plot_stacked_bar_by_priority(ax, summary_priority, PRIORITY_COLORS, priority_counts)
@@ -218,20 +237,22 @@ def generate_threat_tipper_chart(tippers):
     # Add trend line
     # add_trend_line(ax, all_dates, summary_priority)
 
+    # Enhanced axes styling
+    ax.set_facecolor('#ffffff')
+    ax.grid(False)  # Remove gridlines for cleaner look
+    ax.set_axisbelow(True)
+
     # Format x-axis with dates
     ax.set_xticks(np.arange(len(all_dates)))
-    ax.set_xticklabels([date.strftime('%m/%d/%y') for date in all_dates], rotation=45, ha='right')
+    ax.set_xticklabels([date.strftime('%m/%d/%y') for date in all_dates], rotation=45, ha='right', 
+                       fontsize=12, color='#1A237E')
 
-    # Add vertical grid lines to separate date pairs
-    ax.grid(axis='x', linestyle='-', alpha=0.1)
-    ax.grid(axis='y', linestyle='-', alpha=0.2)
-
-    # Add labels and title
-    fig.suptitle('Threat Tippers Summary', fontsize=14, fontweight='bold')
-    ax.set_title(f'Total {len(tippers)}', fontsize=12)
-    ax.set_xlabel('Last 30 days', fontsize=10, fontweight='bold', labelpad=10)
-    ax.set_ylabel('Counts', fontsize=10, fontweight='bold', labelpad=10)
+    # Enhanced labels and title
+    plt.suptitle('Threat Tippers Summary', fontsize=24, fontweight='bold', color='#1A237E', y=0.95)
+    ax.set_xlabel(f'Last 30 days (Total: {len(tippers)})', fontsize=14, fontweight='bold', labelpad=15, color='#1A237E')
+    ax.set_ylabel('Counts', fontsize=14, fontweight='bold', labelpad=15, color='#1A237E')
     ax.yaxis.set_major_locator(MaxNLocator(integer=True))
+    ax.tick_params(axis='y', colors='#1A237E', labelsize=12, width=1.5)
 
     # Set y-axis limit with some padding
     max_height = max(
@@ -241,22 +262,52 @@ def generate_threat_tipper_chart(tippers):
     y_max = max(max_height * 1.2, 4)  # At least 4, or 20% above max for labels
     ax.set_ylim(0, y_max)
 
-    # Add a thin black border around the figure
-    fig.patch.set_edgecolor('black')
-    fig.patch.set_linewidth(5)
+    # Enhanced border with rounded corners like other charts
+    from matplotlib.patches import FancyBboxPatch
+    border_width = 4
+    fig.patch.set_edgecolor('none')
+    fig.patch.set_linewidth(0)
 
-    # Add the current time to the chart
+    fancy_box = FancyBboxPatch(
+        (0, 0), width=1.0, height=1.0,
+        boxstyle="round,pad=0,rounding_size=0.01",
+        edgecolor='#1A237E',
+        facecolor='none',
+        linewidth=border_width,
+        transform=fig.transFigure,
+        zorder=1000,
+        clip_on=False
+    )
+    fig.patches.append(fancy_box)
+
+    # Style the spines
+    for spine in ax.spines.values():
+        spine.set_color('#CCCCCC')
+        spine.set_linewidth(1.5)
+
+    # Enhanced timestamp and branding
     now_eastern = datetime.now(eastern).strftime('%m/%d/%Y %I:%M %p %Z')
-    plt.figtext(0.05, 0.01, now_eastern, ha='left', va='bottom', fontsize=10)
+    fig.text(0.02, 0.02, f"Generated@ {now_eastern}",
+             ha='left', va='bottom', fontsize=10, color='#1A237E', fontweight='bold',
+             bbox=dict(boxstyle="round,pad=0.4", facecolor='white', alpha=0.9,
+                       edgecolor='#1A237E', linewidth=1.5))
+
+    # Add GS-DnR branding
+    fig.text(0.98, 0.02, 'GS-DnR', ha='right', va='bottom', fontsize=10,
+             alpha=0.7, color='#3F51B5', style='italic', fontweight='bold')
 
     # Save chart files
     today_date = datetime.now().strftime('%m-%d-%Y')
     OUTPUT_PATH = ROOT_DIRECTORY / "web" / "static" / "charts" / today_date
     os.makedirs(OUTPUT_PATH, exist_ok=True)
 
-    # Save as PNG for static display
+    # Enhanced layout with space for external legends
     plt.tight_layout()
-    plt.savefig(OUTPUT_PATH / 'Threat Tippers.png', dpi=300, bbox_inches='tight')
+    plt.subplots_adjust(top=0.88, bottom=0.15, left=0.08, right=0.72)
+
+    # Save as PNG for static display
+    plt.savefig(OUTPUT_PATH / 'Threat Tippers.png', dpi=300, bbox_inches='tight', 
+               pad_inches=0, facecolor='#f8f9fa')
     plt.savefig(OUTPUT_PATH / 'Threat Tippers.svg', format='svg', bbox_inches='tight')
 
     # Create interactive version with tooltips (code remains the same)
