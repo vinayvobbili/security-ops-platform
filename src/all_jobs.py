@@ -12,6 +12,7 @@ from src.charts import mttr_mttc, outflow, lifespan, heatmap, sla_breaches, agin
     crowdstrike_volume, threat_tippers, crowdstrike_efficacy
 from src.components import oncall, approved_security_testing, thithi, orphaned_tickets, response_sla_risk_tickets, containment_sla_risk_tickets, qa_tickets
 from src.utils.fs_utils import make_dir_for_todays_charts
+from src.utils.data_cache import fetch_daily_cache
 
 logging.basicConfig(level=logging.ERROR)
 logging.getLogger("webexpythonsdk.restsession").setLevel(logging.ERROR)
@@ -60,6 +61,7 @@ def main():
 
     schedule.every().day.at("00:01", eastern).do(lambda: (
         make_dir_for_todays_charts(helper_methods.CHARTS_DIR_PATH),
+        fetch_daily_cache(),  # Fetch and cache 3 months of data first
         aging_tickets.make_chart(),
         crowdstrike_efficacy.make_chart(),
         crowdstrike_volume.make_chart(),
