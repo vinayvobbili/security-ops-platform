@@ -177,10 +177,23 @@ def save_sla_breaches_chart(ticket_slas_by_periods):
     ax1.set_ylim(0, max_response * 1.1)  # 10% padding above max value
     ax2.set_ylim(0, max_containment * 1.1)  # 10% padding above max value
 
-    # Enhanced border
+    # Enhanced border with rounded corners like MTTR chart
+    from matplotlib.patches import FancyBboxPatch
     border_width = 4
-    fig.patch.set_edgecolor('#1A237E')
-    fig.patch.set_linewidth(border_width)
+    fig.patch.set_edgecolor('none')
+    fig.patch.set_linewidth(0)
+
+    fancy_box = FancyBboxPatch(
+        (0, 0), width=1.0, height=1.0,
+        boxstyle="round,pad=0,rounding_size=0.01",
+        edgecolor='#1A237E',
+        facecolor='none',
+        linewidth=border_width,
+        transform=fig.transFigure,
+        zorder=1000,
+        clip_on=False
+    )
+    fig.patches.append(fancy_box)
 
     # Enhanced timestamp
     trans = transforms.blended_transform_factory(fig.transFigure, fig.transFigure)
@@ -206,7 +219,7 @@ def save_sla_breaches_chart(ticket_slas_by_periods):
 
     # Move legend to top right outside chart area with horizontal gap
     legend = ax1.legend(title='Period (Ticket Count)', loc='upper left',
-                        bbox_to_anchor=(1.08, 1),  # increased horizontal offset for gap
+                        bbox_to_anchor=(1.18, 1),  # increased horizontal offset for gap
                         frameon=True, fancybox=True, shadow=True,
                         title_fontsize=12, fontsize=10)
     legend.get_frame().set_facecolor('white')
@@ -244,13 +257,14 @@ def save_sla_breaches_chart(ticket_slas_by_periods):
              ha='right', va='bottom', fontsize=10,
              alpha=0.7, color='#3F51B5', style='italic', fontweight='bold')
 
-    # Add explanatory note
-    plt.text(0.02, 0.08, '(*) Ticket counts for that period',
-             transform=trans, ha='left', va='bottom',
+    # Add explanatory note below legend like MTTR chart
+    plt.text(1.18, 0.78, 'Ticket counts for that period (*)',
+             transform=ax1.transAxes, ha='left', va='top',
              fontsize=9, color='#666666', style='italic')
 
-    # Enhanced layout
-    plt.subplots_adjust(top=0.85, bottom=0.20, left=0.12, right=0.88)
+    # Enhanced layout with space for external legend and note
+    plt.tight_layout()
+    plt.subplots_adjust(top=0.88, bottom=0.15, left=0.08, right=0.68)
 
     today_date = datetime.now().strftime('%m-%d-%Y')
     output_path = root_directory / "web" / "static" / "charts" / today_date / "SLA Breaches.png"
