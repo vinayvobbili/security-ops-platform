@@ -8,6 +8,7 @@ from src import helper_methods
 from src import verify_host_online_status
 from src.charts import mttr_mttc, outflow, lifespan, heatmap, sla_breaches, aging_tickets, inflow, qradar_rule_efficacy, de_stories, days_since_incident, re_stories, threatcon_level, vectra_volume, \
     crowdstrike_volume, threat_tippers, crowdstrike_efficacy
+from src.utils.data_cache import fetch_daily_cache
 from src.utils.fs_utils import make_dir_for_todays_charts
 
 config = get_config()
@@ -18,6 +19,7 @@ def scheduler_process():
     # run once to test
     print("Running once to test the scheduler...")
     make_dir_for_todays_charts(helper_methods.CHARTS_DIR_PATH),
+    fetch_daily_cache(),
     aging_tickets.make_chart(),
     days_since_incident.make_chart(),
     crowdstrike_volume.make_chart(),
