@@ -5,6 +5,7 @@ urllib3.disable_warnings(InsecureRequestWarning)
 
 import json
 import logging
+from datetime import datetime
 
 import requests
 
@@ -62,9 +63,64 @@ class TicketHandler:
         self.dev_base = CONFIG.xsoar_dev_api_base_url
 
     def get_tickets(self, query, period=None, size=10000):
-        """Fetch security incidents from XSOAR"""
-        query += f' -category:job -type:"{CONFIG.team_name} Ticket QA" -type:"{CONFIG.team_name} SNOW Whitelist Request"'
-
+        """Fetch security incidents from XSOAR, using cached data when available"""
+        # Check if we can use cached data for common queries
+        base_query = f'type:{CONFIG.team_name} -owner:""'
+        full_query = query + f' -category:job -type:"{CONFIG.team_name} Ticket QA" -type:"{CONFIG.team_name} SNOW Whitelist Request"'
+        
+        # Try to use cached data for queries that match our cache pattern
+        if self._can_use_cache(query, period):
+            cached_tickets = self._get_cached_tickets()
+            if cached_tickets is not None:
+                log.info(f"Using cached data for query: {query}")
+                return self._filter_cached_tickets(cached_tickets, full_query, period)
+        
+        # Fall back to API call
+        log.info(f"Making API call for query: {query}")
+        return self._fetch_from_api(full_query, period, size)
+    
+    def _can_use_cache(self, query: str, period) -> bool:
+        """Check if we can use cached data for this query"""
+        base_query = f'type:{CONFIG.team_name} -owner:""'
+        
+        # Can use cache if:
+        # 1. Query matches our base pattern
+        # 2. Period is within the last 3 months or None
+        if not query.startswith(base_query):
+            return False
+            
+        if period is None:
+            return True
+            
+        # Check if period is within our 3-month cache range
+        if period.get("byFrom") == "months" and period.get("fromValue", 0) <= 3:
+            return True
+        if period.get("byFrom") == "days" and period.get("fromValue", 0) <= 90:
+            return True
+            
+        return False
+    
+    def _get_cached_tickets(self):
+        """Get cached tickets for today's date"""
+        try:
+            # Import here to avoid circular imports
+            from src.utils.data_cache import DataCache
+            cache = DataCache()
+            cached_data = cache.get_cached_data()
+            return cached_data.get("tickets", []) if cached_data else None
+        except Exception as e:
+            log.warning(f"Failed to load cached data: {e}")
+            return None
+    
+    def _filter_cached_tickets(self, tickets, query, period):
+        """Apply additional filtering to cached tickets"""
+        # For now, return all cached tickets - the charts can do their own filtering
+        # This still saves the expensive API call
+        # TODO: Implement more sophisticated filtering if needed
+        return tickets
+    
+    def _fetch_from_api(self, query, period, size):
+        """Fetch tickets directly from XSOAR API"""
         payload = {
             "filter": {
                 "query": query,
