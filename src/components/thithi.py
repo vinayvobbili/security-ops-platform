@@ -2,7 +2,6 @@ import logging
 
 import requests
 from bs4 import BeautifulSoup
-from twilio.rest import Client
 from webexpythonsdk import WebexAPI
 
 from my_config import get_config
@@ -27,17 +26,6 @@ def setup_webex_api():
         return WebexAPI(CONFIG.webex_bot_access_token_hal9000)
     except Exception as e:
         logger.error(f"Failed to initialize Webex API: {e}")
-        return None
-
-
-def setup_whatsapp_client():
-    """Initialize and return Twilio Client for WhatsApp."""
-    try:
-        account_sid = CONFIG.twilio_account_sid
-        auth_token = CONFIG.twilio_auth_token
-        return Client(account_sid, auth_token)
-    except Exception as e:
-        logger.error(f"Failed to initialize WhatsApp client: {e}")
         return None
 
 
@@ -191,33 +179,6 @@ def broadcast_to_webex(message, webex_api=None):
         return False
 
 
-def broadcast_to_whatsapp(message):
-    """Send message through WhatsApp via Twilio."""
-    client = setup_whatsapp_client()
-    whatsapp_receiver_numbers = CONFIG.whatsapp_receiver_numbers.split(',')
-    if not client:
-        logger.error("Could not initialize WhatsApp client. Message not sent.")
-        return False
-
-    try:
-        logger.info(f"Broadcasting WhatsApp message: {message}")
-        # Format with whatsapp: prefix for Twilio WhatsApp
-        from_number = f"whatsapp:{CONFIG.twilio_whatsapp_number}"
-
-        for number in whatsapp_receiver_numbers:
-            to_number = f"whatsapp:{number}"
-            client.messages.create(
-                body=message,
-                from_=from_number,
-                to=to_number
-            )
-        logger.info("Message sent successfully via WhatsApp")
-        return True
-    except Exception as e:
-        logger.error(f"Failed to send WhatsApp message: {e}")
-        return False
-
-
 def main():
     """Main function to fetch and broadcast thithi information."""
     try:
@@ -235,7 +196,6 @@ def main():
         if thithi and paksha:
             message = f'Thithi: {thithi}, {paksha}'
             broadcast_to_webex(message, webex_api)
-            # broadcast_to_whatsapp(message)
         else:
             message = "Could not retrieve thithi and paksha information"
             logger.warning(message)
