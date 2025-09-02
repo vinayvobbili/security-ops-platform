@@ -28,7 +28,7 @@ class ChartConfig:
     font_family: List[str] = None
     background_color: str = '#f8f9fa'
     border_color: str = '#1A237E'
-    border_width: int = 4
+    border_width: int = 2
 
     def __post_init__(self):
         if self.font_family is None:
@@ -563,7 +563,7 @@ class TicketChartGenerator:
         """Apply final styling and save chart."""
         # Enhanced border with rounded corners
         from matplotlib.patches import FancyBboxPatch
-        border_width = 4
+        border_width = 2
         fig.patch.set_edgecolor('none')
         fig.patch.set_linewidth(0)
 
@@ -585,7 +585,7 @@ class TicketChartGenerator:
         plt.tight_layout()
         plt.subplots_adjust(top=0.88, bottom=0.23, left=0.08, right=0.85)
         output_path = self.output_dir / filename
-        plt.savefig(output_path, format='png', bbox_inches='tight', pad_inches=0.1, dpi=300, facecolor='#f8f9fa')
+        plt.savefig(output_path, format='png', bbox_inches='tight', pad_inches=0.0, dpi=300, facecolor='#f8f9fa')
         plt.close(fig)
 
     def generate_all_charts(self) -> None:
