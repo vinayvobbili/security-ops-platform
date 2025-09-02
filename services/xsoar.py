@@ -2,9 +2,13 @@ import json
 import logging
 
 import requests
+import urllib3
+from urllib3.exceptions import InsecureRequestWarning
 
 from my_config import get_config
 from src.utils.http_utils import get_session
+
+urllib3.disable_warnings(InsecureRequestWarning)
 
 CONFIG = get_config()
 log = logging.getLogger(__name__)
