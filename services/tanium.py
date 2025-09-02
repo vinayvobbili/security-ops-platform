@@ -350,6 +350,10 @@ class TaniumInstance:
             logger.error(f"Error removing tag '{tag}' from '{computer_name}' in {self.name}: {e}")
             return False
 
+    def iterate_computers(self, limit: Optional[int] = None) -> Iterator[Computer]:
+        """Public method to iterate through computers with pagination"""
+        return self._paginate_computers(limit)
+
 
 class TaniumClient:
     """Main client for managing multiple Tanium instances"""
@@ -512,7 +516,7 @@ class TaniumClient:
         
         matches = []
         try:
-            for computer in instance._paginate_computers(limit=None):
+            for computer in instance.iterate_computers(limit=None):
                 if search_term.lower() in computer.name.lower():
                     matches.append({
                         'hostname': computer.name,
