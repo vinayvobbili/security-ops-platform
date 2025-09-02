@@ -79,8 +79,8 @@ LOGO_DIR = ROOT_DIRECTORY / "web" / "static" / "logos"  # Directory where logos 
 CROWDSTRIKE_LOGO_SIZE = 0.02  # CrowdStrike falcon logos
 VECTRA_LOGO_SIZE = 0.08       # Vectra logos
 PRISMA_LOGO_SIZE = 0.08       # Prisma Cloud logos  
-THIRD_PARTY_LOGO_SIZE = 0.08  # Third party compromise
-EMPLOYEE_REPORT_LOGO_SIZE = 0.08  # Employee report
+THIRD_PARTY_LOGO_SIZE = 0.03  # Third party compromise
+EMPLOYEE_REPORT_LOGO_SIZE = 0.12  # Employee report
 CASE_LOGO_SIZE = 0.03         # Case logos (smaller)
 QRADAR_LOGO_SIZE = 0.05       # QRadar logos
 DEFAULT_LOGO_SIZE = 0.05      # Default for others
@@ -98,8 +98,8 @@ LOGO_URL_MAPPING = {
     "splunk alert": ("https://logos-world.net/wp-content/uploads/2021/08/Splunk-Logo.png", "splunk.png"),
     "qradar alert": ("https://tse3.mm.bing.net/th/id/OIP.CAdOtgtsDWXIx1oIBPQ55QAAAA?r=0&rs=1&pid=ImgDetMain&o=7&rm=3", "qradar.png"),
     "vectra detection": ("https://images.g2crowd.com/uploads/product/image/social_landscape/social_landscape_0851751a52d7a99e332527e5918d321b/vectra-ai.png", "vectra.png"),
-    "third party compromise": ("https://cdn-icons-png.flaticon.com/512/2092/2092063.png", "third_party.png"),
-    "employee report": ("https://cdn-icons-png.flaticon.com/512/1077/1077114.png", "employee_report.png"),
+    "third party compromise": ("https://png.pngtree.com/png-clipart/20230819/original/pngtree-third-party-icon-on-white-background-picture-image_8053292.png", "third_party.png"),
+    "employee report": ("https://cdn.iconscout.com/icon/premium/png-256-thumb/employee-report-4849241-4030934.png", "employee_report.png"),
     "case": ("https://static.vecteezy.com/system/resources/previews/006/593/081/non_2x/security-alert-concepts-vector.jpg", "case.png"),
     "lost/stolen device": ("https://cdn-icons-png.flaticon.com/512/3437/3437364.png", "lost_stolen_device.png"),
     "unknown": ("https://cdn-icons-png.flaticon.com/512/2534/2534590.png", "unknown.png")
