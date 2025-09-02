@@ -9,21 +9,31 @@ async function setRandomAudio() {
     // Check if we have a saved audio source from previous navigation
     const savedSrc = localStorage.getItem('music-src');
     
-    if (savedSrc) {
-        // Use previously saved audio source to maintain continuity
+    if (savedSrc && savedSrc.includes('/static/audio/')) {
+        // Use previously saved audio source to maintain continuity (only if it's actually an audio file)
         music.src = savedSrc;
-    } else if (!music.src || music.src === window.location.origin + '/') {
-        // Only fetch new random audio if no source exists
-        try {
-            const response = await fetch('/api/random-audio');
-            const data = await response.json();
-            if (data.filename) {
-                const newSrc = '/static/audio/' + data.filename;
-                music.src = newSrc;
-                localStorage.setItem('music-src', newSrc);
+        console.log('Using saved audio:', savedSrc);
+    } else {
+        // Clear invalid saved source
+        if (savedSrc && !savedSrc.includes('/static/audio/')) {
+            localStorage.removeItem('music-src');
+            console.log('Cleared invalid saved audio source:', savedSrc);
+        }
+        
+        if (!music.src || music.src === window.location.origin + '/' || !music.src.includes('/static/audio/')) {
+            // Only fetch new random audio if no valid audio source exists
+            try {
+                const response = await fetch('/api/random-audio');
+                const data = await response.json();
+                if (data.filename) {
+                    const newSrc = '/static/audio/' + data.filename;
+                    music.src = newSrc;
+                    localStorage.setItem('music-src', newSrc);
+                    console.log('Set new random audio:', newSrc);
+                }
+            } catch (e) {
+                console.error('Failed to fetch random audio:', e);
             }
-        } catch (e) {
-            // fallback: keep default src
         }
     }
     
@@ -31,16 +41,51 @@ async function setRandomAudio() {
     music.muted = true;
     music.pause();
     icon.src = '/static/icons/volume-xmark-solid.svg';
+    
+    // Add error event listener to debug loading issues
+    music.addEventListener('error', (e) => {
+        console.error('Audio loading error:', e, 'Source:', music.src);
+    });
+    
+    music.addEventListener('loadeddata', () => {
+        console.log('Audio loaded successfully:', music.src);
+    });
 }
 
 // Toggle audio mute/unmute and update icon
 function toggleAudio() {
     const music = document.getElementById('music');
     const icon = document.getElementById('music-icon');
-    if (!music || !icon) return;
+    console.log('Toggle audio called - music:', !!music, 'icon:', !!icon, 'src:', music?.src, 'muted:', music?.muted);
+    if (!music || !icon || !music.src) return;
+    
     if (music.muted) {
         music.muted = false;
-        music.play();
+        
+        // Wait for audio to be ready before playing
+        const tryPlay = () => {
+            music.play().then(() => {
+                console.log('Audio playing successfully');
+            }).catch(e => {
+                console.error('Audio play failed:', e);
+                console.log('Audio state:', {
+                    src: music.src,
+                    readyState: music.readyState,
+                    networkState: music.networkState,
+                    error: music.error
+                });
+            });
+        };
+        
+        if (music.readyState >= 3) {
+            // Audio is already loaded enough to play
+            tryPlay();
+        } else {
+            // Wait for audio to load
+            music.addEventListener('canplay', tryPlay, { once: true });
+            music.load(); // Force reload if needed
+        }
+        
         icon.src = '/static/icons/volume-high-solid.svg';
     } else {
         music.muted = true;
