@@ -229,7 +229,7 @@ class StackedBarChart:
 
     def _add_legend(self, ax, title: str) -> None:
         """Add styled legend."""
-        legend = ax.legend(title=title, loc='upper right', frameon=True,
+        legend = ax.legend(title=title, loc='upper left', bbox_to_anchor=(1.01, 1), frameon=True,
                            fancybox=True, shadow=True, title_fontsize=12, fontsize=10)
         legend.get_frame().set_facecolor('white')
         legend.get_frame().set_alpha(0.95)
