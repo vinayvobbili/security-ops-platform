@@ -39,20 +39,51 @@ from services.bot_rooms import get_room_name
 
 CONFIG = get_config()
 
-# Configure logging
+# Configure logging with colors
 ROOT_DIRECTORY = Path(__file__).parent.parent
+
+class ColoredFormatter(logging.Formatter):
+    """Custom formatter to add colors to console output"""
+    
+    def format(self, record):
+        # Get the original formatted message without colors first
+        log_message = super().format(record)
+        
+        # Only colorize WARNING and ERROR levels, leave INFO as default
+        if record.levelname == 'WARNING':
+            return f"\033[33m{log_message}\033[0m"  # Yellow
+        elif record.levelname == 'ERROR':
+            return f"\033[31m{log_message}\033[0m"  # Red
+        elif record.levelname == 'CRITICAL':
+            return f"\033[35m{log_message}\033[0m"  # Magenta
+        else:
+            # INFO, DEBUG and others - no color (default terminal color)
+            return log_message
+
+# Create file handler (no colors for file)
+file_handler = logging.handlers.RotatingFileHandler(
+    ROOT_DIRECTORY / "logs" / "pokedex.log",
+    maxBytes=10 * 1024 * 1024,  # 10MB
+    backupCount=5
+)
+file_handler.setFormatter(logging.Formatter(
+    '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+))
+
+# Create console handler with colors
+console_handler = logging.StreamHandler()
+console_handler.setFormatter(ColoredFormatter(
+    '%(asctime)s - %(levelname)s - %(message)s'
+))
+
+# Configure root logger with simple approach
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.handlers.RotatingFileHandler(
-            ROOT_DIRECTORY / "logs" / "pokedex.log",
-            maxBytes=10 * 1024 * 1024,  # 10MB
-            backupCount=5
-        ),
-        logging.StreamHandler()
-    ]
+    handlers=[file_handler, console_handler],
+    force=True  # Override any existing logging config
 )
+
 logger = logging.getLogger(__name__)
 
 # Configuration
@@ -295,17 +326,40 @@ class PokeDexBot(WebexBot):
 
             logger.info(f"Processing message from {teams_message.personEmail}: {raw_message[:100]}...")
 
+            # Initialize thinking_msg as None
+            thinking_msg = None
+            
             # Check if bot is ready
             if not bot_ready:
                 response_text = "🔄 I'm still starting up. Please try again in a moment."
             else:
-                # Get response from LLM agent
+                # Send thinking indicator as a threaded reply for user engagement
+                try:
+                    thinking_msg = self.teams.messages.create(
+                        roomId=teams_message.roomId,
+                        parentId=teams_message.id,  # Thread it as a reply to user's message
+                        text="🤔 Thinking..."
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to send thinking message: {e}")
+                    thinking_msg = None
+                
+                # Process query through LLM agent
+                agent_start_time = datetime.now()
+                # Get response from LLM agent  
                 try:
                     response_text = ask(
                         raw_message,
                         user_id=teams_message.personId,
                         room_id=teams_message.roomId
                     )
+                    # Calculate response time for cards
+                    agent_end_time = datetime.now()
+                    response_time_seconds = (agent_end_time - agent_start_time).total_seconds()
+                    
+                    # Replace placeholder with actual response time in Adaptive Cards
+                    if "[X.X]s" in response_text:
+                        response_text = response_text.replace("[X.X]s", f"{response_time_seconds:.1f}s")
                 except Exception as e:
                     logger.error(f"Error in LLM agent processing: {e}")
                     response_text = "❌ I encountered an error processing your message. Please try again."
@@ -325,21 +379,56 @@ class PokeDexBot(WebexBot):
                     # If the incoming message has a parentId, use that instead to stay in same thread
                     parent_id = getattr(teams_message, 'parentId', None) or teams_message.id
 
-                    self.teams.messages.create(
-                        roomId=teams_message.roomId,
-                        parentId=parent_id,
-                        markdown=response_text
-                    )
-                except Exception as thread_error:
-                    # Fallback to non-threaded message if threading fails
-                    if "Cannot reply to a reply" in str(thread_error):
-                        logger.warning("Threading failed, sending as standalone message")
+                    # Check for Adaptive Card in LLM response
+                    card_dict, clean_text = self._extract_adaptive_card(response_text)
+                    
+                    # Also check if the entire response is just JSON (LLM mistake)
+                    if not card_dict and response_text.strip().startswith('{') and '"type": "AdaptiveCard"' in response_text:
+                        try:
+                            import json
+                            potential_card = json.loads(response_text.strip())
+                            if potential_card.get("type") == "AdaptiveCard":
+                                card_dict = potential_card
+                                clean_text = "Enhanced staffing information"
+                                logger.info("Detected raw JSON card response from LLM")
+                        except:
+                            pass
+                    
+                    # First, update thinking message with "Done!" regardless of card presence
+                    if thinking_msg:
+                        # Skip the problematic update, just send completion as new message
+                        # This is more reliable than trying to update thinking message
+                        done_message = f"✅ **Done!** ⚡ Response time: {response_time:.1f}s"
+                        try:
+                            self.teams.messages.create(
+                                roomId=teams_message.roomId,
+                                parentId=parent_id,
+                                markdown=done_message
+                            )
+                            logger.info(f"Sent completion status: {done_message}")
+                        except Exception as completion_error:
+                            logger.error(f"Could not send completion message: {completion_error}")
+                    
+                    # Then send the actual response
+                    if card_dict:
+                        # Send Adaptive Card
+                        logger.info("Sending response as Adaptive Card")
                         self.teams.messages.create(
                             roomId=teams_message.roomId,
-                            markdown=response_text
+                            parentId=parent_id,  # ✅ Threaded with original message
+                            text=clean_text or " ",  # Minimal text for card
+                            attachments=[{
+                                "contentType": "application/vnd.microsoft.card.adaptive",
+                                "content": card_dict
+                            }]
                         )
                     else:
-                        raise thread_error
+                        # Send regular response as new threaded message
+                        self.teams.messages.create(
+                            roomId=teams_message.roomId,
+                            parentId=parent_id,  # Threaded with original message
+                            markdown=response_text
+                        )
                 log_conversation(user_name, raw_message, response_text, response_time, room_name)
 
         except Exception as e:
@@ -348,6 +437,46 @@ class PokeDexBot(WebexBot):
                 roomId=teams_message.roomId,
                 text="❌ I encountered an error processing your message. Please try again."
             )
+    
+    def _extract_adaptive_card(self, response_text):
+        """
+        Extract Adaptive Card JSON from LLM response if present
+        
+        Returns:
+            tuple: (card_dict, clean_text) or (None, response_text)
+        """
+        import json
+        import re
+        
+        try:
+            # Look for Adaptive Card markers in the response
+            if "ADAPTIVE_CARD_START" in response_text and "ADAPTIVE_CARD_END" in response_text:
+                # Extract the JSON between markers
+                pattern = r'ADAPTIVE_CARD_START\s*\n?(.*?)\n?ADAPTIVE_CARD_END'
+                match = re.search(pattern, response_text, re.DOTALL)
+                
+                if match:
+                    card_json = match.group(1).strip()
+                    # Remove any markdown code block markers
+                    card_json = card_json.replace('```json', '').replace('```', '').strip()
+                    
+                    try:
+                        card_dict = json.loads(card_json)
+                        # Remove the card from the original text for fallback
+                        clean_text = re.sub(pattern, '', response_text, flags=re.DOTALL).strip()
+                        
+                        logger.info("Successfully extracted Adaptive Card from LLM response")
+                        return card_dict, clean_text
+                        
+                    except json.JSONDecodeError as je:
+                        logger.warning(f"Failed to parse Adaptive Card JSON: {je}")
+                        
+        except Exception as e:
+            logger.error(f"Error extracting Adaptive Card: {e}")
+        
+        # No card found or error occurred
+        return None, response_text
+    
 
 
 def create_webex_bot():
