@@ -180,6 +180,7 @@ I'm here to help with security operations by searching our local SOC documentati
 • Answer questions about security procedures
 • Search SOC documentation and runbooks
 • Check device status and containment
+• View current shift staffing and on-call information
 • Provide step-by-step incident response guidance
 
 Just ask me any security-related question!"""
