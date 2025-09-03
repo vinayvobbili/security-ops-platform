@@ -179,7 +179,7 @@ def save_sla_breaches_chart(ticket_slas_by_periods):
 
     # Enhanced border with rounded corners like MTTR chart
     from matplotlib.patches import FancyBboxPatch
-    border_width = 4
+    border_width = 2
     fig.patch.set_edgecolor('none')
     fig.patch.set_linewidth(0)
 
