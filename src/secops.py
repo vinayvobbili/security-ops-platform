@@ -6,8 +6,9 @@ from datetime import date
 from datetime import datetime, timedelta
 from pathlib import Path
 
-import requests
-import urllib3
+import pytz
+from requests import exceptions as requests_exceptions
+from urllib3 import exceptions as urllib3_exceptions
 from dateutil import parser
 from openpyxl import load_workbook
 from tabulate import tabulate
@@ -46,6 +47,27 @@ with open(SECOPS_SHIFT_STAFFING_FILENAME, 'r') as f:
 
 MANAGEMENT_NOTES_FILE = root_directory / 'data' / 'transient' / 'secOps' / 'management_notes.json'
 
+# Shift time boundaries in minutes from midnight
+MORNING_START = 270  # 04:30
+AFTERNOON_START = 750  # 12:30
+NIGHT_START = 1230  # 20:30
+
+
+def get_current_shift():
+    """Determine current shift based on Eastern time."""
+    eastern = pytz.timezone('US/Eastern')
+    now = datetime.now(eastern)
+    hour = now.hour
+    minute = now.minute
+    total_minutes = hour * 60 + minute
+    # Morning: 04:30 - 12:29, Afternoon: 12:30 - 20:29, Night: 20:30 - 04:29
+    if MORNING_START <= total_minutes < AFTERNOON_START:
+        return 'morning'
+    elif AFTERNOON_START <= total_minutes < NIGHT_START:
+        return 'afternoon'
+    else:
+        return 'night'
+
 
 def get_open_tickets():
     all_tickets = TicketHandler().get_tickets(query=BASE_QUERY + ' -status:closed')
@@ -57,7 +79,7 @@ def get_open_tickets():
     return ', '.join(map(str, open_tickets)) + (f" and {diff} more" if diff > 0 else '')
 
 
-def get_staffing_data(day_name, shift_name):
+def get_staffing_data(day_name=datetime.now(pytz.timezone('US/Eastern')).strftime('%A'), shift_name=get_current_shift()):
     shift_cell_names = cell_names_by_shift[day_name][shift_name]
     staffing_data = {}
     for team, cell_names in shift_cell_names.items():
@@ -288,7 +310,7 @@ def announce_shift_change(shift_name, room_id, sleep_time=30):
         time.sleep(sleep_time)  # give time to digest the shift change message before sending the performance message
 
         announce_previous_shift_performance(shift_name=shift_name, room_id=room_id)
-    except (requests.exceptions.ConnectionError, urllib3.exceptions.ProtocolError) as net_err:
+    except (requests_exceptions.ConnectionError, urllib3_exceptions.ProtocolError) as net_err:
         print(f"Network error in announce_shift_change: {net_err}")
         traceback.print_exc()
         raise  # Reraise to trigger retry
@@ -302,8 +324,9 @@ def main():
     Main function to run the scheduled jobs.
     """
     room_id = config.webex_room_id_vinay_test_space
-    announce_shift_change('afternoon', room_id, sleep_time=0)
+    # announce_shift_change('afternoon', room_id, sleep_time=0)
     # announce_previous_shift_performance(room_id, 'night')
+    print(get_staffing_data())
 
 
 if __name__ == "__main__":

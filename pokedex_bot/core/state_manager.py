@@ -21,6 +21,7 @@ from pokedex_bot.utils.enhanced_config import ModelConfig
 from pokedex_bot.document.document_processor import DocumentProcessor
 from pokedex_bot.tools.crowdstrike_tools import CrowdStrikeToolsManager
 from pokedex_bot.tools.weather_tools import WeatherToolsManager
+from pokedex_bot.tools.staffing_tools import StaffingToolsManager
 
 
 class SecurityBotStateManager:
@@ -41,6 +42,7 @@ class SecurityBotStateManager:
         self.document_processor: Optional[DocumentProcessor] = None
         self.crowdstrike_manager: Optional[CrowdStrikeToolsManager] = None
         self.weather_manager: Optional[WeatherToolsManager] = None
+        self.staffing_manager: Optional[StaffingToolsManager] = None
         
         # Initialization state
         self.is_initialized = False
@@ -113,6 +115,7 @@ class SecurityBotStateManager:
         self.weather_manager = WeatherToolsManager(
             api_key=self.config.open_weather_map_api_key
         )
+        self.staffing_manager = StaffingToolsManager()
         
         logging.info("Core managers initialized")
     
@@ -174,6 +177,11 @@ class SecurityBotStateManager:
             if self.crowdstrike_manager.is_available():
                 all_tools.extend(self.crowdstrike_manager.get_tools())
                 logging.info("CrowdStrike tools added to agent.")
+            
+            # Add staffing tools
+            if self.staffing_manager.is_available():
+                all_tools.extend(self.staffing_manager.get_tools())
+                logging.info("Staffing tools added to agent.")
             
             # Add RAG tool if available
             if self.document_processor.retriever:
@@ -240,6 +248,7 @@ I'm here to help with security operations by searching our local SOC documentati
 • Answer questions about security procedures
 • Search SOC documentation and runbooks
 • Check device status and containment
+• View current shift staffing and on-call information
 • Provide step-by-step incident response guidance
 
 Just ask me any security-related question!
@@ -287,6 +296,13 @@ Action: the action to take, should be one of [{tool_names}]
 Action Input: the input to the action (IMPORTANT: for CrowdStrike tools, extract the hostname from the question and pass ONLY the clean hostname like "C02G7C7LMD6R", not "hostname=C02G7C7LMD6R")
 Observation: the result of the action
 Final Answer: [Use the observation data to provide complete answer - DO NOT do additional actions]
+
+CRITICAL: For staffing queries like "Who is working right now?", "Who's on shift?", or "Current staffing":
+Thought: I need to get current staffing information
+Action: get_current_staffing
+Action Input: (no input needed)
+Observation: the result with current staffing
+Final Answer: [Use the staffing data directly - DO NOT do additional tool calls]
 
 IMPORTANT EFFICIENCY GUIDELINES:
 1. ALWAYS start with "Thought:" - never skip directly to Final Answer

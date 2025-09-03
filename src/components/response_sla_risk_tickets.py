@@ -5,7 +5,7 @@ import logging
 
 from my_config import get_config
 from services.xsoar import TicketHandler
-from src.secops import get_staffing_data
+from src.secops import get_staffing_data, get_current_shift
 
 CONFIG = get_config()
 webex_api = WebexAPI(access_token=CONFIG.webex_bot_access_token_soar)
@@ -17,27 +17,6 @@ logger = logging.getLogger(__name__)
 # Note: XSOAR only returns tickets with slaStatus:2 (already at risk, typically within 3 mins of breach)
 CRITICAL_THRESHOLD = 60  # Critical urgency if <= 60 seconds remaining
 WARNING_THRESHOLD = 120  # Warning urgency if <= 120 seconds remaining
-
-# Shift time boundaries in minutes from midnight
-MORNING_START = 270  # 04:30
-AFTERNOON_START = 750  # 12:30
-NIGHT_START = 1230  # 20:30
-
-
-def get_current_shift():
-    """Determine current shift based on Eastern time."""
-    eastern = pytz.timezone('US/Eastern')
-    now = datetime.now(eastern)
-    hour = now.hour
-    minute = now.minute
-    total_minutes = hour * 60 + minute
-    # Morning: 04:30 - 12:29, Afternoon: 12:30 - 20:29, Night: 20:30 - 04:29
-    if MORNING_START <= total_minutes < AFTERNOON_START:
-        return 'morning'
-    elif AFTERNOON_START <= total_minutes < NIGHT_START:
-        return 'afternoon'
-    else:
-        return 'night'
 
 
 def parse_due_date(due_date_str):
