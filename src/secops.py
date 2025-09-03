@@ -37,7 +37,7 @@ root_directory = Path(__file__).parent.parent
 excel_path = root_directory / 'data' / 'transient' / 'secOps' / config.secops_shift_staffing_filename
 wb = load_workbook(excel_path)
 # Select the sheet
-sheet = wb['SecOps Roster 2025 Jul Aug']
+sheet = wb['SecOps Roster 2025 SEP-OCT']
 
 # get the cell names by shift from the sheet
 SECOPS_SHIFT_STAFFING_FILENAME = root_directory / 'data' / 'secOps' / 'cell_names_by_shift.json'

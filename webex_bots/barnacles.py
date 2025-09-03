@@ -404,7 +404,7 @@ class SaveThreatcon(Command):
                     ActionSet(
                         actions=[
                             Submit(
-                                title="Announce",
+                                title="Announce in ThreatCon Chat",
                                 style=ActionStyle.POSITIVE,
                                 data={"callback_keyword": "announce_threatcon"}
                             )
