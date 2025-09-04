@@ -22,6 +22,8 @@ from pokedex_bot.document.document_processor import DocumentProcessor
 from pokedex_bot.tools.crowdstrike_tools import CrowdStrikeToolsManager
 from pokedex_bot.tools.weather_tools import WeatherToolsManager
 from pokedex_bot.tools.staffing_tools import StaffingToolsManager
+from pokedex_bot.tools.metrics_tools import MetricsToolsManager
+from pokedex_bot.tools.test_tools import TestToolsManager
 
 
 class SecurityBotStateManager:
@@ -43,6 +45,8 @@ class SecurityBotStateManager:
         self.crowdstrike_manager: Optional[CrowdStrikeToolsManager] = None
         self.weather_manager: Optional[WeatherToolsManager] = None
         self.staffing_manager: Optional[StaffingToolsManager] = None
+        self.metrics_manager: Optional[MetricsToolsManager] = None
+        self.test_manager: Optional[TestToolsManager] = None
 
         # Initialization state
         self.is_initialized = False
@@ -115,6 +119,8 @@ class SecurityBotStateManager:
             api_key=self.config.open_weather_map_api_key
         )
         self.staffing_manager = StaffingToolsManager()
+        self.metrics_manager = MetricsToolsManager()
+        self.test_manager = TestToolsManager()
 
         logging.info("Core managers initialized")
 
@@ -180,6 +186,16 @@ class SecurityBotStateManager:
             if self.staffing_manager.is_available():
                 all_tools.extend(self.staffing_manager.get_tools())
                 logging.info("Staffing tools added to agent.")
+
+            # Add metrics tools
+            if self.metrics_manager.is_available():
+                all_tools.extend(self.metrics_manager.get_tools())
+                logging.info("Metrics tools added to agent.")
+
+            # Add test tools
+            if self.test_manager.is_available():
+                all_tools.extend(self.test_manager.get_tools())
+                logging.info("Test execution tools added to agent.")
 
             # Add RAG tool if available
             if self.document_processor.retriever:
