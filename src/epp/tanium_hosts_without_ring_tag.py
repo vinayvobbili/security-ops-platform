@@ -353,10 +353,15 @@ class SmartCountryResolver:
 
         name = computer.name.strip().lower()
 
-        # Priority 1: Set the country to India PMLI for all METLAP and PMDesk hosts
+        # Priority 1.1: Set the country to India PMLI for all METLAP and PMDesk hosts
         if name.lower().startswith('metlap') or name.lower().startswith('pmdesk'):
             # print("Matched METLAP/PMDESK prefix -> India PMLI")
             country = 'India PMLI'
+            was_country_guessed = False
+        # Priority 1.2: Set the country to India PMLI for all METLAP and PMDesk hosts
+        elif name.lower().startswith('iaz'):
+            # print("Matched IAZ prefix -> US")
+            country = 'US'
             was_country_guessed = False
         # Priority 2: Valid ServiceNow country
         elif self._is_valid_country(snow_country):
