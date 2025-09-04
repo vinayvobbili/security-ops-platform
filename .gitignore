@@ -3,6 +3,7 @@ data/transient/.env
 .ipynb_checkpoints
 __pycache__/
 web/static/charts/*
+web/static/logos/*.png
 data/transient/*
 scheduler.pid
 web/static/audio

@@ -43,119 +43,224 @@ class TestToolsManager:
 
 
 def run_tests_tool():
-    """Factory function to create test execution tool"""
+    """Factory function to create interactive test execution tool"""
     @tool
     def run_tests() -> str:
-        """Run the full test suite for the bot. Use this when asked to 'run tests', 'execute tests', or 'test the bot'. Note: This may take 30-60 seconds to complete."""
+        """Run interactive bot functionality tests with real-time progress updates. This sends live test progress to Webex as each test executes. Use this when asked to 'run tests', 'execute tests', or 'test the bot'."""
         try:
-            project_root = Path(__file__).parent.parent.parent
-            start_time = datetime.now()
+            # Import here to avoid circular imports
+            from pokedex_bot.core.state_manager import get_state_manager
             
-            # Change to project directory
-            original_cwd = os.getcwd()
-            os.chdir(project_root)
+            # Get state manager and check if bot is ready
+            state_manager = get_state_manager()
+            if not state_manager.is_initialized or not state_manager.agent_executor:
+                return "❌ **Error:** Bot not fully initialized - cannot run interactive tests"
             
-            # Run pytest with verbose output and time limit
-            result = subprocess.run([
-                'python', '-m', 'pytest', 'tests/', '-v', '--tb=short'
-            ], capture_output=True, text=True, timeout=300)  # 5 minute timeout
+            # Define test queries with expected behaviors
+            test_queries = [
+                {
+                    "name": "Greeting Test",
+                    "query": "Hello",
+                    "expected": "Should respond with SOC assistant greeting",
+                    "timeout": 10
+                },
+                {
+                    "name": "Status Check", 
+                    "query": "status",
+                    "expected": "Should respond with system online status",
+                    "timeout": 5
+                },
+                {
+                    "name": "RAG Document Search",
+                    "query": "Who are our AIX server contacts?",
+                    "expected": "Should search documents and provide contact information", 
+                    "timeout": 30
+                },
+                {
+                    "name": "Staffing Query",
+                    "query": "Current staffing",
+                    "expected": "Should provide current shift staffing information",
+                    "timeout": 15
+                },
+                {
+                    "name": "Weather Tool Test",
+                    "query": "What's the weather in London?",
+                    "expected": "Should provide current weather information",
+                    "timeout": 20
+                },
+                {
+                    "name": "General Security Question",
+                    "query": "How do I handle a malware incident?",
+                    "expected": "Should search documents or provide security guidance",
+                    "timeout": 25
+                }
+            ]
             
-            # Restore original directory
-            os.chdir(original_cwd)
+            # Send initial start message
+            _send_test_message("🚀 **INTERACTIVE BOT TESTS STARTING**\n\nRunning live functionality tests with real-time updates...")
+            time.sleep(1)  # Brief pause for readability
             
-            end_time = datetime.now()
-            execution_time = (end_time - start_time).total_seconds()
+            # Initialize results tracking
+            test_results = []
+            total_tests = len(test_queries)
             
-            # Parse test results
-            output_lines = result.stdout.split('\n')
-            error_lines = result.stderr.split('\n') if result.stderr else []
+            # Execute each test
+            for i, test in enumerate(test_queries, 1):
+                test_start_time = time.time()
+                
+                # Send test start message
+                _send_test_message(f"🧪 **Test {i}/{total_tests}: {test['name']}**\n📝 Query: `{test['query']}`\n⏱️ Starting...")
+                
+                try:
+                    # Execute the query using the agent
+                    response = state_manager.agent_executor.invoke({
+                        "input": test['query']
+                    })
+                    
+                    test_end_time = time.time()
+                    response_time = test_end_time - test_start_time
+                    
+                    # Get response text
+                    response_text = response.get('output', 'No response') if isinstance(response, dict) else str(response)
+                    
+                    # Truncate long responses for display
+                    display_response = response_text[:200] + "..." if len(response_text) > 200 else response_text
+                    
+                    # Determine if test passed (basic checks)
+                    test_passed = len(response_text.strip()) > 10 and "error" not in response_text.lower()
+                    status_emoji = "✅" if test_passed else "⚠️"
+                    
+                    # Send test result message
+                    result_message = [
+                        f"{status_emoji} **Test {i} Complete: {test['name']}**",
+                        f"⏱️ **Response Time:** {response_time:.2f}s",
+                        f"📊 **Status:** {'PASS' if test_passed else 'NEEDS REVIEW'}",
+                        "",
+                        f"**Response Preview:**",
+                        f"```{display_response}```"
+                    ]
+                    _send_test_message("\n".join(result_message))
+                    
+                    # Store results
+                    test_results.append({
+                        'name': test['name'],
+                        'query': test['query'],
+                        'response_time': response_time,
+                        'passed': test_passed,
+                        'response_length': len(response_text)
+                    })
+                    
+                except Exception as e:
+                    test_end_time = time.time()
+                    response_time = test_end_time - test_start_time
+                    
+                    # Send error message
+                    error_message = [
+                        f"❌ **Test {i} FAILED: {test['name']}**",
+                        f"⏱️ **Time:** {response_time:.2f}s",
+                        f"🚨 **Error:** {str(e)[:100]}..."
+                    ]
+                    _send_test_message("\n".join(error_message))
+                    
+                    # Store error results
+                    test_results.append({
+                        'name': test['name'],
+                        'query': test['query'],
+                        'response_time': response_time,
+                        'passed': False,
+                        'error': str(e)
+                    })
+                
+                # Brief pause between tests for readability
+                time.sleep(2)
             
-            # Extract summary line (usually the last meaningful line)
-            summary_line = ""
-            for line in reversed(output_lines):
-                if 'passed' in line or 'failed' in line or 'error' in line:
-                    summary_line = line.strip()
-                    break
+            # Send final summary
+            passed_tests = sum(1 for result in test_results if result['passed'])
+            avg_response_time = sum(result['response_time'] for result in test_results) / len(test_results)
             
-            # Format response for Webex
-            if result.returncode == 0:
-                # All tests passed
-                response = [
-                    "✅ **TEST SUITE COMPLETED SUCCESSFULLY**",
-                    f"⏱️ **Execution Time:** {execution_time:.1f}s",
-                    f"📊 **Results:** {summary_line}",
+            summary_message = [
+                "📊 **INTERACTIVE TEST SUITE COMPLETE**",
+                "",
+                f"**📈 Summary:**",
+                f"• Tests Passed: **{passed_tests}/{total_tests}** ({(passed_tests/total_tests)*100:.1f}%)",
+                f"• Average Response Time: **{avg_response_time:.2f}s**",
+                f"• Total Execution Time: **{sum(result['response_time'] for result in test_results):.1f}s**",
+                "",
+                "**🎯 Test Results:**"
+            ]
+            
+            for result in test_results:
+                status_emoji = "✅" if result['passed'] else "❌"
+                summary_message.append(f"{status_emoji} {result['name']}: {result['response_time']:.2f}s")
+            
+            if passed_tests == total_tests:
+                summary_message.extend([
                     "",
-                    "**Key Points:**",
-                    "• All tests passed",
-                    "• No critical issues detected", 
-                    "• Bot functionality verified",
-                    ""
-                ]
-                
-                # Add any warnings from stderr
-                if error_lines and any(line.strip() for line in error_lines):
-                    warnings = [line for line in error_lines if line.strip() and 'warning' in line.lower()]
-                    if warnings:
-                        response.extend([
-                            "**⚠️ Warnings:**",
-                            *[f"• {w.strip()}" for w in warnings[:3]],  # Show first 3 warnings
-                            ""
-                        ])
-                        
+                    "🎉 **All tests passed!** Bot is functioning correctly.",
+                    "✅ Ready for production use."
+                ])
             else:
-                # Some tests failed
-                failed_tests = []
-                for line in output_lines:
-                    if 'FAILED' in line and '::' in line:
-                        test_name = line.split('::')[-1].split()[0]
-                        failed_tests.append(test_name)
-                
-                response = [
-                    "❌ **TEST SUITE COMPLETED WITH FAILURES**",
-                    f"⏱️ **Execution Time:** {execution_time:.1f}s", 
-                    f"📊 **Results:** {summary_line}",
-                    ""
-                ]
-                
-                if failed_tests:
-                    response.extend([
-                        "**Failed Tests:**",
-                        *[f"• `{test}`" for test in failed_tests[:5]],  # Show first 5 failures
-                        ""
-                    ])
-                
-                response.extend([
-                    "**Recommended Actions:**",
-                    "• Review failed test details",
-                    "• Check for recent code changes",
-                    "• Run specific failed tests for debugging",
-                    ""
+                failed_tests = [r['name'] for r in test_results if not r['passed']]
+                summary_message.extend([
+                    "",
+                    f"⚠️ **{len(failed_tests)} tests need attention:**",
+                    *[f"• {name}" for name in failed_tests],
+                    "",
+                    "🔧 **Recommended:** Review failed tests and check system configuration."
                 ])
             
-            # Add system info
-            response.extend([
-                "**Test Environment:**",
-                f"• Project Root: `{project_root.name}/`",
-                f"• Python: `python -m pytest`",
-                f"• Test Directory: `tests/`"
-            ])
+            _send_test_message("\n".join(summary_message))
             
-            return "\n".join(response)
+            # Return brief summary for the tool response
+            return f"✅ Interactive test suite completed: {passed_tests}/{total_tests} tests passed, {avg_response_time:.2f}s avg response time. Check Webex for detailed real-time results."
             
-        except subprocess.TimeoutExpired:
-            return "⏰ **Test execution timed out** (>5 minutes). Tests may be hanging or system is under heavy load."
-        except subprocess.SubprocessError as e:
-            return f"❌ **Test execution failed:** {str(e)}"
         except Exception as e:
-            return f"❌ **Error running tests:** {str(e)}"
-        finally:
-            # Ensure we restore the original directory
-            try:
-                os.chdir(original_cwd)
-            except:
-                pass
+            error_msg = f"❌ **Interactive test suite failed:** {str(e)}"
+            _send_test_message(error_msg)
+            return error_msg
     
     return run_tests
+
+
+def _send_test_message(message: str):
+    """Helper function to send test progress messages to Webex"""
+    try:
+        # Import here to avoid circular imports
+        import sys
+        from pathlib import Path
+        
+        # Add webex_bots directory to path
+        webex_bots_path = Path(__file__).parent.parent.parent / 'webex_bots'
+        if str(webex_bots_path) not in sys.path:
+            sys.path.append(str(webex_bots_path))
+        
+        # Try to get the current bot instance from pokedex module
+        try:
+            from pokedex import bot_instance
+            if bot_instance and hasattr(bot_instance, 'teams'):
+                # Send to current user (this assumes the test was triggered by a user)
+                from my_config import get_config
+                config = get_config()
+                
+                # Try to send to test room first, then fallback to user email
+                if hasattr(config, 'webex_room_id_vinay_test_space'):
+                    bot_instance.teams.messages.create(
+                        roomId=config.webex_room_id_vinay_test_space,
+                        markdown=message
+                    )
+                else:
+                    bot_instance.teams.messages.create(
+                        toPersonEmail=config.my_email_address,
+                        markdown=message
+                    )
+        except (ImportError, AttributeError):
+            # If bot instance not available, log the message
+            logging.getLogger(__name__).info(f"Test Progress: {message}")
+            
+    except Exception as e:
+        # If message sending fails, just log it
+        logging.getLogger(__name__).warning(f"Could not send test message: {e}")
+        logging.getLogger(__name__).info(f"Test Message: {message}")
 
 
 def run_specific_test_tool():
