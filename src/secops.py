@@ -83,7 +83,12 @@ def get_staffing_data(day_name=datetime.now(pytz.timezone('US/Eastern')).strftim
     shift_cell_names = cell_names_by_shift[day_name][shift_name]
     staffing_data = {}
     for team, cell_names in shift_cell_names.items():
-        staffing_data[team] = [sheet[cell_name].value for cell_name in cell_names if sheet[cell_name].value != '\xa0']
+        staffing_data[team] = [
+            sheet[cell_name].value for cell_name in cell_names 
+            if sheet[cell_name].value is not None 
+            and str(sheet[cell_name].value).strip() != '' 
+            and sheet[cell_name].value != '\xa0'
+        ]
     staffing_data['On-Call'] = [oncall.get_on_call_person()['name'] + ' (' + oncall.get_on_call_person()['phone_number'] + ')']
     return staffing_data
 
