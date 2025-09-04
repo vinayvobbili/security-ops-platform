@@ -1,15 +1,60 @@
 """
-Tanium Host Processing - Clean Architecture Refactor
-Following SOLID principles and Clean Code practices
+# Tanium Host Processing Script - How It Works
 
-Business Purpose:
-This script automates the processing and enrichment of host data from Tanium, supporting IT operations, compliance, and reporting. Key business logic includes:
+## Overview
 
-- Loading raw host data from Tanium as the initial step in the workflow.
-- Enriching host data with country, region, environment, and category information using ServiceNow and custom rules.
-- Applying "ring" tags to hosts based on configurable percentage distributions (e.g., 10% Ring 1, 20% Ring 2, 30% Ring 3, remainder Ring 4), enabling phased rollouts and risk segmentation.
-- Guessing country information for hosts when not available from ServiceNow, using hostname patterns and tag analysis, and clearly marking when a country is guessed.
-- Exporting results to Excel for further analysis, reporting, and operational use.
+This script automates the assignment of "ring tags" to hosts in Tanium for phased software deployments. It safely processes only hosts that don't already have ring tags, enriches them with business context from ServiceNow, and generates appropriate ring assignments based on device type and environment.
+
+## Step-by-Step Process
+
+### 1. Data Collection & Safety Checks
+
+- Retrieves host inventory from Tanium including device names, IDs, IP addresses, last-seen dates, and current tags
+- **Safety filter**: Only processes hosts that DON'T already have EPP ring tags or power mode tags (prevents overwriting existing assignments)
+- **Test mode available**: Can limit processing to a small number of hosts for validation before full production run
+- **Uses existing data if available**: Checks for today's host export file before making new Tanium API calls
+
+### 2. ServiceNow Data Enrichment
+
+- Exports host list to temporary Excel file for ServiceNow integration
+- Calls ServiceNow API to enrich each host with business context:
+  - Environment classification (dev/test/staging/prod)
+  - Device category (workstation/server)
+  - Country location data
+- **Safely handles missing data**: Gracefully processes hosts even when ServiceNow data is incomplete
+
+### 3. Geographic Classification
+- ** `METLAP/PMDESK` prefix → India PMLI
+- ** IAZ` prefix → US
+- **Primary source**: Uses country data from ServiceNow when available
+- **Intelligent fallback**: When ServiceNow country is missing, uses hostname pattern matching:
+  - `VMVDI` prefix → United States
+  - `TK` prefix → Korea
+  - First 2 characters as country codes (US, CA, etc.)
+  - Leading digit in hostname → Korea
+- **Transparency**: Clearly marks when country was guessed vs. directly sourced
+- **Regional mapping**: Converts countries to regions using predefined mapping files
+
+### 4. Ring Assignment Logic
+
+**Workstations**: Grouped by region/country, then distributed using percentages:
+- Ring 1: 10% (earliest adopters)
+- Ring 2: 20%
+- Ring 3: 30%
+- Ring 4: 40% (most conservative)
+- Uses last-seen date to ensure fair distribution
+
+**Servers**: Assigned based on environment risk level:
+- Dev/Lab/Sandbox → Ring 1 (safe to test)
+- Test/QA → Ring 2
+- Staging/UAT/Pre-prod → Ring 3
+- Production/unknown → Ring 4 (most stable)
+
+### 5. Output & Reporting
+
+- Generates Excel report with complete details for review before applying changes
+- Includes status tracking: Shows which hosts were processed successfully and any issues encountered
+- **No automatic changes**: Script only generates recommendations - actual tag application requires separate approval and execution
 """
 import json
 import logging
