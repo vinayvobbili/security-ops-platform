@@ -285,6 +285,8 @@ You have access to the following tools:
 
 {tools}
 
+Tool names: {tool_names}
+
 Use standard ReAct format: Question → Thought → Action (if needed) → Observation → Final Answer.
 
 EFFICIENCY: Complete tasks in 1-2 iterations. Always start with "Thought:", use ONE tool call when possible, then provide "Final Answer" immediately after getting results.
