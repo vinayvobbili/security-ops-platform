@@ -8,8 +8,10 @@ including OpenWeatherMap API integration with fallback mock data.
 
 import requests
 import logging
+import time
 from typing import Dict
 from langchain_core.tools import tool
+from pokedex_bot.utils.network_logger import log_api_call
 
 
 class WeatherToolsManager:
@@ -54,7 +56,22 @@ def _get_weather_data(city: str, api_key: str) -> str:
             'units': 'imperial'  # For Fahrenheit, use 'metric' for Celsius
         }
         
+        start_time = time.time()
         response = requests.get(base_url, params=params, timeout=10)
+        duration_ms = (time.time() - start_time) * 1000
+        
+        # Log the API call
+        log_api_call(
+            endpoint_url=f"{base_url}?q={city}&units=imperial",
+            method="GET",
+            payload=params,
+            response_status=response.status_code,
+            response_size=len(response.content) if hasattr(response, 'content') else 0,
+            duration_ms=duration_ms,
+            tool_name="weather_tool",
+            user_query=f"weather for {city}",
+            success=response.status_code == 200
+        )
         
         if response.status_code == 401:
             # Fallback to mock data if no API key is configured
@@ -67,16 +84,48 @@ def _get_weather_data(city: str, api_key: str) -> str:
         return _format_weather_data(data)
         
     except requests.exceptions.HTTPError as e:
+        # Log failed request
+        status_code = e.response.status_code if hasattr(e, 'response') else 0
+        log_api_call(
+            endpoint_url=f"{base_url}?q={city}&units=imperial",
+            method="GET",
+            payload=params,
+            response_status=status_code,
+            tool_name="weather_tool",
+            user_query=f"weather for {city}",
+            success=False,
+            error_message=f"HTTP Error: {str(e)}"
+        )
+        
         if hasattr(e, 'response') and e.response.status_code == 404:
             return f"Weather data not available for '{city}'. Please check the city name and try again."
         else:
             return _get_mock_weather(city)
     except requests.exceptions.RequestException as e:
-        # Fallback to mock data on network error
+        # Log network error
+        log_api_call(
+            endpoint_url=f"{base_url}?q={city}&units=imperial",
+            method="GET",
+            payload=params,
+            tool_name="weather_tool",
+            user_query=f"weather for {city}",
+            success=False,
+            error_message=f"Network Error: {str(e)}"
+        )
         return _get_mock_weather(city)
     except KeyError as e:
         return _get_mock_weather(city)
     except Exception as e:
+        # Log unexpected error
+        log_api_call(
+            endpoint_url=f"{base_url}?q={city}&units=imperial",
+            method="GET",
+            payload=params,
+            tool_name="weather_tool",
+            user_query=f"weather for {city}",
+            success=False,
+            error_message=f"Unexpected Error: {str(e)}"
+        )
         return _get_mock_weather(city)
 
 

@@ -24,6 +24,7 @@ from pokedex_bot.tools.weather_tools import WeatherToolsManager
 from pokedex_bot.tools.staffing_tools import StaffingToolsManager
 from pokedex_bot.tools.metrics_tools import MetricsToolsManager
 from pokedex_bot.tools.test_tools import TestToolsManager
+from pokedex_bot.tools.network_monitoring_tools import NetworkMonitoringToolsManager
 
 
 class SecurityBotStateManager:
@@ -246,7 +247,6 @@ I'm here to help with security operations by searching our local SOC documentati
 🔒 Security Note: I operate in a secure environment with:
 • Access to internal SOC documents and procedures
 • Integration with security tools and APIs
-• No internet access - all responses from local resources only
 
 ❓ How I can help:
 • Answer questions about security procedures

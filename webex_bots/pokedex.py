@@ -129,6 +129,9 @@ logger = logging.getLogger(__name__)
 WEBEX_ACCESS_TOKEN = CONFIG.webex_bot_access_token_pokedex
 WEBEX_BOT_EMAIL = CONFIG.webex_bot_email_pokedex
 
+# Network logging configuration - set to False to improve performance
+SHOULD_LOG_NETWORK_TRAFFIC = True  # Change to False to disable network logging
+
 if not WEBEX_ACCESS_TOKEN:
     logger.error("WEBEX_ACCESS_TOKEN environment variable is required")
     import sys

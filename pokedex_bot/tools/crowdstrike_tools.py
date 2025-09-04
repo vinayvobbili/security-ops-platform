@@ -8,11 +8,13 @@ containment status checking, and device information retrieval.
 """
 
 import logging
+import time
 from typing import Optional
 from langchain_core.tools import tool
 
 # Import CrowdStrike client
 from services.crowdstrike import CrowdStrikeClient
+from pokedex_bot.utils.network_logger import log_api_call
 
 
 class CrowdStrikeToolsManager:
