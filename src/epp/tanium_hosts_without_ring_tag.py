@@ -170,7 +170,7 @@ class TaniumDataLoader:
 
         # Filter and limit
         filtered_computers = [c for c in computers if not c.has_epp_ring_tag() and not c.has_epp_power_mode_tag()]
-        # TODO: comment out the line below after testing
+        # the line below may be used for testing code changes on small subsets of data
         # filtered_computers = [c for c in filtered_computers if c.name.startswith("MININT")]
 
         if test_limit is not None and test_limit > 0:
@@ -337,25 +337,46 @@ class SmartCountryResolver:
         self.logger = logging.getLogger(__name__)
 
     def resolve_country(self, computer: Computer, snow_country: str) -> Tuple[str, bool]:
-        """Resolve country with fallback strategies"""
+        """Resolve country with fallback strategies
+        
+        Args:
+            computer: Computer object with hostname and other metadata
+            snow_country: Country value from ServiceNow (may be empty/invalid)
+            
+        Returns:
+            Tuple[str, bool]: (resolved_country, country_was_guessed) where:
+                - resolved_country: The country name or empty string if none found
+                - country_was_guessed: True if guessed from hostname, False if from reliable source
+        """
         self.logger.debug(f'Processing host {computer.name}:')
         self.logger.debug(f'  SNOW country: "{snow_country}" (type: {type(snow_country)})')
 
-        # Priority 1: Valid ServiceNow country
-        if self._is_valid_country(snow_country):
+        name = computer.name.strip().lower()
+
+        # Priority 1: Set the country to India PMLI for all METLAP and PMDesk hosts
+        if name.lower().startswith('metlap') or name.lower().startswith('pmdesk'):
+            # print("Matched METLAP/PMDESK prefix -> India PMLI")
+            country = 'India PMLI'
+            was_country_guessed = False
+        # Priority 2: Valid ServiceNow country
+        elif self._is_valid_country(snow_country):
             self.logger.debug(f'  Using SNOW country: {snow_country}')
-            return snow_country, False
+            country = snow_country
+            was_country_guessed = False
+        else:
+            self.logger.debug(f'  SNOW country invalid, trying hostname guessing...')
+            # Priority 3: Guess from hostname
+            guessed_country, reason = self._guess_country_from_hostname(computer)
+            if self._is_valid_country(guessed_country):
+                self.logger.debug(f'  Guessed country: {guessed_country} (reason: {reason})')
+                country = guessed_country
+                was_country_guessed = True
+            else:
+                self.logger.debug(f'  No country could be determined')
+                country = ""
+                was_country_guessed = False
 
-        self.logger.debug(f'  SNOW country invalid, trying hostname guessing...')
-
-        # Priority 2: Guess from hostname
-        guessed_country, reason = self._guess_country_from_hostname(computer)
-        if self._is_valid_country(guessed_country):
-            self.logger.debug(f'  Guessed country: {guessed_country} (reason: {reason})')
-            return guessed_country, True
-
-        self.logger.debug(f'  No country could be determined')
-        return "", False
+        return country, was_country_guessed
 
     @staticmethod
     def _is_valid_country(country: str) -> bool:
@@ -389,11 +410,6 @@ class SmartCountryResolver:
         if name.lower().startswith('tk'):
             # print("Matched TK prefix -> Korea")
             return 'Korea', "TK prefix"
-
-        # Strategy 1.3: METLAP or PMDESK prefix for India PMLI (case insensitive)
-        if name.lower().startswith('metlap') or name.lower().startswith('pmdesk'):
-            # print("Matched METLAP/PMDESK prefix -> India PMLI")
-            return 'India PMLI', "METLAP/PMDESK prefix"
 
         # Strategy 2: Country code from first 2 characters
         if len(name) >= 2:
@@ -679,22 +695,22 @@ class TaniumRingTagProcessor:
             final_computers = []
             for comp in enriched_computers:
                 # Resolve country
-                country, was_guessed = self.country_resolver.resolve_country(
+                resolved_country, was_country_guessed = self.country_resolver.resolve_country(
                     comp.computer,
                     comp.country  # This would be from SNOW
                 )
 
                 # Resolve region
-                region = self.region_resolver.resolve_region(country) if country else ""
+                region = self.region_resolver.resolve_region(resolved_country) if resolved_country else ""
 
                 # Create final enriched computer
                 final_comp = EnrichedComputer(
                     computer=comp.computer,
-                    country=country,
+                    country=resolved_country,
                     region=region,
                     environment=comp.environment,
                     category=comp.category,
-                    was_country_guessed=was_guessed,
+                    was_country_guessed=was_country_guessed,
                     status=comp.status,
                     ring_tag=''
                 )
