@@ -21,6 +21,7 @@ ARCHITECTURE APPROACH:
 import csv
 import logging.handlers
 import os
+import random
 import signal
 import sys
 from datetime import datetime
@@ -38,6 +39,42 @@ from pokedex_bot.core.my_model import ask, initialize_model_and_agent
 from services.bot_rooms import get_room_name
 
 CONFIG = get_config()
+
+# Fun thinking messages for user engagement
+THINKING_MESSAGES = [
+    "🤔 Thinking...", "🧠 Processing...", "⚡ Computing...", "🔍 Searching...", 
+    "🎯 Analyzing...", "🛡️ Investigating...", "📊 Calculating...", "🔬 Examining...",
+    "💭 Pondering...", "🎪 Working magic...", "🚀 Launching queries...", "⚙️ Turning gears...",
+    "🔮 Consulting oracles...", "📚 Reading docs...", "🎲 Rolling dice...", "🌟 Connecting dots...",
+    "🎨 Crafting response...", "🏃‍♂️ Running analysis...", "🔥 Firing neurons...", "⭐ Aligning stars...",
+    "🎯 Taking aim...", "🧩 Solving puzzle...", "🎪 Performing magic...", "🚁 Hovering over data...",
+    "🎭 Putting on thinking cap...", "🔍 Zooming in...", "⚡ Charging up...", "🎨 Painting picture...",
+    "🧠 Flexing brain...", "🎪 Juggling ideas...", "🔬 Under microscope...", "📡 Scanning frequencies...",
+    "🎯 Zeroing in...", "🚀 Rocket science mode...", "🎲 Calculating odds...", "⚙️ Oiling gears...",
+    "🔮 Crystal ball active...", "📊 Crunching numbers...", "🎨 Mixing colors...", "🧩 Finding pieces...",
+    "⚡ Lightning speed...", "🎪 Center stage...", "🔍 Detective mode...", "🌟 Seeing stars...",
+    "🎭 Method acting...", "🚁 Bird's eye view...", "🔬 Lab coat on...", "📡 Signal strong...",
+    "🎯 Bullseye incoming...", "🧠 Big brain time...", "🎪 Grand finale prep...", "⚙️ All systems go...",
+    "🔮 Fortune telling...", "📚 Page turning...", "🎲 Lucky number 7...", "🌟 Constellation forming...",
+    "🎨 Masterpiece loading...", "🧩 Last piece hunting...", "⚡ Storm brewing...", "🎪 Showtime prep...",
+    "🔍 Magnifying glass out...", "🚀 T-minus counting...", "🎭 Oscar performance...", "🔬 Hypothesis testing...",
+    "📡 Satellite locked...", "🎯 Perfect aim...", "🧠 Neural networks firing...", "🎪 Magic wand waving...",
+    "⚙️ Clockwork precision...", "🔮 Third eye opening...", "📊 Graph plotting...", "🎲 Dice rolling...",
+    "🌟 Supernova incoming...", "🎨 Canvas ready...", "🧩 Pattern matching...", "⚡ Thunder rumbling...",
+    "🎪 Spotlight on...", "🔍 Sherlock mode...", "🚀 Warp speed...", "🎭 Drama unfolding...",
+    "🔬 Microscope focused...", "📡 Transmission clear...", "🎯 Target acquired...", "🧠 Synapse snapping...",
+    "🎪 Ringmaster ready...", "⚙️ Engine revving...", "🔮 Visions coming...", "📚 Chapter turning...",
+    "🎲 Fortune favors...", "🌟 Galaxy spinning...", "🎨 Brush stroking...", "🧩 Eureka moment...",
+    "⚡ Power surge...", "🎪 Curtain rising...", "🔍 Clue hunting...", "🚀 Orbit achieved...",
+    "🎭 Scene stealing...", "🔬 Specimen ready...", "📡 Message received...", "🎯 Direct hit...",
+    "🧠 Mind melding...", "🎪 Abracadabra...", "⚙️ Turbine spinning...", "🔮 Cards revealing...",
+    "📊 Trend spotting...", "🎲 Snake eyes...", "🌟 Comet approaching...", "🎨 Sketch complete...",
+    "🧩 Jigsaw solving...", "⚡ Electric moment...", "🎪 Ta-da incoming...", "🔍 Evidence gathering...",
+    "🚀 Houston, we have...", "🎭 Standing ovation...", "🔬 Breakthrough near...", "📡 Signal boosted...",
+    "🎯 Championship shot...", "🧠 Genius at work...", "🎪 Grand illusion...", "⚙️ Perfect timing...",
+    "🔮 Future glimpse...", "📚 Story unfolding...", "🎲 Jackpot hunting...", "🌟 Wish upon a...",
+    "🎨 Final touches...", "🧩 Missing link...", "⚡ Lightning strikes...", "🎪 Magic revealed..."
+]
 
 # Configure logging with colors
 ROOT_DIRECTORY = Path(__file__).parent.parent
@@ -337,10 +374,11 @@ class PokeDexBot(WebexBot):
             else:
                 # Send thinking indicator as a threaded reply for user engagement
                 try:
+                    thinking_message = random.choice(THINKING_MESSAGES)
                     thinking_msg = self.teams.messages.create(
                         roomId=teams_message.roomId,
                         parentId=teams_message.id,  # Thread it as a reply to user's message
-                        text="🤔 Thinking..."
+                        text=thinking_message
                     )
                 except Exception as e:
                     logger.warning(f"Failed to send thinking message: {e}")
@@ -384,19 +422,8 @@ class PokeDexBot(WebexBot):
                     # Check for Adaptive Card in LLM response
                     card_dict, clean_text = self._extract_adaptive_card(response_text)
 
-                    # Also check if the entire response is just JSON (LLM mistake)
-                    if not card_dict and response_text.strip().startswith('{') and '"type": "AdaptiveCard"' in response_text:
-                        try:
-                            import json
-                            potential_card = json.loads(response_text.strip())
-                            if potential_card.get("type") == "AdaptiveCard":
-                                card_dict = potential_card
-                                clean_text = "Enhanced staffing information"
-                                logger.info("Detected raw JSON card response from LLM")
-                        except:
-                            pass
 
-                    # First, update thinking message with "Done!" regardless of card presence
+                    # Send completion status as new threaded message
                     if thinking_msg:
                         # Skip the problematic update, just send completion as new message
                         # This is more reliable than trying to update thinking message
@@ -458,30 +485,17 @@ class PokeDexBot(WebexBot):
             tuple: (card_dict, clean_text) or (None, response_text)
         """
         import json
-        import re
 
         try:
-            # Look for Adaptive Card markers in the response
-            if "ADAPTIVE_CARD_START" in response_text and "ADAPTIVE_CARD_END" in response_text:
-                # Extract the JSON between markers
-                pattern = r'ADAPTIVE_CARD_START\s*\n?(.*?)\n?ADAPTIVE_CARD_END'
-                match = re.search(pattern, response_text, re.DOTALL)
-
-                if match:
-                    card_json = match.group(1).strip()
-                    # Remove any Markdown code block markers
-                    card_json = card_json.replace('```json', '').replace('```', '').strip()
-
-                    try:
-                        card_dict = json.loads(card_json)
-                        # Remove the card from the original text for fallback
-                        clean_text = re.sub(pattern, '', response_text, flags=re.DOTALL).strip()
-
-                        logger.info("Successfully extracted Adaptive Card from LLM response")
-                        return card_dict, clean_text
-
-                    except json.JSONDecodeError as je:
-                        logger.warning(f"Failed to parse Adaptive Card JSON: {je}")
+            # Check if the response is a direct JSON Adaptive Card
+            if response_text.strip().startswith('{') and '"type": "AdaptiveCard"' in response_text:
+                try:
+                    card_dict = json.loads(response_text.strip())
+                    if card_dict.get("type") == "AdaptiveCard":
+                        logger.info("Successfully parsed direct JSON Adaptive Card from LLM response")
+                        return card_dict, "Enhanced response"
+                except json.JSONDecodeError as je:
+                    logger.warning(f"Failed to parse direct JSON Adaptive Card: {je}")
 
         except Exception as e:
             logger.error(f"Error extracting Adaptive Card: {e}")
