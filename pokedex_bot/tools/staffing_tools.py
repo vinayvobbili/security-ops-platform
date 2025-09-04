@@ -42,7 +42,7 @@ def get_current_shift_tool():
     """Factory function to create current shift tool"""
     @tool
     def get_current_shift_info() -> str:
-        """Get information about the current shift including name and time boundaries."""
+        """Get current shift information including shift name and time boundaries."""
         try:
             current_shift = get_current_shift()
             eastern_time = datetime.now(pytz.timezone('US/Eastern'))
@@ -74,7 +74,7 @@ def get_current_staffing_tool():
     """Factory function to create current staffing tool"""
     @tool
     def get_current_staffing() -> str:
-        """Get the current shift's staffing information including all team members and on-call personnel. Use this for queries like 'Who is working right now?'"""
+        """Get current shift staffing information including team members and on-call personnel. Use for staffing and team roster queries."""
         try:
             staffing_data = get_staffing_data()
             current_shift = get_current_shift()
