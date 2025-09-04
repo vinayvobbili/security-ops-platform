@@ -119,7 +119,7 @@ def get_bot_metrics_summary_tool():
     def get_bot_metrics_summary() -> str:
         """Get a brief summary of bot metrics including key performance indicators. Use this for quick status checks or when asked for a 'summary' or 'quick status'."""
         try:
-            from pokedx_bot.core.my_model import performance_monitor, session_manager
+            from pokedex_bot.core.my_model import performance_monitor, session_manager
             
             perf_stats = performance_monitor.get_stats()
             capacity_warning = performance_monitor.get_capacity_warning()
@@ -150,7 +150,7 @@ def get_bot_metrics_summary_tool():
 def _fetch_raw_metrics() -> Dict[str, Any]:
     """Helper function to fetch raw metrics data (used internally)"""
     try:
-        from pokedx_bot.core.my_model import performance_monitor, session_manager
+        from pokedex_bot.core.my_model import performance_monitor, session_manager
 
         # Get comprehensive stats
         perf_stats = performance_monitor.get_stats()
