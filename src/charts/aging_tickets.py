@@ -17,8 +17,8 @@ project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
 # Import project modules after path setup - necessary due to custom path setup
-import my_config as config  # noqa: E402
-from services.xsoar import TicketHandler  # noqa: E402
+import my_config as config
+from services.xsoar import TicketHandler
 
 config = config.get_config()
 

@@ -15,9 +15,9 @@ from webexpythonsdk import WebexAPI
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-import my_config as config  # noqa: E402
-from data.data_maps import impact_colors  # noqa: E402
-from services.xsoar import TicketHandler  # noqa: E402
+import my_config as config
+from data.data_maps import impact_colors
+from services.xsoar import TicketHandler
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')

@@ -1,4 +1,7 @@
 """
+Tanium Host Processing - Clean Architecture Refactor
+Following SOLID principles and Clean Code practices
+
 Business Purpose:
 This script automates the processing and enrichment of host data from Tanium, supporting IT operations, compliance, and reporting. Key business logic includes:
 
@@ -8,15 +11,9 @@ This script automates the processing and enrichment of host data from Tanium, su
 - Guessing country information for hosts when not available from ServiceNow, using hostname patterns and tag analysis, and clearly marking when a country is guessed.
 - Exporting results to Excel for further analysis, reporting, and operational use.
 """
-import os
-
-"""
-Tanium Host Processing - Clean Architecture Refactor
-Following SOLID principles and Clean Code practices
-"""
-
 import json
 import logging
+import os
 from collections import defaultdict
 from dataclasses import dataclass, replace
 from datetime import datetime
