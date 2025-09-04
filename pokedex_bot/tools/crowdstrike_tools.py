@@ -61,7 +61,7 @@ def get_device_containment_status_tool(client: CrowdStrikeClient):
     """Factory function to create containment status tool with client reference"""
     @tool
     def get_device_containment_status(hostname: str) -> str:
-        """Get the containment status of a device from CrowdStrike by hostname."""
+        """Get device containment status from CrowdStrike. Use for containment status queries."""
         if not client:
             return "Error: CrowdStrike service is not initialized."
 
@@ -92,7 +92,7 @@ def get_device_online_status_tool(client: CrowdStrikeClient):
     """Factory function to create online status tool with client reference"""
     @tool
     def get_device_online_status(hostname: str) -> str:
-        """Get the online status of a device from CrowdStrike by hostname."""
+        """Get device online status from CrowdStrike. Use for online/offline status queries."""
         if not client:
             return "Error: CrowdStrike service is not initialized."
 
@@ -119,7 +119,7 @@ def get_device_details_tool(client: CrowdStrikeClient):
     """Factory function to create device details tool with client reference"""
     @tool
     def get_device_details_cs(hostname: str) -> str:
-        """Get detailed information about a device from CrowdStrike by hostname."""
+        """Get detailed device information from CrowdStrike. Use for comprehensive device queries."""
         if not client:
             return "Error: CrowdStrike service is not initialized."
 

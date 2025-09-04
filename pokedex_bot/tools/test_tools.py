@@ -46,7 +46,7 @@ def run_tests_tool():
     """Factory function to create interactive test execution tool"""
     @tool
     def run_tests() -> str:
-        """Run interactive bot functionality tests with real-time progress updates. This sends live test progress to Webex as each test executes. Use this when asked to 'run tests', 'execute tests', or 'test the bot'."""
+        """Run interactive bot functionality tests with real-time progress updates and live Webex messages. Use for test execution requests like 'run tests' or 'test the bot'."""
         try:
             # Import here to avoid circular imports
             from pokedex_bot.core.state_manager import get_state_manager
@@ -267,7 +267,7 @@ def run_specific_test_tool():
     """Factory function to create specific test execution tool"""
     @tool
     def run_specific_test(test_name: str) -> str:
-        """Run a specific test file or test function. Provide the test name like 'test_staffing' or 'test_bot_tools_and_features.py'. Use this for targeted testing of specific functionality."""
+        """Run a specific test file or test function by name. Use for targeted testing when a specific test is requested."""
         try:
             project_root = Path(__file__).parent.parent.parent
             start_time = datetime.now()
@@ -345,7 +345,7 @@ def get_test_status_tool():
     """Factory function to create test status tool"""
     @tool
     def get_test_status() -> str:
-        """Get information about available tests and test environment status. Use this to check what tests are available before running them."""
+        """Get information about available tests and test environment status. Use when asked about test availability or test environment."""
         try:
             project_root = Path(__file__).parent.parent.parent
             tests_dir = project_root / 'tests'
