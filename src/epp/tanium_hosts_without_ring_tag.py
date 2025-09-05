@@ -386,7 +386,7 @@ class SmartCountryResolver:
         
         Args:
             computer: Computer object with hostname and other metadata
-            snow_country: Country value from ServiceNow (may be empty/invalid)
+            snow_country: Country value from ServiceNow (maybe empty/invalid)
             
         Returns:
             Tuple[str, bool]: (resolved_country, country_was_guessed) where:
