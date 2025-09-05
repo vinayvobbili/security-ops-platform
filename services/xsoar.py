@@ -157,6 +157,39 @@ class TicketHandler:
         response = http_session.post(f"{self.prod_base}/xsoar/entry", headers=prod_headers, json=payload)
         return response.json()
 
+    def get_participants(self, incident_id):
+        """
+        Get participants (users) for a given incident.
+        """
+        if not incident_id:
+            log.error("Incident ID is empty. Cannot get participants.")
+            return []
+
+        log.info(f"Getting participants for incident {incident_id}")
+        investigation_url = f"{self.prod_base}/investigation/{incident_id}"
+        
+        # Based on the JSON structure from the user's example, send empty payload
+        payload = {}
+        
+        response = http_session.post(investigation_url, headers=prod_headers, json=payload, verify=False, timeout=30)
+        if response is None:
+            raise requests.exceptions.ConnectionError("Failed to connect after multiple retries")
+        
+        # Handle API errors gracefully
+        if not response.ok:
+            error_data = response.json() if response.content else {}
+            error_msg = error_data.get('detail', 'Unknown error')
+            
+            if response.status_code == 400 and 'Could not find investigation' in error_msg:
+                log.warning(f"Investigation {incident_id} not found")
+                raise ValueError(f"Investigation {incident_id} not found")
+            else:
+                log.error(f"API error {response.status_code}: {error_msg}")
+                raise requests.exceptions.HTTPError(f"API error {response.status_code}: {error_msg}")
+            
+        investigation_data = response.json()
+        return investigation_data.get('users', [])
+
     def create_in_dev(self, payload):
         """Create a new incident in dev XSOAR"""
 
@@ -250,4 +283,5 @@ if __name__ == "__main__":
     ticket_handler = TicketHandler()
     # print(ticket_handler.get_tickets("id:717407"))
     # print(ticket_handler.link_tickets('1345807', '1345822'))
-    print(ticket_handler.add_participant('1345807', 'tyler.brescia@company.com'))
+    # print(ticket_handler.add_participant('1345807', 'tyler.brescia@company.com'))
+    print(ticket_handler.get_participants('717407'))
