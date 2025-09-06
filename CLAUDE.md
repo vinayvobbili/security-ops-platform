@@ -113,4 +113,5 @@ The project integrates with enterprise security tools:
 
 - Keep it simple and concise
 - Follow SOLID principles and Clean Code practices
+- All my code runs in a trusted environment, so no need of excessive defensive coding. Only exception is Pokédex.py which must be protected against prompt injection
 - Git stage code files
