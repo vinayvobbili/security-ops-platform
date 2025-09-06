@@ -55,10 +55,14 @@ query getEndpoints($first: Int, $after: Cursor) {
 """
 
 UPDATE_TAGS_MUTATION = """
-mutation assetUpdateEndpointsUsingEid($input: AssetUpdateEndpointsUsingEidInput!) {
-  assetUpdateEndpointsUsingEid(input: $input) {
-    assets {
-      eid
+mutation actionPerform($input: ActionPerformInput!) {
+  actionPerform(input: $input) {
+    scheduledActions {
+      platforms
+      scheduledAction {
+        id
+        name
+      }
     }
   }
 }
@@ -236,32 +240,35 @@ class TaniumInstance:
         try:
             variables = {
                 "input": {
-                    "sourceName": "Custom",
-                    "entityNames": ["Custom Tags"],
-                    "assets": [{
-                        "eid": tanium_id,
-                        "entities": [{
-                            "entityName": "Custom Tags",
-                            "entityRowItems": [{
-                                "attributes": [{
-                                    "attributeName": "Custom Tags",
-                                    "value": ",".join(tags)  # Join all tags as comma-separated string
-                                }]
-                            }]
-                        }]
-                    }]
+                    "targets": {
+                        "endpoints": [tanium_id]
+                    },
+                    "operation": {
+                        "addTags": tags
+                    },
+                    "name": f"Add Custom Tags to {tanium_id}"
                 }
             }
             result = self.query(UPDATE_TAGS_MUTATION, variables)
+            
+            logger.debug(f"GraphQL response for tag update: {result}")
 
-            # Check if the mutation was successful by looking for assets
-            updated_assets = result.get('data', {}).get('assetUpdateEndpointsUsingEid', {}).get('assets', [])
-            success = len(updated_assets) > 0
+            # Check if the mutation was successful by looking for scheduled actions
+            action_perform_result = result.get('data', {}).get('actionPerform', {})
+            scheduled_actions = action_perform_result.get('scheduledActions') or []
+            
+            if action_perform_result is None:
+                logger.error(f"actionPerform returned None in response: {result}")
+            if action_perform_result.get('scheduledActions') is None:
+                logger.warning(f"scheduledActions is None - this might indicate no actions were created. Full result: {action_perform_result}")
+            
+            success = len(scheduled_actions) > 0
 
             if success:
-                logger.info(f"Successfully updated tags for computer ID '{tanium_id}' in {self.name}: {tags}")
+                action_ids = [platform['scheduledAction']['id'] for platform in scheduled_actions if platform.get('scheduledAction')]
+                logger.info(f"Successfully created tag actions for computer ID '{tanium_id}' in {self.name}: {tags}, Action IDs: {action_ids}")
             else:
-                logger.error(f"Failed to update tags for computer ID '{tanium_id}' in {self.name}: No endpoints were updated")
+                logger.error(f"Failed to create tag actions for computer ID '{tanium_id}' in {self.name}: No actions were created")
 
             return success
 
