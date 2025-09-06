@@ -1,3 +1,4 @@
+python-dotenv
 matplotlib
 # Core Data Processing
 pandas==2.3.1
