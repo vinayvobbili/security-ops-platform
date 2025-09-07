@@ -15,7 +15,7 @@ from urllib.parse import urlsplit
 
 import pytz
 import requests
-from flask import Flask, request, abort, jsonify, render_template, send_from_directory
+from flask import Flask, request, abort, jsonify, render_template
 
 from my_config import get_config
 from services import xsoar
@@ -699,7 +699,7 @@ def api_xsoar_incidents():
     query = request.args.get('query', '')
     period = request.args.get('period')
     size = int(request.args.get('size', 50))
-    
+
     try:
         incidents = incident_handler.get_tickets(query, period, size)
         return jsonify({'success': True, 'incidents': incidents})
@@ -708,7 +708,7 @@ def api_xsoar_incidents():
 
 
 @app.route('/api/xsoar/incident/<incident_id>')
-@log_web_activity  
+@log_web_activity
 def api_xsoar_incident_detail(incident_id):
     """API to get XSOAR incident details"""
     try:
@@ -718,6 +718,7 @@ def api_xsoar_incident_detail(incident_id):
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
+
 @app.route('/xsoar/incident/<incident_id>')
 @log_web_activity
 def xsoar_incident_detail(incident_id):
@@ -725,8 +726,8 @@ def xsoar_incident_detail(incident_id):
     try:
         incident = xsoar.get_incident(incident_id)
         entries = incident_handler.get_entries(incident_id)
-        return render_template('xsoar_incident_detail.html', 
-                             incident=incident, entries=entries)
+        return render_template('xsoar_incident_detail.html',
+                               incident=incident, entries=entries)
     except requests.exceptions.HTTPError as e:
         return f"XSOAR API Error for incident {incident_id}: HTTP {e.response.status_code} - {e.response.text}", 500
     except requests.exceptions.ConnectionError as e:
@@ -738,7 +739,7 @@ def xsoar_incident_detail(incident_id):
 
 
 @app.route('/api/xsoar/incident/<incident_id>/entries')
-@log_web_activity  
+@log_web_activity
 def api_xsoar_incident_entries(incident_id):
     """API to get incident entries/comments"""
     try:
