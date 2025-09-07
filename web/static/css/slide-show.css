@@ -159,7 +159,7 @@ body {
 .slides img {
     border-radius: 12px;
     box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
-    transition: transform 0.3s ease;
+    transition: transform 0.6s ease-out;
     max-width: calc(100vw - 40px); /* Account for padding */
     max-height: calc(100vh - 250px); /* Increased space for bottom nav controls */
     width: auto; /* Maintain aspect ratio */
@@ -167,6 +167,9 @@ body {
     object-fit: contain; /* Ensure full image is visible */
     object-position: center; /* Center the image */
     display: block; /* Remove inline spacing */
+    will-change: transform; /* Optimize for transform animations */
+    backface-visibility: hidden; /* Prevent flickering during transitions */
+    transform: translateZ(0); /* Force hardware acceleration */
 }
 
 .slides img:hover {
