@@ -30,7 +30,9 @@ function initializeSlider() {
 }
 
 function playSlideshow() {
-    intervalId = setInterval(() => moveSlide(1), 5000);
+    intervalId = setInterval(() => {
+        moveSlide(1);
+    }, 5000);
 }
 
 function toggleSlideshow() {
@@ -77,12 +79,12 @@ function moveSlide(direction) {
         currentSlide = totalSlides - 1;
     }
 
-    // Check if it's the last slide
-    if (currentSlide === totalSlides - 1) {
-        showConfetti();
-    }
-
     updateSlider();
+
+    // Check if we just moved to the last slide
+    if (currentSlide === totalSlides - 1 && direction === 1) {
+        setTimeout(() => showConfetti(), 100); // Small delay to ensure slide is visible
+    }
 }
 
 function updateSlider() {
