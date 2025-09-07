@@ -69,7 +69,6 @@ mutation actionPerform($input: ActionPerformInput!) {
 """
 
 
-
 @dataclass
 class Computer:
     """Represents a computer/endpoint in Tanium"""
@@ -250,18 +249,18 @@ class TaniumInstance:
                 }
             }
             result = self.query(UPDATE_TAGS_MUTATION, variables)
-            
+
             logger.debug(f"GraphQL response for tag update: {result}")
 
             # Check if the mutation was successful by looking for scheduled actions
             action_perform_result = result.get('data', {}).get('actionPerform', {})
             scheduled_actions = action_perform_result.get('scheduledActions') or []
-            
+
             if action_perform_result is None:
                 logger.error(f"actionPerform returned None in response: {result}")
             if action_perform_result.get('scheduledActions') is None:
                 logger.warning(f"scheduledActions is None - this might indicate no actions were created. Full result: {action_perform_result}")
-            
+
             success = len(scheduled_actions) > 0
 
             if success:
@@ -284,10 +283,10 @@ class TaniumInstance:
                 if computer.id == tanium_id:
                     logger.debug(f"Found computer with ID '{tanium_id}' in {self.name}: {computer.name}")
                     return computer
-            
+
             logger.debug(f"Computer with ID '{tanium_id}' not found in {self.name}")
             return None
-            
+
         except Exception as e:
             logger.error(f"Error fetching computer by ID '{tanium_id}' from {self.name}: {e}")
             return None
@@ -305,10 +304,10 @@ class TaniumInstance:
                 if computer.name.lower() == hostname.lower():
                     logger.debug(f"Found hostname '{hostname}' with Tanium ID '{computer.id}' in {self.name}")
                     return computer.id
-            
+
             logger.debug(f"Hostname '{hostname}' not found in {self.name}")
             return None
-            
+
         except Exception as e:
             logger.error(f"Error finding hostname '{hostname}' in {self.name}: {e}")
             return None
@@ -383,7 +382,7 @@ class TaniumClient:
                 verify_ssl=True
             )
             self.instances.append(cloud_instance)
-            
+
             # Add Cloud Write instance if write token is available
             if hasattr(self.config, 'tanium_cloud_api_token_write') and self.config.tanium_cloud_api_token_write:
                 cloud_write_instance = TaniumInstance(
@@ -488,16 +487,16 @@ class TaniumClient:
 
     def get_tanium_id_by_hostname(self, hostname: str, instance_name: str) -> Optional[Dict[str, str]]:
         """Get Tanium ID for a computer by hostname in the specified instance"""
-        
-        instance = self._get_instance_by_name(instance_name)
+
+        instance = self.get_instance_by_name(instance_name)
         if not instance:
             logger.error(f"Instance '{instance_name}' not found. Available instances: {self.list_available_instances()}")
             return None
-        
+
         if not instance.validate_token():
             logger.error(f"Invalid token for instance '{instance_name}'")
             return None
-        
+
         tanium_id = instance.get_tanium_id_by_hostname(hostname)
         if tanium_id:
             return {
@@ -505,22 +504,22 @@ class TaniumClient:
                 'instance': instance_name,
                 'hostname': hostname
             }
-        
+
         logger.warning(f"Hostname '{hostname}' not found in instance '{instance_name}'")
         return None
 
     def search_hostnames_containing(self, search_term: str, instance_name: str, limit: int = 10) -> List[Dict[str, str]]:
         """Search for hostnames containing the search term (case-insensitive)"""
-        
-        instance = self._get_instance_by_name(instance_name)
+
+        instance = self.get_instance_by_name(instance_name)
         if not instance:
             logger.error(f"Instance '{instance_name}' not found. Available instances: {self.list_available_instances()}")
             return []
-        
+
         if not instance.validate_token():
             logger.error(f"Invalid token for instance '{instance_name}'")
             return []
-        
+
         matches = []
         try:
             for computer in instance.iterate_computers(limit=None):
@@ -530,18 +529,18 @@ class TaniumClient:
                         'tanium_id': computer.id,
                         'instance': instance_name
                     })
-                    
+
                     if len(matches) >= limit:
                         break
-            
+
             logger.info(f"Found {len(matches)} hostnames containing '{search_term}' in {instance_name}")
             return matches
-            
+
         except Exception as e:
             logger.error(f"Error searching for hostnames containing '{search_term}' in {instance_name}: {e}")
             return []
 
-    def _get_instance_by_name(self, instance_name: str) -> Optional[TaniumInstance]:
+    def get_instance_by_name(self, instance_name: str) -> Optional[TaniumInstance]:
         """Get a Tanium instance by name"""
         return next((i for i in self.instances if i.name.lower() == instance_name.lower()), None)
 
@@ -551,8 +550,8 @@ class TaniumClient:
 
     def add_custom_tag_to_computer(self, tanium_id: str, tag: str, instance_name: str, check_existing: bool = True) -> Dict[str, Any]:
         """Add a custom tag to a computer using its Tanium ID"""
-        
-        instance = self._get_instance_by_name(instance_name)
+
+        instance = self.get_instance_by_name(instance_name)
         if not instance:
             return {
                 'success': False,
@@ -603,8 +602,8 @@ class TaniumClient:
 
     def remove_custom_tag_from_computer(self, computer_name: str, tanium_id: str, tag: str, instance_name: str) -> Dict[str, Any]:
         """Remove a custom tag from a computer using its Tanium ID"""
-        
-        instance = self._get_instance_by_name(instance_name)
+
+        instance = self.get_instance_by_name(instance_name)
         if not instance:
             return {
                 'success': False,
@@ -672,10 +671,10 @@ def main():
         test_tanium_id = "621122"  # We already confirmed this ID matches the hostname
         test_tag = "Test_Tag_Jarvais"
         write_instance = "Cloud-Write"
-        
+
         # First, test if write token can read data
         logger.info("Testing if write token can read computer data...")
-        write_instance_obj = client._get_instance_by_name(write_instance)
+        write_instance_obj = client.get_instance_by_name(write_instance)
         if write_instance_obj:
             try:
                 test_computer = write_instance_obj.get_computer_by_id(test_tanium_id)
@@ -685,12 +684,12 @@ def main():
                     logger.warning(f"✗ Write token can't find computer ID {test_tanium_id} - might have limited scope")
             except Exception as e:
                 logger.error(f"✗ Write token CANNOT read computer data: {e}")
-        
+
         # Now test tagging
         logger.info(f"Testing direct tagging for {test_hostname} (ID: {test_tanium_id}) with write token...")
         tag_result = client.add_custom_tag_to_computer(
-            test_tanium_id, 
-            test_tag, 
+            test_tanium_id,
+            test_tag,
             write_instance,
             check_existing=False  # Skip expensive computer fetch
         )
