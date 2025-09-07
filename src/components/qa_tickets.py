@@ -68,10 +68,10 @@ def format_summary_message(summary, total):
 def generate(room_id):
     try:
         ticket_handler = TicketHandler()
-        # Calculate the start of the week (previous Sunday)
-        # Since this script runs on Saturday, we go back 6 days to get to Sunday
+        # Calculate the start of the work week (previous Monday)
+        # Since this script runs on Monday at 8am ET, we go back 7 days to get to previous Monday
         today = datetime.now()
-        week_start = today - timedelta(days=6)  # Saturday (6) back to Sunday (0)
+        week_start = today - timedelta(days=7)  # Go back 7 days to get previous Monday
         week_start_str = week_start.strftime('%Y-%m-%dT00:00:00 -0400')
 
         query = f'status:closed -category:job type:METCIRT -owner:"" closed:>="{week_start_str}"'
