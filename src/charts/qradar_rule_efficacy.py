@@ -202,7 +202,7 @@ class QRadarEfficacyChart:
                 legend_handles.append(plt.Rectangle((0, 0), 1, 1, color=colors[i]))
 
         legend = ax.legend(handles=legend_handles, labels=legend_labels, title="Impact",
-                           loc='upper left', bbox_to_anchor=(1.06, 1),
+                           loc='upper left', bbox_to_anchor=(1.02, 1),
                            frameon=True, fancybox=True, shadow=True,
                            title_fontsize=12, fontsize=10)
         legend.get_frame().set_facecolor('white')
@@ -277,8 +277,9 @@ class QRadarEfficacyChart:
         output_path = output_dir / output_filename
 
         # Enhanced layout with space for external legend
+        # Adjust layout with proper spacing for rule names and legend - expand plot area
         plt.tight_layout()
-        plt.subplots_adjust(top=0.92, bottom=0.12, left=0.02, right=0.98)
+        plt.subplots_adjust(top=0.90, bottom=0.12, left=0.28, right=0.83)
 
         plt.savefig(output_path, format="png", dpi=300, bbox_inches='tight',
                     pad_inches=0, facecolor='#f8f9fa')
