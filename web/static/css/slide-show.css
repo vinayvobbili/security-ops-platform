@@ -129,11 +129,13 @@ body {
 
 .slides {
     display: flex;
-    transition: transform 0.5s ease-in-out;
     height: 100%;
     width: 100%;
     position: relative;
+    /* Default slide transition */
+    transition: transform 0.5s ease-in-out;
 }
+
 
 .slides figure {
     min-width: 100vw; /* Fixed width regardless of content */
@@ -155,6 +157,7 @@ body {
     position: relative;
     overflow: hidden; /* Contain large images */
 }
+
 
 .slides img {
     border-radius: 12px;
@@ -573,3 +576,4 @@ body {
         transform: rotate(360deg);
     }
 }
+
