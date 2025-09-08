@@ -119,6 +119,16 @@ def get_ir_dashboard_slide_show():
     return render_template("slide-show.html", image_files=image_files, show_burger=True)
 
 
+@app.route("/<path:filename>.pac")
+def proxy_pac_file(filename):
+    """Handle PAC file requests to reduce log clutter."""
+    # Return empty PAC file content
+    pac_content = """function FindProxyForURL(url, host) {
+    return "DIRECT";
+}"""
+    return pac_content, 200, {'Content-Type': 'application/x-ns-proxy-autoconfig'}
+
+
 @app.route("/msoc-form")
 @log_web_activity
 def display_msoc_form():

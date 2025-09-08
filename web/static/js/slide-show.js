@@ -1,15 +1,23 @@
 const slides = document.querySelector('.slides');
 const dots = document.querySelectorAll('.nav-dot');
 const pausePlayButton = document.getElementById('pausePlayButton');
+let timingProgressContainer;
+let timingProgressBar;
 let currentSlide = 0;
 const totalSlides = document.querySelectorAll('.slides figure').length;
 let intervalId; // Variable to store the interval ID
+let progressIntervalId; // Variable to store the progress bar interval ID
+const slideInterval = 5000; // 5 seconds per slide
 
 // Start the auto-slide when the page loads
 window.addEventListener('load', initializeSlider);
 window.addEventListener('resize', updateSlider); // Recalculate on window resize
 
 function initializeSlider() {
+    // Get progress bar elements after DOM is loaded
+    timingProgressContainer = document.getElementById('timingProgressContainer2');
+    timingProgressBar = document.getElementById('timingProgressBar2');
+    
     updateSlider(); // Set initial slide position
     playSlideshow(); // Start auto-sliding
 
@@ -32,7 +40,41 @@ function initializeSlider() {
 function playSlideshow() {
     intervalId = setInterval(() => {
         moveSlide(1);
-    }, 5000);
+    }, slideInterval);
+    startProgressBar();
+}
+
+function startProgressBar() {
+    if (!timingProgressBar) {
+        return;
+    }
+    
+    // Reset progress bar
+    timingProgressBar.style.width = '0%';
+    timingProgressContainer.classList.remove('paused');
+    
+    let progress = 0;
+    const increment = 100 / (slideInterval / 50); // Update every 50ms
+    
+    progressIntervalId = setInterval(() => {
+        progress += increment;
+        if (progress >= 100) {
+            progress = 100;
+        }
+        timingProgressBar.style.width = progress + '%';
+        
+        if (progress >= 100) {
+            clearInterval(progressIntervalId);
+        }
+    }, 50);
+}
+
+function stopProgressBar() {
+    if (progressIntervalId) {
+        clearInterval(progressIntervalId);
+        progressIntervalId = null;
+    }
+    timingProgressContainer.classList.add('paused');
 }
 
 function toggleSlideshow() {
@@ -41,6 +83,7 @@ function toggleSlideshow() {
 
     if (isSlideshowRunning) {
         clearInterval(intervalId);
+        stopProgressBar();
         pausePlayButton.src = "/static/icons/play-solid.svg";
     } else {
         playSlideshow();
@@ -52,6 +95,11 @@ function toggleSlideshow() {
 function goToSlide(index) {
     currentSlide = index;
     updateSlider();
+    // Restart progress bar if slideshow is running
+    if (intervalId) {
+        stopProgressBar();
+        startProgressBar();
+    }
 }
 
 
@@ -80,6 +128,12 @@ function moveSlide(direction) {
     }
 
     updateSlider();
+    
+    // Restart progress bar if slideshow is running
+    if (intervalId) {
+        stopProgressBar();
+        startProgressBar();
+    }
 
     // Check if we just moved to the last slide
     if (currentSlide === totalSlides - 1 && direction === 1) {

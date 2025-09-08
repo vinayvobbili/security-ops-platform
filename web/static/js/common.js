@@ -6,35 +6,20 @@ async function setRandomAudio() {
     const icon = document.getElementById('music-icon');
     if (!music || !icon) return;
     
-    // Check if we have a saved audio source from previous navigation
-    const savedSrc = localStorage.getItem('music-src');
-    
-    if (savedSrc && savedSrc.includes('/static/audio/')) {
-        // Use previously saved audio source to maintain continuity (only if it's actually an audio file)
-        music.src = savedSrc;
-        console.log('Using saved audio:', savedSrc);
-    } else {
-        // Clear invalid saved source
-        if (savedSrc && !savedSrc.includes('/static/audio/')) {
-            localStorage.removeItem('music-src');
-            console.log('Cleared invalid saved audio source:', savedSrc);
+    // Always fetch a new random audio file - no more persistence of the same song
+    try {
+        const response = await fetch('/api/random-audio');
+        const data = await response.json();
+        if (data.filename) {
+            const newSrc = '/static/audio/' + data.filename;
+            music.src = newSrc;
+            localStorage.setItem('music-src', newSrc);
+            console.log('Set new random audio:', newSrc);
         }
-        
-        if (!music.src || music.src === window.location.origin + '/' || !music.src.includes('/static/audio/')) {
-            // Only fetch new random audio if no valid audio source exists
-            try {
-                const response = await fetch('/api/random-audio');
-                const data = await response.json();
-                if (data.filename) {
-                    const newSrc = '/static/audio/' + data.filename;
-                    music.src = newSrc;
-                    localStorage.setItem('music-src', newSrc);
-                    console.log('Set new random audio:', newSrc);
-                }
-            } catch (e) {
-                console.error('Failed to fetch random audio:', e);
-            }
-        }
+    } catch (e) {
+        console.error('Failed to fetch random audio:', e);
+        // Fallback: clear any saved source if API fails
+        localStorage.removeItem('music-src');
     }
     
     // Always start muted on page load
