@@ -58,6 +58,49 @@
 <img id="reloadButton" src="{{ url_for('static', filename='icons/reload.svg') }}" alt="Reload" class="reload-icon" onclick="restartSlideshow()">
 <img id="pausePlayButton" onclick="toggleSlideshow()" src="{{ url_for('static', filename='icons/pause-solid.svg') }}" alt="Pause">
 
+<!-- Speed Control -->
+<div class="speed-control" id="speedControl">
+    <div class="speed-icon" id="speedIcon" onclick="toggleSpeedMenu()">
+        <svg class="speed-gauge" viewBox="0 0 100 50">
+            <!-- Main gauge body (filled semi-circle) with high contrast gradient -->
+            <defs>
+                <linearGradient id="gaugeGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" style="stop-color:#ff6b35;stop-opacity:0.9" />
+                    <stop offset="50%" style="stop-color:#f7931e;stop-opacity:0.9" />
+                    <stop offset="100%" style="stop-color:#ffcc02;stop-opacity:0.9" />
+                </linearGradient>
+            </defs>
+            
+            <!-- Full semi-circle that fills the container -->
+            <path d="M 0 50 A 50 50 0 0 1 100 50 L 85 50 A 35 35 0 0 0 15 50 Z" fill="url(#gaugeGradient)"/>
+            
+            <!-- Inner arc for depth -->
+            <path d="M 15 50 A 35 35 0 0 1 85 50" fill="none" stroke="#ffffff" stroke-width="1" opacity="0.6"/>
+            
+            <!-- Speed indicator marks -->
+            <circle cx="15" cy="50" r="2.5" fill="#ffffff"/>
+            <circle cx="30" cy="25" r="2" fill="#ffffff"/>
+            <circle cx="50" cy="8" r="2.5" fill="#ffffff"/>
+            <circle cx="70" cy="25" r="2" fill="#ffffff"/>
+            <circle cx="85" cy="50" r="2.5" fill="#ffffff"/>
+            
+            <!-- Center hub -->
+            <circle cx="50" cy="50" r="8" fill="#2c3e50"/>
+            <circle cx="50" cy="50" r="6" fill="#ffffff"/>
+            
+            <!-- Needle -->
+            <line x1="50" y1="50" x2="50" y2="15" stroke="#e74c3c" stroke-width="5" stroke-linecap="round" class="needle"/>
+        </svg>
+    </div>
+    <div class="speed-menu" id="speedMenu" style="display: none;">
+        <div class="speed-option" data-speed="2000">Fast (2s)</div>
+        <div class="speed-option" data-speed="3000">Quick (3s)</div>
+        <div class="speed-option active" data-speed="5000">Normal (5s)</div>
+        <div class="speed-option" data-speed="8000">Slow (8s)</div>
+        <div class="speed-option" data-speed="12000">Very Slow (12s)</div>
+    </div>
+</div>
+
 <audio id="music" src="" loop muted></audio>
 <div class="audio-controls">
     <button onclick="toggleAudio()">
@@ -91,10 +134,17 @@
     document.addEventListener('click', function (e) {
         var burgerMenu = document.getElementById('burgerMenu');
         var navBurger = document.querySelector('.nav-burger');
+        var speedMenu = document.getElementById('speedMenu');
+        var speedControl = document.getElementById('speedControl');
 
         // Check if the click was outside the menu and burger button
         if (burgerMenu && !burgerMenu.contains(e.target) && !navBurger.contains(e.target)) {
             burgerMenu.style.display = 'none';
+        }
+
+        // Close speed menu when clicking outside
+        if (speedMenu && speedControl && !speedControl.contains(e.target)) {
+            speedMenu.style.display = 'none';
         }
     });
 
@@ -106,6 +156,11 @@
             playSlideshow();
             pausePlayButton.src = "/static/icons/pause-solid.svg";
         }
+    }
+
+    function toggleSpeedMenu() {
+        const speedMenu = document.getElementById('speedMenu');
+        speedMenu.style.display = speedMenu.style.display === 'none' ? 'block' : 'none';
     }
 
     // Hide loading overlay after content is fully loaded

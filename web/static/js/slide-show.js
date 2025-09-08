@@ -7,7 +7,7 @@ let currentSlide = 0;
 const totalSlides = document.querySelectorAll('.slides figure').length;
 let intervalId; // Variable to store the interval ID
 let progressIntervalId; // Variable to store the progress bar interval ID
-const slideInterval = 5000; // 5 seconds per slide
+let slideInterval = 5000; // Default: 5 seconds per slide (will be updated by speed control)
 
 // Start the auto-slide when the page loads
 window.addEventListener('load', initializeSlider);
@@ -20,6 +20,8 @@ function initializeSlider() {
     
     updateSlider(); // Set initial slide position
     playSlideshow(); // Start auto-sliding
+    initializeSpeedControl(); // Initialize speed control
+    updateSpeedNeedle(slideInterval); // Set initial needle position
 
     // Add click event listeners to all slides
     document.querySelectorAll('.slides figure').forEach(slide => {
@@ -99,6 +101,57 @@ function goToSlide(index) {
     if (intervalId) {
         stopProgressBar();
         startProgressBar();
+    }
+}
+
+// Initialize speed control
+function initializeSpeedControl() {
+    const speedOptions = document.querySelectorAll('.speed-option');
+    speedOptions.forEach(option => {
+        option.addEventListener('click', function() {
+            const newSpeed = parseInt(this.dataset.speed);
+            changeSlideSpeed(newSpeed);
+            
+            // Update active state
+            speedOptions.forEach(opt => opt.classList.remove('active'));
+            this.classList.add('active');
+            
+            // Close the menu
+            document.getElementById('speedMenu').style.display = 'none';
+        });
+    });
+}
+
+// Change slideshow speed
+function changeSlideSpeed(newInterval) {
+    slideInterval = newInterval;
+    
+    // Update needle position based on speed
+    updateSpeedNeedle(newInterval);
+    
+    // If slideshow is currently running, restart it with new speed
+    if (intervalId) {
+        clearInterval(intervalId);
+        stopProgressBar();
+        playSlideshow();
+    }
+}
+
+// Update needle position based on current speed
+function updateSpeedNeedle(speed) {
+    const needle = document.querySelector('.needle');
+    if (needle) {
+        // Map speed to needle rotation (left to right across semi-circle)
+        // 2000ms (fast) = -45deg, 5000ms (normal) = 0deg, 12000ms (very slow) = +45deg
+        let rotation;
+        if (speed <= 2000) rotation = -45;
+        else if (speed <= 3000) rotation = -22.5;
+        else if (speed <= 5000) rotation = 0;
+        else if (speed <= 8000) rotation = 22.5;
+        else rotation = 45;
+        
+        needle.style.transform = `rotate(${rotation}deg)`;
+        needle.style.transformOrigin = '50px 50px';
     }
 }
 
