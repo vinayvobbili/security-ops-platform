@@ -236,3 +236,4 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Use the common toggleAudio function - no need to override
 });
+
