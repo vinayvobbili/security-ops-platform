@@ -611,7 +611,7 @@ def start_proxy_server():
 
 
 def main():
-    charts_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../charts'))
+    charts_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), 'static/charts'))
     app.config['CHARTS_DIR'] = charts_dir
 
     # Start proxy server in a separate thread

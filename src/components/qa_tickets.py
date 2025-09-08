@@ -126,7 +126,8 @@ def generate(room_id):
                 print("Ticket creation failed: No 'id' in response.")
                 continue
             ticket_handler.link_tickets(qa_ticket['id'], source_ticket['id'])
-            stake_holders = source_ticket['owner'] + ticket_handler.get_participants(source_ticket['id'])
+            participants = ticket_handler.get_participants(source_ticket['id'])
+            stake_holders = [source_ticket['owner']] + participants
             for stake_holder in stake_holders:
                 ticket_handler.add_participant(qa_ticket['id'], stake_holder)
             qa_ticket_url = CONFIG.xsoar_prod_ui_base_url + "/Custom/caseinfoid/" + qa_ticket['id']

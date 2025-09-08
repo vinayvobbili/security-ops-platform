@@ -10,7 +10,7 @@ from services import phish_fort
 from src import helper_methods
 from src.charts import mttr_mttc, outflow, lifespan, heatmap, sla_breaches, aging_tickets, inflow, qradar_rule_efficacy, de_stories, days_since_incident, re_stories, threatcon_level, vectra_volume, \
     crowdstrike_volume, threat_tippers, crowdstrike_efficacy
-from src.components import oncall, approved_security_testing, thithi, orphaned_tickets, qa_tickets
+from src.components import oncall, approved_security_testing, thithi, orphaned_tickets, qa_tickets, response_sla_risk_tickets, containment_sla_risk_tickets, incident_declaration_sla_risk
 from src.utils.data_cache import fetch_daily_cache
 from src.utils.fs_utils import make_dir_for_todays_charts
 
@@ -97,9 +97,9 @@ def main():
     schedule.every().day.at("17:00", eastern).do(approved_security_testing.removed_expired_entries)
     schedule.every().day.at("07:00", eastern).do(thithi.main)
     schedule.every().monday.at("09:00", eastern).do(qa_tickets.generate, config.webex_room_id_qa_tickets)
-    # schedule.every(1).minutes.do(lambda: response_sla_risk_tickets.start(config.webex_room_id_response_sla_risk))
-    # schedule.every(3).minutes.do(lambda: containment_sla_risk_tickets.start(config.webex_room_id_containment_sla_risk))
-    # schedule.every().hour.at(":00").do(lambda: incident_declaration_sla_risk.start(config.webex_room_id_response_sla_risk))
+    schedule.every(1).minutes.do(lambda: response_sla_risk_tickets.start(config.webex_room_id_response_sla_risk))
+    schedule.every(3).minutes.do(lambda: containment_sla_risk_tickets.start(config.webex_room_id_containment_sla_risk))
+    schedule.every().hour.at(":00").do(lambda: incident_declaration_sla_risk.start(config.webex_room_id_response_sla_risk))
 
     while True:
         schedule.run_pending()
