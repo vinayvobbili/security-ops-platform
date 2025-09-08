@@ -74,7 +74,7 @@ def generate(room_id):
         week_start = today - timedelta(days=7)  # Go back 7 days to get previous Monday
         week_start_str = week_start.strftime('%Y-%m-%dT00:00:00 -0400')
 
-        query = f'status:closed -category:job type:METCIRT -owner:"" closed:>="{week_start_str}"'
+        query = f'status:closed -category:job type:METCIRT -owner:"" -type:"METCIRT IOC Hunt" closed:>="{week_start_str}"'
 
         tickets = ticket_handler.get_tickets(query)
         if not tickets:
