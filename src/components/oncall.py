@@ -127,7 +127,7 @@ def alert_change():
 
         # List of rooms to notify
         room_ids = [
-            # CONFIG.webex_room_id_response_engineering,
+            CONFIG.webex_room_id_response_engineering,
             CONFIG.webex_room_id_vinay_test_space,
             # Add other relevant room IDs here
         ]
