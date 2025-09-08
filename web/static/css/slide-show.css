@@ -318,6 +318,125 @@ body {
     right: 20px;
 }
 
+/* Speed Control */
+.speed-control {
+    position: fixed;
+    bottom: 30px;
+    left: 20px;
+    z-index: 100;
+}
+
+.speed-icon {
+    width: 60px;
+    height: 35px;
+    cursor: pointer;
+    background: rgba(0, 70, 173, 0.3);
+    border-radius: 60px 60px 0 0;
+    padding: 0;
+    backdrop-filter: blur(10px);
+    transition: all 0.3s ease;
+    border: 2px solid rgba(0, 166, 81, 0.5);
+    border-bottom: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+}
+
+.speed-icon:hover {
+    background: rgba(0, 166, 81, 0.4);
+    transform: scale(1.1);
+    box-shadow: 0 5px 20px rgba(0, 166, 81, 0.6);
+    border-color: var(--acme-green);
+}
+
+.speed-gauge {
+    width: 100%;
+    height: 100%;
+    color: white;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+    transition: all 0.3s ease;
+}
+
+.speed-icon:hover .speed-gauge {
+    transform: scale(1.1);
+    filter: drop-shadow(0 4px 8px rgba(0, 166, 81, 0.4));
+}
+
+.speed-gauge .needle {
+    transform-origin: 50px 50px;
+    transition: transform 0.3s ease;
+}
+
+/* Don't rotate needle on hover - it will show current speed instead */
+
+.speed-menu {
+    position: absolute;
+    bottom: 55px;
+    left: 0;
+    background: rgba(255, 255, 255, 0.98);
+    backdrop-filter: blur(20px);
+    border-radius: 12px;
+    box-shadow: 0 10px 30px rgba(0, 70, 173, 0.3);
+    border: 1px solid var(--acme-green);
+    min-width: 120px;
+    overflow: hidden;
+    animation: slideUpMenu 0.3s ease-out;
+}
+
+@keyframes slideUpMenu {
+    from {
+        opacity: 0;
+        transform: translateY(10px) scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.speed-option {
+    padding: 10px 15px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    color: var(--acme-dark-blue);
+    font-size: 11px;
+    font-weight: 500;
+    border-left: 3px solid transparent;
+}
+
+.speed-option:hover {
+    background: linear-gradient(135deg, var(--acme-blue), var(--acme-green));
+    color: white;
+    border-left: 3px solid var(--acme-green);
+    transform: translateX(3px);
+}
+
+.speed-option.active {
+    background: rgba(0, 166, 81, 0.1);
+    border-left: 3px solid var(--acme-green);
+    font-weight: 600;
+}
+
+/* Responsive positioning */
+@media (max-width: 768px) {
+    .speed-control {
+        bottom: 20px;
+        left: 10px;
+    }
+    
+    .speed-icon {
+        width: 40px;
+        height: 40px;
+        padding: 8px;
+    }
+    
+    .speed-option {
+        padding: 8px 12px;
+        font-size: 10px;
+    }
+}
+
 /* Enhanced Audio Controls with Acme styling - Made more prominent */
 
 .audio-controls button {
