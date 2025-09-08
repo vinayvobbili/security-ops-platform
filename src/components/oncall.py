@@ -149,18 +149,20 @@ def alert_change():
         log.error(f'Failed to generate and send on-call change alert: {e}', exc_info=True)
 
 
-def announce_change():
+def announce_change(room_id: Optional[str] = CONFIG.webex_room_id_threatcon_collab):
     """Sends a Webex notification about the current on-call person."""
     try:
-        on_call_str = get_on_call_person()  # This now handles errors internally
+        on_call_details = get_on_call_person()
 
-        if "_unknown_" in on_call_str:  # Check if get_on_call_person failed
+        if not on_call_details or "name" not in on_call_details:
             message = "⚠️ **Error:** Could not determine the current on-call person."
             log.error("Failed to determine current on-call person for announcement.")
         else:
-            message = f"On-call person now is {on_call_str}"
+            name = on_call_details.get("name", "_unknown_")
+            email = on_call_details.get("email_address", "_unknown_")
+            phone = on_call_details.get("phone_number", "_unknown_")
+            message = f"On-call person now is **{name}** (<{email}>) Phone: [{phone}](facetime://{phone})"
 
-        room_id = CONFIG.webex_room_id_threatcon_collab
         if not room_id:
             log.error("Cannot announce change: webex_room_id_threatcon_collab not configured.")
             return
@@ -245,7 +247,7 @@ if __name__ == "__main__":
 
     # Uncomment to actually send messages (use with caution)
     # log.info("Announcing current on-call...")
-    # announce_change()
+    announce_change(room_id=CONFIG.webex_room_id_vinay_test_space)
     # log.info("Alerting about next week's on-call...")
     # alert_change()
 
