@@ -64,7 +64,7 @@ class TicketHandler:
         """Fetch security incidents from XSOAR"""
         full_query = query + f' -category:job -type:"{CONFIG.team_name} Ticket QA" -type:"{CONFIG.team_name} SNOW Whitelist Request"'
 
-        log.info(f"Making API call for query: {query}")
+        log.debug(f"Making API call for query: {query}")
         return self._fetch_from_api(full_query, period, size)
 
     def _fetch_from_api(self, query, period, size):
@@ -167,26 +167,26 @@ class TicketHandler:
 
         log.info(f"Getting participants for incident {incident_id}")
         investigation_url = f"{self.prod_base}/investigation/{incident_id}"
-        
+
         # Based on the JSON structure from the user's example, send empty payload
         payload = {}
-        
+
         response = http_session.post(investigation_url, headers=prod_headers, json=payload, verify=False, timeout=30)
         if response is None:
             raise requests.exceptions.ConnectionError("Failed to connect after multiple retries")
-        
+
         # Handle API errors gracefully
         if not response.ok:
             error_data = response.json() if response.content else {}
             error_msg = error_data.get('detail', 'Unknown error')
-            
+
             if response.status_code == 400 and 'Could not find investigation' in error_msg:
                 log.warning(f"Investigation {incident_id} not found")
                 raise ValueError(f"Investigation {incident_id} not found")
             else:
                 log.error(f"API error {response.status_code}: {error_msg}")
                 raise requests.exceptions.HTTPError(f"API error {response.status_code}: {error_msg}")
-            
+
         investigation_data = response.json()
         return investigation_data.get('users', [])
 
