@@ -161,7 +161,8 @@ def announce_change(room_id: Optional[str] = CONFIG.webex_room_id_threatcon_coll
             name = on_call_details.get("name", "_unknown_")
             email = on_call_details.get("email_address", "_unknown_")
             phone = on_call_details.get("phone_number", "_unknown_")
-            message = f"On-call person now is **{name}** (<{email}>) Phone: [{phone}](facetime://{phone})"
+            # Try multiple approaches for phone link - Webex may be picky about URL schemes
+            message = f"On-call person now is **{name}** (<{email}>) Phone: [{phone}](tel:{phone})"
 
         if not room_id:
             log.error("Cannot announce change: webex_room_id_threatcon_collab not configured.")
