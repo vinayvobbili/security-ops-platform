@@ -43,6 +43,8 @@ def get_config():
         xsoar_lists_filename=os.environ["XSOAR_LISTS_FILENAME"],
         barnacles_approved_users=os.environ["BARNACLES_APPROVED_USERS"],
         team_name=os.environ["TEAM_NAME"],
+        ollama_llm_model=os.environ.get("OLLAMA_LLM_MODEL", "qwen2.5:32b"),
+        ollama_embedding_model=os.environ.get("OLLAMA_EMBEDDING_MODEL", "nomic-embed-text"),
         azdo_org=os.environ["AZDO_ORGANIZATION"],
         azdo_de_project=os.environ["AZDO_DE_PROJECT"],
         azdo_re_project=os.environ["AZDO_RE_PROJECT"],
@@ -138,6 +140,8 @@ class Config:
     xsoar_dev_auth_id: str
     xsoar_lists_filename: str
     team_name: str
+    ollama_llm_model: str
+    ollama_embedding_model: str
     barnacles_approved_users: str
     azdo_org: str
     azdo_de_project: str

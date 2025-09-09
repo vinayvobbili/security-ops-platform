@@ -12,12 +12,19 @@ import logging
 from typing import Dict, Any, Optional
 from dataclasses import dataclass, field
 
+# Import the centralized config system
+import sys
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
+import my_config
+
+# Get the config instance
+_main_config = my_config.get_config()
 
 @dataclass
 class ModelConfig:
     """Configuration for AI models"""
-    llm_model_name: str = "qwen2.5:32b"
-    embedding_model_name: str = "nomic-embed-text"
+    llm_model_name: str = _main_config.ollama_llm_model
+    embedding_model_name: str = _main_config.ollama_embedding_model
     temperature: float = 0.1
     max_iterations: int = 8  # Safety limit - agent should complete in 1-2 iterations via prompt guidance
     chunk_size: int = 1500
@@ -137,7 +144,8 @@ class ConfigManager:
 
         return self._config
 
-    def _load_from_environment(self) -> Dict[str, Any]:
+    @staticmethod
+    def _load_from_environment() -> Dict[str, Any]:
         """Load configuration from environment variables"""
         env_config = {}
 
@@ -187,7 +195,8 @@ class ConfigManager:
 
         return env_config
 
-    def _create_config_from_dict(self, config_dict: Dict[str, Any]) -> EnhancedConfig:
+    @staticmethod
+    def _create_config_from_dict(config_dict: Dict[str, Any]) -> EnhancedConfig:
         """Create EnhancedConfig from dictionary"""
         # Create individual config objects
         model_config = ModelConfig(**config_dict.get('model', {}))
@@ -234,8 +243,7 @@ class ConfigManager:
         directories = [
             self._config.paths.pdf_directory,
             self._config.paths.logs_directory,
-            os.path.dirname(self._config.paths.faiss_index_path),
-            os.path.dirname(self._config.paths.performance_data_path)
+            os.path.dirname(self._config.paths.faiss_index_path)
         ]
 
         for directory in directories:
