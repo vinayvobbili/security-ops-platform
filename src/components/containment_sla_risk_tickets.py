@@ -205,16 +205,6 @@ def start(room_id):
         error_message = f"❌ **Error processing containment SLA tickets:** {str(e)}"
         logger.error(f"Critical error in containment SLA processing: {e}", exc_info=True)
 
-        # Send error notification to the room
-        try:
-            webex_api.messages.create(
-                roomId=room_id,
-                text="Error processing containment SLA tickets",
-                markdown=error_message
-            )
-        except Exception as notification_error:
-            logger.error(f"Failed to send error notification: {notification_error}")
-
 
 if __name__ == "__main__":
     room_id = CONFIG.webex_room_id_vinay_test_space
