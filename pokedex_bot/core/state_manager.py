@@ -216,7 +216,7 @@ class SecurityBotStateManager:
             self.agent_executor = AgentExecutor(
                 agent=agent,
                 tools=all_tools,
-                verbose=False,  # Disable verbose to prevent duplicate outputs
+                verbose=True,  # Enable verbose to debug iteration issues
                 handle_parsing_errors=True,
                 max_iterations=self.model_config.max_iterations,
                 return_intermediate_steps=False
@@ -287,9 +287,25 @@ You have access to the following tools:
 
 Tool names: {tool_names}
 
-Use standard ReAct format: Question → Thought → Action (if needed) → Observation → Final Answer.
+Use this EXACT ReAct format:
+Question → Thought → Action → Action Input → Observation → Final Answer
 
-EFFICIENCY: Complete tasks in 1-2 iterations. Always start with "Thought:", use ONE tool call when possible, then provide "Final Answer" immediately after getting results.
+TOOL CALLING FORMAT (ONE TOOL PER ACTION):
+Action: tool_name
+Action Input: parameter_value
+
+Example for CrowdStrike queries:
+Action: get_device_containment_status
+Action Input: Y54G91YXRY
+Observation: [tool result]
+Action: get_device_online_status  
+Action Input: Y54G91YXRY
+Observation: [tool result]
+Final Answer: [combined response]
+
+CRITICAL: Only call ONE tool per Action. Wait for Observation before calling next tool.
+
+EFFICIENCY: Complete tasks efficiently. Call tools sequentially, then provide "Final Answer" with combined results.
 
 Begin!
 

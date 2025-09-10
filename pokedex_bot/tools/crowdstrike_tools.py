@@ -63,7 +63,7 @@ def get_device_containment_status_tool(client: CrowdStrikeClient):
     """Factory function to create containment status tool with client reference"""
     @tool
     def get_device_containment_status(hostname: str) -> str:
-        """Get device containment status from CrowdStrike. Use for containment status queries."""
+        """Get device containment status from CrowdStrike. IMPORTANT: 'normal' means NOT contained (free to communicate), 'contained' means isolated/contained. Use for containment status queries."""
         if not client:
             return "Error: CrowdStrike service is not initialized."
 
@@ -77,10 +77,10 @@ def get_device_containment_status_tool(client: CrowdStrikeClient):
 
         if status:
             status_descriptions = {
-                'normal': 'Normal - Device is not contained',
-                'containment_pending': 'Containment Pending - Containment action initiated',
-                'contained': 'Contained - Device is isolated from network',
-                'lift_containment_pending': 'Lift Containment Pending - Uncontainment action initiated'
+                'normal': 'NORMAL - Device is NOT CONTAINED (free to communicate on network)',
+                'containment_pending': 'CONTAINMENT PENDING - Containment action initiated but not yet complete',
+                'contained': 'CONTAINED - Device is ISOLATED and blocked from network communication',
+                'lift_containment_pending': 'LIFT CONTAINMENT PENDING - Uncontainment action initiated but not yet complete'
             }
             description = status_descriptions.get(status, f'Unknown status: {status}')
             return f"Containment status for '{hostname}': {description}"
