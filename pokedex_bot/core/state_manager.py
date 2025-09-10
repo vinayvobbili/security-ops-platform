@@ -216,7 +216,13 @@ class SecurityBotStateManager:
     def execute_query(self, query: str) -> str:
         """Execute query using native tool calling"""
         try:
-            response = self.llm_with_tools.invoke(query)
+            # Create conversation with system message
+            messages = [
+                {"role": "system", "content": """You are a security operations assistant. When tools return structured data like JSON (especially Adaptive Cards), include that data directly in your response without modification. Users expect to see the exact tool output when it contains formatted information like cards or structured data."""},
+                {"role": "user", "content": query}
+            ]
+            
+            response = self.llm_with_tools.invoke(messages)
             
             # Check if LLM made tool calls
             if hasattr(response, 'tool_calls') and response.tool_calls:
@@ -230,6 +236,7 @@ class SecurityBotStateManager:
                         
                         # Send result back to LLM for final response
                         final_response = self.llm_with_tools.invoke([
+                            {"role": "system", "content": """You are a security operations assistant. When tools return structured data like JSON (especially Adaptive Cards), include that data directly in your response without modification. Users expect to see the exact tool output when it contains formatted information like cards or structured data."""},
                             {"role": "user", "content": query},
                             response,
                             {"role": "tool", "tool_call_id": tool_call['id'], "content": str(tool_result)}

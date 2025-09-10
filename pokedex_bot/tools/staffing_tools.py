@@ -119,3 +119,10 @@ def get_current_staffing() -> str:
     except Exception as e:
         logging.error(f"Error getting current staffing: {e}")
         return f"Unable to retrieve current staffing information: {str(e)}"
+
+if __name__ == "__main__":
+    # Simple test calls
+    print("Testing get_current_shift_info()")
+    print(get_current_shift_info.invoke(""))
+    print("\nTesting get_current_staffing()")
+    print(get_current_staffing.invoke(""))
