@@ -25,7 +25,7 @@ from pokedex_bot.core.state_manager import get_state_manager
 from pokedex_bot.core.session_manager import get_session_manager
 from pokedex_bot.core.error_recovery import get_recovery_manager, enhanced_agent_wrapper
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.ERROR)
 
 
 def run_health_tests_command() -> str:
@@ -197,33 +197,22 @@ Just ask me any security-related question!"""
         # STEP 1: For complex queries, pass to LLM agent - let it decide everything
         try:
             agent_executor = state_manager.get_agent_executor() if state_manager else None
-            logging.info(f"Agent executor available: {agent_executor is not None}")
+            # Use direct execution instead of agent framework
+            logging.info(f"Using direct LLM execution")
+            
+            # Prepare input with conversation context
+            agent_input = query
+            if conversation_context:
+                agent_input = conversation_context + " " + query
+                logging.debug(f"Added conversation context to query")
 
-            if agent_executor:
-                # Prepare input with conversation context
-                agent_input = query
-                if conversation_context:
-                    agent_input = conversation_context + " " + query
-                    logging.debug(f"Added conversation context to query")
-
-                # Let the LLM agent handle everything with enhanced error recovery
-                logging.info(f"Passing query to LLM agent: {query[:100]}...")
-                recovery_manager = get_recovery_manager()
-                
-                try:
-                    final_response = enhanced_agent_wrapper(agent_executor, agent_input, recovery_manager)
-                    # Store user message and bot response in session
-                    session_manager.add_message(session_key, "user", query)
-                    session_manager.add_message(session_key, "assistant", final_response)
-                except Exception as e:
-                    logging.error(f"Enhanced agent wrapper failed: {e}")
-                    final_response = recovery_manager.get_fallback_response('general', query)
-                    # Still store the interaction for context
-                    session_manager.add_message(session_key, "user", query)
-                    session_manager.add_message(session_key, "assistant", final_response)
-            else:
-                logging.error("Agent executor not available - system not properly initialized")
-                final_response = "❌ System not ready. Please try again in a moment."
+            # Let the 70B model handle everything directly - no agent framework
+            logging.info(f"Passing query to direct LLM: {query[:100]}...")
+            
+            final_response = state_manager.execute_query(agent_input)
+            # Store user message and bot response in session
+            session_manager.add_message(session_key, "user", query)
+            session_manager.add_message(session_key, "assistant", final_response)
 
         except Exception as e:
             logging.error(f"Failed to invoke agent: {e}")
