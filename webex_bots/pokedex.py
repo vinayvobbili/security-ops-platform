@@ -509,6 +509,22 @@ class PokeDexBot(WebexBot):
                 except json.JSONDecodeError as je:
                     logger.warning(f"Failed to parse direct JSON Adaptive Card: {je}")
 
+            # Also check for JSON blocks within the response (in case LLM adds text)
+            import re
+            json_pattern = r'\{[^{}]*"type":\s*"AdaptiveCard"[^{}]*\}'
+            json_matches = re.findall(json_pattern, response_text, re.DOTALL)
+
+            for json_match in json_matches:
+                try:
+                    card_dict = json.loads(json_match)
+                    if card_dict.get("type") == "AdaptiveCard":
+                        logger.info("Successfully extracted Adaptive Card from LLM response text")
+                        # Return the remaining text without the JSON
+                        clean_text = response_text.replace(json_match, "").strip()
+                        return card_dict, clean_text or "Enhanced response"
+                except json.JSONDecodeError:
+                    continue
+
         except Exception as e:
             logger.error(f"Error extracting Adaptive Card: {e}")
 
