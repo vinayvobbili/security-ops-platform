@@ -8,6 +8,7 @@ data/transient/*
 scheduler.pid
 web/static/audio
 local_pdfs_docs
+debug/*
 
 # System files
 .DS_Store
