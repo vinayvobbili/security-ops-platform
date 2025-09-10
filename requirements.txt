@@ -39,6 +39,7 @@ tabulate
 beautifulsoup4
 pyarrow==21.0.0
 orjson==3.11.0
+python-docx
 
 # Image Processing
 pillow==11.3.0
@@ -62,8 +63,10 @@ langchain-community==0.3.27
 langchain-core==0.3.69
 langchain-ollama==0.3.5
 langsmith<0.4
+faiss-cpu
 
 # Development/Testing
+pytest==8.3.3
 types-pytz
 jsonschema==4.25.0
 pydantic-settings==2.10.1

@@ -274,7 +274,7 @@ def main() -> None:
         return
 
     # Test API
-    host_name_cs = 'uscku1metu03c7l'
+    host_name_cs = 'Y54G91YXRY'
     device_id = client.get_device_id(host_name_cs)
     if device_id:
         print(f"Device ID: {device_id}")
