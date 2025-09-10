@@ -12,22 +12,8 @@ from langchain_core.tools import tool
 from pokedex_bot.utils.network_logger import get_network_logger, get_network_summary
 
 
-class NetworkMonitoringToolsManager:
-    """Manager for network monitoring tools"""
-    
-    def __init__(self):
-        self.logger = get_network_logger()
-    
-    def get_tools(self) -> List:
-        """Get list of available network monitoring tools"""
-        return [
-            get_network_activity_tool(),
-            get_network_summary_tool()
-        ]
-
-
 @tool
-def get_network_activity_tool():
+def get_network_activity() -> str:
     """Get recent network activity logs from the bot"""
     try:
         logger = get_network_logger()
@@ -67,9 +53,10 @@ def get_network_activity_tool():
 
 
 @tool  
-def get_network_summary_tool():
+def get_network_summary_tool() -> str:
     """Get summary of network activity by domain and tool"""
     try:
+        from pokedex_bot.utils.network_logger import get_network_summary
         summary = get_network_summary()
         
         total_calls = summary.get('total_recent_calls', 0)
