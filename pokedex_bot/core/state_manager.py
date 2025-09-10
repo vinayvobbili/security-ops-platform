@@ -218,7 +218,7 @@ class SecurityBotStateManager:
         try:
             # Create conversation with system message
             messages = [
-                {"role": "system", "content": """You are a security operations assistant. When tools return structured data like JSON (especially Adaptive Cards), include that data directly in your response without modification. Users expect to see the exact tool output when it contains formatted information like cards or structured data."""},
+                {"role": "system", "content": "You are a security operations assistant. Your responses will be sent as Webex messages, so you can use Webex markdown formatting or return Adaptive Card JSON when appropriate."},
                 {"role": "user", "content": query}
             ]
             
@@ -236,7 +236,7 @@ class SecurityBotStateManager:
                         
                         # Send result back to LLM for final response
                         final_response = self.llm_with_tools.invoke([
-                            {"role": "system", "content": """You are a security operations assistant. When tools return structured data like JSON (especially Adaptive Cards), include that data directly in your response without modification. Users expect to see the exact tool output when it contains formatted information like cards or structured data."""},
+                            {"role": "system", "content": "You are a security operations assistant. Your responses will be sent as Webex messages, so you can use Webex markdown formatting or return Adaptive Card JSON when appropriate."},
                             {"role": "user", "content": query},
                             response,
                             {"role": "tool", "tool_call_id": tool_call['id'], "content": str(tool_result)}

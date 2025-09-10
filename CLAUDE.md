@@ -115,3 +115,60 @@ The project integrates with enterprise security tools:
 - Follow SOLID principles and Clean Code practices
 - All my code runs in a trusted environment, so no need of excessive defensive coding. Only exception is Pokédex.py which must be protected against prompt injection
 - Git stage code files
+
+## Architecture Principles
+
+### Simplicity Over Complexity
+- **Prefer native solutions** over custom implementations
+- **Avoid over-engineering** - no special cases, detection logic, or complex abstractions
+- **Trust the LLM** - let it make intelligent decisions rather than forcing behaviors
+- **Clean separation** - tools do their job, LLM composes responses, presentation layer renders
+
+### LLM Integration Philosophy
+- **Use native tool calling** (`llm.bind_tools()`) instead of manual action parsing
+- **No regex parsing** of LLM responses (Action:, Action Input:, etc.)
+- **No agent frameworks** - direct LLM invocation with tool results
+- **Simple system prompts** - give context, let LLM decide execution
+- **Pass-through responses** - forward LLM output directly without transformation
+
+### Tool Design
+- **Tools return data** - let LLM format for user consumption
+- **Use @tool decorators** directly instead of factory patterns or manager classes
+- **Avoid unnecessary abstraction** - if a manager class adds no value, remove it
+- **Keep tool descriptions concise** - trust domain experts (SOC analysts) to understand their tools
+
+### Anti-Patterns to Avoid
+- **Manual action parsing** with regex (`Action:`, `Action Input:`)
+- **Agent frameworks** and AgentExecutor complexity
+- **Special case handling** for different response formats
+- **Complex detection logic** for structured data (adaptive cards, JSON)
+- **Over-engineered managers** when simple functions suffice
+- **Forcing LLM behavior** through complex prompts or post-processing
+
+### Example: Clean Tool Integration
+```python
+# ✅ Good - Simple and direct
+@tool
+def get_weather(city: str) -> str:
+    """Get current weather for a city."""
+    response = requests.get(api_url, params={'q': city})
+    return response.text
+
+# ❌ Bad - Over-engineered
+class WeatherToolsManager:
+    def get_weather_tool(self):
+        def weather_factory():
+            # Complex factory logic...
+```
+
+### Example: Clean LLM Integration
+```python
+# ✅ Good - Native tool calling
+llm_with_tools = llm.bind_tools([weather_tool, staffing_tool])
+response = llm_with_tools.invoke("What's the weather?")
+
+# ❌ Bad - Manual parsing
+if "Action:" in response:
+    action = regex_parse_action(response)
+    result = execute_tool_manually(action)
+```
