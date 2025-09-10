@@ -216,34 +216,13 @@ class SecurityBotStateManager:
     def execute_query(self, query: str) -> str:
         """Execute query using native tool calling"""
         try:
-            # Create conversation with system message
+            # Single call - let LLM handle entire tool calling flow
             messages = [
                 {"role": "system", "content": "You are a security operations assistant. Your responses will be sent as Webex messages, so you can use Webex markdown formatting or return Adaptive Card JSON when appropriate."},
                 {"role": "user", "content": query}
             ]
             
             response = self.llm_with_tools.invoke(messages)
-            
-            # Check if LLM made tool calls
-            if hasattr(response, 'tool_calls') and response.tool_calls:
-                # Execute tool calls
-                for tool_call in response.tool_calls:
-                    tool_name = tool_call['name']
-                    tool_args = tool_call.get('args', {})
-                    
-                    if tool_name in self.available_tools:
-                        tool_result = self.available_tools[tool_name].run(tool_args)
-                        
-                        # Send result back to LLM for final response
-                        final_response = self.llm_with_tools.invoke([
-                            {"role": "system", "content": "You are a security operations assistant. Your responses will be sent as Webex messages, so you can use Webex markdown formatting or return Adaptive Card JSON when appropriate."},
-                            {"role": "user", "content": query},
-                            response,
-                            {"role": "tool", "tool_call_id": tool_call['id'], "content": str(tool_result)}
-                        ])
-                        return final_response.content
-            
-            # Return direct response if no tool calls
             return response.content
             
         except Exception as e:

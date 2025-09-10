@@ -125,9 +125,11 @@ The project integrates with enterprise security tools:
 - **Clean separation** - tools do their job, LLM composes responses, presentation layer renders
 
 ### LLM Integration Philosophy
+- **Single-call tool execution** - let LLM handle entire tool calling flow internally
 - **Use native tool calling** (`llm.bind_tools()`) instead of manual action parsing
+- **No manual tool orchestration** - avoid separate invoke() calls for tool results
 - **No regex parsing** of LLM responses (Action:, Action Input:, etc.)
-- **No agent frameworks** - direct LLM invocation with tool results
+- **No agent frameworks** - direct LLM invocation handles everything
 - **Simple system prompts** - give context, let LLM decide execution
 - **Pass-through responses** - forward LLM output directly without transformation
 
@@ -138,6 +140,7 @@ The project integrates with enterprise security tools:
 - **Keep tool descriptions concise** - trust domain experts (SOC analysts) to understand their tools
 
 ### Anti-Patterns to Avoid
+- **Manual tool orchestration** - separate invoke() calls to handle tool results
 - **Manual action parsing** with regex (`Action:`, `Action Input:`)
 - **Agent frameworks** and AgentExecutor complexity
 - **Special case handling** for different response formats
@@ -163,9 +166,20 @@ class WeatherToolsManager:
 
 ### Example: Clean LLM Integration
 ```python
-# ✅ Good - Native tool calling
+# ✅ Good - Single call with native tool calling
 llm_with_tools = llm.bind_tools([weather_tool, staffing_tool])
-response = llm_with_tools.invoke("What's the weather?")
+response = llm_with_tools.invoke([
+    {"role": "system", "content": "You are an assistant..."},
+    {"role": "user", "content": "What's the weather?"}
+])
+return response.content  # LLM handles tools internally
+
+# ❌ Bad - Manual tool orchestration
+response = llm_with_tools.invoke(messages)
+if response.tool_calls:
+    for tool_call in response.tool_calls:
+        result = execute_tool(tool_call)
+        final_response = llm.invoke([original, response, tool_result])
 
 # ❌ Bad - Manual parsing
 if "Action:" in response:
