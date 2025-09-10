@@ -42,7 +42,7 @@ CONFIG = get_config()
 
 # Fun thinking messages for user engagement
 THINKING_MESSAGES = [
-    "🤔 Thinking...", "🧠 Processing...", "⚡ Computing...", "🔍 Searching...", 
+    "🤔 Thinking...", "🧠 Processing...", "⚡ Computing...", "🔍 Searching...",
     "🎯 Analyzing...", "🛡️ Investigating...", "📊 Calculating...", "🔬 Examining...",
     "💭 Pondering...", "🎪 Working magic...", "🚀 Launching queries...", "⚙️ Turning gears...",
     "🔮 Consulting oracles...", "📚 Reading docs...", "🎲 Rolling dice...", "🌟 Connecting dots...",
@@ -424,7 +424,6 @@ class PokeDexBot(WebexBot):
 
                     # Check for Adaptive Card in LLM response
                     card_dict, clean_text = self._extract_adaptive_card(response_text)
-
 
                     # Send completion status as new threaded message
                     if thinking_msg:
