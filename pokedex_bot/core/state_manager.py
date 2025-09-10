@@ -10,6 +10,7 @@ import os
 import logging
 import atexit
 import signal
+import re
 from typing import Optional
 
 from langchain_ollama import ChatOllama, OllamaEmbeddings
@@ -225,15 +226,13 @@ class SecurityBotStateManager:
         try:
             # Simple prompt for the LLM
             tool_names = list(self.available_tools.keys())
-            prompt = f"""You are a security operations assistant helping SOC analysts.
+            prompt = f"""You are a security operations assistant.
 
 Available tools: {', '.join(tool_names)}
 
-If you need to use a tool, format it as:
+To use a tool:
 Action: tool_name
 Action Input: parameter
-
-Otherwise, answer the user directly.
 
 User query: {query}
 
@@ -245,7 +244,6 @@ Response:"""
             # Check if the LLM wants to use a tool
             if "Action:" in response.content:
                 # Extract and execute tool call
-                import re
                 action_match = re.search(r"Action:\s*(\w+)", response.content)
                 input_match = re.search(r"Action Input:\s*(.+)", response.content)
                 
