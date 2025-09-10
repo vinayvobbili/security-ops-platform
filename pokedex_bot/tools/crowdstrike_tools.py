@@ -63,7 +63,7 @@ def get_device_containment_status_tool(client: CrowdStrikeClient):
     """Factory function to create containment status tool with client reference"""
     @tool
     def get_device_containment_status(hostname: str) -> str:
-        """Get device containment status from CrowdStrike. IMPORTANT: 'normal' means NOT contained (free to communicate), 'contained' means isolated/contained. Use for containment status queries."""
+        """Get device containment status from CrowdStrike."""
         if not client:
             return "Error: CrowdStrike service is not initialized."
 
@@ -76,14 +76,7 @@ def get_device_containment_status_tool(client: CrowdStrikeClient):
             return f"Hostname '{hostname}' was not found in CrowdStrike."
 
         if status:
-            status_descriptions = {
-                'normal': 'NORMAL - Device is NOT CONTAINED (free to communicate on network)',
-                'containment_pending': 'CONTAINMENT PENDING - Containment action initiated but not yet complete',
-                'contained': 'CONTAINED - Device is ISOLATED and blocked from network communication',
-                'lift_containment_pending': 'LIFT CONTAINMENT PENDING - Uncontainment action initiated but not yet complete'
-            }
-            description = status_descriptions.get(status, f'Unknown status: {status}')
-            return f"Containment status for '{hostname}': {description}"
+            return f"Containment status for '{hostname}': {status}"
 
         return f"Unable to retrieve containment status for hostname '{hostname}'."
     
@@ -94,7 +87,7 @@ def get_device_online_status_tool(client: CrowdStrikeClient):
     """Factory function to create online status tool with client reference"""
     @tool
     def get_device_online_status(hostname: str) -> str:
-        """Get device online status from CrowdStrike. Use for online/offline status queries."""
+        """Get device online status from CrowdStrike."""
         if not client:
             return "Error: CrowdStrike service is not initialized."
 
@@ -104,13 +97,7 @@ def get_device_online_status_tool(client: CrowdStrikeClient):
         status = client.get_device_online_state(hostname)
 
         if status:
-            status_descriptions = {
-                'online': 'Online - Device is currently connected',
-                'offline': 'Offline - Device is not currently connected',
-                'unknown': 'Unknown - Connection status unclear'
-            }
-            description = status_descriptions.get(status, f'Status: {status}')
-            return f"Online status for '{hostname}': {description}"
+            return f"Online status for '{hostname}': {status}"
 
         return f"Unable to retrieve online status for hostname '{hostname}'. Device may not exist in CrowdStrike."
     
@@ -121,7 +108,7 @@ def get_device_details_tool(client: CrowdStrikeClient):
     """Factory function to create device details tool with client reference"""
     @tool
     def get_device_details_cs(hostname: str) -> str:
-        """Get detailed device information from CrowdStrike. Use for comprehensive device queries."""
+        """Get detailed device information from CrowdStrike."""
         if not client:
             return "Error: CrowdStrike service is not initialized."
 

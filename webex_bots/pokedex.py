@@ -118,7 +118,7 @@ console_handler.setFormatter(ColoredFormatter(
 
 # Configure root logger with simple approach
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.ERROR,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[file_handler, console_handler],
     force=True  # Override any existing logging config

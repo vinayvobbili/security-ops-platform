@@ -26,7 +26,7 @@ class ModelConfig:
     llm_model_name: str = _main_config.ollama_llm_model
     embedding_model_name: str = _main_config.ollama_embedding_model
     temperature: float = 0.1
-    max_iterations: int = 10  # Reasonable limit - most queries should complete in 2-3 iterations
+    max_iterations: int = 3  # Keep it tight - forces smarter tool usage
     chunk_size: int = 1500
     chunk_overlap: int = 300
     retrieval_k: int = 5

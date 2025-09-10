@@ -50,7 +50,7 @@ def run_tests_tool():
 
     @tool  
     def run_tests() -> str:
-        """Run interactive bot functionality tests with real-time progress updates and live Webex messages. Use for test execution requests like 'run tests' or 'test the bot'."""
+        """Run interactive bot functionality tests."""
         import threading
         
         def run_test_suite():
@@ -327,7 +327,7 @@ def run_specific_test_tool():
 
     @tool
     def run_specific_test(test_name: str) -> str:
-        """Run a specific test file or test function by name. Use for targeted testing when a specific test is requested."""
+        """Run a specific test file or test function by name."""
         try:
             project_root = Path(__file__).parent.parent.parent
             start_time = datetime.now()

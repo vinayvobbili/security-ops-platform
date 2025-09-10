@@ -36,7 +36,7 @@ def get_bot_metrics_tool():
     """Factory function to create detailed bot metrics tool"""
     @tool
     def get_bot_metrics() -> str:
-        """Get comprehensive bot performance metrics including system resources, response times, user sessions, and capacity warnings. Use for metrics, performance, system stats requests."""
+        """Get comprehensive bot performance metrics."""
         try:
             import pandas as pd
             import psutil
@@ -215,7 +215,7 @@ def get_bot_metrics_summary_tool():
     """Factory function to create bot metrics summary tool"""
     @tool  
     def get_bot_metrics_summary() -> str:
-        """Get a brief summary of bot metrics and key performance indicators. Use for quick metrics, summary, or status requests."""
+        """Get a brief summary of bot metrics."""
         try:
             import pandas as pd
             import psutil

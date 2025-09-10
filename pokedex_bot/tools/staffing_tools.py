@@ -74,7 +74,7 @@ def get_current_staffing_tool():
     """Factory function to create current staffing tool"""
     @tool
     def get_current_staffing() -> str:
-        """Get current shift staffing information including team members and on-call personnel. Use for staffing and team roster queries."""
+        """Get current shift staffing information."""
         try:
             staffing_data = get_staffing_data()
             current_shift = get_current_shift()
