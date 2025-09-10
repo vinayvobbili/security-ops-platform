@@ -294,7 +294,12 @@ TOOL CALLING FORMAT (ONE TOOL PER ACTION):
 Action: tool_name
 Action Input: parameter_value
 
-CRITICAL: Do NOT use backticks, quotes, or code blocks around tool names. Use the exact format above.
+CRITICAL FORMATTING RULES:
+- Do NOT use asterisks (**), backticks (`), quotes (""), or any markdown formatting
+- Do NOT use code blocks or special characters around tool names or inputs
+- Use the EXACT format above with plain text only
+- Action and Action Input must be on separate lines
+- Use the exact tool name from the tool list
 
 If no tool is needed, go directly to Final Answer. NEVER use "Action: None" or empty actions.
 
@@ -306,6 +311,12 @@ Action: get_device_online_status
 Action Input: Y54G91YXRY
 Observation: [tool result]
 Final Answer: [combined response]
+
+Example for document search queries:
+Action: search_local_documents
+Action Input: ESXI escalation contacts
+Observation: [document search results]
+Final Answer: [formatted response with contact information]
 
 CRITICAL: Only call ONE tool per Action. Wait for Observation before calling next tool.
 
