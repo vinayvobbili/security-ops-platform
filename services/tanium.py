@@ -237,10 +237,16 @@ class TaniumInstance:
     def update_custom_tags_by_id(self, tanium_id: str, tags: List[str]) -> bool:
         """Update the complete set of custom tags for a computer using its Tanium ID directly"""
         try:
+            # Try integer conversion for endpoint ID
+            try:
+                endpoint_id = int(tanium_id)
+            except ValueError:
+                endpoint_id = tanium_id
+                
             variables = {
                 "input": {
                     "targets": {
-                        "endpoints": [tanium_id]
+                        "endpoints": [endpoint_id]
                     },
                     "operation": {
                         "addTags": tags
@@ -669,7 +675,7 @@ def main():
         # Test: Direct tagging with known Tanium ID (no hostname lookup needed)
         test_hostname = "uscku1metu03c7l.METNET.NET"
         test_tanium_id = "621122"  # We already confirmed this ID matches the hostname
-        test_tag = "Test_Tag_Jarvais"
+        test_tag = "USSRVRing1"
         write_instance = "Cloud-Write"
 
         # First, test if write token can read data
