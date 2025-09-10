@@ -55,18 +55,18 @@ class DocumentProcessor:
                     loader = PyPDFDirectoryLoader(self.pdf_directory)
                     documents.extend(loader.load())
                     pdf_loaded = True
-                    logging.info(f"Loaded PDF documents from {self.pdf_directory}")
+                    logging.debug(f"Loaded PDF documents from {self.pdf_directory}")
                 elif ext in [".doc", ".docx"]:
                     loader = UnstructuredWordDocumentLoader(fpath)
                     doc_content = loader.load()
 
                     documents.extend(doc_content)
-                    logging.info(f"Loaded Word document: {fname}")
+                    logging.debug(f"Loaded Word document: {fname}")
                 elif ext in [".xlsx", ".xls"]:
                     loader = UnstructuredExcelLoader(fpath)
                     doc_content = loader.load()
                     documents.extend(doc_content)
-                    logging.info(f"Loaded Excel document: {fname}")
+                    logging.debug(f"Loaded Excel document: {fname}")
             except Exception as e:
                 logging.error(f"Failed to load {fname}: {e}")
 
@@ -85,7 +85,7 @@ class DocumentProcessor:
         )
 
         texts = text_splitter.split_documents(documents)
-        logging.info(f"Split into {len(texts)} text chunks with improved chunking strategy.")
+        logging.debug(f"Split into {len(texts)} text chunks with improved chunking strategy.")
         return texts
 
     def build_and_save_vector_store(self, embeddings) -> bool:
@@ -99,14 +99,14 @@ class DocumentProcessor:
             logging.warning(f"PDF directory '{self.pdf_directory}' is empty. Skipping vector store build.")
             return False
 
-        logging.info(f"Loading documents from: {self.pdf_directory}")
+        logging.debug(f"Loading documents from: {self.pdf_directory}")
         documents = self.load_documents_from_folder()
 
         if not documents:
             logging.warning(f"No documents could be loaded from '{self.pdf_directory}'. Skipping vector store build.")
             return False
 
-        logging.info(f"Loaded {len(documents)} documents.")
+        logging.debug(f"Loaded {len(documents)} documents.")
 
         # Create text chunks
         texts = self.create_text_chunks(documents)
@@ -115,14 +115,14 @@ class DocumentProcessor:
         self.all_documents = texts
 
         # Create vector store
-        logging.info("Creating vector store with FAISS and Ollama embeddings...")
+        logging.debug("Creating vector store with FAISS and Ollama embeddings...")
         try:
             self.vector_store = FAISS.from_documents(texts, embeddings)
 
             # Save the vector store
             os.makedirs(os.path.dirname(self.faiss_index_path), exist_ok=True)
             self.vector_store.save_local(self.faiss_index_path)
-            logging.info(f"Vector store saved to: {self.faiss_index_path}")
+            logging.debug(f"Vector store saved to: {self.faiss_index_path}")
             return True
 
         except Exception as e:
@@ -132,21 +132,21 @@ class DocumentProcessor:
     def load_vector_store(self, embeddings) -> bool:
         """Load existing vector store from disk"""
         try:
-            logging.info(f"Loading existing FAISS index from: {self.faiss_index_path}")
+            logging.debug(f"Loading existing FAISS index from: {self.faiss_index_path}")
             self.vector_store = FAISS.load_local(
                 self.faiss_index_path,
                 embeddings,
                 allow_dangerous_deserialization=True
             )
-            logging.info("FAISS index loaded successfully.")
+            logging.debug("FAISS index loaded successfully.")
             
             # Also load documents for BM25 retriever if not already loaded
             if not self.all_documents:
-                logging.info("Loading documents for BM25 retriever...")
+                logging.debug("Loading documents for BM25 retriever...")
                 documents = self.load_documents_from_folder()
                 if documents:
                     self.all_documents = self.create_text_chunks(documents)
-                    logging.info(f"Loaded {len(self.all_documents)} documents for BM25")
+                    logging.debug(f"Loaded {len(self.all_documents)} documents for BM25")
             
             return True
         except Exception as e:
@@ -158,7 +158,7 @@ class DocumentProcessor:
         # Check if we need to rebuild due to new/changed documents
         if os.path.exists(self.faiss_index_path):
             if self._should_rebuild_index():
-                logging.info("🔄 New or changed documents detected, rebuilding vector store...")
+                logging.debug("🔄 New or changed documents detected, rebuilding vector store...")
                 if self.build_and_save_vector_store(embeddings):
                     return self.load_vector_store(embeddings)
                 else:
@@ -167,11 +167,11 @@ class DocumentProcessor:
             if self.load_vector_store(embeddings):
                 return True
             else:
-                logging.info("Failed to load existing vector store, rebuilding...")
+                logging.debug("Failed to load existing vector store, rebuilding...")
                 if self.build_and_save_vector_store(embeddings):
                     return self.load_vector_store(embeddings)
         else:
-            logging.info(f"FAISS index not found at {self.faiss_index_path}. Building new vector store.")
+            logging.debug(f"FAISS index not found at {self.faiss_index_path}. Building new vector store.")
             if self.build_and_save_vector_store(embeddings):
                 return self.load_vector_store(embeddings)
 
@@ -190,7 +190,7 @@ class DocumentProcessor:
             if file.endswith(('.pdf', '.docx')):
                 file_path = os.path.join(self.pdf_directory, file)
                 if os.path.getmtime(file_path) > index_mtime:
-                    logging.info(f"📄 Newer document found: {file}")
+                    logging.debug(f"📄 Newer document found: {file}")
                     return True
 
         return False
@@ -219,14 +219,14 @@ class DocumentProcessor:
                 weights=[0.7, 0.3]
             )
             
-            logging.info("Hybrid retriever created successfully (70% vector + 30% BM25)")
+            logging.debug("Hybrid retriever created successfully (70% vector + 30% BM25)")
             return self.retriever
             
         except Exception as e:
             logging.error(f"Failed to create hybrid retriever: {e}")
             # Fallback to vector-only retriever
             self.retriever = self.vector_store.as_retriever(search_kwargs={"k": self.retrieval_k})
-            logging.info("Falling back to vector-only retriever")
+            logging.debug("Falling back to vector-only retriever")
             return self.retriever
 
     def create_rag_tool(self):
@@ -310,14 +310,14 @@ class DocumentProcessor:
 
     def force_rebuild(self, embeddings) -> bool:
         """Force rebuild the vector store from scratch"""
-        logging.info("Force rebuilding vector store...")
+        logging.debug("Force rebuilding vector store...")
 
         # Remove existing index if it exists
         if os.path.exists(self.faiss_index_path):
             try:
                 import shutil
                 shutil.rmtree(self.faiss_index_path)
-                logging.info("Removed existing FAISS index")
+                logging.debug("Removed existing FAISS index")
             except Exception as e:
                 logging.error(f"Failed to remove existing index: {e}")
 
@@ -366,4 +366,4 @@ class DocumentProcessor:
         if chunk_overlap is not None:
             self.chunk_overlap = chunk_overlap
 
-        logging.info(f"Updated retrieval settings: k={self.retrieval_k}, chunk_size={self.chunk_size}, chunk_overlap={self.chunk_overlap}")
+        logging.debug(f"Updated retrieval settings: k={self.retrieval_k}, chunk_size={self.chunk_size}, chunk_overlap={self.chunk_overlap}")
