@@ -68,7 +68,7 @@ def run_tests_tool():
 
                 # Get state manager  
                 state_manager = get_state_manager()
-                if not state_manager.is_initialized or not state_manager.agent_executor:
+                if not state_manager.is_initialized or not state_manager.llm_with_tools:
                     _send_direct_message("❌ **Error:** Bot not fully initialized - cannot run interactive tests")
                     return
 
@@ -128,16 +128,13 @@ def run_tests_tool():
                     _send_direct_message(f"🧪 **Test {i}/{total_tests}: {test['name']}**\n📝 Query: `{test['query']}`\n⏱️ Starting...")
 
                     try:
-                        # Execute the query using a NEW agent instance to avoid blocking
-                        response = state_manager.agent_executor.invoke({
-                            "input": test['query']
-                        })
+                        # Execute the query using native tool calling
+                        response_text = state_manager.execute_query(test['query'])
 
                         test_end_time = time.time()
                         response_time = test_end_time - test_start_time
 
-                        # Get response text
-                        response_text = response.get('output', 'No response') if isinstance(response, dict) else str(response)
+                        # Response is already text from execute_query
 
                         # Truncate long responses for display
                         display_response = response_text[:200] + "..." if len(response_text) > 200 else response_text

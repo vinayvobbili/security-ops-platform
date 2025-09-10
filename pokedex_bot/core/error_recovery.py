@@ -170,25 +170,25 @@ def safe_tool_call(func: Callable, tool_type: str, context: str = None,
         return False, fallback
 
 
-def enhanced_agent_wrapper(agent_executor, query: str, recovery_manager: ErrorRecoveryManager = None):
+def enhanced_query_wrapper(state_manager, query: str, recovery_manager: ErrorRecoveryManager = None):
     """
-    Wrapper for agent executor with enhanced error recovery
+    Wrapper for native tool calling with enhanced error recovery
     """
     if recovery_manager is None:
         recovery_manager = ErrorRecoveryManager()
     
     try:
-        # Add error recovery instructions to agent
+        # Add error recovery instructions
         enhanced_query = f"""
 {query}
 
 IMPORTANT: If any tool calls fail, provide a helpful response explaining the issue and suggest alternatives. Never return empty responses or technical error messages to users.
 """
         
-        result = agent_executor.invoke({"input": enhanced_query})
+        result = state_manager.execute_query(enhanced_query)
         
-        if result and 'output' in result:
-            return result['output']
+        if result:
+            return result
         else:
             return "⚠️ I'm experiencing technical difficulties. Please try again or contact support."
             

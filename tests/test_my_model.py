@@ -53,9 +53,7 @@ class TestMyModelImprovements:
 
     @patch('pokedex_bot.core.my_model.get_state_manager')
     @patch('pokedex_bot.core.my_model.get_session_manager')
-    @patch('pokedex_bot.core.my_model.get_recovery_manager')
-    @patch('pokedex_bot.core.my_model.enhanced_agent_wrapper')
-    def test_ask_with_error_recovery(self, mock_wrapper, mock_recovery_mgr, mock_session_mgr, mock_state_mgr):
+    def test_ask_with_error_recovery(self, mock_session_mgr, mock_state_mgr):
         """Test that ask() function uses enhanced error recovery"""
         # Setup mocks
         mock_session_manager = Mock()
@@ -66,36 +64,24 @@ class TestMyModelImprovements:
         
         mock_state_manager = Mock()
         mock_state_manager.is_initialized = True
-        mock_agent_executor = Mock()
-        mock_state_manager.get_agent_executor.return_value = mock_agent_executor
+        mock_state_manager.execute_query.return_value = "Native tool calling response"
         mock_state_mgr.return_value = mock_state_manager
         
-        mock_recovery_manager = Mock()
-        mock_recovery_mgr.return_value = mock_recovery_manager
-        
-        # Mock enhanced agent wrapper
-        mock_wrapper.return_value = "Enhanced agent response"
-        
-        # Test complex query that uses agent
+        # Test complex query that uses native tool calling
         result = ask("Complex security question", "test_user", "test_room")
         
-        # Verify enhanced agent wrapper was called
-        mock_wrapper.assert_called_once()
-        args = mock_wrapper.call_args[0]
-        assert args[0] == mock_agent_executor  # agent_executor
-        assert "Previous context" in args[1]   # enhanced query with context
-        assert "Complex security question" in args[1]
-        assert args[2] == mock_recovery_manager  # recovery_manager
+        # Verify execute_query was called
+        mock_state_manager.execute_query.assert_called_once()
+        query_arg = mock_state_manager.execute_query.call_args[0][0]
+        assert "Complex security question" in query_arg
         
         # Verify session storage
         assert mock_session_manager.add_message.call_count == 2
-        assert result == "Enhanced agent response"
+        assert result == "Native tool calling response"
 
     @patch('pokedex_bot.core.my_model.get_state_manager')
     @patch('pokedex_bot.core.my_model.get_session_manager')
-    @patch('pokedex_bot.core.my_model.get_recovery_manager')
-    @patch('pokedex_bot.core.my_model.enhanced_agent_wrapper')
-    def test_ask_with_agent_failure(self, mock_wrapper, mock_recovery_mgr, mock_session_mgr, mock_state_mgr):
+    def test_ask_with_agent_failure(self, mock_session_mgr, mock_state_mgr):
         """Test ask() function handles agent failures gracefully"""
         # Setup mocks
         mock_session_manager = Mock()
@@ -106,22 +92,14 @@ class TestMyModelImprovements:
         
         mock_state_manager = Mock()
         mock_state_manager.is_initialized = True
-        mock_state_manager.get_agent_executor.return_value = Mock()
+        mock_state_manager.execute_query.side_effect = Exception("Query failed")
         mock_state_mgr.return_value = mock_state_manager
         
-        mock_recovery_manager = Mock()
-        mock_recovery_manager.get_fallback_response.return_value = "Fallback response"
-        mock_recovery_mgr.return_value = mock_recovery_manager
-        
-        # Mock agent wrapper to raise exception
-        mock_wrapper.side_effect = Exception("Agent failed")
-        
-        # Test complex query that triggers agent failure
+        # Test complex query that triggers failure
         result = ask("Complex question", "test_user", "test_room")
         
-        # Verify fallback was used
-        mock_recovery_manager.get_fallback_response.assert_called_once_with('general', 'Complex question')
-        assert result == "Fallback response"
+        # Verify error handling
+        assert "error occurred" in result.lower()
         
         # Verify session still stored the interaction
         assert mock_session_manager.add_message.call_count == 2
