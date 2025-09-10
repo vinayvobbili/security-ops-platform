@@ -432,8 +432,6 @@ class PokeDexBot(WebexBot):
                     # If the incoming message has a parentId, use that instead to stay in same thread
                     parent_id = getattr(teams_message, 'parentId', None) or teams_message.id
 
-                    # Check for Adaptive Card in LLM response
-                    card_dict, clean_text = self._extract_adaptive_card(response_text)
 
                     # Send completion status as new threaded message
                     if thinking_msg:
@@ -450,26 +448,12 @@ class PokeDexBot(WebexBot):
                         except Exception as completion_error:
                             logger.error(f"Could not send completion message: {completion_error}")
 
-                    # Then send the actual response
-                    if card_dict:
-                        # Send Adaptive Card
-                        logger.info("Sending response as Adaptive Card")
-                        self.teams.messages.create(
-                            roomId=teams_message.roomId,
-                            parentId=parent_id,  # ✅ Threaded with original message
-                            text=clean_text or " ",  # Minimal text for card
-                            attachments=[{
-                                "contentType": "application/vnd.microsoft.card.adaptive",
-                                "content": card_dict
-                            }]
-                        )
-                    else:
-                        # Send regular response as new threaded message
-                        self.teams.messages.create(
-                            roomId=teams_message.roomId,
-                            parentId=parent_id,  # Threaded with original message
-                            markdown=response_text
-                        )
+                    # Send LLM response directly as Webex message
+                    self.teams.messages.create(
+                        roomId=teams_message.roomId,
+                        parentId=parent_id,
+                        markdown=response_text
+                    )
 
                     log_conversation(user_name, raw_message, response_text, response_time, room_name)
 
@@ -488,48 +472,6 @@ class PokeDexBot(WebexBot):
                 text="❌ I encountered an error processing your message. Please try again."
             )
 
-    @staticmethod
-    def _extract_adaptive_card(response_text):
-        """
-        Extract Adaptive Card JSON from LLM response if present
-        
-        Returns:
-            tuple: (card_dict, clean_text) or (None, response_text)
-        """
-        import json
-
-        try:
-            # Check if the response is a direct JSON Adaptive Card
-            if response_text.strip().startswith('{') and '"type": "AdaptiveCard"' in response_text:
-                try:
-                    card_dict = json.loads(response_text.strip())
-                    if card_dict.get("type") == "AdaptiveCard":
-                        logger.info("Successfully parsed direct JSON Adaptive Card from LLM response")
-                        return card_dict, "Enhanced response"
-                except json.JSONDecodeError as je:
-                    logger.warning(f"Failed to parse direct JSON Adaptive Card: {je}")
-
-            # Also check for JSON blocks within the response (in case LLM adds text)
-            import re
-            json_pattern = r'\{[^{}]*"type":\s*"AdaptiveCard"[^{}]*\}'
-            json_matches = re.findall(json_pattern, response_text, re.DOTALL)
-
-            for json_match in json_matches:
-                try:
-                    card_dict = json.loads(json_match)
-                    if card_dict.get("type") == "AdaptiveCard":
-                        logger.info("Successfully extracted Adaptive Card from LLM response text")
-                        # Return the remaining text without the JSON
-                        clean_text = response_text.replace(json_match, "").strip()
-                        return card_dict, clean_text or "Enhanced response"
-                except json.JSONDecodeError:
-                    continue
-
-        except Exception as e:
-            logger.error(f"Error extracting Adaptive Card: {e}")
-
-        # No card found or error occurred
-        return None, response_text
 
 
 def create_webex_bot():

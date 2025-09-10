@@ -7,7 +7,6 @@ Staffing data is now handled via RAG search of the Excel schedule file.
 """
 
 import logging
-import json
 from datetime import datetime
 import pytz
 from langchain_core.tools import tool
@@ -119,6 +118,7 @@ def get_current_staffing() -> str:
     except Exception as e:
         logging.error(f"Error getting current staffing: {e}")
         return f"Unable to retrieve current staffing information: {str(e)}"
+
 
 if __name__ == "__main__":
     # Simple test calls
