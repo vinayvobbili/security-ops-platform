@@ -14,6 +14,8 @@ from langchain_community.document_loaders import PyPDFDirectoryLoader, Unstructu
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
 from langchain.tools.retriever import create_retriever_tool
+from langchain_community.retrievers import BM25Retriever
+from langchain.retrievers import EnsembleRetriever
 
 
 class DocumentProcessor:
@@ -24,6 +26,7 @@ class DocumentProcessor:
         self.faiss_index_path = faiss_index_path
         self.vector_store = None
         self.retriever = None
+        self.all_documents = []  # Store documents for BM25 retriever
 
         # Document processing configuration
         self.chunk_size = 1500
@@ -107,6 +110,9 @@ class DocumentProcessor:
 
         # Create text chunks
         texts = self.create_text_chunks(documents)
+        
+        # Store documents for BM25 retriever
+        self.all_documents = texts
 
         # Create vector store
         logging.info("Creating vector store with FAISS and Ollama embeddings...")
@@ -133,6 +139,15 @@ class DocumentProcessor:
                 allow_dangerous_deserialization=True
             )
             logging.info("FAISS index loaded successfully.")
+            
+            # Also load documents for BM25 retriever if not already loaded
+            if not self.all_documents:
+                logging.info("Loading documents for BM25 retriever...")
+                documents = self.load_documents_from_folder()
+                if documents:
+                    self.all_documents = self.create_text_chunks(documents)
+                    logging.info(f"Loaded {len(self.all_documents)} documents for BM25")
+            
             return True
         except Exception as e:
             logging.error(f"Error loading FAISS index: {e}", exc_info=True)
@@ -181,13 +196,38 @@ class DocumentProcessor:
         return False
 
     def create_retriever(self):
-        """Create retriever from vector store"""
+        """Create hybrid retriever combining vector and keyword search"""
         if not self.vector_store:
             logging.error("Vector store not initialized")
             return None
 
-        self.retriever = self.vector_store.as_retriever(search_kwargs={"k": self.retrieval_k})
-        return self.retriever
+        if not self.all_documents:
+            logging.error("Documents not loaded for BM25 retriever")
+            return None
+
+        try:
+            # Create vector retriever
+            vector_retriever = self.vector_store.as_retriever(search_kwargs={"k": self.retrieval_k})
+            
+            # Create BM25 keyword retriever
+            bm25_retriever = BM25Retriever.from_documents(self.all_documents)
+            bm25_retriever.k = self.retrieval_k
+            
+            # Create hybrid ensemble retriever (70% vector, 30% keyword)
+            self.retriever = EnsembleRetriever(
+                retrievers=[vector_retriever, bm25_retriever],
+                weights=[0.7, 0.3]
+            )
+            
+            logging.info("Hybrid retriever created successfully (70% vector + 30% BM25)")
+            return self.retriever
+            
+        except Exception as e:
+            logging.error(f"Failed to create hybrid retriever: {e}")
+            # Fallback to vector-only retriever
+            self.retriever = self.vector_store.as_retriever(search_kwargs={"k": self.retrieval_k})
+            logging.info("Falling back to vector-only retriever")
+            return self.retriever
 
     def create_rag_tool(self):
         """Create RAG tool for document search with source attribution"""
@@ -206,15 +246,6 @@ class DocumentProcessor:
             """
             try:
                 docs = self.retriever.invoke(query)
-
-                # For contact queries, prioritize Excel files and add fallback search
-                if 'contact' in query.lower() or 'who are' in query.lower():
-                    excel_docs = [d for d in docs if d.metadata.get('source', '').endswith(('.xlsx', '.xls'))]
-                    if not excel_docs:  # If no Excel found, try "contacts" search
-                        fallback_docs = self.retriever.invoke('contacts')
-                        excel_docs = [d for d in fallback_docs if d.metadata.get('source', '').endswith(('.xlsx', '.xls'))]
-                    other_docs = [d for d in docs if not d.metadata.get('source', '').endswith(('.xlsx', '.xls'))]
-                    docs = excel_docs + other_docs
 
                 if not docs:
                     return f"No relevant documents found for query: '{query}'"

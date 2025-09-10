@@ -36,6 +36,7 @@ from webex_bot.webex_bot import WebexBot
 
 from my_config import get_config
 from pokedex_bot.core.my_model import ask, initialize_model_and_agent
+from pokedex_bot.core.session_manager import get_session_manager
 from services.bot_rooms import get_room_name
 
 CONFIG = get_config()
@@ -307,6 +308,12 @@ def initialize_bot():
             logger.error("Failed to initialize streamlined components")
             return False
 
+        # Clean up old conversation sessions on startup
+        session_manager = get_session_manager()
+        cleaned_count = session_manager.cleanup_old_sessions()
+        if cleaned_count > 0:
+            logger.info(f"🧹 Cleaned up {cleaned_count} old conversation messages")
+
         # Set bot as ready immediately after core initialization
         bot_ready = True
         total_time = (datetime.now() - start_time).total_seconds()
@@ -370,6 +377,9 @@ class PokeDexBot(WebexBot):
 
             # Initialize thinking_msg as None
             thinking_msg = None
+
+            # Note: Session management is handled inside the ask() function
+            # The LLM agent automatically manages conversation context via SQLite
 
             # Check if bot is ready
             if not bot_ready:
