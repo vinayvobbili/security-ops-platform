@@ -294,6 +294,10 @@ TOOL CALLING FORMAT (ONE TOOL PER ACTION):
 Action: tool_name
 Action Input: parameter_value
 
+CRITICAL: Do NOT use backticks, quotes, or code blocks around tool names. Use the exact format above.
+
+If no tool is needed, go directly to Final Answer. NEVER use "Action: None" or empty actions.
+
 Example for CrowdStrike queries:
 Action: get_device_containment_status
 Action Input: Y54G91YXRY
