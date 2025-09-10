@@ -14,7 +14,7 @@ def test_network_logging_enabled():
     """Test network logging when enabled"""
     try:
         # Import and temporarily modify the config
-        sys.path.append('webex_bots')
+        sys.path.append('../webex_bots')
         import pokedex
         
         # Save original value
@@ -70,7 +70,7 @@ def test_network_logging_disabled():
     """Test network logging when disabled"""
     try:
         # Import and modify the config
-        sys.path.append('webex_bots')
+        sys.path.append('../webex_bots')
         import pokedex
         
         # Save original value
@@ -127,7 +127,7 @@ def test_performance_impact():
     import time
     
     try:
-        sys.path.append('webex_bots')
+        sys.path.append('../webex_bots')
         import pokedex
         
         original_value = getattr(pokedex, 'SHOULD_LOG_NETWORK_TRAFFIC', True)
