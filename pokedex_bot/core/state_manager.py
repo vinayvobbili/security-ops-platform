@@ -21,11 +21,10 @@ from pokedex_bot.utils.enhanced_config import ModelConfig
 from pokedex_bot.document.document_processor import DocumentProcessor
 from pokedex_bot.tools.crowdstrike_tools import CrowdStrikeToolsManager
 from pokedex_bot.tools.weather_tools import get_weather_info_tool
-# Skip staffing tools import due to missing webexpythonsdk dependency
-# from pokedex_bot.tools.staffing_tools import StaffingToolsManager
-from pokedex_bot.tools.metrics_tools import MetricsToolsManager
+from pokedex_bot.tools.staffing_tools import get_current_shift_info, get_current_staffing
+from pokedex_bot.tools.metrics_tools import get_bot_metrics, get_bot_metrics_summary
 from pokedex_bot.tools.test_tools import TestToolsManager
-from pokedex_bot.tools.network_monitoring_tools import NetworkMonitoringToolsManager
+from pokedex_bot.tools.network_monitoring_tools import get_network_activity, get_network_summary_tool
 
 
 class SecurityBotStateManager:
@@ -46,8 +45,8 @@ class SecurityBotStateManager:
         self.document_processor: Optional[DocumentProcessor] = None
         self.crowdstrike_manager: Optional[CrowdStrikeToolsManager] = None
         self.weather_tool = None
-        self.staffing_manager: Optional[StaffingToolsManager] = None
-        self.metrics_manager: Optional[MetricsToolsManager] = None
+        # Staffing tools are now direct functions
+        # Metrics tools are now direct functions
         self.test_manager: Optional[TestToolsManager] = None
 
         # Initialization state
@@ -120,9 +119,7 @@ class SecurityBotStateManager:
         self.weather_tool = get_weather_info_tool(
             api_key=self.config.open_weather_map_api_key
         )
-        # Skip staffing tools due to missing webexpythonsdk dependency
-        self.staffing_manager = None
-        self.metrics_manager = MetricsToolsManager()
+        # Staffing and metrics tools imported directly
         self.test_manager = TestToolsManager()
 
         logging.info("Core managers initialized")
@@ -185,15 +182,14 @@ class SecurityBotStateManager:
                 all_tools.extend(self.crowdstrike_manager.get_tools())
                 logging.info("CrowdStrike tools added to agent.")
 
-            # Add staffing tools (skip if not available)
-            if self.staffing_manager and self.staffing_manager.is_available():
-                all_tools.extend(self.staffing_manager.get_tools())
-                logging.info("Staffing tools added to agent.")
+            # Add staffing tools
+            all_tools.extend([get_current_shift_info, get_current_staffing])
 
             # Add metrics tools
-            if self.metrics_manager.is_available():
-                all_tools.extend(self.metrics_manager.get_tools())
-                logging.info("Metrics tools added to agent.")
+            all_tools.extend([get_bot_metrics, get_bot_metrics_summary])
+
+            # Add network monitoring tools
+            all_tools.extend([get_network_activity, get_network_summary_tool])
 
             # Add test tools
             if self.test_manager.is_available():

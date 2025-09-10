@@ -13,31 +13,10 @@ from langchain_core.tools import tool
 from typing import Dict, Any
 
 
-class MetricsToolsManager:
-    """Manager for metrics and performance monitoring tools"""
-    
-    def __init__(self):
-        self.logger = logging.getLogger(__name__)
-    
-    def get_tools(self) -> list:
-        """Get list of available metrics tools"""
-        return [
-            get_bot_metrics_tool(),
-            get_bot_metrics_summary_tool()
-        ]
-    
-    def is_available(self) -> bool:
-        """Check if metrics tools are available"""
-        # Always return True since we'll provide basic system metrics
-        return True
-
-
-def get_bot_metrics_tool():
-    """Factory function to create detailed bot metrics tool"""
-    @tool
-    def get_bot_metrics() -> str:
-        """Get comprehensive bot performance metrics."""
-        try:
+@tool
+def get_bot_metrics() -> str:
+    """Get comprehensive bot performance metrics."""
+    try:
             import pandas as pd
             import psutil
             from datetime import datetime, timedelta
@@ -208,15 +187,12 @@ def get_bot_metrics_tool():
             logging.error(f"Error getting bot metrics: {e}")
             return f"❌ **Error retrieving metrics:** {str(e)}"
     
-    return get_bot_metrics
 
 
-def get_bot_metrics_summary_tool():
-    """Factory function to create bot metrics summary tool"""
-    @tool  
-    def get_bot_metrics_summary() -> str:
-        """Get a brief summary of bot metrics."""
-        try:
+@tool  
+def get_bot_metrics_summary() -> str:
+    """Get a brief summary of bot metrics."""
+    try:
             import pandas as pd
             import psutil
             from datetime import datetime, timedelta
@@ -281,8 +257,6 @@ def get_bot_metrics_summary_tool():
         except Exception as e:
             logging.error(f"Error getting metrics summary: {e}")
             return f"❌ **Error:** {str(e)}"
-    
-    return get_bot_metrics_summary
 
 
 def _fetch_raw_metrics() -> Dict[str, Any]:
