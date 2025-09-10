@@ -10,11 +10,9 @@ import os
 import logging
 import atexit
 import signal
-import re
 from typing import Optional
 
 from langchain_ollama import ChatOllama, OllamaEmbeddings
-from langchain.agents import AgentExecutor
 
 from my_config import get_config
 from pokedex_bot.utils.enhanced_config import ModelConfig
@@ -39,7 +37,6 @@ class SecurityBotStateManager:
         # Core components
         self.llm: Optional[ChatOllama] = None
         self.embeddings: Optional[OllamaEmbeddings] = None
-        self.agent_executor: Optional[AgentExecutor] = None
 
         # Managers
         self.document_processor: Optional[DocumentProcessor] = None
@@ -205,9 +202,8 @@ class SecurityBotStateManager:
 
             # No complex agent framework needed - using direct LLM calls
 
-            # Skip the agent framework entirely - direct LLM with tool calling logic
-            self.agent_executor = None  # We'll handle this manually
-            self.llm_with_tools = self.llm
+            # Use native tool calling
+                self.llm_with_tools = self.llm.bind_tools(all_tools)
             self.available_tools = {tool.name: tool for tool in all_tools}
 
             logging.info("Direct LLM with tools initialized successfully.")
@@ -218,52 +214,29 @@ class SecurityBotStateManager:
             return False
 
     def execute_query(self, query: str) -> str:
-        """Execute query directly with the 70B model - no agent framework"""
+        """Execute query using native tool calling"""
         try:
-            # Simple prompt for the LLM
-            tool_names = list(self.available_tools.keys())
-            prompt = f"""You are a security operations assistant.
-
-Available tools: {', '.join(tool_names)}
-
-To use a tool:
-Action: tool_name
-Action Input: parameter
-
-User query: {query}
-
-Response:"""
-
-            # Get LLM response
-            response = self.llm_with_tools.invoke(prompt)
+            response = self.llm_with_tools.invoke(query)
             
-            # Check if the LLM wants to use a tool
-            if "Action:" in response.content:
-                # Extract and execute tool call
-                action_match = re.search(r"Action:\s*(\w+)", response.content)
-                input_match = re.search(r"Action Input:\s*(.+)", response.content)
-                
-                if action_match and input_match:
-                    tool_name = action_match.group(1)
-                    tool_input = input_match.group(1).strip()
+            # Check if LLM made tool calls
+            if hasattr(response, 'tool_calls') and response.tool_calls:
+                # Execute tool calls
+                for tool_call in response.tool_calls:
+                    tool_name = tool_call['name']
+                    tool_args = tool_call.get('args', {})
                     
                     if tool_name in self.available_tools:
-                        tool_result = self.available_tools[tool_name].run(tool_input)
+                        tool_result = self.available_tools[tool_name].run(tool_args)
                         
-                        # Send tool result back to LLM for final response
-                        final_prompt = f"""You are a security operations assistant. 
-
-The user asked: {query}
-
-You used the tool '{tool_name}' and got this result:
-{tool_result}
-
-Please provide a clear, helpful response to the user based on this information. Do not show the action format or tool name, just give a natural response."""
-
-                        final_response = self.llm_with_tools.invoke(final_prompt)
+                        # Send result back to LLM for final response
+                        final_response = self.llm_with_tools.invoke([
+                            {"role": "user", "content": query},
+                            response,
+                            {"role": "tool", "tool_call_id": tool_call['id'], "content": str(tool_result)}
+                        ])
                         return final_response.content
             
-            # Return direct response
+            # Return direct response if no tool calls
             return response.content
             
         except Exception as e:
@@ -276,8 +249,7 @@ Please provide a clear, helpful response to the user based on this information. 
             # Clear references to force cleanup
             self.llm = None
             self.embeddings = None
-            self.agent_executor = None
-
+    
         except Exception as e:
             logging.error(f"Error during shutdown: {e}")
 
@@ -290,9 +262,6 @@ Please provide a clear, helpful response to the user based on this information. 
         """Get embeddings instance"""
         return self.embeddings
 
-    def get_agent_executor(self) -> Optional[AgentExecutor]:
-        """Get agent executor instance"""
-        return self.agent_executor
 
     def get_document_processor(self) -> Optional[DocumentProcessor]:
         """Get document processor instance"""
@@ -307,7 +276,7 @@ Please provide a clear, helpful response to the user based on this information. 
         component_status = {
             'llm': self.llm is not None,
             'embeddings': self.embeddings is not None,
-            'agent': self.agent_executor is not None,
+            'agent': True,  # Always true with native tool calling
             'rag': self.document_processor.retriever is not None if self.document_processor else False,
             'crowdstrike': self.crowdstrike_manager.is_available() if self.crowdstrike_manager else False
         }
@@ -319,12 +288,12 @@ Please provide a clear, helpful response to the user based on this information. 
 
     def warmup(self) -> bool:
         """Warm up the model with a simple query"""
-        if not self.is_initialized or not self.agent_executor:
+        if not self.is_initialized or not self.llm_with_tools:
             return False
 
         try:
             logging.info("Warming up the model...")
-            result = self.agent_executor.invoke({"input": "Hello, are you working?"})
+            result = self.execute_query("Hello, are you working?")
             if result:
                 logging.info("Model warmup completed successfully")
                 return True
@@ -359,7 +328,6 @@ Please provide a clear, helpful response to the user based on this information. 
 
         self.llm = None
         self.embeddings = None
-        self.agent_executor = None
 
         self.is_initialized = False
         logging.info("All components reset")

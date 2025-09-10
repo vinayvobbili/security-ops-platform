@@ -23,7 +23,7 @@ import logging
 import time
 from pokedex_bot.core.state_manager import get_state_manager
 from pokedex_bot.core.session_manager import get_session_manager
-from pokedex_bot.core.error_recovery import get_recovery_manager, enhanced_agent_wrapper
+from pokedex_bot.core.error_recovery import get_recovery_manager, enhanced_query_wrapper
 
 logging.basicConfig(level=logging.ERROR)
 
@@ -196,8 +196,7 @@ Just ask me any security-related question!"""
 
         # STEP 1: For complex queries, pass to LLM agent - let it decide everything
         try:
-            agent_executor = state_manager.get_agent_executor() if state_manager else None
-            # Use direct execution instead of agent framework
+            # Use direct execution with native tool calling
             logging.info(f"Using direct LLM execution")
             
             # Prepare input with conversation context
@@ -210,13 +209,14 @@ Just ask me any security-related question!"""
             logging.info(f"Passing query to direct LLM: {query[:100]}...")
             
             final_response = state_manager.execute_query(agent_input)
-            # Store user message and bot response in session
-            session_manager.add_message(session_key, "user", query)
-            session_manager.add_message(session_key, "assistant", final_response)
 
         except Exception as e:
             logging.error(f"Failed to invoke agent: {e}")
             final_response = "❌ An error occurred. Please try again or contact support."
+
+        # Store user message and bot response in session
+        session_manager.add_message(session_key, "user", query)
+        session_manager.add_message(session_key, "assistant", final_response)
 
         elapsed = time.time() - start_time
         if elapsed > 25:
