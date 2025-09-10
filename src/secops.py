@@ -34,11 +34,23 @@ list_handler = ListHandler()
 BASE_QUERY = f'type:{config.team_name} -owner:""'
 root_directory = Path(__file__).parent.parent
 
-# Load the workbook
+# Load the workbook with error handling
 excel_path = root_directory / 'data' / 'transient' / 'secOps' / config.secops_shift_staffing_filename
-wb = load_workbook(excel_path)
-# Select the sheet
-sheet = wb['SecOps Roster 2025 SEP-OCT']
+try:
+    wb = load_workbook(excel_path)
+    # Select the sheet
+    sheet = wb['SecOps Roster 2025 SEP-OCT']
+    EXCEL_AVAILABLE = True
+except FileNotFoundError:
+    logger.warning(f"Excel file not found: {excel_path}. Staffing data will be unavailable.")
+    wb = None
+    sheet = None
+    EXCEL_AVAILABLE = False
+except Exception as e:
+    logger.error(f"Error loading Excel file: {e}. Staffing data will be unavailable.")
+    wb = None
+    sheet = None
+    EXCEL_AVAILABLE = False
 
 # get the cell names by shift from the sheet
 SECOPS_SHIFT_STAFFING_FILENAME = root_directory / 'data' / 'secOps' / 'cell_names_by_shift.json'
@@ -80,6 +92,13 @@ def get_open_tickets():
 
 
 def get_staffing_data(day_name=datetime.now(pytz.timezone('US/Eastern')).strftime('%A'), shift_name=get_current_shift()):
+    if not EXCEL_AVAILABLE or sheet is None:
+        logger.warning("Excel file not available, returning minimal staffing data")
+        return {
+            'SA': ['N/A (Excel file missing)'],
+            'On-Call': [oncall.get_on_call_person()['name'] + ' (' + oncall.get_on_call_person()['phone_number'] + ')']
+        }
+    
     shift_cell_names = cell_names_by_shift[day_name][shift_name]
     staffing_data = {}
     for team, cell_names in shift_cell_names.items():
@@ -299,12 +318,21 @@ def announce_shift_change(shift_name, room_id, sleep_time=30):
             for item in hosts_in_containment
         ]
 
+        # Get shift timings with fallback
+        if EXCEL_AVAILABLE and sheet is not None:
+            try:
+                shift_timings = sheet[cell_names_by_shift['shift_timings'][shift_name]].value
+            except (KeyError, TypeError):
+                shift_timings = "N/A (Excel file issue)"
+        else:
+            shift_timings = "N/A (Excel file missing)"
+
         # Send a new shift starting message to Webex room
         webex_api.messages.create(
             roomId=room_id,
             text=f"Shift Change Notice!",
             markdown=f"Good **{shift_name.upper()}**! A new shift's starting now!\n"
-                     f"Timings: {sheet[cell_names_by_shift['shift_timings'][shift_name]].value}\n"
+                     f"Timings: {shift_timings}\n"
                      f"Open {config.team_name}* tickets: {get_open_tickets()}\n"
                      f"Hosts in Containment (TUC): \n {'\n'.join(hosts_in_containment) if hosts_in_containment else ''}\n\n"
                      f"**Management Notes**: {note}\n"
