@@ -1,7 +1,6 @@
 import ipaddress
 import logging.handlers
 import re
-import time
 from datetime import datetime, timedelta
 from pathlib import Path
 from urllib.parse import quote
@@ -22,8 +21,8 @@ from webexpythonsdk.models.cards import (
 from webexpythonsdk.models.cards.actions import Submit
 
 import src.components.oncall as oncall
-from my_config import get_config
 from data.data_maps import azdo_projects, azdo_orgs, azdo_area_paths
+from my_config import get_config
 from services import xsoar, azdo
 from services.approved_testing_utils import add_approved_testing_entry
 from services.crowdstrike import CrowdStrikeClient
@@ -40,9 +39,6 @@ http_session = get_session()
 # Ensure logs directory exists
 (ROOT_DIRECTORY / "logs").mkdir(exist_ok=True)
 
-
-
-
 # Setup logging with rotation and better formatting
 logging.basicConfig(
     level=logging.INFO,
@@ -57,7 +53,6 @@ logging.basicConfig(
     ]
 )
 logger = logging.getLogger(__name__)
-
 
 webex_api = WebexAPI(CONFIG.webex_bot_access_token_toodles)
 
@@ -1627,8 +1622,6 @@ def announce_new_threat_hunt(ticket_no, ticket_title, incident_url, person_id):
     requests.post(webex_data.get('api_url'), headers=headers, json=payload_json)
 
 
-
-
 class Who(Command):
     """Return who the on-call person is"""
 
@@ -1930,8 +1923,6 @@ class GetCompanyHolidays(Command):
         return title + "\n".join(output_lines) + note
 
 
-
-
 class GetBotHealth(Command):
     """Command to check bot health and status."""
 
@@ -1946,14 +1937,14 @@ class GetBotHealth(Command):
     def execute(self, message, attachment_actions, activity):
         room_id = attachment_actions.roomId
         current_time = datetime.now(EASTERN_TZ)
-        
+
         # Simple status using the resilience framework
         health_status = "🟢 Healthy"
         health_detail = "Running with resilience framework"
-        
+
         # Format current time with timezone
         tz_name = "EST" if current_time.dst().total_seconds() == 0 else "EDT"
-        
+
         # Create status card with enhanced details
         status_card = AdaptiveCard(
             body=[
@@ -1980,14 +1971,12 @@ class GetBotHealth(Command):
                 )
             ]
         )
-        
+
         webex_api.messages.create(
             roomId=room_id,
             text="Bot Status Information",
             attachments=[{"contentType": "application/vnd.microsoft.card.adaptive", "content": status_card.to_dict()}]
         )
-
-
 
 
 def toodles_bot_factory():
@@ -2000,6 +1989,7 @@ def toodles_bot_factory():
         threads=True,
         bot_help_subtitle="🔧 Your friendly toolbox bot! 🪚"
     )
+
 
 def toodles_initialization(bot_instance=None):
     """Initialize Toodles commands"""
@@ -2031,10 +2021,11 @@ def toodles_initialization(bot_instance=None):
         return True
     return False
 
+
 def main():
     """Toodles main with resilience framework"""
     from src.utils.bot_resilience import BotResilient
-    
+
     resilient_runner = BotResilient(
         bot_name="Toodles",
         bot_factory=toodles_bot_factory,
