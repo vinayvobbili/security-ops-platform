@@ -28,7 +28,7 @@ from data.data_maps import azdo_area_paths, azdo_orgs, azdo_projects
 from services import azdo, xsoar
 from services.crowdstrike import CrowdStrikeClient
 from services.xsoar import TicketHandler, ListHandler
-from src.helper_methods import log_moneyball_activity
+from src.utils.logging_utils import log_activity
 
 # --- Configuration and Setup ---
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -599,7 +599,7 @@ class URLs(Command):
             card=URL_CARD,  # Use pre-generated card
         )
 
-    @log_moneyball_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles)
+    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_hal9000, log_file_name="hal9000_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
         """Executes the URLs command."""
         # Card is displayed automatically by the framework.
@@ -617,7 +617,7 @@ class GetNewXTicketForm(Command):
             help_message="Open form to create a new XSOAR ticket",
         )
 
-    @log_moneyball_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles)
+    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_hal9000, log_file_name="hal9000_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
         """Executes the GetNewXTicketForm command."""
         logger.debug(f"Executing GetNewXTicketForm command for user {activity.get('actor', {}).get('emailAddress')}")
@@ -634,7 +634,7 @@ class CreateXSOARTicket(Command):
             help_message="Processes the new XSOAR ticket form submission (internal).",
         )
 
-    @log_moneyball_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles)
+    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_hal9000, log_file_name="hal9000_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
         """Executes the CreateXSOARTicket command."""
         if not attachment_actions or not hasattr(attachment_actions, 'inputs'):
@@ -702,7 +702,7 @@ class IOC(Command):
             card=IOC_HUNT,
         )
 
-    @log_moneyball_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles)
+    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_hal9000, log_file_name="hal9000_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
         """Executes the IOC command."""
         logger.debug(f"Executing IOC command for user {activity.get('actor', {}).get('emailAddress')}")
@@ -719,7 +719,7 @@ class IOCHunt(Command):
             help_message="Processes the IOC Hunt form submission (internal)."
         )
 
-    @log_moneyball_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles)
+    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_hal9000, log_file_name="hal9000_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
         """Executes the IOCHunt command."""
         if not attachment_actions or not hasattr(attachment_actions, 'inputs'):
@@ -792,7 +792,7 @@ class ThreatHuntCard(Command):
             card=THREAT_HUNT,
         )
 
-    @log_moneyball_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles)
+    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_hal9000, log_file_name="hal9000_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
         """Executes the ThreatHuntCard command."""
         logger.debug(f"Executing ThreatHuntCard command for user {activity.get('actor', {}).get('emailAddress')}")
@@ -809,7 +809,7 @@ class ThreatHunt(Command):
             help_message="Processes the Threat Hunt form submission (internal)."
         )
 
-    @log_moneyball_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles)
+    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_hal9000, log_file_name="hal9000_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
         """Executes the CreateThreatHunt command."""
         if not attachment_actions or not hasattr(attachment_actions, 'inputs') or not hasattr(attachment_actions, 'personId'):
@@ -892,7 +892,7 @@ class CreateAZDOWorkItem(Command):
             card=AZDO_CARD,  # Show card on direct command
         )
 
-    @log_moneyball_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles)
+    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_hal9000, log_file_name="hal9000_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
         """Executes the CreateAZDOWorkItem command."""
         # If attachment_actions is None, user typed command -> show card (handled by framework)
@@ -1001,7 +1001,7 @@ class Review(Command):
             help_message="Adds a ticket to the review list (requires context from another card)."
         )
 
-    @log_moneyball_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles)
+    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_hal9000, log_file_name="hal9000_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
         """Executes the Review command."""
         # This command depends on context from another card providing "review_notes" and "incident_id".
@@ -1080,7 +1080,7 @@ class GetApprovedTestingCard(Command):
             card=RED_TEAM_TESTING_CARD,
         )
 
-    @log_moneyball_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles)
+    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_hal9000, log_file_name="hal9000_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
         """Executes the GetApprovedTestingCard command."""
         logger.debug(f"Executing GetApprovedTestingCard command for user {activity.get('actor', {}).get('emailAddress')}")
@@ -1097,7 +1097,7 @@ class GetCurrentApprovedTestingEntries(Command):
             help_message="Shows the current approved testing entries (internal)."
         )
 
-    @log_moneyball_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles)
+    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_hal9000, log_file_name="hal9000_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
         """Executes the GetCurrentApprovedTestingEntries command."""
         submitter_name = activity.get('actor', {}).get('displayName', 'User')
@@ -1199,7 +1199,7 @@ class AddApprovedTestingEntry(Command):
             help_message="Adds entries to the approved testing list (internal)."
         )
 
-    @log_moneyball_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles)
+    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_hal9000, log_file_name="hal9000_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
         """Executes the AddApprovedTestingEntry command."""
         if not attachment_actions or not hasattr(attachment_actions, 'inputs'):
@@ -1364,7 +1364,7 @@ class RemoveApprovedTestingEntry(Command):
             help_message="Removes entries from the approved testing list (internal - NOT IMPLEMENTED)."
         )
 
-    @log_moneyball_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles)
+    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_hal9000, log_file_name="hal9000_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
         """Executes the RemoveApprovedTestingEntry command."""
         submitter_email = activity.get('actor', {}).get('emailAddress', 'Unknown User')
@@ -1387,7 +1387,7 @@ class Who(Command):
             card=None,
         )
 
-    @log_moneyball_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles)
+    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_hal9000, log_file_name="hal9000_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
         """Executes the Who command."""
         submitter_email = activity.get('actor', {}).get('emailAddress', 'Unknown User')
@@ -1415,7 +1415,7 @@ class Rotation(Command):
             card=None,
         )
 
-    @log_moneyball_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles)
+    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_hal9000, log_file_name="hal9000_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
         """Executes the Rotation command."""
         submitter_email = activity.get('actor', {}).get('emailAddress', 'Unknown User')
@@ -1467,7 +1467,7 @@ class ContainmentStatusCS(Command):
             card=None,  # Processes message or card input
         )
 
-    @log_moneyball_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles)
+    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_hal9000, log_file_name="hal9000_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
         """Executes the ContainmentStatusCS command."""
         host_name_cs = ""
@@ -1534,7 +1534,7 @@ class GetAllOptions(Command):
             card=all_commands_card,
         )
 
-    @log_moneyball_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles)
+    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_hal9000, log_file_name="hal9000_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
         """Executes the GetAllOptions command."""
         logger.debug(f"Executing GetAllOptions command for user {activity.get('actor', {}).get('emailAddress')}")
@@ -1551,7 +1551,7 @@ class ImportTicket(Command):
             card=TICKET_IMPORT_CARD.to_dict(),  # Show card on direct command
         )
 
-    @log_moneyball_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles)
+    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_hal9000, log_file_name="hal9000_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
         """Executes the ImportTicket command."""
         if attachment_actions is None:
@@ -1615,7 +1615,7 @@ class CreateTuningRequest(Command):
     # Internal callback keyword matches card definition's data
     _callback_keyword = "tuning_request"
 
-    @log_moneyball_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles)
+    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_hal9000, log_file_name="hal9000_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
         """Executes the CreateTuningRequest command."""
         # Check if this execution is from the card submission based on callback keyword
@@ -1720,67 +1720,72 @@ class CreateTuningRequest(Command):
 
 # --- Main Bot Execution ---
 
-def main():
-    """Initializes and runs the Webex Bot."""
-
+def hal9000_bot_factory():
+    """Create HAL9000 bot instance"""
     # Approved domains from config or default
     approved_domains = getattr(CONFIG, 'approved_domains')
     logger.info(f"Approved domains: {approved_domains}")
-
-    # --- Initialize Bot ---
-    # Token presence already checked at top level
-    bot = WebexBot(
+    
+    return WebexBot(
         CONFIG.webex_bot_access_token_hal9000,
         approved_domains=approved_domains,
         include_demo_commands=False  # Disable default demo commands
     )
 
-    # --- Add Commands ---
-    logger.info("Adding commands to bot...")
-    # Approved Testing
-    bot.add_command(GetApprovedTestingCard())
-    bot.add_command(GetCurrentApprovedTestingEntries())
-    bot.add_command(AddApprovedTestingEntry())
-    bot.add_command(RemoveApprovedTestingEntry())  # Still needs implementation
+def hal9000_initialization(bot_instance=None):
+    """Initialize HAL9000 commands"""
+    if bot_instance:
+        logger.info("Adding commands to bot...")
+        # Approved Testing
+        bot_instance.add_command(GetApprovedTestingCard())
+        bot_instance.add_command(GetCurrentApprovedTestingEntries())
+        bot_instance.add_command(AddApprovedTestingEntry())
+        bot_instance.add_command(RemoveApprovedTestingEntry())  # Still needs implementation
 
-    # On Call
-    bot.add_command(Who())
-    bot.add_command(Rotation())
+        # On Call
+        bot_instance.add_command(Who())
+        bot_instance.add_command(Rotation())
 
-    # CrowdStrike
-    bot.add_command(ContainmentStatusCS())
-    # Add Contain/Uncontain commands here if they exist
-    # bot.add_command(ContainHostCS())
-    # bot.add_command(UncontainHostCS())
+        # CrowdStrike
+        bot_instance.add_command(ContainmentStatusCS())
+        # Add Contain/Uncontain commands here if they exist
+        # bot_instance.add_command(ContainHostCS())
+        # bot_instance.add_command(UncontainHostCS())
 
-    # XSOAR
-    bot.add_command(GetNewXTicketForm())
-    bot.add_command(CreateXSOARTicket())
-    bot.add_command(IOC())
-    bot.add_command(IOCHunt())
-    bot.add_command(ThreatHuntCard())
-    bot.add_command(ThreatHunt())
-    bot.add_command(ImportTicket())
-    bot.add_command(Review())  # Check context dependency
+        # XSOAR
+        bot_instance.add_command(GetNewXTicketForm())
+        bot_instance.add_command(CreateXSOARTicket())
+        bot_instance.add_command(IOC())
+        bot_instance.add_command(IOCHunt())
+        bot_instance.add_command(ThreatHuntCard())
+        bot_instance.add_command(ThreatHunt())
+        bot_instance.add_command(ImportTicket())
+        bot_instance.add_command(Review())  # Check context dependency
 
-    # AZDO
-    bot.add_command(CreateAZDOWorkItem())
-    bot.add_command(CreateTuningRequest())
+        # AZDO
+        bot_instance.add_command(CreateAZDOWorkItem())
+        bot_instance.add_command(CreateTuningRequest())
 
-    # Misc / General
-    bot.add_command(URLs())
-    bot.add_command(GetAllOptions())  # Main menu/entry point
+        # Misc / General
+        bot_instance.add_command(URLs())
+        bot_instance.add_command(GetAllOptions())  # Main menu/entry point
+        
+        return True
+    return False
 
-    logger.info(f"Starting bot {bot}...")
-    try:
-        # Run the bot's main loop
-        bot.run()
-    except KeyboardInterrupt:
-        logger.info(f"Bot {bot} stopped by user (KeyboardInterrupt).")
-    except Exception as run_e:
-        logger.critical(f"Bot {bot} run failed unexpectedly: {run_e}", exc_info=True)
-    finally:
-        logger.info(f"Bot {bot} has stopped.")
+def main():
+    """HAL9000 main with resilience framework"""
+    from src.utils.bot_resilience import BotResilient
+    
+    resilient_runner = BotResilient(
+        bot_name="HAL9000",
+        bot_factory=hal9000_bot_factory,
+        initialization_func=hal9000_initialization,
+        max_retries=5,
+        initial_retry_delay=30,
+        max_retry_delay=300
+    )
+    resilient_runner.run()
 
 
 if __name__ == '__main__':  # Standard check for script execution
