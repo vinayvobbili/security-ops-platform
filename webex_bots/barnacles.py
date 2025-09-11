@@ -1,10 +1,15 @@
 import json
 import logging.handlers
 import random
+import sys
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
+
+# Add the root directory to Python path for imports
+ROOT_DIRECTORY = Path(__file__).parent.parent
+sys.path.insert(0, str(ROOT_DIRECTORY))
 
 import webexpythonsdk.models.cards.inputs as INPUTS
 import webexpythonsdk.models.cards.options as OPTIONS
@@ -21,8 +26,6 @@ from webexteamssdk import WebexTeamsAPI
 from my_config import get_config
 from src.charts import threatcon_level
 from src.utils.logging_utils import log_activity
-
-ROOT_DIRECTORY = Path(__file__).parent.parent
 
 # Ensure logs directory exists
 (ROOT_DIRECTORY / "logs").mkdir(exist_ok=True)
@@ -52,9 +55,9 @@ bot_instance = None
 # Timezone constant for consistent usage
 EASTERN_TZ = ZoneInfo("America/New_York")
 
-NOTES_FILE = "data/transient/secOps/management_notes.json"
-THREAT_CON_FILE = "data/transient/secOps/threatcon.json"
-COMPANY_LOGO_BASE64 = "web/static/icons/company_logo.txt"
+NOTES_FILE = ROOT_DIRECTORY / "data" / "transient" / "secOps" / "management_notes.json"
+THREAT_CON_FILE = ROOT_DIRECTORY / "data" / "transient" / "secOps" / "threatcon.json"
+COMPANY_LOGO_BASE64 = ROOT_DIRECTORY / "web" / "static" / "icons" / "company_logo.txt"
 
 with open(COMPANY_LOGO_BASE64, "r") as file:
     company_logo = file.read()
