@@ -412,8 +412,28 @@ class PokeDexBot(WebexBot):
                             if thinking_active.is_set():  # Check again after sleep
                                 try:
                                     new_message = random.choice(THINKING_MESSAGES)
-                                    self.teams.messages.edit(thinking_msg.id, text=f"{new_message} ({counter * 5}s)")
-                                    counter += 1
+                                    # Try editing with proper API call format
+                                    import requests
+                                    edit_url = f'https://webexapis.com/v1/messages/{thinking_msg.id}'
+                                    headers = {
+                                        'Authorization': f'Bearer {self.access_token}',
+                                        'Content-Type': 'application/json'
+                                    }
+                                    payload = {
+                                        'roomId': teams_message.roomId,
+                                        'text': f"{new_message} ({counter * 5}s)"
+                                    }
+                                    
+                                    response = requests.put(edit_url, headers=headers, json=payload)
+                                    
+                                    if response.status_code == 200:
+                                        counter += 1
+                                    else:
+                                        error_detail = response.text if response.text else f"Status {response.status_code}"
+                                        logger.warning(f"Message edit failed (disabling updates): {error_detail}")
+                                        # If editing fails, stop the updates to avoid clutter
+                                        break
+                                        
                                 except Exception as update_error:
                                     logger.warning(f"Failed to update thinking message: {update_error}")
                                     break
