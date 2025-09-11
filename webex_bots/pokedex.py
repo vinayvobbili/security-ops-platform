@@ -74,7 +74,28 @@ THINKING_MESSAGES = [
     "🚀 Houston, we have...", "🎭 Standing ovation...", "🔬 Breakthrough near...", "📡 Signal boosted...",
     "🎯 Championship shot...", "🧠 Genius at work...", "🎪 Grand illusion...", "⚙️ Perfect timing...",
     "🔮 Future glimpse...", "📚 Story unfolding...", "🎲 Jackpot hunting...", "🌟 Wish upon a...",
-    "🎨 Final touches...", "🧩 Missing link...", "⚡ Lightning strikes...", "🎪 Magic revealed..."
+    "🎨 Final touches...", "🧩 Missing link...", "⚡ Lightning strikes...", "🎪 Magic revealed...",
+    # Longer, more conversational SOC-specific messages
+    "🛡️ Cross-referencing threat intelligence databases for your query...",
+    "🔍 Diving deep into CrowdStrike telemetry and security logs...",
+    "📊 Analyzing staffing patterns and shift rotations...",
+    "🌦️ Checking weather conditions that might affect operations...",
+    "🎯 Correlating events across multiple security platforms...",
+    "🔬 Examining incident timelines and forensic artifacts...",
+    "🚨 Scanning for indicators of compromise and anomalies...",
+    "📡 Querying threat feeds and intelligence sources...",
+    "🔐 Decrypting security alerts and parsing event logs...",
+    "🧠 Processing complex security queries with advanced analytics...",
+    "⚡ Running automated threat hunting algorithms...",
+    "🎪 Orchestrating a symphony of security tools and data sources...",
+    "🔍 Investigating potential security incidents with digital forensics...",
+    "📈 Calculating risk scores and probability assessments...",
+    "🛡️ Consulting my vast knowledge of cybersecurity best practices...",
+    "🎯 Triangulating data points across the security ecosystem...",
+    "🔬 Performing behavioral analysis on network traffic patterns...",
+    "🚀 Launching comprehensive security posture assessments...",
+    "💡 Connecting security dots that humans might miss...",
+    "🎭 Putting on my best security analyst persona for you..."
 ]
 
 # Configure logging with colors
@@ -389,7 +410,7 @@ class PokeDexBot(WebexBot):
                 import threading
                 thinking_msg = None
                 thinking_active = threading.Event()
-                
+
                 # Send thinking indicator as a threaded reply for user engagement
                 try:
                     thinking_message = random.choice(THINKING_MESSAGES)
@@ -400,11 +421,11 @@ class PokeDexBot(WebexBot):
                         parentId=parent_id,  # Use original parent to avoid "reply to reply"
                         text=thinking_message
                     )
-                    
+
                     # Start background thread to update thinking message every 5 seconds
                     import time
                     thinking_active.set()
-                    
+
                     def update_thinking_message():
                         counter = 1
                         while thinking_active.is_set():
@@ -423,9 +444,9 @@ class PokeDexBot(WebexBot):
                                         'roomId': teams_message.roomId,
                                         'text': f"{new_message} ({counter * 5}s)"
                                     }
-                                    
+
                                     response = requests.put(edit_url, headers=headers, json=payload)
-                                    
+
                                     if response.status_code == 200:
                                         counter += 1
                                     else:
@@ -433,14 +454,14 @@ class PokeDexBot(WebexBot):
                                         logger.warning(f"Message edit failed (disabling updates): {error_detail}")
                                         # If editing fails, stop the updates to avoid clutter
                                         break
-                                        
+
                                 except Exception as update_error:
                                     logger.warning(f"Failed to update thinking message: {update_error}")
                                     break
-                    
+
                     thinking_thread = threading.Thread(target=update_thinking_message, daemon=True)
                     thinking_thread.start()
-                    
+
                 except Exception as e:
                     logger.warning(f"Failed to send thinking message: {e}")
                     thinking_msg = None
@@ -483,7 +504,7 @@ class PokeDexBot(WebexBot):
                 try:
                     # Use original parent ID if the incoming message is already a reply
                     parent_id = teams_message.parentId if hasattr(teams_message, 'parentId') and teams_message.parentId else teams_message.id
-                    
+
                     # Send completion status as new threaded message
                     if thinking_msg:
                         # Skip the problematic update, just send completion as new message
@@ -522,7 +543,6 @@ class PokeDexBot(WebexBot):
                 roomId=teams_message.roomId,
                 text="❌ I encountered an error processing your message. Please try again."
             )
-
 
 
 def create_webex_bot():
