@@ -192,7 +192,7 @@ class SecurityBotStateManager:
             # No complex agent framework needed - using direct LLM calls
 
             # Use native tool calling
-                self.llm_with_tools = self.llm.bind_tools(all_tools)
+            self.llm_with_tools = self.llm.bind_tools(all_tools)
             self.available_tools = {tool.name: tool for tool in all_tools}
 
             logging.info("Direct LLM with tools initialized successfully.")
@@ -205,14 +205,43 @@ class SecurityBotStateManager:
     def execute_query(self, query: str) -> str:
         """Execute query using native tool calling"""
         try:
-            # Single call - let LLM handle entire tool calling flow
             messages = [
-                {"role": "system", "content": "You are a security operations assistant. Your responses will be sent as Webex messages, so you can use Webex markdown formatting or return Adaptive Card JSON when appropriate."},
+                {"role": "system", "content": "You are a security operations assistant. Your responses will be sent as Webex messages, so you can use Webex markdown formatting."},
                 {"role": "user", "content": query}
             ]
             
+            # Get initial response (may contain tool calls)
             response = self.llm_with_tools.invoke(messages)
-            return response.content
+            
+            # If there are tool calls, execute them and get final response
+            if hasattr(response, 'tool_calls') and response.tool_calls:
+                # Add the AI message with tool calls to conversation
+                messages.append(response)
+                
+                # Execute each tool call
+                for tool_call in response.tool_calls:
+                    tool_name = tool_call['name']
+                    tool_args = tool_call.get('args', {})
+                    tool_id = tool_call['id']
+                    
+                    if tool_name in self.available_tools:
+                        try:
+                            tool_result = self.available_tools[tool_name].invoke(tool_args)
+                        except Exception as e:
+                            tool_result = f"Error executing {tool_name}: {str(e)}"
+                    else:
+                        tool_result = f"Tool {tool_name} not found"
+                    
+                    # Add tool result to conversation
+                    from langchain_core.messages import ToolMessage
+                    messages.append(ToolMessage(content=str(tool_result), tool_call_id=tool_id))
+                
+                # Get final response with tool results
+                final_response = self.llm_with_tools.invoke(messages)
+                return final_response.content
+            else:
+                # No tool calls, return direct response
+                return response.content
             
         except Exception as e:
             return f"Error: {str(e)}"

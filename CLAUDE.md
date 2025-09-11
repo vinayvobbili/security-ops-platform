@@ -95,7 +95,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Environment variables loaded from `data/transient/.env`
 - Logging configured for operations with rotating file handlers
 - Web dashboard includes proxy functionality and security request filtering
-- Bot architecture uses synchronous processing with agent-driven intelligence
+- Bot architecture uses native LangChain tool calling with proper multi-step conversation flow:
+  1. LLM receives query and determines tool usage  
+  2. Tools are executed and results returned to LLM
+  3. LLM generates final response incorporating tool results
+  - This is the correct tool calling pattern, not "double HTTP calls" but necessary conversation flow
 - Chart generation automated with daily timestamped directories
 - Configuration supports multiple Webex rooms for different operational contexts
 
@@ -125,13 +129,22 @@ The project integrates with enterprise security tools:
 - **Clean separation** - tools do their job, LLM composes responses, presentation layer renders
 
 ### LLM Integration Philosophy
-- **Single-call tool execution** - let LLM handle entire tool calling flow internally
-- **Use native tool calling** (`llm.bind_tools()`) instead of manual action parsing
-- **No manual tool orchestration** - avoid separate invoke() calls for tool results
-- **No regex parsing** of LLM responses (Action:, Action Input:, etc.)
-- **No agent frameworks** - direct LLM invocation handles everything
+- **Native tool calling** - use LangChain's `llm.bind_tools()` with proper conversation flow:
+  1. Initial invoke() determines and calls tools
+  2. Tool results are added to conversation context  
+  3. Final invoke() generates response incorporating tool results
+  - **This multi-step flow is correct architecture, not a design flaw**
+- **Avoid manual orchestration** - no regex parsing of responses or custom tool detection
+- **Clean tool implementation** - use `@tool` decorators, not manager classes or factory functions
+- **No agent frameworks** - direct LLM invocation with native tool binding handles everything
 - **Simple system prompts** - give context, let LLM decide execution
 - **Pass-through responses** - forward LLM output directly without transformation
+
+### Correct vs. Problematic Multiple LLM Calls
+- **✅ CORRECT**: Native tool calling conversation flow (multiple invokes for tool execution)
+- **❌ AVOID**: Manual orchestration where you parse responses and decide tool usage yourself
+- **❌ AVOID**: Separate calls for formatting, validation, or response transformation
+- **Key distinction**: Let LangChain handle the tool calling flow, don't build your own
 
 ### Tool Design
 - **Tools return data** - let LLM format for user consumption

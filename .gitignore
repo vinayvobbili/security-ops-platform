@@ -2,6 +2,7 @@ data/transient/.env
 .idea
 .ipynb_checkpoints
 __pycache__/
+.venv/
 web/static/charts/*
 web/static/logos/*.png
 data/transient/*
