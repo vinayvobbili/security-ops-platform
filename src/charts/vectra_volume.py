@@ -39,8 +39,8 @@ def generate_chart(tickets):
         return
 
     # Define custom order and enhanced colors (matching CrowdStrike chart)
-    custom_impact_order = ["Malicious True Positive", "Significant", "Confirmed", "Detected", "Prevented", 
-                          "False Positive", "Benign True Positive", "Security Testing", "Testing", "Ignore"]
+    custom_impact_order = ["Malicious True Positive", "Significant", "Confirmed", "Detected", "Prevented",
+                           "False Positive", "Benign True Positive", "Security Testing", "Testing", "Ignore"]
     enhanced_impact_colors = {
         'Malicious True Positive': '#D32F2F',  # Red - Critical
         'Significant': '#E91E63',  # Pink - Significant impact
@@ -90,8 +90,8 @@ def generate_chart(tickets):
         bottom = [b + c for b, c in zip(bottom, counts)]
 
     # Enhanced legend with MetLife styling - positioned outside chart area
-    legend = ax.legend(title='Impact', bbox_to_anchor=(1.02, 1), loc='upper left', 
-                      fontsize=12, title_fontsize=14, frameon=True, fancybox=True, shadow=True)
+    legend = ax.legend(title='Impact', bbox_to_anchor=(1.02, 1), loc='upper left',
+                       fontsize=12, title_fontsize=14, frameon=True, fancybox=True, shadow=True)
     legend.get_frame().set_facecolor('white')
     legend.get_frame().set_alpha(0.95)
     legend.get_frame().set_edgecolor('#1A237E')
@@ -120,7 +120,7 @@ def generate_chart(tickets):
     ax.xaxis.set_major_formatter(plt.matplotlib.dates.DateFormatter('%m/%d/%Y'))
     ax.xaxis.set_major_locator(plt.matplotlib.dates.DayLocator(interval=2))  # Show every 2 days
     plt.xticks(rotation=90)
-    
+
     # Adjust layout FIRST to make room for legend - expand chart area
     plt.tight_layout()
     plt.subplots_adjust(top=0.88, bottom=0.12, left=0.08, right=0.85)
@@ -142,7 +142,7 @@ def generate_chart(tickets):
     trans = transforms.blended_transform_factory(fig.transFigure, fig.transFigure)
     fig.text(0.02, 0.02, f"Generated {now_eastern}",
              ha='left', va='bottom', fontsize=10, color='#1A237E', fontweight='bold',
-             bbox=dict(boxstyle="round,pad=0.4", facecolor='white', alpha=0.9,
+             bbox=dict(boxstyle="round,pad=0.2", facecolor='white', alpha=0.9,
                        edgecolor='#1A237E', linewidth=1.5),
              transform=trans)
 
@@ -151,11 +151,10 @@ def generate_chart(tickets):
              alpha=0.7, color='#3F51B5', style='italic', fontweight='bold',
              transform=trans)
 
-
     today_date = datetime.now().strftime('%m-%d-%Y')
     output_path = ROOT_DIRECTORY / "web" / "static" / "charts" / today_date / "Vectra Volume.png"
     output_path.parent.mkdir(parents=True, exist_ok=True)  # Ensure the directory exists
-    plt.savefig(output_path, format='png', bbox_inches='tight', pad_inches=0.2, dpi=300)
+    plt.savefig(output_path, format='png', bbox_inches='tight', pad_inches=0, dpi=300)
     plt.close()
 
 
