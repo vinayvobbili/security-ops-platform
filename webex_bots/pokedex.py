@@ -388,9 +388,11 @@ class PokeDexBot(WebexBot):
                 # Send thinking indicator as a threaded reply for user engagement
                 try:
                     thinking_message = random.choice(THINKING_MESSAGES)
+                    # Use original parent ID if the incoming message is already a reply
+                    parent_id = teams_message.parentId if hasattr(teams_message, 'parentId') and teams_message.parentId else teams_message.id
                     thinking_msg = self.teams.messages.create(
                         roomId=teams_message.roomId,
-                        parentId=teams_message.id,  # Thread it as a reply to user's message
+                        parentId=parent_id,  # Use original parent to avoid "reply to reply"
                         text=thinking_message
                     )
                 except Exception as e:
@@ -429,8 +431,8 @@ class PokeDexBot(WebexBot):
 
                 # Handle threading - avoid "Cannot reply to a reply" error
                 try:
-                    # If the incoming message has a parentId, use that instead to stay in same thread
-                    parent_id = getattr(teams_message, 'parentId', None) or teams_message.id
+                    # Use original parent ID if the incoming message is already a reply
+                    parent_id = teams_message.parentId if hasattr(teams_message, 'parentId') and teams_message.parentId else teams_message.id
 
 
                     # Send completion status as new threaded message
