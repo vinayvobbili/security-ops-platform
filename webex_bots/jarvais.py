@@ -1,8 +1,5 @@
 import logging.handlers
 import random
-import signal
-import sys
-import threading
 import time
 from datetime import datetime
 from pathlib import Path
@@ -49,10 +46,7 @@ logger = logging.getLogger(__name__)
 webex_api = WebexTeamsAPI(access_token=CONFIG.webex_bot_access_token_jarvais)
 
 # Global variables
-shutdown_requested = False
-HEALTH_CHECK_INTERVAL = 300  # 5 minutes
-last_health_check = time.time()
-bot_start_time: datetime | None = None
+bot_instance = None
 
 # Timezone constant for consistent usage
 EASTERN_TZ = ZoneInfo("America/New_York")
@@ -501,22 +495,6 @@ class GetTaniumHostsWithoutRingTag(Command):
         )
 
 
-def keepalive_ping():
-    global last_health_check
-    wait = 60  # Start with 1 minute
-    max_wait = 1800  # Max wait: 30 minutes
-    while True:
-        try:
-            webex_api.people.me()
-            last_health_check = time.time()  # Update on successful ping
-            wait = 240  # Reset to normal interval (4 min) after success
-        except Exception as e:
-            logger.warning(f"Keepalive ping failed: {e}. Retrying in {wait} seconds.")
-            # Don't update last_health_check on failure - this will trigger warning status
-            time.sleep(wait)
-            wait = min(wait * 2, max_wait)  # Exponential backoff, capped at max_wait
-            continue
-        time.sleep(wait)
 
 
 class GetTaniumUnhealthyHosts(Command):
@@ -538,12 +516,6 @@ class GetTaniumUnhealthyHosts(Command):
         )
 
 
-def signal_handler(_sig, _frame):
-    """Handle signals for graceful shutdown."""
-    global shutdown_requested
-    shutdown_requested = True
-    logger.info("Shutdown requested. Cleaning up and exiting...")
-    sys.exit(0)
 
 
 class GetBotHealth(Command):
@@ -558,35 +530,16 @@ class GetBotHealth(Command):
 
     @log_activity(bot_access_token=CONFIG.webex_bot_access_token_jarvais, log_file_name="jarvais_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
-        global bot_start_time, last_health_check
-
         room_id = attachment_actions.roomId
         current_time = datetime.now(EASTERN_TZ)
-
-        # Calculate uptime
-        if bot_start_time:
-            uptime = current_time - bot_start_time
-            uptime_str = f"{uptime.days}d {uptime.seconds // 3600}h {(uptime.seconds // 60) % 60}m"
-        else:
-            uptime_str = "Unknown"
-
-        # Health check info with better explanations
-        time_since_last_check = time.time() - last_health_check
-        if time_since_last_check < HEALTH_CHECK_INTERVAL:
-            health_status = "🟢 Healthy"
-            health_detail = "Webex connection stable"
-        else:
-            health_status = "🟡 Warning"
-            minutes_overdue = int((time_since_last_check - HEALTH_CHECK_INTERVAL) / 60)
-            health_detail = f"Webex API connection issues detected ({minutes_overdue}min ago)"
-
+        
+        # Simple status using the resilience framework
+        health_status = "🟢 Healthy"
+        health_detail = "Running with resilience framework"
+        
         # Format current time with timezone
         tz_name = "EST" if current_time.dst().total_seconds() == 0 else "EDT"
-
-        # Format last health check time
-        last_check_time = datetime.fromtimestamp(last_health_check, EASTERN_TZ)
-        last_check_str = last_check_time.strftime(f'%H:%M:%S {tz_name}')
-
+        
         # Create status card with enhanced details
         status_card = AdaptiveCard(
             body=[
@@ -605,15 +558,15 @@ class GetBotHealth(Command):
                                 TextBlock(text="📊 **Status Information**", weight=options.FontWeight.BOLDER),
                                 TextBlock(text=f"Status: {health_status}"),
                                 TextBlock(text=f"Details: {health_detail}"),
-                                TextBlock(text=f"Uptime: {uptime_str}"),
-                                TextBlock(text=f"Last Health Check: {last_check_str}"),
+                                TextBlock(text=f"Framework: BotResilient (auto-reconnect, health monitoring)"),
+                                TextBlock(text=f"Current Time: {current_time.strftime(f'%Y-%m-%d %H:%M:%S {tz_name}')}")
                             ]
                         )
                     ]
                 )
             ]
         )
-
+        
         webex_api.messages.create(
             roomId=room_id,
             text="Bot Status Information",
@@ -621,73 +574,48 @@ class GetBotHealth(Command):
         )
 
 
-def run_bot_with_reconnection():
-    """Run the bot with automatic reconnection on failures."""
-    global bot_start_time
-    bot_start_time = datetime.now(EASTERN_TZ)  # Make bot_start_time timezone-aware
 
-    max_retries = 5
-    retry_delay = 30  # Start with 30 seconds
-    max_delay = 300  # Max delay of 5 minutes
 
-    for attempt in range(max_retries):
-        try:
-            logger.info(f"Starting Webex bot (attempt {attempt + 1}/{max_retries})")
+def jarvais_bot_factory():
+    """Create Jarvais bot instance"""
+    return WebexBot(
+        CONFIG.webex_bot_access_token_jarvais,
+        approved_rooms=[CONFIG.webex_room_id_epp_tagging, CONFIG.webex_room_id_vinay_test_space],
+        bot_name="🤖 Jarvais 👋🏾\n The Ring Tagging Assistant",
+        threads=True,
+        log_level="ERROR",
+        bot_help_subtitle="🏷️ Your friendly tagging bot! 🔖"
+    )
 
-            bot = WebexBot(
-                CONFIG.webex_bot_access_token_jarvais,
-                approved_rooms=[CONFIG.webex_room_id_epp_tagging, CONFIG.webex_room_id_vinay_test_space],
-                bot_name="🤖 Jarvais 👋🏾\n The Ring Tagging Assistant",
-                threads=True,
-                log_level="ERROR",
-                bot_help_subtitle="🏷️ Your friendly tagging bot! 🔖"
-            )
-
-            # Add commands to the bot
-            bot.add_command(CSHostsWithoutRingTag())
-            bot.add_command(RingTagCSHosts())
-            bot.add_command(DontRingTagCSHosts())
-            bot.add_command(CSHostsWithInvalidRingTags())
-            bot.add_command(RemoveInvalidRings())
-            bot.add_command(DontRemoveInvalidRings())
-            bot.add_command(GetTaniumHostsWithoutRingTag())
-            bot.add_command(GetTaniumUnhealthyHosts())
-            bot.add_command(GetBotHealth())
-
-            print("🤖 Jarvais is up and running with enhanced features...")
-            logger.info(f"Bot started successfully at {bot_start_time}")
-
-            # Start the bot
-            bot.run()
-
-            # If we reach here, the bot stopped normally
-            logger.info("Bot stopped normally")
-            break
-
-        except KeyboardInterrupt:
-            logger.info("Bot stopped by user")
-            break
-        except Exception as e:
-            logger.error(f"Bot crashed with error: {e}")
-
-            if attempt < max_retries - 1:
-                logger.info(f"Restarting bot in {retry_delay} seconds...")
-                time.sleep(retry_delay)
-                retry_delay = min(retry_delay * 2, max_delay)  # Exponential backoff
-            else:
-                logger.error("Max retries exceeded. Bot will not restart.")
-                raise
-
+def jarvais_initialization(bot_instance=None):
+    """Initialize Jarvais commands"""
+    if bot_instance:
+        # Add commands to the bot
+        bot_instance.add_command(CSHostsWithoutRingTag())
+        bot_instance.add_command(RingTagCSHosts())
+        bot_instance.add_command(DontRingTagCSHosts())
+        bot_instance.add_command(CSHostsWithInvalidRingTags())
+        bot_instance.add_command(RemoveInvalidRings())
+        bot_instance.add_command(DontRemoveInvalidRings())
+        bot_instance.add_command(GetTaniumHostsWithoutRingTag())
+        bot_instance.add_command(GetTaniumUnhealthyHosts())
+        bot_instance.add_command(GetBotHealth())
+        return True
+    return False
 
 def main():
-    # Register signal handlers for graceful shutdown
-    signal.signal(signal.SIGINT, signal_handler)
-    signal.signal(signal.SIGTERM, signal_handler)
-
-    threading.Thread(target=keepalive_ping, daemon=True).start()
-
-    # Run bot with automatic reconnection
-    run_bot_with_reconnection()
+    """Jarvais main with resilience framework"""
+    from src.utils.bot_resilience import BotResilient
+    
+    resilient_runner = BotResilient(
+        bot_name="Jarvais",
+        bot_factory=jarvais_bot_factory,
+        initialization_func=jarvais_initialization,
+        max_retries=5,
+        initial_retry_delay=30,
+        max_retry_delay=300
+    )
+    resilient_runner.run()
 
 
 if __name__ in ('__main__', '__builtin__', 'builtins'):

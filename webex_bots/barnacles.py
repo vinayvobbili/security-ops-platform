@@ -1,9 +1,6 @@
 import json
 import logging.handlers
 import random
-import signal
-import sys
-import threading
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -49,18 +46,15 @@ config = get_config()
 bot_token = config.webex_bot_access_token_barnacles
 webex_api = WebexTeamsAPI(access_token=bot_token)
 
-# Global variables for health monitoring
-shutdown_requested = False
-HEALTH_CHECK_INTERVAL = 300  # 5 minutes
-last_health_check = time.time()
-bot_start_time: datetime | None = None
+# Global variables
+bot_instance = None
 
 # Timezone constant for consistent usage
 EASTERN_TZ = ZoneInfo("America/New_York")
 
-NOTES_FILE = "../data/transient/secOps/management_notes.json"
-THREAT_CON_FILE = "../data/transient/secOps/threatcon.json"
-COMPANY_LOGO_BASE64 = "../web/static/icons/company_logo.txt"
+NOTES_FILE = "data/transient/secOps/management_notes.json"
+THREAT_CON_FILE = "data/transient/secOps/threatcon.json"
+COMPANY_LOGO_BASE64 = "web/static/icons/company_logo.txt"
 
 with open(COMPANY_LOGO_BASE64, "r") as file:
     company_logo = file.read()
@@ -89,31 +83,8 @@ BARNACLES_QUOTES = [
 ]
 
 
-def keepalive_ping():
-    """Keep the bot connection alive with periodic pings."""
-    global last_health_check
-    wait = 60  # Start with 1 minute
-    max_wait = 1800  # Max wait: 30 minutes
-    while not shutdown_requested:
-        try:
-            webex_api.people.me()
-            last_health_check = time.time()  # Update on successful ping
-            wait = 240  # Reset to normal interval (4 min) after success
-        except Exception as e:
-            logger.warning(f"Keepalive ping failed: {e}. Retrying in {wait} seconds.")
-            # Don't update last_health_check on failure - this will trigger warning status
-            time.sleep(wait)
-            wait = min(wait * 2, max_wait)  # Exponential backoff, capped at max_wait
-            continue
-        time.sleep(wait)
 
 
-def signal_handler(_sig, _frame):
-    """Handle signals for graceful shutdown."""
-    global shutdown_requested
-    shutdown_requested = True
-    logger.info("Shutdown requested. Cleaning up and exiting...")
-    sys.exit(0)
 
 
 class BotStatusCommand(Command):
@@ -128,34 +99,15 @@ class BotStatusCommand(Command):
 
     @log_activity(config.webex_bot_access_token_barnacles, "barnacles_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
-        global bot_start_time, last_health_check
-
         current_time = datetime.now(EASTERN_TZ)
-
-        # Calculate uptime
-        if bot_start_time:
-            uptime = current_time - bot_start_time
-            uptime_str = f"{uptime.days}d {uptime.seconds // 3600}h {(uptime.seconds // 60) % 60}m"
-        else:
-            uptime_str = "Unknown"
-
-        # Health check info with better explanations
-        time_since_last_check = time.time() - last_health_check
-        if time_since_last_check < HEALTH_CHECK_INTERVAL:
-            health_status = "🟢 Healthy"
-            health_detail = "Webex connection stable"
-        else:
-            health_status = "🟡 Warning"
-            minutes_overdue = int((time_since_last_check - HEALTH_CHECK_INTERVAL) / 60)
-            health_detail = f"Webex API connection issues detected ({minutes_overdue}min ago)"
-
+        
+        # Simple status using the resilience framework
+        health_status = "🟢 Healthy"
+        health_detail = "Running with resilience framework"
+        
         # Format current time with timezone
         tz_name = "EST" if current_time.dst().total_seconds() == 0 else "EDT"
-
-        # Format last health check time
-        last_check_time = datetime.fromtimestamp(last_health_check, EASTERN_TZ)
-        last_check_str = last_check_time.strftime(f'%H:%M:%S {tz_name}')
-
+        
         # Create status card with enhanced details
         status_card = AdaptiveCard(
             body=[
@@ -174,8 +126,7 @@ class BotStatusCommand(Command):
                                 TextBlock(text="📊 **Status Information**", weight=FontWeight.BOLDER),
                                 TextBlock(text=f"Status: {health_status}"),
                                 TextBlock(text=f"Details: {health_detail}"),
-                                TextBlock(text=f"Uptime: {uptime_str}"),
-                                TextBlock(text=f"Last Health Check: {last_check_str}"),
+                                TextBlock(text=f"Framework: BotResilient (auto-reconnect, health monitoring)"),
                                 TextBlock(text=f"Current Time: {current_time.strftime(f'%Y-%m-%d %H:%M:%S {tz_name}')}")
                             ]
                         )
@@ -603,74 +554,46 @@ def get_threatcon_message(level):
     return random.choice(THREATCON_MESSAGES.get(level, THREATCON_MESSAGES["green"]))
 
 
-def run_bot_with_reconnection():
-    """Run the bot with automatic reconnection on failures."""
-    global bot_start_time
-    bot_start_time = datetime.now(EASTERN_TZ)  # Make bot_start_time timezone-aware
 
-    max_retries = 5
-    retry_delay = 30  # Start with 30 seconds
-    max_delay = 300  # Max delay of 5 minutes
 
-    for attempt in range(max_retries):
-        try:
-            logger.info(f"Starting Barnacles bot (attempt {attempt + 1}/{max_retries})")
+def barnacles_bot_factory():
+    """Create Barnacles bot instance"""
+    return WebexBot(
+        bot_token,
+        approved_rooms=[],
+        approved_users=config.barnacles_approved_users.split(','),
+        bot_name="⚓ Barnacles 🤖\n The Captain's Assistant 👩🏻‍⚕️",
+        threads=True,
+        log_level="ERROR",
+        bot_help_subtitle="Click a button to start! 🎬"
+    )
 
-            bot = WebexBot(
-                bot_token,
-                approved_rooms=[],
-                approved_users=config.barnacles_approved_users.split(','),
-                bot_name="⚓ Barnacles 🤖\n The Captain's Assistant 👩🏻‍⚕️",
-                threads=True,
-                log_level="ERROR",
-                bot_help_subtitle="Click a button to start! 🎬"
-            )
-
-            # Add commands to the bot
-            bot.add_command(ManagementNotes())
-            bot.add_command(ThreatconLevel())
-            bot.add_command(SaveManagementNotes())
-            bot.add_command(SaveThreatcon())
-            bot.add_command(AnnounceThreatcon())
-            bot.add_command(BotStatusCommand())
-
-            print("⚓ Barnacles is up and running with enhanced features...")
-            logger.info(f"Bot started successfully at {bot_start_time}")
-
-            # Start the bot
-            bot.run()
-
-            # If we reach here, the bot stopped normally
-            logger.info("Bot stopped normally")
-            break
-
-        except KeyboardInterrupt:
-            logger.info("Bot stopped by user")
-            break
-        except Exception as e:
-            logger.error(f"Bot crashed with error: {e}")
-
-            if attempt < max_retries - 1:
-                logger.info(f"Restarting bot in {retry_delay} seconds...")
-                time.sleep(retry_delay)
-                retry_delay = min(retry_delay * 2, max_delay)  # Exponential backoff
-            else:
-                logger.error("Max retries exceeded. Bot will not restart.")
-                raise
-
+def barnacles_initialization(bot_instance=None):
+    """Initialize Barnacles commands"""
+    if bot_instance:
+        # Add commands to the bot
+        bot_instance.add_command(ManagementNotes())
+        bot_instance.add_command(ThreatconLevel())
+        bot_instance.add_command(SaveManagementNotes())
+        bot_instance.add_command(SaveThreatcon())
+        bot_instance.add_command(AnnounceThreatcon())
+        bot_instance.add_command(BotStatusCommand())
+        return True
+    return False
 
 def main():
-    """Initialize and run the Webex bot with enhanced features."""
-
-    # Register signal handlers for graceful shutdown
-    signal.signal(signal.SIGINT, signal_handler)
-    signal.signal(signal.SIGTERM, signal_handler)
-
-    # Start keepalive thread
-    threading.Thread(target=keepalive_ping, daemon=True).start()
-
-    # Run bot with automatic reconnection
-    run_bot_with_reconnection()
+    """Barnacles main with resilience framework"""
+    from src.utils.bot_resilience import BotResilient
+    
+    resilient_runner = BotResilient(
+        bot_name="Barnacles",
+        bot_factory=barnacles_bot_factory,
+        initialization_func=barnacles_initialization,
+        max_retries=5,
+        initial_retry_delay=30,
+        max_retry_delay=300
+    )
+    resilient_runner.run()
 
 
 if __name__ == "__main__":

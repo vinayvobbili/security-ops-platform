@@ -555,95 +555,34 @@ def create_webex_bot():
     )
 
 
-def graceful_shutdown():
-    """Perform graceful shutdown with proper websocket cleanup"""
-    global bot_ready, bot_instance
-    bot_ready = False
+def pokedex_bot_factory():
+    """Create Pokedex bot instance"""
+    return create_webex_bot()
 
-    logger.info("🛑 Performing graceful shutdown...")
 
-    try:
-        if bot_instance:
-            # Try to properly close the websocket connection
-            if hasattr(bot_instance, 'stop'):
-                logger.info("Stopping bot instance...")
-                bot_instance.stop()
-            elif hasattr(bot_instance, 'websocket_client'):
-                logger.info("Closing websocket client...")
-                bot_instance.websocket_client.close()
-
-            # Clear the instance
-            bot_instance = None
-            logger.info("Bot instance cleared")
-    except Exception as e:
-        logger.error(f"Error during graceful shutdown: {e}")
-        bot_instance = None
+def pokedex_initialization(bot_instance_param=None):
+    """Initialize Pokedex LLM components"""
+    global bot_instance
+    if bot_instance_param:
+        bot_instance = bot_instance_param
+        return initialize_bot()
+    return False
 
 
 def main():
-    """Main application entry point"""
-    global bot_instance
+    """Pokedex main with resilience framework"""
+    from src.utils.bot_resilience import BotResilient
 
-    start_time = datetime.now()
-    logger.info("🤖 Starting Pokedex Webex Bot...")
-
-    try:
-        # Small delay to ensure any previous connections are cleaned up
-        logger.info("⏳ Waiting for any previous connections to clean up...")
-        import time
-        time.sleep(2)
-
-        # Create Webex bot first (before complex initialization)
-        logger.info("🌐 Creating Webex bot connection...")
-        bot_instance = create_webex_bot()
-        logger.info("✅ Bot created successfully")
-        logger.info(f"📧 Bot email: {WEBEX_BOT_EMAIL}")
-
-        # Now initialize the LLM components (after Webex bot creation)
-        logger.info("🧠 Initializing LLM components...")
-        if not initialize_bot():
-            logger.error("❌ Failed to initialize bot. Exiting.")
-            return 1
-
-        # Calculate total initialization time
-        init_duration = (datetime.now() - start_time).total_seconds()
-
-        from pokedex_bot.utils.enhanced_config import ModelConfig
-        config = ModelConfig()
-
-        print(f"🚀 Pokedex is up and running with {config.llm_model_name} (startup in {init_duration:.1f}s)...")
-        logger.info(f"🚀 Pokedex is up and running with {config.llm_model_name} (startup in {init_duration:.1f}s)...")
-
-        # Start the bot (this will block and run forever)
-        bot_instance.run()
-
-    except KeyboardInterrupt:
-        logger.info("🛑 Bot stopped by user (Ctrl+C)")
-        graceful_shutdown()
-    except Exception as e:
-        logger.error(f"❌ Bot error: {e}", exc_info=True)
-        graceful_shutdown()
-        return 1
+    resilient_runner = BotResilient(
+        bot_name="Pokedex",
+        bot_factory=pokedex_bot_factory,
+        initialization_func=pokedex_initialization,
+        max_retries=5,
+        initial_retry_delay=30,
+        max_retry_delay=300
+    )
+    resilient_runner.run()
 
 
 if __name__ == "__main__":
-    import sys
-
-
-    def signal_handler(sig, _):
-        logger.info(f"🛑 Signal {sig} received, shutting down...")
-        graceful_shutdown()
-        sys.exit(0)
-
-
-    # Register signal handlers
-    signal.signal(signal.SIGINT, signal_handler)
-    signal.signal(signal.SIGTERM, signal_handler)
-
-    try:
-        exit_code = main()
-        sys.exit(exit_code or 0)
-    except Exception as e:
-        logger.error(f"Fatal error in main: {e}", exc_info=True)
-        graceful_shutdown()
-        sys.exit(1)
+    main()

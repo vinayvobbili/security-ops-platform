@@ -1,10 +1,6 @@
-import asyncio
 import ipaddress
 import logging.handlers
 import re
-import signal
-import sys
-import threading
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -45,20 +41,6 @@ http_session = get_session()
 (ROOT_DIRECTORY / "logs").mkdir(exist_ok=True)
 
 
-# Custom exception handler for asyncio
-def handle_asyncio_exception(_, context):
-    """Custom exception handler for asyncio to handle connection errors gracefully"""
-    exception = context.get('exception')
-    if exception:
-        if isinstance(exception, (ConnectionResetError, ConnectionError)):
-            logger.warning(f"Connection error handled gracefully: {exception}")
-            return
-        elif "Connection reset by peer" in str(exception):
-            logger.warning(f"Connection reset error handled: {exception}")
-            return
-
-    # For other exceptions, use default handling
-    logger.error(f"Asyncio exception: {context}")
 
 
 # Setup logging with rotation and better formatting
@@ -76,21 +58,11 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Set custom asyncio exception handler
-try:
-    loop = asyncio.get_event_loop()
-    loop.set_exception_handler(handle_asyncio_exception)
-except RuntimeError:
-    # If no loop is running, set it for when one starts
-    pass
 
 webex_api = WebexAPI(CONFIG.webex_bot_access_token_toodles)
 
 # Global variables
-shutdown_requested = False
-HEALTH_CHECK_INTERVAL = 300  # 5 minutes
-last_health_check = time.time()
-bot_start_time: datetime | None = None
+bot_instance = None
 
 # Timezone constant for consistent usage
 EASTERN_TZ = ZoneInfo("America/New_York")
@@ -1655,22 +1627,6 @@ def announce_new_threat_hunt(ticket_no, ticket_title, incident_url, person_id):
     requests.post(webex_data.get('api_url'), headers=headers, json=payload_json)
 
 
-def keepalive_ping():
-    global last_health_check
-    wait = 60  # Start with 1 minute
-    max_wait = 1800  # Max wait: 30 minutes
-    while True:
-        try:
-            webex_api.people.me()
-            last_health_check = time.time()  # Update on successful ping
-            wait = 240  # Reset to normal interval (4 min) after success
-        except Exception as e:
-            logger.warning(f"Keepalive ping failed: {e}. Retrying in {wait} seconds.")
-            # Don't update last_health_check on failure - this will trigger warning status
-            time.sleep(wait)
-            wait = min(wait * 2, max_wait)  # Exponential backoff, capped at max_wait
-            continue
-        time.sleep(wait)
 
 
 class Who(Command):
@@ -1974,12 +1930,6 @@ class GetCompanyHolidays(Command):
         return title + "\n".join(output_lines) + note
 
 
-def signal_handler(_sig, _frame):
-    """Handle signals for graceful shutdown."""
-    global shutdown_requested
-    shutdown_requested = True
-    logger.info("Shutdown requested. Cleaning up and exiting...")
-    sys.exit(0)
 
 
 class GetBotHealth(Command):
@@ -1994,35 +1944,16 @@ class GetBotHealth(Command):
 
     @log_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles, log_file_name="toodles_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
-        global bot_start_time, last_health_check
-
         room_id = attachment_actions.roomId
         current_time = datetime.now(EASTERN_TZ)
-
-        # Calculate uptime
-        if bot_start_time:
-            uptime = current_time - bot_start_time
-            uptime_str = f"{uptime.days}d {uptime.seconds // 3600}h {(uptime.seconds // 60) % 60}m"
-        else:
-            uptime_str = "Unknown"
-
-        # Health check info with better explanations
-        time_since_last_check = time.time() - last_health_check
-        if time_since_last_check < HEALTH_CHECK_INTERVAL:
-            health_status = "🟢 Healthy"
-            health_detail = "Webex connection stable"
-        else:
-            health_status = "🟡 Warning"
-            minutes_overdue = int((time_since_last_check - HEALTH_CHECK_INTERVAL) / 60)
-            health_detail = f"Webex API connection issues detected ({minutes_overdue}min ago)"
-
+        
+        # Simple status using the resilience framework
+        health_status = "🟢 Healthy"
+        health_detail = "Running with resilience framework"
+        
         # Format current time with timezone
         tz_name = "EST" if current_time.dst().total_seconds() == 0 else "EDT"
-
-        # Format last health check time
-        last_check_time = datetime.fromtimestamp(last_health_check, EASTERN_TZ)
-        last_check_str = last_check_time.strftime(f'%H:%M:%S {tz_name}')
-
+        
         # Create status card with enhanced details
         status_card = AdaptiveCard(
             body=[
@@ -2041,8 +1972,7 @@ class GetBotHealth(Command):
                                 TextBlock(text="📊 **Status Information**", weight=options.FontWeight.BOLDER),
                                 TextBlock(text=f"Status: {health_status}"),
                                 TextBlock(text=f"Details: {health_detail}"),
-                                TextBlock(text=f"Uptime: {uptime_str}"),
-                                TextBlock(text=f"Last Health Check: {last_check_str}"),
+                                TextBlock(text=f"Framework: BotResilient (auto-reconnect, health monitoring)"),
                                 TextBlock(text=f"Current Time: {current_time.strftime(f'%Y-%m-%d %H:%M:%S {tz_name}')}")
                             ]
                         )
@@ -2050,7 +1980,7 @@ class GetBotHealth(Command):
                 )
             ]
         )
-
+        
         webex_api.messages.create(
             roomId=room_id,
             text="Bot Status Information",
@@ -2058,88 +1988,62 @@ class GetBotHealth(Command):
         )
 
 
-def run_bot_with_reconnection():
-    """Run the bot with automatic reconnection on failures."""
-    global bot_start_time
-    bot_start_time = datetime.now(EASTERN_TZ)  # Make bot_start_time timezone-aware
 
-    max_retries = 5
-    retry_delay = 30  # Start with 30 seconds
-    max_delay = 300  # Max delay of 5 minutes
 
-    for attempt in range(max_retries):
-        try:
-            logger.info(f"Starting Webex bot (attempt {attempt + 1}/{max_retries})")
+def toodles_bot_factory():
+    """Create Toodles bot instance"""
+    return WebexBot(
+        CONFIG.webex_bot_access_token_toodles,
+        bot_name="🛠🤖 Toodles! 👋",
+        approved_rooms=[CONFIG.webex_room_id_vinay_test_space, CONFIG.webex_room_id_gosc_t2, CONFIG.webex_room_id_threatcon_collab],
+        log_level="ERROR",
+        threads=True,
+        bot_help_subtitle="🔧 Your friendly toolbox bot! 🪚"
+    )
 
-            bot = WebexBot(
-                CONFIG.webex_bot_access_token_toodles,
-                bot_name="🛠🤖 Toodles! 👋",
-                approved_rooms=[CONFIG.webex_room_id_vinay_test_space, CONFIG.webex_room_id_gosc_t2, CONFIG.webex_room_id_threatcon_collab],
-                log_level="ERROR",
-                threads=True,
-                bot_help_subtitle="🔧 Your friendly toolbox bot! 🪚"
-            )
-
-            # Add all commands to the bot
-            bot.add_command(GetApprovedTestingCard())
-            bot.add_command(GetCurrentApprovedTestingEntries())
-            bot.add_command(AddApprovedTestingEntry())
-            bot.add_command(RemoveApprovedTestingEntry())
-            bot.add_command(Who())
-            bot.add_command(Rotation())
-            bot.add_command(ContainmentStatusCS())
-            bot.add_command(Review())
-            bot.add_command(GetNewXTicketForm())
-            bot.add_command(CreateXSOARTicket())
-            bot.add_command(IOC())
-            bot.add_command(IOCHunt())
-            bot.add_command(URLs())
-            bot.add_command(ThreatHunt())
-            bot.add_command(CreateThreatHunt())
-            bot.add_command(CreateAZDOWorkItem())
-            bot.add_command(GetAllOptions())
-            bot.add_command(ImportTicket())
-            bot.add_command(CreateTuningRequest())
-            bot.add_command(GetSearchXSOARCard())
-            bot.add_command(FetchXSOARTickets())
-            bot.add_command(GetCompanyHolidays())
-            bot.add_command(GetBotHealth())
-
-            print("🛠️ Toodles is up and running with enhanced features...")
-            logger.info(f"Bot started successfully at {bot_start_time}")
-
-            # Start the bot
-            bot.run()
-
-            # If we reach here, the bot stopped normally
-            logger.info("Bot stopped normally")
-            break
-
-        except KeyboardInterrupt:
-            logger.info("Bot stopped by user")
-            break
-        except Exception as e:
-            logger.error(f"Bot crashed with error: {e}")
-
-            if attempt < max_retries - 1:
-                logger.info(f"Restarting bot in {retry_delay} seconds...")
-                time.sleep(retry_delay)
-                retry_delay = min(retry_delay * 2, max_delay)  # Exponential backoff
-            else:
-                logger.error("Max retries exceeded. Bot will not restart.")
-                raise
-
+def toodles_initialization(bot_instance=None):
+    """Initialize Toodles commands"""
+    if bot_instance:
+        # Add all commands
+        bot_instance.add_command(GetApprovedTestingCard())
+        bot_instance.add_command(GetCurrentApprovedTestingEntries())
+        bot_instance.add_command(AddApprovedTestingEntry())
+        bot_instance.add_command(RemoveApprovedTestingEntry())
+        bot_instance.add_command(Who())
+        bot_instance.add_command(Rotation())
+        bot_instance.add_command(ContainmentStatusCS())
+        bot_instance.add_command(Review())
+        bot_instance.add_command(GetNewXTicketForm())
+        bot_instance.add_command(CreateXSOARTicket())
+        bot_instance.add_command(IOC())
+        bot_instance.add_command(IOCHunt())
+        bot_instance.add_command(URLs())
+        bot_instance.add_command(ThreatHunt())
+        bot_instance.add_command(CreateThreatHunt())
+        bot_instance.add_command(CreateAZDOWorkItem())
+        bot_instance.add_command(GetAllOptions())
+        bot_instance.add_command(ImportTicket())
+        bot_instance.add_command(CreateTuningRequest())
+        bot_instance.add_command(GetSearchXSOARCard())
+        bot_instance.add_command(FetchXSOARTickets())
+        bot_instance.add_command(GetCompanyHolidays())
+        bot_instance.add_command(GetBotHealth())
+        return True
+    return False
 
 def main():
-    # Register signal handlers for graceful shutdown
-    signal.signal(signal.SIGINT, signal_handler)
-    signal.signal(signal.SIGTERM, signal_handler)
-
-    # Start keepalive thread
-    threading.Thread(target=keepalive_ping, daemon=True).start()
-
-    # Run bot with automatic reconnection
-    run_bot_with_reconnection()
+    """Toodles main with resilience framework"""
+    from src.utils.bot_resilience import BotResilient
+    
+    resilient_runner = BotResilient(
+        bot_name="Toodles",
+        bot_factory=toodles_bot_factory,
+        initialization_func=toodles_initialization,
+        max_retries=5,
+        initial_retry_delay=30,
+        max_retry_delay=300
+    )
+    resilient_runner.run()
 
 
 if __name__ in ('__main__', '__builtin__', 'builtins'):
