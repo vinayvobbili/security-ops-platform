@@ -2,7 +2,7 @@ import logging.handlers
 import os
 import random
 import sys
-import time
+
 import unittest
 from datetime import datetime
 from pathlib import Path
@@ -245,14 +245,14 @@ class GetBotHealth(Command):
     def execute(self, message, attachment_actions, activity):
         room_id = attachment_actions.roomId
         current_time = datetime.now(EASTERN_TZ)
-        
+
         # Simple status using the resilience framework
         health_status = "🟢 Healthy"
         health_detail = "Running with resilience framework"
-        
+
         # Format current time with timezone
         tz_name = "EST" if current_time.dst().total_seconds() == 0 else "EDT"
-        
+
         # Create status card with enhanced details
         status_card = AdaptiveCard(
             body=[
@@ -285,10 +285,6 @@ class GetBotHealth(Command):
             text="Bot Status Information",
             attachments=[{"contentType": "application/vnd.microsoft.card.adaptive", "content": status_card.to_dict()}]
         )
-
-
-
-
 
 
 def send_chart(room_id, display_name, chart_name, chart_filename):
@@ -331,8 +327,6 @@ def send_chart(room_id, display_name, chart_name, chart_filename):
             logger.error(f"Failed to send error message: {msg_error}")
 
 
-
-
 def get_random_chart_message():
     """Get a random fun chart loading message."""
     return random.choice(CHART_MESSAGES)
@@ -348,6 +342,7 @@ def moneyball_bot_factory():
         log_level="ERROR",
         bot_help_subtitle="📈 Your friendly neighborhood metrics bot! Click a button to get charts and reports!"
     )
+
 
 def moneyball_initialization(bot_instance=None):
     """Initialize MoneyBall commands"""
@@ -370,6 +365,7 @@ def moneyball_initialization(bot_instance=None):
         return True
     return False
 
+
 def main():
     """MoneyBall main with resilience framework"""
     # Run tests (optional, can be disabled in production)
@@ -378,9 +374,9 @@ def main():
             unittest.main(exit=False, argv=[''], verbosity=0)
         except Exception as e:
             logger.warning(f"Tests failed or skipped: {e}")
-    
+
     from src.utils.bot_resilience import BotResilient
-    
+
     resilient_runner = BotResilient(
         bot_name="MoneyBall",
         bot_factory=moneyball_bot_factory,

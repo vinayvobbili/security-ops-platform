@@ -2,7 +2,6 @@ import json
 import logging.handlers
 import random
 import sys
-import time
 from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -86,10 +85,6 @@ BARNACLES_QUOTES = [
 ]
 
 
-
-
-
-
 class BotStatusCommand(Command):
     """Command to check bot health and status."""
 
@@ -103,14 +98,14 @@ class BotStatusCommand(Command):
     @log_activity(config.webex_bot_access_token_barnacles, "barnacles_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
         current_time = datetime.now(EASTERN_TZ)
-        
+
         # Simple status using the resilience framework
         health_status = "🟢 Healthy"
         health_detail = "Running with resilience framework"
-        
+
         # Format current time with timezone
         tz_name = "EST" if current_time.dst().total_seconds() == 0 else "EDT"
-        
+
         # Create status card with enhanced details
         status_card = AdaptiveCard(
             body=[
@@ -504,12 +499,12 @@ class AnnounceThreatcon(Command):
             threatcon_level.make_chart()
 
             today_date = datetime.now().strftime('%m-%d-%Y')
-            FILE_PATH = ROOT_DIRECTORY / "web" / "static" / "charts" / today_date / "Threatcon Level.png"
+            file_path = ROOT_DIRECTORY / "web" / "static" / "charts" / today_date / "Threatcon Level.png"
 
             WebexTeamsAPI(access_token=config.webex_bot_access_token_toodles).messages.create(
                 roomId=config.webex_room_id_threatcon_collab,
                 text=f"🚨🚨 NEW THREATCON LEVEL ANNOUNCEMENT! 🚨🚨",
-                files=[str(FILE_PATH)]
+                files=[str(file_path)]
             )
 
             # Confirm to user
@@ -557,8 +552,6 @@ def get_threatcon_message(level):
     return random.choice(THREATCON_MESSAGES.get(level, THREATCON_MESSAGES["green"]))
 
 
-
-
 def barnacles_bot_factory():
     """Create the alert triage service bot instance"""
     return WebexBot(
@@ -570,6 +563,7 @@ def barnacles_bot_factory():
         log_level="ERROR",
         bot_help_subtitle="Click a button to start! 🎬"
     )
+
 
 def barnacles_initialization(bot_instance=None):
     """Initialize the alert triage service commands"""
@@ -584,10 +578,11 @@ def barnacles_initialization(bot_instance=None):
         return True
     return False
 
+
 def main():
     """the alert triage service main with resilience framework"""
     from src.utils.bot_resilience import BotResilient
-    
+
     resilient_runner = BotResilient(
         bot_name="the alert triage service",
         bot_factory=barnacles_bot_factory,
