@@ -140,7 +140,7 @@ def add_gauge_needle(ax, threatcon_color):
                        arrow_length * np.cos(rad_angle),
                        arrow_length * np.sin(rad_angle),
                        width=arrow_width,
-                       color='black', zorder=3)
+                       color='#1A237E', zorder=3)
     ax.add_patch(arrow)
 
     # Add simple center dot (pivot point)
@@ -234,11 +234,11 @@ def add_fancy_title(ax):
     ax.text(0, 1.25, title_text,
             ha='center', va='center',
             fontsize=18, fontweight='bold',
-            color='#1F2937',
+            color='#1A237E',
             bbox=dict(
-                boxstyle="round,pad=0.2",  # Reduced padding from 0.4 to 0.2
+                boxstyle="round,pad=0.2",
                 facecolor='white',
-                edgecolor='#1F2937',
+                edgecolor='#1A237E',
                 linewidth=2,
                 alpha=0.95
             ),
