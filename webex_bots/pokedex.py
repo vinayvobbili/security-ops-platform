@@ -385,6 +385,11 @@ class PokeDexBot(WebexBot):
             if not bot_ready:
                 response_text = "🔄 I'm still starting up. Please try again in a moment."
             else:
+                # Initialize thinking message variables  
+                import threading
+                thinking_msg = None
+                thinking_active = threading.Event()
+                
                 # Send thinking indicator as a threaded reply for user engagement
                 try:
                     thinking_message = random.choice(THINKING_MESSAGES)
@@ -395,6 +400,27 @@ class PokeDexBot(WebexBot):
                         parentId=parent_id,  # Use original parent to avoid "reply to reply"
                         text=thinking_message
                     )
+                    
+                    # Start background thread to update thinking message every 5 seconds
+                    import time
+                    thinking_active.set()
+                    
+                    def update_thinking_message():
+                        counter = 1
+                        while thinking_active.is_set():
+                            time.sleep(5)
+                            if thinking_active.is_set():  # Check again after sleep
+                                try:
+                                    new_message = random.choice(THINKING_MESSAGES)
+                                    self.teams.messages.edit(thinking_msg.id, text=f"{new_message} ({counter * 5}s)")
+                                    counter += 1
+                                except Exception as update_error:
+                                    logger.warning(f"Failed to update thinking message: {update_error}")
+                                    break
+                    
+                    thinking_thread = threading.Thread(target=update_thinking_message, daemon=True)
+                    thinking_thread.start()
+                    
                 except Exception as e:
                     logger.warning(f"Failed to send thinking message: {e}")
                     thinking_msg = None
@@ -425,6 +451,10 @@ class PokeDexBot(WebexBot):
 
                 logger.info(f"Sending response to {teams_message.personEmail}: {len(response_text)} chars")
 
+                # Stop thinking message updates
+                if thinking_active:
+                    thinking_active.clear()
+
             if response_text:
                 end_time = datetime.now()
                 response_time = (end_time - start_time).total_seconds()
@@ -433,8 +463,7 @@ class PokeDexBot(WebexBot):
                 try:
                     # Use original parent ID if the incoming message is already a reply
                     parent_id = teams_message.parentId if hasattr(teams_message, 'parentId') and teams_message.parentId else teams_message.id
-
-
+                    
                     # Send completion status as new threaded message
                     if thinking_msg:
                         # Skip the problematic update, just send completion as new message
