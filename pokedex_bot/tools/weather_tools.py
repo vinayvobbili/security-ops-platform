@@ -8,25 +8,27 @@ import requests
 from langchain_core.tools import tool
 
 
-def get_weather_info_tool(api_key: str):
-    """Factory function to create weather tool with API key configuration"""
-
-    @tool
-    def get_weather_info(city: str) -> str:
-        """Get current weather information for a specific city."""
-        try:
-            response = requests.get(
-                "http://api.openweathermap.org/data/2.5/weather",
-                params={
-                    'q': city,
-                    'appid': api_key,
-                    'units': 'imperial'
-                },
-                timeout=10
-            )
-            response.raise_for_status()
-            return response.text
-        except requests.exceptions.RequestException as e:
-            return f"Error fetching weather data: {str(e)}"
-
-    return get_weather_info
+@tool  
+def get_weather_info(city: str) -> str:
+    """Get current weather information for a specific city."""
+    try:
+        from my_config import get_config
+        config = get_config()
+        api_key = config.open_weather_map_api_key
+        
+        if not api_key:
+            return "Error: Weather API key not configured"
+            
+        response = requests.get(
+            "http://api.openweathermap.org/data/2.5/weather",
+            params={
+                'q': city,
+                'appid': api_key,
+                'units': 'imperial'
+            },
+            timeout=10
+        )
+        response.raise_for_status()
+        return response.text
+    except requests.exceptions.RequestException as e:
+        return f"Error fetching weather data: {str(e)}"

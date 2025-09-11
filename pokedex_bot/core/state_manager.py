@@ -17,11 +17,11 @@ from langchain_ollama import ChatOllama, OllamaEmbeddings
 from my_config import get_config
 from pokedex_bot.utils.enhanced_config import ModelConfig
 from pokedex_bot.document.document_processor import DocumentProcessor
-from pokedex_bot.tools.crowdstrike_tools import CrowdStrikeToolsManager
-from pokedex_bot.tools.weather_tools import get_weather_info_tool
+from pokedex_bot.tools.crowdstrike_tools import get_device_containment_status, get_device_online_status, get_device_details_cs
+from pokedex_bot.tools.weather_tools import get_weather_info
 from pokedex_bot.tools.staffing_tools import get_current_shift_info, get_current_staffing
 from pokedex_bot.tools.metrics_tools import get_bot_metrics, get_bot_metrics_summary
-from pokedex_bot.tools.test_tools import TestToolsManager
+from pokedex_bot.tools.test_tools import run_tests, simple_live_message_test
 from pokedex_bot.tools.network_monitoring_tools import get_network_activity, get_network_summary_tool
 
 
@@ -38,13 +38,8 @@ class SecurityBotStateManager:
         self.llm: Optional[ChatOllama] = None
         self.embeddings: Optional[OllamaEmbeddings] = None
 
-        # Managers
+        # Components
         self.document_processor: Optional[DocumentProcessor] = None
-        self.crowdstrike_manager: Optional[CrowdStrikeToolsManager] = None
-        self.weather_tool = None
-        # Staffing tools are now direct functions
-        # Metrics tools are now direct functions
-        self.test_manager: Optional[TestToolsManager] = None
 
         # Initialization state
         self.is_initialized = False
@@ -111,15 +106,7 @@ class SecurityBotStateManager:
         self.document_processor.chunk_overlap = self.model_config.chunk_overlap
         self.document_processor.retrieval_k = self.model_config.retrieval_k
 
-        # Tool managers
-        self.crowdstrike_manager = CrowdStrikeToolsManager()
-        self.weather_tool = get_weather_info_tool(
-            api_key=self.config.open_weather_map_api_key
-        )
-        # Staffing and metrics tools imported directly
-        self.test_manager = TestToolsManager()
-
-        logging.info("Core managers initialized")
+        logging.info("Document processor initialized")
 
     def _initialize_ai_components(self) -> bool:
         """Initialize AI components (LLM and embeddings)"""
@@ -169,29 +156,31 @@ class SecurityBotStateManager:
         """Initialize the LangChain agent with all tools"""
         try:
             # Collect all available tools
-            all_tools = []
-
-            # Add weather tools
-            all_tools.append(self.weather_tool)
-
-            # Add CrowdStrike tools if available
-            if self.crowdstrike_manager.is_available():
-                all_tools.extend(self.crowdstrike_manager.get_tools())
-                logging.info("CrowdStrike tools added to agent.")
-
-            # Add staffing tools
-            all_tools.extend([get_current_shift_info, get_current_staffing])
-
-            # Add metrics tools
-            all_tools.extend([get_bot_metrics, get_bot_metrics_summary])
-
-            # Add network monitoring tools
-            all_tools.extend([get_network_activity, get_network_summary_tool])
-
-            # Add test tools
-            if self.test_manager.is_available():
-                all_tools.extend(self.test_manager.get_tools())
-                logging.info("Test execution tools added to agent.")
+            all_tools = [
+                # Weather tools
+                get_weather_info,
+                
+                # CrowdStrike tools
+                get_device_containment_status,
+                get_device_online_status, 
+                get_device_details_cs,
+                
+                # Staffing tools
+                get_current_shift_info,
+                get_current_staffing,
+                
+                # Metrics tools
+                get_bot_metrics,
+                get_bot_metrics_summary,
+                
+                # Network monitoring tools
+                get_network_activity,
+                get_network_summary_tool,
+                
+                # Test tools
+                run_tests,
+                simple_live_message_test
+            ]
 
             # Add RAG tool if available
             if self.document_processor.retriever:
@@ -263,8 +252,7 @@ class SecurityBotStateManager:
             'llm': self.llm is not None,
             'embeddings': self.embeddings is not None,
             'agent': True,  # Always true with native tool calling
-            'rag': self.document_processor.retriever is not None if self.document_processor else False,
-            'crowdstrike': self.crowdstrike_manager.is_available() if self.crowdstrike_manager else False
+            'rag': self.document_processor.retriever is not None if self.document_processor else False
         }
 
         return {
