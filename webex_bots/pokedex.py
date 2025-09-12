@@ -326,7 +326,10 @@ class Bot(WebexBot):
                             import requests
                             edit_url = f'https://webexapis.com/v1/messages/{thinking_msg.id}'
                             headers = {'Authorization': f'Bearer {CONFIG.webex_bot_access_token_pokedex}', 'Content-Type': 'application/json'}
-                            edit_data = {'text': done_message}
+                            edit_data = {
+                                'roomId': teams_message.roomId,
+                                'text': done_message
+                            }
 
                             edit_response = requests.put(edit_url, headers=headers, json=edit_data)
                             if edit_response.status_code == 200:
