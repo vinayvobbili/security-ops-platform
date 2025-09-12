@@ -1,4 +1,4 @@
-# /pokedex_bot/tools/staffing_tools.py
+# /my_bot/tools/staffing_tools.py
 """
 Shift Information Tools
 

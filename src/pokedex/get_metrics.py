@@ -17,7 +17,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(
 def fetch_metrics() -> Dict[str, Any]:
     """Fetch metrics from the performance monitor"""
     try:
-        from pokedex_bot.core.my_model import performance_monitor, session_manager
+        from my_bot.core.my_model import performance_monitor, session_manager
 
         # Get comprehensive stats
         perf_stats = performance_monitor.get_stats()

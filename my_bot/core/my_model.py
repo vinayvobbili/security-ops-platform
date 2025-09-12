@@ -21,9 +21,9 @@ Created for MetLife Security Operations
 """
 import logging
 import time
-from pokedex_bot.core.state_manager import get_state_manager
-from pokedex_bot.core.session_manager import get_session_manager
-from pokedex_bot.core.error_recovery import get_recovery_manager, enhanced_query_wrapper
+from my_bot.core.state_manager import get_state_manager
+from my_bot.core.session_manager import get_session_manager
+from my_bot.core.error_recovery import get_recovery_manager, enhanced_query_wrapper
 
 logging.basicConfig(level=logging.ERROR)
 
@@ -31,7 +31,7 @@ logging.basicConfig(level=logging.ERROR)
 def run_health_tests_command() -> str:
     """Execute health tests and return formatted results"""
     try:
-        from pokedex_bot.tests.system_health_tests import run_health_tests
+        from my_bot.tests.system_health_tests import run_health_tests
 
         # Run the health tests
         logging.info("🔬 Running health tests via chat command...")
