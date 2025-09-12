@@ -248,7 +248,7 @@ class Bot(WebexBot):
                     def update_thinking_message():
                         counter = 1
                         while thinking_active.is_set():
-                            time.sleep(5)
+                            time.sleep(10)
                             if thinking_active.is_set():  # Check again after sleep
                                 try:
                                     new_message = random.choice(THINKING_MESSAGES)
@@ -261,7 +261,7 @@ class Bot(WebexBot):
                                     }
                                     payload = {
                                         'roomId': teams_message.roomId,
-                                        'text': f"{new_message} ({counter * 5}s)"
+                                        'text': f"{new_message} ({counter * 10}s)"
                                     }
 
                                     response = requests.put(update_url, headers=update_headers, json=payload)
