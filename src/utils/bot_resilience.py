@@ -271,6 +271,11 @@ class ResilientBot:
                     logger.warning(f"Could not extract bot name for process detection: {e}")
                     return 0
 
+            # Final check - if bot_name is still None, we can't do process detection
+            if not self.bot_name:
+                logger.warning("Bot name is still None after extraction attempt - skipping process detection")
+                return 0
+                
             bot_script = f"{self.bot_name.lower()}.py"
 
             # Check for other Python processes running the same bot script

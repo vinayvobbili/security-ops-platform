@@ -367,7 +367,8 @@ def main():
             approved_domains=['company.com'],
             bot_name="Pokedex"
         ),
-        initialization_func=initialize_bot
+        initialization_func=initialize_bot,
+        bot_name="Pokedex"
     )
     resilient_runner.run()
 
