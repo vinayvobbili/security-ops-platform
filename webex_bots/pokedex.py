@@ -364,7 +364,7 @@ def main():
     resilient_runner = ResilientBot(
         bot_factory=lambda: Bot(
             teams_bot_token=WEBEX_ACCESS_TOKEN,
-            approved_domains=['company.com'],
+            approved_rooms=[CONFIG.webex_room_id_vinay_test_space, CONFIG.webex_room_id_threatcon_collab, CONFIG.webex_room_id_automation_engineering],
             bot_name="Pokedex"
         ),
         initialization_func=initialize_bot,
