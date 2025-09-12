@@ -287,6 +287,21 @@ class GetBotHealth(Command):
         )
 
 
+class Hi(Command):
+    """Simple Hi command to check if bot is alive."""
+
+    def __init__(self):
+        super().__init__(
+            command_keyword="hi",
+            delete_previous_message=False,
+            exact_command_keyword_match=False,
+        )
+
+    @log_activity(config.webex_bot_access_token_moneyball, "moneyball_activity_log.csv")
+    def execute(self, message, attachment_actions, activity):
+        return "Hi 👋"
+
+
 def send_chart(room_id, display_name, chart_name, chart_filename):
     """Sends a chart image to a Webex room with enhanced error handling."""
     try:
@@ -362,6 +377,7 @@ def moneyball_initialization(bot_instance=None):
         bot_instance.add_command(GetAgingTicketsByOwnerReport())
         bot_instance.add_command(GetBotHealth())
         bot_instance.add_command(HelpCommand())
+        bot_instance.add_command(Hi())
         return True
     return False
 
