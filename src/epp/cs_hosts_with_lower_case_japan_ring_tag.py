@@ -47,21 +47,13 @@ def get_cs_hosts_with_japan_ring_tag():
             out_df = pd.DataFrame(columns=df.columns)
         else:
             out_df = pd.DataFrame()
-    with pd.ExcelWriter(output_path, engine='openpyxl') as writer:
-        out_df.to_excel(writer, index=False, sheet_name='Hosts')
-        worksheet = writer.sheets['Hosts']
-        from openpyxl.styles import Font
-        if out_df.shape[1] > 0:
-            for cell in worksheet[1]:
-                cell.font = Font(bold=True)
-            worksheet.auto_filter.ref = worksheet.dimensions
-            worksheet.freeze_panes = worksheet['A2']
-            for col in worksheet.columns:
-                max_length = max(len(str(cell.value)) if cell.value else 0 for cell in col)
-                worksheet.column_dimensions[col[0].column_letter].width = min(max_length + 2, 50)
-        else:
-            # If no columns, just leave the empty sheet
-            pass
+    # Write Excel file
+    out_df.to_excel(output_path, index=False, engine='openpyxl')
+    
+    # Apply professional formatting
+    if out_df.shape[1] > 0:  # Only format if there's data
+        from src.utils.excel_formatting import apply_professional_formatting
+        apply_professional_formatting(output_path)
     return output_path
 
 

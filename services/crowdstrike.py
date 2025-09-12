@@ -218,7 +218,12 @@ class CrowdStrikeClient:
         output_path.mkdir(parents=True, exist_ok=True)
 
         df = pd.DataFrame(all_host_data)
-        df.to_excel(output_path / xlsx_filename, index=False, engine='openpyxl')
+        excel_file_path = output_path / xlsx_filename
+        df.to_excel(excel_file_path, index=False, engine='openpyxl')
+        
+        # Apply professional formatting
+        from src.utils.excel_formatting import apply_professional_formatting
+        apply_professional_formatting(excel_file_path)
 
     def update_device_tags(self, action_name: str, ids: list, tags: list) -> dict:
         """Update device tags (add/remove) for a list of device IDs."""
@@ -262,6 +267,10 @@ def update_unique_hosts_from_cs() -> None:
     unique_hosts_file = DATA_DIR / today_date / "unique_cs_hosts.xlsx"
     unique_hosts_file.parent.mkdir(parents=True, exist_ok=True)
     unique_hosts.to_excel(unique_hosts_file, index=False, engine="openpyxl")
+    
+    # Apply professional formatting
+    from src.utils.excel_formatting import apply_professional_formatting
+    apply_professional_formatting(unique_hosts_file)
 
 
 def main() -> None:
