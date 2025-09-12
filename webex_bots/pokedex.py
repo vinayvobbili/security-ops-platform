@@ -367,7 +367,8 @@ def main():
             approved_domains=['company.com'],
             bot_name="the security assistant bot"
         ),
-        initialization_func=initialize_bot
+        initialization_func=initialize_bot,
+        bot_name="the security assistant bot"
     )
     resilient_runner.run()
 

@@ -366,7 +366,8 @@ def main():
             approved_domains=['company.com'],
             bot_name="HAL9000"
         ),
-        initialization_func=initialize_bot
+        initialization_func=initialize_bot,
+        bot_name="HAL9000"
     )
     resilient_runner.run()
 
