@@ -322,13 +322,13 @@ class Bot(WebexBot):
                         done_prefix = random.choice(DONE_MESSAGES)
                         done_message = f"{done_prefix} ⚡ Response time: **{response_time:.1f}s**"
                         try:
-                            # Update the thinking message to show completion (using text, not markdown)
+                            # Update the thinking message to show completion (using markdown)
                             import requests
                             edit_url = f'https://webexapis.com/v1/messages/{thinking_msg.id}'
                             headers = {'Authorization': f'Bearer {CONFIG.webex_bot_access_token_pokedex}', 'Content-Type': 'application/json'}
                             edit_data = {
                                 'roomId': teams_message.roomId,
-                                'text': done_message
+                                'markdown': done_message
                             }
 
                             edit_response = requests.put(edit_url, headers=headers, json=edit_data)
