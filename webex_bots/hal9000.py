@@ -244,7 +244,7 @@ class Bot(WebexBot):
                     thinking_msg = self.teams.messages.create(
                         roomId=teams_message.roomId,
                         parentId=parent_id,  # Use original parent to avoid "reply to reply"
-                        text=thinking_message
+                        markdown=thinking_message
                     )
 
                     # Start background thread to update thinking message every 5 seconds
@@ -267,7 +267,7 @@ class Bot(WebexBot):
                                     }
                                     payload = {
                                         'roomId': teams_message.roomId,
-                                        'text': f"{new_message} ({counter * 10}s)"
+                                        'markdown': f"{new_message} ({counter * 10}s)"
                                     }
 
                                     response = requests.put(update_url, headers=update_headers, json=payload)

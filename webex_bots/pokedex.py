@@ -244,7 +244,7 @@ class Bot(WebexBot):
                     thinking_msg = self.teams.messages.create(
                         roomId=teams_message.roomId,
                         parentId=parent_id,  # Use original parent to avoid "reply to reply"
-                        text=thinking_message
+                        markdown=thinking_message
                     )
 
                     # Start background thread to update thinking message every 5 seconds
@@ -267,7 +267,7 @@ class Bot(WebexBot):
                                     }
                                     payload = {
                                         'roomId': teams_message.roomId,
-                                        'text': f"{new_message} ({counter * 10}s)"
+                                        'markdown': f"{new_message} ({counter * 10}s)"
                                     }
 
                                     response = requests.put(update_url, headers=update_headers, json=payload)
@@ -343,6 +343,10 @@ class Bot(WebexBot):
                             logger.warning(f"Failed to update thinking message to completion: {edit_response.status_code}")
                     except Exception as completion_error:
                         logger.warning(f"Could not update thinking message to completion: {completion_error}")
+
+                # Brief pause to let users see the "Done!" message before the response
+                import time
+                time.sleep(1)
 
                 # Handle threading - avoid "Cannot reply to a reply" error
                 try:
