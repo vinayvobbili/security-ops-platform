@@ -37,17 +37,12 @@ openpyxl
 tabulate
 beautifulsoup4
 pyarrow
-orjson
 python-docx
-networkx
-msoffcrypto-tool
-unstructured
 
 # Image Processing
 pillow
 pytesseract
 Cartopy
-fonttools
 
 # Security Tools
 crowdstrike-falconpy
@@ -74,9 +69,3 @@ types-pytz
 jsonschema
 pydantic-settings
 typing_extensions
-
-# Additional Dependencies
-marshmallow
-multidict
-narwhals
-rpds-py
