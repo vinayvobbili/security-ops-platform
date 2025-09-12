@@ -1983,11 +1983,11 @@ def toodles_bot_factory():
     """Create the notification service bot instance"""
     return WebexBot(
         CONFIG.webex_bot_access_token_toodles,
-        bot_name="🛠🤖 the notification service! 👋",
+        bot_name="the notification service Bot",
         approved_rooms=[CONFIG.webex_room_id_vinay_test_space, CONFIG.webex_room_id_gosc_t2, CONFIG.webex_room_id_threatcon_collab],
         log_level="ERROR",
         threads=True,
-        bot_help_subtitle="🔧 Your friendly toolbox bot! 🪚"
+        bot_help_subtitle="Your friendly toolbox bot!"
     )
 
 

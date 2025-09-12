@@ -337,10 +337,10 @@ def moneyball_bot_factory():
     return WebexBot(
         config.webex_bot_access_token_moneyball,
         approved_rooms=[config.webex_room_id_vinay_test_space, config.webex_room_id_metrics],
-        bot_name="📊 MoneyBall 🤖\n The Metrics & Analytics Bot",
+        bot_name="MoneyBall - The Metrics & Analytics Bot",
         threads=True,
         log_level="ERROR",
-        bot_help_subtitle="📈 Your friendly neighborhood metrics bot! Click a button to get charts and reports!"
+        bot_help_subtitle="Your friendly neighborhood metrics bot! Click a button to get charts and reports!"
     )
 
 

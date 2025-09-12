@@ -558,10 +558,10 @@ def barnacles_bot_factory():
         bot_token,
         approved_rooms=[],
         approved_users=config.barnacles_approved_users.split(','),
-        bot_name="⚓ the alert triage service 🤖\n The Captain's Assistant 👩🏻‍⚕️",
+        bot_name="the alert triage service - The Captain's Assistant",
         threads=True,
         log_level="ERROR",
-        bot_help_subtitle="Click a button to start! 🎬"
+        bot_help_subtitle="Click a button to start!"
     )
 
 
