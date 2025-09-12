@@ -412,8 +412,10 @@ class PokeDexBot(WebexBot):
 
             logger.info(f"Processing message from {teams_message.personEmail}: {raw_message[:100]}...")
 
-            # Initialize thinking_msg as None
+            # Initialize thinking message variables
+            import threading
             thinking_msg = None
+            thinking_active = threading.Event()
 
             # Note: Session management is handled inside the ask() function
             # The LLM agent automatically manages conversation context via SQLite
@@ -422,10 +424,6 @@ class PokeDexBot(WebexBot):
             if not bot_ready:
                 response_text = "🔄 I'm still starting up. Please try again in a moment."
             else:
-                # Initialize thinking message variables  
-                import threading
-                thinking_msg = None
-                thinking_active = threading.Event()
 
                 # Send thinking indicator as a threaded reply for user engagement
                 try:
@@ -451,8 +449,8 @@ class PokeDexBot(WebexBot):
                                     new_message = random.choice(THINKING_MESSAGES)
                                     # Try editing with proper API call format
                                     import requests
-                                    edit_url = f'https://webexapis.com/v1/messages/{thinking_msg.id}'
-                                    headers = {
+                                    update_url = f'https://webexapis.com/v1/messages/{thinking_msg.id}'
+                                    update_headers = {
                                         'Authorization': f'Bearer {self.access_token}',
                                         'Content-Type': 'application/json'
                                     }
@@ -461,7 +459,7 @@ class PokeDexBot(WebexBot):
                                         'text': f"{new_message} ({counter * 5}s)"
                                     }
 
-                                    response = requests.put(edit_url, headers=headers, json=payload)
+                                    response = requests.put(update_url, headers=update_headers, json=payload)
 
                                     if response.status_code == 200:
                                         counter += 1
@@ -569,18 +567,17 @@ def create_webex_bot():
     """Create and configure the WebexBot instance"""
     return PokeDexBot(
         teams_bot_token=WEBEX_ACCESS_TOKEN,
-        approved_rooms=[CONFIG.webex_room_id_vinay_test_space],
         approved_domains=['company.com'],
         bot_name="Pokedex"
     )
 
 
-def pokedex_bot_factory():
+def bot_factory():
     """Create Pokedex bot instance"""
     return create_webex_bot()
 
 
-def pokedex_initialization(bot_instance_param=None):
+def initialization(bot_instance_param=None):
     """Initialize Pokedex LLM components"""
     global bot_instance
     if bot_instance_param:
@@ -595,8 +592,8 @@ def main():
 
     runner = SimpleBotRunner(
         bot_name="Pokedex",
-        bot_factory=pokedex_bot_factory,
-        initialization_func=pokedex_initialization
+        bot_factory=bot_factory,
+        initialization_func=initialization
     )
     runner.run()
 
