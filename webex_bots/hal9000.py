@@ -376,14 +376,10 @@ class Bot(WebexBot):
 
 def main():
     """Bot main entry point"""
-    # Initialize LLM components
-    if not initialize_model_and_agent():
-        logger.error("Failed to initialize components")
+    # Initialize bot components (includes LLM and startup message)
+    if not initialize_bot():
+        logger.error("Failed to initialize bot")
         return
-
-    # Set bot as ready
-    global bot_ready
-    bot_ready = True
 
     # Create and run bot
     bot = Bot(
