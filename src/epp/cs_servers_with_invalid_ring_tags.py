@@ -19,11 +19,10 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import pandas as pd
-from openpyxl import load_workbook
-from openpyxl.styles import Font, PatternFill, Border, Side, Alignment, NamedStyle
 
 from services import crowdstrike, service_now
 from src.epp.cs_hosts_without_ring_tag import get_dated_path
+from src.utils.excel_formatting import apply_professional_formatting
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -223,7 +222,7 @@ def generate_report():
     # Save servers with ring tags
     servers_with_ring_tags_file_path = output_dir / "cs_servers_with_ring_tags.xlsx"
     servers_with_ring_tags.to_excel(servers_with_ring_tags_file_path, index=False, engine="openpyxl")
-    adjust_column_widths(servers_with_ring_tags_file_path)
+    apply_professional_formatting(servers_with_ring_tags_file_path)
 
     # Enrich with ServiceNow data
     enriched_file_path = service_now.enrich_host_report(servers_with_ring_tags_file_path)
@@ -235,7 +234,7 @@ def generate_report():
     # Save complete report
     complete_report_path = output_dir / "cs_servers_last_seen_with_invalid_ring_tags.xlsx"
     enriched_servers.to_excel(complete_report_path, index=False, engine="openpyxl")
-    adjust_column_widths(complete_report_path)
+    apply_professional_formatting(complete_report_path)
 
     # Save filtered report (invalid tags only)
     invalid_servers = enriched_servers[enriched_servers['has_invalid_ring_tag']].copy()
@@ -269,7 +268,7 @@ def generate_report():
         ]
         filtered_report_path = output_dir / "cs_servers_with_invalid_ring_tags_only.xlsx"
         invalid_servers[columns_to_keep].to_excel(filtered_report_path, index=False, engine="openpyxl")
-        adjust_column_widths(filtered_report_path)
+        apply_professional_formatting(filtered_report_path)
         logger.info(f"Found {len(invalid_servers)} hosts with invalid ring tags")
     else:
         logger.info("No hosts with invalid ring tags found")
