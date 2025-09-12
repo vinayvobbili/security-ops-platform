@@ -22,7 +22,6 @@ import csv
 import logging.handlers
 import os
 import random
-import signal
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -152,7 +151,7 @@ WEBEX_ACCESS_TOKEN = CONFIG.webex_bot_access_token_pokedex
 WEBEX_BOT_EMAIL = CONFIG.webex_bot_email_pokedex
 
 # Network logging configuration - set to False to improve performance
-SHOULD_LOG_NETWORK_TRAFFIC = True  # Change to False to disable network logging
+SHOULD_LOG_NETWORK_TRAFFIC = False  # Change to False to disable network logging
 
 if not WEBEX_ACCESS_TOKEN:
     logger.error("WEBEX_ACCESS_TOKEN environment variable is required")
@@ -570,18 +569,15 @@ def pokedex_initialization(bot_instance_param=None):
 
 
 def main():
-    """Pokedex main with resilience framework"""
-    from src.utils.bot_resilience import BotResilient
+    """Pokedex main with simplified resilience framework"""
+    from src.utils.simple_bot_resilience import SimpleBotRunner
 
-    resilient_runner = BotResilient(
+    runner = SimpleBotRunner(
         bot_name="Pokedex",
         bot_factory=pokedex_bot_factory,
-        initialization_func=pokedex_initialization,
-        max_retries=5,
-        initial_retry_delay=30,
-        max_retry_delay=300
+        initialization_func=pokedex_initialization
     )
-    resilient_runner.run()
+    runner.run()
 
 
 if __name__ == "__main__":
