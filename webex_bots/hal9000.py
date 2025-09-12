@@ -292,21 +292,12 @@ class Bot(WebexBot):
                     thinking_msg = None
 
                 # Process query through LLM agent
-                agent_start_time = datetime.now()
-                # Get response from LLM agent
                 try:
                     response_text = ask(
                         raw_message,
                         user_id=teams_message.personId,
                         room_id=teams_message.roomId
                     )
-                    # Calculate response time for cards
-                    agent_end_time = datetime.now()
-                    response_time_seconds = (agent_end_time - agent_start_time).total_seconds()
-
-                    # Replace placeholder with actual response time in Adaptive Cards
-                    if "[X.X]s" in response_text:
-                        response_text = response_text.replace("[X.X]s", f"{response_time_seconds:.1f}s")
                 except Exception as e:
                     logger.error(f"Error in LLM agent processing: {e}")
                     response_text = "❌ I encountered an error processing your message. Please try again."
