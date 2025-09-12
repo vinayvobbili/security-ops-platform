@@ -19,6 +19,8 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import pandas as pd
+from openpyxl import load_workbook
+from openpyxl.styles import Font, PatternFill, Border, Side, Alignment, NamedStyle
 
 from services import crowdstrike, service_now
 from src.epp.cs_hosts_without_ring_tag import get_dated_path
@@ -53,13 +55,113 @@ def get_expected_ring(env):
     return 4
 
 
+def adjust_column_widths(file_path):
+    """Adjust column widths, format headers, and add professional formatting in Excel file."""
+    try:
+        workbook = load_workbook(file_path)
+        worksheet = workbook.active
+
+        # Column width mappings for common columns
+        column_widths = {
+            'hostname': 25,
+            'host_id': 20,
+            'current_tags': 80,
+            'invalid_tags': 60,
+            'last_seen': 20,
+            'status': 15,
+            'cs_host_category': 20,
+            'SNOW_environment': 15,
+            'SNOW_lifecycleStatus': 20,
+            'comment': 50,
+            'environment': 15,
+            'platform': 15,
+        }
+
+        # Text wrap columns (for long content)
+        wrap_columns = {'current_tags', 'invalid_tags', 'comment'}
+
+        # Date columns (for date formatting)
+        date_columns = {'last_seen'}
+
+        # Get header row to map column names to letters
+        header_row = list(worksheet.iter_rows(min_row=1, max_row=1, values_only=True))[0]
+
+        # Define styles
+        header_font = Font(bold=True, color="FFFFFF")
+        header_fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
+        thin_border = Border(
+            left=Side(style='thin'),
+            right=Side(style='thin'),
+            top=Side(style='thin'),
+            bottom=Side(style='thin')
+        )
+        wrap_alignment = Alignment(wrap_text=True, vertical='top')
+
+        # Zebra stripe colors
+        light_fill = PatternFill(start_color="F2F2F2", end_color="F2F2F2", fill_type="solid")
+
+        # Create date style
+        date_style = NamedStyle(name='date_style', number_format='MM/DD/YYYY HH:MM')
+
+        # Format headers
+        for col_idx, header in enumerate(header_row, 1):
+            col_letter = worksheet.cell(row=1, column=col_idx).column_letter
+            cell = worksheet.cell(row=1, column=col_idx)
+
+            # Set column width
+            if header and header.lower() in column_widths:
+                worksheet.column_dimensions[col_letter].width = column_widths[header.lower()]
+            else:
+                worksheet.column_dimensions[col_letter].width = 15
+
+            # Format header cell
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.border = thin_border
+
+        # Format data rows
+        for row_idx in range(2, worksheet.max_row + 1):
+            # Zebra striping - every other row
+            is_alternate_row = (row_idx % 2 == 0)
+
+            for col_idx, header in enumerate(header_row, 1):
+                cell = worksheet.cell(row=row_idx, column=col_idx)
+
+                # Add borders to all cells
+                cell.border = thin_border
+
+                # Zebra striping
+                if is_alternate_row:
+                    cell.fill = light_fill
+
+                # Text wrapping for long content columns
+                if header and header.lower() in wrap_columns:
+                    cell.alignment = wrap_alignment
+
+                # Date formatting
+                if header and header.lower() in date_columns and cell.value:
+                    cell.style = date_style
+
+        # Freeze the header row
+        worksheet.freeze_panes = 'A2'
+
+        # Add auto filter to the data range
+        if worksheet.max_row > 1:  # Only add filter if there's data beyond headers
+            worksheet.auto_filter.ref = f"A1:{worksheet.cell(row=worksheet.max_row, column=worksheet.max_column).coordinate}"
+
+        workbook.save(file_path)
+        logger.info(f"Applied professional formatting to {file_path}")
+    except Exception as e:
+        logger.warning(f"Could not format Excel file {file_path}: {e}")
+
+
 def analyze_ring_tags(servers_df):
     """Analyze servers and mark those with invalid ring tags, completely ignoring Citrix rings."""
     servers_df['has_invalid_ring_tag'] = False
     servers_df['comment'] = ''
 
     for index, server in servers_df.iterrows():
-        env = str(server.get('environment', '')).lower()
+        env = str(server.get('SNOW_environment', '')).lower()
         current_tags = server.get('current_tags', '')
 
         # Extract all ring tags first
@@ -121,6 +223,7 @@ def generate_report():
     # Save servers with ring tags
     servers_with_ring_tags_file_path = output_dir / "cs_servers_with_ring_tags.xlsx"
     servers_with_ring_tags.to_excel(servers_with_ring_tags_file_path, index=False, engine="openpyxl")
+    adjust_column_widths(servers_with_ring_tags_file_path)
 
     # Enrich with ServiceNow data
     enriched_file_path = service_now.enrich_host_report(servers_with_ring_tags_file_path)
@@ -132,6 +235,7 @@ def generate_report():
     # Save complete report
     complete_report_path = output_dir / "cs_servers_last_seen_with_invalid_ring_tags.xlsx"
     enriched_servers.to_excel(complete_report_path, index=False, engine="openpyxl")
+    adjust_column_widths(complete_report_path)
 
     # Save filtered report (invalid tags only)
     invalid_servers = enriched_servers[enriched_servers['has_invalid_ring_tag']].copy()
@@ -165,6 +269,7 @@ def generate_report():
         ]
         filtered_report_path = output_dir / "cs_servers_with_invalid_ring_tags_only.xlsx"
         invalid_servers[columns_to_keep].to_excel(filtered_report_path, index=False, engine="openpyxl")
+        adjust_column_widths(filtered_report_path)
         logger.info(f"Found {len(invalid_servers)} hosts with invalid ring tags")
     else:
         logger.info("No hosts with invalid ring tags found")
