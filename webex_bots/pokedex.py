@@ -169,12 +169,18 @@ def initialize_bot():
         # Set bot as ready immediately after core initialization
         bot_ready = True
         total_time = (datetime.now() - start_time).total_seconds()
-        logger.info(f"✅ Streamlined bot initialization completed in {total_time:.1f}s")
 
-        # Health tests disabled for faster startup - run manually when needed
-        # To run health tests: python my_bot/tests/system_health_tests.py
-        # Or use pytest: python -m pytest tests/
-        logger.info("🚀 Bot ready - health tests available on demand")
+        # Get model information
+        try:
+            from my_bot.core.state_manager import get_state_manager
+            state_manager = get_state_manager()
+            model_name = state_manager.model_config.llm_model_name if state_manager and hasattr(state_manager, 'model_config') else "Unknown"
+        except:
+            model_name = "Unknown"
+
+        startup_message = f"🚀 Pokedex is up and running (startup in {total_time:.1f}s) using {model_name}..."
+        logger.info(startup_message)
+        print(startup_message)
 
         return True
 
