@@ -581,9 +581,9 @@ def barnacles_initialization(bot_instance=None):
 
 def main():
     """Barnacles main with resilience framework"""
-    from src.utils.bot_resilience import BotResilient
+    from src.utils.bot_resilience import ResilientBot
 
-    resilient_runner = BotResilient(
+    resilient_runner = ResilientBot(
         bot_name="Barnacles",
         bot_factory=barnacles_bot_factory,
         initialization_func=barnacles_initialization,

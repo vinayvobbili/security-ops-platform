@@ -358,19 +358,18 @@ class Bot(WebexBot):
 
 
 def main():
-    """Bot main entry point"""
-    # Initialize bot components (includes LLM and startup message)
-    if not initialize_bot():
-        logger.error("Failed to initialize bot")
-        return
+    """Pokedex main with resilience framework"""
+    from src.utils.bot_resilience import ResilientBot
 
-    # Create and run bot
-    bot = Bot(
-        teams_bot_token=WEBEX_ACCESS_TOKEN,
-        approved_domains=['company.com'],
-        bot_name="Pokedex"
+    resilient_runner = ResilientBot(
+        bot_factory=lambda: Bot(
+            teams_bot_token=WEBEX_ACCESS_TOKEN,
+            approved_domains=['company.com'],
+            bot_name="Pokedex"
+        ),
+        initialization_func=initialize_bot
     )
-    bot.run()
+    resilient_runner.run()
 
 
 if __name__ == "__main__":

@@ -32,20 +32,23 @@ def main():
 ```
 
 ### After (Common Framework)
+
 ```python
 def bot_factory():
     """Factory function to create bot instance"""
     return create_bot()
 
+
 def initialization():
     """Custom initialization logic"""
     return initialize_components()
 
+
 def main():
     """Main entry point using resilience framework"""
-    from src.utils.bot_resilience import BotResilient
-    
-    resilient_runner = BotResilient(
+    from src.utils.bot_resilience import ResilientBot
+
+    resilient_runner = ResilientBot(
         bot_name="MyBot",
         bot_factory=bot_factory,
         initialization_func=initialization
@@ -68,6 +71,7 @@ def toodles_bot_factory():
         threads=True
     )
 
+
 def toodles_initialization():
     """Initialize Toodles commands"""
     global bot_instance
@@ -79,11 +83,12 @@ def toodles_initialization():
         # ... add all other commands
     return True
 
+
 def main():
     """Toodles main with resilience"""
-    from src.utils.bot_resilience import BotResilient
-    
-    resilient_runner = BotResilient(
+    from src.utils.bot_resilience import ResilientBot
+
+    resilient_runner = ResilientBot(
         bot_name="Toodles",
         bot_factory=toodles_bot_factory,
         initialization_func=toodles_initialization,
@@ -92,6 +97,7 @@ def main():
         max_retry_delay=300
     )
     resilient_runner.run()
+
 
 if __name__ == "__main__":
     main()
@@ -103,24 +109,26 @@ if __name__ == "__main__":
 # jarvais.py - After conversion
 
 def jarvais_bot_factory():
-    """Create Jarvais bot instance"""  
+    """Create Jarvais bot instance"""
     return WebexBot(
         CONFIG.webex_bot_access_token_jarvais,
         bot_name="🤖 Jarvais",
         approved_rooms=[...],
     )
 
+
 def jarvais_initialization():
     """Initialize Jarvais components"""
     # Custom Jarvais initialization
     return initialize_jarvais_components()
 
+
 def main():
-    """Jarvais main with resilience"""  
-    from src.utils.bot_resilience import BotResilient
-    
-    resilient_runner = BotResilient(
-        bot_name="Jarvais", 
+    """Jarvais main with resilience"""
+    from src.utils.bot_resilience import ResilientBot
+
+    resilient_runner = ResilientBot(
+        bot_name="Jarvais",
         bot_factory=jarvais_bot_factory,
         initialization_func=jarvais_initialization
     )

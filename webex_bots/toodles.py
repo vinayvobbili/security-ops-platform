@@ -2024,9 +2024,9 @@ def toodles_initialization(bot_instance=None):
 
 def main():
     """Toodles main with resilience framework"""
-    from src.utils.bot_resilience import BotResilient
+    from src.utils.bot_resilience import ResilientBot
 
-    resilient_runner = BotResilient(
+    resilient_runner = ResilientBot(
         bot_name="Toodles",
         bot_factory=toodles_bot_factory,
         initialization_func=toodles_initialization,
