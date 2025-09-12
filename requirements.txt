@@ -1,53 +1,53 @@
 python-dotenv
 matplotlib
 # Core Data Processing
-pandas==2.3.1
-numpy==1.26.4
+pandas>=2.3.2
+numpy>=2.3.3
 pytz
 python-dateutil
 
 # Webex/Communication
 webexpythonsdk==2.0.4
-webexteamssdk==1.6.1
-webex_bot==1.0.4
-twilio==9.6.5
+webexteamssdk
+webex_bot
 
-# Web Framework
-# streamlit==1.37.0
-Flask==3.0.3
-altair==5.2.0
+# Web Frameworks
+# streamlit
+Flask
+altair
 
 # HTTP/Network
-requests==2.32.4
-aiohttp==3.12.14
-urllib3==2.5.0
-websockets==11.0.3
-aiohttp-retry==2.9.1
+requests
+aiohttp
+urllib3
+websockets<12.0
+aiohttp-retry
 
-# Security/Authentication - VULNERABILITY FIXED
-PyJWT==2.10.1
-cryptography==45.0.5
-certifi==2025.7.14
+# Security/Authentication - Always use latest for security
+PyJWT
+cryptography
+certifi
 
 # Azure/Cloud
-azure-core==1.35.0
+azure-core
 msrest
 
 # Data Processing/Analysis
 openpyxl
 tabulate
 beautifulsoup4
-pyarrow==21.0.0
-orjson==3.11.0
+pyarrow
+orjson
 python-docx
 networkx
 msoffcrypto-tool
+unstructured
 
 # Image Processing
-pillow==11.3.0
+pillow
 pytesseract
 Cartopy
-fonttools==4.59.0
+fonttools
 
 # Security Tools
 crowdstrike-falconpy
@@ -60,22 +60,23 @@ tenacity
 filelock
 config
 
-# AI/LangChain
-langchain-community==0.3.27
-langchain-core==0.3.69
-langchain-ollama==0.3.5
-langsmith<0.4
+# AI/LangChain - Use latest for features and fixes
+langchain-community
+langchain-core
+langchain-ollama
+langsmith
 faiss-cpu
+rank_bm25
 
 # Development/Testing
-pytest==8.3.3
+pytest
 types-pytz
-jsonschema==4.25.0
-pydantic-settings==2.10.1
-typing_extensions==4.14.1
+jsonschema
+pydantic-settings
+typing_extensions
 
 # Additional Dependencies
-marshmallow==3.26.1
-multidict==6.6.3
-narwhals==1.47.1
-rpds-py==0.26.0
+marshmallow
+multidict
+narwhals
+rpds-py
