@@ -359,6 +359,14 @@ class Bot(WebexBot):
 def main():
     """HAL9000 main with resilience framework"""
     from src.utils.bot_resilience import ResilientBot
+    
+    # NOTE: To enable ZScaler resilience (when ZScaler gets upgraded on this machine):
+    # 1. Change "needs_resilience": False to True in src/utils/zscaler_resilience.py for "HAL9000"
+    # 2. OR replace the imports above with:
+    #    from src.utils.zscaler_resilience import should_use_zscaler_resilience, ZScalerResilientBot
+    #    And use the same pattern as Pokedx.py to automatically choose resilience framework
+    # 
+    # Currently using standard resilience since ZScaler 4.1.0.161 works fine.
 
     resilient_runner = ResilientBot(
         bot_factory=lambda: Bot(

@@ -54,8 +54,10 @@ class ResilientBot:
                  max_retries: int = 5,
                  initial_retry_delay: int = 30,
                  max_retry_delay: int = 300,
-                 keepalive_interval: int = 240,
-                 max_keepalive_interval: int = 1800):
+                 keepalive_interval: int = 120,  # More frequent for proxy handling
+                 max_keepalive_interval: int = 600,
+                 websocket_ping_interval: int = 30,  # WebSocket ping frequency
+                 proxy_detection: bool = True):  # Enable ZScaler proxy detection
         """
         Initialize resilient bot runner
         
@@ -77,14 +79,23 @@ class ResilientBot:
         self.max_retry_delay = max_retry_delay
         self.keepalive_interval = keepalive_interval
         self.max_keepalive_interval = max_keepalive_interval
+        self.websocket_ping_interval = websocket_ping_interval
+        self.proxy_detection = proxy_detection
 
         # Runtime state
         self.bot_instance = None
         self.shutdown_requested = False
         self.keepalive_thread = None
+        self.websocket_monitor_thread = None
+        self.last_successful_ping = datetime.now()
+        self.consecutive_failures = 0
 
         # Setup signal handlers
         self._setup_signal_handlers()
+        
+        # Detect proxy environment
+        if proxy_detection:
+            self._detect_proxy_environment()
 
     def _setup_signal_handlers(self):
         """Setup signal handlers for graceful shutdown"""
@@ -97,6 +108,95 @@ class ResilientBot:
 
         signal.signal(signal.SIGINT, signal_handler)
         signal.signal(signal.SIGTERM, signal_handler)
+        
+    def _detect_proxy_environment(self):
+        """Detect if we're running behind a proxy (like ZScaler)"""
+        try:
+            import subprocess
+            import os
+            
+            # Check for ZScaler process
+            result = subprocess.run(["ps", "aux"], capture_output=True, text=True)
+            if "zscaler" in result.stdout.lower():
+                logger.info(f"🛡️ ZScaler proxy detected for {self.bot_name} - enabling enhanced monitoring")
+                # Reduce ping intervals for proxy environments
+                self.keepalive_interval = min(60, self.keepalive_interval)
+                self.websocket_ping_interval = min(20, self.websocket_ping_interval)
+                return True
+                
+            # Check environment variables
+            proxy_vars = ['HTTP_PROXY', 'HTTPS_PROXY', 'http_proxy', 'https_proxy']
+            for var in proxy_vars:
+                if os.environ.get(var):
+                    logger.info(f"🛡️ Proxy environment detected for {self.bot_name}: {var}")
+                    return True
+                    
+            return False
+        except Exception as e:
+            logger.warning(f"Could not detect proxy environment: {e}")
+            return False
+            
+    def _is_proxy_related_error(self, error):
+        """Check if an error is likely related to proxy issues"""
+        error_str = str(error).lower()
+        proxy_indicators = [
+            'connection reset',
+            'connection aborted', 
+            'ssl handshake failed',
+            'tunnel connection failed',
+            'proxy',
+            'certificate verify failed',
+            'connection refused',
+            'timed out',
+            'network is unreachable'
+        ]
+        return any(indicator in error_str for indicator in proxy_indicators)
+        
+    def _trigger_reconnection(self, reason):
+        """Trigger a bot reconnection due to connection issues"""
+        logger.warning(f"🔄 Triggering {self.bot_name} reconnection: {reason}")
+        try:
+            if self.bot_instance:
+                # Force close the current bot instance
+                self._graceful_shutdown()
+        except Exception as e:
+            logger.error(f"Error during forced reconnection: {e}")
+            
+    def _websocket_monitor(self):
+        """Monitor WebSocket connection health with proxy-aware logic"""
+        while not self.shutdown_requested:
+            try:
+                if self.bot_instance and hasattr(self.bot_instance, 'websocket_client'):
+                    ws_client = self.bot_instance.websocket_client
+                    
+                    # Check WebSocket connection state
+                    if hasattr(ws_client, 'websocket') and ws_client.websocket:
+                        # Try to send a ping if supported
+                        try:
+                            if hasattr(ws_client.websocket, 'ping'):
+                                ws_client.websocket.ping()
+                                logger.debug(f"WebSocket ping sent for {self.bot_name}")
+                        except Exception as ping_error:
+                            if self._is_proxy_related_error(ping_error):
+                                logger.warning(f"WebSocket ping failed due to proxy issue: {ping_error}")
+                                self._trigger_reconnection("WebSocket ping failure")
+                                break
+                            else:
+                                logger.debug(f"WebSocket ping failed: {ping_error}")
+                    
+                    # Check if we haven't had a successful ping in too long
+                    time_since_last_ping = (datetime.now() - self.last_successful_ping).total_seconds()
+                    if time_since_last_ping > 300:  # 5 minutes
+                        logger.warning(f"No successful ping for {self.bot_name} in {time_since_last_ping:.0f}s")
+                        if self.consecutive_failures > 3:
+                            self._trigger_reconnection("Extended connection silence")
+                            break
+                            
+                time.sleep(self.websocket_ping_interval)
+            except Exception as e:
+                if not self.shutdown_requested:
+                    logger.warning(f"WebSocket monitor error for {self.bot_name}: {e}")
+                    time.sleep(self.websocket_ping_interval * 2)
 
     def _keepalive_ping(self):
         """Keep connection alive with periodic health checks"""
@@ -105,12 +205,24 @@ class ResilientBot:
         while not self.shutdown_requested:
             try:
                 if self.bot_instance and hasattr(self.bot_instance, 'teams'):
-                    self.bot_instance.teams.people.me()  # Simple health check
+                    # Try a simple API call to test connection health
+                    self.bot_instance.teams.people.me()
+                    self.last_successful_ping = datetime.now()
+                    self.consecutive_failures = 0
                     wait = self.keepalive_interval  # Reset to normal interval
+                    logger.debug(f"Keepalive ping successful for {self.bot_name}")
                 time.sleep(wait)
             except Exception as e:
                 if not self.shutdown_requested:
-                    logger.warning(f"Keepalive ping failed for {self.bot_name}: {e}. Retrying in {wait}s.")
+                    self.consecutive_failures += 1
+                    logger.warning(f"Keepalive ping failed for {self.bot_name} (failure #{self.consecutive_failures}): {e}")
+                    
+                    # Check if this looks like a proxy/network issue
+                    if self._is_proxy_related_error(e):
+                        logger.warning(f"Detected proxy-related error for {self.bot_name}. Triggering reconnection...")
+                        self._trigger_reconnection("Proxy connection issue detected")
+                        break
+                    
                     wait = min(wait * 2, self.max_keepalive_interval)  # Exponential backoff
                     time.sleep(wait)
 
@@ -120,9 +232,11 @@ class ResilientBot:
             self.shutdown_requested = True
             logger.info(f"🛑 Performing graceful shutdown of {self.bot_name}...")
 
-            # Stop keepalive thread
+            # Stop monitoring threads
             if self.keepalive_thread and self.keepalive_thread.is_alive():
                 logger.info("Stopping keepalive monitoring...")
+            if self.websocket_monitor_thread and self.websocket_monitor_thread.is_alive():
+                logger.info("Stopping WebSocket monitoring...")
 
             # Properly close bot instance and WebSocket connections
             if self.bot_instance:
@@ -167,10 +281,11 @@ class ResilientBot:
             try:
                 logger.info(f"🚀 Starting {self.bot_name} (attempt {attempt + 1}/{self.max_retries})")
 
-                # Longer delay to ensure previous WebSocket connections are fully closed
+                # Enhanced delay for proxy environments - ZScaler needs more time
                 if attempt > 0:
-                    logger.info("⏳ Waiting for previous WebSocket connections to clean up...")
-                    time.sleep(15)  # Increased from 10 to 15 seconds for better reliability
+                    proxy_delay = 20 if self.proxy_detection else 15
+                    logger.info(f"⏳ Waiting {proxy_delay}s for previous WebSocket connections to clean up...")
+                    time.sleep(proxy_delay)  # Extra time for proxy environments
 
                 start_time = datetime.now()
 
@@ -227,17 +342,23 @@ class ResilientBot:
                 break
             except Exception as e:
                 logger.error(f"❌ {self.bot_name} crashed with error: {e}", exc_info=True)
+                
+                # Check if this is a proxy-related crash
+                if self._is_proxy_related_error(e):
+                    logger.warning(f"🛡️ Proxy-related crash detected for {self.bot_name}")
+                    retry_delay = min(retry_delay * 1.5, self.max_retry_delay)  # Gentler backoff for proxy issues
 
                 # Enhanced cleanup before retry
                 logger.info(f"🧹 Performing cleanup after {self.bot_name} crash...")
                 try:
                     self._graceful_shutdown()
-                    # Additional delay after cleanup to ensure connections are fully closed
-                    time.sleep(3)
+                    # Extra delay for proxy environments
+                    cleanup_delay = 5 if self.proxy_detection else 3
+                    time.sleep(cleanup_delay)
                 except Exception as cleanup_error:
                     logger.warning(f"Cleanup error: {cleanup_error}")
                     # Even if cleanup fails, give time for connections to timeout
-                    time.sleep(5)
+                    time.sleep(8 if self.proxy_detection else 5)
 
                 if attempt < self.max_retries - 1:
                     logger.info(f"🔄 Restarting {self.bot_name} in {retry_delay} seconds...")
@@ -358,6 +479,11 @@ class ResilientBot:
             self.keepalive_thread = threading.Thread(target=self._keepalive_ping, daemon=True)
             self.keepalive_thread.start()
             logger.info(f"💓 Keepalive monitoring started for {self.bot_name}")
+            
+            # Start WebSocket monitoring thread for enhanced proxy handling
+            self.websocket_monitor_thread = threading.Thread(target=self._websocket_monitor, daemon=True)
+            self.websocket_monitor_thread.start()
+            logger.info(f"🔌 WebSocket monitoring started for {self.bot_name}")
 
             # Run bot with reconnection logic
             self.run_with_reconnection()
