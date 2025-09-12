@@ -15,14 +15,14 @@ from typing import Optional
 from langchain_ollama import ChatOllama, OllamaEmbeddings
 
 from my_config import get_config
-from pokedex_bot.utils.enhanced_config import ModelConfig
-from pokedex_bot.document.document_processor import DocumentProcessor
-from pokedex_bot.tools.crowdstrike_tools import get_device_containment_status, get_device_online_status, get_device_details_cs
-from pokedex_bot.tools.weather_tools import get_weather_info
-from pokedex_bot.tools.staffing_tools import get_current_shift_info, get_current_staffing
-from pokedex_bot.tools.metrics_tools import get_bot_metrics, get_bot_metrics_summary
-from pokedex_bot.tools.test_tools import run_tests, simple_live_message_test
-from pokedex_bot.tools.network_monitoring_tools import get_network_activity, get_network_summary_tool
+from my_bot.utils.enhanced_config import ModelConfig
+from my_bot.document.document_processor import DocumentProcessor
+from my_bot.tools.crowdstrike_tools import get_device_containment_status, get_device_online_status, get_device_details_cs
+from my_bot.tools.weather_tools import get_weather_info
+from my_bot.tools.staffing_tools import get_current_shift_info, get_current_staffing
+from my_bot.tools.metrics_tools import get_bot_metrics, get_bot_metrics_summary
+from my_bot.tools.test_tools import run_tests, simple_live_message_test
+from my_bot.tools.network_monitoring_tools import get_network_activity, get_network_summary_tool
 
 
 class SecurityBotStateManager:

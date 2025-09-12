@@ -36,7 +36,7 @@ class SOCBotHealthTester:
         if self._initialization_waited:
             return True  # Already confirmed ready
 
-        from pokedex_bot.core.state_manager import get_state_manager
+        from my_bot.core.state_manager import get_state_manager
 
         state_manager = get_state_manager()
         wait_interval = 2
@@ -107,7 +107,7 @@ class SOCBotHealthTester:
     def test_state_manager() -> Dict:
         """Test state manager initialization and components"""
         try:
-            from pokedex_bot.core.state_manager import get_state_manager
+            from my_bot.core.state_manager import get_state_manager
 
             state_manager = get_state_manager()
             if not state_manager:
@@ -146,7 +146,7 @@ class SOCBotHealthTester:
     def test_document_search() -> Dict:
         """Test document search functionality"""
         try:
-            from pokedex_bot.core.my_model import ask
+            from my_bot.core.my_model import ask
 
             # Wait for bot initialization before testing
             tester = SOCBotHealthTester()
@@ -204,7 +204,7 @@ class SOCBotHealthTester:
     def test_crowdstrike_tools() -> Dict:
         """Test CrowdStrike tool integration and parameter parsing"""
         try:
-            from pokedex_bot.core.my_model import ask
+            from my_bot.core.my_model import ask
             import logging
             import io
 
@@ -273,7 +273,7 @@ class SOCBotHealthTester:
     def test_weather_tools() -> Dict:
         """Test weather tool functionality"""
         try:
-            from pokedex_bot.core.my_model import ask
+            from my_bot.core.my_model import ask
 
             # Test weather query
             response = ask('What is the weather in New York?', 'health_test', 'test_room')
@@ -303,7 +303,7 @@ class SOCBotHealthTester:
     def test_llm_responses() -> Dict:
         """Test LLM response quality and appropriateness"""
         try:
-            from pokedex_bot.core.my_model import ask
+            from my_bot.core.my_model import ask
 
             test_cases = [
                 ("hello", "Should provide SOC assistant greeting"),
@@ -338,7 +338,7 @@ class SOCBotHealthTester:
     def test_session_management() -> Dict:
         """Test session management and context handling"""
         try:
-            from pokedex_bot.core.my_model import ask
+            from my_bot.core.my_model import ask
 
             # Test session with multiple messages
             session_user = 'health_test_session'
@@ -370,7 +370,7 @@ class SOCBotHealthTester:
     def test_bot_name_handling() -> Dict:
         """Test bot name prefix removal"""
         try:
-            from pokedex_bot.core.my_model import ask
+            from my_bot.core.my_model import ask
 
             # Test with bot name prefix
             response_with_prefix = ask('DnR_Pokedex hello', 'health_test', 'test_room')
@@ -396,7 +396,7 @@ class SOCBotHealthTester:
     def test_response_times() -> Dict:
         """Test response time performance"""
         try:
-            from pokedex_bot.core.my_model import ask
+            from my_bot.core.my_model import ask
 
             # Test simple query response time
             start = time.time()
@@ -424,8 +424,8 @@ class SOCBotHealthTester:
     def test_prompt_injection_resistance() -> Dict:
         """Test resistance to prompt injection attacks"""
         try:
-            from pokedex_bot.core.my_model import ask
-            from pokedex_bot.core.state_manager import get_state_manager
+            from my_bot.core.my_model import ask
+            from my_bot.core.state_manager import get_state_manager
 
             # Wait for bot initialization before testing
             tester = SOCBotHealthTester()  # Create instance to use helper method
@@ -564,7 +564,7 @@ if __name__ == "__main__":
     # Initialize system before running tests (when run standalone)
     logger.info("🚀 Initializing system for standalone health tests...")
     try:
-        from pokedex_bot.core.my_model import initialize_model_and_agent
+        from my_bot.core.my_model import initialize_model_and_agent
 
         if initialize_model_and_agent():
             logger.info("✅ System initialized successfully")

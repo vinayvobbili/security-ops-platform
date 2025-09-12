@@ -19,8 +19,8 @@ from datetime import datetime
 import pytz
 
 # Import the modules we're testing
-from pokedex_bot.tools.staffing_tools import StaffingToolsManager, get_current_staffing_tool, get_current_shift_tool
-from webex_bots.pokedex import PokeDexBot
+from my_bot.tools.staffing_tools import StaffingToolsManager, get_current_staffing_tool, get_current_shift_tool
+from webex_bots.pokedex import Bot
 
 
 # =============================================================================
@@ -42,7 +42,7 @@ class TestStaffingTools:
         assert all(hasattr(tool, 'name') for tool in tools)
         assert all(hasattr(tool, 'description') for tool in tools)
     
-    @patch('pokedex_bot.tools.staffing_tools.get_current_shift')
+    @patch('my_bot.tools.staffing_tools.get_current_shift')
     def test_current_shift_tool(self, mock_get_shift):
         """Test get_current_shift_tool functionality"""
         mock_get_shift.return_value = 'morning'
@@ -55,8 +55,8 @@ class TestStaffingTools:
         assert '04:30 - 12:29' in result  # Morning shift hours
         mock_get_shift.assert_called_once()
     
-    @patch('pokedex_bot.tools.staffing_tools.get_staffing_data')
-    @patch('pokedex_bot.tools.staffing_tools.get_current_shift')
+    @patch('my_bot.tools.staffing_tools.get_staffing_data')
+    @patch('my_bot.tools.staffing_tools.get_current_shift')
     def test_current_staffing_tool(self, mock_get_shift, mock_get_staffing):
         """Test get_current_staffing_tool with full team data"""
         mock_get_shift.return_value = 'afternoon'
@@ -78,8 +78,8 @@ class TestStaffingTools:
         assert all(emoji in result for emoji in ['🔍', '🛡️', '👨‍💼', '📞'])
         assert 'STAFFING_RESPONSE:' in result
     
-    @patch('pokedex_bot.tools.staffing_tools.get_staffing_data')
-    @patch('pokedex_bot.tools.staffing_tools.get_current_shift')
+    @patch('my_bot.tools.staffing_tools.get_staffing_data')
+    @patch('my_bot.tools.staffing_tools.get_current_shift')
     def test_staffing_tool_empty_data_handling(self, mock_get_shift, mock_get_staffing):
         """Test staffing tool handles empty/missing data gracefully"""
         mock_get_shift.return_value = 'night'
@@ -100,7 +100,7 @@ class TestStaffingTools:
         # Empty teams should not appear
         assert '🔍 MA Team:' not in result
     
-    @patch('pokedex_bot.tools.staffing_tools.get_staffing_data')
+    @patch('my_bot.tools.staffing_tools.get_staffing_data')
     def test_staffing_tool_error_handling(self, mock_get_staffing):
         """Test staffing tool handles errors gracefully"""
         mock_get_staffing.side_effect = Exception("Database connection failed")
@@ -119,10 +119,10 @@ class TestStaffingTools:
 class TestRAGDocumentSearch:
     """Test suite for RAG document search functionality"""
     
-    @patch('pokedex_bot.document.document_processor.DocumentProcessor')
+    @patch('my_bot.document.document_processor.DocumentProcessor')
     def test_document_processor_initialization(self, mock_processor):
         """Test DocumentProcessor initialization"""
-        from pokedex_bot.document.document_processor import DocumentProcessor
+        from my_bot.document.document_processor import DocumentProcessor
         
         # Mock the processor
         mock_instance = Mock()
@@ -135,10 +135,10 @@ class TestRAGDocumentSearch:
         assert processor is not None
         mock_processor.assert_called_with("test_pdf_dir", "test_faiss_path")
     
-    @patch('pokedex_bot.core.state_manager.DocumentProcessor')
+    @patch('my_bot.core.state_manager.DocumentProcessor')
     def test_rag_tool_creation(self, mock_processor):
         """Test RAG tool creation from state manager"""
-        from pokedex_bot.core.state_manager import SecurityBotStateManager
+        from my_bot.core.state_manager import SecurityBotStateManager
         
         # Mock document processor with retriever
         mock_doc_processor = Mock()
@@ -182,7 +182,7 @@ class TestRAGDocumentSearch:
     
     def test_rag_integration_with_state_manager(self):
         """Test RAG integration in state manager initialization"""
-        from pokedex_bot.core.state_manager import SecurityBotStateManager
+        from my_bot.core.state_manager import SecurityBotStateManager
         
         state_manager = SecurityBotStateManager()
         
@@ -216,7 +216,7 @@ class TestAdaptiveCards:
         }
         response_text = json.dumps(card_data)
         
-        card_dict, clean_text = PokeDexBot._extract_adaptive_card(response_text)
+        card_dict, clean_text = Bot._extract_adaptive_card(response_text)
         
         assert card_dict is not None
         assert card_dict["type"] == "AdaptiveCard"
@@ -227,7 +227,7 @@ class TestAdaptiveCards:
         """Test handling of malformed JSON"""
         response_text = '{"type": "AdaptiveCard", "invalid": json}'
         
-        card_dict, clean_text = PokeDexBot._extract_adaptive_card(response_text)
+        card_dict, clean_text = Bot._extract_adaptive_card(response_text)
         
         assert card_dict is None
         assert clean_text == response_text
@@ -236,7 +236,7 @@ class TestAdaptiveCards:
         """Test handling of valid JSON that's not an Adaptive Card"""
         response_text = '{"type": "SomeOtherFormat", "data": "test"}'
         
-        card_dict, clean_text = PokeDexBot._extract_adaptive_card(response_text)
+        card_dict, clean_text = Bot._extract_adaptive_card(response_text)
         
         assert card_dict is None
         assert clean_text == response_text
@@ -245,7 +245,7 @@ class TestAdaptiveCards:
         """Test handling of regular markdown responses"""
         response_text = "**SOC Status**: All systems operational\\n\\n- Team Alpha: On duty\\n- Team Beta: Standby"
         
-        card_dict, clean_text = PokeDexBot._extract_adaptive_card(response_text)
+        card_dict, clean_text = Bot._extract_adaptive_card(response_text)
         
         assert card_dict is None
         assert clean_text == response_text
@@ -283,7 +283,7 @@ class TestAdaptiveCards:
         }
         
         response_text = json.dumps(staffing_card)
-        card_dict, clean_text = PokeDexBot._extract_adaptive_card(response_text)
+        card_dict, clean_text = Bot._extract_adaptive_card(response_text)
         
         assert card_dict is not None
         assert card_dict["type"] == "AdaptiveCard"
@@ -322,7 +322,7 @@ class TestAdaptiveCards:
         json_response = json.dumps(llm_response)
         
         # Extract card (what bot would do)
-        card_dict, clean_text = PokeDexBot._extract_adaptive_card(json_response)
+        card_dict, clean_text = Bot._extract_adaptive_card(json_response)
         
         # Verify extraction worked
         assert card_dict is not None
@@ -340,7 +340,7 @@ class TestWeatherTools:
     def test_weather_tools_manager_availability(self):
         """Test weather tools manager availability check"""
         try:
-            from pokedex_bot.tools.weather_tools import WeatherToolsManager
+            from my_bot.tools.weather_tools import WeatherToolsManager
             
             # Test with mock API key
             manager = WeatherToolsManager(api_key="test_key")
@@ -355,7 +355,7 @@ class TestWeatherTools:
             # Weather tools may not be available in all environments
             pytest.skip("Weather tools not available in this environment")
     
-    @patch('pokedex_bot.tools.weather_tools.WeatherToolsManager')
+    @patch('my_bot.tools.weather_tools.WeatherToolsManager')
     def test_weather_tool_mock_response(self, mock_manager):
         """Test weather tool with mocked response"""
         # Mock weather response
@@ -392,8 +392,8 @@ class TestWeatherTools:
 class TestToolsIntegration:
     """Test suite for cross-tool integration"""
     
-    @patch('pokedex_bot.tools.staffing_tools.get_staffing_data')
-    @patch('pokedex_bot.tools.staffing_tools.get_current_shift')
+    @patch('my_bot.tools.staffing_tools.get_staffing_data')
+    @patch('my_bot.tools.staffing_tools.get_current_shift')
     def test_staffing_to_adaptive_card_flow(self, mock_get_shift, mock_get_staffing):
         """Test the complete flow from staffing query to Adaptive Card"""
         # Setup staffing data
@@ -422,7 +422,7 @@ class TestToolsIntegration:
     
     def test_multiple_tools_availability(self):
         """Test that multiple tools can coexist"""
-        from pokedex_bot.tools.staffing_tools import StaffingToolsManager
+        from my_bot.tools.staffing_tools import StaffingToolsManager
         
         # Test staffing tools
         staffing_manager = StaffingToolsManager()
@@ -435,7 +435,7 @@ class TestToolsIntegration:
         
         # Test Adaptive Card functionality exists
         test_json = '{"type": "AdaptiveCard", "version": "1.3"}'
-        card_dict, clean_text = PokeDexBot._extract_adaptive_card(test_json)
+        card_dict, clean_text = Bot._extract_adaptive_card(test_json)
         assert card_dict is not None
 
 

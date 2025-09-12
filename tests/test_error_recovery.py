@@ -9,7 +9,7 @@ and graceful degradation functionality.
 import pytest
 import time
 from unittest.mock import Mock, patch
-from pokedex_bot.core.error_recovery import (
+from my_bot.core.error_recovery import (
     ErrorRecoveryManager, 
     safe_tool_call, 
     enhanced_agent_wrapper,

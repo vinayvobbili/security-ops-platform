@@ -17,8 +17,8 @@ script_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.dirname(os.path.dirname(script_dir))
 sys.path.insert(0, project_root)
 
-from pokedex_bot.core.my_model import initialize_model_and_agent
-from pokedex_bot.core.state_manager import get_state_manager
+from my_bot.core.my_model import initialize_model_and_agent
+from my_bot.core.state_manager import get_state_manager
 
 
 def restart_preloader():

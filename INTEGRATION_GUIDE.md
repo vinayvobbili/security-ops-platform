@@ -45,8 +45,8 @@ def get_conversation_context(session_key: str, max_messages: int = 20) -> str:
 def get_session_info(session_key: str = None) -> dict:
 
 # NEW - Add these imports:
-from pokedex_bot.core.session_manager import get_session_manager
-from pokedex_bot.core.error_recovery import get_recovery_manager, enhanced_agent_wrapper
+from my_bot.core.session_manager import get_session_manager
+from my_bot.core.error_recovery import get_recovery_manager, enhanced_agent_wrapper
 ```
 
 ### Step 2: Update Session Functions in ask()
@@ -131,8 +131,9 @@ ls -la /Users/user/PycharmProjects/IR/data/transient/sessions/
 ### Check Session Health
 
 Add this debug endpoint to test:
+
 ```python
-from pokedex_bot.core.session_manager import get_session_manager
+from my_bot.core.session_manager import get_session_manager
 session_manager = get_session_manager()
 print(session_manager.get_session_info())
 ```
