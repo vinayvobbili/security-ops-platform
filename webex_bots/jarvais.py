@@ -1,6 +1,5 @@
 import logging.handlers
 import random
-import time
 from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -495,8 +494,6 @@ class GetTaniumHostsWithoutRingTag(Command):
         )
 
 
-
-
 class GetTaniumUnhealthyHosts(Command):
     def __init__(self):
         super().__init__(
@@ -516,8 +513,6 @@ class GetTaniumUnhealthyHosts(Command):
         )
 
 
-
-
 class GetBotHealth(Command):
     """Command to check bot health and status."""
 
@@ -532,14 +527,14 @@ class GetBotHealth(Command):
     def execute(self, message, attachment_actions, activity):
         room_id = attachment_actions.roomId
         current_time = datetime.now(EASTERN_TZ)
-        
+
         # Simple status using the resilience framework
         health_status = "🟢 Healthy"
         health_detail = "Running with resilience framework"
-        
+
         # Format current time with timezone
         tz_name = "EST" if current_time.dst().total_seconds() == 0 else "EDT"
-        
+
         # Create status card with enhanced details
         status_card = AdaptiveCard(
             body=[
@@ -566,7 +561,7 @@ class GetBotHealth(Command):
                 )
             ]
         )
-        
+
         webex_api.messages.create(
             roomId=room_id,
             text="Bot Status Information",
@@ -589,8 +584,6 @@ class Hi(Command):
         return "Hi 👋"
 
 
-
-
 def jarvais_bot_factory():
     """Create Jarvais bot instance"""
     return WebexBot(
@@ -601,6 +594,7 @@ def jarvais_bot_factory():
         log_level="ERROR",
         bot_help_subtitle="🏷️ Your friendly tagging bot! 🔖"
     )
+
 
 def jarvais_initialization(bot_instance=None):
     """Initialize Jarvais commands"""
@@ -619,10 +613,11 @@ def jarvais_initialization(bot_instance=None):
         return True
     return False
 
+
 def main():
     """Jarvais main with resilience framework"""
     from src.utils.bot_resilience import ResilientBot
-    
+
     resilient_runner = ResilientBot(
         bot_name="Jarvais",
         bot_factory=jarvais_bot_factory,
