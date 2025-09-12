@@ -37,82 +37,9 @@ from my_config import get_config
 from pokedex_bot.core.my_model import ask, initialize_model_and_agent
 from pokedex_bot.core.session_manager import get_session_manager
 from services.bot_rooms import get_room_name
+from src.utils.bot_messages import THINKING_MESSAGES, DONE_MESSAGES
 
 CONFIG = get_config()
-
-# Fun thinking messages for user engagement
-THINKING_MESSAGES = [
-    "🤔 Thinking...", "🧠 Processing...", "⚡ Computing...", "🔍 Searching...",
-    "🎯 Analyzing...", "🛡️ Investigating...", "📊 Calculating...", "🔬 Examining...",
-    "💭 Pondering...", "🎪 Working magic...", "🚀 Launching queries...", "⚙️ Turning gears...",
-    "🔮 Consulting oracles...", "📚 Reading docs...", "🎲 Rolling dice...", "🌟 Connecting dots...",
-    "🎨 Crafting response...", "🏃‍♂️ Running analysis...", "🔥 Firing neurons...", "⭐ Aligning stars...",
-    "🎯 Taking aim...", "🧩 Solving puzzle...", "🎪 Performing magic...", "🚁 Hovering over data...",
-    "🎭 Putting on thinking cap...", "🔍 Zooming in...", "⚡ Charging up...", "🎨 Painting picture...",
-    "🧠 Flexing brain...", "🎪 Juggling ideas...", "🔬 Under microscope...", "📡 Scanning frequencies...",
-    "🎯 Zeroing in...", "🚀 Rocket science mode...", "🎲 Calculating odds...", "⚙️ Oiling gears...",
-    "🔮 Crystal ball active...", "📊 Crunching numbers...", "🎨 Mixing colors...", "🧩 Finding pieces...",
-    "⚡ Lightning speed...", "🎪 Center stage...", "🔍 Detective mode...", "🌟 Seeing stars...",
-    "🎭 Method acting...", "🚁 Bird's eye view...", "🔬 Lab coat on...", "📡 Signal strong...",
-    "🎯 Bullseye incoming...", "🧠 Big brain time...", "🎪 Grand finale prep...", "⚙️ All systems go...",
-    "🔮 Fortune telling...", "📚 Page turning...", "🎲 Lucky number 7...", "🌟 Constellation forming...",
-    "🎨 Masterpiece loading...", "🧩 Last piece hunting...", "⚡ Storm brewing...", "🎪 Showtime prep...",
-    "🔍 Magnifying glass out...", "🚀 T-minus counting...", "🎭 Oscar performance...", "🔬 Hypothesis testing...",
-    "📡 Satellite locked...", "🎯 Perfect aim...", "🧠 Neural networks firing...", "🎪 Magic wand waving...",
-    "⚙️ Clockwork precision...", "🔮 Third eye opening...", "📊 Graph plotting...", "🎲 Dice rolling...",
-    "🌟 Supernova incoming...", "🎨 Canvas ready...", "🧩 Pattern matching...", "⚡ Thunder rumbling...",
-    "🎪 Spotlight on...", "🔍 Sherlock mode...", "🚀 Warp speed...", "🎭 Drama unfolding...",
-    "🔬 Microscope focused...", "📡 Transmission clear...", "🎯 Target acquired...", "🧠 Synapse snapping...",
-    "🎪 Ringmaster ready...", "⚙️ Engine revving...", "🔮 Visions coming...", "📚 Chapter turning...",
-    "🎲 Fortune favors...", "🌟 Galaxy spinning...", "🎨 Brush stroking...", "🧩 Eureka moment...",
-    "⚡ Power surge...", "🎪 Curtain rising...", "🔍 Clue hunting...", "🚀 Orbit achieved...",
-    "🎭 Scene stealing...", "🔬 Specimen ready...", "📡 Message received...", "🎯 Direct hit...",
-    "🧠 Mind melding...", "🎪 Abracadabra...", "⚙️ Turbine spinning...", "🔮 Cards revealing...",
-    "📊 Trend spotting...", "🎲 Snake eyes...", "🌟 Comet approaching...", "🎨 Sketch complete...",
-    "🧩 Jigsaw solving...", "⚡ Electric moment...", "🎪 Ta-da incoming...", "🔍 Evidence gathering...",
-    "🚀 Houston, we have...", "🎭 Standing ovation...", "🔬 Breakthrough near...", "📡 Signal boosted...",
-    "🎯 Championship shot...", "🧠 Genius at work...", "🎪 Grand illusion...", "⚙️ Perfect timing...",
-    "🔮 Future glimpse...", "📚 Story unfolding...", "🎲 Jackpot hunting...", "🌟 Wish upon a...",
-    "🎨 Final touches...", "🧩 Missing link...", "⚡ Lightning strikes...", "🎪 Magic revealed...",
-    # Longer, more conversational SOC-specific messages
-    "🛡️ Cross-referencing threat intelligence databases for your query...",
-    "🔍 Diving deep into CrowdStrike telemetry and security logs...",
-    "📊 Analyzing staffing patterns and shift rotations...",
-    "🌦️ Checking weather conditions that might affect operations...",
-    "🎯 Correlating events across multiple security platforms...",
-    "🔬 Examining incident timelines and forensic artifacts...",
-    "🚨 Scanning for indicators of compromise and anomalies...",
-    "📡 Querying threat feeds and intelligence sources...",
-    "🔐 Decrypting security alerts and parsing event logs...",
-    "🧠 Processing complex security queries with advanced analytics...",
-    "⚡ Running automated threat hunting algorithms...",
-    "🎪 Orchestrating a symphony of security tools and data sources...",
-    "🔍 Investigating potential security incidents with digital forensics...",
-    "📈 Calculating risk scores and probability assessments...",
-    "🛡️ Consulting my vast knowledge of cybersecurity best practices...",
-    "🎯 Triangulating data points across the security ecosystem...",
-    "🔬 Performing behavioral analysis on network traffic patterns...",
-    "🚀 Launching comprehensive security posture assessments...",
-    "💡 Connecting security dots that humans might miss...",
-    "🎭 Putting on my best security analyst persona for you..."
-]
-
-# Fun completion messages for user engagement
-DONE_MESSAGES = [
-    "✅ **Done!**", "🎉 **Complete!**", "⚡ **Finished!**", "🎯 **Nailed it!**",
-    "🚀 **Mission accomplished!**", "🏆 **Success!**", "🎪 **Ta-da!**", "🌟 **All set!**",
-    "🎨 **Masterpiece ready!**", "🔥 **Delivered!**", "🎵 **And scene!**", "🎬 **That's a wrap!**",
-    "🎲 **Jackpot!**", "🧩 **Puzzle solved!**", "⭐ **Mission complete!**", "🎯 **Bullseye!**",
-    "🏃‍♂️ **Crossed the finish line!**", "🎪 **Magic complete!**", "🔮 **Oracle consulted!**", "📚 **Knowledge delivered!**",
-    "🛡️ **Investigation complete!**", "🎭 **Performance finished!**", "🎸 **Final note played!**", "🌈 **Rainbow delivered!**",
-    "🔬 **Analysis complete!**", "📡 **Signal transmitted!**", "🎯 **Target acquired!**", "🧠 **Brain power delivered!**",
-    "🎪 **Show's over!**", "⚙️ **Gears stopped turning!**", "🔮 **Crystal ball cleared!**", "📊 **Numbers crunched!**",
-    "🎨 **Artwork finished!**", "🧩 **All pieces found!**", "⚡ **Lightning captured!**", "🎪 **Curtain call!**",
-    "🔍 **Case closed!**", "🚀 **Houston, we're done!**", "🎭 **Final bow taken!**", "🔬 **Lab results in!**",
-    "📡 **Transmission ended!**", "🎯 **Direct hit achieved!**", "🧠 **Mind blown!**", "🎪 **Abracadabra complete!**",
-    "⚙️ **Engine shut down!**", "🔮 **Fortune told!**", "📚 **Story complete!**", "🎲 **Lucky roll!**",
-    "🌟 **Stars aligned!**", "🎨 **Brush down!**", "🧩 **Eureka achieved!**", "⚡ **Power restored!**"
-]
 
 # Configure logging with colors
 ROOT_DIRECTORY = Path(__file__).parent.parent
@@ -257,7 +184,7 @@ def initialize_bot():
         return False
 
 
-class PokeDexBot(WebexBot):
+class Bot(WebexBot):
     """LLM Agent-powered SOC bot for Webex"""
 
     def process_incoming_message(self, teams_message, activity):
@@ -275,19 +202,9 @@ class PokeDexBot(WebexBot):
             logger.info("Ignoring non-person actor")
             return
 
-        # Check user approval
-        user_email = teams_message.personEmail
-        if not self.check_user_approved(user_email=user_email, approved_rooms=self.approved_rooms):
-            logger.info(f"User {user_email} not approved")
-            return
-
         try:
             # Clean message
             raw_message = teams_message.text or ""
-            is_one_on_one = 'ONE_ON_ONE' in activity.get('target', {}).get('tags', [])
-
-            if not is_one_on_one:
-                raw_message = raw_message.replace(self.bot_display_name, '').strip()
 
             # Process message with LLM agent
             user_name = activity.get('actor', {}).get('displayName', 'Unknown')
@@ -451,39 +368,24 @@ class PokeDexBot(WebexBot):
             )
 
 
-def create_webex_bot():
-    """Create and configure the WebexBot instance"""
-    return PokeDexBot(
+def main():
+    """Bot main entry point"""
+    # Initialize LLM components
+    if not initialize_model_and_agent():
+        logger.error("Failed to initialize components")
+        return
+
+    # Set bot as ready
+    global bot_ready
+    bot_ready = True
+
+    # Create and run bot
+    bot = Bot(
         teams_bot_token=WEBEX_ACCESS_TOKEN,
         approved_domains=['company.com'],
         bot_name="the security assistant bot"
     )
-
-
-def bot_factory():
-    """Create the security assistant bot bot instance"""
-    return create_webex_bot()
-
-
-def initialization(bot_instance_param=None):
-    """Initialize the security assistant bot LLM components"""
-    global bot_instance
-    if bot_instance_param:
-        bot_instance = bot_instance_param
-        return initialize_bot()
-    return False
-
-
-def main():
-    """the security assistant bot main with simplified resilience framework"""
-    from src.utils.simple_bot_resilience import SimpleBotRunner
-
-    runner = SimpleBotRunner(
-        bot_name="the security assistant bot",
-        bot_factory=bot_factory,
-        initialization_func=initialization
-    )
-    runner.run()
+    bot.run()
 
 
 if __name__ == "__main__":
