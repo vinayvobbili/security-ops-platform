@@ -10,7 +10,7 @@ import pytest
 import tempfile
 import os
 from pathlib import Path
-from pokedex_bot.core.session_manager import PersistentSessionManager
+from my_bot.core.session_manager import PersistentSessionManager
 
 
 @pytest.fixture

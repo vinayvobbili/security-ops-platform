@@ -1,4 +1,4 @@
-# /pokedex_bot/core/session_manager.py
+# /my_bot/core/session_manager.py
 """
 Persistent Session Manager
 

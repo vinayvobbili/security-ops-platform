@@ -34,8 +34,8 @@ from pytz import timezone
 from webex_bot.webex_bot import WebexBot
 
 from my_config import get_config
-from pokedex_bot.core.my_model import ask, initialize_model_and_agent
-from pokedex_bot.core.session_manager import get_session_manager
+from my_bot.core.my_model import ask, initialize_model_and_agent
+from my_bot.core.session_manager import get_session_manager
 from services.bot_rooms import get_room_name
 from src.utils.bot_messages import THINKING_MESSAGES, DONE_MESSAGES
 
@@ -172,7 +172,7 @@ def initialize_bot():
         logger.info(f"✅ Streamlined bot initialization completed in {total_time:.1f}s")
 
         # Health tests disabled for faster startup - run manually when needed
-        # To run health tests: python pokedex_bot/tests/system_health_tests.py
+        # To run health tests: python my_bot/tests/system_health_tests.py
         # Or use pytest: python -m pytest tests/
         logger.info("🚀 Bot ready - health tests available on demand")
 

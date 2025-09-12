@@ -1,4 +1,4 @@
-# /pokedex_bot/utils/network_logger.py
+# /my_bot/utils/network_logger.py
 """
 Network Traffic Logger for SOC Bot
 

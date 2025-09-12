@@ -23,7 +23,7 @@ def test_network_logging_enabled():
         # Test with logging enabled
         pokedex.SHOULD_LOG_NETWORK_TRAFFIC = True
         
-        from pokedex_bot.utils.network_logger import log_api_call, get_network_logger
+        from my_bot.utils.network_logger import log_api_call, get_network_logger
         
         print("🧪 Testing with SHOULD_LOG_NETWORK_TRAFFIC = True")
         
@@ -79,7 +79,7 @@ def test_network_logging_disabled():
         # Test with logging disabled
         pokedex.SHOULD_LOG_NETWORK_TRAFFIC = False
         
-        from pokedex_bot.utils.network_logger import log_api_call, get_network_logger
+        from my_bot.utils.network_logger import log_api_call, get_network_logger
         
         print("\n🧪 Testing with SHOULD_LOG_NETWORK_TRAFFIC = False")
         
@@ -132,7 +132,7 @@ def test_performance_impact():
         
         original_value = getattr(pokedex, 'SHOULD_LOG_NETWORK_TRAFFIC', True)
         
-        from pokedex_bot.utils.network_logger import log_api_call
+        from my_bot.utils.network_logger import log_api_call
         
         print("\n⏱️ Testing performance impact...")
         

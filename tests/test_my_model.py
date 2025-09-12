@@ -10,15 +10,15 @@ import pytest
 import tempfile
 import os
 from unittest.mock import Mock, patch, MagicMock
-from pokedex_bot.core.my_model import ask, initialize_model_and_agent
+from my_bot.core.my_model import ask, initialize_model_and_agent
 
 
 class TestMyModelImprovements:
     """Integration tests for my_model.py with improvements"""
     
-    @patch('pokedex_bot.core.my_model.get_state_manager')
-    @patch('pokedex_bot.core.my_model.get_session_manager')
-    @patch('pokedex_bot.core.my_model.get_recovery_manager')
+    @patch('my_bot.core.my_model.get_state_manager')
+    @patch('my_bot.core.my_model.get_session_manager')
+    @patch('my_bot.core.my_model.get_recovery_manager')
     def test_ask_with_session_storage(self, mock_recovery_mgr, mock_session_mgr, mock_state_mgr):
         """Test that ask() function uses session storage correctly"""
         # Setup mocks
@@ -51,8 +51,8 @@ class TestMyModelImprovements:
         assert calls[1][0][0] == "test_user_test_room"
         assert calls[1][0][1] == "assistant"
 
-    @patch('pokedex_bot.core.my_model.get_state_manager')
-    @patch('pokedex_bot.core.my_model.get_session_manager')
+    @patch('my_bot.core.my_model.get_state_manager')
+    @patch('my_bot.core.my_model.get_session_manager')
     def test_ask_with_error_recovery(self, mock_session_mgr, mock_state_mgr):
         """Test that ask() function uses enhanced error recovery"""
         # Setup mocks
@@ -79,8 +79,8 @@ class TestMyModelImprovements:
         assert mock_session_manager.add_message.call_count == 2
         assert result == "Native tool calling response"
 
-    @patch('pokedex_bot.core.my_model.get_state_manager')
-    @patch('pokedex_bot.core.my_model.get_session_manager')
+    @patch('my_bot.core.my_model.get_state_manager')
+    @patch('my_bot.core.my_model.get_session_manager')
     def test_ask_with_agent_failure(self, mock_session_mgr, mock_state_mgr):
         """Test ask() function handles agent failures gracefully"""
         # Setup mocks
@@ -104,8 +104,8 @@ class TestMyModelImprovements:
         # Verify session still stored the interaction
         assert mock_session_manager.add_message.call_count == 2
 
-    @patch('pokedex_bot.core.my_model.get_state_manager')
-    @patch('pokedex_bot.core.my_model.get_session_manager')
+    @patch('my_bot.core.my_model.get_state_manager')
+    @patch('my_bot.core.my_model.get_session_manager')
     def test_ask_with_conversation_context(self, mock_session_mgr, mock_state_mgr):
         """Test that conversation context is properly integrated"""
         # Setup mocks
@@ -128,7 +128,7 @@ class TestMyModelImprovements:
         # For simple queries, context isn't used but should still be retrieved
         assert "System online and ready" in result
 
-    @patch('pokedex_bot.core.my_model.get_state_manager')
+    @patch('my_bot.core.my_model.get_state_manager')
     def test_ask_uninitialized_state(self, mock_state_mgr):
         """Test ask() function with uninitialized state manager"""
         mock_state_manager = Mock()
@@ -139,7 +139,7 @@ class TestMyModelImprovements:
         
         assert "Bot not ready" in result
 
-    @patch('pokedex_bot.core.my_model.get_state_manager')
+    @patch('my_bot.core.my_model.get_state_manager')
     def test_ask_with_empty_message(self, mock_state_mgr):
         """Test ask() function with empty or whitespace message"""
         result1 = ask("", "test_user", "test_room")
@@ -150,8 +150,8 @@ class TestMyModelImprovements:
         assert "Please ask me a question!" in result2
         assert "Please ask me a question!" in result3
 
-    @patch('pokedex_bot.core.my_model.get_state_manager')
-    @patch('pokedex_bot.core.my_model.get_session_manager')
+    @patch('my_bot.core.my_model.get_state_manager')
+    @patch('my_bot.core.my_model.get_session_manager')
     def test_ask_bot_name_removal(self, mock_session_mgr, mock_state_mgr):
         """Test that bot name prefixes are properly removed from queries"""
         # Setup mocks for simple query path
@@ -174,7 +174,7 @@ class TestMyModelImprovements:
         user_message_call = calls[0]
         assert user_message_call[0][2] == "status"  # Bot name should be removed
 
-    @patch('pokedex_bot.core.my_model.get_state_manager')
+    @patch('my_bot.core.my_model.get_state_manager')
     def test_initialize_model_and_agent_success(self, mock_state_mgr):
         """Test successful initialization"""
         mock_state_manager = Mock()
@@ -186,7 +186,7 @@ class TestMyModelImprovements:
         assert result is True
         mock_state_manager.initialize_all_components.assert_called_once()
 
-    @patch('pokedex_bot.core.my_model.get_state_manager')
+    @patch('my_bot.core.my_model.get_state_manager')
     def test_initialize_model_and_agent_failure(self, mock_state_mgr):
         """Test initialization failure"""
         mock_state_manager = Mock()
@@ -200,8 +200,8 @@ class TestMyModelImprovements:
     def test_session_key_format(self):
         """Test that session keys are formatted correctly"""
         # This is implicitly tested in other tests, but let's be explicit
-        with patch('pokedex_bot.core.my_model.get_state_manager') as mock_state_mgr, \
-             patch('pokedex_bot.core.my_model.get_session_manager') as mock_session_mgr:
+        with patch('my_bot.core.my_model.get_state_manager') as mock_state_mgr, \
+             patch('my_bot.core.my_model.get_session_manager') as mock_session_mgr:
             
             mock_session_manager = Mock()
             mock_session_mgr.return_value = mock_session_manager
@@ -222,8 +222,8 @@ class TestMyModelImprovements:
             assert calls[0][0][0] == "user123_room456"
             assert calls[1][0][0] == "user@email.com_room_with_underscores"
 
-    @patch('pokedex_bot.core.my_model.get_state_manager')
-    @patch('pokedex_bot.core.my_model.get_session_manager')
+    @patch('my_bot.core.my_model.get_state_manager')
+    @patch('my_bot.core.my_model.get_session_manager')
     def test_ask_performance_logging(self, mock_session_mgr, mock_state_mgr):
         """Test that performance logging works correctly"""
         # Setup mocks for simple query
@@ -249,8 +249,8 @@ class TestMyModelImprovements:
 
     def test_greeting_responses(self):
         """Test that greeting responses work correctly"""
-        with patch('pokedex_bot.core.my_model.get_state_manager') as mock_state_mgr, \
-             patch('pokedex_bot.core.my_model.get_session_manager') as mock_session_mgr:
+        with patch('my_bot.core.my_model.get_state_manager') as mock_state_mgr, \
+             patch('my_bot.core.my_model.get_session_manager') as mock_session_mgr:
             
             mock_session_manager = Mock()
             mock_session_mgr.return_value = mock_session_manager

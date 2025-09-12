@@ -19,7 +19,7 @@ def test_session_manager():
     print("🔄 Testing Persistent Session Storage...")
     
     try:
-        from pokedex_bot.core.session_manager import get_session_manager
+        from my_bot.core.session_manager import get_session_manager
         
         session_manager = get_session_manager()
         test_session = "test_user_test_room"
@@ -73,7 +73,7 @@ def test_error_recovery():
     print("\n🛡️ Testing Enhanced Error Recovery...")
     
     try:
-        from pokedex_bot.core.error_recovery import get_recovery_manager, safe_tool_call
+        from my_bot.core.error_recovery import get_recovery_manager, safe_tool_call
         
         recovery_manager = get_recovery_manager()
         print("  ✅ Recovery manager imported successfully")
@@ -123,7 +123,7 @@ def test_integration_readiness():
     print("\n🔧 Testing Integration Readiness...")
     
     # Check if my_model.py exists
-    model_file = PROJECT_ROOT / "pokedex_bot" / "core" / "my_model.py"
+    model_file = PROJECT_ROOT / "my_bot" / "core" / "my_model.py"
     if model_file.exists():
         print(f"  ✅ Target file found: {model_file}")
     else:
@@ -132,8 +132,8 @@ def test_integration_readiness():
     
     # Check if both new modules can be imported
     try:
-        from pokedex_bot.core.session_manager import get_session_manager
-        from pokedex_bot.core.error_recovery import get_recovery_manager
+        from my_bot.core.session_manager import get_session_manager
+        from my_bot.core.error_recovery import get_recovery_manager
         print("  ✅ All required modules can be imported")
     except ImportError as e:
         print(f"  ❌ Import error: {e}")

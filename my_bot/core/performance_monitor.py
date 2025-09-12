@@ -1,4 +1,4 @@
-# /pokedex_bot/core/performance_monitor.py
+# /my_bot/core/performance_monitor.py
 """
 Performance Monitor for Security Bot
 

@@ -1,4 +1,4 @@
-# /pokedex_bot/tools/network_monitoring_tools.py
+# /my_bot/tools/network_monitoring_tools.py
 """
 Network Monitoring Tools for SOC Bot
 
@@ -9,7 +9,7 @@ for security auditing and monitoring purposes.
 import logging
 from typing import List
 from langchain_core.tools import tool
-from pokedex_bot.utils.network_logger import get_network_logger, get_network_summary
+from my_bot.utils.network_logger import get_network_logger, get_network_summary
 
 
 @tool
@@ -56,7 +56,7 @@ def get_network_activity() -> str:
 def get_network_summary_tool() -> str:
     """Get summary of network activity by domain and tool"""
     try:
-        from pokedex_bot.utils.network_logger import get_network_summary
+        from my_bot.utils.network_logger import get_network_summary
         summary = get_network_summary()
         
         total_calls = summary.get('total_recent_calls', 0)

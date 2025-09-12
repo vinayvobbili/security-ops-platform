@@ -14,8 +14,8 @@ from datetime import datetime
 # Add the project root to Python path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from pokedex_bot.core.my_model import initialize_model_and_agent
-from pokedex_bot.core.state_manager import get_state_manager
+from my_bot.core.my_model import initialize_model_and_agent
+from my_bot.core.state_manager import get_state_manager
 
 # Configure logging
 logging.basicConfig(

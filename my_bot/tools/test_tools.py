@@ -14,7 +14,7 @@ from langchain_core.tools import tool
 def run_tests() -> str:
     """Run basic bot functionality tests."""
     try:
-        from pokedex_bot.core.state_manager import get_state_manager
+        from my_bot.core.state_manager import get_state_manager
         
         def _send_direct_message(message: str):
             """Helper to send direct messages during testing"""
