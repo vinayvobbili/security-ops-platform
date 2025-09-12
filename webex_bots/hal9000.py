@@ -119,7 +119,7 @@ def log_conversation(user_name: str, user_prompt: str, bot_response: str, respon
             with open(log_file, "w", newline="") as f:
                 writer = csv.writer(f, quoting=csv.QUOTE_MINIMAL)
                 writer.writerow([
-                    "timestamp", "user_name", "user_message", "bot_response", 
+                    "timestamp", "user_name", "user_message", "bot_response",
                     "response_time_seconds", "room_name"
                 ])
 
@@ -363,7 +363,7 @@ def main():
     resilient_runner = ResilientBot(
         bot_factory=lambda: Bot(
             teams_bot_token=WEBEX_ACCESS_TOKEN,
-            approved_domains=['company.com'],
+            approved_rooms=[CONFIG.webex_room_id_vinay_test_space, CONFIG.webex_room_id_threatcon_collab, CONFIG.webex_room_id_automation_engineering],
             bot_name="HAL9000"
         ),
         initialization_func=initialize_bot,
