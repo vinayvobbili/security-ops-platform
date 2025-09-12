@@ -187,7 +187,7 @@ class DocumentProcessor:
 
         # Check if any document is newer than the index
         for file in os.listdir(self.pdf_directory):
-            if file.endswith(('.pdf', '.docx')):
+            if file.endswith(('.pdf', '.docx', '.doc', '.xlsx', '.xls')):
                 file_path = os.path.join(self.pdf_directory, file)
                 if os.path.getmtime(file_path) > index_mtime:
                     logging.debug(f"📄 Newer document found: {file}")

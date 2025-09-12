@@ -111,7 +111,7 @@ LOG_FILE_DIR = Path(__file__).parent.parent / 'data' / 'transient' / 'logs'
 def log_conversation(user_name: str, user_prompt: str, bot_response: str, response_time: float, room_name: str):
     """Log complete conversation to CSV file for analytics"""
     try:
-        log_file = Path(__file__).parent.parent / "hal9000_conversations.csv"
+        log_file = LOG_FILE_DIR / "hal9000_conversations.csv"
         now_eastern = datetime.now(eastern).strftime('%m/%d/%Y %I:%M:%S %p %Z')
 
         # Create header if file doesn't exist
