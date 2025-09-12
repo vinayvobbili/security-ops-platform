@@ -30,8 +30,8 @@ def restart_preloader():
             subprocess.run(["launchctl", "stop", "com.acme.soc-bot-preloader"],
                            check=False, capture_output=True)
             # Start the service
-            result = subprocess.run(["launchctl", "start", "com.acme.soc-bot-preloader"],
-                                    check=True, capture_output=True, text=True)
+            subprocess.run(["launchctl", "start", "com.acme.soc-bot-preloader"],
+                           check=True, capture_output=True, text=True)
             print("✅ Preloader service restarted successfully!")
             print("🔥 Updated documents are now available for search!")
 
