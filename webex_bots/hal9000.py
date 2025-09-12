@@ -111,17 +111,16 @@ LOG_FILE_DIR = Path(__file__).parent.parent / 'data' / 'transient' / 'logs'
 def log_conversation(user_name: str, user_prompt: str, bot_response: str, response_time: float, room_name: str):
     """Log complete conversation to CSV file for analytics"""
     try:
-        log_file = LOG_FILE_DIR / "_conversations.csv"
+        log_file = Path(__file__).parent.parent / "hal9000_conversations.csv"
         now_eastern = datetime.now(eastern).strftime('%m/%d/%Y %I:%M:%S %p %Z')
 
         # Create header if file doesn't exist
         if not log_file.exists():
-            os.makedirs(LOG_FILE_DIR, exist_ok=True)
             with open(log_file, "w", newline="") as f:
                 writer = csv.writer(f, quoting=csv.QUOTE_MINIMAL)
                 writer.writerow([
-                    "Person", "User Prompt", "Bot Response", "Response Length",
-                    "Response Time (s)", "Webex Room", "Message Time"
+                    "timestamp", "user_name", "user_message", "bot_response", 
+                    "response_time_seconds", "room_name"
                 ])
 
         # Sanitize data for CSV
@@ -134,8 +133,8 @@ def log_conversation(user_name: str, user_prompt: str, bot_response: str, respon
         with open(log_file, "a", newline="") as f:
             writer = csv.writer(f, quoting=csv.QUOTE_MINIMAL)
             writer.writerow([
-                user_name, sanitized_prompt, sanitized_response, response_length,
-                response_time_rounded, room_name, now_eastern
+                now_eastern, user_name, sanitized_prompt, sanitized_response,
+                response_time_rounded, room_name
             ])
 
     except Exception as e:
