@@ -574,6 +574,21 @@ class GetBotHealth(Command):
         )
 
 
+class Hi(Command):
+    """Simple Hi command to check if bot is alive."""
+
+    def __init__(self):
+        super().__init__(
+            command_keyword="hi",
+            delete_previous_message=False,
+            exact_command_keyword_match=False,
+        )
+
+    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_jarvais, log_file_name="jarvais_activity_log.csv")
+    def execute(self, message, attachment_actions, activity):
+        return "Hi 👋"
+
+
 
 
 def jarvais_bot_factory():
@@ -600,6 +615,7 @@ def jarvais_initialization(bot_instance=None):
         bot_instance.add_command(GetTaniumHostsWithoutRingTag())
         bot_instance.add_command(GetTaniumUnhealthyHosts())
         bot_instance.add_command(GetBotHealth())
+        bot_instance.add_command(Hi())
         return True
     return False
 

@@ -140,6 +140,21 @@ class BotStatusCommand(Command):
         )
 
 
+class Hi(Command):
+    """Simple Hi command to check if bot is alive."""
+
+    def __init__(self):
+        super().__init__(
+            command_keyword="hi",
+            delete_previous_message=False,
+            exact_command_keyword_match=False,
+        )
+
+    @log_activity(config.webex_bot_access_token_barnacles, "barnacles_activity_log.csv")
+    def execute(self, message, attachment_actions, activity):
+        return "Hi 👋"
+
+
 # Command to save notes
 class SaveManagementNotes(Command):
     def __init__(self):
@@ -575,6 +590,7 @@ def barnacles_initialization(bot_instance=None):
         bot_instance.add_command(SaveThreatcon())
         bot_instance.add_command(AnnounceThreatcon())
         bot_instance.add_command(BotStatusCommand())
+        bot_instance.add_command(Hi())
         return True
     return False
 
