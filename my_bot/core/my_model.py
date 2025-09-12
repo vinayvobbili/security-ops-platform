@@ -132,16 +132,32 @@ def ask(user_message: str, user_id: str = "default", room_id: str = "default") -
         if not user_message or not user_message.strip():
             return "Please ask me a question!"
 
-        query = user_message.strip()
+        import re
 
-        # Remove bot name prefixes if present (common in group chats)
+        query = user_message.strip()
+        original_query = query
+
+        # Remove bot name mentions from anywhere in the message (common in group chats)
         bot_names = ['DnR_Pokedex', 'Pokedex', 'pokedex', 'dnr_pokedex',
                      'HAL9000', 'hal9000', 'Jarvais', 'jarvais',
                      'Toodles', 'toodles', 'Barnacles', 'barnacles']
+
+        # Remove all bot name mentions from anywhere in the message
+        removed_names = []
         for bot_name in bot_names:
-            if query.lower().startswith(bot_name.lower()):
-                query = query[len(bot_name):].strip()
-                break
+            if bot_name.lower() in query.lower():
+                # Use case-insensitive replacement
+                pattern = re.compile(re.escape(bot_name), re.IGNORECASE)
+                query = pattern.sub('', query)
+                removed_names.append(bot_name)
+
+        # Clean up extra whitespace and commas left by removals
+        query = re.sub(r'\s+', ' ', query)  # Multiple spaces -> single space
+        query = re.sub(r'[,\s]*,\s*', ', ', query)  # Clean up commas
+        query = query.strip(' ,')  # Remove leading/trailing spaces and commas
+
+        if removed_names:
+            logging.info(f"Removed bot names {removed_names} from query: '{original_query}' -> '{query}'")
 
         # Create unique session key for user + room combination
         session_key = f"{user_id}_{room_id}"
