@@ -18,6 +18,7 @@ def get_config():
         webex_bot_access_token_hal9000=os.environ["WEBEX_BOT_ACCESS_TOKEN_HAL9000"],
         webex_bot_access_token_pokedex=os.environ["WEBEX_BOT_ACCESS_TOKEN_POKEDEX"],
         webex_bot_email_pokedex=os.environ["WEBEX_BOT_EMAIL_POKEDEX"],
+        webex_bot_email_hal9000=os.environ["WEBEX_BOT_EMAIL_HAL9000"],
         webex_room_id_aging_tickets=os.environ["WEBEX_ROOM_ID_AGING_TICKETS"],
         webex_room_id_vinay_test_space=os.environ["WEBEX_ROOM_ID_VINAY_TEST_SPACE"],
         webex_room_id_soc_shift_updates=os.environ["WEBEX_ROOM_ID_SOC_SHIFT_UPDATES"],
@@ -116,6 +117,7 @@ class Config:
     webex_bot_access_token_hal9000: str
     webex_bot_access_token_pokedex: str
     webex_bot_email_pokedex: str
+    webex_bot_email_hal9000: str
     webex_room_id_aging_tickets: str
     webex_room_id_vinay_test_space: str
     webex_room_id_soc_shift_updates: str
