@@ -215,10 +215,10 @@ class DocumentProcessor:
             # Create hybrid ensemble retriever (70% vector, 30% keyword)
             self.retriever = EnsembleRetriever(
                 retrievers=[vector_retriever, bm25_retriever],
-                weights=[0.70, 0.30]
+                weights=[0.65, 0.35]
             )
 
-            logging.debug("Hybrid retriever created successfully (70% vector + 30% BM25)")
+            logging.debug("Hybrid retriever created successfully (65% vector + 35% BM25)")
             return self.retriever
 
         except Exception as e:
@@ -259,25 +259,22 @@ class DocumentProcessor:
                         sources_content[source_file] = []
                     sources_content[source_file].append(doc.page_content.strip())
 
+                # Simple approach: show top sources in order retrieved
                 for source_file, contents in sources_content.items():
-                    # Combine content from same source, limiting length
-                    combined_content = "\n\n".join(contents[:1])  # Only use top chunk per source
-                    # Truncate if still too long
-                    if len(combined_content) > 1000:
-                        combined_content = combined_content[:1000] + "..."
+                    combined_content = "\n\n".join(contents[:2])  # Top 2 chunks per source
                     response_parts.append(f"📄 **From {source_file}:**\n{combined_content}")
 
-                # Join all sources
-                result = "\n\n" + "\n\n".join(response_parts[:2])  # Limit to top 2 sources
+                # Join all sources (limit to top 3)
+                result = "\n\n" + "\n\n".join(response_parts[:3])
 
-                # Add source summary at the end
+                # Add source summary
                 source_list = list(sources_content.keys())
                 if len(source_list) == 1:
                     result += f"\n\n**Source:** {source_list[0]}"
                 else:
-                    result += f"\n\n**Sources:** {', '.join(source_list[:2])}"
-                    if len(source_list) > 2:
-                        result += f" and {len(source_list) - 2} other documents"
+                    result += f"\n\n**Sources:** {', '.join(source_list[:3])}"
+                    if len(source_list) > 3:
+                        result += f" and {len(source_list) - 3} other documents"
 
                 return result
 
