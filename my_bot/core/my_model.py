@@ -135,7 +135,9 @@ def ask(user_message: str, user_id: str = "default", room_id: str = "default") -
         query = user_message.strip()
 
         # Remove bot name prefixes if present (common in group chats)
-        bot_names = ['DnR_Pokedex', 'Pokedex', 'pokedex', 'dnr_pokedex']
+        bot_names = ['DnR_Pokedex', 'Pokedex', 'pokedex', 'dnr_pokedex',
+                     'HAL9000', 'hal9000', 'Jarvais', 'jarvais',
+                     'Toodles', 'toodles', 'Barnacles', 'barnacles']
         for bot_name in bot_names:
             if query.lower().startswith(bot_name.lower()):
                 query = query[len(bot_name):].strip()
