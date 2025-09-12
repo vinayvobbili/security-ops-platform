@@ -320,7 +320,7 @@ class Bot(WebexBot):
                     # Update the final thinking message to show "Done!"
                     if thinking_msg:
                         done_prefix = random.choice(DONE_MESSAGES)
-                        done_message = f"{done_prefix} ⚡ Response time: {response_time:.1f}s"
+                        done_message = f"{done_prefix} ⚡ Response time: **{response_time:.1f}s**"
                         try:
                             # Update the thinking message to show completion (using text, not markdown)
                             import requests
