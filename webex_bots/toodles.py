@@ -1983,11 +1983,11 @@ def toodles_bot_factory():
     """Create Toodles bot instance"""
     return WebexBot(
         CONFIG.webex_bot_access_token_toodles,
-        bot_name="🛠🤖 Toodles! 👋",
+        bot_name="Toodles Bot",
         approved_rooms=[CONFIG.webex_room_id_vinay_test_space, CONFIG.webex_room_id_gosc_t2, CONFIG.webex_room_id_threatcon_collab],
         log_level="ERROR",
         threads=True,
-        bot_help_subtitle="🔧 Your friendly toolbox bot! 🪚"
+        bot_help_subtitle="Your friendly toolbox bot!"
     )
 
 
