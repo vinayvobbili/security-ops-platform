@@ -8,12 +8,11 @@ processing, and vector store management for the security operations bot.
 
 import os
 import logging
-from typing import List, Optional
+from typing import List
 
 from langchain_community.document_loaders import PyPDFDirectoryLoader, UnstructuredWordDocumentLoader, UnstructuredExcelLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
-from langchain.tools.retriever import create_retriever_tool
 from langchain_community.retrievers import BM25Retriever
 from langchain.retrievers import EnsembleRetriever
 
@@ -110,7 +109,7 @@ class DocumentProcessor:
 
         # Create text chunks
         texts = self.create_text_chunks(documents)
-        
+
         # Store documents for BM25 retriever
         self.all_documents = texts
 
@@ -139,7 +138,7 @@ class DocumentProcessor:
                 allow_dangerous_deserialization=True
             )
             logging.debug("FAISS index loaded successfully.")
-            
+
             # Also load documents for BM25 retriever if not already loaded
             if not self.all_documents:
                 logging.debug("Loading documents for BM25 retriever...")
@@ -147,7 +146,7 @@ class DocumentProcessor:
                 if documents:
                     self.all_documents = self.create_text_chunks(documents)
                     logging.debug(f"Loaded {len(self.all_documents)} documents for BM25")
-            
+
             return True
         except Exception as e:
             logging.error(f"Error loading FAISS index: {e}", exc_info=True)
@@ -208,20 +207,20 @@ class DocumentProcessor:
         try:
             # Create vector retriever
             vector_retriever = self.vector_store.as_retriever(search_kwargs={"k": self.retrieval_k})
-            
+
             # Create BM25 keyword retriever
             bm25_retriever = BM25Retriever.from_documents(self.all_documents)
             bm25_retriever.k = self.retrieval_k
-            
+
             # Create hybrid ensemble retriever (70% vector, 30% keyword)
             self.retriever = EnsembleRetriever(
                 retrievers=[vector_retriever, bm25_retriever],
-                weights=[0.7, 0.3]
+                weights=[0.70, 0.30]
             )
-            
+
             logging.debug("Hybrid retriever created successfully (70% vector + 30% BM25)")
             return self.retriever
-            
+
         except Exception as e:
             logging.error(f"Failed to create hybrid retriever: {e}")
             # Fallback to vector-only retriever
