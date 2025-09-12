@@ -308,54 +308,58 @@ class Bot(WebexBot):
 
                 logger.info(f"Sending response to {teams_message.personEmail}: {len(response_text)} chars")
 
-            if response_text:
-                end_time = datetime.now()
-                response_time = (end_time - start_time).total_seconds()
+                # Done message logic - moved inside the else block where response_text is set
+                if response_text:
+                    end_time = datetime.now()
+                    response_time = (end_time - start_time).total_seconds()
 
-                # Stop thinking message updates and update to "Done!" message
-                if thinking_active:
-                    thinking_active.clear()
+                    # Stop thinking message updates and update to "Done!" message
+                    if thinking_active:
+                        thinking_active.clear()
 
-                # Update the final thinking message to show "Done!"
-                if thinking_msg:
-                    done_prefix = random.choice(DONE_MESSAGES)
-                    done_message = f"{done_prefix} ⚡ Response time: {response_time:.1f}s"
+                    # Update the final thinking message to show "Done!"
+                    if thinking_msg:
+                        done_prefix = random.choice(DONE_MESSAGES)
+                        done_message = f"{done_prefix} ⚡ Response time: {response_time:.1f}s"
+                        try:
+                            # Update the thinking message to show completion
+                            import requests
+                            edit_url = f'https://webexapis.com/v1/messages/{thinking_msg.id}'
+                            headers = {'Authorization': f'Bearer {CONFIG.webex_bot_access_token_hal9000}', 'Content-Type': 'application/json'}
+                            edit_data = {
+                                'roomId': teams_message.roomId,
+                                'markdown': done_message
+                            }
+
+                            edit_response = requests.put(edit_url, headers=headers, json=edit_data)
+                            if edit_response.status_code == 200:
+                                logger.info(f"Updated thinking message to completion: {done_message}")
+                            else:
+                                logger.warning(f"Failed to update thinking message to completion: {edit_response.status_code}")
+                        except Exception as completion_error:
+                            logger.warning(f"Could not update thinking message to completion: {completion_error}")
+
+                    # Handle threading - avoid "Cannot reply to a reply" error
                     try:
-                        # Update the thinking message to show completion
-                        import requests
-                        edit_url = f'https://webexapis.com/v1/messages/{thinking_msg.id}'
-                        headers = {'Authorization': f'Bearer {CONFIG.webex_bot_access_token_hal9000}', 'Content-Type': 'application/json'}
-                        edit_data = {'markdown': done_message}
+                        # Use original parent ID if the incoming message is already a reply
+                        parent_id = teams_message.parentId if hasattr(teams_message, 'parentId') and teams_message.parentId else teams_message.id
 
-                        edit_response = requests.put(edit_url, headers=headers, json=edit_data)
-                        if edit_response.status_code == 200:
-                            logger.info(f"Updated thinking message to completion: {done_message}")
-                        else:
-                            logger.warning(f"Failed to update thinking message to completion: {edit_response.status_code}")
-                    except Exception as completion_error:
-                        logger.warning(f"Could not update thinking message to completion: {completion_error}")
+                        # Send LLM response directly as Webex message
+                        self.teams.messages.create(
+                            roomId=teams_message.roomId,
+                            parentId=parent_id,
+                            markdown=response_text
+                        )
 
-                # Handle threading - avoid "Cannot reply to a reply" error
-                try:
-                    # Use original parent ID if the incoming message is already a reply
-                    parent_id = teams_message.parentId if hasattr(teams_message, 'parentId') and teams_message.parentId else teams_message.id
+                        log_conversation(user_name, raw_message, response_text, response_time, room_name)
 
-                    # Send LLM response directly as Webex message
-                    self.teams.messages.create(
-                        roomId=teams_message.roomId,
-                        parentId=parent_id,
-                        markdown=response_text
-                    )
-
-                    log_conversation(user_name, raw_message, response_text, response_time, room_name)
-
-                except Exception as threading_error:
-                    logger.error(f"Error in threading/response: {threading_error}")
-                    # Send response without threading as fallback
-                    self.teams.messages.create(
-                        roomId=teams_message.roomId,
-                        text=response_text if isinstance(response_text, str) and len(response_text) < 7000 else "Response too long for message limits"
-                    )
+                    except Exception as threading_error:
+                        logger.error(f"Error in threading/response: {threading_error}")
+                        # Send response without threading as fallback
+                        self.teams.messages.create(
+                            roomId=teams_message.roomId,
+                            text=response_text if isinstance(response_text, str) and len(response_text) < 7000 else "Response too long for message limits"
+                        )
 
         except Exception as e:
             logger.error(f"Error in message processing: {e}", exc_info=True)
