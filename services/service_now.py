@@ -338,23 +338,12 @@ def enrich_host_report(input_file):
     # Save results with adjusted column widths
     output_file.parent.mkdir(parents=True, exist_ok=True)
 
-    with pd.ExcelWriter(output_file, engine="openpyxl") as writer:
-        df.to_excel(writer, index=False)
-
-        # Auto-adjust column widths for better readability
-        worksheet = writer.sheets['Sheet1']
-        for i, column in enumerate(df.columns):
-            # Set column width based on content
-            max_length = max(
-                df[column].astype(str).apply(len).max(),
-                len(str(column))
-            ) + 2  # add a little extra space
-
-            # Cap the width at a reasonable maximum to prevent overly wide columns
-            column_width = min(max_length, 30)
-
-            # Convert to Excel's character width
-            worksheet.column_dimensions[worksheet.cell(row=1, column=i + 1).column_letter].width = column_width
+    # Save Excel file
+    df.to_excel(output_file, index=False, engine="openpyxl")
+    
+    # Apply professional formatting
+    from src.utils.excel_formatting import apply_professional_formatting
+    apply_professional_formatting(output_file)
 
     if errors_occurred:
         logger.warning(f"Enriched report saved with some errors to {output_file}")
