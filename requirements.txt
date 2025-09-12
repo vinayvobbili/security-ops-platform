@@ -30,6 +30,7 @@ certifi
 
 # Azure/Cloud
 azure-core
+azure-devops
 msrest
 
 # Data Processing/Analysis
