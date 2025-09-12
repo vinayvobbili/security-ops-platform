@@ -264,17 +264,17 @@ class DocumentProcessor:
                     combined_content = "\n\n".join(contents[:2])  # Top 2 chunks per source
                     response_parts.append(f"📄 **From {source_file}:**\n{combined_content}")
 
-                # Join all sources (limit to top 3)
-                result = "\n\n" + "\n\n".join(response_parts[:3])
+                # Join all sources (limit to top 10 to catch more relevant docs)
+                result = "\n\n" + "\n\n".join(response_parts[:10])
 
                 # Add source summary
                 source_list = list(sources_content.keys())
                 if len(source_list) == 1:
                     result += f"\n\n**Source:** {source_list[0]}"
                 else:
-                    result += f"\n\n**Sources:** {', '.join(source_list[:3])}"
-                    if len(source_list) > 3:
-                        result += f" and {len(source_list) - 3} other documents"
+                    result += f"\n\n**Sources:** {', '.join(source_list[:10])}"
+                    if len(source_list) > 10:
+                        result += f" and {len(source_list) - 10} other documents"
 
                 return result
 
