@@ -97,6 +97,23 @@ THINKING_MESSAGES = [
     "🎭 Putting on my best security analyst persona for you..."
 ]
 
+# Fun completion messages for user engagement
+DONE_MESSAGES = [
+    "✅ **Done!**", "🎉 **Complete!**", "⚡ **Finished!**", "🎯 **Nailed it!**",
+    "🚀 **Mission accomplished!**", "🏆 **Success!**", "🎪 **Ta-da!**", "🌟 **All set!**",
+    "🎨 **Masterpiece ready!**", "🔥 **Delivered!**", "🎵 **And scene!**", "🎬 **That's a wrap!**",
+    "🎲 **Jackpot!**", "🧩 **Puzzle solved!**", "⭐ **Mission complete!**", "🎯 **Bullseye!**",
+    "🏃‍♂️ **Crossed the finish line!**", "🎪 **Magic complete!**", "🔮 **Oracle consulted!**", "📚 **Knowledge delivered!**",
+    "🛡️ **Investigation complete!**", "🎭 **Performance finished!**", "🎸 **Final note played!**", "🌈 **Rainbow delivered!**",
+    "🔬 **Analysis complete!**", "📡 **Signal transmitted!**", "🎯 **Target acquired!**", "🧠 **Brain power delivered!**",
+    "🎪 **Show's over!**", "⚙️ **Gears stopped turning!**", "🔮 **Crystal ball cleared!**", "📊 **Numbers crunched!**",
+    "🎨 **Artwork finished!**", "🧩 **All pieces found!**", "⚡ **Lightning captured!**", "🎪 **Curtain call!**",
+    "🔍 **Case closed!**", "🚀 **Houston, we're done!**", "🎭 **Final bow taken!**", "🔬 **Lab results in!**",
+    "📡 **Transmission ended!**", "🎯 **Direct hit achieved!**", "🧠 **Mind blown!**", "🎪 **Abracadabra complete!**",
+    "⚙️ **Engine shut down!**", "🔮 **Fortune told!**", "📚 **Story complete!**", "🎲 **Lucky roll!**",
+    "🌟 **Stars aligned!**", "🎨 **Brush down!**", "🧩 **Eureka achieved!**", "⚡ **Power restored!**"
+]
+
 # Configure logging with colors
 ROOT_DIRECTORY = Path(__file__).parent.parent
 
@@ -491,33 +508,37 @@ class PokeDexBot(WebexBot):
 
                 logger.info(f"Sending response to {teams_message.personEmail}: {len(response_text)} chars")
 
-                # Stop thinking message updates
-                if thinking_active:
-                    thinking_active.clear()
-
             if response_text:
                 end_time = datetime.now()
                 response_time = (end_time - start_time).total_seconds()
+
+                # Stop thinking message updates and update to "Done!" message
+                if thinking_active:
+                    thinking_active.clear()
+
+                # Update the final thinking message to show "Done!"
+                if thinking_msg:
+                    done_prefix = random.choice(DONE_MESSAGES)
+                    done_message = f"{done_prefix} ⚡ Response time: {response_time:.1f}s"
+                    try:
+                        # Update the thinking message to show completion
+                        import requests
+                        edit_url = f'https://webexapis.com/v1/messages/{thinking_msg.id}'
+                        headers = {'Authorization': f'Bearer {CONFIG.webex_bot_access_token_pokedex}', 'Content-Type': 'application/json'}
+                        edit_data = {'markdown': done_message}
+
+                        edit_response = requests.put(edit_url, headers=headers, json=edit_data)
+                        if edit_response.status_code == 200:
+                            logger.info(f"Updated thinking message to completion: {done_message}")
+                        else:
+                            logger.warning(f"Failed to update thinking message to completion: {edit_response.status_code}")
+                    except Exception as completion_error:
+                        logger.warning(f"Could not update thinking message to completion: {completion_error}")
 
                 # Handle threading - avoid "Cannot reply to a reply" error
                 try:
                     # Use original parent ID if the incoming message is already a reply
                     parent_id = teams_message.parentId if hasattr(teams_message, 'parentId') and teams_message.parentId else teams_message.id
-
-                    # Send completion status as new threaded message
-                    if thinking_msg:
-                        # Skip the problematic update, just send completion as new message
-                        # This is more reliable than trying to update thinking message
-                        done_message = f"✅ **Done!** ⚡ Response time: {response_time:.1f}s"
-                        try:
-                            self.teams.messages.create(
-                                roomId=teams_message.roomId,
-                                parentId=parent_id,
-                                markdown=done_message
-                            )
-                            logger.info(f"Sent completion status: {done_message}")
-                        except Exception as completion_error:
-                            logger.error(f"Could not send completion message: {completion_error}")
 
                     # Send LLM response directly as Webex message
                     self.teams.messages.create(

@@ -39,6 +39,9 @@ tabulate
 beautifulsoup4
 pyarrow
 python-docx
+unstructured
+networkx
+msoffcrypto-tool
 
 # Image Processing
 pillow

@@ -32,16 +32,16 @@ def run_health_tests_command() -> str:
     """Execute health tests and return formatted results"""
     try:
         from pokedex_bot.tests.system_health_tests import run_health_tests
-        
+
         # Run the health tests
         logging.info("🔬 Running health tests via chat command...")
         test_results = run_health_tests()
-        
+
         # Format results for chat response
         total_tests = len(test_results)
         passed_tests = sum(1 for result in test_results.values() if result.get('status') == 'PASS')
         failed_tests = total_tests - passed_tests
-        
+
         # Create summary
         if failed_tests == 0:
             status_emoji = "✅"
@@ -52,25 +52,25 @@ def run_health_tests_command() -> str:
         else:
             status_emoji = "❌"
             status_text = "MULTIPLE TESTS FAILED"
-        
+
         response = f"🔬 **Health Test Report**\\n\\n"
         response += f"{status_emoji} **Status**: {status_text}\\n"
         response += f"📊 **Summary**: {passed_tests}/{total_tests} tests passed\\n\\n"
-        
+
         # Add individual test results
         for test_name, result in test_results.items():
             status = result.get('status', 'UNKNOWN')
             duration = result.get('duration', 'N/A')
             emoji = "✅" if status == 'PASS' else "❌"
-            
+
             response += f"{emoji} **{test_name}**: {status} ({duration})\\n"
-            
+
             # Add error details for failed tests
             if status in ['FAIL', 'ERROR'] and result.get('error'):
                 response += f"└─ Error: {result['error']}\\n"
-        
+
         return response
-        
+
     except Exception as e:
         logging.error(f"Failed to run health tests: {e}")
         return f"❌ **Health Test Error**\\n\\nFailed to execute health tests: {str(e)}\\n\\n💡 **Manual run**: `python pokedx_bot/tests/system_health_tests.py`"
@@ -152,7 +152,7 @@ def ask(user_message: str, user_id: str = "default", room_id: str = "default") -
 
         # Get session manager for persistent sessions
         session_manager = get_session_manager()
-        
+
         # Clean up old sessions periodically
         session_manager.cleanup_old_sessions()
 
@@ -161,34 +161,13 @@ def ask(user_message: str, user_id: str = "default", room_id: str = "default") -
 
         # Quick responses for simple queries (performance optimization)
         simple_query = query.lower().strip()
-        if simple_query in ['status', 'health', 'are you working', 'hello', 'hi', 'run health tests', 'health tests', 'run tests']:
-            if simple_query in ['status', 'health', 'are you working']:
-                final_response = "✅ System online and ready"
-            elif simple_query in ['run health tests', 'health tests', 'run tests']:
-                final_response = run_health_tests_command()
-            else:  # greetings
-                final_response = """👋 Hello! I'm your SOC Q&A Assistant
+        if simple_query in ['hi', 'status', 'health', 'are you working']:
+            final_response = "✅ System online and ready"
 
-I'm here to help with security operations by searching our local SOC documentation and using available security tools.
-
-🔒 Security Note: I operate in a secure environment with:
-• Access to internal SOC documents and procedures
-• Integration with security tools (CrowdStrike, Tanium, etc.)
-• No internet access - all responses from local resources only
-
-❓ How I can help:
-• Answer questions about security procedures
-• Search SOC documentation and runbooks
-• Check device status and containment
-• View current shift staffing and on-call information
-• Provide step-by-step incident response guidance
-
-Just ask me any security-related question!"""
-            
             # Store simple interaction in session
             session_manager.add_message(session_key, "user", query)
             session_manager.add_message(session_key, "assistant", final_response)
-            
+
             elapsed = time.time() - start_time
             if elapsed > 25:
                 logging.warning(f"Response took {elapsed:.1f}s")
@@ -198,7 +177,7 @@ Just ask me any security-related question!"""
         try:
             # Use direct execution with native tool calling
             logging.info(f"Using direct LLM execution")
-            
+
             # Prepare input with conversation context
             agent_input = query
             if conversation_context:
@@ -207,7 +186,7 @@ Just ask me any security-related question!"""
 
             # Let the 70B model handle everything directly - no agent framework
             logging.info(f"Passing query to direct LLM: {query[:100]}...")
-            
+
             final_response = state_manager.execute_query(agent_input)
 
         except Exception as e:
