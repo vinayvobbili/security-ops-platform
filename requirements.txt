@@ -67,6 +67,11 @@ langsmith
 faiss-cpu
 rank_bm25
 
+# Local RAG Components
+sentence-transformers>=5.1.0
+chromadb>=1.0.21
+pypdf>=6.0.0
+
 # Development/Testing
 pytest
 types-pytz
