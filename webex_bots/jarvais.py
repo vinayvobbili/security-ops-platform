@@ -605,9 +605,9 @@ def jarvais_initialization(bot_instance=None):
 
 def main():
     """Jarvais main with resilience framework"""
-    from src.utils.bot_resilience import BotResilient
+    from src.utils.bot_resilience import ResilientBot
     
-    resilient_runner = BotResilient(
+    resilient_runner = ResilientBot(
         bot_name="Jarvais",
         bot_factory=jarvais_bot_factory,
         initialization_func=jarvais_initialization,

@@ -38,7 +38,7 @@ from typing import Callable, Optional, Any
 logger = logging.getLogger(__name__)
 
 
-class BotResilient:
+class ResilientBot:
     """
     Resilient bot runner that handles:
     - Automatic reconnection on failures
@@ -46,11 +46,11 @@ class BotResilient:
     - Graceful shutdown on signals
     - Exponential backoff retry logic
     """
-    
-    def __init__(self, 
-                 bot_name: str,
+
+    def __init__(self,
                  bot_factory: Callable[[], Any],
                  initialization_func: Optional[Callable[..., bool]] = None,
+                 bot_name: Optional[str] = None,
                  max_retries: int = 5,
                  initial_retry_delay: int = 30,
                  max_retry_delay: int = 300,
@@ -60,16 +60,16 @@ class BotResilient:
         Initialize resilient bot runner
         
         Args:
-            bot_name: Name of the bot for logging
             bot_factory: Function that creates and returns a bot instance
             initialization_func: Optional function for custom initialization
+            bot_name: Optional bot name (will be extracted from bot instance if not provided)
             max_retries: Maximum number of restart attempts
             initial_retry_delay: Initial delay between retries (seconds)
             max_retry_delay: Maximum delay between retries (seconds)
             keepalive_interval: Normal keepalive ping interval (seconds)
             max_keepalive_interval: Maximum keepalive ping interval (seconds)
         """
-        self.bot_name = bot_name
+        self.bot_name = bot_name  # Will be set after bot creation if not provided
         self.bot_factory = bot_factory
         self.initialization_func = initialization_func
         self.max_retries = max_retries
@@ -77,30 +77,31 @@ class BotResilient:
         self.max_retry_delay = max_retry_delay
         self.keepalive_interval = keepalive_interval
         self.max_keepalive_interval = max_keepalive_interval
-        
+
         # Runtime state
         self.bot_instance = None
         self.shutdown_requested = False
         self.keepalive_thread = None
-        
+
         # Setup signal handlers
         self._setup_signal_handlers()
-    
+
     def _setup_signal_handlers(self):
         """Setup signal handlers for graceful shutdown"""
+
         def signal_handler(sig, _):
             logger.info(f"🛑 Signal {sig} received, shutting down {self.bot_name}...")
             self.shutdown_requested = True
             self._graceful_shutdown()
             sys.exit(0)
-        
+
         signal.signal(signal.SIGINT, signal_handler)
         signal.signal(signal.SIGTERM, signal_handler)
-    
+
     def _keepalive_ping(self):
         """Keep connection alive with periodic health checks"""
         wait = 60  # Start with 1 minute
-        
+
         while not self.shutdown_requested:
             try:
                 if self.bot_instance and hasattr(self.bot_instance, 'teams'):
@@ -112,17 +113,17 @@ class BotResilient:
                     logger.warning(f"Keepalive ping failed for {self.bot_name}: {e}. Retrying in {wait}s.")
                     wait = min(wait * 2, self.max_keepalive_interval)  # Exponential backoff
                     time.sleep(wait)
-    
+
     def _graceful_shutdown(self):
         """Perform graceful shutdown cleanup with proper WebSocket handling"""
         try:
             self.shutdown_requested = True
             logger.info(f"🛑 Performing graceful shutdown of {self.bot_name}...")
-            
+
             # Stop keepalive thread
             if self.keepalive_thread and self.keepalive_thread.is_alive():
                 logger.info("Stopping keepalive monitoring...")
-            
+
             # Properly close bot instance and WebSocket connections
             if self.bot_instance:
                 logger.info("Closing WebSocket connections...")
@@ -141,43 +142,53 @@ class BotResilient:
                                     asyncio.run(self.bot_instance.websocket_client.websocket.close())
                             except Exception as ws_error:
                                 logger.warning(f"WebSocket close error: {ws_error}")
-                    
+
                     logger.info("WebSocket connections closed")
                 except Exception as close_error:
                     logger.warning(f"Error closing WebSocket: {close_error}")
-                
+
                 # Clear bot instance
                 logger.info("Clearing bot instance...")
                 self.bot_instance = None
-            
+
             logger.info(f"✅ {self.bot_name} shutdown complete")
-            
+
         except Exception as e:
             logger.error(f"Error during graceful shutdown of {self.bot_name}: {e}")
-    
+
     def run_with_reconnection(self):
         """Run bot with automatic reconnection on failures"""
         retry_delay = self.initial_retry_delay
-        
+
         for attempt in range(self.max_retries):
             if self.shutdown_requested:
                 break
-                
+
             try:
                 logger.info(f"🚀 Starting {self.bot_name} (attempt {attempt + 1}/{self.max_retries})")
-                
+
                 # Longer delay to ensure previous WebSocket connections are fully closed
                 if attempt > 0:
                     logger.info("⏳ Waiting for previous WebSocket connections to clean up...")
-                    time.sleep(10)  # Increased from 5 to 10 seconds
-                
+                    time.sleep(15)  # Increased from 10 to 15 seconds for better reliability
+
                 start_time = datetime.now()
-                
+
                 # Create bot instance
-                logger.info(f"🌐 Creating {self.bot_name} connection...")
+                logger.info(f"🌐 Creating bot connection...")
                 self.bot_instance = self.bot_factory()
+
+                # Extract bot name from instance if not provided
+                if not self.bot_name:
+                    if hasattr(self.bot_instance, 'bot_name'):
+                        self.bot_name = self.bot_instance.bot_name
+                    elif hasattr(self.bot_instance, 'name'):
+                        self.bot_name = self.bot_instance.name
+                    else:
+                        self.bot_name = "UnknownBot"
+
                 logger.info(f"✅ {self.bot_name} created successfully")
-                
+
                 # Run custom initialization if provided
                 if self.initialization_func:
                     logger.info(f"🧠 Initializing {self.bot_name} components...")
@@ -198,25 +209,25 @@ class BotResilient:
                     except Exception as init_error:
                         logger.error(f"❌ Initialization function failed: {init_error}")
                         continue
-                
+
                 # Calculate initialization time
                 init_duration = (datetime.now() - start_time).total_seconds()
                 logger.info(f"🚀 {self.bot_name} is up and running (startup in {init_duration:.1f}s)...")
                 print(f"🚀 {self.bot_name} is up and running (startup in {init_duration:.1f}s)...")
-                
+
                 # Start the bot (this will block and run forever)
                 self.bot_instance.run()
-                
+
                 # If we reach here, the bot stopped normally
                 logger.info(f"{self.bot_name} stopped normally")
                 break
-                
+
             except KeyboardInterrupt:
                 logger.info(f"🛑 {self.bot_name} stopped by user (Ctrl+C)")
                 break
             except Exception as e:
                 logger.error(f"❌ {self.bot_name} crashed with error: {e}", exc_info=True)
-                
+
                 # Enhanced cleanup before retry
                 logger.info(f"🧹 Performing cleanup after {self.bot_name} crash...")
                 try:
@@ -227,7 +238,7 @@ class BotResilient:
                     logger.warning(f"Cleanup error: {cleanup_error}")
                     # Even if cleanup fails, give time for connections to timeout
                     time.sleep(5)
-                
+
                 if attempt < self.max_retries - 1:
                     logger.info(f"🔄 Restarting {self.bot_name} in {retry_delay} seconds...")
                     time.sleep(retry_delay)
@@ -235,38 +246,61 @@ class BotResilient:
                 else:
                     logger.error(f"❌ Max retries exceeded. {self.bot_name} will not restart.")
                     raise
-    
+
     def _kill_competing_processes(self):
         """Find and kill any competing instances of this bot"""
         try:
             import subprocess
             import os
             import signal
-            
+
             # Get current process info
             current_pid = os.getpid()
+
+            # If bot_name not set yet, try to create a temporary bot to extract the name
+            if not self.bot_name:
+                try:
+                    temp_bot = self.bot_factory()
+                    if hasattr(temp_bot, 'bot_name'):
+                        self.bot_name = temp_bot.bot_name
+                    elif hasattr(temp_bot, 'name'):
+                        self.bot_name = temp_bot.name
+                    # Clean up temp bot
+                    del temp_bot
+                except Exception as e:
+                    logger.warning(f"Could not extract bot name for process detection: {e}")
+                    return 0
+
             bot_script = f"{self.bot_name.lower()}.py"
-            
+
             # Check for other Python processes running the same bot script
             result = subprocess.run(
-                ["ps", "aux"], 
-                capture_output=True, 
+                ["ps", "aux"],
+                capture_output=True,
                 text=True
             )
-            
+
             competing_processes = []
             for line in result.stdout.split('\n'):
-                if f"python" in line and bot_script in line:
+                # More robust matching - check for python processes with our bot script
+                # Handle different path formats: relative, absolute, with/without full paths
+                if ("python" in line.lower() and
+                        (bot_script in line or
+                         f"webex_bots/{bot_script}" in line or
+                         f"/{bot_script}" in line.split()[-1] if line.split() else False)):
+
                     # Extract PID (usually the second column)
                     parts = line.split()
                     if len(parts) > 1:
                         try:
                             pid = int(parts[1])
                             if pid != current_pid:
-                                competing_processes.append(pid)
+                                # Double-check this is actually our bot by looking at the full command
+                                if any(bot_script in part for part in parts):
+                                    competing_processes.append(pid)
                         except ValueError:
                             continue
-            
+
             # Kill competing processes
             if competing_processes:
                 logger.info(f"🔫 Found {len(competing_processes)} competing {self.bot_name} process(es). Terminating...")
@@ -275,7 +309,7 @@ class BotResilient:
                         logger.info(f"Killing process {pid}...")
                         os.kill(pid, signal.SIGTERM)
                         time.sleep(1)  # Give process time to exit gracefully
-                        
+
                         # Check if process is still running, force kill if needed
                         try:
                             os.kill(pid, 0)  # Check if process exists
@@ -284,19 +318,23 @@ class BotResilient:
                         except OSError:
                             # Process no longer exists, good
                             pass
-                            
+
                         logger.info(f"✅ Successfully terminated process {pid}")
                     except OSError as e:
                         logger.warning(f"Could not kill process {pid}: {e}")
-                
-                # Wait a moment for WebSocket cleanup
-                logger.info("⏳ Waiting 3s for WebSocket cleanup...")
-                time.sleep(3)
+
+                # Wait longer for proper WebSocket cleanup and avoid race conditions
+                logger.info("⏳ Waiting 5s for complete WebSocket cleanup...")
+                time.sleep(5)
+
+                # Double-check no processes are still starting up
+                logger.info("🔍 Performing final process check...")
+                time.sleep(2)
             else:
                 logger.info(f"✅ No competing {self.bot_name} processes detected")
-            
+
             return len(competing_processes)
-            
+
         except Exception as e:
             logger.warning(f"Could not check/kill competing processes: {e}")
             return 0
@@ -310,24 +348,24 @@ class BotResilient:
             killed_count = self._kill_competing_processes()
             if killed_count > 0:
                 logger.info(f"🧹 Cleaned up {killed_count} competing process(es). Starting {self.bot_name}...")
-            
+
             # Start keepalive monitoring thread
             self.keepalive_thread = threading.Thread(target=self._keepalive_ping, daemon=True)
             self.keepalive_thread.start()
             logger.info(f"💓 Keepalive monitoring started for {self.bot_name}")
-            
+
             # Run bot with reconnection logic
             self.run_with_reconnection()
-            
+
         except Exception as e:
             logger.error(f"Fatal error in {self.bot_name}: {e}", exc_info=True)
             self._graceful_shutdown()
             sys.exit(1)
 
 
-def create_resilient_main(bot_name: str, 
-                         bot_factory: Callable[[], Any],
-                         initialization_func: Optional[Callable[[], bool]] = None):
+def create_resilient_main(bot_factory: Callable[[], Any],
+                          initialization_func: Optional[Callable[[], bool]] = None,
+                          bot_name: Optional[str] = None):
     """
     Convenience function to create a resilient main() function
     
@@ -338,17 +376,18 @@ def create_resilient_main(bot_name: str,
         def initialize_my_bot():
             return True
         
-        main = create_resilient_main("MyBot", create_my_bot, initialize_my_bot)
+        main = create_resilient_main(create_my_bot, initialize_my_bot)
         
         if __name__ == "__main__":
             main()
     """
+
     def main():
-        resilient_runner = BotResilient(
-            bot_name=bot_name,
-            bot_factory=bot_factory, 
-            initialization_func=initialization_func
+        resilient_runner = ResilientBot(
+            bot_factory=bot_factory,
+            initialization_func=initialization_func,
+            bot_name=bot_name
         )
         resilient_runner.run()
-    
+
     return main

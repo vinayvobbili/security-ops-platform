@@ -375,9 +375,9 @@ def main():
         except Exception as e:
             logger.warning(f"Tests failed or skipped: {e}")
 
-    from src.utils.bot_resilience import BotResilient
+    from src.utils.bot_resilience import ResilientBot
 
-    resilient_runner = BotResilient(
+    resilient_runner = ResilientBot(
         bot_name="MoneyBall",
         bot_factory=moneyball_bot_factory,
         initialization_func=moneyball_initialization,

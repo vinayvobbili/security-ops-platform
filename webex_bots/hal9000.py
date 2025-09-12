@@ -358,19 +358,18 @@ class Bot(WebexBot):
 
 
 def main():
-    """Bot main entry point"""
-    # Initialize bot components (includes LLM and startup message)
-    if not initialize_bot():
-        logger.error("Failed to initialize bot")
-        return
+    """HAL9000 main with resilience framework"""
+    from src.utils.bot_resilience import ResilientBot
 
-    # Create and run bot
-    bot = Bot(
-        teams_bot_token=WEBEX_ACCESS_TOKEN,
-        approved_domains=['company.com'],
-        bot_name="HAL9000"
+    resilient_runner = ResilientBot(
+        bot_factory=lambda: Bot(
+            teams_bot_token=WEBEX_ACCESS_TOKEN,
+            approved_domains=['company.com'],
+            bot_name="HAL9000"
+        ),
+        initialization_func=initialize_bot
     )
-    bot.run()
+    resilient_runner.run()
 
 
 if __name__ == "__main__":
