@@ -7,10 +7,10 @@ Wants=network.target
 Type=simple
 User=user
 Group=staff
-WorkingDirectory=/Users/user/PycharmProjects/IR
+WorkingDirectory=/Users/user@company.com/PycharmProjects/IR
 Environment=PATH=/usr/local/bin:/usr/bin:/bin
-Environment=PYTHONPATH=/Users/user/PycharmProjects/IR
-ExecStart=/usr/bin/python3 /Users/user/PycharmProjects/IR/preload_soc_bot.py
+Environment=PYTHONPATH=/Users/user@company.com/PycharmProjects/IR
+ExecStart=/usr/bin/python3 /Users/user@company.com/PycharmProjects/IR/preload_soc_bot.py
 Restart=always
 RestartSec=10
 StandardOutput=journal

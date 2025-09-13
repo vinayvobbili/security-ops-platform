@@ -4,12 +4,44 @@ This framework provides automatic WebSocket connection monitoring and recovery f
 
 ## Current Status
 
-- **Pokedex**: ✅ Using ZScaler resilience (affected by ZScaler 4.5.0.198)
+- **Pokedex**: ✅ Using **External ZScaler Monitor** (affected by ZScaler 4.5.0.198)
 - **HAL9000**: ⏸️ Using standard resilience (ZScaler 4.1.0.161 works fine)
 
-## How to Enable for a Bot
+## ⚡ **NEW: External ZScaler Monitor (Recommended)**
 
-When ZScaler gets upgraded on HAL's machine, simply change one setting:
+Due to asyncio/threading issues with the internal ZScaler resilience framework, we now use an **external monitoring approach** that's more reliable:
+
+### 🛡️ **Features**
+- **MacBook Sleep/Wake Resilience**: Survives and recovers from sleep cycles
+- **ZScaler Connection Recovery**: Automatically detects and recovers from ZScaler kills
+- **Rate Limited**: Max 6 restarts per hour with cooldown periods
+- **Background Service**: Runs as launchd service, starts on boot
+- **Smart Detection**: Monitors logs for connection resets and WebSocket failures
+
+### 🚀 **Quick Start**
+```bash
+# Start the ZScaler monitor
+./src/pokedx/manage_zscaler_monitor.sh start
+
+# Check status
+./src/pokedx/manage_zscaler_monitor.sh status
+
+# View monitor logs
+./src/pokedx/manage_zscaler_monitor.sh logs
+
+# Test recovery mechanism
+./src/pokedx/test_zscaler_recovery.sh
+```
+
+### 📁 **Files Created**
+- `src/pokedx/zscaler_monitor.sh` - Main monitoring script
+- `src/pokedx/manage_zscaler_monitor.sh` - Management interface  
+- `src/pokedx/test_zscaler_recovery.sh` - Recovery testing
+- `~/Library/LaunchAgents/com.pokedx.zscaler.monitor.plist` - macOS service
+
+## Legacy Internal Framework (Deprecated)
+
+The original internal ZScaler resilience had threading issues. How to enable (not recommended):
 
 ### Option 1: Configuration File Update
 Edit `/src/utils/zscaler_resilience.py`:

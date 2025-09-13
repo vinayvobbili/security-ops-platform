@@ -5,7 +5,7 @@
 ORIGINAL_DIR=$(pwd)
 
 # Change to project directory
-cd /Users/user/PycharmProjects/IR || exit 1
+cd /Users/user@company.com/PycharmProjects/IR || exit 1
 
 echo "🚀 Starting Pokedex SOC Bot..."
 
@@ -28,8 +28,8 @@ fi
 # Activate virtual environment and run bot
 echo "🤖 Starting Pokedex bot..."
 source .venv/bin/activate
-export PYTHONPATH="/Users/user/PycharmProjects/IR:$PYTHONPATH"
-python src/pokedex/pokedex.py
+export PYTHONPATH="/Users/user@company.com/PycharmProjects/IR:$PYTHONPATH"
+python webex_bots/pokedex.py
 
 # Return to original directory
 cd "$ORIGINAL_DIR" || exit 1
