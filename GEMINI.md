@@ -1,4 +1,4 @@
-# CLAUDE.md
+# GEMINI.md
 
 **This file is a reference to the unified agent instructions.**
 

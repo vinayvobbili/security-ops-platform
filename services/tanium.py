@@ -55,14 +55,17 @@ query getEndpoints($first: Int, $after: Cursor) {
 """
 
 UPDATE_TAGS_MUTATION = """
-mutation actionPerform($input: ActionPerformInput!) {
-  actionPerform(input: $input) {
-    scheduledActions {
-      platforms
+mutation createParamTaniumAction($comment: String, $distributeSeconds: Int, $expireSeconds: Int, $name: String, $tag: String!, $startTime: Time, $packageID: ID, $endpoints: [ID!]!) {
+  actionCreate(
+    input: {comment: $comment, name: $name, package: {id: $packageID, params: [$tag]}, targets: {endpoints: $endpoints, actionGroup: {id: 4}}, schedule: {distributeSeconds: $distributeSeconds, expireSeconds: $expireSeconds, startTime: $startTime}}
+  ) {
+    action {
       scheduledAction {
         id
-        name
       }
+    }
+    error {
+      message
     }
   }
 }
@@ -242,40 +245,42 @@ class TaniumInstance:
                 endpoint_id = int(tanium_id)
             except ValueError:
                 endpoint_id = tanium_id
-                
+            
+            # Try package ID 226 for "Custom Tags - Add Tags" (Windows) 
+            package_id = "226"
+            
+            # Create variables for the new mutation format - try minimal required parameters first
             variables = {
-                "input": {
-                    "targets": {
-                        "endpoints": [endpoint_id]
-                    },
-                    "operation": {
-                        "addTags": tags
-                    },
-                    "name": f"Add Custom Tags to {tanium_id}"
-                }
+                "name": f"Add Custom Tags to {tanium_id}",
+                "tag": ",".join(tags),     # Join tags with comma
+                "packageID": package_id,
+                "endpoints": [endpoint_id]
             }
+            
+            logger.info(f"Sending GraphQL variables for {tanium_id}: {variables}")
             result = self.query(UPDATE_TAGS_MUTATION, variables)
 
-            logger.debug(f"GraphQL response for tag update: {result}")
+            logger.info(f"Full GraphQL response for tag update: {result}")
 
-            # Check if the mutation was successful by looking for scheduled actions
-            action_perform_result = result.get('data', {}).get('actionPerform', {})
-            scheduled_actions = action_perform_result.get('scheduledActions') or []
-
-            if action_perform_result is None:
-                logger.error(f"actionPerform returned None in response: {result}")
-            if action_perform_result.get('scheduledActions') is None:
-                logger.warning(f"scheduledActions is None - this might indicate no actions were created. Full result: {action_perform_result}")
-
-            success = len(scheduled_actions) > 0
-
-            if success:
-                action_ids = [platform['scheduledAction']['id'] for platform in scheduled_actions if platform.get('scheduledAction')]
-                logger.info(f"Successfully created tag actions for computer ID '{tanium_id}' in {self.name}: {tags}, Action IDs: {action_ids}")
+            # Check if the mutation was successful by looking for action creation
+            action_create_result = result.get('data', {}).get('actionCreate', {})
+            
+            # Check for errors first
+            error = action_create_result.get('error')
+            if error:
+                logger.error(f"GraphQL error creating action for computer ID '{tanium_id}' in {self.name}: {error.get('message', 'Unknown error')}")
+                logger.error(f"Full error details: {error}")
+                return False
+            
+            # Check for successful action creation
+            action = action_create_result.get('action')
+            if action and action.get('scheduledAction', {}).get('id'):
+                action_id = action['scheduledAction']['id']
+                logger.info(f"Successfully created tag action for computer ID '{tanium_id}' in {self.name}: {tags}, Action ID: {action_id}")
+                return True
             else:
-                logger.error(f"Failed to create tag actions for computer ID '{tanium_id}' in {self.name}: No actions were created")
-
-            return success
+                logger.error(f"Failed to create tag action for computer ID '{tanium_id}' in {self.name}: No action was created")
+                return False
 
         except Exception as e:
             logger.error(f"Error updating tags for computer ID '{tanium_id}' in {self.name}: {e}")
@@ -673,9 +678,9 @@ def main():
         #     logger.warning("No data to export")
 
         # Test: Direct tagging with known Tanium ID (no hostname lookup needed)
-        test_hostname = "uscku1metu03c7l.METNET.NET"
+        test_hostname = "uscku1metu03c7l.METNET.NET"  # Full hostname from Tanium
         test_tanium_id = "621122"  # We already confirmed this ID matches the hostname
-        test_tag = "USSRVRing1"
+        test_tag = "TestTag123"  # Simple test tag
         write_instance = "Cloud-Write"
 
         # First, test if write token can read data
