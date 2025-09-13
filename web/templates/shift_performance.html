@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shift Performance - Past 7 Days</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/common.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/shift_performance.css') }}">
+</head>
+<body>
+<div class="top-nav">
+    <div class="nav-burger" onclick="toggleMenu()">
+        <img src="{{ url_for('static', filename='icons/burger.svg') }}" alt="Menu" class="nav-icon">
+    </div>
+    <div id="burgerMenu" class="burger-menu-content" style="display:none;">
+        <a href="/">Home</a>
+        <a href="/xsoar">XSOAR Dashboard</a>
+        <a href="/shift-performance">Shift Performance</a>
+        <a href="/msoc-form">MSOC Form</a>
+        <a href="/speak-up-form">Speak Up Form</a>
+        <a href="/travel-form">Travel Notification Form</a>
+        <a href="/xsoar-ticket-import-form">XSOAR Ticket Import</a>
+        <a href="/red-team-testing-form">Red Team Testing</a>
+        <a href="/apt-other-names-search">APT Other Names Search</a>
+    </div>
+</div>
+
+<div class="container">
+    <!-- Title and Filter Header Row -->
+    <div class="header-row">
+        <h1>Shift Performance Dashboard</h1>
+        <div class="filter-section">
+            <div class="filter-dropdown">
+                <button class="filter-toggle" onclick="toggleFilters()">
+                    🔽 Filters
+                </button>
+                <div class="filter-menu" id="filterMenu" style="display: none;">
+                    <div class="filter-group">
+                        <h4>Shift Type</h4>
+                        <label><input type="checkbox" value="all" checked> All Shifts</label>
+                        <label><input type="checkbox" value="morning" checked> 🌅 Morning</label>
+                        <label><input type="checkbox" value="afternoon" checked> ☀️ Afternoon</label>
+                        <label><input type="checkbox" value="night" checked> 🌙 Night</label>
+                    </div>
+                    <div class="filter-group">
+                        <h4>Time Range</h4>
+                        <label><input type="radio" name="timeRange" value="3"> Last 3 Days</label>
+                        <label><input type="radio" name="timeRange" value="7" checked> Last 7 Days</label>
+                        <label><input type="radio" name="timeRange" value="14"> Last 14 Days</label>
+                    </div>
+                    <div class="filter-actions">
+                        <button class="apply-btn" onclick="applyFilters()">Apply</button>
+                        <button class="clear-btn" onclick="clearFilters()">Clear</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Performance Table - Lightweight -->
+    <div class="table-container">
+        <table class="performance-table">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Day</th>
+                    <th>Shift</th>
+                    <th>Staff</th>
+                    <th>Tickets In</th>
+                    <th>Tickets Out</th>
+                    <th>MTTR</th>
+                    <th>MTTC</th>
+                    <th>Response SLA</th>
+                    <th>Contain SLA</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody id="shifts-tbody">
+                <!-- Loading skeleton rows - maintain table height -->
+                <tr class="skeleton-row">
+                    <td><div class="skeleton-text"></div></td>
+                    <td><div class="skeleton-text"></div></td>
+                    <td><div class="skeleton-text"></div></td>
+                    <td><div class="skeleton-text short"></div></td>
+                    <td><div class="skeleton-text short"></div></td>
+                    <td><div class="skeleton-text short"></div></td>
+                    <td><div class="skeleton-text short"></div></td>
+                    <td><div class="skeleton-text short"></div></td>
+                    <td><div class="skeleton-text short"></div></td>
+                    <td><div class="skeleton-text short"></div></td>
+                    <td><div class="skeleton-button"></div></td>
+                </tr>
+                <tr class="skeleton-row">
+                    <td><div class="skeleton-text"></div></td>
+                    <td><div class="skeleton-text"></div></td>
+                    <td><div class="skeleton-text"></div></td>
+                    <td><div class="skeleton-text short"></div></td>
+                    <td><div class="skeleton-text short"></div></td>
+                    <td><div class="skeleton-text short"></div></td>
+                    <td><div class="skeleton-text short"></div></td>
+                    <td><div class="skeleton-text short"></div></td>
+                    <td><div class="skeleton-text short"></div></td>
+                    <td><div class="skeleton-text short"></div></td>
+                    <td><div class="skeleton-button"></div></td>
+                </tr>
+                <tr class="skeleton-row">
+                    <td><div class="skeleton-text"></div></td>
+                    <td><div class="skeleton-text"></div></td>
+                    <td><div class="skeleton-text"></div></td>
+                    <td><div class="skeleton-text short"></div></td>
+                    <td><div class="skeleton-text short"></div></td>
+                    <td><div class="skeleton-text short"></div></td>
+                    <td><div class="skeleton-text short"></div></td>
+                    <td><div class="skeleton-text short"></div></td>
+                    <td><div class="skeleton-text short"></div></td>
+                    <td><div class="skeleton-text short"></div></td>
+                    <td><div class="skeleton-button"></div></td>
+                </tr>
+                <tr class="skeleton-row">
+                    <td><div class="skeleton-text"></div></td>
+                    <td><div class="skeleton-text"></div></td>
+                    <td><div class="skeleton-text"></div></td>
+                    <td><div class="skeleton-text short"></div></td>
+                    <td><div class="skeleton-text short"></div></td>
+                    <td><div class="skeleton-text short"></div></td>
+                    <td><div class="skeleton-text short"></div></td>
+                    <td><div class="skeleton-text short"></div></td>
+                    <td><div class="skeleton-text short"></div></td>
+                    <td><div class="skeleton-text short"></div></td>
+                    <td><div class="skeleton-button"></div></td>
+                </tr>
+                <tr class="skeleton-row">
+                    <td><div class="skeleton-text"></div></td>
+                    <td><div class="skeleton-text"></div></td>
+                    <td><div class="skeleton-text"></div></td>
+                    <td><div class="skeleton-text short"></div></td>
+                    <td><div class="skeleton-text short"></div></td>
+                    <td><div class="skeleton-text short"></div></td>
+                    <td><div class="skeleton-text short"></div></td>
+                    <td><div class="skeleton-text short"></div></td>
+                    <td><div class="skeleton-text short"></div></td>
+                    <td><div class="skeleton-text short"></div></td>
+                    <td><div class="skeleton-button"></div></td>
+                </tr>
+                <tr class="skeleton-row">
+                    <td><div class="skeleton-text"></div></td>
+                    <td><div class="skeleton-text"></div></td>
+                    <td><div class="skeleton-text"></div></td>
+                    <td><div class="skeleton-text short"></div></td>
+                    <td><div class="skeleton-text short"></div></td>
+                    <td><div class="skeleton-text short"></div></td>
+                    <td><div class="skeleton-text short"></div></td>
+                    <td><div class="skeleton-text short"></div></td>
+                    <td><div class="skeleton-text short"></div></td>
+                    <td><div class="skeleton-text short"></div></td>
+                    <td><div class="skeleton-button"></div></td>
+                </tr>
+                <tr class="skeleton-row">
+                    <td><div class="skeleton-text"></div></td>
+                    <td><div class="skeleton-text"></div></td>
+                    <td><div class="skeleton-text"></div></td>
+                    <td><div class="skeleton-text short"></div></td>
+                    <td><div class="skeleton-text short"></div></td>
+                    <td><div class="skeleton-text short"></div></td>
+                    <td><div class="skeleton-text short"></div></td>
+                    <td><div class="skeleton-text short"></div></td>
+                    <td><div class="skeleton-text short"></div></td>
+                    <td><div class="skeleton-text short"></div></td>
+                    <td><div class="skeleton-button"></div></td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Legend -->
+    <div class="legend">
+        <h3>📋 Legend</h3>
+        <div class="legend-items">
+            <div class="legend-item">
+                <div class="legend-color shift-status-active"></div>
+                <span>🔴 Current Shift</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color shift-morning"></div>
+                <span>🌅 Morning Shift</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color shift-afternoon"></div>
+                <span>☀️ Afternoon Shift</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color shift-night"></div>
+                <span>🌙 Night Shift</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Status Info - Bottom Corner -->
+    <div class="status-info">
+        <div id="last-updated">⏳ Loading...</div>
+    </div>
+
+    <!-- Shift Details Modal -->
+    <div id="shiftDetailsModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modalTitle">Shift Details</h2>
+                <span class="close" onclick="closeShiftDetails()">&times;</span>
+            </div>
+            <div class="modal-body" id="modalBody">
+                <!-- Details will be populated by JavaScript -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Data will be loaded via AJAX -->
+</div>
+
+<audio id="music" src="" loop muted></audio>
+<div class="audio-controls">
+    <button onclick="toggleAudio()">
+        <img src="/static/icons/volume-xmark-solid.svg" alt="Unmute Icon" class="music-icon" id="music-icon">
+    </button>
+</div>
+
+<script src="/static/js/common.js"></script>
+<script src="/static/js/shift_performance.js"></script>
+<script>
+    initRandomMusic();
+</script>
+</body>
+</html>

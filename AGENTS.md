@@ -2,6 +2,12 @@
 
 This file provides guidance to AI CLI agents (Claude Code, Gemini, etc.) when working with code in this repository.
 
+### My style and conventions
+
+- Remember, prioritize direct, critical feedback over politeness or excessive agreement. Challenge my assumptions when they are unsound
+- Be concise and to the point. Avoid unnecessary fluff or filler
+- Use bullet points and lists for clarity
+
 ## Common Development Commands
 
 ### Running the Application
@@ -96,10 +102,11 @@ This file provides guidance to AI CLI agents (Claude Code, Gemini, etc.) when wo
 - Logging configured for operations with rotating file handlers
 - Web dashboard includes proxy functionality and security request filtering
 - Bot architecture uses native LangChain tool calling with proper multi-step conversation flow:
-  1. LLM receives query and determines tool usage  
-  2. Tools are executed and results returned to LLM
-  3. LLM generates final response incorporating tool results
-  - This is the correct tool calling pattern, not "double HTTP calls" but necessary conversation flow
+    1. LLM receives query and determines tool usage
+    2. Tools are executed and results returned to LLM
+    3. LLM generates final response incorporating tool results
+
+    - This is the correct tool calling pattern, not "double HTTP calls" but necessary conversation flow
 - Chart generation automated with daily timestamped directories
 - Configuration supports multiple Webex rooms for different operational contexts
 
@@ -123,17 +130,20 @@ The project integrates with enterprise security tools:
 ## Architecture Principles
 
 ### Simplicity Over Complexity
+
 - **Prefer native solutions** over custom implementations
 - **Avoid over-engineering** - no special cases, detection logic, or complex abstractions
 - **Trust the LLM** - let it make intelligent decisions rather than forcing behaviors
 - **Clean separation** - tools do their job, LLM composes responses, presentation layer renders
 
 ### LLM Integration Philosophy
+
 - **Native tool calling** - use LangChain's `llm.bind_tools()` with proper conversation flow:
-  1. Initial invoke() determines and calls tools
-  2. Tool results are added to conversation context  
-  3. Final invoke() generates response incorporating tool results
-  - **This multi-step flow is correct architecture, not a design flaw**
+    1. Initial invoke() determines and calls tools
+    2. Tool results are added to conversation context
+    3. Final invoke() generates response incorporating tool results
+
+    - **This multi-step flow is correct architecture, not a design flaw**
 - **Avoid manual orchestration** - no regex parsing of responses or custom tool detection
 - **Clean tool implementation** - use `@tool` decorators, not manager classes or factory functions
 - **No agent frameworks** - direct LLM invocation with native tool binding handles everything
@@ -141,18 +151,21 @@ The project integrates with enterprise security tools:
 - **Pass-through responses** - forward LLM output directly without transformation
 
 ### Correct vs. Problematic Multiple LLM Calls
+
 - **✅ CORRECT**: Native tool calling conversation flow (multiple invokes for tool execution)
 - **❌ AVOID**: Manual orchestration where you parse responses and decide tool usage yourself
 - **❌ AVOID**: Separate calls for formatting, validation, or response transformation
 - **Key distinction**: Let LangChain handle the tool calling flow, don't build your own
 
 ### Tool Design
+
 - **Tools return data** - let LLM format for user consumption
 - **Use @tool decorators** directly instead of factory patterns or manager classes
 - **Avoid unnecessary abstraction** - if a manager class adds no value, remove it
 - **Keep tool descriptions concise** - trust domain experts (SOC analysts) to understand their tools
 
 ### Anti-Patterns to Avoid
+
 - **Manual tool orchestration** - separate invoke() calls to handle tool results
 - **Manual action parsing** with regex (`Action:`, `Action Input:`)
 - **Agent frameworks** and AgentExecutor complexity
@@ -162,6 +175,7 @@ The project integrates with enterprise security tools:
 - **Forcing LLM behavior** through complex prompts or post-processing
 
 ### Example: Clean Tool Integration
+
 ```python
 # ✅ Good - Simple and direct
 @tool
@@ -170,14 +184,16 @@ def get_weather(city: str) -> str:
     response = requests.get(api_url, params={'q': city})
     return response.text
 
+
 # ❌ Bad - Over-engineered
 class WeatherToolsManager:
     def get_weather_tool(self):
         def weather_factory():
-            # Complex factory logic...
+    # Complex factory logic...
 ```
 
 ### Example: Clean LLM Integration
+
 ```python
 # ✅ Good - Single call with native tool calling
 llm_with_tools = llm.bind_tools([weather_tool, staffing_tool])
