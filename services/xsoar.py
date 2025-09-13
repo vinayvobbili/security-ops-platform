@@ -69,28 +69,32 @@ class TicketHandler:
 
     def _fetch_from_api(self, query, period, size):
         """Fetch tickets directly from XSOAR API"""
-        payload = {
-            "filter": {
-                "query": query,
-                "page": 0,
-                "size": size,
-                "sort": [{"field": "created", "asc": False}]
+        try:
+            payload = {
+                "filter": {
+                    "query": query,
+                    "page": 0,
+                    "size": size,
+                    "sort": [{"field": "created", "asc": False}]
+                }
             }
-        }
-        if period:
-            payload["filter"]["period"] = period
+            if period:
+                payload["filter"]["period"] = period
 
-        response = http_session.post(
-            f"{self.prod_base}/incidents/search",
-            headers=prod_headers,
-            json=payload,
-            timeout=300,
-            verify=False
-        )
-        if response is None:
-            raise requests.exceptions.ConnectionError("Failed to connect after multiple retries")
-        response.raise_for_status()
-        return response.json().get('data', [])
+            response = http_session.post(
+                f"{self.prod_base}/incidents/search",
+                headers=prod_headers,
+                json=payload,
+                timeout=300,
+                verify=False
+            )
+            if response is None:
+                raise requests.exceptions.ConnectionError("Failed to connect after multiple retries")
+            response.raise_for_status()
+            return response.json().get('data', [])
+        except Exception as e:
+            log.error(f"Error in _fetch_from_api: {str(e)}")
+            return []
 
     def get_entries(self, incident_id):
         """Fetch entries (comments, notes) for a given incident"""
