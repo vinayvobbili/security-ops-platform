@@ -9,7 +9,7 @@ MONITOR_LOG="$PROJECT_DIR/logs/pokedex_zscaler_monitor.log"
 LOCK_FILE="/tmp/pokedex_zscaler_monitor.lock"
 
 # Configuration
-CHECK_INTERVAL=30  # Check every 30 seconds
+CHECK_INTERVAL=15  # Check every 15 seconds for faster sleep/wake detection
 MAX_RESTARTS_PER_HOUR=6
 RESTART_COOLDOWN=60  # Wait 60 seconds between restarts
 
@@ -112,7 +112,41 @@ restart_pokedex() {
     fi
 }
 
-check_pokedex_zscaler_issues() {
+detect_system_sleep_wake() {
+    # Check if system recently woke from sleep by monitoring system uptime
+    local current_uptime=$(sysctl -n kern.boottime 2>/dev/null | grep -o 'sec = [0-9]*' | cut -d' ' -f3)
+    local current_time=$(date +%s)
+
+    if [ -n "$current_uptime" ]; then
+        local uptime_seconds=$((current_time - current_uptime))
+
+        # Store previous uptime check
+        local uptime_file="/tmp/pokedx_uptime_check"
+
+        if [ -f "$uptime_file" ]; then
+            local prev_uptime=$(cat "$uptime_file")
+
+            # If uptime decreased significantly, system likely went to sleep
+            if [ "$uptime_seconds" -lt "$((prev_uptime - 60))" ]; then
+                log_message "🌙 System sleep/wake detected - uptime decreased from ${prev_uptime}s to ${uptime_seconds}s"
+                return 0  # Sleep detected
+            fi
+        fi
+
+        # Update uptime file
+        echo "$uptime_seconds" > "$uptime_file"
+    fi
+
+    return 1  # No sleep detected
+}
+
+check_pokedx_zscaler_issues() {
+    # Check for system sleep/wake first (highest priority for ZScaler)
+    if detect_system_sleep_wake; then
+        log_message "🚨 System sleep/wake detected - ZScaler likely killed connections"
+        restart_pokedx
+        return
+    fi
     # Check if Pokedex is running
     if ! is_pokedex_running; then
         log_message "📴 Pokedex not running, attempting to start..."
