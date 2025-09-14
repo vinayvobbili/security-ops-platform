@@ -375,7 +375,10 @@ def main():
             bot_name="HAL9000"
         ),
         initialization_func=initialize_bot,
-        bot_name="HAL9000"
+        bot_name="HAL9000",
+        max_retries=5,
+        initial_retry_delay=30,
+        max_retry_delay=300
     )
     resilient_runner.run()
 
