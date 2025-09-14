@@ -269,7 +269,7 @@ def get_shift_security_actions(days_back, shift_start_hour):
         # Get domain blocking data from lists
         try:
             domain_blocks = 0
-            domain_list = list_handler.get_list_items(config.xsoar_domain_blocking_list_name)
+            domain_list = list_handler.get_list_data_by_name(config.xsoar_domain_blocking_list_name)
             if domain_list:
                 # Count domains added during this shift period
                 for item in domain_list:
