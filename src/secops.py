@@ -92,26 +92,33 @@ def get_open_tickets():
 
 
 def get_staffing_data(day_name=datetime.now(pytz.timezone('US/Eastern')).strftime('%A'), shift_name=get_current_shift()):
-    if not EXCEL_AVAILABLE or sheet is None:
-        logger.warning("Excel file not available, returning minimal staffing data")
-        return {
-            'SA': ['N/A (Excel file missing)'],
-            'On-Call': [oncall.get_on_call_person()['name'] + ' (' + oncall.get_on_call_person()['phone_number'] + ')']
-        }
+    try:
+        if not EXCEL_AVAILABLE or sheet is None:
+            logger.warning("Excel file not available, returning minimal staffing data")
+            return {
+                'SA': ['N/A (Excel file missing)'],
+                'On-Call': [oncall.get_on_call_person()['name'] + ' (' + oncall.get_on_call_person()['phone_number'] + ')']
+            }
 
-    shift_cell_names = cell_names_by_shift[day_name][shift_name]
-    staffing_data = {}
-    for team, cell_names in shift_cell_names.items():
-        staffing_data[team] = []
-        for cell_name in cell_names:
-            cell = sheet[cell_name]
-            if cell is not None:
-                value = getattr(cell, 'value', None)
-                if (value is not None and str(value).strip() != ''
-                        and value != '\xa0'):
-                    staffing_data[team].append(value)
-    staffing_data['On-Call'] = [oncall.get_on_call_person()['name'] + ' (' + oncall.get_on_call_person()['phone_number'] + ')']
-    return staffing_data
+        shift_cell_names = cell_names_by_shift[day_name][shift_name]
+        staffing_data = {}
+        for team, cell_names in shift_cell_names.items():
+            staffing_data[team] = []
+            for cell_name in cell_names:
+                cell = sheet[cell_name]
+                if cell is not None:
+                    value = getattr(cell, 'value', None)
+                    if (value is not None and str(value).strip() != ''
+                            and value != '\xa0'):
+                        staffing_data[team].append(value)
+        staffing_data['On-Call'] = [oncall.get_on_call_person()['name'] + ' (' + oncall.get_on_call_person()['phone_number'] + ')']
+        return staffing_data
+    except Exception as e:
+        logger.error(f"Error in get_staffing_data: {e}")
+        return {
+            'SA': ['N/A (Error occurred)'],
+            'On-Call': ['N/A (Error occurred)']
+        }
 
 
 def safe_parse_datetime(dt_string):
