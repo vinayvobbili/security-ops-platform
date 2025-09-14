@@ -17,41 +17,86 @@ show_status() {
     else
         echo "❌ the security assistant bot ZScaler service is not loaded"
     fi
-    
+
     echo ""
-    echo "📊 Recent the security assistant bot monitor activity:"
-    if [ -f "$PROJECT_DIR/logs/pokedex_zscaler_monitor.log" ]; then
-        tail -n 5 "$PROJECT_DIR/logs/pokedex_zscaler_monitor.log"
+    echo "🌙 MacBook Sleep Monitor Status:"
+    if pgrep -f "macbook_sleep_monitor.py" > /dev/null; then
+        echo "✅ MacBook Sleep Monitor is running"
+        echo "PID: $(pgrep -f "macbook_sleep_monitor.py")"
     else
-        echo "No the security assistant bot ZScaler monitor log found"
+        echo "❌ MacBook Sleep Monitor is not running"
     fi
+
+    echo ""
+    echo "📊 Recent monitor activity:"
+    echo "--- ZScaler Monitor ---"
+    if [ -f "$PROJECT_DIR/logs/pokedex_zscaler_monitor.log" ]; then
+        tail -n 3 "$PROJECT_DIR/logs/pokedex_zscaler_monitor.log"
+    else
+        echo "No ZScaler monitor log found"
+    fi
+
+    echo "--- Sleep Monitor ---"
+    if [ -f "$PROJECT_DIR/logs/macbook_sleep_monitor.log" ]; then
+        tail -n 3 "$PROJECT_DIR/logs/macbook_sleep_monitor.log"
+    else
+        echo "No sleep monitor log found"
+    fi
+}
+
+start_sleep_monitor() {
+    echo "🌙 Starting MacBook Sleep Monitor..."
+
+    if pgrep -f "macbook_sleep_monitor.py" > /dev/null; then
+        echo "⚠️  MacBook Sleep Monitor already running"
+        return
+    fi
+
+    "$PROJECT_DIR/src/pokedex/start_sleep_monitor.sh"
+    sleep 2
+}
+
+stop_sleep_monitor() {
+    echo "🛑 Stopping MacBook Sleep Monitor..."
+
+    pkill -f "macbook_sleep_monitor.py" 2>/dev/null
+    rm -f "/tmp/pokedex_macbook_sleep_monitor.lock" 2>/dev/null
+
+    sleep 1
 }
 
 start_monitor() {
     echo "🚀 Starting the security assistant bot ZScaler monitor..."
-    
+
     # Load the service
     launchctl load "$PLIST_FILE" 2>/dev/null
-    
+
     # Start the service
     launchctl start "$SERVICE_NAME"
-    
+
     sleep 2
+
+    # Also start sleep monitor for enhanced protection
+    start_sleep_monitor
+
     show_status
 }
 
 stop_monitor() {
     echo "🛑 Stopping the security assistant bot ZScaler monitor..."
-    
+
     # Stop the service
     launchctl stop "$SERVICE_NAME" 2>/dev/null
-    
+
     # Unload the service
     launchctl unload "$PLIST_FILE" 2>/dev/null
-    
+
     # Kill any remaining the security assistant bot monitor processes
     pkill -f "pokedex_zscaler_monitor.sh" 2>/dev/null
-    
+
+    # Also stop sleep monitor
+    stop_sleep_monitor
+
     sleep 1
     show_status
 }
@@ -89,17 +134,25 @@ case "$1" in
     logs)
         show_logs
         ;;
+    sleep-start)
+        start_sleep_monitor
+        ;;
+    sleep-stop)
+        stop_sleep_monitor
+        ;;
     *)
         echo "the security assistant bot ZScaler Monitor Management"
         echo "=================================="
-        echo "Usage: $0 {start|stop|restart|status|logs}"
+        echo "Usage: $0 {start|stop|restart|status|logs|sleep-start|sleep-stop}"
         echo ""
         echo "Commands:"
-        echo "  start   - Start the the security assistant bot ZScaler monitor service"
-        echo "  stop    - Stop the the security assistant bot ZScaler monitor service"
-        echo "  restart - Restart the the security assistant bot ZScaler monitor service"
-        echo "  status  - Show current the security assistant bot ZScaler monitor status"
-        echo "  logs    - Show recent the security assistant bot ZScaler monitor logs"
+        echo "  start       - Start the the security assistant bot ZScaler monitor service + sleep monitor"
+        echo "  stop        - Stop the the security assistant bot ZScaler monitor service + sleep monitor"
+        echo "  restart     - Restart the the security assistant bot ZScaler monitor service + sleep monitor"
+        echo "  status      - Show current monitor status"
+        echo "  logs        - Show recent monitor logs"
+        echo "  sleep-start - Start only the MacBook sleep monitor"
+        echo "  sleep-stop  - Stop only the MacBook sleep monitor"
         echo ""
         show_status
         exit 1

@@ -358,36 +358,22 @@ class Bot(WebexBot):
 
 
 def main():
-    """the security assistant bot main - uses ZScaler resilience if needed"""
-    from src.utils.zscaler_resilience import should_use_zscaler_resilience, ZScalerResilientBot
+    """the security assistant bot main - uses standard resilience framework"""
     from src.utils.bot_resilience import ResilientBot
-    
+
     bot_name = "the security assistant bot"
-    
-    # Choose resilience framework based on ZScaler needs
-    if should_use_zscaler_resilience(bot_name):
-        logger.info("🛡️ Using ZScaler-aware resilience framework")
-        resilient_runner = ZScalerResilientBot(
-            bot_factory=lambda: Bot(
-                teams_bot_token=WEBEX_ACCESS_TOKEN,
-                approved_rooms=[CONFIG.webex_room_id_vinay_test_space, CONFIG.webex_room_id_threatcon_collab, CONFIG.webex_room_id_automation_engineering],
-                bot_name=bot_name
-            ),
-            initialization_func=initialize_bot,
+
+    logger.info("🔧 Using standard resilience framework")
+    resilient_runner = ResilientBot(
+        bot_factory=lambda: Bot(
+            teams_bot_token=WEBEX_ACCESS_TOKEN,
+            approved_rooms=[CONFIG.webex_room_id_vinay_test_space, CONFIG.webex_room_id_threatcon_collab, CONFIG.webex_room_id_automation_engineering],
             bot_name=bot_name
-        )
-    else:
-        logger.info("🔧 Using standard resilience framework")
-        resilient_runner = ResilientBot(
-            bot_factory=lambda: Bot(
-                teams_bot_token=WEBEX_ACCESS_TOKEN,
-                approved_rooms=[CONFIG.webex_room_id_vinay_test_space, CONFIG.webex_room_id_threatcon_collab, CONFIG.webex_room_id_automation_engineering],
-                bot_name=bot_name
-            ),
-            initialization_func=initialize_bot,
-            bot_name=bot_name
-        )
-    
+        ),
+        initialization_func=initialize_bot,
+        bot_name=bot_name
+    )
+
     resilient_runner.run()
 
 
