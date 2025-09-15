@@ -248,7 +248,7 @@ class TaniumInstance:
             
             # Try package ID 226 for "Custom Tags - Add Tags" (Windows) 
             package_id = "226"
-            
+
             # Create variables for the new mutation format - try minimal required parameters first
             variables = {
                 "name": f"Add Custom Tags to {tanium_id}",
