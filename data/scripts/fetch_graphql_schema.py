@@ -134,7 +134,8 @@ def fetch_schema():
         schema_data = response.json()
 
         # Save schema to file
-        output_file = '../transient/tanium_schema.json'
+        import os
+        output_file = os.path.join(os.path.dirname(__file__), '..', 'transient', 'tanium_schema.json')
         with open(output_file, 'w') as f:
             json.dump(schema_data, f, indent=2)
 
