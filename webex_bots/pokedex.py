@@ -188,7 +188,7 @@ class Bot(WebexBot):
 
     def process_incoming_message(self, teams_message, activity):
         """Process incoming messages"""
-        logger.info(f"Processing message: {getattr(teams_message, 'text', 'NO TEXT')[:50]}...")
+        logger.info(f"Processing message: {getattr(teams_message, 'text', 'NO TEXT')[:50]}... | Activity verb: {activity.get('verb')} | Message ID: {getattr(teams_message, 'id', 'None')}")
 
         # Basic filtering - ignore bot messages and non-person actors
         bot_email = WEBEX_BOT_EMAIL  # Use the actual bot email from config
@@ -199,6 +199,11 @@ class Bot(WebexBot):
 
         if activity.get('actor', {}).get('type') != 'PERSON':
             logger.info("Ignoring non-person actor")
+            return
+
+        # Only process 'post' verbs (new messages), ignore 'edit', 'acknowledge', etc.
+        if activity.get('verb') != 'post':
+            logger.info(f"Ignoring non-post activity verb: {activity.get('verb')}")
             return
 
         try:
