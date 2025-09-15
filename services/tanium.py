@@ -147,7 +147,7 @@ class TaniumInstance:
                 try:
                     error_details = e.response.json()
                     logger.error(f"GraphQL error details: {error_details}")
-                except:
+                except (ValueError, TypeError, AttributeError):
                     logger.error(f"Response text: {e.response.text}")
             raise TaniumAPIError(f"Request failed: {e}")
 
@@ -249,12 +249,15 @@ class TaniumInstance:
             # Try package ID 226 for "Custom Tags - Add Tags" (Windows) 
             package_id = "226"
 
-            # Create variables for the new mutation format - try minimal required parameters first
+            # Create variables for the new mutation format - include schedule parameters
             variables = {
                 "name": f"Add Custom Tags to {tanium_id}",
                 "tag": ",".join(tags),     # Join tags with comma
                 "packageID": package_id,
-                "endpoints": [endpoint_id]
+                "endpoints": [endpoint_id],
+                "distributeSeconds": 600,  # 10 minutes to distribute
+                "expireSeconds": 3600,     # 1 hour to expire
+                "startTime": "now"         # Start immediately
             }
             
             logger.info(f"Sending GraphQL variables for {tanium_id}: {variables}")
