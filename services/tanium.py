@@ -237,17 +237,37 @@ class TaniumInstance:
             logger.error(f"Error validating token for {self.name}: {e}")
             return False
 
-    def update_custom_tags_by_id(self, tanium_id: str, tags: List[str]) -> bool:
-        """Update the complete set of custom tags for a computer using its Tanium ID directly"""
+    def update_custom_tags_by_id(self, tanium_id: str, tags: List[str], device_type: str = "windows") -> bool:
+        """Update the complete set of custom tags for a computer using its Tanium ID directly
+
+        Args:
+            tanium_id: The Tanium ID of the device
+            tags: List of custom tags to apply
+            device_type: Device type ('windows', 'linux', etc.) to determine appropriate package ID
+        """
         try:
+            # Get current tags before update
+            current_computer = self.get_computer_by_id(tanium_id)
+            if current_computer:
+                logger.info(f"BEFORE UPDATE - Current tags for {tanium_id} ({current_computer.name}): {current_computer.custom_tags}")
+            else:
+                logger.warning(f"Could not retrieve current tags for {tanium_id} - computer not found")
+
             # Try integer conversion for endpoint ID
             try:
                 endpoint_id = int(tanium_id)
             except ValueError:
                 endpoint_id = tanium_id
 
-            # Try package ID 226 for "Custom Tags - Add Tags" (Windows) 
-            package_id = "226"
+            # Select package ID based on device type
+            device_type_lower = device_type.lower()
+            if device_type_lower == "windows":
+                package_id = "38355"  # Acme - Custom Tagging - Add Tags
+            elif device_type_lower in ["linux", "unix", "macos", "mac"]:
+                package_id = "38356"  # Acme - Custom Tagging - Add Tags (Non-Windows)
+            else:
+                logger.warning(f"Unknown device type '{device_type}', defaulting to Windows package ID")
+                package_id = "38355"  # Default to Windows
 
             # Create variables for the new mutation format - include schedule parameters
             variables = {
@@ -256,7 +276,7 @@ class TaniumInstance:
                 "packageID": package_id,
                 "endpoints": [endpoint_id],
                 "distributeSeconds": 600,  # 10 minutes to distribute
-                "expireSeconds": 3600,     # 1 hour to expire
+                "expireSeconds": 3600,  # 1 hour to expire
                 "startTime": datetime.now().isoformat() + "Z"  # Start immediately
             }
 
@@ -280,6 +300,11 @@ class TaniumInstance:
             if action and action.get('scheduledAction', {}).get('id'):
                 action_id = action['scheduledAction']['id']
                 logger.info(f"Successfully created tag action for computer ID '{tanium_id}' in {self.name}: {tags}, Action ID: {action_id}")
+
+                # Get updated tags after the action (note: may take time to propagate)
+                logger.info(f"AFTER UPDATE - New tags applied to {tanium_id}: {tags}")
+                logger.info(f"Note: It may take a few minutes for the new tags to be visible in Tanium")
+
                 return True
             else:
                 logger.error(f"Failed to create tag action for computer ID '{tanium_id}' in {self.name}: No action was created")
@@ -562,8 +587,16 @@ class TaniumClient:
         """Get list of available instance names"""
         return [instance.name for instance in self.instances]
 
-    def add_custom_tag_to_computer(self, tanium_id: str, tag: str, instance_name: str, check_existing: bool = True) -> Dict[str, Any]:
-        """Add a custom tag to a computer using its Tanium ID"""
+    def add_custom_tag_to_computer(self, tanium_id: str, tag: str, instance_name: str, device_type: str, check_existing: bool = True) -> Dict[str, Any]:
+        """Add a custom tag to a computer using its Tanium ID
+
+        Args:
+            tanium_id: The Tanium ID of the computer
+            tag: The tag to add
+            instance_name: Name of the Tanium instance to use
+            device_type: Device type ('windows', 'linux', etc.) to determine correct package ID
+            check_existing: Whether to check if tag already exists before adding
+        """
 
         instance = self.get_instance_by_name(instance_name)
         if not instance:
@@ -606,7 +639,7 @@ class TaniumClient:
             # This is more efficient but requires caller to handle duplicates
             updated_tags = [tag]  # Just set the single tag (Tanium will merge with existing)
 
-        success = instance.update_custom_tags_by_id(tanium_id, updated_tags)
+        success = instance.update_custom_tags_by_id(tanium_id, updated_tags, device_type)
 
         return {
             'success': success,
@@ -614,8 +647,16 @@ class TaniumClient:
             'instance': instance_name
         }
 
-    def remove_custom_tag_from_computer(self, computer_name: str, tanium_id: str, tag: str, instance_name: str) -> Dict[str, Any]:
-        """Remove a custom tag from a computer using its Tanium ID"""
+    def remove_custom_tag_from_computer(self, computer_name: str, tanium_id: str, tag: str, instance_name: str, device_type: str) -> Dict[str, Any]:
+        """Remove a custom tag from a computer using its Tanium ID
+
+        Args:
+            computer_name: Name of the computer (for logging)
+            tanium_id: The Tanium ID of the computer
+            tag: The tag to remove
+            instance_name: Name of the Tanium instance to use
+            device_type: Device type ('windows', 'linux', etc.) to determine correct package ID
+        """
 
         instance = self.get_instance_by_name(instance_name)
         if not instance:
@@ -651,7 +692,7 @@ class TaniumClient:
 
         # Remove the tag from existing tags
         updated_tags = [t for t in computer.custom_tags if t != tag]
-        success = instance.update_custom_tags_by_id(tanium_id, updated_tags)
+        success = instance.update_custom_tags_by_id(tanium_id, updated_tags, device_type)
 
         return {
             'success': success,
@@ -705,6 +746,7 @@ def main():
             test_tanium_id,
             test_tag,
             write_instance,
+            "linux",  # Test with non-Windows to see if package ID 38356 works
             check_existing=False  # Skip expensive computer fetch
         )
         logger.info(f"Tagging result for {test_hostname} (ID: {test_tanium_id}) with tag '{test_tag}' using {write_instance}: {tag_result}")
