@@ -64,14 +64,15 @@ body {
     position: absolute;
     top: 100%;
     left: 0; /* Moved to very left - changed from 20px to 0 */
-    background: rgba(255, 255, 255, 0.98);
-    backdrop-filter: blur(20px);
-    border-radius: 12px;
-    box-shadow: 0 10px 30px rgba(0, 70, 173, 0.3);
-    padding: 15px 0;
-    min-width: 250px;
-    animation: slideDownMenu 0.3s ease-out;
-    border: 1px solid var(--acme-green);
+    background: linear-gradient(135deg, rgba(0, 70, 173, 0.95), rgba(74, 139, 194, 0.90));
+    backdrop-filter: blur(25px);
+    border-radius: 16px;
+    box-shadow: 0 15px 40px rgba(0, 0, 0, 0.4), 0 0 20px rgba(0, 166, 81, 0.3);
+    padding: 20px 0;
+    min-width: 280px;
+    animation: slideDownMenu 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+    border: 2px solid rgba(0, 166, 81, 0.8);
+    border-top: 3px solid var(--acme-green);
 }
 
 @keyframes slideDownMenu {
@@ -87,31 +88,42 @@ body {
 
 .burger-menu-content a {
     display: block;
-    padding: 12px 20px;
+    padding: 4px 24px;
     text-decoration: none;
-    color: #333;
+    color: rgba(255, 255, 255, 0.95);
     font-weight: 500;
-    transition: all 0.2s ease;
+    font-size: 18px;
+    transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
     position: relative;
-    border-left: 3px solid transparent;
+    border-left: 4px solid transparent;
+    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.2);
 }
 
 .burger-menu-content a:hover {
-    background: linear-gradient(135deg, var(--acme-blue), var(--acme-green));
+    background: linear-gradient(135deg, rgba(0, 166, 81, 0.3), rgba(255, 255, 255, 0.15));
     color: white;
-    border-left: 3px solid var(--acme-green);
-    transform: translateX(5px);
+    border-left: 4px solid var(--acme-green);
+    transform: translateX(8px);
+    box-shadow: inset 0 0 15px rgba(0, 166, 81, 0.2);
 }
 
 .burger-menu-content a::before {
     content: "🔗";
-    margin-right: 8px;
-    opacity: 0.7;
+    margin-right: 10px;
+    opacity: 0.85;
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.3));
+    font-size: 16px;
+    transition: all 0.3s ease;
+}
+
+.burger-menu-content a[href="/shift-performance"]::before {
+    content: "🎯";
 }
 
 .burger-menu-content a:hover::before {
     opacity: 1;
-    transform: scale(1.1);
+    transform: scale(1.15) rotate(5deg);
+    filter: drop-shadow(0 2px 4px rgba(0, 166, 81, 0.4));
 }
 
 /* Enhanced Slider Container */
@@ -427,13 +439,13 @@ body {
         bottom: 20px;
         left: 10px;
     }
-    
+
     .speed-icon {
         width: 40px;
         height: 40px;
         padding: 8px;
     }
-    
+
     .speed-option {
         padding: 8px 12px;
         font-size: 10px;
