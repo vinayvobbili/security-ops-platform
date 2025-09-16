@@ -20,7 +20,6 @@ ARCHITECTURE APPROACH:
 """
 import csv
 import logging.handlers
-import os
 import random
 import sys
 from datetime import datetime
@@ -363,6 +362,18 @@ class Bot(WebexBot):
 
 def main():
     """HAL9000 main with resilience framework"""
+    import subprocess
+    import os
+
+    # Prevent system sleep in clamshell mode by caffeinating the process
+    # This creates a power assertion to prevent idle sleep
+    try:
+        # Create caffeinate subprocess that will keep system awake
+        caffeinate_process = subprocess.Popen(['caffeinate', '-i', '-w', str(os.getpid())])
+        logger.info("🔋 Power assertion created - preventing idle sleep for clamshell mode stability")
+    except Exception as e:
+        logger.warning(f"Could not create power assertion: {e}")
+
     from src.utils.bot_resilience import ResilientBot
     
     # NOTE: To enable ZScaler resilience (when ZScaler gets upgraded on this machine):
