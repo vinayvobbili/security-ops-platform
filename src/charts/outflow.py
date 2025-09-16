@@ -1,12 +1,10 @@
 import json
-import os
 import re
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 import urllib.request
 import ssl
-from io import BytesIO
 
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -39,35 +37,36 @@ QUERY_TEMPLATE = 'type:{ticket_type_prefix} -owner:"" closed:>={start} closed:<{
 def download_and_cache_logo(logo_url, logo_filename):
     """Download a logo from URL and cache it locally"""
     logo_path = LOGO_DIR / logo_filename
-    
+
     # If logo already exists, return the path
     if logo_path.exists():
         return logo_path
-    
+
     try:
         # Create SSL context that doesn't verify certificates
         ssl_context = ssl.create_default_context()
         ssl_context.check_hostname = False
         ssl_context.verify_mode = ssl.CERT_NONE
-        
+
         # Create request with User-Agent to avoid 403 errors
         request = urllib.request.Request(logo_url, headers={
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         })
-        
+
         # Download and save logo
         with urllib.request.urlopen(request, context=ssl_context) as response:
             image_data = response.read()
-        
+
         # Save the original logo data directly without processing
         with open(logo_path, 'wb') as f:
             f.write(image_data)
         print(f"Downloaded and cached logo: {logo_filename}")
         return logo_path
-        
+
     except Exception as e:
         print(f"Error downloading logo from {logo_url}: {e}")
         return None
+
 
 # Define a custom order for the impacts
 CUSTOM_IMPACT_ORDER = ["Confirmed", "Detected", "Prevented", "Ignore", "Testing", "Security Testing", "False Positive", "Benign True Positive", "Malicious True Positive", "Unknown", "Resolved"]
@@ -77,13 +76,15 @@ LOGO_DIR = ROOT_DIRECTORY / "web" / "static" / "logos"  # Directory where logos 
 
 # Individual logo sizes for optimal appearance
 CROWDSTRIKE_LOGO_SIZE = 0.02  # CrowdStrike falcon logos
-VECTRA_LOGO_SIZE = 0.08       # Vectra logos
-PRISMA_LOGO_SIZE = 0.08       # Prisma Cloud logos  
+VECTRA_LOGO_SIZE = 0.08  # Vectra logos
+PRISMA_LOGO_SIZE = 0.08  # Prisma Cloud logos
 THIRD_PARTY_LOGO_SIZE = 0.03  # Third party compromise
 EMPLOYEE_REPORT_LOGO_SIZE = 0.12  # Employee report
-CASE_LOGO_SIZE = 0.03         # Case logos (smaller)
-QRADAR_LOGO_SIZE = 0.05       # QRadar logos
-DEFAULT_LOGO_SIZE = 0.05      # Default for others
+CASE_LOGO_SIZE = 0.03  # Case logos (smaller)
+QRADAR_LOGO_SIZE = 0.05  # QRadar logos
+DEFAULT_LOGO_SIZE = 0.05  # Default for others
+LOST_STOLEN_DEVICE = 0.1  # Lost/Stolen Device logos
+SPLUNK_LOGO_SIZE = 0.02  # Splunk logos
 
 # Create a mapping of detection sources to logo URLs and filenames
 LOGO_URL_MAPPING = {
@@ -95,13 +96,13 @@ LOGO_URL_MAPPING = {
     "prisma runtime": ("https://images.g2crowd.com/uploads/product/image/social_landscape/social_landscape_f24901e9b516e0c419136a22214e9e4f/palo-alto-networks-prisma-cloud.png", "prisma_cloud.png"),
     "prisma cloud": ("https://images.g2crowd.com/uploads/product/image/social_landscape/social_landscape_f24901e9b516e0c419136a22214e9e4f/palo-alto-networks-prisma-cloud.png", "prisma_cloud.png"),
     "ueba prisma": ("https://images.g2crowd.com/uploads/product/image/social_landscape/social_landscape_f24901e9b516e0c419136a22214e9e4f/palo-alto-networks-prisma-cloud.png", "prisma_cloud.png"),
-    "splunk alert": ("https://logos-world.net/wp-content/uploads/2021/08/Splunk-Logo.png", "splunk.png"),
+    "splunk alert": ("https://miro.medium.com/v2/resize:fit:1200/1*pUe_Skk6iOVvGdPKTio12g.jpeg", "splunk.png"),
     "qradar alert": ("https://tse3.mm.bing.net/th/id/OIP.CAdOtgtsDWXIx1oIBPQ55QAAAA?r=0&rs=1&pid=ImgDetMain&o=7&rm=3", "qradar.png"),
     "vectra detection": ("https://images.g2crowd.com/uploads/product/image/social_landscape/social_landscape_0851751a52d7a99e332527e5918d321b/vectra-ai.png", "vectra.png"),
     "third party compromise": ("https://png.pngtree.com/png-clipart/20230819/original/pngtree-third-party-icon-on-white-background-picture-image_8053292.png", "third_party.png"),
     "employee report": ("https://cdn.iconscout.com/icon/premium/png-256-thumb/employee-report-4849241-4030934.png", "employee_report.png"),
     "case": ("https://static.vecteezy.com/system/resources/previews/006/593/081/non_2x/security-alert-concepts-vector.jpg", "case.png"),
-    "lost/stolen device": ("https://cdn-icons-png.flaticon.com/512/3437/3437364.png", "lost_stolen_device.png"),
+    "lost/stolen device": ("https://clipground.com/images/theft-protection-clipart-14.jpg", "lost_stolen_device.png"),
     "unknown": ("https://cdn-icons-png.flaticon.com/512/2534/2534590.png", "unknown.png")
 }
 
@@ -199,9 +200,9 @@ def create_graph(tickets):
             else:
                 counts.append(0)
 
-        bars = ax.barh(pyramid_sources, counts, height=0.6, left=bottom, label=impact,
-                       color=impact_colors.get(impact, "#6B7280"),
-                       edgecolor="white", linewidth=1.5, alpha=0.95)
+        ax.barh(pyramid_sources, counts, height=0.6, left=bottom, label=impact,
+                color=impact_colors.get(impact, "#6B7280"),
+                edgecolor="white", linewidth=1.5, alpha=0.95)
 
         # Enhanced value labels with black circles (matching MTTR style)
         for i, count in enumerate(counts):
@@ -224,26 +225,26 @@ def create_graph(tickets):
 
         if logo_info:  # If a logo mapping is found for the source
             logo_url, logo_filename = logo_info
-            
+
             # Download and cache the logo (or use existing cached version)
             logo_path = download_and_cache_logo(logo_url, logo_filename)
-            
+
             if logo_path and logo_path.exists():
                 try:
                     # Load image from local file
                     image = Image.open(logo_path)
-                    
+
                     # Convert to RGBA and add white background
                     if image.mode != 'RGBA':
                         image = image.convert('RGBA')
-                    
+
                     # Create white background
                     white_bg = Image.new('RGBA', image.size, (255, 255, 255, 255))
                     # Composite the logo onto white background
                     image_with_bg = Image.alpha_composite(white_bg, image)
                     # Convert back to RGB for matplotlib
                     image_with_bg = image_with_bg.convert('RGB')
-                    
+
                     # Determine logo size based on source type
                     source_lower = source.lower()
                     if any(crowdstrike_key in source_lower for crowdstrike_key in ["cs detection", "cs incident", "crowdstrike"]):
@@ -260,9 +261,13 @@ def create_graph(tickets):
                         logo_size = CASE_LOGO_SIZE
                     elif "qradar" in source_lower:
                         logo_size = QRADAR_LOGO_SIZE
+                    elif "lost/stolen device" in source_lower:
+                        logo_size = LOST_STOLEN_DEVICE
+                    elif "splunk" in source_lower:
+                        logo_size = SPLUNK_LOGO_SIZE
                     else:
                         logo_size = DEFAULT_LOGO_SIZE
-                    
+
                     # Create matplotlib image
                     imagebox = OffsetImage(image_with_bg, zoom=logo_size)  # Use source-specific logo size
                     x_pos = bottom[i] + max(bottom) * 0.005  # Position very close to bar end
