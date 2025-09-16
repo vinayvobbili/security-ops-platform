@@ -1,19 +1,19 @@
 {
   "Monday": {
     "night": {
-      "MA": [
+      "monitoring_analysts": [
         "C5",
         "C6",
         "C7",
         "C8"
       ],
-      "RA": [
+      "response_analysts": [
         "D5",
         "D6",
         "D7",
         "D8"
       ],
-      "SA": [
+      "senior_analysts": [
         "E5",
         "E6",
         "E7",
@@ -21,19 +21,19 @@
       ]
     },
     "morning": {
-      "MA": [
+      "monitoring_analysts": [
         "C13",
         "C14",
         "C15",
         "C16"
       ],
-      "RA": [
+      "response_analysts": [
         "D13",
         "D14",
         "D15",
         "D16"
       ],
-      "SA": [
+      "senior_analysts": [
         "E13",
         "E14",
         "E15",
@@ -41,19 +41,19 @@
       ]
     },
     "afternoon": {
-      "MA": [
+      "monitoring_analysts": [
         "C29",
         "C30",
         "C31",
         "C32"
       ],
-      "RA": [
+      "response_analysts": [
         "D29",
         "D30",
         "D31",
         "D32"
       ],
-      "SA": [
+      "senior_analysts": [
         "E29",
         "E30",
         "E31",
@@ -63,19 +63,19 @@
   },
   "Tuesday": {
     "night": {
-      "MA": [
+      "monitoring_analysts": [
         "G5",
         "G6",
         "G7",
         "G8"
       ],
-      "RA": [
+      "response_analysts": [
         "H5",
         "H6",
         "H7",
         "H8"
       ],
-      "SA": [
+      "senior_analysts": [
         "I5",
         "I6",
         "I7",
@@ -83,19 +83,19 @@
       ]
     },
     "morning": {
-      "MA": [
+      "monitoring_analysts": [
         "G13",
         "G14",
         "G15",
         "G16"
       ],
-      "RA": [
+      "response_analysts": [
         "H13",
         "H14",
         "H15",
         "H16"
       ],
-      "SA": [
+      "senior_analysts": [
         "I13",
         "I14",
         "I15",
@@ -103,19 +103,19 @@
       ]
     },
     "afternoon": {
-      "MA": [
+      "monitoring_analysts": [
         "G29",
         "G30",
         "G31",
         "G32"
       ],
-      "RA": [
+      "response_analysts": [
         "H29",
         "H30",
         "H31",
         "H32"
       ],
-      "SA": [
+      "senior_analysts": [
         "I29",
         "I30",
         "I31",
@@ -125,19 +125,19 @@
   },
   "Wednesday": {
     "night": {
-      "MA": [
+      "monitoring_analysts": [
         "K5",
         "K6",
         "K7",
         "K8"
       ],
-      "RA": [
+      "response_analysts": [
         "L5",
         "L6",
         "L7",
         "L8"
       ],
-      "SA": [
+      "senior_analysts": [
         "M5",
         "M6",
         "M7",
@@ -145,19 +145,19 @@
       ]
     },
     "morning": {
-      "MA": [
+      "monitoring_analysts": [
         "K13",
         "K14",
         "K15",
         "K16"
       ],
-      "RA": [
+      "response_analysts": [
         "L13",
         "L14",
         "L15",
         "L16"
       ],
-      "SA": [
+      "senior_analysts": [
         "M13",
         "M14",
         "M15",
@@ -165,19 +165,19 @@
       ]
     },
     "afternoon": {
-      "MA": [
+      "monitoring_analysts": [
         "K29",
         "K30",
         "K31",
         "K32"
       ],
-      "RA": [
+      "response_analysts": [
         "L29",
         "L30",
         "L31",
         "L32"
       ],
-      "SA": [
+      "senior_analysts": [
         "M29",
         "M30",
         "M31",
@@ -187,19 +187,19 @@
   },
   "Thursday": {
     "night": {
-      "MA": [
+      "monitoring_analysts": [
         "O5",
         "O6",
         "O7",
         "O8"
       ],
-      "RA": [
+      "response_analysts": [
         "P5",
         "P6",
         "P7",
         "P8"
       ],
-      "SA": [
+      "senior_analysts": [
         "Q5",
         "Q6",
         "Q7",
@@ -207,19 +207,19 @@
       ]
     },
     "morning": {
-      "MA": [
+      "monitoring_analysts": [
         "O13",
         "O14",
         "O15",
         "O16"
       ],
-      "RA": [
+      "response_analysts": [
         "P13",
         "P14",
         "P15",
         "P16"
       ],
-      "SA": [
+      "senior_analysts": [
         "Q13",
         "Q14",
         "Q15",
@@ -227,19 +227,19 @@
       ]
     },
     "afternoon": {
-      "MA": [
+      "monitoring_analysts": [
         "O29",
         "O30",
         "O31",
         "O32"
       ],
-      "RA": [
+      "response_analysts": [
         "P29",
         "P30",
         "P31",
         "P32"
       ],
-      "SA": [
+      "senior_analysts": [
         "Q29",
         "Q30",
         "Q31",
@@ -249,19 +249,19 @@
   },
   "Friday": {
     "night": {
-      "MA": [
+      "monitoring_analysts": [
         "S5",
         "S6",
         "S7",
         "S8"
       ],
-      "RA": [
+      "response_analysts": [
         "T5",
         "T6",
         "T7",
         "T8"
       ],
-      "SA": [
+      "senior_analysts": [
         "U5",
         "U6",
         "U7",
@@ -269,19 +269,19 @@
       ]
     },
     "morning": {
-      "MA": [
+      "monitoring_analysts": [
         "S13",
         "S14",
         "S15",
         "S16"
       ],
-      "RA": [
+      "response_analysts": [
         "T13",
         "T14",
         "T15",
         "T16"
       ],
-      "SA": [
+      "senior_analysts": [
         "U13",
         "U14",
         "U15",
@@ -289,19 +289,19 @@
       ]
     },
     "afternoon": {
-      "MA": [
+      "monitoring_analysts": [
         "S29",
         "S30",
         "S31",
         "S32"
       ],
-      "RA": [
+      "response_analysts": [
         "T29",
         "T30",
         "T31",
         "T32"
       ],
-      "SA": [
+      "senior_analysts": [
         "U29",
         "U30",
         "U31",
@@ -311,19 +311,19 @@
   },
   "Saturday": {
     "night": {
-      "MA": [
+      "monitoring_analysts": [
         "W5",
         "W6",
         "W7",
         "W8"
       ],
-      "RA": [
+      "response_analysts": [
         "X5",
         "X6",
         "X7",
         "X8"
       ],
-      "SA": [
+      "senior_analysts": [
         "Y5",
         "Y6",
         "Y7",
@@ -331,19 +331,19 @@
       ]
     },
     "morning": {
-      "MA": [
+      "monitoring_analysts": [
         "W13",
         "W14",
         "W15",
         "W16"
       ],
-      "RA": [
+      "response_analysts": [
         "X13",
         "X14",
         "X15",
         "X16"
       ],
-      "SA": [
+      "senior_analysts": [
         "Y13",
         "Y14",
         "Y15",
@@ -351,19 +351,19 @@
       ]
     },
     "afternoon": {
-      "MA": [
+      "monitoring_analysts": [
         "W29",
         "W30",
         "W31",
         "W32"
       ],
-      "RA": [
+      "response_analysts": [
         "X29",
         "X30",
         "X31",
         "X32"
       ],
-      "SA": [
+      "senior_analysts": [
         "Y29",
         "Y30",
         "Y31",
@@ -373,19 +373,19 @@
   },
   "Sunday": {
     "night": {
-      "MA": [
+      "monitoring_analysts": [
         "AA5",
         "AA6",
         "AA7",
         "AA8"
       ],
-      "RA": [
+      "response_analysts": [
         "AB5",
         "AB6",
         "AB7",
         "AB8"
       ],
-      "SA": [
+      "senior_analysts": [
         "AC5",
         "AC6",
         "AC7",
@@ -393,19 +393,19 @@
       ]
     },
     "morning": {
-      "MA": [
+      "monitoring_analysts": [
         "AA13",
         "AA14",
         "AA15",
         "AA16"
       ],
-      "RA": [
+      "response_analysts": [
         "AB13",
         "AB14",
         "AB15",
         "AB16"
       ],
-      "SA": [
+      "senior_analysts": [
         "AC13",
         "AC14",
         "AC15",
@@ -413,19 +413,19 @@
       ]
     },
     "afternoon": {
-      "MA": [
+      "monitoring_analysts": [
         "AA29",
         "AA30",
         "AA31",
         "AA32"
       ],
-      "RA": [
+      "response_analysts": [
         "AB29",
         "AB30",
         "AB31",
         "AB32"
       ],
-      "SA": [
+      "senior_analysts": [
         "AC29",
         "AC30",
         "AC31",
