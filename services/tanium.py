@@ -245,21 +245,21 @@ class TaniumInstance:
                 endpoint_id = int(tanium_id)
             except ValueError:
                 endpoint_id = tanium_id
-            
+
             # Try package ID 226 for "Custom Tags - Add Tags" (Windows) 
             package_id = "226"
 
             # Create variables for the new mutation format - include schedule parameters
             variables = {
                 "name": f"Add Custom Tags to {tanium_id}",
-                "tag": ",".join(tags),     # Join tags with comma
+                "tag": ",".join(tags),  # Join tags with comma
                 "packageID": package_id,
                 "endpoints": [endpoint_id],
                 "distributeSeconds": 600,  # 10 minutes to distribute
                 "expireSeconds": 3600,     # 1 hour to expire
-                "startTime": "now"         # Start immediately
+                "startTime": datetime.now().isoformat() + "Z"  # Start immediately
             }
-            
+
             logger.info(f"Sending GraphQL variables for {tanium_id}: {variables}")
             result = self.query(UPDATE_TAGS_MUTATION, variables)
 
@@ -267,14 +267,14 @@ class TaniumInstance:
 
             # Check if the mutation was successful by looking for action creation
             action_create_result = result.get('data', {}).get('actionCreate', {})
-            
+
             # Check for errors first
             error = action_create_result.get('error')
             if error:
                 logger.error(f"GraphQL error creating action for computer ID '{tanium_id}' in {self.name}: {error.get('message', 'Unknown error')}")
                 logger.error(f"Full error details: {error}")
                 return False
-            
+
             # Check for successful action creation
             action = action_create_result.get('action')
             if action and action.get('scheduledAction', {}).get('id'):
