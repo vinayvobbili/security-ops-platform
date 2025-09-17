@@ -59,77 +59,129 @@ with open(SECOPS_SHIFT_STAFFING_FILENAME, 'r') as f:
 
 MANAGEMENT_NOTES_FILE = root_directory / 'data' / 'transient' / 'secOps' / 'management_notes.json'
 
-# Shift time boundaries in minutes from midnight
-MORNING_START = 270  # 04:30
-AFTERNOON_START = 750  # 12:30
-NIGHT_START = 1230  # 20:30
+
+# Constants
+class ShiftConstants:
+    MORNING_START = 270  # 04:30
+    AFTERNOON_START = 750  # 12:30
+    NIGHT_START = 1230  # 20:30
+    TICKET_SHOW_COUNT = 5
+    SHIFT_DURATION_HOURS = 8
+    EASTERN_TZ = 'US/Eastern'
 
 
 def get_current_shift():
     """Determine current shift based on Eastern time."""
-    eastern = pytz.timezone('US/Eastern')
+    eastern = pytz.timezone(ShiftConstants.EASTERN_TZ)
     now = datetime.now(eastern)
-    hour = now.hour
-    minute = now.minute
-    total_minutes = hour * 60 + minute
-    # Morning: 04:30 - 12:29, Afternoon: 12:30 - 20:29, Night: 20:30 - 04:29
-    if MORNING_START <= total_minutes < AFTERNOON_START:
+    total_minutes = now.hour * 60 + now.minute
+
+    if ShiftConstants.MORNING_START <= total_minutes < ShiftConstants.AFTERNOON_START:
         return 'morning'
-    elif AFTERNOON_START <= total_minutes < NIGHT_START:
+    elif ShiftConstants.AFTERNOON_START <= total_minutes < ShiftConstants.NIGHT_START:
         return 'afternoon'
     else:
         return 'night'
 
 
 def get_open_tickets():
+    """Get formatted string of open tickets with links."""
     all_tickets = TicketHandler().get_tickets(query=BASE_QUERY + ' -status:closed')
     total_tickets = len(all_tickets)
-    ticket_show_count = min(total_tickets, 5)
-    ticket_base_url = config.xsoar_prod_ui_base_url + "/Custom/caseinfoid/"
-    open_tickets = [f"[{ticket['id']}]({ticket_base_url}{ticket['id']})" for ticket in all_tickets[0:ticket_show_count]]
-    diff = total_tickets - ticket_show_count
-    return ', '.join(map(str, open_tickets)) + (f" and {diff} more" if diff > 0 else '')
+    ticket_show_count = min(total_tickets, ShiftConstants.TICKET_SHOW_COUNT)
+
+    ticket_base_url = f"{config.xsoar_prod_ui_base_url}/Custom/caseinfoid/"
+    open_tickets = [
+        f"[{ticket['id']}]({ticket_base_url}{ticket['id']})"
+        for ticket in all_tickets[:ticket_show_count]
+    ]
+
+    tickets_text = ', '.join(open_tickets)
+    remaining = total_tickets - ticket_show_count
+    return f"{tickets_text}{f' and {remaining} more' if remaining > 0 else ''}"
 
 
-def get_staffing_data(day_name=datetime.now(pytz.timezone('US/Eastern')).strftime('%A'), shift_name=get_current_shift()):
+class ExcelStaffingReader:
+    """Handles reading staffing data from Excel sheet."""
+
+    @staticmethod
+    def _get_oncall_info():
+        """Get formatted on-call person info."""
+        person = oncall.get_on_call_person()
+        return f"{person['name']} ({person['phone_number']})"
+
+    @staticmethod
+    def _get_fallback_data():
+        """Get fallback staffing data when Excel is unavailable."""
+        return {
+            'senior_analysts': ['N/A (Excel file missing)'],
+            'On-Call': [ExcelStaffingReader._get_oncall_info()]
+        }
+
+    @staticmethod
+    def _get_error_data():
+        """Get error fallback staffing data."""
+        return {
+            'senior_analysts': ['N/A (Error occurred)'],
+            'On-Call': ['N/A (Error occurred)']
+        }
+
+    @staticmethod
+    def _is_valid_cell_value(value):
+        """Check if cell value is valid and not empty."""
+        return (value is not None and
+                str(value).strip() != '' and
+                value != '\xa0')
+
+    @staticmethod
+    def _read_team_staffing(cell_names):
+        """Read staffing data for a specific team."""
+        team_staff = []
+        for cell_name in cell_names:
+            cell = sheet[cell_name] if sheet else None
+            if cell is not None:
+                value = getattr(cell, 'value', None)
+                if ExcelStaffingReader._is_valid_cell_value(value):
+                    team_staff.append(value)
+        return team_staff
+
+
+def get_staffing_data(day_name=None, shift_name=None):
+    """Get staffing data for a specific day and shift."""
+    if day_name is None:
+        day_name = datetime.now(pytz.timezone(ShiftConstants.EASTERN_TZ)).strftime('%A')
+    if shift_name is None:
+        shift_name = get_current_shift()
+
     try:
         if not EXCEL_AVAILABLE or sheet is None:
             logger.warning("Excel file not available, returning minimal staffing data")
-            return {
-                'SA': ['N/A (Excel file missing)'],
-                'On-Call': [oncall.get_on_call_person()['name'] + ' (' + oncall.get_on_call_person()['phone_number'] + ')']
-            }
+            return ExcelStaffingReader._get_fallback_data()
 
         shift_cell_names = cell_names_by_shift[day_name][shift_name]
         staffing_data = {}
+
         for team, cell_names in shift_cell_names.items():
-            staffing_data[team] = []
-            for cell_name in cell_names:
-                cell = sheet[cell_name]
-                if cell is not None:
-                    value = getattr(cell, 'value', None)
-                    if (value is not None and str(value).strip() != ''
-                            and value != '\xa0'):
-                        staffing_data[team].append(value)
-        staffing_data['On-Call'] = [oncall.get_on_call_person()['name'] + ' (' + oncall.get_on_call_person()['phone_number'] + ')']
+            staffing_data[team] = ExcelStaffingReader._read_team_staffing(cell_names)
+
+        staffing_data['On-Call'] = [ExcelStaffingReader._get_oncall_info()]
         return staffing_data
+
     except Exception as e:
         logger.error(f"Error in get_staffing_data: {e}")
-        return {
-            'SA': ['N/A (Error occurred)'],
-            'On-Call': ['N/A (Error occurred)']
-        }
+        return ExcelStaffingReader._get_error_data()
 
 
 def safe_parse_datetime(dt_string):
     """Parse datetime string safely, ensuring it's timezone naive."""
+    if not dt_string:
+        return None
+
     try:
-        if not dt_string:
-            return None
         dt = parser.parse(dt_string)
         return dt.replace(tzinfo=None)
     except Exception as e:
-        print(f"Error parsing datetime {dt_string}: {e}")
+        logger.error(f"Error parsing datetime {dt_string}: {e}")
         return None
 
 
@@ -140,13 +192,16 @@ def get_shift_lead(day_name, shift_name):
 
     try:
         shift_cell_names = cell_names_by_shift[day_name][shift_name]
-        if 'Lead' in shift_cell_names:
-            for cell_name in shift_cell_names['Lead']:
-                cell = sheet[cell_name]
-                if cell is not None:
-                    value = getattr(cell, 'value', None)
-                    if value is not None and str(value).strip() != '' and value != '\xa0':
-                        return str(value)
+        if 'Lead' not in shift_cell_names:
+            return "No Lead Assigned"
+
+        for cell_name in shift_cell_names['Lead']:
+            cell = sheet[cell_name]
+            if cell is not None:
+                value = getattr(cell, 'value', None)
+                if ExcelStaffingReader._is_valid_cell_value(value):
+                    return str(value)
+
         return "No Lead Assigned"
     except (KeyError, IndexError, AttributeError) as e:
         logger.error(f"Error getting shift lead: {e}")
@@ -160,81 +215,120 @@ def get_basic_shift_staffing(day_name, shift_name):
 
     try:
         shift_cell_names = cell_names_by_shift[day_name][shift_name]
-        total_staff = 0
         teams = {}
 
         for team, cell_names in shift_cell_names.items():
-            team_count = 0
-            for cell_name in cell_names:
-                cell = sheet[cell_name]
-                if cell is not None:
-                    value = getattr(cell, 'value', None)
-                    if value is not None and str(value).strip() != '' and value != '\xa0':
-                        team_count += 1
+            team_count = sum(
+                1 for cell_name in cell_names
+                if sheet[cell_name] is not None and
+                ExcelStaffingReader._is_valid_cell_value(getattr(sheet[cell_name], 'value', None))
+            )
             teams[team] = team_count
-            total_staff += team_count
 
+        total_staff = sum(teams.values())
         return {'total_staff': total_staff, 'teams': teams}
+
     except (KeyError, IndexError, AttributeError) as e:
         logger.error(f"Error getting basic staffing: {e}")
         return {'total_staff': 0, 'teams': {}}
 
 
-def get_shift_ticket_metrics(days_back, shift_start_hour):
-    """Get ticket metrics for a specific shift period."""
-    try:
-        # Calculate 8-hour periods for this shift
-        period = {
+class TicketMetricsCalculator:
+    """Handles ticket metrics calculations."""
+
+    @staticmethod
+    def _create_shift_period(days_back, shift_start_hour):
+        """Create time period dict for shift."""
+        return {
             "byFrom": "hours",
             "fromValue": (days_back * 24) + (24 - shift_start_hour),
             "byTo": "hours",
             "toValue": (days_back * 24) + (16 - shift_start_hour)
         }
 
+    @staticmethod
+    def _calculate_response_times(tickets):
+        """Calculate total response time and count from tickets."""
+        total_time = 0
+        count = 0
+
+        for ticket in tickets:
+            custom_fields = ticket.get('CustomFields', {})
+            duration = None
+
+            if 'timetorespond' in custom_fields:
+                duration = custom_fields['timetorespond']['totalDuration']
+            elif 'responsesla' in custom_fields:
+                duration = custom_fields['responsesla']['totalDuration']
+
+            if duration is not None:
+                total_time += duration
+                count += 1
+
+        return total_time, count
+
+    @staticmethod
+    def _calculate_containment_times(tickets):
+        """Calculate containment times for tickets with hostnames."""
+        tickets_with_host = [
+            t for t in tickets
+            if t.get('CustomFields', {}).get('hostname')
+        ]
+
+        total_time = 0
+        count = 0
+
+        for ticket in tickets_with_host:
+            custom_fields = ticket.get('CustomFields', {})
+            duration = None
+
+            if 'timetocontain' in custom_fields:
+                duration = custom_fields['timetocontain']['totalDuration']
+            elif 'containmentsla' in custom_fields:
+                duration = custom_fields['containmentsla']['totalDuration']
+
+            if duration is not None:
+                total_time += duration
+                count += 1
+
+        return total_time, count
+
+    @staticmethod
+    def _safe_divide(numerator, denominator):
+        """Safely divide, returning 0 if denominator is 0."""
+        return numerator / denominator if denominator > 0 else 0
+
+    @staticmethod
+    def _convert_to_minutes(milliseconds):
+        """Convert milliseconds to minutes, rounded to 1 decimal."""
+        return round(milliseconds / 60000, 1)
+
+
+def get_shift_ticket_metrics(days_back, shift_start_hour):
+    """Get ticket metrics for a specific shift period."""
+    try:
+        period = TicketMetricsCalculator._create_shift_period(days_back, shift_start_hour)
         incident_fetcher = TicketHandler()
 
-        # Get inflow tickets
-        inflow = incident_fetcher.get_tickets(
-            query=BASE_QUERY,
-            period=period
-        )
+        # Get tickets
+        inflow = incident_fetcher.get_tickets(query=BASE_QUERY, period=period)
+        outflow = incident_fetcher.get_tickets(query=BASE_QUERY + ' status:closed', period=period)
 
-        # Get outflow tickets
-        outflow = incident_fetcher.get_tickets(
-            query=BASE_QUERY + ' status:closed',
-            period=period
-        )
-
-        # Calculate response times
-        total_response_time = 0
-        response_count = 0
-        for ticket in inflow:
-            if 'timetorespond' in ticket.get('CustomFields', {}):
-                total_response_time += ticket['CustomFields']['timetorespond']['totalDuration']
-                response_count += 1
-            elif 'responsesla' in ticket.get('CustomFields', {}):
-                total_response_time += ticket['CustomFields']['responsesla']['totalDuration']
-                response_count += 1
-
-        # Calculate containment times (only for tickets with hostnames)
-        inflow_with_host = [t for t in inflow if t.get('CustomFields', {}).get('hostname')]
-        total_contain_time = 0
-        contain_count = 0
-        for ticket in inflow_with_host:
-            if 'timetocontain' in ticket.get('CustomFields', {}):
-                total_contain_time += ticket['CustomFields']['timetocontain']['totalDuration']
-                contain_count += 1
-            elif 'containmentsla' in ticket.get('CustomFields', {}):
-                total_contain_time += ticket['CustomFields']['containmentsla']['totalDuration']
-                contain_count += 1
+        # Calculate metrics
+        total_response_time, response_count = TicketMetricsCalculator._calculate_response_times(inflow)
+        total_contain_time, contain_count = TicketMetricsCalculator._calculate_containment_times(inflow)
 
         return {
             'tickets_inflow': len(inflow),
             'tickets_closed': len(outflow),
-            'mean_response_time': total_response_time / response_count if response_count > 0 else 0,
-            'mean_contain_time': total_contain_time / contain_count if contain_count > 0 else 0,
-            'response_time_minutes': round((total_response_time / response_count) / 60000, 1) if response_count > 0 else 0,
-            'contain_time_minutes': round((total_contain_time / contain_count) / 60000, 1) if contain_count > 0 else 0
+            'mean_response_time': TicketMetricsCalculator._safe_divide(total_response_time, response_count),
+            'mean_contain_time': TicketMetricsCalculator._safe_divide(total_contain_time, contain_count),
+            'response_time_minutes': TicketMetricsCalculator._convert_to_minutes(
+                TicketMetricsCalculator._safe_divide(total_response_time, response_count)
+            ),
+            'contain_time_minutes': TicketMetricsCalculator._convert_to_minutes(
+                TicketMetricsCalculator._safe_divide(total_contain_time, contain_count)
+            )
         }
     except Exception as e:
         logger.error(f"Error getting ticket metrics: {e}")
@@ -248,16 +342,43 @@ def get_shift_ticket_metrics(days_back, shift_start_hour):
         }
 
 
+class SecurityActionsCalculator:
+    """Handles security actions calculations."""
+
+    @staticmethod
+    def _count_domains_in_period(start_time, end_time):
+        """Count domains blocked during a specific time period."""
+        try:
+            domain_list = list_handler.get_list_data_by_name(config.xsoar_domain_blocking_list_name)
+            if not domain_list:
+                return 0
+
+            count = 0
+            for item in domain_list:
+                if 'modified' not in item:
+                    continue
+
+                modified_time = safe_parse_datetime(item['modified'])
+                if modified_time and start_time <= modified_time <= end_time:
+                    count += 1
+
+            return count
+        except Exception as e:
+            logger.error(f"Error counting domain blocks: {e}")
+            return 0
+
+    @staticmethod
+    def _calculate_shift_time_bounds(days_back, shift_start_hour):
+        """Calculate start and end times for a shift period."""
+        shift_start = datetime.now() - timedelta(hours=(days_back * 24) + (24 - shift_start_hour))
+        shift_end = datetime.now() - timedelta(hours=(days_back * 24) + (16 - shift_start_hour))
+        return shift_start, shift_end
+
+
 def get_shift_security_actions(days_back, shift_start_hour):
     """Get security actions data for a specific shift period."""
     try:
-        period = {
-            "byFrom": "hours",
-            "fromValue": (days_back * 24) + (24 - shift_start_hour),
-            "byTo": "hours",
-            "toValue": (days_back * 24) + (16 - shift_start_hour)
-        }
-
+        period = TicketMetricsCalculator._create_shift_period(days_back, shift_start_hour)
         incident_fetcher = TicketHandler()
 
         # Get malicious true positives
@@ -266,24 +387,11 @@ def get_shift_security_actions(days_back, shift_start_hour):
             period=period
         )
 
-        # Get domain blocking data from lists
-        try:
-            domain_blocks = 0
-            domain_list = list_handler.get_list_data_by_name(config.xsoar_domain_blocking_list_name)
-            if domain_list:
-                # Count domains added during this shift period
-                for item in domain_list:
-                    if 'modified' in item:
-                        modified_time = safe_parse_datetime(item['modified'])
-                        if modified_time:
-                            # Check if modified during shift period
-                            shift_start = datetime.now() - timedelta(hours=(days_back * 24) + (24 - shift_start_hour))
-                            shift_end = datetime.now() - timedelta(hours=(days_back * 24) + (16 - shift_start_hour))
-                            if shift_start <= modified_time <= shift_end:
-                                domain_blocks += 1
-        except Exception as e:
-            logger.error(f"Error getting domain blocks: {e}")
-            domain_blocks = 0
+        # Count domain blocks during shift
+        shift_start, shift_end = SecurityActionsCalculator._calculate_shift_time_bounds(
+            days_back, shift_start_hour
+        )
+        domain_blocks = SecurityActionsCalculator._count_domains_in_period(shift_start, shift_end)
 
         return {
             'malicious_true_positives': len(malicious_tp),
@@ -416,15 +524,15 @@ def announce_previous_shift_performance(room_id, shift_name):
                 ),
                 FactSet(
                     facts=[
-                        Fact(title="Shift Lead", value=previous_shift_staffing_data['SA'][0]),
+                        Fact(title="Shift Lead", value=previous_shift_staffing_data['senior_analysts'][0]),
                         Fact(title="Tickets ack'ed", value=str(len(inflow))),
                         Fact(title="Tickets closed",
                              value=f"{len(outflow)} ({tickets_closed_per_analyst:.2f}/analyst)"),
                         Fact(title="MTPs",
-                             value=', '.join([ticket.get('id') for ticket in malicious_true_positives])),
+                             value=', '.join([ticket['id'] for ticket in malicious_true_positives])),
                         Fact(title="SLA Breaches",
-                             value=f"Resp- {len(response_sla_breaches)} [{', '.join(['X#' + breach.get('id') for breach in response_sla_breaches])}]\n"
-                                   f"Cont- {len(containment_sla_breaches)} [{', '.join(['X#' + breach.get('id') for breach in containment_sla_breaches])}]"),
+                             value=f"Resp- {len(response_sla_breaches)} [{', '.join(['X#' + breach['id'] for breach in response_sla_breaches])}]\n"
+                                   f"Cont- {len(containment_sla_breaches)} [{', '.join(['X#' + breach['id'] for breach in containment_sla_breaches])}]"),
                         Fact(title="MTT (min:sec)",
                              value=f"Respond- {int(mean_time_to_respond // 60)}:{int(mean_time_to_respond % 60):02d} \n"
                                    f"Contain- {int(mean_time_to_contain // 60)}:{int(mean_time_to_contain % 60):02d}"),
@@ -445,6 +553,124 @@ def announce_previous_shift_performance(room_id, shift_name):
         traceback.print_exc()
 
 
+class ShiftChangeFormatter:
+    """Handles formatting and data preparation for shift change announcements."""
+
+    @staticmethod
+    def _mark_shift_lead(staffing_data):
+        """Mark the first senior analyst as shift lead."""
+        if 'senior_analysts' in staffing_data and staffing_data['senior_analysts']:
+            staffing_data['senior_analysts'][0] += ' (Lead)'
+        return staffing_data
+
+    @staticmethod
+    def _pad_staffing_data(staffing_data):
+        """Pad all staffing lists to same length for table formatting."""
+        max_len = max(len(v) for v in staffing_data.values()) if staffing_data else 0
+
+        for k, v in staffing_data.items():
+            padded_list = [(i if i is not None else '') for i in v]
+            padded_list.extend([''] * (max_len - len(padded_list)))
+            staffing_data[k] = padded_list
+
+        return staffing_data
+
+    @staticmethod
+    def _create_staffing_table(staffing_data):
+        """Create a formatted table from staffing data."""
+        headers = list(staffing_data.keys())
+        data_rows = list(zip(*staffing_data.values()))
+        return tabulate(data_rows, headers=headers, tablefmt="simple")
+
+    @staticmethod
+    def _get_management_notes():
+        """Get current management notes if still valid."""
+        try:
+            with open(MANAGEMENT_NOTES_FILE, "r") as file:
+                management_notes = json.loads(file.read())
+                keep_until = datetime.strptime(management_notes['keep_until'], '%Y-%m-%d').date()
+                if date.today() <= keep_until:
+                    return management_notes['note']
+        except (FileNotFoundError, json.JSONDecodeError, KeyError) as e:
+            logger.warning(f"Error reading management notes: {e}")
+        return ''
+
+    @staticmethod
+    def _format_containment_duration(contained_at):
+        """Format time under containment as 'X D, Y H'."""
+        if not contained_at:
+            return "Unknown"
+
+        time_delta = datetime.now() - contained_at
+        days = time_delta.days
+        hours = time_delta.seconds // 3600
+        return f"{days} D, {hours} H"
+
+    @staticmethod
+    def _get_hosts_in_containment():
+        """Get formatted list of hosts currently in containment."""
+        hosts_data = list_handler.get_list_data_by_name(f'{config.team_name} Contained Hosts')
+
+        formatted_hosts = []
+        for item in hosts_data:
+            contained_at = safe_parse_datetime(item.get("contained_at"))
+            time_under_containment = ShiftChangeFormatter._format_containment_duration(contained_at)
+
+            formatted_host = (
+                f"X#{item.get('ticket#', 'N/A')} | "
+                f"{item.get('hostname', 'Unknown')} | "
+                f"{time_under_containment}"
+            )
+            formatted_hosts.append(formatted_host)
+
+        return formatted_hosts
+
+    @staticmethod
+    def _get_shift_timings(shift_name):
+        """Get shift timing information from Excel."""
+        if not EXCEL_AVAILABLE or sheet is None:
+            return "N/A (Excel file missing)"
+
+        try:
+            cell = sheet[cell_names_by_shift['shift_timings'][shift_name]]
+            return getattr(cell, 'value', "N/A (Excel cell missing)") if cell else "N/A (Excel cell missing)"
+        except (KeyError, TypeError):
+            return "N/A (Excel file issue)"
+
+    @staticmethod
+    def prepare_shift_data(shift_name):
+        """Prepare all data needed for shift change announcement."""
+        day_name = datetime.now().strftime("%A")
+
+        # Get and format staffing data
+        staffing_data = get_staffing_data(day_name, shift_name)
+        staffing_data = ShiftChangeFormatter._mark_shift_lead(staffing_data)
+        staffing_data = ShiftChangeFormatter._pad_staffing_data(staffing_data)
+        staffing_table = ShiftChangeFormatter._create_staffing_table(staffing_data)
+
+        return {
+            'shift_timings': ShiftChangeFormatter._get_shift_timings(shift_name),
+            'management_notes': ShiftChangeFormatter._get_management_notes(),
+            'hosts_in_containment': ShiftChangeFormatter._get_hosts_in_containment(),
+            'staffing_table': staffing_table
+        }
+
+
+def _create_shift_change_message(shift_name, shift_data):
+    """Create the markdown message for shift change announcement."""
+    hosts_text = '\n'.join(shift_data['hosts_in_containment']) if shift_data['hosts_in_containment'] else ''
+
+    return (
+        f"Good **{shift_name.upper()}**! A new shift's starting now!\n"
+        f"Timings: {shift_data['shift_timings']}\n"
+        f"Open {config.team_name}* tickets: {get_open_tickets()}\n"
+        f"Hosts in Containment (TUC): \n{hosts_text}\n\n"
+        f"**Management Notes**: {shift_data['management_notes']}\n"
+        f"Staffing:\n"
+        f"```\n{shift_data['staffing_table']}\n```"
+    )
+
+
 @retry(
     reraise=True,
     stop=stop_after_attempt(3),  # Retry up to 3 times
@@ -454,87 +680,33 @@ def announce_previous_shift_performance(room_id, shift_name):
 def announce_shift_change(shift_name, room_id, sleep_time=30):
     """Announce the change of shift in the Webex room."""
     try:
-        day_name = datetime.now().strftime("%A")
-        staffing_data = get_staffing_data(day_name, shift_name)
-        staffing_data['SA'][0] = staffing_data['SA'][0] + ' (Lead)'
+        # Prepare all shift data
+        shift_data = ShiftChangeFormatter.prepare_shift_data(shift_name)
 
-        # Pad staffing_data lists to the same length
-        max_len = max(len(v) for v in staffing_data.values())
-        for k, v in staffing_data.items():
-            staffing_data[k] = [(i if i is not None else '') for i in v] + [''] * (max_len - len(v))
-
-        # Convert staffing_data to a table with the first column as headers
-        headers = list(staffing_data.keys())
-        shift_data_table = list(zip(*staffing_data.values()))
-        shift_data_table = tabulate(shift_data_table, headers=headers, tablefmt="simple")
-
-        note = ''
-        with open(MANAGEMENT_NOTES_FILE, "r") as file:
-            management_notes = json.loads(file.read())
-            keep_until = datetime.strptime(management_notes['keep_until'], '%Y-%m-%d').date()
-            if date.today() <= keep_until:
-                note = management_notes['note']
-
-        hosts_in_containment = list_handler.get_list_data_by_name(f'{config.team_name} Contained Hosts')
-        for item in hosts_in_containment:
-            contained_at = safe_parse_datetime(item.get("contained_at"))
-            if contained_at:
-                time_under_containment_delta = datetime.now() - contained_at
-                days = time_under_containment_delta.days
-                hours = time_under_containment_delta.seconds // 3600
-                item["time_under_containment"] = f"{days} D, {hours} H"
-            else:
-                item["time_under_containment"] = "Unknown"
-
-        hosts_in_containment = [
-            'X#' + item.get('ticket#', 'N/A') + ' | ' +
-            item["hostname"] + ' | ' +
-            item['time_under_containment']
-            for item in hosts_in_containment
-        ]
-
-        # Get shift timings with fallback
-        if EXCEL_AVAILABLE and sheet is not None:
-            try:
-                cell = sheet[cell_names_by_shift['shift_timings'][shift_name]]
-                shift_timings = getattr(cell, 'value', "N/A (Excel cell missing)") if cell is not None else "N/A (Excel cell missing)"
-            except (KeyError, TypeError):
-                shift_timings = "N/A (Excel file issue)"
-        else:
-            shift_timings = "N/A (Excel file missing)"
-
-        # Send a new shift starting message to Webex room
+        # Create and send message
+        message_text = _create_shift_change_message(shift_name, shift_data)
         webex_api.messages.create(
             roomId=room_id,
-            text=f"Shift Change Notice!",
-            markdown=f"Good **{shift_name.upper()}**! A new shift's starting now!\n"
-                     f"Timings: {shift_timings}\n"
-                     f"Open {config.team_name}* tickets: {get_open_tickets()}\n"
-                     f"Hosts in Containment (TUC): \n {'\n'.join(hosts_in_containment) if hosts_in_containment else ''}\n\n"
-                     f"**Management Notes**: {note}\n"
-                     f"Staffing:\n"
-                     f"```\n{shift_data_table}\n```"
+            text="Shift Change Notice!",
+            markdown=message_text
         )
 
-        time.sleep(sleep_time)  # give time to digest the shift change message before sending the performance message
-
+        # Wait before sending performance message
+        time.sleep(sleep_time)
         announce_previous_shift_performance(shift_name=shift_name, room_id=room_id)
+
     except (requests_exceptions.ConnectionError, urllib3_exceptions.ProtocolError) as net_err:
-        print(f"Network error in announce_shift_change: {net_err}")
-        traceback.print_exc()
+        logger.error(f"Network error in announce_shift_change: {net_err}")
         raise  # Reraise to trigger retry
     except Exception as e:
-        print(f"Error in announce_shift_change: {e}")
-        traceback.print_exc()  # Print the full traceback for better debugging
+        logger.error(f"Error in announce_shift_change: {e}")
+        traceback.print_exc()
 
 
 def main():
-    """
-    Main function to run the scheduled jobs.
-    """
+    """Main function to run the scheduled jobs."""
     room_id = config.webex_room_id_vinay_test_space
     announce_shift_change('night', room_id, sleep_time=0)
-    # announce_previous_shift_performance(room_id, 'night')
     print(get_staffing_data())
 
 
