@@ -39,7 +39,7 @@ EASTERN_TZ = ZoneInfo("America/New_York")
 # Environment to ring mappings (all values must be lowercase)
 RING_1_ENVS = {"dev", "poc", "lab", "integration", "development"}
 RING_2_ENVS = {"qa", "test"}
-RING_3_ENVS = {"dr"}
+RING_3_ENVS = {"dr", "qa/dr"}
 
 
 # Ring 4 is for production or unknown environments

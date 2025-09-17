@@ -20,9 +20,9 @@ from flask import Flask, request, abort, jsonify, render_template
 from my_config import get_config
 from services import xsoar
 from services.approved_testing_utils import add_approved_testing_entry
+from src import secops
 from src.components import apt_names_fetcher
 from src.utils.logging_utils import log_web_activity, is_scanner_request
-from src import secops
 
 # Define the proxy port
 PROXY_PORT = 8080
@@ -806,6 +806,7 @@ def _shift_has_passed(shift_name, current_shift):
 @log_web_activity
 def get_shift_list():
     """Get basic shift list data for the past week"""
+    status = 'unknown'
     try:
         # Generate lightweight shift data for past 7 days
         shift_data = []
@@ -827,7 +828,6 @@ def get_shift_list():
 
                     # Determine if this shift should be shown
                     current_shift = secops.get_current_shift()
-                    now_eastern = datetime.now(eastern)
 
                     # Only show data for current and past shifts
                     if days_back > 0:
@@ -880,7 +880,8 @@ def get_shift_list():
                             'response_time_minutes': ticket_metrics['response_time_minutes'],
                             'contain_time_minutes': ticket_metrics['contain_time_minutes'],
                             'response_sla_breaches': response_sla_breaches,
-                            'containment_sla_breaches': containment_sla_breaches
+                            'containment_sla_breaches': containment_sla_breaches,
+                            'security_actions': security_actions
                         })
 
                 except Exception as e:
@@ -1041,7 +1042,7 @@ def get_shift_details(shift_id):
                             blocked_time = secops.safe_parse_datetime(domain['blocked_at'])
                             if shift_start <= blocked_time <= shift_end:
                                 domains_blocked += 1
-                        except:
+                        except (ValueError, TypeError):
                             pass
         except Exception as e:
             print(f"Error counting blocked domains: {e}")

@@ -39,12 +39,10 @@ body {
 
 .performance-table {
     width: 100%;
-    border-collapse: collapse;
-    margin-top: 20px;
+    border-collapse: separate;
+    border-spacing: 0;
+    margin: 0;
     font-size: 12px;
-    border-radius: 12px;
-    overflow: hidden;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
     animation: slideUp 0.6s ease-out;
 }
 
@@ -58,22 +56,21 @@ body {
     transition: all 0.3s ease;
 }
 
+.performance-table thead {
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+}
+
 .performance-table th {
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     color: white;
     font-weight: bold;
-    position: sticky;
-    top: 0;
-    z-index: 1000;
     text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
     border-right: 1px solid rgba(255, 255, 255, 0.2);
     border-bottom: 2px solid rgba(0, 0, 0, 0.1);
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
-    /* Ensure background stays solid during scroll */
     background-clip: padding-box;
-    /* Force hardware acceleration for smoother sticky behavior */
-    transform: translateZ(0);
-    will-change: transform;
 }
 
 .performance-table tr {
@@ -254,7 +251,7 @@ h1 {
 .filter-menu {
     position: absolute;
     top: 100%;
-    left: 0;
+    right: 0;
     background: white;
     border: 1px solid #e0e0e0;
     border-radius: 8px;
@@ -299,7 +296,7 @@ h1 {
     margin-top: 15px;
     display: flex;
     gap: 10px;
-    justify-content: flex-end;
+    justify-content: space-between;
 }
 
 .apply-btn, .clear-btn {
@@ -410,11 +407,6 @@ h1 {
     opacity: 1;
 }
 
-.table-container {
-    overflow-x: auto;
-    border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-}
 
 .refresh-button {
     background: #28a745;
@@ -1090,47 +1082,14 @@ h1 {
     opacity: 0.8;
 }
 
-@keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
-}
-
-/* Enhanced table container for loading overlay */
 .table-container {
     position: relative;
     margin-top: 20px;
-    min-height: 400px; /* Ensure minimum height for spinner visibility */
     background: rgba(255, 255, 255, 0.05);
     border-radius: 12px;
-    padding: 10px;
-    max-height: 70vh; /* Limit height to enable scrolling */
-    overflow-y: auto; /* Enable vertical scrolling */
-    overflow-x: auto; /* Enable horizontal scrolling */
-    /* Ensure proper stacking context for sticky headers */
-    contain: layout style paint;
+    height: calc(100vh - 200px);
+    overflow-y: auto;
+    overflow-x: auto;
+    border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-.performance-table {
-    min-height: 350px; /* Maintain table height even when empty */
-    width: 100%;
-    border-collapse: separate; /* Required for sticky headers */
-    border-spacing: 0;
-}
-
-/* Ensure tbody maintains height when empty */
-#shifts-tbody {
-    min-height: 300px;
-    display: block;
-}
-
-.performance-table thead {
-    display: table;
-    width: 100%;
-    table-layout: fixed;
-}
-
-.performance-table tbody tr {
-    display: table;
-    width: 100%;
-    table-layout: fixed;
-}
