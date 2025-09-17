@@ -9,7 +9,7 @@ Usage:
 
 import logging
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional, Dict, Any, Iterator
 
@@ -98,6 +98,34 @@ class Computer:
 class TaniumAPIError(Exception):
     """Custom exception for Tanium API errors"""
     pass
+
+
+def get_package_id_for_device_type(device_type: str) -> str:
+    """Get the appropriate package ID for the given device type."""
+    device_type_lower = device_type.lower()
+    if device_type_lower == "windows":
+        return "38355"  # Acme - Custom Tagging - Add Tags
+    elif device_type_lower in ["linux", "unix", "macos", "mac"]:
+        return "38356"  # Acme - Custom Tagging - Add Tags (Non-Windows)
+    else:
+        return "38355"  # Default to Windows
+
+
+def build_tag_update_variables(tanium_id: str, tags: List[str], package_id: str) -> dict:
+    """Build GraphQL variables for tag update mutation."""
+    endpoint_id = int(tanium_id) if tanium_id.isdigit() else tanium_id
+
+    logger.info(f"Building GraphQL variables - tanium_id: {tanium_id}, tags: {tags}, package_id: {package_id}")
+
+    return {
+        "name": f"Add Custom Tags to {tanium_id}",
+        "tag": ",".join(tags),
+        "packageID": package_id,
+        "endpoints": [endpoint_id],
+        "distributeSeconds": 600,  # 10 minutes to distribute
+        "expireSeconds": 3600,  # 1 hour to expire
+        "startTime": datetime.now(timezone.utc).isoformat()  # Start immediately
+    }
 
 
 class TaniumInstance:
@@ -217,118 +245,21 @@ class TaniumInstance:
 
     def validate_token(self) -> bool:
         """Validate the API token"""
-        try:
-            response = requests.post(
-                f"{self.server_url}/api/v2/session/validate",
-                json={'session': self.token},
-                headers=self.headers,
-                verify=self.verify_ssl,
-                timeout=10
-            )
-
-            if response.status_code == 200:
-                logger.info(f"✓ {self.name} token is valid")
-                return True
-
-            logger.warning(f"Token validation failed for {self.name}: {response.status_code}")
-            return False
-
-        except Exception as e:
-            logger.error(f"Error validating token for {self.name}: {e}")
-            return False
-
-    def update_custom_tags_by_id(self, tanium_id: str, tags: List[str], device_type: str = "windows") -> bool:
-        """Update the complete set of custom tags for a computer using its Tanium ID directly
-
-        Args:
-            tanium_id: The Tanium ID of the device
-            tags: List of custom tags to apply
-            device_type: Device type ('windows', 'linux', etc.) to determine appropriate package ID
-        """
-        try:
-            # Get current tags before update
-            current_computer = self.get_computer_by_id(tanium_id)
-            if current_computer:
-                logger.info(f"BEFORE UPDATE - Current tags for {tanium_id} ({current_computer.name}): {current_computer.custom_tags}")
-            else:
-                logger.warning(f"Could not retrieve current tags for {tanium_id} - computer not found")
-
-            # Try integer conversion for endpoint ID
-            try:
-                endpoint_id = int(tanium_id)
-            except ValueError:
-                endpoint_id = tanium_id
-
-            # Select package ID based on device type
-            device_type_lower = device_type.lower()
-            if device_type_lower == "windows":
-                package_id = "38355"  # Acme - Custom Tagging - Add Tags
-            elif device_type_lower in ["linux", "unix", "macos", "mac"]:
-                package_id = "38356"  # Acme - Custom Tagging - Add Tags (Non-Windows)
-            else:
-                logger.warning(f"Unknown device type '{device_type}', defaulting to Windows package ID")
-                package_id = "38355"  # Default to Windows
-
-            # Create variables for the new mutation format - include schedule parameters
-            variables = {
-                "name": f"Add Custom Tags to {tanium_id}",
-                "tag": ",".join(tags),  # Join tags with comma
-                "packageID": package_id,
-                "endpoints": [endpoint_id],
-                "distributeSeconds": 600,  # 10 minutes to distribute
-                "expireSeconds": 3600,  # 1 hour to expire
-                "startTime": datetime.now().isoformat() + "Z"  # Start immediately
-            }
-
-            logger.info(f"Sending GraphQL variables for {tanium_id}: {variables}")
-            result = self.query(UPDATE_TAGS_MUTATION, variables)
-
-            logger.info(f"Full GraphQL response for tag update: {result}")
-
-            # Check if the mutation was successful by looking for action creation
-            action_create_result = result.get('data', {}).get('actionCreate', {})
-
-            # Check for errors first
-            error = action_create_result.get('error')
-            if error:
-                logger.error(f"GraphQL error creating action for computer ID '{tanium_id}' in {self.name}: {error.get('message', 'Unknown error')}")
-                logger.error(f"Full error details: {error}")
-                return False
-
-            # Check for successful action creation
-            action = action_create_result.get('action')
-            if action and action.get('scheduledAction', {}).get('id'):
-                action_id = action['scheduledAction']['id']
-                logger.info(f"Successfully created tag action for computer ID '{tanium_id}' in {self.name}: {tags}, Action ID: {action_id}")
-
-                # Get updated tags after the action (note: may take time to propagate)
-                logger.info(f"AFTER UPDATE - New tags applied to {tanium_id}: {tags}")
-                logger.info(f"Note: It may take a few minutes for the new tags to be visible in Tanium")
-
-                return True
-            else:
-                logger.error(f"Failed to create tag action for computer ID '{tanium_id}' in {self.name}: No action was created")
-                return False
-
-        except Exception as e:
-            logger.error(f"Error updating tags for computer ID '{tanium_id}' in {self.name}: {e}")
-            return False
+        response = requests.post(
+            f"{self.server_url}/api/v2/session/validate",
+            json={'session': self.token},
+            headers=self.headers,
+            verify=self.verify_ssl,
+            timeout=10
+        )
+        return response.status_code == 200
 
     def get_computer_by_id(self, tanium_id: str) -> Optional[Computer]:
-        """Get a computer by its Tanium ID - searches all computers until found"""
-        try:
-            # Search through all computers until we find the one with matching ID
-            for computer in self._paginate_computers(limit=None):
-                if computer.id == tanium_id:
-                    logger.debug(f"Found computer with ID '{tanium_id}' in {self.name}: {computer.name}")
-                    return computer
-
-            logger.debug(f"Computer with ID '{tanium_id}' not found in {self.name}")
-            return None
-
-        except Exception as e:
-            logger.error(f"Error fetching computer by ID '{tanium_id}' from {self.name}: {e}")
-            return None
+        """Get a computer by its Tanium ID"""
+        for computer in self._paginate_computers(limit=None):
+            if computer.id == tanium_id:
+                return computer
+        return None
 
     def find_computer_by_name(self, computer_name: str) -> Optional[Computer]:
         """Find a computer by name in this instance"""
@@ -337,63 +268,60 @@ class TaniumInstance:
 
     def get_tanium_id_by_hostname(self, hostname: str) -> Optional[str]:
         """Get Tanium ID for a computer by hostname"""
-        try:
-            # Search through computers until we find the hostname
-            for computer in self._paginate_computers(limit=None):
-                if computer.name.lower() == hostname.lower():
-                    logger.debug(f"Found hostname '{hostname}' with Tanium ID '{computer.id}' in {self.name}")
-                    return computer.id
+        for computer in self._paginate_computers(limit=None):
+            if computer.name.lower() == hostname.lower():
+                return computer.id
+        return None
 
-            logger.debug(f"Hostname '{hostname}' not found in {self.name}")
-            return None
+    def add_tag_by_name(self, computer_name: str, tag: str) -> Optional[dict]:
+        """Add a custom tag to a computer by name. Returns action creation result or None if tag already exists."""
+        computer = self.find_computer_by_name(computer_name)
+        if not computer:
+            raise TaniumAPIError(f"Computer '{computer_name}' not found")
 
-        except Exception as e:
-            logger.error(f"Error finding hostname '{hostname}' in {self.name}: {e}")
-            return None
+        if tag in computer.custom_tags:
+            return None  # Tag already exists
 
-    def add_custom_tag(self, computer_name: str, tag: str) -> bool:
-        """Add a custom tag to a computer by name"""
-        try:
-            # First, find the computer to get its ID
-            computer = self.find_computer_by_name(computer_name)
-            if not computer:
-                logger.warning(f"Computer '{computer_name}' not found in {self.name}")
-                return False
+        updated_tags = computer.custom_tags + [tag]
+        package_id = get_package_id_for_device_type("windows")
+        variables = build_tag_update_variables(computer.id, updated_tags, package_id)
+        result = self.query(UPDATE_TAGS_MUTATION, variables)
 
-            # Check if tag already exists
-            if tag in computer.custom_tags:
-                logger.info(f"Tag '{tag}' already exists on computer '{computer_name}' in {self.name}")
-                return True
+        # Extract action creation result from GraphQL response
+        action_create_result = result.get('data', {}).get('actionCreate', {})
 
-            # Add the new tag to existing tags
-            updated_tags = computer.custom_tags + [tag]
-            return self.update_custom_tags_by_id(computer.id, updated_tags)
+        if error := action_create_result.get('error'):
+            raise TaniumAPIError(f"GraphQL error: {error.get('message', 'Unknown error')}")
 
-        except Exception as e:
-            logger.error(f"Error adding tag '{tag}' to '{computer_name}' in {self.name}: {e}")
-            return False
+        if not action_create_result.get('action'):
+            raise TaniumAPIError("No action data returned from GraphQL response")
 
-    def remove_custom_tag(self, computer_name: str, tag: str) -> bool:
-        """Remove a custom tag from a computer by name"""
-        try:
-            # First, find the computer to get its ID
-            computer = self.find_computer_by_name(computer_name)
-            if not computer:
-                logger.warning(f"Computer '{computer_name}' not found in {self.name}")
-                return False
+        return action_create_result
 
-            # Check if the tag exists
-            if tag not in computer.custom_tags:
-                logger.info(f"Tag '{tag}' not found on computer '{computer_name}' in {self.name}")
-                return True  # Consider it successful since tag is already not there
+    def remove_tag_by_name(self, computer_name: str, tag: str) -> Optional[dict]:
+        """Remove a custom tag from a computer by name. Returns action creation result or None if tag didn't exist."""
+        computer = self.find_computer_by_name(computer_name)
+        if not computer:
+            raise TaniumAPIError(f"Computer '{computer_name}' not found")
 
-            # Remove the tag from existing tags
-            updated_tags = [t for t in computer.custom_tags if t != tag]
-            return self.update_custom_tags_by_id(computer.id, updated_tags)
+        if tag not in computer.custom_tags:
+            return None  # Tag didn't exist
 
-        except Exception as e:
-            logger.error(f"Error removing tag '{tag}' from '{computer_name}' in {self.name}: {e}")
-            return False
+        updated_tags = [t for t in computer.custom_tags if t != tag]
+        package_id = get_package_id_for_device_type("windows")
+        variables = build_tag_update_variables(computer.id, updated_tags, package_id)
+        result = self.query(UPDATE_TAGS_MUTATION, variables)
+
+        # Extract action creation result from GraphQL response
+        action_create_result = result.get('data', {}).get('actionCreate', {})
+
+        if error := action_create_result.get('error'):
+            raise TaniumAPIError(f"GraphQL error: {error.get('message', 'Unknown error')}")
+
+        if not action_create_result.get('action'):
+            raise TaniumAPIError("No action data returned from GraphQL response")
+
+        return action_create_result
 
     def iterate_computers(self, limit: Optional[int] = None) -> Iterator[Computer]:
         """Public method to iterate through computers with pagination"""
@@ -408,7 +336,6 @@ class TaniumClient:
         self.config = config or get_config()
         self.instances = []
         self._setup_instances()
-        logger.info(f"Initialized TaniumClient with {len(self.instances)} instances")
 
     def _setup_instances(self):
         """Initialize cloud and on-prem instances"""
@@ -450,16 +377,12 @@ class TaniumClient:
         return results
 
     def _get_all_computers(self, limit: Optional[int] = None) -> List[Computer]:
-        """Get computers from all instances (private)."""
+        """Get computers from all instances"""
         all_computers = []
         for instance in self.instances:
-            if not instance.validate_token():
-                logger.warning(f"Invalid token for {instance.name}, skipping...")
-                continue
-            logger.info(f"Fetching computers from {instance.name}...")
-            computers = instance.get_computers(limit)
-            all_computers.extend(computers)
-            logger.info(f"Retrieved {len(computers)} computers from {instance.name}")
+            if instance.validate_token():
+                computers = instance.get_computers(limit)
+                all_computers.extend(computers)
         return all_computers
 
     def _get_output_path(self, filename: Optional[str] = None) -> Path:
@@ -484,25 +407,19 @@ class TaniumClient:
                 'Current Tags': ', '.join(computer.custom_tags),
             })
 
-        try:
-            df = pd.DataFrame(data)
-            sheet_name = 'Computers'
+        df = pd.DataFrame(data)
+        sheet_name = 'Computers'
 
-            with pd.ExcelWriter(output_path, engine='openpyxl') as writer:
-                df.to_excel(writer, sheet_name=sheet_name, index=False)
+        with pd.ExcelWriter(output_path, engine='openpyxl') as writer:
+            df.to_excel(writer, sheet_name=sheet_name, index=False)
 
-                # Auto-adjust column widths
-                worksheet = writer.sheets[sheet_name]
-                for column in worksheet.columns:
-                    max_length = max(len(str(cell.value)) for cell in column)
-                    worksheet.column_dimensions[column[0].column_letter].width = min(max_length + 2, 50)
+            # Auto-adjust column widths
+            worksheet = writer.sheets[sheet_name]
+            for column in worksheet.columns:
+                max_length = max(len(str(cell.value)) for cell in column)
+                worksheet.column_dimensions[column[0].column_letter].width = min(max_length + 2, 50)
 
-            logger.info(f"Data exported to: {output_path}")
-            return str(output_path)
-
-        except Exception as e:
-            logger.error(f"Error exporting to Excel: {e}")
-            raise
+        return str(output_path)
 
     def get_and_export_all_computers(self, filename: Optional[str] = None) -> Optional[str]:
         """Get all computers from all instances and export to Excel, using cache if available."""
@@ -511,11 +428,9 @@ class TaniumClient:
         default_filename = filename or 'All Tanium Hosts.xlsx'
         output_path = Path(__file__).parent.parent / "data" / "transient" / "epp_device_tagging" / today / default_filename
         if output_path.exists():
-            logger.info(f"Using cached file: {output_path}")
             return str(output_path)
         all_computers = self._get_all_computers()
         if not all_computers:
-            logger.warning("No computers retrieved from any instance!")
             return None
         return self.export_to_excel(all_computers, default_filename)
 
@@ -524,60 +439,25 @@ class TaniumClient:
         all_computers = self._get_all_computers(limit=TaniumInstance.DEFAULT_SEARCH_LIMIT)
         return next((c for c in all_computers if c.name.lower() == name.lower()), None)
 
-    def get_tanium_id_by_hostname(self, hostname: str, instance_name: str) -> Optional[Dict[str, str]]:
-        """Get Tanium ID for a computer by hostname in the specified instance"""
-
+    def get_tanium_id_by_hostname(self, hostname: str, instance_name: str) -> Optional[str]:
+        """Get Tanium ID for a computer by hostname"""
         instance = self.get_instance_by_name(instance_name)
         if not instance:
-            logger.error(f"Instance '{instance_name}' not found. Available instances: {self.list_available_instances()}")
             return None
+        return instance.get_tanium_id_by_hostname(hostname)
 
-        if not instance.validate_token():
-            logger.error(f"Invalid token for instance '{instance_name}'")
-            return None
-
-        tanium_id = instance.get_tanium_id_by_hostname(hostname)
-        if tanium_id:
-            return {
-                'tanium_id': tanium_id,
-                'instance': instance_name,
-                'hostname': hostname
-            }
-
-        logger.warning(f"Hostname '{hostname}' not found in instance '{instance_name}'")
-        return None
-
-    def search_hostnames_containing(self, search_term: str, instance_name: str, limit: int = 10) -> List[Dict[str, str]]:
-        """Search for hostnames containing the search term (case-insensitive)"""
-
+    def search_computers(self, search_term: str, instance_name: str, limit: int = 10) -> List[Computer]:
+        """Search for hostnames containing the search term"""
         instance = self.get_instance_by_name(instance_name)
-        if not instance:
-            logger.error(f"Instance '{instance_name}' not found. Available instances: {self.list_available_instances()}")
-            return []
-
-        if not instance.validate_token():
-            logger.error(f"Invalid token for instance '{instance_name}'")
-            return []
-
         matches = []
-        try:
-            for computer in instance.iterate_computers(limit=None):
-                if search_term.lower() in computer.name.lower():
-                    matches.append({
-                        'hostname': computer.name,
-                        'tanium_id': computer.id,
-                        'instance': instance_name
-                    })
 
-                    if len(matches) >= limit:
-                        break
+        for computer in instance.iterate_computers(limit=None):
+            if search_term.lower() in computer.name.lower():
+                matches.append(computer)
+                if len(matches) >= limit:
+                    break
 
-            logger.info(f"Found {len(matches)} hostnames containing '{search_term}' in {instance_name}")
-            return matches
-
-        except Exception as e:
-            logger.error(f"Error searching for hostnames containing '{search_term}' in {instance_name}: {e}")
-            return []
+        return matches
 
     def get_instance_by_name(self, instance_name: str) -> Optional[TaniumInstance]:
         """Get a Tanium instance by name"""
@@ -587,118 +467,65 @@ class TaniumClient:
         """Get list of available instance names"""
         return [instance.name for instance in self.instances]
 
-    def add_custom_tag_to_computer(self, tanium_id: str, tag: str, instance_name: str, device_type: str, check_existing: bool = True) -> Dict[str, Any]:
-        """Add a custom tag to a computer using its Tanium ID
-
-        Args:
-            tanium_id: The Tanium ID of the computer
-            tag: The tag to add
-            instance_name: Name of the Tanium instance to use
-            device_type: Device type ('windows', 'linux', etc.) to determine correct package ID
-            check_existing: Whether to check if tag already exists before adding
-        """
-
+    def add_tag(self, tanium_id: str, tag: str, instance_name: str, device_type: str) -> Optional[dict]:
+        """Add a custom tag to a computer using its Tanium ID. Returns action creation result or None if tag already exists."""
         instance = self.get_instance_by_name(instance_name)
-        if not instance:
-            return {
-                'success': False,
-                'message': f"Instance '{instance_name}' not found. Available instances: {self.list_available_instances()}",
-                'instance': None
-            }
-
-        if not instance.validate_token():
-            return {
-                'success': False,
-                'message': f"Invalid token for instance '{instance_name}'",
-                'instance': instance_name
-            }
-
-        # Optionally check if tag already exists (default: True for safety)
-        if check_existing:
-            # Get current tags and add the new one
-            computer = instance.get_computer_by_id(tanium_id)
-            if not computer:
-                return {
-                    'success': False,
-                    'message': f"Computer with ID '{tanium_id}' not found in {instance_name}",
-                    'instance': instance_name
-                }
-
-            # Check if tag already exists
-            if tag in computer.custom_tags:
-                return {
-                    'success': True,
-                    'message': f"Tag '{tag}' already exists on computer ID: {tanium_id} in {instance_name}",
-                    'instance': instance_name
-                }
-
-            # Add the new tag to existing tags
-            updated_tags = computer.custom_tags + [tag]
-        else:
-            # For bulk operations: assume we want to add the tag without checking
-            # This is more efficient but requires caller to handle duplicates
-            updated_tags = [tag]  # Just set the single tag (Tanium will merge with existing)
-
-        success = instance.update_custom_tags_by_id(tanium_id, updated_tags, device_type)
-
-        return {
-            'success': success,
-            'message': f"Tag {'applied' if success else 'failed'} to computer ID: {tanium_id} in {instance_name}",
-            'instance': instance_name
-        }
-
-    def remove_custom_tag_from_computer(self, computer_name: str, tanium_id: str, tag: str, instance_name: str, device_type: str) -> Dict[str, Any]:
-        """Remove a custom tag from a computer using its Tanium ID
-
-        Args:
-            computer_name: Name of the computer (for logging)
-            tanium_id: The Tanium ID of the computer
-            tag: The tag to remove
-            instance_name: Name of the Tanium instance to use
-            device_type: Device type ('windows', 'linux', etc.) to determine correct package ID
-        """
-
-        instance = self.get_instance_by_name(instance_name)
-        if not instance:
-            return {
-                'success': False,
-                'message': f"Instance '{instance_name}' not found. Available instances: {self.list_available_instances()}",
-                'instance': None
-            }
-
-        if not instance.validate_token():
-            return {
-                'success': False,
-                'message': f"Invalid token for instance '{instance_name}'",
-                'instance': instance_name
-            }
-
-        # Get current tags and remove the specified one
         computer = instance.get_computer_by_id(tanium_id)
-        if not computer:
-            return {
-                'success': False,
-                'message': f"Computer with ID '{tanium_id}' not found in {instance_name}",
-                'instance': instance_name
-            }
 
-        # Check if the tag exists
+        if tag in computer.custom_tags:
+            return None  # Tag already exists
+
+        updated_tags = computer.custom_tags + [tag]
+        package_id = get_package_id_for_device_type(device_type)
+        variables = build_tag_update_variables(tanium_id, updated_tags, package_id)
+
+        # Log GraphQL variables for debugging
+        logger.info(f"GraphQL variables for tagging {tanium_id}: {variables}")
+
+        result = instance.query(UPDATE_TAGS_MUTATION, variables)
+
+        # Extract action creation result from GraphQL response
+        action_create_result = result.get('data', {}).get('actionCreate', {})
+
+        if error := action_create_result.get('error'):
+            raise TaniumAPIError(f"GraphQL error: {error.get('message', 'Unknown error')}")
+
+        if not action_create_result.get('action'):
+            raise TaniumAPIError("No action data returned from GraphQL response")
+
+        action_id = action_create_result.get('action', {}).get('scheduledAction', {}).get('id')
+        logger.info(f"Created scheduled action {action_id} for tagging {tanium_id}")
+        return action_create_result
+
+    def remove_tag(self, tanium_id: str, tag: str, instance_name: str, device_type: str) -> Optional[dict]:
+        """Remove a custom tag from a computer using its Tanium ID. Returns action creation result or None if tag didn't exist."""
+        instance = self.get_instance_by_name(instance_name)
+        computer = instance.get_computer_by_id(tanium_id)
+
         if tag not in computer.custom_tags:
-            return {
-                'success': True,
-                'message': f"Tag '{tag}' not found on computer ID: {tanium_id} in {instance_name} (already removed)",
-                'instance': instance_name
-            }
+            return None  # Tag didn't exist
 
-        # Remove the tag from existing tags
         updated_tags = [t for t in computer.custom_tags if t != tag]
-        success = instance.update_custom_tags_by_id(tanium_id, updated_tags, device_type)
+        package_id = get_package_id_for_device_type(device_type)
+        variables = build_tag_update_variables(tanium_id, updated_tags, package_id)
 
-        return {
-            'success': success,
-            'message': f"Tag {'removed' if success else 'failed to remove'} from {computer_name} (ID: {tanium_id}) in {instance_name}",
-            'instance': instance_name
-        }
+        # Log GraphQL variables for debugging
+        logger.info(f"GraphQL variables for removing tag from {tanium_id}: {variables}")
+
+        result = instance.query(UPDATE_TAGS_MUTATION, variables)
+
+        # Extract action creation result from GraphQL response
+        action_create_result = result.get('data', {}).get('actionCreate', {})
+
+        if error := action_create_result.get('error'):
+            raise TaniumAPIError(f"GraphQL error: {error.get('message', 'Unknown error')}")
+
+        if not action_create_result.get('action'):
+            raise TaniumAPIError("No action data returned from GraphQL response")
+
+        action_id = action_create_result.get('action', {}).get('scheduledAction', {}).get('id')
+        logger.info(f"Created scheduled action {action_id} for removing tag from {tanium_id}")
+        return action_create_result
 
 
 def main():
@@ -742,12 +569,11 @@ def main():
 
         # Now test tagging
         logger.info(f"Testing direct tagging for {test_hostname} (ID: {test_tanium_id}) with write token...")
-        tag_result = client.add_custom_tag_to_computer(
+        tag_result = client.add_tag(
             test_tanium_id,
             test_tag,
             write_instance,
             "linux",  # Test with non-Windows to see if package ID 38356 works
-            check_existing=False  # Skip expensive computer fetch
         )
         logger.info(f"Tagging result for {test_hostname} (ID: {test_tanium_id}) with tag '{test_tag}' using {write_instance}: {tag_result}")
 
