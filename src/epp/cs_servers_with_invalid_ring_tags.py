@@ -19,6 +19,8 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import pandas as pd
+from openpyxl import load_workbook
+from openpyxl.styles import Font, PatternFill, Border, Side, Alignment, NamedStyle
 
 from services import crowdstrike, service_now
 from src.epp.cs_hosts_without_ring_tag import get_dated_path
