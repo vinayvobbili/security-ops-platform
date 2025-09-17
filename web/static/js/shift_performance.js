@@ -949,7 +949,7 @@ function clearFilters() {
     // Reset all checkboxes to default state
     const checkboxes = document.querySelectorAll('input[type="checkbox"]');
     checkboxes.forEach(cb => {
-        cb.checked = (cb.value === 'all' || cb.value === 'morning' || cb.value === 'afternoon' || cb.value === 'night');
+        cb.checked = (cb.value === 'morning' || cb.value === 'afternoon' || cb.value === 'night');
     });
 
     // Reset time range to 7 days
