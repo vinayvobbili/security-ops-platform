@@ -16,6 +16,11 @@ webex_bot
 Flask
 altair
 
+# Microsoft Teams Bot Framework
+botbuilder-core
+botbuilder-schema
+botframework-connector
+
 # HTTP/Network
 requests
 aiohttp
