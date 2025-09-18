@@ -17,8 +17,9 @@ script_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.dirname(os.path.dirname(script_dir))
 sys.path.insert(0, project_root)
 
-from my_bot.core.my_model import initialize_model_and_agent
-from my_bot.core.state_manager import get_state_manager
+from langchain_ollama import OllamaEmbeddings
+from my_bot.document.document_processor import DocumentProcessor
+from my_bot.utils.enhanced_config import ModelConfig
 
 
 def restart_preloader():
@@ -59,20 +60,32 @@ def main():
     print("🔄 Rebuilding document vector store...")
     print("=" * 50)
 
-    # Initialize the system
-    success = initialize_model_and_agent()
+    # Setup paths
+    pdf_directory_path = os.path.join(project_root, "local_pdfs_docs")
+    faiss_index_path = os.path.join(project_root, "faiss_index_ollama")
 
-    if not success:
-        print("❌ Failed to initialize system")
+    # Initialize embeddings
+    print("🤖 Initializing embeddings model...")
+    try:
+        model_config = ModelConfig()
+        embeddings = OllamaEmbeddings(
+            model=model_config.embedding_model_name
+        )
+        print("✅ Embeddings initialized")
+    except Exception as e:
+        print(f"❌ Failed to initialize embeddings: {e}")
         return
 
-    # Get components
-    state_manager = get_state_manager()
-    doc_processor = state_manager.get_document_processor()
-    embeddings = state_manager.get_embeddings()
-
-    if not doc_processor or not embeddings:
-        print("❌ Required components not available")
+    # Initialize document processor
+    print("📄 Initializing document processor...")
+    try:
+        doc_processor = DocumentProcessor(
+            pdf_directory=pdf_directory_path,
+            faiss_index_path=faiss_index_path
+        )
+        print("✅ Document processor initialized")
+    except Exception as e:
+        print(f"❌ Failed to initialize document processor: {e}")
         return
 
     # Force rebuild
