@@ -23,7 +23,6 @@ import logging
 import time
 from my_bot.core.state_manager import get_state_manager
 from my_bot.core.session_manager import get_session_manager
-from my_bot.core.error_recovery import get_recovery_manager, enhanced_query_wrapper
 
 logging.basicConfig(level=logging.ERROR)
 
@@ -73,18 +72,18 @@ def run_health_tests_command() -> str:
 
     except Exception as e:
         logging.error(f"Failed to run health tests: {e}")
-        return f"❌ **Health Test Error**\\n\\nFailed to execute health tests: {str(e)}\\n\\n💡 **Manual run**: `python pokedx_bot/tests/system_health_tests.py`"
+        return f"❌ **Health Test Error**\\n\\nFailed to execute health tests: {str(e)}\\n\\n💡 **Manual run**: `python pokedex_bot/tests/system_health_tests.py`"
 
 
 def initialize_model_and_agent():
     """
     Initialize the LLM, embeddings, and agent with enhanced capabilities.
-    
+
     Initializes:
     - State manager for LLM and agent components
     - Session manager for persistent conversation storage
     - Error recovery manager for graceful failure handling
-    
+
     Returns:
         bool: True if initialization successful, False otherwise
     """

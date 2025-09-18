@@ -1714,7 +1714,7 @@ class ImportTicket(Command):
         prod_ticket_number = attachment_actions.inputs['prod_ticket_number']
         requestor_email_address = activity['actor']['emailAddress']
         destination_ticket_number, destination_ticket_link = xsoar.import_ticket(prod_ticket_number, requestor_email_address)
-        return f'{activity['actor']['displayName']}, the Prod ticket has been copied to Dev [X#{destination_ticket_number}]({destination_ticket_link})'
+        return f'{activity['actor']['displayName']}, the Prod ticket X#{prod_ticket_number} has been copied to Dev [X#{destination_ticket_number}]({destination_ticket_link})'
 
 
 class CreateTuningRequest(Command):

@@ -202,6 +202,7 @@ class SecurityBotStateManager:
             logging.error(f"Failed to initialize agent: {e}")
             return False
 
+
     def execute_query(self, query: str) -> str:
         """Execute query using native tool calling"""
         try:
@@ -216,7 +217,7 @@ class SecurityBotStateManager:
             # If there are tool calls, execute them and get final response
             if hasattr(response, 'tool_calls') and response.tool_calls:
                 # Add the AI message with tool calls to conversation
-                messages.append(response)
+                messages.append({"role": "assistant", "content": response.content})
                 
                 # Execute each tool call
                 for tool_call in response.tool_calls:
@@ -233,8 +234,7 @@ class SecurityBotStateManager:
                         tool_result = f"Tool {tool_name} not found"
                     
                     # Add tool result to conversation
-                    from langchain_core.messages import ToolMessage
-                    messages.append(ToolMessage(content=str(tool_result), tool_call_id=tool_id))
+                    messages.append({"role": "tool", "content": str(tool_result), "tool_call_id": tool_id})
                 
                 # Get final response with tool results
                 final_response = self.llm_with_tools.invoke(messages)

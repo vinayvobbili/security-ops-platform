@@ -202,6 +202,10 @@ class TicketHandler:
             payload.pop(key, None)
 
         payload.update({"all": True, "createInvestigation": True, "force": True})
+        security_category = payload["CustomFields"]["securitycategory"]
+        if not security_category:
+            payload["CustomFields"]["securitycategory"] = "CAT-5: Scans/Probes/Attempted Access"
+        payload["CustomFields"]["slabreachreason"] = "Place Holder - To be updated by SOC"
 
         response = http_session.post(f"{self.dev_base}/incident", headers=dev_headers, json=payload)
 
@@ -285,6 +289,7 @@ if __name__ == "__main__":
     # print(destination_ticket_number, destination_ticket_link)
     list_handler = ListHandler()
     ticket_handler = TicketHandler()
+    import_ticket(820116)
     # print(ticket_handler.get_tickets("id:717407"))
     # print(ticket_handler.link_tickets('1345807', '1345822'))
     # print(ticket_handler.add_participant('1345807', 'tyler.brescia@company.com'))
