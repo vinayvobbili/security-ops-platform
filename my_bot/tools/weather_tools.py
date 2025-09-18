@@ -7,8 +7,12 @@ Simple weather tool that makes API calls and returns raw responses.
 import requests
 from langchain_core.tools import tool
 
+# Import tool logging decorator
+from src.utils.tool_decorator import log_tool_call
 
-@tool  
+
+@tool
+@log_tool_call
 def get_weather_info(city: str) -> str:
     """Get current weather information for a specific city."""
     try:

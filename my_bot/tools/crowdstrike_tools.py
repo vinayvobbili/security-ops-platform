@@ -14,6 +14,9 @@ from langchain_core.tools import tool
 # Import CrowdStrike client
 from services.crowdstrike import CrowdStrikeClient
 
+# Import tool logging decorator
+from src.utils.tool_decorator import log_tool_call
+
 # Initialize CrowdStrike client once
 _crowdstrike_client: Optional[CrowdStrikeClient] = None
 
@@ -35,6 +38,7 @@ except Exception as e:
 
 
 @tool
+@log_tool_call
 def get_device_containment_status(hostname: str) -> str:
     """Get device containment status from CrowdStrike."""
     if not _crowdstrike_client:
@@ -53,6 +57,7 @@ def get_device_containment_status(hostname: str) -> str:
 
 
 @tool
+@log_tool_call
 def get_device_online_status(hostname: str) -> str:
     """Get device online status from CrowdStrike."""
     if not _crowdstrike_client:
@@ -68,6 +73,7 @@ def get_device_online_status(hostname: str) -> str:
 
 
 @tool
+@log_tool_call
 def get_device_details_cs(hostname: str) -> str:
     """Get detailed device information from CrowdStrike."""
     if not _crowdstrike_client:

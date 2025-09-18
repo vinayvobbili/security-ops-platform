@@ -21,8 +21,12 @@ from src.secops import (
     get_shift_security_actions
 )
 
+# Import tool logging decorator
+from src.utils.tool_decorator import log_tool_call
+
 
 @tool
+@log_tool_call
 def get_current_shift_info() -> str:
     """Get current shift information including shift name and time boundaries."""
     try:
@@ -51,6 +55,7 @@ def get_current_shift_info() -> str:
 
 
 @tool
+@log_tool_call
 def get_current_staffing() -> str:
     """Get current shift staffing information."""
     try:
@@ -83,6 +88,7 @@ def get_current_staffing() -> str:
 
 
 @tool
+@log_tool_call
 def get_shift_lead_info(day_name: str = None, shift_name: str = None) -> str:
     """
     Get the shift lead for a specific day and shift.
