@@ -205,6 +205,10 @@ def ask(user_message: str, user_id: str = "default", room_id: str = "default") -
             # Let the 70B model handle everything directly - no agent framework
             logging.info(f"Passing query to direct LLM: {query[:100]}...")
 
+            # Set logging context for tool calls
+            from src.utils.tool_logging import set_logging_context
+            set_logging_context(session_key)
+
             final_response = state_manager.execute_query(agent_input)
 
         except Exception as e:
