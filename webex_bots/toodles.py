@@ -2115,7 +2115,7 @@ class ProcessUrlBlockVerdict(Command):
 
             # Build final response with Markdown formatting
             response = (f"**{activity['actor']['displayName']}, URL block verdict results:**\n"
-                        f"```\n{table_str}\n\nLegend: ✅=ALLOWED, ❌=BLOCKED\n"
+                        f"```\n{table_str}\n\nLegend: ✅=ALLOWED ❌=BLOCKED\n"
                         f"Response Time: {response_time}s\n```")
 
             # Check length and fallback to summary if needed
