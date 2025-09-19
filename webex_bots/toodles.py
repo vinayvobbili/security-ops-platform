@@ -1203,7 +1203,7 @@ class GetNewXTicketForm(Command):
         super().__init__(
             card=NEW_TICKET_CARD,
             command_keyword="get_x_ticket_form",
-            help_message="Create X Ticket",
+            help_message="Create X Ticket 𝑿",
             delete_previous_message=True
         )
 
@@ -1760,7 +1760,7 @@ class ImportTicket(Command):
 class CreateTuningRequest(Command):
     def __init__(self):
         super().__init__(
-            help_message="Create Tuning Request",
+            help_message="Create Tuning Request 🎶",
             command_keyword="tuning_request",
             card=TUNING_REQUEST_CARD.to_dict(),
             delete_previous_message=True
@@ -1823,7 +1823,7 @@ SEARCH_X_CARD = AdaptiveCard(
 class GetSearchXSOARCard(Command):
     def __init__(self):
         super().__init__(
-            help_message="Search X",
+            help_message="Search 𝗫",
             command_keyword="get_search_xsoar_card",
             card=SEARCH_X_CARD.to_dict(),
             delete_previous_message=True
