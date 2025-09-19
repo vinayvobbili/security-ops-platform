@@ -27,6 +27,7 @@ from services import xsoar, azdo
 from services.approved_testing_utils import add_approved_testing_entry
 from services.crowdstrike import CrowdStrikeClient
 from services.xsoar import ListHandler, TicketHandler
+from src.components.url_lookup_traffic import URLChecker
 from src.utils.http_utils import get_session
 from src.utils.logging_utils import log_activity
 
@@ -930,6 +931,45 @@ TUNING_REQUEST_CARD = AdaptiveCard(
         )
     ]
 )
+
+URL_BLOCK_VERDICT_CARD = {
+    "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+    "type": "AdaptiveCard",
+    "version": "1.3",
+    "body": [
+        {
+            "type": "TextBlock",
+            "text": "Check URL Block Verdict",
+            "wrap": True,
+            "horizontalAlignment": "Center",
+            "weight": "Bolder",
+            "color": "Accent"
+        },
+        {
+            "type": "Input.Text",
+            "id": "urls_to_check",
+            "label": "URLs to Check (comma-separated)",
+            "placeholder": "Enter the URLs to check",
+            "isRequired": True,
+            "errorMessage": "Required",
+            "isMultiline": True
+        },
+        {
+            "type": "ActionSet",
+            "horizontalAlignment": "Right",
+            "actions": [
+                {
+                    "type": "Action.Submit",
+                    "title": "Get Block Verdict",
+                    "style": "positive",
+                    "data": {
+                        "callback_keyword": "process_url_block_verdict"
+                    }
+                }
+            ]
+        }
+    ]
+}
 
 all_options_card = {
     "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
@@ -1928,8 +1968,7 @@ class GetBotHealth(Command):
 
     def __init__(self):
         super().__init__(
-            command_keyword="bot_status",
-            help_message="Bot Health 🩺🏥",
+            command_keyword="health",
             delete_previous_message=True,
         )
 
@@ -1994,6 +2033,104 @@ class Hi(Command):
         return "Hi 👋"
 
 
+class GetUrlBlockVerdictForm(Command):
+    """Test URL filtering across ZScaler and Bloxone."""
+
+    def __init__(self):
+        super().__init__(
+            command_keyword="get_url_block_verdict_form",
+            help_message="URL Block Verdict ⚖️",
+            card=URL_BLOCK_VERDICT_CARD,
+            delete_previous_message=False
+        )
+
+    def execute(self, message, attachment_actions, activity):
+        pass
+
+
+class ProcessUrlBlockVerdict(Command):
+    """Process URL filtering submission from the card."""
+
+    def __init__(self):
+        super().__init__(
+            command_keyword="process_url_block_verdict",
+            card=None,
+            delete_previous_message=True
+        )
+
+    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles, log_file_name="toodles_activity_log.csv")
+    def execute(self, message, attachment_actions, activity):
+        import time
+        start_time = time.time()
+
+        # Get URLs from the card input
+        urls_text = attachment_actions.inputs['urls_to_check'].strip()
+
+        if not urls_text:
+            return f"{activity['actor']['displayName']}, please provide URLs to test."
+
+        try:
+            # Create tester and parse/normalize URLs using backend logic
+            url_checker = URLChecker()
+            urls = url_checker.parse_and_normalize_urls(urls_text)
+
+            if not urls:
+                return f"{activity['actor']['displayName']}, please provide valid URLs to test."
+
+            # Test URLs and collect results
+            result = url_checker.get_block_verdict(urls, normalize=False)  # Already normalized
+            results = result['details']
+
+            # Build table data for tabulate
+            table_rows = []
+            for result in results:
+                url = result['url']
+                zs = result['zscaler']
+                bo = result['bloxone']
+
+                # Status indicators
+                zs_status = '✅ ALLOWED' if zs.get('allowed') else '❌ BLOCKED'
+
+                if 'skipped' in bo:
+                    bo_status = 'SKIPPED'
+                else:
+                    bo_status = '✅ ALLOWED' if bo.get('allowed') else '❌ BLOCKED'
+
+                # Truncate URL if too long for cleaner display
+                display_url = url if len(url) <= 50 else url[:47] + '...'
+
+                table_rows.append([display_url, zs_status, bo_status])
+
+            # Create table using tabulate
+            headers = ['URL', 'ZScaler', 'Bloxone']
+            table_str = tabulate(table_rows, headers=headers, tablefmt='simple')
+
+            # Calculate response time
+            response_time = round(time.time() - start_time)
+
+            # Build final response with Markdown formatting
+            response = (f"**{activity['actor']['displayName']}, URL block verdict results:**\n"
+                        f"```\n{table_str}\n\nResponse Time: {response_time}s\n")
+
+            # Check length and fallback to summary if needed
+            if len(response) > 7000:  # Conservative limit for Webex
+                total = len(results)
+                zs_blocked = sum(1 for r in results if not r['zscaler'].get('allowed'))
+                bo_blocked = sum(1 for r in results if not r['bloxone'].get('allowed', True) and 'skipped' not in r['bloxone'])
+
+                response = (f"{activity['actor']['displayName']}, tested {total} URLs.\n"
+                            f"ZScaler blocked: {zs_blocked}/{total}\n"
+                            f"Bloxone blocked: {bo_blocked}/{total}\n"
+                            f"Results too long for chat - reduce the number of URLs in the input.\n"
+                            f"Responded in {response_time}s")
+
+            return response
+
+        except Exception as e:
+            logger.error(f"URL testing error: {str(e)}")
+            return f"{activity['actor']['displayName']}, error testing URLs: {str(e)}"
+
+
 def toodles_bot_factory():
     """Create Toodles bot instance"""
     return WebexBot(
@@ -2034,6 +2171,8 @@ def toodles_initialization(bot_instance=None):
         bot_instance.add_command(GetCompanyHolidays())
         bot_instance.add_command(GetBotHealth())
         bot_instance.add_command(Hi())
+        bot_instance.add_command(GetUrlBlockVerdictForm())
+        bot_instance.add_command(ProcessUrlBlockVerdict())
         return True
     return False
 
