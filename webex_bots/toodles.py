@@ -963,7 +963,7 @@ URL_BLOCK_VERDICT_CARD = {
                     "title": "Get Block Verdict",
                     "style": "positive",
                     "data": {
-                        "callback_keyword": "process_url_block_verdict"
+                        "callback_keyword": "url_verdict"
                     }
                 }
             ]
@@ -2053,7 +2053,7 @@ class ProcessUrlBlockVerdict(Command):
 
     def __init__(self):
         super().__init__(
-            command_keyword="process_url_block_verdict",
+            command_keyword="url_verdict",
             card=None,
             delete_previous_message=True
         )
@@ -2063,11 +2063,16 @@ class ProcessUrlBlockVerdict(Command):
         import time
         start_time = time.time()
 
-        # Get URLs from the card input
-        urls_text = attachment_actions.inputs['urls_to_check'].strip()
+        # Handle both card submission and direct text command
+        if hasattr(attachment_actions, 'inputs') and 'urls_to_check' in attachment_actions.inputs:
+            # This is a card submission
+            urls_text = attachment_actions.inputs['urls_to_check'].strip()
+        else:
+            # This is a direct text command - extract URLs from message
+            urls_text = message.replace("url_verdict", "").strip()
 
         if not urls_text:
-            return f"{activity['actor']['displayName']}, please provide URLs to test."
+            return f"{activity['actor']['displayName']}, please provide URLs to test. Example: @toodles url_verdict facebook.com, google.com"
 
         try:
             # Create tester and parse/normalize URLs using backend logic
@@ -2089,12 +2094,12 @@ class ProcessUrlBlockVerdict(Command):
                 bo = result['bloxone']
 
                 # Status indicators
-                zs_status = '✅ ALLOWED' if zs.get('allowed') else '❌ BLOCKED'
+                zs_status = '✅' if zs.get('allowed') else '❌'
 
                 if 'skipped' in bo:
                     bo_status = 'SKIPPED'
                 else:
-                    bo_status = '✅ ALLOWED' if bo.get('allowed') else '❌ BLOCKED'
+                    bo_status = '✅' if bo.get('allowed') else '❌'
 
                 # Truncate URL if too long for cleaner display
                 display_url = url if len(url) <= 50 else url[:47] + '...'
@@ -2103,14 +2108,15 @@ class ProcessUrlBlockVerdict(Command):
 
             # Create table using tabulate
             headers = ['URL', 'ZScaler', 'Bloxone']
-            table_str = tabulate(table_rows, headers=headers, tablefmt='simple')
+            table_str = tabulate(table_rows, headers=headers, tablefmt='simple', colalign=['left', 'center', 'center'])
 
             # Calculate response time
             response_time = round(time.time() - start_time)
 
             # Build final response with Markdown formatting
             response = (f"**{activity['actor']['displayName']}, URL block verdict results:**\n"
-                        f"```\n{table_str}\n\nResponse Time: {response_time}s\n")
+                        f"```\n{table_str}\n\nLegend: ✅=ALLOWED, ❌=BLOCKED\n"
+                        f"Response Time: {response_time}s\n```")
 
             # Check length and fallback to summary if needed
             if len(response) > 7000:  # Conservative limit for Webex
