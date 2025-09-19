@@ -134,7 +134,7 @@ class CrowdStrikeClient:
         """Get containment status for a device using hostname"""
         device_id = self.get_device_id(hostname)
         if not device_id:
-            return 'Host not found in CS'
+            return 'Host not found in CS console or an error occurred.'
 
         device_details = self.get_device_details(device_id)
         return device_details.get("status")
@@ -220,7 +220,7 @@ class CrowdStrikeClient:
         df = pd.DataFrame(all_host_data)
         excel_file_path = output_path / xlsx_filename
         df.to_excel(excel_file_path, index=False, engine='openpyxl')
-        
+
         # Apply professional formatting
         from src.utils.excel_formatting import apply_professional_formatting
         apply_professional_formatting(excel_file_path)
@@ -267,7 +267,7 @@ def update_unique_hosts_from_cs() -> None:
     unique_hosts_file = DATA_DIR / today_date / "unique_cs_hosts.xlsx"
     unique_hosts_file.parent.mkdir(parents=True, exist_ok=True)
     unique_hosts.to_excel(unique_hosts_file, index=False, engine="openpyxl")
-    
+
     # Apply professional formatting
     from src.utils.excel_formatting import apply_professional_formatting
     apply_professional_formatting(unique_hosts_file)
