@@ -213,13 +213,29 @@ class URLChecker:
             'block_reason': None
         }
 
-        # Check for Infoblox block page content
+        # Check for Infoblox/Bloxone block page content
         content_lower = response.text.lower()
-        infoblox_patterns = ['infoblox', 'bloxone', 'dns protection', 'threat protection', 'blocked domain', 'security response']
 
-        for pattern in infoblox_patterns:
+        # Try to decode UTF-16 if it starts with BOM
+        if response.content.startswith(b'\xff\xfe'):
+            try:
+                decoded_content = response.content.decode('utf-16-le').lower()
+                content_lower = decoded_content
+            except Exception as e:
+                pass  # Fall back to original text
+
+        bloxone_patterns = [
+            'infoblox', 'bloxone', 'dns protection', 'threat protection', 'blocked domain', 'security response',
+            'web filter message', 'web filtering', 'content blocked', 'access denied', 'category blocked',
+            'site blocked', 'blocked by policy', 'webfilter', 'filter message'
+        ]
+
+        # Also check for spaced-out text patterns (like "w e b   f i l t e r")
+        spaced_patterns = ['w e b   f i l t e r', 'b l o c k e d', 'a c c e s s   d e n i e d']
+
+        for pattern in bloxone_patterns + spaced_patterns:
             if pattern in content_lower:
-                indicators.update({'blocked': True, 'dns_blocked': True, 'block_reason': f'Infoblox: {pattern}'})
+                indicators.update({'blocked': True, 'dns_blocked': True, 'block_reason': f'Bloxone: {pattern}'})
                 break
 
         # Check for DNS-level blocking
@@ -381,7 +397,7 @@ def print_result_summary(result: Dict[str, Any]):
 def main():
     """Main function - simple test interface."""
     # Test configuration - modify these as needed
-    url_input = 'facebook.com, https://chatgpt.com/'  # CSV format supported
+    url_input = 'chatgpt.com, facebook.com, company.com, google.com'  # CSV format supported
     json_output = False
     verbose = False
 
