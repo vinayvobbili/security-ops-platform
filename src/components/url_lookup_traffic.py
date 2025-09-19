@@ -45,13 +45,15 @@ class URLChecker:
 
     @staticmethod
     def _create_session() -> requests.Session:
-        """Create HTTP session with retry strategy."""
+        """Create HTTP session with security-focused retry strategy."""
         session = requests.Session()
 
+        # Security-focused retry strategy: fewer retries, shorter backoff
         retry_strategy = Retry(
-            total=3,
-            backoff_factor=1,
+            total=2,  # Reduced retries to minimize exposure
+            backoff_factor=0.5,  # Shorter backoff
             status_forcelist=[429, 500, 502, 503, 504],
+            allowed_methods=["HEAD", "GET", "OPTIONS"]  # Only allow safe methods
         )
 
         adapter = HTTPAdapter(max_retries=retry_strategy)
@@ -68,10 +70,16 @@ class URLChecker:
         try:
             # Disable SSL verification for proxy tests (HTTPS interception)
             verify_ssl = proxies is None
+
+            # Use GET request for accurate block detection
             response = self.session.get(
-                url, timeout=10, allow_redirects=True, proxies=proxies, verify=verify_ssl,
+                url,
+                timeout=10,
+                allow_redirects=True,  # Allow redirects to see final destination
+                proxies=proxies,
+                verify=verify_ssl,
                 headers={
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
                     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
                     'Accept-Language': 'en-US,en;q=0.5',
                     'Accept-Encoding': 'gzip, deflate',
@@ -83,16 +91,24 @@ class URLChecker:
             # Log raw response details
             logger.debug(f"[{system}] Response status: {response.status_code}")
             logger.debug(f"[{system}] Response headers: {dict(response.headers)}")
-            logger.debug(f"[{system}] Response content (first 500 chars): {response.text[:500]}")
+            if hasattr(response, '_content') and response._content:
+                logger.debug(f"[{system}] Response content (first 500 chars): {response.text[:500]}")
             logger.debug(f"[{system}] Response time: {response.elapsed.total_seconds() * 1000:.2f}ms")
 
+            # Check for block indicators first
+            blocked_indicators = checker_func(response) if checker_func else {}
+            is_blocked = blocked_indicators.get('blocked', False)
+
+            # Determine if URL is allowed: good status code AND not blocked by content filtering
+            is_allowed = response.status_code < 400 and not is_blocked
+
             return {
-                'allowed': response.status_code < 400,
+                'allowed': is_allowed,
                 'status_code': response.status_code,
                 'response_time_ms': response.elapsed.total_seconds() * 1000,
                 'headers': dict(response.headers),
-                'content_length': len(response.content),
-                'blocked_indicators': checker_func(response) if checker_func else {},
+                'content_length': len(response.content) if hasattr(response, '_content') else 0,
+                'blocked_indicators': blocked_indicators,
                 'error': None,
                 'user_friendly_error': None
             }
@@ -228,15 +244,22 @@ class URLChecker:
         return urls
 
     @staticmethod
+    def extract_domain(url: str) -> str:
+        """Extract core domain from URL."""
+        parsed = urlparse(url if '://' in url else f'https://{url}')
+        domain = parsed.netloc.lower()
+        # Remove www. prefix if present
+        if domain.startswith('www.'):
+            domain = domain[4:]
+        return domain
+
+    @staticmethod
     def normalize_urls(urls: list) -> list:
-        """Auto-fix URLs missing schemes (like browsers do)."""
+        """Extract core domains and convert to https URLs."""
         fixed_urls = []
         for url in urls:
-            parsed = urlparse(url)
-            if not parsed.scheme:
-                # Default to https for domain-only URLs
-                url = f"https://{url}"
-            fixed_urls.append(url)
+            domain = URLChecker.extract_domain(url)
+            fixed_urls.append(f"https://{domain}")
         return fixed_urls
 
     @classmethod
@@ -259,9 +282,16 @@ class URLChecker:
             'details': []
         }
 
-        for url in urls:
+        for i, url in enumerate(urls):
             if normalize:
                 url = self.normalize_urls([url])[0]
+
+            # Security: Add rate limiting between requests
+            if i > 0:
+                time.sleep(0.5)  # 500ms delay between requests
+
+            # Security logging: Log all URL tests for monitoring
+            logger.info(f"Security Analysis: Testing URL {i+1}/{len(urls)}: {url}")
 
             result = {
                 'url': url,
@@ -270,6 +300,11 @@ class URLChecker:
                 'bloxone': self._test_bloxone(url) if self.jump_server_host else {'skipped': 'No jump server configured'}
             }
             results['details'].append(result)
+
+            # Security logging: Log results
+            zs_result = "BLOCKED" if not result['zscaler'].get('allowed', True) else "ALLOWED"
+            bo_result = "SKIPPED" if 'skipped' in result['bloxone'] else ("BLOCKED" if not result['bloxone'].get('allowed', True) else "ALLOWED")
+            logger.info(f"Security Analysis Result: {url} - ZScaler: {zs_result}, Bloxone: {bo_result}")
 
             zscaler_blocked = not result['zscaler'].get('allowed', True)
             bloxone_blocked = not result['bloxone'].get('allowed', True) if 'skipped' not in result['bloxone'] else False
@@ -346,7 +381,7 @@ def print_result_summary(result: Dict[str, Any]):
 def main():
     """Main function - simple test interface."""
     # Test configuration - modify these as needed
-    url_input = 'facebook.com, google.com, x.com, claude.ai'  # CSV format supported
+    url_input = 'facebook.com, https://chatgpt.com/'  # CSV format supported
     json_output = False
     verbose = False
 
