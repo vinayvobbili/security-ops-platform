@@ -115,6 +115,9 @@ class URLChecker:
         except requests.exceptions.RequestException as e:
             logger.debug(f"[{system}] Request failed: {str(e)}")
             user_friendly_error = self._get_user_friendly_error(e, system)
+
+            # Treat all connection issues as blocked from security perspective
+            # If we can't reach it through the proxy, it's effectively blocked
             return {
                 'allowed': False,
                 'error': str(e),
@@ -128,14 +131,8 @@ class URLChecker:
         error_type = type(exception).__name__
         error_str = str(exception).lower()
 
-        # For timeouts and connection issues, the URL is likely blocked/filtered
-        if ('timeout' in error_str or 'timed out' in error_str or
-                error_type in ['ConnectTimeout', 'ReadTimeout'] or
-                ('connection' in error_str and ('failed' in error_str or 'refused' in error_str))):
-            return f"{system} blocked/filtered"
-
         # DNS issues could indicate blocking at DNS level
-        elif 'name resolution failed' in error_str or 'nodename nor servname provided' in error_str:
+        if 'name resolution failed' in error_str or 'nodename nor servname provided' in error_str:
             return f"{system} DNS blocked"
 
         # SSL/certificate errors are usually legitimate technical issues
@@ -146,9 +143,18 @@ class URLChecker:
         elif 'proxy' in error_str:
             return f"{system} proxy issue"
 
-        # Generic network errors - could be blocking
+        # Connection refused could indicate blocking
+        elif 'connection' in error_str and 'refused' in error_str:
+            return f"{system} connection refused"
+
+        # Timeouts are treated as network issues, not blocking
+        elif ('timeout' in error_str or 'timed out' in error_str or
+              error_type in ['ConnectTimeout', 'ReadTimeout']):
+            return f"{system} network timeout"
+
+        # Generic network errors
         elif error_type == 'ConnectionError':
-            return f"{system} blocked/filtered"
+            return f"{system} network error"
 
         # Fallback for other errors
         else:
@@ -397,7 +403,7 @@ def print_result_summary(result: Dict[str, Any]):
 def main():
     """Main function - simple test interface."""
     # Test configuration - modify these as needed
-    url_input = 'chatgpt.com, facebook.com, company.com, google.com'  # CSV format supported
+    url_input = 'chatgpt.com, facebook.com, google.com, internetbadguys.com'  # CSV format supported
     json_output = False
     verbose = False
 
