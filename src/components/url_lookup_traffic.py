@@ -190,11 +190,16 @@ class URLChecker:
         zscaler_patterns = [
             'zscaler', 'blocked by policy', 'access denied', 'category blocked', 'security policy',
             'website blocked', 'not allowed', 'permission to visit', 'social network site',
-            'your organization has selected zscaler', '1-800-ask-met2'
+            'your organization has selected zscaler', '1-800-ask-met2', 'streaming/media site',
+            'streaming site', 'media site'
         ]
+
+        # Debug: Log content for analysis
+        logger.debug(f"[ZScaler] Content snippet for analysis: {content_lower[:300]}")
 
         for pattern in zscaler_patterns:
             if pattern in content_lower:
+                logger.debug(f"[ZScaler] Found blocking pattern: '{pattern}'")
                 indicators.update({'blocked': True, 'block_page_detected': True, 'block_reason': f'ZScaler block: {pattern}'})
                 break
 
@@ -313,7 +318,7 @@ class URLChecker:
                 time.sleep(0.5)  # 500ms delay between requests
 
             # Security logging: Log all URL tests for monitoring
-            logger.info(f"Security Analysis: Testing URL {i+1}/{len(urls)}: {url}")
+            logger.info(f"Security Analysis: Testing URL {i + 1}/{len(urls)}: {url}")
 
             result = {
                 'url': url,
@@ -403,7 +408,7 @@ def print_result_summary(result: Dict[str, Any]):
 def main():
     """Main function - simple test interface."""
     # Test configuration - modify these as needed
-    url_input = 'chatgpt.com, facebook.com, google.com, internetbadguys.com'  # CSV format supported
+    url_input = 'netflix.com'  # CSV format supported
     json_output = False
     verbose = False
 
