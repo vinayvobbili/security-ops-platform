@@ -224,16 +224,23 @@ class ListHandler:
 
     def get_all_lists(self):
         """Get all lists from XSOAR"""
-        response = http_session.get(f"{self.base_url}/lists", headers=prod_headers)
-        if response is None:
-            raise requests.exceptions.ConnectionError("Failed to connect after multiple retries")
-        response.raise_for_status()
-        return response.json()
+        try:
+            response = http_session.get(f"{self.base_url}/lists", headers=prod_headers, timeout=30, verify=False)
+            if response is None:
+                raise requests.exceptions.ConnectionError("Failed to connect after multiple retries")
+            response.raise_for_status()
+            return response.json()
+        except Exception as e:
+            log.error(f"Error in get_all_lists: {str(e)}")
+            return []
 
     def get_list_data_by_name(self, list_name):
         """Get list data by name"""
         all_lists = self.get_all_lists()
-        list_item = next(item for item in all_lists if item['id'] == list_name)
+        list_item = next((item for item in all_lists if item['id'] == list_name), None)
+        if list_item is None:
+            log.warning(f"List '{list_name}' not found")
+            return None
         try:
             return json.loads(list_item['data'])
         except (TypeError, json.JSONDecodeError):
@@ -242,7 +249,10 @@ class ListHandler:
     def get_list_version_by_name(self, list_name):
         """Get list version by name"""
         all_lists = self.get_all_lists()
-        list_item = next(item for item in all_lists if item['id'] == list_name)
+        list_item = next((item for item in all_lists if item['id'] == list_name), None)
+        if list_item is None:
+            log.warning(f"List '{list_name}' not found")
+            return None
         return list_item['version']
 
     def save(self, list_name, list_data):
