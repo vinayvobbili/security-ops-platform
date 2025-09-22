@@ -232,7 +232,7 @@ class URLChecker:
             try:
                 decoded_content = response.content.decode('utf-16-le').lower()
                 content_lower = decoded_content
-            except Exception as e:
+            except Exception:
                 pass  # Fall back to original text
 
         bloxone_patterns = [
