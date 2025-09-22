@@ -121,7 +121,7 @@ def get_ir_dashboard_slide_show():
 
 
 @app.route("/<path:filename>.pac")
-def proxy_pac_file():
+def proxy_pac_file(filename):
     """Handle PAC file requests to reduce log clutter."""
     # Return empty PAC file content
     pac_content = """function FindProxyForURL(url, host) {

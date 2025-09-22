@@ -165,32 +165,40 @@ def analyze_ring_tags(servers_df):
         env = str(server.get('SNOW_environment', '')).lower()
         current_tags = server.get('current_tags', '')
 
-        # Extract all ring tags first
-        all_ring_tags = re.findall(r'FalconGroupingTags/[^,]*?SRVRing(\d+)', current_tags, re.IGNORECASE)
+        # Extract all ring numbers first
+        all_ring_numbers = re.findall(r'FalconGroupingTags/[^,]*?SRVRing(\d+)', current_tags, re.IGNORECASE)
 
         # Find complete ring tag strings to check for Citrix
         complete_ring_tag_matches = re.findall(r'(FalconGroupingTags/[^,]*?SRVRing\d+)', current_tags, re.IGNORECASE)
 
-        # Filter to only non-Citrix rings by checking the complete tag
-        non_citrix_rings = []
-        for i, ring_num in enumerate(all_ring_tags):
+        # Filter to only non-Citrix ring numbers by checking the complete tag
+        ring_numbers = []
+        for i, ring_num in enumerate(all_ring_numbers):
             if 'citrix' not in complete_ring_tag_matches[i].lower():
-                non_citrix_rings.append(int(ring_num))
+                ring_numbers.append(int(ring_num))
 
-        if not non_citrix_rings:
+        if not ring_numbers:
             continue
 
-        if len(non_citrix_rings) > 1:
+        # SPECIAL CASE: Skip validation for Ring 0 hosts
+        # Ring 0 hosts are exempt from environment-based ring validation rules.
+        # Unlike other rings (1-4) which must match their environment type,
+        # Ring 0 hosts are considered valid regardless of their environment.
+        # This exception overrides the general validation logic of this file.
+        if any(ring == 0 for ring in ring_numbers):
+            continue
+
+        if len(ring_numbers) > 1:
             servers_df.loc[index, 'has_invalid_ring_tag'] = True
             servers_df.loc[index, 'comment'] = 'multiple ring tags found'
-            logger.info(f"Multiple non-Citrix ring tags found for host {server.get('hostname', 'Unknown')}: {non_citrix_rings}")
+            logger.info(f"Multiple non-Citrix ring tags found for host {server.get('hostname', 'Unknown')}: {ring_numbers}")
             continue
 
         expected_ring = get_expected_ring(env)
-        if any(num != expected_ring for num in non_citrix_rings):
+        if any(num != expected_ring for num in ring_numbers):
             servers_df.loc[index, 'has_invalid_ring_tag'] = True
-            servers_df.loc[index, 'comment'] = f'{env} server should not be in Ring {non_citrix_rings}, expected Ring {expected_ring}'
-            logger.info(f"Invalid ring tag found for host {server.get('hostname', 'Unknown')}: Ring {non_citrix_rings}, expected Ring {expected_ring}")
+            servers_df.loc[index, 'comment'] = f'{env} server should not be in Ring {ring_numbers}, expected Ring {expected_ring}'
+            logger.info(f"Invalid ring tag found for host {server.get('hostname', 'Unknown')}: Ring {ring_numbers}, expected Ring {expected_ring}")
 
 
 def generate_report():
@@ -245,10 +253,10 @@ def generate_report():
         def extract_invalid_tags(row):
             current_tags = row.get('current_tags', '')
             # Extract all non-Citrix ring tags
-            all_ring_tags = re.findall(r'FalconGroupingTags/[^,]*?SRVRing(\d+)', current_tags, re.IGNORECASE)
+            all_ring_numbers = re.findall(r'FalconGroupingTags/[^,]*?SRVRing(\d+)', current_tags, re.IGNORECASE)
             complete_ring_tag_matches = re.findall(r'(FalconGroupingTags/[^,]*?SRVRing\d+)', current_tags, re.IGNORECASE)
             invalid = []
-            for i, ring_num in enumerate(all_ring_tags):
+            for i, ring_num in enumerate(all_ring_numbers):
                 if 'citrix' not in complete_ring_tag_matches[i].lower():
                     invalid.append(complete_ring_tag_matches[i])
             return ', '.join(invalid) if invalid else ''
