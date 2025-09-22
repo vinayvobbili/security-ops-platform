@@ -202,10 +202,17 @@ class TicketHandler:
             payload.pop(key, None)
 
         payload.update({"all": True, "createInvestigation": True, "force": True})
-        security_category = payload["CustomFields"]["securitycategory"]
+        security_category = payload["CustomFields"].get("securitycategory")
         if not security_category:
             payload["CustomFields"]["securitycategory"] = "CAT-5: Scans/Probes/Attempted Access"
-        payload["CustomFields"]["slabreachreason"] = "Place Holder - To be updated by SOC"
+
+        hunt_source = payload["CustomFields"].get("huntsource")
+        if not hunt_source:
+            payload["CustomFields"]["huntsource"] = "Other"
+
+        sla_breach_reason = payload["CustomFields"].get("slabreachreason")
+        if not sla_breach_reason:
+            payload["CustomFields"]["slabreachreason"] = "Place Holder - To be updated by SOC"
 
         response = http_session.post(f"{self.dev_base}/incident", headers=dev_headers, json=payload)
 
