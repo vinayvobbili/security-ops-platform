@@ -87,6 +87,7 @@ LOST_STOLEN_DEVICE = 0.1  # Lost/Stolen Device logos
 SPLUNK_LOGO_SIZE = 0.02  # Splunk logos
 IOC_HUNT_LOGO_SIZE = 0.03  # IOC Hunt logos
 AREA1_LOGO_SIZE = 0.06  # Area1 logos
+LEAKED_CREDS_LOGO_SIZE = 0.08  # Leaked Credentials logos
 
 # Create a mapping of detection sources to logo URLs and filenames
 LOGO_URL_MAPPING = {
@@ -107,6 +108,7 @@ LOGO_URL_MAPPING = {
     "lost/stolen device": ("https://clipground.com/images/theft-protection-clipart-14.jpg", "lost_stolen_device.png"),
     "ioc hunt": ("https://www.pngitem.com/pimgs/b/104-1049518_detective-silhouette-png.png", "ioc_hunt.png"),
     "area1 alert": ("https://logowik.com/content/uploads/images/area-1-security8161.jpg", "area1.png"),
+    "leaked creds": ("https://www.shutterstock.com/image-vector/data-personal-leak-vector-identity-600nw-2143054971.jpg", "leaked_credentials.png"),
     "unknown": ("https://cdn-icons-png.flaticon.com/512/2534/2534590.png", "unknown.png")
 }
 
@@ -138,17 +140,16 @@ def create_graph(tickets):
     for pattern, replacement in detection_source_codes_by_name.items():
         df['source'] = df['source'].str.replace(pattern, replacement, regex=True, flags=re.IGNORECASE)
 
-    # Simplify to show only ticket types without detection sources
     df['source'] = df.apply(lambda row: row['type']
                             .replace(config.team_name, '').strip()
-                            .replace('METCIRT', '').strip()
                             .replace('CrowdStrike Falcon Detection', 'CS Detection').strip()
                             .replace('CrowdStrike Falcon Incident', 'CS Incident').strip()
                             .replace('Prisma Cloud Compute Runtime Alert', 'Prisma Compute').strip()
                             .replace('Prisma Cloud Runtime Alert', 'Prisma Runtime').strip()
                             .replace('Lost or Stolen Computer', 'Lost/Stolen Device').strip()
                             .replace('Employee Reported Incident', 'Employee Report').strip()
-                            .replace('UEBA Prisma Cloud', 'UEBA Prisma').strip(),
+                            .replace('UEBA Prisma Cloud', 'UEBA Prisma').strip()
+                            .replace('Leaked Credentials', 'Leaked Creds').strip(),
                             axis=1)
 
     # Count the occurrences of each source and impact
@@ -273,6 +274,8 @@ def create_graph(tickets):
                         logo_size = IOC_HUNT_LOGO_SIZE
                     elif "area1" in source_lower:
                         logo_size = AREA1_LOGO_SIZE
+                    elif "leaked cred" in source_lower:
+                        logo_size = LEAKED_CREDS_LOGO_SIZE
                     else:
                         logo_size = DEFAULT_LOGO_SIZE
 
@@ -319,8 +322,7 @@ def create_graph(tickets):
     fig.patches.append(fancy_box)
 
     # Enhanced titles and labels
-    plt.suptitle(f'Outflow Yesterday ({len(tickets)})',
-                 fontsize=20, fontweight='bold', color='#1A237E', y=0.95)
+    plt.suptitle(f'Outflow Yesterday ({len(tickets)})', fontsize=20, fontweight='bold', color='#1A237E', y=0.95)
 
     # Add labels with enhanced styling
     ax.set_yticks(range(len(pyramid_sources)))
