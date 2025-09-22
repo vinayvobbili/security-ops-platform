@@ -167,7 +167,7 @@ class ServiceNowClient:
         params = {'name': hostname}
 
         try:
-            response = requests.get(endpoint, headers=headers, params=params, timeout=2, verify=False)
+            response = requests.get(endpoint, headers=headers, params=params, timeout=5, verify=False)
             response.raise_for_status()
 
             data = response.json()
@@ -356,7 +356,7 @@ def enrich_host_report(input_file):
 if __name__ == "__main__":
     client = ServiceNowClient()
 
-    hostname = "axscgpar6301"
+    hostname = "USTRY1METU02B6"
     logger.info(f"Looking up in SNOW: {hostname}...")
 
     details = client.get_host_details(hostname)
@@ -376,5 +376,5 @@ if __name__ == "__main__":
     else:
         print("Host not found")
 
-    changes = client.get_process_changes()
-    print(changes)
+    # changes = client.get_process_changes()
+    # print(changes)
