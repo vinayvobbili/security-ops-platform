@@ -430,7 +430,7 @@ def announce_previous_shift_performance(room_id, shift_name):
         )
 
         malicious_true_positives = incident_fetcher.get_tickets(
-            query=BASE_QUERY + ' status:closed impact:"Malicious True Positive"',
+            query=BASE_QUERY + ' impact:"Malicious True Positive"',
             period=period
         )
 
