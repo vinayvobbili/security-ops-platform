@@ -16,15 +16,36 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 function setupEventListeners() {
-    // Add listeners for date range radio buttons
-    document.querySelectorAll('input[name="dateRange"]').forEach(radio => {
-        radio.addEventListener('change', applyFilters);
-    });
+    // Add listener for date range slider
+    const dateSlider = document.getElementById('dateRangeSlider');
+    if (dateSlider) {
+        dateSlider.addEventListener('input', function() {
+            updateSliderLabels(this.value);
+            applyFilters();
+        });
+    }
 
     // Add listeners for existing severity and status checkboxes
     document.querySelectorAll('#severityFilter input, #statusFilter input').forEach(checkbox => {
         checkbox.addEventListener('change', applyFilters);
     });
+
+    // Add listeners to slider labels for click functionality
+    document.querySelectorAll('.slider-labels span').forEach(label => {
+        label.addEventListener('click', function() {
+            const value = this.getAttribute('data-value');
+            dateSlider.value = value;
+            updateSliderLabels(value);
+            applyFilters();
+        });
+    });
+}
+
+function updateSliderLabels(value) {
+    document.querySelectorAll('.slider-labels span').forEach(span => {
+        span.classList.remove('active');
+    });
+    document.querySelector(`.slider-labels span[data-value="${value}"]`).classList.add('active');
 }
 
 async function loadData() {
@@ -78,7 +99,10 @@ function populateCheckboxFilter(filterId, options) {
 }
 
 function applyFilters() {
-    const dateRange = parseInt(document.querySelector('input[name="dateRange"]:checked').value);
+    const dateSlider = document.getElementById('dateRangeSlider');
+    const sliderValue = parseInt(dateSlider ? dateSlider.value : 1);
+    // Map slider positions to days: 0=7, 1=30, 2=60, 3=90
+    const dateRange = [7, 30, 60, 90][sliderValue] || 30;
     const countries = Array.from(document.querySelectorAll('#countryFilter input:checked')).map(cb => cb.value);
     const impacts = Array.from(document.querySelectorAll('#impactFilter input:checked')).map(cb => cb.value);
     const severities = Array.from(document.querySelectorAll('#severityFilter input:checked')).map(cb => cb.value);
@@ -176,8 +200,12 @@ function removeFilter(filterType, value) {
 }
 
 function clearAllFilters() {
-    // Reset date range to default (30 days)
-    document.querySelector('input[name="dateRange"][value="30"]').checked = true;
+    // Reset date range slider to default (30 days, position 1)
+    const dateSlider = document.getElementById('dateRangeSlider');
+    if (dateSlider) {
+        dateSlider.value = 1;
+        updateSliderLabels(1);
+    }
 
     // Uncheck all checkboxes
     document.querySelectorAll('#countryFilter input, #impactFilter input, #severityFilter input, #ticketTypeFilter input, #statusFilter input').forEach(checkbox => {

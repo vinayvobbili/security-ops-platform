@@ -41,25 +41,30 @@
 
 <div class="dashboard-container">
     <div class="dashboard-header">
-        <h1 class="dashboard-title">Security Incident Analytics</h1>
-        <p class="dashboard-subtitle">Real-time analytics and insights from XSOAR security incidents</p>
+        <h1 class="dashboard-title">METCIRT Meaningful Metrics</h1>
+        <p class="dashboard-subtitle">Past 90 days analytics and insights from XSOAR alerts</p>
     </div>
 
     <!-- Filters Section -->
     <div class="filters-section">
         <div class="filters-header">
-            🎛️ Filter Controls
-        </div>
-        <div class="filters-grid">
-            <div class="filter-group">
-                <label class="filter-label">📅 Date Range</label>
-                <div class="radio-filter-box">
-                    <label><input type="radio" name="dateRange" value="7"> Last 7 days</label>
-                    <label><input type="radio" name="dateRange" value="30" checked> Last 30 days</label>
-                    <label><input type="radio" name="dateRange" value="60"> Last 60 days</label>
-                    <label><input type="radio" name="dateRange" value="90"> Last 90 days</label>
+            <div class="header-left">
+                🎛️ Filter Controls
+            </div>
+            <div class="header-right">
+                <label class="date-range-label">📅 Date Range (days):</label>
+                <div class="date-range-slider-container">
+                    <input type="range" id="dateRangeSlider" class="date-range-slider" min="0" max="3" value="1" step="1">
+                    <div class="slider-labels">
+                        <span data-value="0">7</span>
+                        <span data-value="1" class="active">30</span>
+                        <span data-value="2">60</span>
+                        <span data-value="3">90</span>
+                    </div>
                 </div>
             </div>
+        </div>
+        <div class="filters-grid">
             <div class="filter-group">
                 <label class="filter-label">🌍 Country</label>
                 <div id="countryFilter" class="checkbox-filter">
