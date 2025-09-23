@@ -80,6 +80,7 @@ def main():
     ))
 
     schedule.every(5).minutes.do(verify_host_online_status.start)
+
     room_id = config.webex_room_id_soc_shift_updates
     schedule.every().day.at("04:30", eastern).do(lambda: secops.announce_shift_change('morning', room_id))
     schedule.every().day.at("12:30", eastern).do(lambda: secops.announce_shift_change('afternoon', room_id))
