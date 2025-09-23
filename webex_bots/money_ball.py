@@ -31,7 +31,7 @@ ROOT_DIRECTORY = Path(__file__).parent.parent
 
 # Setup logging with rotation and better formatting
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.WARNING,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
         logging.handlers.RotatingFileHandler(

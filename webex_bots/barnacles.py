@@ -31,7 +31,7 @@ from src.utils.logging_utils import log_activity
 
 # Setup logging with rotation and better formatting
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.WARNING,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
         logging.handlers.RotatingFileHandler(

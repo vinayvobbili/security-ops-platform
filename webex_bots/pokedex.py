@@ -82,13 +82,14 @@ console_handler.setFormatter(ColoredFormatter(
 
 # Configure root logger with simple approach
 logging.basicConfig(
-    level=logging.ERROR,
+    level=logging.WARNING,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[file_handler, console_handler],
     force=True  # Override any existing logging config
 )
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.WARNING)  # Ensure bot logger also uses WARNING level
 
 # Configuration
 WEBEX_ACCESS_TOKEN = CONFIG.webex_bot_access_token_pokedex
