@@ -147,8 +147,24 @@ body {
     border-radius: 5px;
     padding: 8px;
     background: white;
-    max-height: 120px;
-    overflow-y: auto;
+    height: 120px;
+    overflow-y: scroll;
+    scrollbar-gutter: stable;
+}
+
+.checkbox-filter::-webkit-scrollbar {
+    -webkit-appearance: none;
+    width: 8px;
+}
+
+.checkbox-filter::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+}
+
+.checkbox-filter::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 4px;
 }
 
 .checkbox-filter label {
@@ -239,6 +255,8 @@ body {
     grid-template-columns: 1fr 1fr;
     gap: 4px;
     column-gap: 12px;
+    height: 120px;
+    overflow-y: scroll;
 }
 
 #countryFilter {
@@ -246,6 +264,8 @@ body {
     grid-template-columns: 1fr 1fr;
     gap: 4px;
     column-gap: 8px;
+    height: 120px;
+    overflow-y: scroll;
 }
 
 .metrics-grid {
