@@ -167,6 +167,51 @@ body {
     border-radius: 4px;
 }
 
+.radio-filter-box {
+    border: 1px solid #ced4da;
+    border-radius: 5px;
+    padding: 8px;
+    background: white;
+    height: 120px;
+    overflow-y: scroll;
+    scrollbar-gutter: stable;
+    display: flex;
+    flex-direction: column;
+}
+
+.radio-filter-box::-webkit-scrollbar {
+    -webkit-appearance: none;
+    width: 8px;
+}
+
+.radio-filter-box::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+}
+
+.radio-filter-box::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 4px;
+}
+
+.radio-filter-box label {
+    display: block;
+    padding: 4px 0;
+    cursor: pointer;
+    font-size: 14px;
+    margin: 0;
+}
+
+.radio-filter-box label:hover {
+    background: rgba(0, 70, 173, 0.1);
+    border-radius: 3px;
+}
+
+.radio-filter-box input[type="radio"] {
+    margin-right: 8px;
+    transform: scale(1.1);
+}
+
 .checkbox-filter label {
     display: block;
     padding: 4px 0;
@@ -216,10 +261,77 @@ body {
     padding: 12px;
     margin-top: 15px;
     font-size: 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 15px;
+}
+
+.filter-summary-content {
+    flex: 1;
 }
 
 .filter-summary strong {
     color: #0046ad;
+    margin-right: 10px;
+}
+
+.active-filters-container {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-left: 8px;
+}
+
+.filter-tag {
+    background: rgba(0, 70, 173, 0.2);
+    border: 1px solid rgba(0, 70, 173, 0.4);
+    border-radius: 20px;
+    padding: 4px 12px;
+    font-size: 12px;
+    color: #0046ad;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.remove-filter-btn {
+    background: none;
+    border: none;
+    color: #0046ad;
+    font-size: 16px;
+    font-weight: bold;
+    cursor: pointer;
+    padding: 0;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.remove-filter-btn:hover {
+    background: rgba(220, 53, 69, 0.2);
+    color: #dc3545;
+}
+
+.clear-all-btn {
+    background: #dc3545;
+    color: white;
+    border: none;
+    border-radius: 20px;
+    padding: 6px 12px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+}
+
+.clear-all-btn:hover {
+    background: #c82333;
+    transform: translateY(-1px);
 }
 
 #filterText {

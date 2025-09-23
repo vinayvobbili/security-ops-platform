@@ -110,43 +110,82 @@ function applyFilters() {
 }
 
 function updateFilterSummary(dateRange, countries, impacts, severities, ticketTypes, statuses) {
-    const filterParts = [];
+    const container = document.getElementById('activeFiltersContainer');
+    container.innerHTML = '';
 
-    // Date range
+    // Date range - no X button, use radio buttons to change
     const dateText = dateRange === 7 ? 'Last 7 days' :
                    dateRange === 30 ? 'Last 30 days' :
                    dateRange === 60 ? 'Last 60 days' :
                    dateRange === 90 ? 'Last 90 days' :
                    dateRange === 365 ? 'Last year' : `Last ${dateRange} days`;
-    filterParts.push(dateText);
+
+    container.innerHTML += `<span class="filter-tag">${dateText}</span>`;
 
     // Add other filters if selected
     if (countries.length > 0) {
-        filterParts.push(`Countries: ${countries.join(', ')}`);
+        countries.forEach(country => {
+            container.innerHTML += `<span class="filter-tag">Country: ${country} <button class="remove-filter-btn" onclick="removeFilter('country', '${country}')">×</button></span>`;
+        });
     }
     if (impacts.length > 0) {
-        filterParts.push(`Impact: ${impacts.join(', ')}`);
+        impacts.forEach(impact => {
+            container.innerHTML += `<span class="filter-tag">Impact: ${impact} <button class="remove-filter-btn" onclick="removeFilter('impact', '${impact}')">×</button></span>`;
+        });
     }
     if (severities.length > 0) {
-        const severityNames = severities.map(s =>
-            s === '4' ? 'Critical' : s === '3' ? 'High' : s === '2' ? 'Medium' : s === '1' ? 'Low' : 'Unknown'
-        );
-        filterParts.push(`Severity: ${severityNames.join(', ')}`);
+        severities.forEach(severity => {
+            const severityName = severity === '4' ? 'Critical' : severity === '3' ? 'High' : severity === '2' ? 'Medium' : severity === '1' ? 'Low' : 'Unknown';
+            container.innerHTML += `<span class="filter-tag">Severity: ${severityName} <button class="remove-filter-btn" onclick="removeFilter('severity', '${severity}')">×</button></span>`;
+        });
     }
     if (ticketTypes.length > 0) {
-        const displayTypes = ticketTypes.map(type =>
-            type.startsWith('METCIRT') ? type.replace(/^METCIRT[_\-\s]*/i, '') : type
-        );
-        filterParts.push(`Types: ${displayTypes.join(', ')}`);
+        ticketTypes.forEach(type => {
+            const displayType = type.startsWith('METCIRT') ? type.replace(/^METCIRT[_\-\s]*/i, '') : type;
+            container.innerHTML += `<span class="filter-tag">Type: ${displayType} <button class="remove-filter-btn" onclick="removeFilter('ticketType', '${type}')">×</button></span>`;
+        });
     }
     if (statuses.length > 0) {
-        const statusNames = statuses.map(s =>
-            s === '0' ? 'Pending' : s === '1' ? 'Active' : s === '2' ? 'Closed' : 'Unknown'
-        );
-        filterParts.push(`Status: ${statusNames.join(', ')}`);
+        statuses.forEach(status => {
+            const statusName = status === '0' ? 'Pending' : status === '1' ? 'Active' : status === '2' ? 'Closed' : 'Unknown';
+            container.innerHTML += `<span class="filter-tag">Status: ${statusName} <button class="remove-filter-btn" onclick="removeFilter('status', '${status}')">×</button></span>`;
+        });
+    }
+}
+
+function removeFilter(filterType, value) {
+    if (filterType === 'country') {
+        const checkbox = document.querySelector(`#countryFilter input[value="${value}"]`);
+        if (checkbox) checkbox.checked = false;
+    } else if (filterType === 'impact') {
+        const checkbox = document.querySelector(`#impactFilter input[value="${value}"]`);
+        if (checkbox) checkbox.checked = false;
+    } else if (filterType === 'severity') {
+        const checkbox = document.querySelector(`#severityFilter input[value="${value}"]`);
+        if (checkbox) checkbox.checked = false;
+    } else if (filterType === 'ticketType') {
+        const checkbox = document.querySelector(`#ticketTypeFilter input[value="${value}"]`);
+        if (checkbox) checkbox.checked = false;
+    } else if (filterType === 'status') {
+        const checkbox = document.querySelector(`#statusFilter input[value="${value}"]`);
+        if (checkbox) checkbox.checked = false;
     }
 
-    document.getElementById('filterText').textContent = filterParts.join(' | ');
+    // Re-apply filters
+    applyFilters();
+}
+
+function clearAllFilters() {
+    // Reset date range to default (30 days)
+    document.querySelector('input[name="dateRange"][value="30"]').checked = true;
+
+    // Uncheck all checkboxes
+    document.querySelectorAll('#countryFilter input, #impactFilter input, #severityFilter input, #ticketTypeFilter input, #statusFilter input').forEach(checkbox => {
+        checkbox.checked = false;
+    });
+
+    // Re-apply filters
+    applyFilters();
 }
 
 function updateDashboard() {

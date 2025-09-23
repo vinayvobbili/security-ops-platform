@@ -53,7 +53,7 @@
         <div class="filters-grid">
             <div class="filter-group">
                 <label class="filter-label">📅 Date Range</label>
-                <div class="radio-group">
+                <div class="radio-filter-box">
                     <label><input type="radio" name="dateRange" value="7"> Last 7 days</label>
                     <label><input type="radio" name="dateRange" value="30" checked> Last 30 days</label>
                     <label><input type="radio" name="dateRange" value="60"> Last 60 days</label>
@@ -96,7 +96,13 @@
 
         <!-- Filter Summary -->
         <div class="filter-summary" id="filterSummary">
-            <strong>Active Filters:</strong> <span id="filterText">Last 30 days</span>
+            <div class="filter-summary-content">
+                <strong>Active Filters:</strong>
+                <span class="active-filters-container" id="activeFiltersContainer">
+                    <span class="filter-tag">Last 30 days</span>
+                </span>
+            </div>
+            <button class="clear-all-btn" onclick="clearAllFilters()">Clear All</button>
         </div>
     </div>
 
