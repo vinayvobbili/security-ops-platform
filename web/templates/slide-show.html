@@ -1,12 +1,12 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
     <title>DnR Dashboard</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/common.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/slide-show.css') }}">
-    <link rel="icon" href="{{ url_for('static', filename='icons/metrics-dashboard-icon.ico') }}" type="image/x-icon">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/common.css') }}"/>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/slide-show.css') }}"/>
+    <link rel="icon" href="{{ url_for('static', filename='icons/metrics-dashboard-icon.ico') }}" type="image/x-icon"/>
 </head>
 <body>
 <!-- Loading overlay -->
@@ -20,7 +20,7 @@
 <!-- Top Navigation Bar -->
 <div class="top-nav">
     <div class="nav-burger" onclick="toggleMenu()">
-        <img src="{{ url_for('static', filename='icons/burger.svg') }}" alt="Menu" class="nav-icon">
+        <img src="{{ url_for('static', filename='icons/burger.svg') }}" alt="Menu" class="nav-icon"/>
     </div>
     <!-- Title can be added here if needed in the future -->
     <div id="burgerMenu" class="burger-menu-content" style="display:none;">
@@ -45,20 +45,20 @@
     <div class="slides">
         {% for filename in image_files %}
             <figure>
-                <img src="{{ url_for('static', filename=filename) }}" alt="{{ filename }}">
+                <img src="{{ url_for('static', filename=filename) }}" alt="{{ filename }}"/>
             </figure>
         {% endfor %}
     </div>
 </div>
-<img src="{{ url_for('static', filename='icons/circle-left-solid.svg') }}" alt="Left Arrow" class="arrow left" onclick="moveSlide(-1)">
-<img src="{{ url_for('static', filename='icons/circle-right-solid.svg') }}" alt="Right Arrow" class="arrow right" onclick="moveSlide(1)">
+<img src="{{ url_for('static', filename='icons/circle-left-solid.svg') }}" alt="Left Arrow" class="arrow left" onclick="moveSlide(-1)"/>
+<img src="{{ url_for('static', filename='icons/circle-right-solid.svg') }}" alt="Right Arrow" class="arrow right" onclick="moveSlide(1)"/>
 <div class="nav-buttons">
     {% for image_file in image_files %}
         <button data-slide-index="{{ loop.index0 }}" class="nav-dot"></button>
     {% endfor %}
 </div>
-<img id="reloadButton" src="{{ url_for('static', filename='icons/reload.svg') }}" alt="Reload" class="reload-icon" onclick="restartSlideshow()">
-<img id="pausePlayButton" onclick="toggleSlideshow()" src="{{ url_for('static', filename='icons/pause-solid.svg') }}" alt="Pause">
+<img id="reloadButton" src="{{ url_for('static', filename='icons/reload.svg') }}" alt="Reload" class="reload-icon" onclick="restartSlideshow()"/>
+<img id="pausePlayButton" onclick="toggleSlideshow()" src="{{ url_for('static', filename='icons/pause-solid.svg') }}" alt="Pause"/>
 
 <!-- Speed Control -->
 <div class="speed-control" id="speedControl">
@@ -67,31 +67,31 @@
             <!-- Main gauge body (filled semicircle) with high contrast gradient -->
             <defs>
                 <linearGradient id="gaugeGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                    <stop offset="0%" style="stop-color:#ff6b35;stop-opacity:0.9"/>
-                    <stop offset="50%" style="stop-color:#f7931e;stop-opacity:0.9"/>
-                    <stop offset="100%" style="stop-color:#ffcc02;stop-opacity:0.9"/>
+                    <stop offset="0%" style="stop-color:#ff6b35;stop-opacity:0.9"></stop>
+                    <stop offset="50%" style="stop-color:#f7931e;stop-opacity:0.9"></stop>
+                    <stop offset="100%" style="stop-color:#ffcc02;stop-opacity:0.9"></stop>
                 </linearGradient>
             </defs>
 
             <!-- Full semicircle that fills the container -->
-            <path d="M 0 50 A 50 50 0 0 1 100 50 L 85 50 A 35 35 0 0 0 15 50 Z" fill="url(#gaugeGradient)"/>
+            <path d="M 0 50 A 50 50 0 0 1 100 50 L 85 50 A 35 35 0 0 0 15 50 Z" fill="url(#gaugeGradient)"></path>
 
             <!-- Inner arc for depth -->
-            <path d="M 15 50 A 35 35 0 0 1 85 50" fill="none" stroke="#ffffff" stroke-width="1" opacity="0.6"/>
+            <path d="M 15 50 A 35 35 0 0 1 85 50" fill="none" stroke="#ffffff" stroke-width="1" opacity="0.6"></path>
 
             <!-- Speed indicator marks -->
-            <circle cx="15" cy="50" r="2.5" fill="#ffffff"/>
-            <circle cx="30" cy="25" r="2" fill="#ffffff"/>
-            <circle cx="50" cy="8" r="2.5" fill="#ffffff"/>
-            <circle cx="70" cy="25" r="2" fill="#ffffff"/>
-            <circle cx="85" cy="50" r="2.5" fill="#ffffff"/>
+            <circle cx="15" cy="50" r="2.5" fill="#ffffff"></circle>
+            <circle cx="30" cy="25" r="2" fill="#ffffff"></circle>
+            <circle cx="50" cy="8" r="2.5" fill="#ffffff"></circle>
+            <circle cx="70" cy="25" r="2" fill="#ffffff"></circle>
+            <circle cx="85" cy="50" r="2.5" fill="#ffffff"></circle>
 
             <!-- Center hub -->
-            <circle cx="50" cy="50" r="8" fill="#2c3e50"/>
-            <circle cx="50" cy="50" r="6" fill="#ffffff"/>
+            <circle cx="50" cy="50" r="8" fill="#2c3e50"></circle>
+            <circle cx="50" cy="50" r="6" fill="#ffffff"></circle>
 
             <!-- Needle -->
-            <line x1="50" y1="50" x2="50" y2="15" stroke="#e74c3c" stroke-width="5" stroke-linecap="round" class="needle"/>
+            <line x1="50" y1="50" x2="50" y2="15" stroke="#e74c3c" stroke-width="5" stroke-linecap="round" class="needle"></line>
         </svg>
     </div>
     <div class="speed-menu" id="speedMenu" style="display: none;">
@@ -104,95 +104,14 @@
 </div>
 
 
-<audio id="music" src="" loop muted></audio>
+<audio id="music" loop muted></audio>
 <div class="audio-controls">
     <button onclick="toggleAudio()">
-        <img src="/static/icons/volume-xmark-solid.svg" alt="Unmute Icon" class="music-icon" id="music-icon">
+        <img src="/static/icons/volume-xmark-solid.svg" alt="Unmute Icon" class="music-icon" id="music-icon"/>
     </button>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
 <script src="/static/js/common.js"></script>
 <script src="/static/js/slide-show.js"></script>
-<script>
-    initRandomMusic();
-
-    function toggleMenu() {
-        var menu = document.getElementById('burgerMenu');
-        menu.style.display = (menu.style.display === 'none' || menu.style.display === '') ? 'block' : 'none';
-    }
-
-    // Close menu when a link is clicked
-    document.addEventListener('DOMContentLoaded', function () {
-        var burgerMenu = document.getElementById('burgerMenu');
-        if (burgerMenu) {
-            burgerMenu.querySelectorAll('a').forEach(function (link) {
-                link.addEventListener('click', function () {
-                    burgerMenu.style.display = 'none';
-                });
-            });
-        }
-    });
-
-    // Close burger menu when clicking outside
-    document.addEventListener('click', function (e) {
-        var burgerMenu = document.getElementById('burgerMenu');
-        var navBurger = document.querySelector('.nav-burger');
-        var speedMenu = document.getElementById('speedMenu');
-        var speedControl = document.getElementById('speedControl');
-
-        // Check if the click was outside the menu and burger button
-        if (burgerMenu && !burgerMenu.contains(e.target) && !navBurger.contains(e.target)) {
-            burgerMenu.style.display = 'none';
-        }
-
-        // Close speed menu when clicking outside
-        if (speedMenu && speedControl && !speedControl.contains(e.target)) {
-            speedMenu.style.display = 'none';
-        }
-
-    });
-
-    function restartSlideshow() {
-        currentSlide = 0;
-        updateSlider();
-        // If paused, also resume the slideshow
-        if (pausePlayButton.src.split('/').pop() === "play-solid.svg") {
-            playSlideshow();
-            pausePlayButton.src = "/static/icons/pause-solid.svg";
-        }
-    }
-
-    function toggleSpeedMenu() {
-        const speedMenu = document.getElementById('speedMenu');
-        speedMenu.style.display = speedMenu.style.display === 'none' ? 'block' : 'none';
-    }
-
-    // Hide loading overlay after content is fully loaded
-    window.addEventListener('load', function () {
-        var loadingOverlay = document.getElementById('loadingOverlay');
-        if (loadingOverlay) {
-            loadingOverlay.style.opacity = '0';
-            setTimeout(function () {
-                loadingOverlay.style.display = 'none';
-            }, 500);
-        }
-    });
-
-    // Floating particle effect initialization
-    document.addEventListener('DOMContentLoaded', function () {
-        var particles = document.getElementById('particles');
-        if (particles) {
-            for (var i = 0; i < 100; i++) {
-                var particle = document.createElement('div');
-                particle.className = 'particle';
-                particle.style.left = Math.random() * 100 + 'vw';
-                particle.style.animationDelay = Math.random() * 6 + 's';
-                particle.style.animationDuration = (Math.random() * 3 + 3) + 's';
-                particle.style.opacity = Math.random() * 0.6 + 0.2;
-                particles.appendChild(particle);
-            }
-        }
-    });
-</script>
 </body>
 </html>
