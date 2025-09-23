@@ -60,7 +60,7 @@ def main():
 
     schedule.every().day.at("00:01", eastern).do(lambda: (
         make_dir_for_todays_charts(helper_methods.CHARTS_DIR_PATH),
-        TicketHandler().cache_past_90_days_tickets(),  # Cache past 90 days tickets from XSOAR
+        TicketHandler().cache_past_90_days_tickets(),
         aging_tickets.make_chart(),
         crowdstrike_efficacy.make_chart(),
         crowdstrike_volume.make_chart(),
