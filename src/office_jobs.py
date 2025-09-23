@@ -63,8 +63,6 @@ def scheduler_process():
         threat_tippers.make_chart(),
     ))
 
-    schedule.every(10).minutes.do(verify_host_online_status.start)
-
     while True:
         schedule.run_pending()
         time.sleep(60)
