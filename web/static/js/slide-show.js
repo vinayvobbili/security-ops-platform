@@ -208,6 +208,29 @@ function updateSlider() {
     }
 }
 
+// Initialize random music on page load
+initRandomMusic();
+
+function toggleMenu() {
+    const menu = document.getElementById('burgerMenu');
+    menu.style.display = (menu.style.display === 'none' || menu.style.display === '') ? 'block' : 'none';
+}
+
+function restartSlideshow() {
+    currentSlide = 0;
+    updateSlider();
+    // If paused, also resume the slideshow
+    if (pausePlayButton.src.split('/').pop() === "play-solid.svg") {
+        playSlideshow();
+        pausePlayButton.src = "/static/icons/pause-solid.svg";
+    }
+}
+
+function toggleSpeedMenu() {
+    const speedMenu = document.getElementById('speedMenu');
+    speedMenu.style.display = speedMenu.style.display === 'none' ? 'block' : 'none';
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     const music = document.getElementById('music');
     const music_icon = document.getElementById('music-icon');
@@ -234,6 +257,57 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Use the common toggleAudio function - no need to override
+    // Close menu when a link is clicked
+    const burgerMenu = document.getElementById('burgerMenu');
+    if (burgerMenu) {
+        burgerMenu.querySelectorAll('a').forEach(function (link) {
+            link.addEventListener('click', function () {
+                burgerMenu.style.display = 'none';
+            });
+        });
+    }
+
+    // Floating particle effect initialization
+    const particles = document.getElementById('particles');
+    if (particles) {
+        for (let i = 0; i < 100; i++) {
+            const particle = document.createElement('div');
+            particle.className = 'particle';
+            particle.style.left = Math.random() * 100 + 'vw';
+            particle.style.animationDelay = Math.random() * 6 + 's';
+            particle.style.animationDuration = (Math.random() * 3 + 3) + 's';
+            particle.style.opacity = Math.random() * 0.6 + 0.2;
+            particles.appendChild(particle);
+        }
+    }
+});
+
+// Close burger menu when clicking outside
+document.addEventListener('click', function (e) {
+    const burgerMenu = document.getElementById('burgerMenu');
+    const navBurger = document.querySelector('.nav-burger');
+    const speedMenu = document.getElementById('speedMenu');
+    const speedControl = document.getElementById('speedControl');
+
+    // Check if the click was outside the menu and burger button
+    if (burgerMenu && !burgerMenu.contains(e.target) && !navBurger.contains(e.target)) {
+        burgerMenu.style.display = 'none';
+    }
+
+    // Close speed menu when clicking outside
+    if (speedMenu && speedControl && !speedControl.contains(e.target)) {
+        speedMenu.style.display = 'none';
+    }
+});
+
+// Hide loading overlay after content is fully loaded
+window.addEventListener('load', function () {
+    const loadingOverlay = document.getElementById('loadingOverlay');
+    if (loadingOverlay) {
+        loadingOverlay.style.opacity = '0';
+        setTimeout(function () {
+            loadingOverlay.style.display = 'none';
+        }, 500);
+    }
 });
 
