@@ -475,8 +475,8 @@ def announce_previous_shift_performance(room_id, shift_name):
 
         previous_shift_staffing_data = get_staffing_data(previous_shift_day, previous_shift_name)
 
-        total_staff_count = sum(len(staff) for staff in previous_shift_staffing_data.values())
-        tickets_closed_per_analyst = len(outflow) / total_staff_count if total_staff_count > 0 else 0
+        # total_staff_count = sum(len(staff) for staff in previous_shift_staffing_data.values())
+        # tickets_closed_per_analyst = len(outflow) / total_staff_count if total_staff_count > 0 else 0
 
         # Use naive datetime for comparison
         eight_hours_ago = datetime.now() - timedelta(hours=8)
@@ -706,7 +706,7 @@ def announce_shift_change(shift_name, room_id, sleep_time=30):
 def main():
     """Main function to run the scheduled jobs."""
     room_id = config.webex_room_id_vinay_test_space
-    # announce_shift_change('night', room_id, sleep_time=0)
+    announce_shift_change('night', room_id, sleep_time=0)
     print(get_staffing_data())
 
 
