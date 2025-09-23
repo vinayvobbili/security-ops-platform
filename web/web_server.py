@@ -608,7 +608,6 @@ def start_proxy_server():
             httpd.serve_forever()
     except Exception as e:
         print(f"Failed to start proxy: {e}")
-        print("This often means the port is in use or you need Administrator privileges to bind to it.")
 
 
 def main():
@@ -621,9 +620,9 @@ def main():
     print(f"High-performance proxy server thread started on port {PROXY_PORT}")
 
     # Start Flask server in main thread
-    port = 80  # Changed from port 80 to avoid "Address already in use" errors
+    port = 80
     print(f"Starting web server on port {port}")
-    app.run(debug=True, host='0.0.0.0', port=port, threaded=True)
+    app.run(debug=False, host='0.0.0.0', port=port, threaded=True)
 
 
 @app.route("/api/apt-names", methods=["GET"])

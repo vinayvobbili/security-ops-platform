@@ -25,7 +25,7 @@
     <!-- Title can be added here if needed in the future -->
     <div id="burgerMenu" class="burger-menu-content" style="display:none;">
         <a href="/xsoar">XSOAR Dashboard</a>
-        <a href="/security-analytics">🛡️ Security Analytics</a>
+        <a href="/security-analytics">Security Analytics</a>
         <a href="/shift-performance">Shift Performance</a>
         <a href="/msoc-form">MSOC Form</a>
         <a href="/speak-up-form">Speak Up Form</a>
@@ -44,9 +44,9 @@
     </div>
     <div class="slides">
         {% for filename in image_files %}
-        <figure>
-            <img src="{{ url_for('static', filename=filename) }}" alt="{{ filename }}">
-        </figure>
+            <figure>
+                <img src="{{ url_for('static', filename=filename) }}" alt="{{ filename }}">
+            </figure>
         {% endfor %}
     </div>
 </div>
@@ -54,7 +54,7 @@
 <img src="{{ url_for('static', filename='icons/circle-right-solid.svg') }}" alt="Right Arrow" class="arrow right" onclick="moveSlide(1)">
 <div class="nav-buttons">
     {% for image_file in image_files %}
-    <button data-slide-index="{{ loop.index0 }}" class="nav-dot"></button>
+        <button data-slide-index="{{ loop.index0 }}" class="nav-dot"></button>
     {% endfor %}
 </div>
 <img id="reloadButton" src="{{ url_for('static', filename='icons/reload.svg') }}" alt="Reload" class="reload-icon" onclick="restartSlideshow()">
@@ -64,32 +64,32 @@
 <div class="speed-control" id="speedControl">
     <div class="speed-icon" id="speedIcon" onclick="toggleSpeedMenu()">
         <svg class="speed-gauge" viewBox="0 0 100 50">
-            <!-- Main gauge body (filled semi-circle) with high contrast gradient -->
+            <!-- Main gauge body (filled semicircle) with high contrast gradient -->
             <defs>
                 <linearGradient id="gaugeGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                    <stop offset="0%" style="stop-color:#ff6b35;stop-opacity:0.9" />
-                    <stop offset="50%" style="stop-color:#f7931e;stop-opacity:0.9" />
-                    <stop offset="100%" style="stop-color:#ffcc02;stop-opacity:0.9" />
+                    <stop offset="0%" style="stop-color:#ff6b35;stop-opacity:0.9"/>
+                    <stop offset="50%" style="stop-color:#f7931e;stop-opacity:0.9"/>
+                    <stop offset="100%" style="stop-color:#ffcc02;stop-opacity:0.9"/>
                 </linearGradient>
             </defs>
-            
-            <!-- Full semi-circle that fills the container -->
+
+            <!-- Full semicircle that fills the container -->
             <path d="M 0 50 A 50 50 0 0 1 100 50 L 85 50 A 35 35 0 0 0 15 50 Z" fill="url(#gaugeGradient)"/>
-            
+
             <!-- Inner arc for depth -->
             <path d="M 15 50 A 35 35 0 0 1 85 50" fill="none" stroke="#ffffff" stroke-width="1" opacity="0.6"/>
-            
+
             <!-- Speed indicator marks -->
             <circle cx="15" cy="50" r="2.5" fill="#ffffff"/>
             <circle cx="30" cy="25" r="2" fill="#ffffff"/>
             <circle cx="50" cy="8" r="2.5" fill="#ffffff"/>
             <circle cx="70" cy="25" r="2" fill="#ffffff"/>
             <circle cx="85" cy="50" r="2.5" fill="#ffffff"/>
-            
+
             <!-- Center hub -->
             <circle cx="50" cy="50" r="8" fill="#2c3e50"/>
             <circle cx="50" cy="50" r="6" fill="#ffffff"/>
-            
+
             <!-- Needle -->
             <line x1="50" y1="50" x2="50" y2="15" stroke="#e74c3c" stroke-width="5" stroke-linecap="round" class="needle"/>
         </svg>
