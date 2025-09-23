@@ -15,7 +15,7 @@
     <div id="burgerMenu" class="burger-menu-content" style="display:none;">
         <a href="/">Home</a>
         <a href="/xsoar">XSOAR Dashboard</a>
-        <a href="/security-analytics">🛡️ Security Analytics</a>        <a href="/shift-performance">Shift Performance</a>
+        <a href="/security-analytics">Security Analytics</a> <a href="/shift-performance">Shift Performance</a>
         <a href="/msoc-form">MSOC Form</a>
         <a href="/speak-up-form">Speak Up Form</a>
         <a href="/travel-form">Travel Notification Form</a>
@@ -44,17 +44,17 @@
             </thead>
             <tbody>
             {% for record in travel_records %}
-            <tr>
-                <td>{{ record.traveller_email_address }}</td>
-                <td>{{ record.work_location }}</td>
-                <td>{{ record.vacation_location }}</td>
-                <td>{{ record.vacation_start_date }}</td>
-                <td>{{ record.vacation_end_date }}</td>
-                <td>{{ "Yes" if record.will_work_during_vacation else "No" }}</td>
-                <td title="{{ record.comments }}"><span class="truncate-text">{{ record.comments }}</span></td>
-                <td>{{ record.submitted_at }}</td>
-                <td>{{ record.submitted_by_ip_address }}</td>
-            </tr>
+                <tr>
+                    <td>{{ record.traveller_email_address }}</td>
+                    <td>{{ record.work_location }}</td>
+                    <td>{{ record.vacation_location }}</td>
+                    <td>{{ record.vacation_start_date }}</td>
+                    <td>{{ record.vacation_end_date }}</td>
+                    <td>{{ "Yes" if record.will_work_during_vacation else "No" }}</td>
+                    <td title="{{ record.comments }}"><span class="truncate-text">{{ record.comments }}</span></td>
+                    <td>{{ record.submitted_at }}</td>
+                    <td>{{ record.submitted_by_ip_address }}</td>
+                </tr>
             {% endfor %}
             </tbody>
         </table>

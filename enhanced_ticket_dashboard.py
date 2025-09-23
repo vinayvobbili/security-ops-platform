@@ -53,6 +53,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+
 @st.cache_data(ttl=300)  # Cache for 5 minutes
 def load_cached_tickets():
     """Load tickets from the cached JSON file"""
@@ -71,6 +72,7 @@ def load_cached_tickets():
     except Exception as e:
         st.error(f"❌ Error loading data: {e}")
         return []
+
 
 def extract_custom_fields(tickets):
     """Extract and flatten custom fields for easier analysis"""
@@ -122,6 +124,7 @@ def extract_custom_fields(tickets):
 
     return df
 
+
 def create_status_mapping():
     """Create human-readable status mapping"""
     return {
@@ -130,6 +133,7 @@ def create_status_mapping():
         2: "Closed",
         3: "Archive"
     }
+
 
 def create_severity_mapping():
     """Create human-readable severity mapping"""
@@ -140,6 +144,7 @@ def create_severity_mapping():
         3: "High",
         4: "Critical"
     }
+
 
 def main():
     # Header
@@ -215,7 +220,7 @@ def main():
         filtered_df = filtered_df[
             (filtered_df['created'].dt.date >= date_range[0]) &
             (filtered_df['created'].dt.date <= date_range[1])
-        ]
+            ]
 
     if selected_country != 'All':
         filtered_df = filtered_df[filtered_df['affected_country'] == selected_country]
@@ -397,7 +402,7 @@ def main():
     display_columns = st.multiselect(
         "Select columns to display:",
         options=['id', 'name', 'type', 'severity_name', 'status_name', 'affected_country',
-                'impact', 'security_category', 'detection_source', 'hostname', 'created', 'owner'],
+                 'impact', 'security_category', 'detection_source', 'hostname', 'created', 'owner'],
         default=['id', 'name', 'severity_name', 'status_name', 'affected_country', 'impact', 'created']
     )
 
@@ -451,6 +456,7 @@ def main():
         🛡️ Security Incident Dashboard | Last Updated: {} | Data Source: XSOAR Cache
     </div>
     """.format(datetime.now().strftime('%Y-%m-%d %H:%M:%S')), unsafe_allow_html=True)
+
 
 if __name__ == "__main__":
     main()
