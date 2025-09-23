@@ -11,18 +11,45 @@
     <script src="https://cdn.plot.ly/plotly-2.26.0.min.js"></script>
 
     <style>
+        :root {
+            --bg-gradient: linear-gradient(135deg, rgba(0, 70, 173, 0.9) 0%, rgba(74, 139, 194, 0.9) 30%, rgba(0, 166, 81, 0.9) 70%, rgba(102, 204, 153, 0.9) 100%);
+            --container-bg: rgba(255, 255, 255, 0.95);
+            --filter-bg: rgba(0, 70, 173, 0.1);
+            --filter-border: rgba(0, 166, 81, 0.3);
+            --text-primary: #0046ad;
+            --text-secondary: #495057;
+            --card-bg: white;
+            --checkbox-bg: white;
+            --hover-bg: rgba(0, 70, 173, 0.1);
+        }
+
+        [data-theme="dark"] {
+            --bg-gradient: linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, rgba(30, 41, 59, 0.95) 30%, rgba(51, 65, 85, 0.95) 70%, rgba(71, 85, 105, 0.95) 100%);
+            --container-bg: rgba(30, 41, 59, 0.95);
+            --filter-bg: rgba(51, 65, 85, 0.3);
+            --filter-border: rgba(71, 85, 105, 0.5);
+            --text-primary: #60a5fa;
+            --text-secondary: #e2e8f0;
+            --card-bg: rgba(51, 65, 85, 0.8);
+            --checkbox-bg: rgba(71, 85, 105, 0.6);
+            --hover-bg: rgba(51, 65, 85, 0.4);
+        }
+
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             margin: 0;
             padding: 0;
             padding-top: 80px;
-            background: linear-gradient(135deg, rgba(0, 70, 173, 0.9) 0%, rgba(74, 139, 194, 0.9) 30%, rgba(0, 166, 81, 0.9) 70%, rgba(102, 204, 153, 0.9) 100%);
+            background: var(--bg-gradient);
             min-height: 100vh;
             backdrop-filter: blur(10px);
+            color: var(--text-secondary);
+            transition: all 0.3s ease;
         }
 
         .dashboard-container {
             max-width: 2100px;
+            min-width: 1200px;
             margin: 0 auto;
             padding: 20px;
             background: rgba(255, 255, 255, 0.95);
@@ -31,6 +58,7 @@
             margin-top: 20px;
             backdrop-filter: blur(20px);
             border: 2px solid rgba(255, 255, 255, 0.3);
+            overflow-x: auto;
         }
 
         .dashboard-header {
@@ -67,11 +95,12 @@
         }
 
         .filters-section {
-            background: #f8f9fa;
+            background: var(--filter-bg);
             padding: 20px;
             border-radius: 10px;
+            border: 2px solid var(--filter-border);
+            transition: all 0.3s ease;
             margin-bottom: 30px;
-            border: 2px solid #e9ecef;
         }
 
         .filters-header {
@@ -191,7 +220,31 @@
         }
 
         #filterText {
-            color: #495057;
+            color: var(--text-secondary);
+        }
+
+        .theme-toggle {
+            position: fixed;
+            top: 12px;
+            right: 70px;
+            z-index: 2000;
+            background: var(--container-bg);
+            border: 2px solid var(--filter-border);
+            border-radius: 50%;
+            padding: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+        }
+
+        .theme-toggle:hover {
+            transform: scale(1.1) rotate(15deg);
+            box-shadow: 0 4px 15px rgba(0, 70, 173, 0.4);
         }
 
         .ticket-type-filter .checkbox-filter {
@@ -199,6 +252,13 @@
             grid-template-columns: 1fr 1fr;
             gap: 4px;
             column-gap: 12px;
+        }
+
+        #countryFilter {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 4px;
+            column-gap: 8px;
         }
 
         .metrics-grid {
@@ -385,6 +445,9 @@
     </div>
 
     <audio id="music" src="" loop muted></audio>
+    <div class="theme-toggle" onclick="toggleTheme()" title="Toggle Dark Mode">
+        🌙
+    </div>
     <div class="audio-controls">
         <button onclick="toggleAudio()">
             <img src="/static/icons/volume-xmark-solid.svg" alt="Unmute Icon" class="music-icon" id="music-icon">
@@ -1079,6 +1142,35 @@
     <script src="/static/js/common.js"></script>
     <script>
         initRandomMusic();
+
+        function toggleTheme() {
+            const body = document.body;
+            const themeToggle = document.querySelector('.theme-toggle');
+
+            if (body.getAttribute('data-theme') === 'dark') {
+                body.removeAttribute('data-theme');
+                themeToggle.textContent = '🌙';
+                themeToggle.title = 'Toggle Dark Mode';
+                localStorage.setItem('theme', 'light');
+            } else {
+                body.setAttribute('data-theme', 'dark');
+                themeToggle.textContent = '☀️';
+                themeToggle.title = 'Toggle Light Mode';
+                localStorage.setItem('theme', 'dark');
+            }
+        }
+
+        // Load saved theme on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            const savedTheme = localStorage.getItem('theme');
+            const themeToggle = document.querySelector('.theme-toggle');
+
+            if (savedTheme === 'dark') {
+                document.body.setAttribute('data-theme', 'dark');
+                themeToggle.textContent = '☀️';
+                themeToggle.title = 'Toggle Light Mode';
+            }
+        });
 
         function toggleMenu() {
             var menu = document.getElementById('burgerMenu');
