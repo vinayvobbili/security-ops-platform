@@ -25,8 +25,7 @@
 body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     margin: 0;
-    padding: 0;
-    padding-top: 80px;
+    padding: 80px 0 0;
     background: var(--bg-gradient);
     min-height: 100vh;
     backdrop-filter: blur(10px);
@@ -37,12 +36,11 @@ body {
 .dashboard-container {
     max-width: 2100px;
     min-width: 1200px;
-    margin: 0 auto;
     padding: 20px;
     background: rgba(255, 255, 255, 0.95);
     border-radius: 16px;
     box-shadow: 0 15px 40px rgba(0, 70, 173, 0.3), 0 5px 15px rgba(0, 166, 81, 0.2);
-    margin-top: 20px;
+    margin: 20px auto 0;
     backdrop-filter: blur(20px);
     border: 2px solid rgba(255, 255, 255, 0.3);
     overflow-x: auto;
@@ -479,15 +477,41 @@ body {
     background: #f8f9fa;
 }
 
-.severity-critical { color: #dc3545; font-weight: bold; }
-.severity-high { color: #fd7e14; font-weight: bold; }
-.severity-medium { color: #ffc107; font-weight: bold; }
-.severity-low { color: #28a745; }
-.severity-unknown { color: #6c757d; }
+.severity-critical {
+    color: #dc3545;
+    font-weight: bold;
+}
 
-.status-active { color: #007bff; font-weight: bold; }
-.status-closed { color: #28a745; }
-.status-pending { color: #ffc107; }
+.severity-high {
+    color: #fd7e14;
+    font-weight: bold;
+}
+
+.severity-medium {
+    color: #ffc107;
+    font-weight: bold;
+}
+
+.severity-low {
+    color: #28a745;
+}
+
+.severity-unknown {
+    color: #6c757d;
+}
+
+.status-active {
+    color: #007bff;
+    font-weight: bold;
+}
+
+.status-closed {
+    color: #28a745;
+}
+
+.status-pending {
+    color: #ffc107;
+}
 
 .loading {
     text-align: center;
