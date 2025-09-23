@@ -18,7 +18,7 @@
     <div id="burgerMenu" class="burger-menu-content" style="display:none;">
         <a href="/">Home</a>
         <a href="/xsoar">XSOAR Dashboard</a>
-        <a href="/security-analytics">🛡️ Security Analytics</a>        <a href="/msoc-form">MSOC Form</a>
+        <a href="/security-analytics">Security Analytics</a> <a href="/msoc-form">MSOC Form</a>
         <a href="/speak-up-form">Speak Up Form</a>
         <a href="/xsoar-ticket-import-form">XSOAR Ticket Import</a>
         <a href="/red-team-testing-form">Red Team Testing</a>
@@ -120,19 +120,23 @@
             burgerMenu.style.display = 'none';
         }
     });
+
     // Toast notification for feedback
     function showToast(message, isError = false) {
         const toast = document.getElementById('toast');
         toast.textContent = message;
         toast.style.background = isError ? '#d9534f' : '#28a745';
         toast.style.display = 'block';
-        setTimeout(() => { toast.style.display = 'none'; }, 3000);
+        setTimeout(() => {
+            toast.style.display = 'none';
+        }, 3000);
     }
+
     // Example: showToast('Submitted successfully!');
 
     // Add form feedback
     const form = document.getElementById('travelForm');
-    form.addEventListener('submit', function(e) {
+    form.addEventListener('submit', function (e) {
         e.preventDefault();
         // Simulate AJAX submit
         setTimeout(() => {
