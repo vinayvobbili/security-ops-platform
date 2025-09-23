@@ -622,7 +622,7 @@ def main():
     # Start Flask server in main thread
     port = 80
     print(f"Starting web server on port {port}")
-    app.run(debug=False, host='0.0.0.0', port=port, threaded=True)
+    app.run(debug=True, host='0.0.0.0', port=port, threaded=True, use_reloader=True, extra_files=['static'])
 
 
 @app.route("/api/apt-names", methods=["GET"])
