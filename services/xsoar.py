@@ -224,6 +224,29 @@ class TicketHandler:
         else:
             return {"error": response.text}
 
+    def cache_past_90_days_tickets(self):
+        """Cache past 90 days tickets from prod environment"""
+        from datetime import datetime, timedelta, timezone
+        from pathlib import Path
+
+        root_directory = Path(__file__).parent.parent
+
+        end_date = datetime.now(timezone.utc)
+        start_date = end_date - timedelta(days=90)
+        query = f"created:>={start_date.strftime('%Y-%m-%dT%H:%M:%SZ')} created:<={end_date.strftime('%Y-%m-%dT%H:%M:%SZ')} type:{CONFIG.team_name}"
+
+        tickets = self.get_tickets(query, size=5000)
+        log.info(f"Fetched {len(tickets)} tickets from prod for caching")
+
+        # save those tickets under today's date in web/static/charts
+        today_date = datetime.now().strftime('%m-%d-%Y')
+        output_path = root_directory / "web" / "static" / "charts" / today_date / "past_90_days_tickets.json"
+        output_path.parent.mkdir(parents=True, exist_ok=True)  # Ensure the directory exists
+
+        with open(output_path, 'w') as f:
+            json.dump(tickets, f, indent=4)
+        log.info(f"Cached tickets to {output_path}")
+
 
 class ListHandler:
     def __init__(self):
@@ -302,12 +325,5 @@ class ListHandler:
 
 
 if __name__ == "__main__":
-    # destination_ticket_number, destination_ticket_link = import_ticket('690289')
-    # print(destination_ticket_number, destination_ticket_link)
-    list_handler = ListHandler()
     ticket_handler = TicketHandler()
-    import_ticket(820116)
-    # print(ticket_handler.get_tickets("id:717407"))
-    # print(ticket_handler.link_tickets('1345807', '1345822'))
-    # print(ticket_handler.add_participant('1345807', 'tyler.brescia@company.com'))
-    print(ticket_handler.get_participants('717407'))
+    ticket_handler.cache_past_90_days_tickets()
