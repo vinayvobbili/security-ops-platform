@@ -1212,5 +1212,71 @@ def get_shift_summary(shift_id):
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@app.route('/security-analytics')
+@log_web_activity
+def security_analytics():
+    """Security Incident Analytics Dashboard"""
+    return render_template('security_analytics.html')
+
+
+@app.route('/api/security-analytics/data')
+@log_web_activity
+def api_security_dashboard_data():
+    """API to get cached security incident data for dashboard"""
+    import json
+    from pathlib import Path
+
+    try:
+        # Load cached data
+        today_date = datetime.now().strftime('%m-%d-%Y')
+        root_directory = Path(__file__).parent.parent
+        cache_file = root_directory / "web" / "static" / "charts" / today_date / "past_90_days_tickets.json"
+
+        if not cache_file.exists():
+            return jsonify({'success': False, 'error': 'Cache file not found'}), 404
+
+        with open(cache_file, 'r') as f:
+            tickets = json.load(f)
+
+        # Process and extract relevant fields
+        processed_data = []
+        for ticket in tickets:
+            custom_fields = ticket.get('CustomFields', {})
+            processed_data.append({
+                'id': ticket.get('id', ''),
+                'name': ticket.get('name', ''),
+                'type': ticket.get('type', ''),
+                'severity': ticket.get('severity', 0),
+                'status': ticket.get('status', 0),
+                'owner': ticket.get('owner', ''),
+                'created': ticket.get('created', ''),
+                'modified': ticket.get('modified', ''),
+                'closed': ticket.get('closed', ''),
+                'phase': ticket.get('phase', ''),
+                'category': ticket.get('category', ''),
+                'affected_country': custom_fields.get('affectedcountry', 'Unknown'),
+                'affected_region': custom_fields.get('affectedregion', 'Unknown'),
+                'impact': custom_fields.get('impact', 'Unknown'),
+                'security_category': custom_fields.get('securitycategory', 'Unknown'),
+                'detection_source': custom_fields.get('detectionsource', 'Unknown'),
+                'device_environment': custom_fields.get('deviceenvironment', 'Unknown'),
+                'hostname': custom_fields.get('hostname', 'Unknown'),
+                'escalation_state': custom_fields.get('escalationstate', 'Unknown'),
+                'contained': custom_fields.get('contained', False),
+                'root_cause': custom_fields.get('rootcause', 'Unknown'),
+                'device_os': custom_fields.get('deviceos', 'Unknown'),
+            })
+
+        return jsonify({
+            'success': True,
+            'data': processed_data,
+            'total_count': len(processed_data),
+            'cache_date': today_date
+        })
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 if __name__ == "__main__":
     main()

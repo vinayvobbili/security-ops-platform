@@ -194,6 +194,13 @@
     filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.3));
 }
 
+.burger-menu-content a[href="/security-analytics"]::before {
+    content: "📊";
+    margin-right: 10px;
+    opacity: 0.95;
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.3));
+}
+
 .burger-menu-content a[href="/get-current-upcoming-travel-records"]::before {
     content: "📊";
     margin-right: 10px;
