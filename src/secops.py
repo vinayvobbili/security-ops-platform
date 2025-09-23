@@ -527,7 +527,7 @@ def announce_previous_shift_performance(room_id, shift_name):
                         Fact(title="Shift Lead", value=previous_shift_staffing_data['senior_analysts'][0]),
                         Fact(title="Tickets ack'ed", value=str(len(inflow))),
                         Fact(title="Tickets closed",
-                             value=f"{len(outflow)} ({tickets_closed_per_analyst:.2f}/analyst)"),
+                             value=f"{len(outflow)}"),
                         Fact(title="MTPs",
                              value=', '.join([ticket['id'] for ticket in malicious_true_positives])),
                         Fact(title="SLA Breaches",
@@ -666,7 +666,7 @@ def _create_shift_change_message(shift_name, shift_data):
         f"Open {config.team_name}* tickets: {get_open_tickets()}\n"
         f"Hosts in Containment (TUC): \n{hosts_text}\n\n"
         f"**Management Notes**: {shift_data['management_notes']}\n"
-        f"Staffing:\n"
+        f"Scheduled Staffing:\n"
         f"```\n{shift_data['staffing_table']}\n```"
     )
 
