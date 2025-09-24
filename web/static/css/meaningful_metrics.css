@@ -123,21 +123,35 @@ body {
 .header-right {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 30px;
+}
+
+.slider-field {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border: 1px solid rgba(0, 70, 173, 0.2);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.7);
 }
 
 .date-range-label {
     font-size: 0.9rem;
     font-weight: 500;
     color: #495057;
-    white-space: nowrap;
+    white-space: normal;
+    text-align: center;
+    line-height: 1.2;
+    max-width: 80px;
+    word-wrap: break-word;
 }
 
 .date-range-slider-container {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 8px;
+    gap: 4px;
     position: relative;
 }
 
