@@ -525,6 +525,13 @@ body {
     margin-bottom: 5px;
 }
 
+.metric-subtitle {
+    font-size: 0.7rem;
+    opacity: 0.8;
+    margin-top: 5px;
+    font-weight: normal;
+}
+
 .charts-grid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);

@@ -1264,6 +1264,8 @@ def api_meaningful_metrics_data():
                 'contained': custom_fields.get('contained', False),
                 'root_cause': custom_fields.get('rootcause', 'Unknown'),
                 'device_os': custom_fields.get('deviceos', 'Unknown'),
+                'timetorespond': custom_fields.get('timetorespond', {}),
+                'timetocontain': custom_fields.get('timetocontain', {}),
             })
 
         return jsonify({
