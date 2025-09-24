@@ -103,7 +103,7 @@ function updateSliderLabels(value) {
 
 async function loadData() {
     try {
-        const response = await fetch('/api/security-analytics/data');
+        const response = await fetch('/api/meaningful-metrics/data');
         const result = await response.json();
 
         if (result.success) {
@@ -706,10 +706,6 @@ function showDashboard() {
 }
 
 // Navigation functions
-function toggleMenu() {
-    const menu = document.getElementById('burgerMenu');
-    menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
-}
 
 function toggleAudio() {
     // Placeholder for audio functionality
@@ -717,43 +713,8 @@ function toggleAudio() {
     icon.style.opacity = icon.style.opacity === '0.5' ? '1' : '0.5';
 }
 
-// Close menu when clicking outside
-document.addEventListener('click', function(event) {
-    const menu = document.getElementById('burgerMenu');
-    const burger = document.querySelector('.nav-burger');
-    if (!burger.contains(event.target) && !menu.contains(event.target)) {
-        menu.style.display = 'none';
-    }
-});
 
 
-// Burger menu functions
-function toggleMenu() {
-    var menu = document.getElementById('burgerMenu');
-    menu.style.display = (menu.style.display === 'none' || menu.style.display === '') ? 'block' : 'none';
-}
-
-// Close menu when a link is clicked
-document.addEventListener('DOMContentLoaded', function () {
-    var burgerMenu = document.getElementById('burgerMenu');
-    if (burgerMenu) {
-        burgerMenu.querySelectorAll('a').forEach(function (link) {
-            link.addEventListener('click', function () {
-                burgerMenu.style.display = 'none';
-            });
-        });
-    }
-});
-
-// Close burger menu when clicking outside
-document.addEventListener('click', function (e) {
-    var burgerMenu = document.getElementById('burgerMenu');
-    var navBurger = document.querySelector('.nav-burger');
-
-    if (burgerMenu && !burgerMenu.contains(e.target) && !navBurger.contains(e.target)) {
-        burgerMenu.style.display = 'none';
-    }
-});
 
 // Table sorting functions
 function sortTable(column) {
