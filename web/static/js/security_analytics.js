@@ -300,10 +300,53 @@ function updateMetrics() {
     const openIncidents = filteredData.filter(item => item.status !== 2).length;
     const containedIncidents = filteredData.filter(item => item.contained === true).length;
 
+    // Calculate MTTR (Mean Time to Respond) - only for cases with an owner
+    const casesWithOwnerAndTimeToRespond = filteredData.filter(item =>
+        item.owner &&
+        item.owner.trim() !== '' &&
+        item.timetorespond &&
+        item.timetorespond.totalDuration > 0
+    );
+    const mttr = casesWithOwnerAndTimeToRespond.length > 0
+        ? casesWithOwnerAndTimeToRespond.reduce((sum, item) => sum + item.timetorespond.totalDuration, 0) / casesWithOwnerAndTimeToRespond.length
+        : 0;
+
+    // Calculate MTTC (Mean Time to Contain) - only for cases with an owner
+    const casesWithOwnerAndTimeToContain = filteredData.filter(item =>
+        item.owner &&
+        item.owner.trim() !== '' &&
+        item.timetocontain &&
+        item.timetocontain.totalDuration > 0
+    );
+    const mttc = casesWithOwnerAndTimeToContain.length > 0
+        ? casesWithOwnerAndTimeToContain.reduce((sum, item) => sum + item.timetocontain.totalDuration, 0) / casesWithOwnerAndTimeToContain.length
+        : 0;
+
+    // Convert seconds to mins:secs format for display
+    const formatTime = (seconds) => {
+        if (seconds === 0) return '0:00';
+        const mins = Math.floor(seconds / 60);
+        const secs = Math.round(seconds % 60);
+        return `${mins}:${secs.toString().padStart(2, '0')}`;
+    };
+
+    const mttrFormatted = formatTime(mttr);
+    const mttcFormatted = formatTime(mttc);
+
     const metricsHTML = `
         <div class="metric-card">
-            <div class="metric-title">🎫 Total Incidents</div>
+            <div class="metric-title">🎫 Total Cases</div>
             <div class="metric-value">${totalIncidents.toLocaleString()}</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-title">⏱️ MTTR (mins:secs)</div>
+            <div class="metric-value">${mttrFormatted}</div>
+            <div class="metric-subtitle">${casesWithOwnerAndTimeToRespond.length} cases</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-title">🔒 MTTC (mins:secs)</div>
+            <div class="metric-value">${mttcFormatted}</div>
+            <div class="metric-subtitle">${casesWithOwnerAndTimeToContain.length} cases</div>
         </div>
         <div class="metric-card">
             <div class="metric-title">🚨 Critical</div>
@@ -314,7 +357,7 @@ function updateMetrics() {
             <div class="metric-value">${openIncidents.toLocaleString()}</div>
         </div>
         <div class="metric-card">
-            <div class="metric-title">🔒 Contained</div>
+            <div class="metric-title">🔐 Contained</div>
             <div class="metric-value">${containedIncidents.toLocaleString()}</div>
         </div>
         <div class="metric-card">
