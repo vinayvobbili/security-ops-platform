@@ -1215,7 +1215,7 @@ def get_shift_summary(shift_id):
 @log_web_activity
 def meaningful_metrics():
     """Meaningful Metrics Dashboard"""
-    return render_template('security_analytics.html')
+    return render_template('meaningful_metrics.html')
 
 
 @app.route('/api/meaningful-metrics/data')
