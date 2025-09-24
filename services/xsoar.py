@@ -60,7 +60,7 @@ class TicketHandler:
         self.prod_base = CONFIG.xsoar_prod_api_base_url
         self.dev_base = CONFIG.xsoar_dev_api_base_url
 
-    def get_tickets(self, query, period=None, size=10000):
+    def get_tickets(self, query, period=None, size=20000):
         """Fetch security incidents from XSOAR"""
         full_query = query + f' -category:job -type:"{CONFIG.team_name} Ticket QA" -type:"{CONFIG.team_name} SNOW Whitelist Request"'
 
@@ -233,9 +233,9 @@ class TicketHandler:
 
         end_date = datetime.now(timezone.utc)
         start_date = end_date - timedelta(days=90)
-        query = f"created:>={start_date.strftime('%Y-%m-%dT%H:%M:%SZ')} created:<={end_date.strftime('%Y-%m-%dT%H:%M:%SZ')} type:{CONFIG.team_name}"
+        query = f"created:>={start_date.strftime('%Y-%m-%dT%H:%M:%SZ')} created:<={end_date.strftime('%Y-%m-%dT%H:%M:%SZ')} type:{CONFIG.team_name} -closeReason:Duplicate"
 
-        tickets = self.get_tickets(query, size=5000)
+        tickets = self.get_tickets(query)
         log.info(f"Fetched {len(tickets)} tickets from prod for caching")
 
         # save those tickets under today's date in web/static/charts
