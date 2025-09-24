@@ -18,6 +18,7 @@ def scheduler_process():
     # run once to test
     print("Running once to test the scheduler...")
     make_dir_for_todays_charts(helper_methods.CHARTS_DIR_PATH),
+    TicketHandler().cache_past_90_days_tickets(),
     aging_tickets.make_chart(),
     days_since_incident.make_chart(),
     crowdstrike_volume.make_chart(),
@@ -36,7 +37,6 @@ def scheduler_process():
     vectra_volume.make_chart(),
     crowdstrike_volume.make_chart(),
     threat_tippers.make_chart(),
-    TicketHandler().cache_past_90_days_tickets(),
 
     print("Starting the scheduler...")
     schedule.every().day.at("00:01", eastern).do(lambda: (
