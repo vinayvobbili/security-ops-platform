@@ -6,11 +6,6 @@ from webexpythonsdk import WebexAPI
 
 from my_config import get_config
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
 logger = logging.getLogger(__name__)
 
 # Load configuration
@@ -205,4 +200,9 @@ def main():
 
 
 if __name__ in ('__main__', '__builtin__', 'builtins'):
+    # Configure logging when run as main module
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
     main()
