@@ -2,6 +2,7 @@ import asyncio
 import http.client
 import http.server
 import ipaddress
+import logging
 import os
 import random
 import select
@@ -36,6 +37,9 @@ MAX_CONNECTIONS = 100
 app = Flask(__name__, static_folder='static', static_url_path='/static', template_folder='templates')
 eastern = pytz.timezone('US/Eastern')
 CONFIG = get_config()
+
+# Configure logging to suppress werkzeug INFO logs for PAC files and other noise
+logging.getLogger('werkzeug').setLevel(logging.WARNING)
 
 # Connection pool for HTTP requests
 http_pool = ThreadPoolExecutor(max_workers=NUM_WORKERS)
