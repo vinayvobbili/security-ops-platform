@@ -107,11 +107,7 @@ def get_image_files() -> List[str]:
         if os.path.exists(full_path):
             image_files.append(image_path)
         else:
-            full_path = os.path.join(app.config['CHARTS_DIR'], image_path.split('/')[-1])
-            if os.path.exists(full_path):
-                image_files.append(image_path)
-            else:
-                print(f"File not found: {full_path}")
+            print(f"File not found: {full_path}")
 
     return image_files
 
