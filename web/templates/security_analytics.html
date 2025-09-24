@@ -30,9 +30,6 @@
 </div>
 
 <audio id="music" src="" loop muted></audio>
-<div class="theme-toggle" onclick="toggleTheme()" title="Toggle Dark Mode">
-    🌙
-</div>
 <div class="audio-controls">
     <button onclick="toggleAudio()">
         <img src="/static/icons/volume-xmark-solid.svg" alt="Unmute Icon" class="music-icon" id="music-icon">
@@ -113,6 +110,7 @@
             <div class="filter-summary-content">
                 <strong>Active Filters:</strong>
                 <span class="active-filters-container" id="activeFiltersContainer">
+                    <span class="filter-tag non-removable">Unique</span>
                     <span class="filter-tag">Last 30 days</span>
                 </span>
             </div>
@@ -161,19 +159,47 @@
 
     <!-- Data Table -->
     <div id="dataTableSection" class="data-table-section" style="display: none;">
-        <div class="table-header">📋 Case Details</div>
+        <div class="table-controls">
+            <div class="table-header">📋 Case Details (showing first 100 results)</div>
+            <div class="column-selector">
+                <button id="columnSelectorBtn" class="column-selector-btn">⚙️ Columns</button>
+                <div id="columnSelectorDropdown" class="column-selector-dropdown" style="display: none;">
+                    <div class="column-selector-content">
+                        <div class="column-selector-header">
+                            <span>Select Columns to Display</span>
+                            <div class="column-selector-buttons">
+                                <button onclick="selectAllColumns()" class="select-all-btn">Select All</button>
+                                <button onclick="deselectAllColumns()" class="deselect-all-btn">Deselect All</button>
+                            </div>
+                        </div>
+                        <div id="columnCheckboxes" class="column-checkboxes">
+                            <!-- Checkboxes will be populated by JavaScript -->
+                        </div>
+                        <div class="column-order-section">
+                            <div class="column-order-header">
+                                <strong>Column Order</strong>
+                                <span class="order-help">(Drag to reorder)</span>
+                            </div>
+                            <div id="columnOrderList" class="column-order-list">
+                                <!-- Order list will be populated by JavaScript -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
         <div style="overflow-x: auto;">
             <table id="dataTable" class="data-table">
                 <thead>
                 <tr>
-                    <th>ID</th>
-                    <th>Name</th>
-                    <th>Severity</th>
-                    <th>Status</th>
-                    <th>Country</th>
-                    <th>Impact</th>
-                    <th>Source</th>
-                    <th>Created</th>
+                    <th class="sortable" data-column="id">ID <span class="sort-indicator"></span></th>
+                    <th class="sortable" data-column="name">Name <span class="sort-indicator"></span></th>
+                    <th class="sortable" data-column="severity">Severity <span class="sort-indicator"></span></th>
+                    <th class="sortable" data-column="status">Status <span class="sort-indicator"></span></th>
+                    <th class="sortable" data-column="affected_country">Country <span class="sort-indicator"></span></th>
+                    <th class="sortable" data-column="impact">Impact <span class="sort-indicator"></span></th>
+                    <th class="sortable" data-column="type">Source <span class="sort-indicator"></span></th>
+                    <th class="sortable" data-column="created">Created <span class="sort-indicator"></span></th>
                 </tr>
                 </thead>
                 <tbody>

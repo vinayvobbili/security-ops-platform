@@ -1,5 +1,43 @@
 let allData = [];
 let filteredData = [];
+let currentSort = { column: null, direction: 'asc' };
+
+// Column configuration with all available fields
+const availableColumns = {
+    // Primary fields (commonly used)
+    'id': { label: 'ID', category: 'Primary', path: 'id', type: 'number' },
+    'name': { label: 'Name', category: 'Primary', path: 'name', type: 'string' },
+    'severity': { label: 'Severity', category: 'Primary', path: 'severity', type: 'number' },
+    'status': { label: 'Status', category: 'Primary', path: 'status', type: 'number' },
+    'type': { label: 'Type', category: 'Primary', path: 'type', type: 'string' },
+    'created': { label: 'Created', category: 'Primary', path: 'created', type: 'date' },
+    'closed': { label: 'Closed', category: 'Primary', path: 'closed', type: 'date' },
+    'owner': { label: 'Owner', category: 'Primary', path: 'owner', type: 'string' },
+
+    // Custom Fields (from data analysis)
+    'affected_country': { label: 'Country', category: 'Location', path: 'CustomFields.affectedcountry', type: 'string' },
+    'affected_region': { label: 'Region', category: 'Location', path: 'CustomFields.affectedregion', type: 'string' },
+    'impact': { label: 'Impact', category: 'Assessment', path: 'CustomFields.impact', type: 'string' },
+    'contained': { label: 'Contained', category: 'Status', path: 'CustomFields.contained', type: 'string' },
+    'automation': { label: 'Automation Level', category: 'Process', path: 'CustomFields.automation', type: 'string' },
+    'escalation_state': { label: 'Escalation State', category: 'Process', path: 'CustomFields.escalationstate', type: 'string' },
+    'source': { label: 'Source', category: 'Detection', path: 'CustomFields.source', type: 'string' },
+    'threat_type': { label: 'Threat Type', category: 'Assessment', path: 'CustomFields.threattype', type: 'string' },
+    'root_cause': { label: 'Root Cause', category: 'Assessment', path: 'CustomFields.rootcause', type: 'string' },
+    'breach_confirmation': { label: 'Breach Confirmation', category: 'Assessment', path: 'CustomFields.breachconfirmation', type: 'string' },
+
+    // Additional useful fields
+    'occurred': { label: 'Occurred', category: 'Timing', path: 'occurred', type: 'date' },
+    'dueDate': { label: 'Due Date', category: 'Timing', path: 'dueDate', type: 'date' },
+    'phase': { label: 'Phase', category: 'Process', path: 'phase', type: 'string' },
+    'category': { label: 'Category', category: 'Classification', path: 'category', type: 'string' },
+    'sourceInstance': { label: 'Source Instance', category: 'Technical', path: 'sourceInstance', type: 'string' },
+    'openDuration': { label: 'Open Duration', category: 'Metrics', path: 'openDuration', type: 'number' }
+};
+
+// Default visible columns and their order
+let visibleColumns = ['id', 'name', 'severity', 'status', 'affected_country', 'impact', 'type', 'created'];
+let columnOrder = [...visibleColumns]; // Maintains the order of columns
 
 // Color schemes for consistent theming
 const colorSchemes = {
@@ -39,6 +77,21 @@ function setupEventListeners() {
             applyFilters();
         });
     });
+
+    // Add listeners for sortable table headers
+    document.querySelectorAll('.sortable').forEach(header => {
+        header.addEventListener('click', function() {
+            const column = this.getAttribute('data-column');
+            sortTable(column);
+        });
+        header.style.cursor = 'pointer';
+    });
+
+    // Load sort preferences from cookies
+    loadSortPreferences();
+
+    // Setup column selector
+    setupColumnSelector();
 }
 
 function updateSliderLabels(value) {
@@ -139,7 +192,12 @@ function applyFilters() {
 
 function updateFilterSummary(dateRange, countries, impacts, severities, ticketTypes, statuses, automationLevels) {
     const container = document.getElementById('activeFiltersContainer');
-    container.innerHTML = '';
+
+    // Preserve non-removable filters
+    const nonRemovableFilters = container.querySelectorAll('.filter-tag.non-removable');
+    const nonRemovableHTML = Array.from(nonRemovableFilters).map(filter => filter.outerHTML).join('');
+
+    container.innerHTML = nonRemovableHTML;
 
     // Date range - no X button, use radio buttons to change
     const dateText = dateRange === 7 ? 'Last 7 days' :
@@ -509,27 +567,59 @@ function updateTable() {
     const tbody = document.querySelector('#dataTable tbody');
     tbody.innerHTML = '';
 
-    const displayData = filteredData.slice(0, 100); // Limit to 100 rows for performance
+    // Sort the filtered data before displaying
+    const sortedData = sortData(filteredData);
+    const displayData = sortedData.slice(0, 100); // Limit to 100 rows for performance
 
     displayData.forEach(item => {
         const row = document.createElement('tr');
 
-        const severityMap = { 0: 'Unknown', 1: 'Low', 2: 'Medium', 3: 'High', 4: 'Critical' };
-        const statusMap = { 0: 'Pending', 1: 'Active', 2: 'Closed' };
+        // Use column order, but only show visible columns
+        const orderedVisibleColumns = columnOrder.filter(col => visibleColumns.includes(col));
 
-        const severity = severityMap[item.severity] || 'Unknown';
-        const status = statusMap[item.status] || 'Unknown';
+        orderedVisibleColumns.forEach(columnId => {
+            const column = availableColumns[columnId];
+            if (column) {
+                const td = document.createElement('td');
+                let value = getNestedValue(item, column.path);
 
-        row.innerHTML = `
-            <td><a href="https://msoar.crtx.us.paloaltonetworks.com/Custom/caseinfoid/${item.id}" target="_blank" style="color: #0046ad; text-decoration: underline;">${item.id}</a></td>
-            <td title="${item.name}">${item.name.substring(0, 50)}${item.name.length > 50 ? '...' : ''}</td>
-            <td><span class="severity-${severity.toLowerCase()}">${severity}</span></td>
-            <td><span class="status-${status.toLowerCase()}">${status}</span></td>
-            <td>${item.affected_country}</td>
-            <td>${item.impact}</td>
-            <td>${item.type}</td>
-            <td>${new Date(item.created).toLocaleDateString()}</td>
-        `;
+                // Format the value based on type
+                if (value !== null && value !== undefined) {
+                    switch (column.type) {
+                        case 'date':
+                            if (value) {
+                                td.textContent = new Date(value).toLocaleDateString();
+                            }
+                            break;
+                        case 'number':
+                            if (columnId === 'id') {
+                                td.innerHTML = `<a href="https://msoar.crtx.us.paloaltonetworks.com/Custom/caseinfoid/${value}" target="_blank" style="color: #0046ad; text-decoration: underline;">${value}</a>`;
+                            } else if (columnId === 'severity') {
+                                const severityMap = { 0: 'Unknown', 1: 'Low', 2: 'Medium', 3: 'High', 4: 'Critical' };
+                                const severity = severityMap[value] || 'Unknown';
+                                td.innerHTML = `<span class="severity-${severity.toLowerCase()}">${severity}</span>`;
+                            } else if (columnId === 'status') {
+                                const statusMap = { 0: 'Pending', 1: 'Active', 2: 'Closed' };
+                                const status = statusMap[value] || 'Unknown';
+                                td.innerHTML = `<span class="status-${status.toLowerCase()}">${status}</span>`;
+                            } else {
+                                td.textContent = value;
+                            }
+                            break;
+                        default:
+                            if (columnId === 'name' && value.length > 50) {
+                                td.innerHTML = `<span title="${value}">${value.substring(0, 50)}...</span>`;
+                            } else {
+                                td.textContent = value || '';
+                            }
+                    }
+                } else {
+                    td.textContent = '';
+                }
+
+                row.appendChild(td);
+            }
+        });
 
         tbody.appendChild(row);
     });
@@ -610,6 +700,9 @@ function showDashboard() {
     document.getElementById('metricsGrid').style.display = 'grid';
     document.getElementById('chartsGrid').style.display = 'grid';
     document.getElementById('dataTableSection').style.display = 'block';
+
+    // Initialize table headers on first load
+    buildTableHeaders();
 }
 
 // Navigation functions
@@ -633,35 +726,6 @@ document.addEventListener('click', function(event) {
     }
 });
 
-// Theme toggle functionality
-function toggleTheme() {
-    const body = document.body;
-    const themeToggle = document.querySelector('.theme-toggle');
-
-    if (body.getAttribute('data-theme') === 'dark') {
-        body.removeAttribute('data-theme');
-        themeToggle.textContent = '🌙';
-        themeToggle.title = 'Toggle Dark Mode';
-        localStorage.setItem('theme', 'light');
-    } else {
-        body.setAttribute('data-theme', 'dark');
-        themeToggle.textContent = '☀️';
-        themeToggle.title = 'Toggle Light Mode';
-        localStorage.setItem('theme', 'dark');
-    }
-}
-
-// Load saved theme on page load
-document.addEventListener('DOMContentLoaded', function() {
-    const savedTheme = localStorage.getItem('theme');
-    const themeToggle = document.querySelector('.theme-toggle');
-
-    if (savedTheme === 'dark') {
-        document.body.setAttribute('data-theme', 'dark');
-        themeToggle.textContent = '☀️';
-        themeToggle.title = 'Toggle Light Mode';
-    }
-});
 
 // Burger menu functions
 function toggleMenu() {
@@ -690,3 +754,388 @@ document.addEventListener('click', function (e) {
         burgerMenu.style.display = 'none';
     }
 });
+
+// Table sorting functions
+function sortTable(column) {
+    if (currentSort.column === column) {
+        currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
+    } else {
+        currentSort.column = column;
+        currentSort.direction = 'asc';
+    }
+
+    // Save sort preferences to cookies
+    saveSortPreferences();
+
+    // Update sort indicators
+    updateSortIndicators();
+
+    // Re-render table with sorted data
+    updateTable();
+}
+
+function updateSortIndicators() {
+    // Clear all sort indicators
+    document.querySelectorAll('.sort-indicator').forEach(indicator => {
+        indicator.textContent = '';
+        indicator.parentElement.classList.remove('sort-asc', 'sort-desc');
+    });
+
+    // Set current sort indicator
+    if (currentSort.column) {
+        const header = document.querySelector(`[data-column="${currentSort.column}"]`);
+        if (header) {
+            const indicator = header.querySelector('.sort-indicator');
+            indicator.textContent = currentSort.direction === 'asc' ? ' ▲' : ' ▼';
+            header.classList.add(currentSort.direction === 'asc' ? 'sort-asc' : 'sort-desc');
+        }
+    }
+}
+
+function sortData(data) {
+    if (!currentSort.column) return data;
+
+    const column = availableColumns[currentSort.column];
+    if (!column) return data;
+
+    return [...data].sort((a, b) => {
+        let aVal = getNestedValue(a, column.path);
+        let bVal = getNestedValue(b, column.path);
+
+        // Handle different data types
+        if (column.type === 'date') {
+            aVal = aVal ? new Date(aVal) : new Date(0);
+            bVal = bVal ? new Date(bVal) : new Date(0);
+        } else if (column.type === 'number') {
+            aVal = parseInt(aVal) || 0;
+            bVal = parseInt(bVal) || 0;
+        } else {
+            aVal = (aVal || '').toString().toLowerCase();
+            bVal = (bVal || '').toString().toLowerCase();
+        }
+
+        let comparison = 0;
+        if (aVal > bVal) comparison = 1;
+        else if (aVal < bVal) comparison = -1;
+
+        return currentSort.direction === 'asc' ? comparison : -comparison;
+    });
+}
+
+function saveSortPreferences() {
+    const preferences = {
+        column: currentSort.column,
+        direction: currentSort.direction
+    };
+    document.cookie = `tableSort=${JSON.stringify(preferences)}; path=/; max-age=${60 * 60 * 24 * 30}`; // 30 days
+}
+
+function loadSortPreferences() {
+    const cookies = document.cookie.split(';');
+    const sortCookie = cookies.find(cookie => cookie.trim().startsWith('tableSort='));
+
+    if (sortCookie) {
+        try {
+            const preferences = JSON.parse(sortCookie.split('=')[1]);
+            currentSort.column = preferences.column;
+            currentSort.direction = preferences.direction;
+            updateSortIndicators();
+        } catch (e) {
+            // Invalid cookie, ignore
+        }
+    }
+}
+
+// Column selector functions
+function setupColumnSelector() {
+    const btn = document.getElementById('columnSelectorBtn');
+    const dropdown = document.getElementById('columnSelectorDropdown');
+
+    // Load column preferences
+    loadColumnPreferences();
+
+    // Toggle dropdown
+    btn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
+        if (dropdown.style.display === 'block') {
+            populateColumnSelector();
+        }
+    });
+
+    // Close dropdown when clicking outside
+    document.addEventListener('click', function(e) {
+        if (!dropdown.contains(e.target) && !btn.contains(e.target)) {
+            dropdown.style.display = 'none';
+        }
+    });
+}
+
+function populateColumnSelector() {
+    const container = document.getElementById('columnCheckboxes');
+    container.innerHTML = '';
+
+    // Group columns by category
+    const categories = {};
+    Object.keys(availableColumns).forEach(columnId => {
+        const column = availableColumns[columnId];
+        if (!categories[column.category]) {
+            categories[column.category] = [];
+        }
+        categories[column.category].push({ id: columnId, ...column });
+    });
+
+    // Create checkboxes grouped by category
+    Object.keys(categories).sort().forEach(categoryName => {
+        // Category header
+        const categoryHeader = document.createElement('div');
+        categoryHeader.className = 'column-category-header';
+        categoryHeader.innerHTML = `<strong>${categoryName}</strong>`;
+        categoryHeader.style.gridColumn = '1 / -1';
+        categoryHeader.style.marginTop = '10px';
+        categoryHeader.style.marginBottom = '5px';
+        categoryHeader.style.fontSize = '13px';
+        categoryHeader.style.color = '#666';
+        container.appendChild(categoryHeader);
+
+        categories[categoryName].forEach(column => {
+            const item = document.createElement('div');
+            item.className = 'column-checkbox-item';
+
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.id = `col-${column.id}`;
+            checkbox.checked = visibleColumns.includes(column.id);
+
+            // Disable ID and Name checkboxes - they cannot be unchecked
+            const isRequired = column.id === 'id' || column.id === 'name';
+            if (isRequired) {
+                checkbox.disabled = true;
+                checkbox.checked = true;
+                if (!visibleColumns.includes(column.id)) {
+                    visibleColumns.push(column.id);
+                }
+            }
+
+            checkbox.addEventListener('change', function() {
+                if (!isRequired) {
+                    toggleColumn(column.id, this.checked);
+                }
+            });
+
+            const label = document.createElement('label');
+            label.htmlFor = `col-${column.id}`;
+            label.textContent = column.label + (isRequired ? ' (Required)' : '');
+            if (isRequired) {
+                label.style.color = '#6c757d';
+                label.style.fontStyle = 'italic';
+            }
+
+            item.appendChild(checkbox);
+            item.appendChild(label);
+            container.appendChild(item);
+        });
+    });
+
+    // Populate column order list
+    populateColumnOrder();
+}
+
+function populateColumnOrder() {
+    const container = document.getElementById('columnOrderList');
+    container.innerHTML = '';
+
+    // Show only visible columns in order
+    const orderedVisibleColumns = columnOrder.filter(col => visibleColumns.includes(col));
+
+    orderedVisibleColumns.forEach((columnId, index) => {
+        const column = availableColumns[columnId];
+        if (column) {
+            const item = document.createElement('div');
+            item.className = 'column-order-item';
+            item.draggable = true;
+            item.dataset.columnId = columnId;
+            item.dataset.index = index;
+
+            item.innerHTML = `
+                <span class="drag-handle">⋮⋮</span>
+                <span class="column-order-label">${column.label}</span>
+            `;
+
+            // Add drag event listeners
+            item.addEventListener('dragstart', handleDragStart);
+            item.addEventListener('dragover', handleDragOver);
+            item.addEventListener('drop', handleDrop);
+            item.addEventListener('dragend', handleDragEnd);
+
+            container.appendChild(item);
+        }
+    });
+}
+
+function toggleColumn(columnId, isVisible) {
+    if (isVisible && !visibleColumns.includes(columnId)) {
+        visibleColumns.push(columnId);
+        // Add to column order if not present
+        if (!columnOrder.includes(columnId)) {
+            columnOrder.push(columnId);
+        }
+    } else if (!isVisible && visibleColumns.includes(columnId)) {
+        visibleColumns = visibleColumns.filter(id => id !== columnId);
+    }
+
+    // Save preferences and rebuild table
+    saveColumnPreferences();
+    rebuildTable();
+    populateColumnOrder();
+}
+
+function selectAllColumns() {
+    visibleColumns = Object.keys(availableColumns);
+    columnOrder = [...visibleColumns];
+    populateColumnSelector();
+    saveColumnPreferences();
+    rebuildTable();
+}
+
+function deselectAllColumns() {
+    // Keep required columns (id and name)
+    visibleColumns = ['id', 'name'];
+    populateColumnSelector();
+    saveColumnPreferences();
+    rebuildTable();
+}
+
+// Drag and drop handlers
+let draggedElement = null;
+
+function handleDragStart(e) {
+    draggedElement = this;
+    this.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/html', this.outerHTML);
+}
+
+function handleDragOver(e) {
+    if (e.preventDefault) {
+        e.preventDefault();
+    }
+    e.dataTransfer.dropEffect = 'move';
+
+    // Add visual feedback
+    this.classList.add('drag-over');
+    return false;
+}
+
+function handleDrop(e) {
+    if (e.stopPropagation) {
+        e.stopPropagation();
+    }
+
+    if (draggedElement !== this) {
+        const draggedIndex = parseInt(draggedElement.dataset.index);
+        const targetIndex = parseInt(this.dataset.index);
+        const draggedColumnId = draggedElement.dataset.columnId;
+
+        // Remove dragged column from its current position in order
+        const currentOrderIndex = columnOrder.indexOf(draggedColumnId);
+        if (currentOrderIndex !== -1) {
+            columnOrder.splice(currentOrderIndex, 1);
+        }
+
+        // Insert at new position
+        const visibleOrderedColumns = columnOrder.filter(col => visibleColumns.includes(col));
+        const targetColumnId = this.dataset.columnId;
+        const newTargetIndex = columnOrder.indexOf(targetColumnId);
+
+        if (draggedIndex < targetIndex) {
+            columnOrder.splice(newTargetIndex + 1, 0, draggedColumnId);
+        } else {
+            columnOrder.splice(newTargetIndex, 0, draggedColumnId);
+        }
+
+        // Update UI and save
+        populateColumnOrder();
+        saveColumnPreferences();
+        rebuildTable();
+    }
+
+    // Clean up drag over styles
+    document.querySelectorAll('.drag-over').forEach(el => {
+        el.classList.remove('drag-over');
+    });
+
+    return false;
+}
+
+function handleDragEnd(e) {
+    this.classList.remove('dragging');
+    document.querySelectorAll('.drag-over').forEach(el => {
+        el.classList.remove('drag-over');
+    });
+    draggedElement = null;
+}
+
+function saveColumnPreferences() {
+    const preferences = {
+        visibleColumns: visibleColumns,
+        columnOrder: columnOrder
+    };
+    document.cookie = `tableColumns=${JSON.stringify(preferences)}; path=/; max-age=${60 * 60 * 24 * 30}`; // 30 days
+}
+
+function loadColumnPreferences() {
+    const cookies = document.cookie.split(';');
+    const columnCookie = cookies.find(cookie => cookie.trim().startsWith('tableColumns='));
+
+    if (columnCookie) {
+        try {
+            const preferences = JSON.parse(columnCookie.split('=')[1]);
+            if (preferences.visibleColumns) {
+                visibleColumns = preferences.visibleColumns;
+            }
+            if (preferences.columnOrder) {
+                columnOrder = preferences.columnOrder;
+            }
+        } catch (e) {
+            // Invalid cookie, ignore
+        }
+    }
+}
+
+function getNestedValue(obj, path) {
+    return path.split('.').reduce((current, key) => {
+        return current && current[key] !== undefined ? current[key] : null;
+    }, obj);
+}
+
+function rebuildTable() {
+    buildTableHeaders();
+    updateTable();
+}
+
+function buildTableHeaders() {
+    const thead = document.querySelector('#dataTable thead tr');
+    thead.innerHTML = '';
+
+    // Use column order, but only show visible columns
+    const orderedVisibleColumns = columnOrder.filter(col => visibleColumns.includes(col));
+
+    orderedVisibleColumns.forEach(columnId => {
+        const column = availableColumns[columnId];
+        if (column) {
+            const th = document.createElement('th');
+            th.className = 'sortable';
+            th.setAttribute('data-column', columnId);
+            th.innerHTML = `${column.label} <span class="sort-indicator"></span>`;
+            th.style.cursor = 'pointer';
+            th.addEventListener('click', function() {
+                sortTable(columnId);
+            });
+            thead.appendChild(th);
+        }
+    });
+
+    // Update sort indicators after rebuilding headers
+    updateSortIndicators();
+}
