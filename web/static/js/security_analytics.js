@@ -270,7 +270,7 @@ function removeFilter(filterType, value) {
     applyFilters();
 }
 
-function clearAllFilters() {
+function resetFilters() {
     // Reset date range slider to default (30 days, position 1)
     const dateSlider = document.getElementById('dateRangeSlider');
     if (dateSlider) {
