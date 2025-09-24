@@ -35,34 +35,52 @@
                 🎛️ Filter Controls
             </div>
             <div class="header-right">
-                <label class="date-range-label">📅 Date Range (days):</label>
-                <div class="date-range-slider-container">
-                    <input type="range" id="dateRangeSlider" class="date-range-slider" min="0" max="3" value="1" step="1">
-                    <div class="slider-labels">
-                        <span data-value="0">7</span>
-                        <span data-value="1" class="active">30</span>
-                        <span data-value="2">60</span>
-                        <span data-value="3">90</span>
+                <div class="slider-field">
+                    <label class="date-range-label">📅<br>Date Range (days):</label>
+                    <div class="date-range-slider-container">
+                        <input type="range" id="dateRangeSlider" class="date-range-slider" min="0" max="3" value="1" step="1">
+                        <div class="slider-labels">
+                            <span data-value="0">7</span>
+                            <span data-value="1" class="active">30</span>
+                            <span data-value="2">60</span>
+                            <span data-value="3">90</span>
+                        </div>
                     </div>
                 </div>
-                <label class="date-range-label">⏱️ MTTR (mins):</label>
-                <div class="date-range-slider-container">
-                    <input type="range" id="mttrRangeSlider" class="date-range-slider" min="0" max="3" value="0" step="1">
-                    <div class="slider-labels">
-                        <span data-value="0" class="active">All</span>
-                        <span data-value="1">≤3</span>
-                        <span data-value="2">>3</span>
-                        <span data-value="3">>5</span>
+                <div class="slider-field">
+                    <label class="date-range-label">⏱️<br>MTTR (mins):</label>
+                    <div class="date-range-slider-container">
+                        <input type="range" id="mttrRangeSlider" class="date-range-slider" min="0" max="3" value="0" step="1">
+                        <div class="slider-labels">
+                            <span data-value="0" class="active">All</span>
+                            <span data-value="1">≤3</span>
+                            <span data-value="2">>3</span>
+                            <span data-value="3">>5</span>
+                        </div>
                     </div>
                 </div>
-                <label class="date-range-label">🔒 MTTC (mins):</label>
-                <div class="date-range-slider-container">
-                    <input type="range" id="mttcRangeSlider" class="date-range-slider" min="0" max="3" value="0" step="1">
-                    <div class="slider-labels">
-                        <span data-value="0" class="active">All</span>
-                        <span data-value="1">≤5</span>
-                        <span data-value="2">≤15</span>
-                        <span data-value="3">>15</span>
+                <div class="slider-field">
+                    <label class="date-range-label">🔒<br>MTTC (mins):</label>
+                    <div class="date-range-slider-container">
+                        <input type="range" id="mttcRangeSlider" class="date-range-slider" min="0" max="3" value="0" step="1">
+                        <div class="slider-labels">
+                            <span data-value="0" class="active">All</span>
+                            <span data-value="1">≤5</span>
+                            <span data-value="2">≤15</span>
+                            <span data-value="3">>15</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="slider-field">
+                    <label class="date-range-label">📆<br>Age<br>(days):</label>
+                    <div class="date-range-slider-container">
+                        <input type="range" id="ageRangeSlider" class="date-range-slider" min="0" max="3" value="0" step="1">
+                        <div class="slider-labels">
+                            <span data-value="0" class="active">All</span>
+                            <span data-value="1">≤7</span>
+                            <span data-value="2">≤30</span>
+                            <span data-value="3">≤90</span>
+                        </div>
                     </div>
                 </div>
             </div>

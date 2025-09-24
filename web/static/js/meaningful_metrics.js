@@ -83,6 +83,15 @@ function setupEventListeners() {
         });
     }
 
+    // Add listener for age range slider
+    const ageSlider = document.getElementById('ageRangeSlider');
+    if (ageSlider) {
+        ageSlider.addEventListener('input', function() {
+            updateAgeSliderLabels(this.value);
+            applyFilters();
+        });
+    }
+
     // Add listeners for existing severity, status, and automation checkboxes
     document.querySelectorAll('#severityFilter input, #statusFilter input, #automationFilter input').forEach(checkbox => {
         checkbox.addEventListener('change', applyFilters);
@@ -119,6 +128,18 @@ function setupEventListeners() {
             const value = this.getAttribute('data-value');
             mttcSlider.value = value;
             updateMttcSliderLabels(value);
+            applyFilters();
+        });
+        label.style.cursor = 'pointer';
+    });
+
+    // Add listeners to age slider labels for click functionality
+    const ageContainer = document.getElementById('ageRangeSlider').parentElement;
+    ageContainer.querySelectorAll('.slider-labels span').forEach(label => {
+        label.addEventListener('click', function() {
+            const value = this.getAttribute('data-value');
+            ageSlider.value = value;
+            updateAgeSliderLabels(value);
             applyFilters();
         });
         label.style.cursor = 'pointer';
@@ -162,6 +183,14 @@ function updateMttcSliderLabels(value) {
         span.classList.remove('active');
     });
     mttcContainer.querySelector(`.slider-labels span[data-value="${value}"]`).classList.add('active');
+}
+
+function updateAgeSliderLabels(value) {
+    const ageContainer = document.getElementById('ageRangeSlider').parentElement;
+    ageContainer.querySelectorAll('.slider-labels span').forEach(span => {
+        span.classList.remove('active');
+    });
+    ageContainer.querySelector(`.slider-labels span[data-value="${value}"]`).classList.add('active');
 }
 
 async function loadData() {
@@ -238,6 +267,11 @@ function applyFilters() {
     // Map slider positions to MTTC ranges: 0=All, 1=≤5mins, 2=≤15mins, 3=>15mins
     const mttcFilter = mttcValue;
 
+    const ageSlider = document.getElementById('ageRangeSlider');
+    const ageValue = parseInt(ageSlider ? ageSlider.value : 0);
+    // Map slider positions to age ranges: 0=All, 1=≤7days, 2=≤30days, 3=≤90days
+    const ageFilter = ageValue;
+
     const countries = Array.from(document.querySelectorAll('#countryFilter input:checked')).map(cb => cb.value);
     const impacts = Array.from(document.querySelectorAll('#impactFilter input:checked')).map(cb => cb.value);
     const severities = Array.from(document.querySelectorAll('#severityFilter input:checked')).map(cb => cb.value);
@@ -246,7 +280,7 @@ function applyFilters() {
     const automationLevels = Array.from(document.querySelectorAll('#automationFilter input:checked')).map(cb => cb.value);
 
     // Update filter summary
-    updateFilterSummary(dateRange, mttrFilter, mttcFilter, countries, impacts, severities, ticketTypes, statuses, automationLevels);
+    updateFilterSummary(dateRange, mttrFilter, mttcFilter, ageFilter, countries, impacts, severities, ticketTypes, statuses, automationLevels);
 
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - dateRange);
@@ -299,13 +333,24 @@ function applyFilters() {
             if (mttcFilter === 3 && mttcSeconds <= 900) return false; // >15 mins (900 seconds)
         }
 
+        // Age filter - calculate days since creation
+        if (ageFilter > 0) {
+            const createdDate = new Date(item.created);
+            const currentDate = new Date();
+            const daysDiff = Math.floor((currentDate - createdDate) / (1000 * 60 * 60 * 24));
+
+            if (ageFilter === 1 && daysDiff > 7) return false; // ≤7 days
+            if (ageFilter === 2 && daysDiff > 30) return false; // ≤30 days
+            if (ageFilter === 3 && daysDiff > 90) return false; // ≤90 days
+        }
+
         return true;
     });
 
     updateDashboard();
 }
 
-function updateFilterSummary(dateRange, mttrFilter, mttcFilter, countries, impacts, severities, ticketTypes, statuses, automationLevels) {
+function updateFilterSummary(dateRange, mttrFilter, mttcFilter, ageFilter, countries, impacts, severities, ticketTypes, statuses, automationLevels) {
     const container = document.getElementById('activeFiltersContainer');
 
     // Preserve non-removable filters
@@ -328,7 +373,7 @@ function updateFilterSummary(dateRange, mttrFilter, mttcFilter, countries, impac
         const mttrText = mttrFilter === 1 ? 'MTTR ≤3 mins' :
                         mttrFilter === 2 ? 'MTTR >3 mins' :
                         mttrFilter === 3 ? 'MTTR >5 mins' : 'All MTTR';
-        container.innerHTML += `<span class="filter-tag">${mttrText}</span>`;
+        container.innerHTML += `<span class="filter-tag">${mttrText} <button class="remove-filter-btn" onclick="removeFilter('mttr', '${mttrFilter}')">×</button></span>`;
     }
 
     // MTTC filter
@@ -336,7 +381,15 @@ function updateFilterSummary(dateRange, mttrFilter, mttcFilter, countries, impac
         const mttcText = mttcFilter === 1 ? 'MTTC ≤5 mins' :
                         mttcFilter === 2 ? 'MTTC ≤15 mins' :
                         mttcFilter === 3 ? 'MTTC >15 mins' : 'All MTTC';
-        container.innerHTML += `<span class="filter-tag">${mttcText}</span>`;
+        container.innerHTML += `<span class="filter-tag">${mttcText} <button class="remove-filter-btn" onclick="removeFilter('mttc', '${mttcFilter}')">×</button></span>`;
+    }
+
+    // Age filter
+    if (ageFilter > 0) {
+        const ageText = ageFilter === 1 ? 'Age ≤7 days' :
+                       ageFilter === 2 ? 'Age ≤30 days' :
+                       ageFilter === 3 ? 'Age ≤90 days' : 'All Ages';
+        container.innerHTML += `<span class="filter-tag">${ageText} <button class="remove-filter-btn" onclick="removeFilter('age', '${ageFilter}')">×</button></span>`;
     }
 
     // Add other filters if selected
@@ -395,6 +448,24 @@ function removeFilter(filterType, value) {
     } else if (filterType === 'automation') {
         const checkbox = document.querySelector(`#automationFilter input[value="${value}"]`);
         if (checkbox) checkbox.checked = false;
+    } else if (filterType === 'mttr') {
+        const mttrSlider = document.getElementById('mttrRangeSlider');
+        if (mttrSlider) {
+            mttrSlider.value = 0;
+            updateMttrSliderLabels(0);
+        }
+    } else if (filterType === 'mttc') {
+        const mttcSlider = document.getElementById('mttcRangeSlider');
+        if (mttcSlider) {
+            mttcSlider.value = 0;
+            updateMttcSliderLabels(0);
+        }
+    } else if (filterType === 'age') {
+        const ageSlider = document.getElementById('ageRangeSlider');
+        if (ageSlider) {
+            ageSlider.value = 0;
+            updateAgeSliderLabels(0);
+        }
     }
 
     // Re-apply filters
@@ -421,6 +492,13 @@ function resetFilters() {
     if (mttcSlider) {
         mttcSlider.value = 0;
         updateMttcSliderLabels(0);
+    }
+
+    // Reset age range slider to default (All, position 0)
+    const ageSlider = document.getElementById('ageRangeSlider');
+    if (ageSlider) {
+        ageSlider.value = 0;
+        updateAgeSliderLabels(0);
     }
 
     // Uncheck all checkboxes
