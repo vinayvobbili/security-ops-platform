@@ -2,7 +2,6 @@ import logging.handlers
 import os
 import random
 import sys
-
 import unittest
 from datetime import datetime
 from pathlib import Path
@@ -158,7 +157,6 @@ class Inflow(Command):
     @log_activity(config.webex_bot_access_token_moneyball, "moneyball_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
         send_chart(attachment_actions.json_data["roomId"], activity['actor']['displayName'], "Inflow Yesterday", "Inflow Yesterday.png")
-        send_chart(attachment_actions.json_data["roomId"], activity['actor']['displayName'], "Inflow Past 60 Days", "Inflow Past 60 Days.png")
 
 
 class HeatMap(Command):
