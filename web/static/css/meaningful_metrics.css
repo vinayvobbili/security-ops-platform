@@ -131,7 +131,7 @@ body {
     align-items: center;
     gap: 8px;
     padding: 8px 12px;
-    border: 1px solid rgba(0, 70, 173, 0.2);
+    border: 2px solid rgba(0, 70, 173, 0.6);
     border-radius: 8px;
     background: rgba(255, 255, 255, 0.7);
 }
@@ -270,8 +270,8 @@ body {
 
 .filter-select, .filter-input {
     padding: 8px 12px;
-    border: 1px solid #ced4da;
-    border-radius: 5px;
+    border: 2px solid rgba(0, 70, 173, 0.6);
+    border-radius: 8px;
     font-size: 14px;
     background: white;
 }
@@ -294,8 +294,8 @@ body {
 }
 
 .checkbox-filter {
-    border: 1px solid #ced4da;
-    border-radius: 5px;
+    border: 2px solid rgba(0, 70, 173, 0.6);
+    border-radius: 8px;
     padding: 8px;
     background: white;
     height: 120px;
@@ -319,8 +319,8 @@ body {
 }
 
 .radio-filter-box {
-    border: 1px solid #ced4da;
-    border-radius: 5px;
+    border: 2px solid rgba(0, 70, 173, 0.6);
+    border-radius: 8px;
     padding: 8px;
     background: white;
     height: 120px;
@@ -444,6 +444,11 @@ body {
     display: inline-flex;
     align-items: center;
     gap: 6px;
+    position: relative;
+}
+
+.filter-tag[title] {
+    cursor: help;
 }
 
 .remove-filter-btn {
