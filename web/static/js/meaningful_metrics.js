@@ -15,9 +15,9 @@ const availableColumns = {
     'owner': { label: 'Owner', category: 'Primary', path: 'owner', type: 'string' },
 
     // Custom Fields (from data analysis)
-    'affected_country': { label: 'Country', category: 'Location', path: 'CustomFields.affectedcountry', type: 'string' },
+    'affected_country': { label: 'Country', category: 'Location', path: 'affected_country', type: 'string' },
     'affected_region': { label: 'Region', category: 'Location', path: 'CustomFields.affectedregion', type: 'string' },
-    'impact': { label: 'Impact', category: 'Assessment', path: 'CustomFields.impact', type: 'string' },
+    'impact': { label: 'Impact', category: 'Assessment', path: 'impact', type: 'string' },
     'contained': { label: 'Contained', category: 'Status', path: 'CustomFields.contained', type: 'string' },
     'automation': { label: 'Automation Level', category: 'Process', path: 'CustomFields.automation', type: 'string' },
     'escalation_state': { label: 'Escalation State', category: 'Process', path: 'CustomFields.escalationstate', type: 'string' },
@@ -36,7 +36,7 @@ const availableColumns = {
 };
 
 // Default visible columns and their order
-let visibleColumns = ['id', 'name', 'severity', 'status', 'affected_country', 'impact', 'type', 'created'];
+let visibleColumns = ['id', 'name', 'severity', 'status', 'affected_country', 'impact', 'type', 'owner', 'created'];
 let columnOrder = [...visibleColumns]; // Maintains the order of columns
 
 // Color schemes for consistent theming
@@ -126,6 +126,12 @@ function populateFilterOptions() {
     const ticketTypes = [...new Set(allData.map(item => item.type))].filter(t => t && t !== 'Unknown').sort();
     const automationLevels = [...new Set(allData.map(item => item.automation_level || 'Unknown'))].sort();
 
+    // Add "No Country" option to countries list
+    countries.unshift('No Country');
+
+    // Add "No Impact" option to impacts list
+    impacts.unshift('No Impact');
+
     populateCheckboxFilter('countryFilter', countries);
     populateCheckboxFilter('impactFilter', impacts);
     populateCheckboxFilter('ticketTypeFilter', ticketTypes);
@@ -177,8 +183,20 @@ function applyFilters() {
         if (createdDate < cutoffDate) return false;
 
         // Other filters
-        if (countries.length > 0 && !countries.includes(item.affected_country)) return false;
-        if (impacts.length > 0 && !impacts.includes(item.impact)) return false;
+        if (countries.length > 0) {
+            const hasNoCountry = !item.affected_country || item.affected_country === 'Unknown' || item.affected_country.trim() === '';
+            const shouldShowNoCountry = countries.includes('No Country') && hasNoCountry;
+            const shouldShowWithCountry = countries.some(c => c !== 'No Country' && c === item.affected_country);
+
+            if (!shouldShowNoCountry && !shouldShowWithCountry) return false;
+        }
+        if (impacts.length > 0) {
+            const hasNoImpact = !item.impact || item.impact === 'Unknown' || item.impact.trim() === '';
+            const shouldShowNoImpact = impacts.includes('No Impact') && hasNoImpact;
+            const shouldShowWithImpact = impacts.some(i => i !== 'No Impact' && i === item.impact);
+
+            if (!shouldShowNoImpact && !shouldShowWithImpact) return false;
+        }
         if (severities.length > 0 && !severities.includes(item.severity.toString())) return false;
         if (ticketTypes.length > 0 && !ticketTypes.includes(item.type)) return false;
         if (statuses.length > 0 && !statuses.includes(item.status.toString())) return false;
