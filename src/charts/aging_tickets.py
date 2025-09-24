@@ -78,36 +78,36 @@ def generate_plot(tickets):
         # Distinct, high-contrast color palette with unique colors for each phase
         phase_colors = {
             # Incident Response Phases - Sequential color scheme
-            '1. Investigation': '#E91E63',    # Pink - initial phase
-            '2. Containment': '#2196F3',      # Blue - containment
-            '3. Investigation': '#9C27B0',    # Purple - investigation
-            '4. Eradication': '#FF5722',      # Deep Orange - eradication
-            '5. Eradication': '#795548',      # Brown - eradication variant
-            '6. Recovery': '#4CAF50',         # Green - recovery
+            '1. Investigation': '#E91E63',  # Pink - initial phase
+            '2. Containment': '#2196F3',  # Blue - containment
+            '3. Investigation': '#9C27B0',  # Purple - investigation
+            '4. Eradication': '#FF5722',  # Deep Orange - eradication
+            '5. Eradication': '#795548',  # Brown - eradication variant
+            '6. Recovery': '#4CAF50',  # Green - recovery
             '7. Lessons Learned': '#FFC107',  # Amber - learning
-            '8. Closure': '#F44336',          # Red - closure
-            
+            '8. Closure': '#F44336',  # Red - closure
+
             # Generic phases
-            'Investigation': '#9C27B0',       # Purple - investigation
-            'Containment': '#2196F3',         # Blue - containment  
-            'Eradication': '#FF5722',         # Deep Orange - eradication
-            'Recovery': '#4CAF50',            # Green - recovery
-            'Lessons Learned': '#FFC107',     # Amber - learning
-            'Closure': '#F44336',             # Red - closure
-            'Closure Phase': '#F44336',       # Red - closure phase
-            
+            'Investigation': '#9C27B0',  # Purple - investigation
+            'Containment': '#2196F3',  # Blue - containment
+            'Eradication': '#FF5722',  # Deep Orange - eradication
+            'Recovery': '#4CAF50',  # Green - recovery
+            'Lessons Learned': '#FFC107',  # Amber - learning
+            'Closure': '#F44336',  # Red - closure
+            'Closure Phase': '#F44336',  # Red - closure phase
+
             # Status phases
-            'New': '#FF9800',                 # Orange - new items
-            'In Progress': '#3F51B5',         # Indigo - in progress
-            'Pending': '#FF6F00',             # Dark Orange - pending action
-            'Resolved': '#8BC34A',            # Light Green - resolved
-            'Unknown': '#607D8B',             # Blue Grey - unknown state
-            'Unassigned': '#9E9E9E',          # Grey - unassigned
-            
+            'New': '#FF9800',  # Orange - new items
+            'In Progress': '#3F51B5',  # Indigo - in progress
+            'Pending': '#FF6F00',  # Dark Orange - pending action
+            'Resolved': '#8BC34A',  # Light Green - resolved
+            'Unknown': '#607D8B',  # Blue Grey - unknown state
+            'Unassigned': '#9E9E9E',  # Grey - unassigned
+
             # Special cases
-            '': '#FFEB3B',                    # Yellow - undefined
-            None: '#FFEB3B',                  # Yellow - null
-            'Undefined Phase': '#FFEB3B'      # Yellow - undefined phase
+            '': '#FFEB3B',  # Yellow - undefined
+            None: '#FFEB3B',  # Yellow - null
+            'Undefined Phase': '#FFEB3B'  # Yellow - undefined phase
         }
 
         # Group and count tickets by 'type' and 'phase'
@@ -123,14 +123,14 @@ def generate_plot(tickets):
             '8. Closure': 'Closure Phase'
         }
         grouped_data = grouped_data.rename(columns=column_mapping)
-        
+
         # 4. Sort phases in logical IR workflow order
         phase_order = [
-            '1. Investigation', '2. Containment', '3. Investigation', 
-            '4. Eradication', '5. Eradication', '6. Recovery', 
+            '1. Investigation', '2. Containment', '3. Investigation',
+            '4. Eradication', '5. Eradication', '6. Recovery',
             '7. Lessons Learned', '8. Closure', 'Closure Phase',
-            'Investigation', 'Containment', 'Eradication', 'Recovery', 
-            'Lessons Learned', 'Closure', 'New', 'In Progress', 'Pending', 
+            'Investigation', 'Containment', 'Eradication', 'Recovery',
+            'Lessons Learned', 'Closure', 'New', 'In Progress', 'Pending',
             'Resolved', 'Unknown', 'Unassigned', 'Undefined Phase'
         ]
         # Reorder columns based on phase order (keep only existing phases)
@@ -142,7 +142,7 @@ def generate_plot(tickets):
         grouped_data = grouped_data[final_order]
 
         # Create figure with even better proportions to completely fix title overlap
-        fig, ax = plt.subplots(figsize=(16, 12), facecolor='#f8f9fa')
+        fig, ax = plt.subplots(figsize=(14, 10), facecolor='#f8f9fa')
         fig.patch.set_facecolor('#f8f9fa')
 
         # Get distinct colors for the phases present in data with gradients
@@ -162,11 +162,10 @@ def generate_plot(tickets):
             width=0.25,  # MUCH narrower bars (was 0.4, now 0.25)
             alpha=0.95  # High alpha for vibrant colors
         )
-        
+
         # 6. Add subtle gradient backgrounds to bars
-        from matplotlib.colors import LinearSegmentedColormap
         import matplotlib.patches as mpatches
-        
+
         # Apply gradient effect to each bar segment
         for container in ax.containers:
             for bar in container:
@@ -175,23 +174,23 @@ def generate_plot(tickets):
                     x, y = bar.get_xy()
                     width = bar.get_width()
                     height = bar.get_height()
-                    
+
                     # Get the original color
                     original_color = bar.get_facecolor()
-                    
+
                     # Create a gradient from the original color to a slightly lighter version
                     gradient = mpatches.Rectangle((x, y), width, height,
-                                                facecolor=original_color,
-                                                edgecolor='white',
-                                                linewidth=1.5,
-                                                alpha=0.95)
-                    
-                    # Add a subtle inner glow effect
-                    inner_rect = mpatches.Rectangle((x + width*0.05, y + height*0.05), 
-                                                  width*0.9, height*0.9,
                                                   facecolor=original_color,
-                                                  alpha=0.3,
-                                                  edgecolor='none')
+                                                  edgecolor='white',
+                                                  linewidth=1.5,
+                                                  alpha=0.95)
+
+                    # Add a subtle inner glow effect
+                    inner_rect = mpatches.Rectangle((x + width * 0.05, y + height * 0.05),
+                                                    width * 0.9, height * 0.9,
+                                                    facecolor=original_color,
+                                                    alpha=0.3,
+                                                    edgecolor='none')
                     ax.add_patch(inner_rect)
 
         # Enhance the axes with better spacing
@@ -267,7 +266,7 @@ def generate_plot(tickets):
 
         # 9. Calculate total aging tickets for subtitle
         total_aging_tickets = int(grouped_data.sum().sum())
-        
+
         # Fix title overlap with much better spacing and move total to subtitle
         plt.suptitle('Aging Tickets',
                      fontsize=24, fontweight='bold', color='#1A237E', y=0.98)  # Even higher
@@ -293,12 +292,12 @@ def generate_plot(tickets):
         # Enhanced legend with counts for each phase and correct colors
         # Calculate total count for each phase across all ticket types
         phase_totals = grouped_data.sum(axis=0)
-        
+
         # Get the legend from the plot (which has correct colors) and move it outside
-        legend = plt.legend(title='Phase', bbox_to_anchor=(1.05, 1), loc='upper left',
+        legend = plt.legend(title='Phase', bbox_to_anchor=(1, 1), loc='upper left',
                             frameon=True, fancybox=True, shadow=True,
                             title_fontsize=14, fontsize=12)
-        
+
         # Update legend labels with counts while preserving colors
         for i, (phase, text) in enumerate(zip(grouped_data.columns, legend.get_texts())):
             count = int(phase_totals[phase])
