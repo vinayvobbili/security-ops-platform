@@ -1211,16 +1211,16 @@ def get_shift_summary(shift_id):
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
-@app.route('/security-analytics')
+@app.route('/meaningful-metrics')
 @log_web_activity
-def security_analytics():
-    """Security Incident Analytics Dashboard"""
+def meaningful_metrics():
+    """Meaningful Metrics Dashboard"""
     return render_template('security_analytics.html')
 
 
-@app.route('/api/security-analytics/data')
+@app.route('/api/meaningful-metrics/data')
 @log_web_activity
-def api_security_dashboard_data():
+def api_meaningful_metrics_data():
     """API to get cached security incident data for dashboard"""
     import json
     from pathlib import Path

@@ -18,24 +18,7 @@
 <div class="particles" id="particles"></div>
 
 <!-- Top Navigation Bar -->
-<div class="top-nav">
-    <div class="nav-burger" onclick="toggleMenu()">
-        <img src="{{ url_for('static', filename='icons/burger.svg') }}" alt="Menu" class="nav-icon"/>
-    </div>
-    <!-- Title can be added here if needed in the future -->
-    <div id="burgerMenu" class="burger-menu-content" style="display:none;">
-        <a href="/xsoar">XSOAR Dashboard</a>
-        <a href="/security-analytics">Security Analytics</a>
-        <a href="/shift-performance">Shift Performance</a>
-        <a href="/msoc-form">MSOC Form</a>
-        <a href="/speak-up-form">Speak Up Form</a>
-        <a href="/xsoar-ticket-import-form">XSOAR Ticket Import</a>
-        <a href="/travel-form">Travel Form</a>
-        <a href="/red-team-testing-form">Red Team Testing</a>
-        <a href="/apt-other-names-search">APT Other Names Search</a>
-        <!-- Add more links as needed -->
-    </div>
-</div>
+{% include 'burger_menu.html' %}
 
 <div class="slider-container">
     <!-- Timing progress bar inside slider container -->

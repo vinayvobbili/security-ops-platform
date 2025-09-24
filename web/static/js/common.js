@@ -149,3 +149,37 @@ function initRandomMusic() {
         window.addEventListener('beforeunload', persistMusicState);
     });
 }
+
+// Burger menu functionality
+function toggleMenu() {
+    var menu = document.getElementById('burgerMenu');
+    if (menu) {
+        menu.style.display = (menu.style.display === 'none' || menu.style.display === '') ? 'block' : 'none';
+    }
+}
+
+// Initialize burger menu event handlers
+function initBurgerMenu() {
+    document.addEventListener('DOMContentLoaded', function () {
+        var burgerMenu = document.getElementById('burgerMenu');
+        if (burgerMenu) {
+            // Close menu when a link is clicked
+            burgerMenu.querySelectorAll('a').forEach(function (link) {
+                link.addEventListener('click', function () {
+                    burgerMenu.style.display = 'none';
+                });
+            });
+        }
+
+        // Close burger menu when clicking outside
+        document.addEventListener('click', function (e) {
+            var burgerMenu = document.getElementById('burgerMenu');
+            var navBurger = document.querySelector('.nav-burger');
+
+            // Check if the click was outside the menu and burger button
+            if (burgerMenu && !burgerMenu.contains(e.target) && navBurger && !navBurger.contains(e.target)) {
+                burgerMenu.style.display = 'none';
+            }
+        });
+    });
+}
