@@ -25,8 +25,8 @@ function setupEventListeners() {
         });
     }
 
-    // Add listeners for existing severity and status checkboxes
-    document.querySelectorAll('#severityFilter input, #statusFilter input').forEach(checkbox => {
+    // Add listeners for existing severity, status, and automation checkboxes
+    document.querySelectorAll('#severityFilter input, #statusFilter input, #automationFilter input').forEach(checkbox => {
         checkbox.addEventListener('change', applyFilters);
     });
 
@@ -71,10 +71,12 @@ function populateFilterOptions() {
     const countries = [...new Set(allData.map(item => item.affected_country))].filter(c => c && c !== 'Unknown').sort();
     const impacts = [...new Set(allData.map(item => item.impact))].filter(i => i && i !== 'Unknown').sort();
     const ticketTypes = [...new Set(allData.map(item => item.type))].filter(t => t && t !== 'Unknown').sort();
+    const automationLevels = [...new Set(allData.map(item => item.automation_level || 'Unknown'))].sort();
 
     populateCheckboxFilter('countryFilter', countries);
     populateCheckboxFilter('impactFilter', impacts);
     populateCheckboxFilter('ticketTypeFilter', ticketTypes);
+    populateCheckboxFilter('automationFilter', automationLevels);
 }
 
 function populateCheckboxFilter(filterId, options) {
@@ -108,9 +110,10 @@ function applyFilters() {
     const severities = Array.from(document.querySelectorAll('#severityFilter input:checked')).map(cb => cb.value);
     const ticketTypes = Array.from(document.querySelectorAll('#ticketTypeFilter input:checked')).map(cb => cb.value);
     const statuses = Array.from(document.querySelectorAll('#statusFilter input:checked')).map(cb => cb.value);
+    const automationLevels = Array.from(document.querySelectorAll('#automationFilter input:checked')).map(cb => cb.value);
 
     // Update filter summary
-    updateFilterSummary(dateRange, countries, impacts, severities, ticketTypes, statuses);
+    updateFilterSummary(dateRange, countries, impacts, severities, ticketTypes, statuses, automationLevels);
 
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - dateRange);
@@ -126,6 +129,7 @@ function applyFilters() {
         if (severities.length > 0 && !severities.includes(item.severity.toString())) return false;
         if (ticketTypes.length > 0 && !ticketTypes.includes(item.type)) return false;
         if (statuses.length > 0 && !statuses.includes(item.status.toString())) return false;
+        if (automationLevels.length > 0 && !automationLevels.includes(item.automation_level || 'Unknown')) return false;
 
         return true;
     });
@@ -133,7 +137,7 @@ function applyFilters() {
     updateDashboard();
 }
 
-function updateFilterSummary(dateRange, countries, impacts, severities, ticketTypes, statuses) {
+function updateFilterSummary(dateRange, countries, impacts, severities, ticketTypes, statuses, automationLevels) {
     const container = document.getElementById('activeFiltersContainer');
     container.innerHTML = '';
 
@@ -175,6 +179,12 @@ function updateFilterSummary(dateRange, countries, impacts, severities, ticketTy
             container.innerHTML += `<span class="filter-tag">Status: ${statusName} <button class="remove-filter-btn" onclick="removeFilter('status', '${status}')">×</button></span>`;
         });
     }
+    if (automationLevels.length > 0) {
+        automationLevels.forEach(automation => {
+            const displayAutomation = automation === 'Semi-Automated' ? 'Semi-Auto' : automation;
+            container.innerHTML += `<span class="filter-tag">Automation: ${displayAutomation} <button class="remove-filter-btn" onclick="removeFilter('automation', '${automation}')">×</button></span>`;
+        });
+    }
 }
 
 function removeFilter(filterType, value) {
@@ -193,6 +203,9 @@ function removeFilter(filterType, value) {
     } else if (filterType === 'status') {
         const checkbox = document.querySelector(`#statusFilter input[value="${value}"]`);
         if (checkbox) checkbox.checked = false;
+    } else if (filterType === 'automation') {
+        const checkbox = document.querySelector(`#automationFilter input[value="${value}"]`);
+        if (checkbox) checkbox.checked = false;
     }
 
     // Re-apply filters
@@ -208,7 +221,7 @@ function clearAllFilters() {
     }
 
     // Uncheck all checkboxes
-    document.querySelectorAll('#countryFilter input, #impactFilter input, #severityFilter input, #ticketTypeFilter input, #statusFilter input').forEach(checkbox => {
+    document.querySelectorAll('#countryFilter input, #impactFilter input, #severityFilter input, #ticketTypeFilter input, #statusFilter input, #automationFilter input').forEach(checkbox => {
         checkbox.checked = false;
     });
 
