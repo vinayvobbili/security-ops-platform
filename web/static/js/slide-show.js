@@ -210,11 +210,8 @@ function updateSlider() {
 
 // Initialize random music on page load
 initRandomMusic();
+initBurgerMenu();
 
-function toggleMenu() {
-    const menu = document.getElementById('burgerMenu');
-    menu.style.display = (menu.style.display === 'none' || menu.style.display === '') ? 'block' : 'none';
-}
 
 function restartSlideshow() {
     currentSlide = 0;
