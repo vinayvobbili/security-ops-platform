@@ -8,22 +8,8 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/shift_performance.css') }}">
 </head>
 <body>
-<div class="top-nav">
-    <div class="nav-burger" onclick="toggleMenu()">
-        <img src="{{ url_for('static', filename='icons/burger.svg') }}" alt="Menu" class="nav-icon">
-    </div>
-    <div id="burgerMenu" class="burger-menu-content" style="display:none;">
-        <a href="/">Home</a>
-        <a href="/xsoar">XSOAR Dashboard</a>
-        <a href="/security-analytics">Security Analytics</a> <a href="/shift-performance">Shift Performance</a>
-        <a href="/msoc-form">MSOC Form</a>
-        <a href="/speak-up-form">Speak Up Form</a>
-        <a href="/travel-form">Travel Notification Form</a>
-        <a href="/xsoar-ticket-import-form">XSOAR Ticket Import</a>
-        <a href="/red-team-testing-form">Red Team Testing</a>
-        <a href="/apt-other-names-search">APT Other Names Search</a>
-    </div>
-</div>
+<!-- Top Navigation Bar -->
+{% include 'burger_menu.html' %}
 
 <div class="container">
     <!-- Title and Filter Header Row -->
@@ -380,6 +366,7 @@
 <script src="/static/js/shift_performance.js"></script>
 <script>
     initRandomMusic();
+    initBurgerMenu();
 </script>
 </body>
 </html>
