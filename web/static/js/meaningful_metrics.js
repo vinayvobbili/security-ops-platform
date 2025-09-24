@@ -32,7 +32,9 @@ const availableColumns = {
     'phase': { label: 'Phase', category: 'Process', path: 'phase', type: 'string' },
     'category': { label: 'Category', category: 'Classification', path: 'category', type: 'string' },
     'sourceInstance': { label: 'Source Instance', category: 'Technical', path: 'sourceInstance', type: 'string' },
-    'openDuration': { label: 'Open Duration', category: 'Metrics', path: 'openDuration', type: 'number' }
+    'openDuration': { label: 'Open Duration', category: 'Metrics', path: 'openDuration', type: 'number' },
+    'timetorespond': { label: 'TTR (mins)', category: 'Metrics', path: 'timetorespond.totalDuration', type: 'duration' },
+    'timetocontain': { label: 'TTC (mins)', category: 'Metrics', path: 'timetocontain.totalDuration', type: 'duration' }
 };
 
 // Default visible columns and their order
@@ -63,19 +65,63 @@ function setupEventListeners() {
         });
     }
 
+    // Add listener for MTTR range slider
+    const mttrSlider = document.getElementById('mttrRangeSlider');
+    if (mttrSlider) {
+        mttrSlider.addEventListener('input', function() {
+            updateMttrSliderLabels(this.value);
+            applyFilters();
+        });
+    }
+
+    // Add listener for MTTC range slider
+    const mttcSlider = document.getElementById('mttcRangeSlider');
+    if (mttcSlider) {
+        mttcSlider.addEventListener('input', function() {
+            updateMttcSliderLabels(this.value);
+            applyFilters();
+        });
+    }
+
     // Add listeners for existing severity, status, and automation checkboxes
     document.querySelectorAll('#severityFilter input, #statusFilter input, #automationFilter input').forEach(checkbox => {
         checkbox.addEventListener('change', applyFilters);
     });
 
-    // Add listeners to slider labels for click functionality
-    document.querySelectorAll('.slider-labels span').forEach(label => {
+    // Add listeners to date slider labels for click functionality
+    const dateContainer = document.getElementById('dateRangeSlider').parentElement;
+    dateContainer.querySelectorAll('.slider-labels span').forEach(label => {
         label.addEventListener('click', function() {
             const value = this.getAttribute('data-value');
             dateSlider.value = value;
             updateSliderLabels(value);
             applyFilters();
         });
+        label.style.cursor = 'pointer';
+    });
+
+    // Add listeners to MTTR slider labels for click functionality
+    const mttrContainer = document.getElementById('mttrRangeSlider').parentElement;
+    mttrContainer.querySelectorAll('.slider-labels span').forEach(label => {
+        label.addEventListener('click', function() {
+            const value = this.getAttribute('data-value');
+            mttrSlider.value = value;
+            updateMttrSliderLabels(value);
+            applyFilters();
+        });
+        label.style.cursor = 'pointer';
+    });
+
+    // Add listeners to MTTC slider labels for click functionality
+    const mttcContainer = document.getElementById('mttcRangeSlider').parentElement;
+    mttcContainer.querySelectorAll('.slider-labels span').forEach(label => {
+        label.addEventListener('click', function() {
+            const value = this.getAttribute('data-value');
+            mttcSlider.value = value;
+            updateMttcSliderLabels(value);
+            applyFilters();
+        });
+        label.style.cursor = 'pointer';
     });
 
     // Add listeners for sortable table headers
@@ -95,10 +141,27 @@ function setupEventListeners() {
 }
 
 function updateSliderLabels(value) {
-    document.querySelectorAll('.slider-labels span').forEach(span => {
+    const dateContainer = document.getElementById('dateRangeSlider').parentElement;
+    dateContainer.querySelectorAll('.slider-labels span').forEach(span => {
         span.classList.remove('active');
     });
-    document.querySelector(`.slider-labels span[data-value="${value}"]`).classList.add('active');
+    dateContainer.querySelector(`.slider-labels span[data-value="${value}"]`).classList.add('active');
+}
+
+function updateMttrSliderLabels(value) {
+    const mttrContainer = document.getElementById('mttrRangeSlider').parentElement;
+    mttrContainer.querySelectorAll('.slider-labels span').forEach(span => {
+        span.classList.remove('active');
+    });
+    mttrContainer.querySelector(`.slider-labels span[data-value="${value}"]`).classList.add('active');
+}
+
+function updateMttcSliderLabels(value) {
+    const mttcContainer = document.getElementById('mttcRangeSlider').parentElement;
+    mttcContainer.querySelectorAll('.slider-labels span').forEach(span => {
+        span.classList.remove('active');
+    });
+    mttcContainer.querySelector(`.slider-labels span[data-value="${value}"]`).classList.add('active');
 }
 
 async function loadData() {
@@ -164,6 +227,17 @@ function applyFilters() {
     const sliderValue = parseInt(dateSlider ? dateSlider.value : 1);
     // Map slider positions to days: 0=7, 1=30, 2=60, 3=90
     const dateRange = [7, 30, 60, 90][sliderValue] || 30;
+
+    const mttrSlider = document.getElementById('mttrRangeSlider');
+    const mttrValue = parseInt(mttrSlider ? mttrSlider.value : 0);
+    // Map slider positions to MTTR ranges: 0=All, 1=≤3mins, 2=>3mins, 3=>5mins
+    const mttrFilter = mttrValue;
+
+    const mttcSlider = document.getElementById('mttcRangeSlider');
+    const mttcValue = parseInt(mttcSlider ? mttcSlider.value : 0);
+    // Map slider positions to MTTC ranges: 0=All, 1=≤5mins, 2=≤15mins, 3=>15mins
+    const mttcFilter = mttcValue;
+
     const countries = Array.from(document.querySelectorAll('#countryFilter input:checked')).map(cb => cb.value);
     const impacts = Array.from(document.querySelectorAll('#impactFilter input:checked')).map(cb => cb.value);
     const severities = Array.from(document.querySelectorAll('#severityFilter input:checked')).map(cb => cb.value);
@@ -172,7 +246,7 @@ function applyFilters() {
     const automationLevels = Array.from(document.querySelectorAll('#automationFilter input:checked')).map(cb => cb.value);
 
     // Update filter summary
-    updateFilterSummary(dateRange, countries, impacts, severities, ticketTypes, statuses, automationLevels);
+    updateFilterSummary(dateRange, mttrFilter, mttcFilter, countries, impacts, severities, ticketTypes, statuses, automationLevels);
 
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - dateRange);
@@ -202,13 +276,36 @@ function applyFilters() {
         if (statuses.length > 0 && !statuses.includes(item.status.toString())) return false;
         if (automationLevels.length > 0 && !automationLevels.includes(item.automation_level || 'Unknown')) return false;
 
+        // MTTR filter
+        if (mttrFilter > 0) {
+            const mttrSeconds = item.timetorespond && item.timetorespond.totalDuration ? item.timetorespond.totalDuration : null;
+            if (mttrSeconds === null || mttrSeconds === 0) return false; // Skip items without MTTR data
+
+            if (mttrFilter === 1 && mttrSeconds > 180) return false; // ≤3 mins (180 seconds)
+            if (mttrFilter === 2 && mttrSeconds <= 180) return false; // >3 mins
+            if (mttrFilter === 3 && mttrSeconds <= 300) return false; // >5 mins (300 seconds)
+        }
+
+        // MTTC filter - only consider cases with host populated
+        if (mttcFilter > 0) {
+            const hasHost = item.hostname && item.hostname.trim() !== '' && item.hostname !== 'Unknown';
+            if (!hasHost) return false; // Skip items without host
+
+            const mttcSeconds = item.timetocontain && item.timetocontain.totalDuration ? item.timetocontain.totalDuration : null;
+            if (mttcSeconds === null || mttcSeconds === 0) return false; // Skip items without MTTC data
+
+            if (mttcFilter === 1 && mttcSeconds > 300) return false; // ≤5 mins (300 seconds)
+            if (mttcFilter === 2 && mttcSeconds > 900) return false; // ≤15 mins (900 seconds)
+            if (mttcFilter === 3 && mttcSeconds <= 900) return false; // >15 mins (900 seconds)
+        }
+
         return true;
     });
 
     updateDashboard();
 }
 
-function updateFilterSummary(dateRange, countries, impacts, severities, ticketTypes, statuses, automationLevels) {
+function updateFilterSummary(dateRange, mttrFilter, mttcFilter, countries, impacts, severities, ticketTypes, statuses, automationLevels) {
     const container = document.getElementById('activeFiltersContainer');
 
     // Preserve non-removable filters
@@ -225,6 +322,22 @@ function updateFilterSummary(dateRange, countries, impacts, severities, ticketTy
                    dateRange === 365 ? 'Last year' : `Last ${dateRange} days`;
 
     container.innerHTML += `<span class="filter-tag">${dateText}</span>`;
+
+    // MTTR filter
+    if (mttrFilter > 0) {
+        const mttrText = mttrFilter === 1 ? 'MTTR ≤3 mins' :
+                        mttrFilter === 2 ? 'MTTR >3 mins' :
+                        mttrFilter === 3 ? 'MTTR >5 mins' : 'All MTTR';
+        container.innerHTML += `<span class="filter-tag">${mttrText}</span>`;
+    }
+
+    // MTTC filter
+    if (mttcFilter > 0) {
+        const mttcText = mttcFilter === 1 ? 'MTTC ≤5 mins' :
+                        mttcFilter === 2 ? 'MTTC ≤15 mins' :
+                        mttcFilter === 3 ? 'MTTC >15 mins' : 'All MTTC';
+        container.innerHTML += `<span class="filter-tag">${mttcText}</span>`;
+    }
 
     // Add other filters if selected
     if (countries.length > 0) {
@@ -296,6 +409,20 @@ function resetFilters() {
         updateSliderLabels(1);
     }
 
+    // Reset MTTR range slider to default (All, position 0)
+    const mttrSlider = document.getElementById('mttrRangeSlider');
+    if (mttrSlider) {
+        mttrSlider.value = 0;
+        updateMttrSliderLabels(0);
+    }
+
+    // Reset MTTC range slider to default (All, position 0)
+    const mttcSlider = document.getElementById('mttcRangeSlider');
+    if (mttcSlider) {
+        mttcSlider.value = 0;
+        updateMttcSliderLabels(0);
+    }
+
     // Uncheck all checkboxes
     document.querySelectorAll('#countryFilter input, #impactFilter input, #severityFilter input, #ticketTypeFilter input, #statusFilter input, #automationFilter input').forEach(checkbox => {
         checkbox.checked = false;
@@ -314,9 +441,19 @@ function updateDashboard() {
 
 function updateMetrics() {
     const totalIncidents = filteredData.length;
-    const criticalIncidents = filteredData.filter(item => item.severity === 4).length;
+    const responseSlaBreachers = filteredData.filter(item => {
+        const timeToRespond = item.timetorespond;
+        return timeToRespond && (timeToRespond.breachTriggered === true || timeToRespond.breachTriggered === 'true');
+    }).length;
+
+    const containmentSlaBreaches = filteredData.filter(item => {
+        // Only consider cases with host populated
+        const hasHost = item.hostname && item.hostname.trim() !== '' && item.hostname !== 'Unknown';
+        const timeToContain = item.timetocontain;
+        return hasHost && timeToContain && (timeToContain.breachTriggered === true || timeToContain.breachTriggered === 'true');
+    }).length;
+
     const openIncidents = filteredData.filter(item => item.status !== 2).length;
-    const containedIncidents = filteredData.filter(item => item.contained === true).length;
 
     // Calculate MTTR (Mean Time to Respond) - only for cases with an owner
     const casesWithOwnerAndTimeToRespond = filteredData.filter(item =>
@@ -329,10 +466,13 @@ function updateMetrics() {
         ? casesWithOwnerAndTimeToRespond.reduce((sum, item) => sum + item.timetorespond.totalDuration, 0) / casesWithOwnerAndTimeToRespond.length
         : 0;
 
-    // Calculate MTTC (Mean Time to Contain) - only for cases with an owner
+    // Calculate MTTC (Mean Time to Contain) - only for cases with an owner and host populated
     const casesWithOwnerAndTimeToContain = filteredData.filter(item =>
         item.owner &&
         item.owner.trim() !== '' &&
+        item.hostname &&
+        item.hostname.trim() !== '' &&
+        item.hostname !== 'Unknown' &&
         item.timetocontain &&
         item.timetocontain.totalDuration > 0
     );
@@ -367,16 +507,16 @@ function updateMetrics() {
             <div class="metric-subtitle">${casesWithOwnerAndTimeToContain.length} cases</div>
         </div>
         <div class="metric-card">
-            <div class="metric-title">🚨 Critical</div>
-            <div class="metric-value">${criticalIncidents.toLocaleString()}</div>
+            <div class="metric-title">🚨 Response SLA Breaches</div>
+            <div class="metric-value">${responseSlaBreachers.toLocaleString()}</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-title">🔒 Containment SLA Breaches</div>
+            <div class="metric-value">${containmentSlaBreaches.toLocaleString()}</div>
         </div>
         <div class="metric-card">
             <div class="metric-title">📈 Open</div>
             <div class="metric-value">${openIncidents.toLocaleString()}</div>
-        </div>
-        <div class="metric-card">
-            <div class="metric-title">🔐 Contained</div>
-            <div class="metric-value">${containedIncidents.toLocaleString()}</div>
         </div>
         <div class="metric-card">
             <div class="metric-title">🌍 Countries</div>
@@ -652,6 +792,15 @@ function updateTable() {
                                 td.textContent = new Date(value).toLocaleDateString();
                             }
                             break;
+                        case 'duration':
+                            if (value && value > 0) {
+                                const minutes = Math.floor(value / 60);
+                                const seconds = Math.round(value % 60);
+                                td.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+                            } else {
+                                td.textContent = '--';
+                            }
+                            break;
                         case 'number':
                             if (columnId === 'id') {
                                 td.innerHTML = `<a href="https://msoar.crtx.us.paloaltonetworks.com/Custom/caseinfoid/${value}" target="_blank" style="color: #0046ad; text-decoration: underline;">${value}</a>`;
@@ -828,7 +977,7 @@ function sortData(data) {
         if (column.type === 'date') {
             aVal = aVal ? new Date(aVal) : new Date(0);
             bVal = bVal ? new Date(bVal) : new Date(0);
-        } else if (column.type === 'number') {
+        } else if (column.type === 'number' || column.type === 'duration') {
             aVal = parseInt(aVal) || 0;
             bVal = parseInt(bVal) || 0;
         } else {

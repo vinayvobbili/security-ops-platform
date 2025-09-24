@@ -25,7 +25,7 @@
 <div class="dashboard-container">
     <div class="dashboard-header">
         <h1 class="dashboard-title">METCIRT Meaningful Metrics</h1>
-        <p class="dashboard-subtitle">Past 90 days analytics and insights from XSOAR alerts</p>
+        <p class="dashboard-subtitle">Past 90 days (excluding today) analytics and insights from XSOAR alerts</p>
     </div>
 
     <!-- Filters Section -->
@@ -43,6 +43,26 @@
                         <span data-value="1" class="active">30</span>
                         <span data-value="2">60</span>
                         <span data-value="3">90</span>
+                    </div>
+                </div>
+                <label class="date-range-label">⏱️ MTTR (mins):</label>
+                <div class="date-range-slider-container">
+                    <input type="range" id="mttrRangeSlider" class="date-range-slider" min="0" max="3" value="0" step="1">
+                    <div class="slider-labels">
+                        <span data-value="0" class="active">All</span>
+                        <span data-value="1">≤3</span>
+                        <span data-value="2">>3</span>
+                        <span data-value="3">>5</span>
+                    </div>
+                </div>
+                <label class="date-range-label">🔒 MTTC (mins):</label>
+                <div class="date-range-slider-container">
+                    <input type="range" id="mttcRangeSlider" class="date-range-slider" min="0" max="3" value="0" step="1">
+                    <div class="slider-labels">
+                        <span data-value="0" class="active">All</span>
+                        <span data-value="1">≤5</span>
+                        <span data-value="2">≤15</span>
+                        <span data-value="3">>15</span>
                     </div>
                 </div>
             </div>
