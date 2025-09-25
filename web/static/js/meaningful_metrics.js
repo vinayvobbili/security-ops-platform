@@ -1,40 +1,40 @@
 let allData = [];
 let filteredData = [];
-let currentSort = { column: null, direction: 'asc' };
+let currentSort = {column: null, direction: 'asc'};
 
 // Column configuration with all available fields
 const availableColumns = {
     // Primary fields (commonly used)
-    'id': { label: 'ID', category: 'Primary', path: 'id', type: 'number' },
-    'name': { label: 'Name', category: 'Primary', path: 'name', type: 'string' },
-    'severity': { label: 'Severity', category: 'Primary', path: 'severity', type: 'number' },
-    'status': { label: 'Status', category: 'Primary', path: 'status', type: 'number' },
-    'type': { label: 'Type', category: 'Primary', path: 'type', type: 'string' },
-    'created': { label: 'Created', category: 'Primary', path: 'created', type: 'date' },
-    'closed': { label: 'Closed', category: 'Primary', path: 'closed', type: 'date' },
-    'owner': { label: 'Owner', category: 'Primary', path: 'owner', type: 'string' },
+    'id': {label: 'ID', category: 'Primary', path: 'id', type: 'number'},
+    'name': {label: 'Name', category: 'Primary', path: 'name', type: 'string'},
+    'severity': {label: 'Severity', category: 'Primary', path: 'severity', type: 'number'},
+    'status': {label: 'Status', category: 'Primary', path: 'status', type: 'number'},
+    'type': {label: 'Type', category: 'Primary', path: 'type', type: 'string'},
+    'created': {label: 'Created', category: 'Primary', path: 'created', type: 'date'},
+    'closed': {label: 'Closed', category: 'Primary', path: 'closed', type: 'date'},
+    'owner': {label: 'Owner', category: 'Primary', path: 'owner', type: 'string'},
 
     // Custom Fields (from data analysis)
-    'affected_country': { label: 'Country', category: 'Location', path: 'affected_country', type: 'string' },
-    'affected_region': { label: 'Region', category: 'Location', path: 'CustomFields.affectedregion', type: 'string' },
-    'impact': { label: 'Impact', category: 'Assessment', path: 'impact', type: 'string' },
-    'contained': { label: 'Contained', category: 'Status', path: 'CustomFields.contained', type: 'string' },
-    'automation': { label: 'Automation Level', category: 'Process', path: 'CustomFields.automation', type: 'string' },
-    'escalation_state': { label: 'Escalation State', category: 'Process', path: 'CustomFields.escalationstate', type: 'string' },
-    'source': { label: 'Source', category: 'Detection', path: 'CustomFields.source', type: 'string' },
-    'threat_type': { label: 'Threat Type', category: 'Assessment', path: 'CustomFields.threattype', type: 'string' },
-    'root_cause': { label: 'Root Cause', category: 'Assessment', path: 'CustomFields.rootcause', type: 'string' },
-    'breach_confirmation': { label: 'Breach Confirmation', category: 'Assessment', path: 'CustomFields.breachconfirmation', type: 'string' },
+    'affected_country': {label: 'Country', category: 'Location', path: 'affected_country', type: 'string'},
+    'affected_region': {label: 'Region', category: 'Location', path: 'CustomFields.affectedregion', type: 'string'},
+    'impact': {label: 'Impact', category: 'Assessment', path: 'impact', type: 'string'},
+    'contained': {label: 'Contained', category: 'Status', path: 'CustomFields.contained', type: 'string'},
+    'automation': {label: 'Automation Level', category: 'Process', path: 'CustomFields.automation', type: 'string'},
+    'escalation_state': {label: 'Escalation State', category: 'Process', path: 'CustomFields.escalationstate', type: 'string'},
+    'source': {label: 'Source', category: 'Detection', path: 'CustomFields.source', type: 'string'},
+    'threat_type': {label: 'Threat Type', category: 'Assessment', path: 'CustomFields.threattype', type: 'string'},
+    'root_cause': {label: 'Root Cause', category: 'Assessment', path: 'CustomFields.rootcause', type: 'string'},
+    'breach_confirmation': {label: 'Breach Confirmation', category: 'Assessment', path: 'CustomFields.breachconfirmation', type: 'string'},
 
     // Additional useful fields
-    'occurred': { label: 'Occurred', category: 'Timing', path: 'occurred', type: 'date' },
-    'dueDate': { label: 'Due Date', category: 'Timing', path: 'dueDate', type: 'date' },
-    'phase': { label: 'Phase', category: 'Process', path: 'phase', type: 'string' },
-    'category': { label: 'Category', category: 'Classification', path: 'category', type: 'string' },
-    'sourceInstance': { label: 'Source Instance', category: 'Technical', path: 'sourceInstance', type: 'string' },
-    'openDuration': { label: 'Open Duration', category: 'Metrics', path: 'openDuration', type: 'number' },
-    'timetorespond': { label: 'TTR (mins)', category: 'Metrics', path: 'timetorespond.totalDuration', type: 'duration' },
-    'timetocontain': { label: 'TTC (mins)', category: 'Metrics', path: 'timetocontain.totalDuration', type: 'duration' }
+    'occurred': {label: 'Occurred', category: 'Timing', path: 'occurred', type: 'date'},
+    'dueDate': {label: 'Due Date', category: 'Timing', path: 'dueDate', type: 'date'},
+    'phase': {label: 'Phase', category: 'Process', path: 'phase', type: 'string'},
+    'category': {label: 'Category', category: 'Classification', path: 'category', type: 'string'},
+    'sourceInstance': {label: 'Source Instance', category: 'Technical', path: 'sourceInstance', type: 'string'},
+    'openDuration': {label: 'Open Duration', category: 'Metrics', path: 'openDuration', type: 'number'},
+    'timetorespond': {label: 'TTR (mins)', category: 'Metrics', path: 'timetorespond.totalDuration', type: 'duration'},
+    'timetocontain': {label: 'TTC (mins)', category: 'Metrics', path: 'timetocontain.totalDuration', type: 'duration'}
 };
 
 // Default visible columns and their order
@@ -50,7 +50,7 @@ const colorSchemes = {
 };
 
 // Initialize dashboard
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', function () {
     loadData();
     setupEventListeners();
 });
@@ -59,7 +59,7 @@ function setupEventListeners() {
     // Add listener for date range slider
     const dateSlider = document.getElementById('dateRangeSlider');
     if (dateSlider) {
-        dateSlider.addEventListener('input', function() {
+        dateSlider.addEventListener('input', function () {
             updateSliderLabels(this.value);
             applyFilters();
         });
@@ -68,7 +68,7 @@ function setupEventListeners() {
     // Add listener for MTTR range slider
     const mttrSlider = document.getElementById('mttrRangeSlider');
     if (mttrSlider) {
-        mttrSlider.addEventListener('input', function() {
+        mttrSlider.addEventListener('input', function () {
             updateMttrSliderLabels(this.value);
             applyFilters();
         });
@@ -77,7 +77,7 @@ function setupEventListeners() {
     // Add listener for MTTC range slider
     const mttcSlider = document.getElementById('mttcRangeSlider');
     if (mttcSlider) {
-        mttcSlider.addEventListener('input', function() {
+        mttcSlider.addEventListener('input', function () {
             updateMttcSliderLabels(this.value);
             applyFilters();
         });
@@ -86,7 +86,7 @@ function setupEventListeners() {
     // Add listener for age range slider
     const ageSlider = document.getElementById('ageRangeSlider');
     if (ageSlider) {
-        ageSlider.addEventListener('input', function() {
+        ageSlider.addEventListener('input', function () {
             updateAgeSliderLabels(this.value);
             applyFilters();
         });
@@ -100,7 +100,7 @@ function setupEventListeners() {
     // Add listeners to date slider labels for click functionality
     const dateContainer = document.getElementById('dateRangeSlider').parentElement;
     dateContainer.querySelectorAll('.slider-labels span').forEach(label => {
-        label.addEventListener('click', function() {
+        label.addEventListener('click', function () {
             const value = this.getAttribute('data-value');
             dateSlider.value = value;
             updateSliderLabels(value);
@@ -112,7 +112,7 @@ function setupEventListeners() {
     // Add listeners to MTTR slider labels for click functionality
     const mttrContainer = document.getElementById('mttrRangeSlider').parentElement;
     mttrContainer.querySelectorAll('.slider-labels span').forEach(label => {
-        label.addEventListener('click', function() {
+        label.addEventListener('click', function () {
             const value = this.getAttribute('data-value');
             mttrSlider.value = value;
             updateMttrSliderLabels(value);
@@ -124,7 +124,7 @@ function setupEventListeners() {
     // Add listeners to MTTC slider labels for click functionality
     const mttcContainer = document.getElementById('mttcRangeSlider').parentElement;
     mttcContainer.querySelectorAll('.slider-labels span').forEach(label => {
-        label.addEventListener('click', function() {
+        label.addEventListener('click', function () {
             const value = this.getAttribute('data-value');
             mttcSlider.value = value;
             updateMttcSliderLabels(value);
@@ -136,7 +136,7 @@ function setupEventListeners() {
     // Add listeners to age slider labels for click functionality
     const ageContainer = document.getElementById('ageRangeSlider').parentElement;
     ageContainer.querySelectorAll('.slider-labels span').forEach(label => {
-        label.addEventListener('click', function() {
+        label.addEventListener('click', function () {
             const value = this.getAttribute('data-value');
             ageSlider.value = value;
             updateAgeSliderLabels(value);
@@ -147,7 +147,7 @@ function setupEventListeners() {
 
     // Add listeners for sortable table headers
     document.querySelectorAll('.sortable').forEach(header => {
-        header.addEventListener('click', function() {
+        header.addEventListener('click', function () {
             const column = this.getAttribute('data-column');
             sortTable(column);
         });
@@ -370,34 +370,34 @@ function updateFilterSummary(dateRange, mttrFilter, mttcFilter, ageFilter, count
 
     // Date range - no X button, use radio buttons to change
     const dateText = dateRange === 7 ? 'Last 7 days' :
-                   dateRange === 30 ? 'Last 30 days' :
-                   dateRange === 60 ? 'Last 60 days' :
-                   dateRange === 90 ? 'Last 90 days' :
-                   dateRange === 365 ? 'Last year' : `Last ${dateRange} days`;
+        dateRange === 30 ? 'Last 30 days' :
+            dateRange === 60 ? 'Last 60 days' :
+                dateRange === 90 ? 'Last 90 days' :
+                    dateRange === 365 ? 'Last year' : `Last ${dateRange} days`;
 
     container.innerHTML += `<span class="filter-tag">${dateText}</span>`;
 
     // MTTR filter
     if (mttrFilter > 0) {
         const mttrText = mttrFilter === 1 ? 'MTTR ≤3 mins' :
-                        mttrFilter === 2 ? 'MTTR >3 mins' :
-                        mttrFilter === 3 ? 'MTTR >5 mins' : 'All MTTR';
+            mttrFilter === 2 ? 'MTTR >3 mins' :
+                mttrFilter === 3 ? 'MTTR >5 mins' : 'All MTTR';
         container.innerHTML += `<span class="filter-tag">${mttrText} <button class="remove-filter-btn" onclick="removeFilter('mttr', '${mttrFilter}')">×</button></span>`;
     }
 
     // MTTC filter
     if (mttcFilter > 0) {
         const mttcText = mttcFilter === 1 ? 'MTTC ≤5 mins' :
-                        mttcFilter === 2 ? 'MTTC ≤15 mins' :
-                        mttcFilter === 3 ? 'MTTC >15 mins' : 'All MTTC';
+            mttcFilter === 2 ? 'MTTC ≤15 mins' :
+                mttcFilter === 3 ? 'MTTC >15 mins' : 'All MTTC';
         container.innerHTML += `<span class="filter-tag">${mttcText} <button class="remove-filter-btn" onclick="removeFilter('mttc', '${mttcFilter}')">×</button></span>`;
     }
 
     // Age filter
     if (ageFilter > 0) {
         const ageText = ageFilter === 1 ? 'Age ≤7 days' :
-                       ageFilter === 2 ? 'Age ≤30 days' :
-                       ageFilter === 3 ? 'Age ≤90 days' : 'All Ages';
+            ageFilter === 2 ? 'Age ≤30 days' :
+                ageFilter === 3 ? 'Age ≤90 days' : 'All Ages';
         container.innerHTML += `<span class="filter-tag">${ageText} <button class="remove-filter-btn" onclick="removeFilter('age', '${ageFilter}')">×</button></span>`;
     }
 
@@ -637,65 +637,99 @@ function createGeoChart() {
         orientation: 'h',
         marker: {
             color: colorSchemes.countries,
-            line: { color: 'rgba(255,255,255,0.8)', width: 1 }
+            line: {color: 'rgba(255,255,255,0.8)', width: 1}
         },
         hovertemplate: '<b>%{y}</b><br>Incidents: %{x}<extra></extra>'
     };
 
     const layout = {
-        margin: { l: 120, r: 20, t: 40, b: 40 },
-        font: { family: 'Segoe UI, sans-serif', size: 12 },
+        margin: {l: 120, r: 20, t: 40, b: 40},
+        font: {family: 'Segoe UI, sans-serif', size: 12},
         showlegend: false,
         plot_bgcolor: 'rgba(0,0,0,0)',
         paper_bgcolor: 'rgba(0,0,0,0)',
-        xaxis: { gridcolor: 'rgba(128,128,128,0.2)' },
-        yaxis: { gridcolor: 'rgba(128,128,128,0.2)' }
+        xaxis: {gridcolor: 'rgba(128,128,128,0.2)'},
+        yaxis: {gridcolor: 'rgba(128,128,128,0.2)'}
     };
 
-    const config = { responsive: true, displayModeBar: true, displaylogo: false };
+    const config = {responsive: true, displayModeBar: true, displaylogo: false};
     Plotly.newPlot('geoChart', [trace], layout, config);
 }
 
 
 function createTimelineChart() {
-    const dailyCounts = {};
+    const dailyInflow = {};
+    const dailyOutflow = {};
+
     filteredData.forEach(item => {
-        const date = new Date(item.created).toISOString().split('T')[0];
-        dailyCounts[date] = (dailyCounts[date] || 0) + 1;
+        // Only include cases with owners
+        if (item.owner && item.owner.trim() !== '') {
+            // Calculate inflow (created cases)
+            if (item.created && item.created.trim() !== '') {
+                const createdDate = new Date(item.created);
+                if (!isNaN(createdDate.getTime()) && createdDate.getFullYear() >= 2020) {
+                    const date = createdDate.toISOString().split('T')[0];
+                    dailyInflow[date] = (dailyInflow[date] || 0) + 1;
+                }
+            }
+
+            // Calculate outflow (closed cases)
+            if (item.closed && item.closed.trim() !== '') {
+                const closedDate = new Date(item.closed);
+                if (!isNaN(closedDate.getTime()) && closedDate.getFullYear() >= 2020) {
+                    const date = closedDate.toISOString().split('T')[0];
+                    dailyOutflow[date] = (dailyOutflow[date] || 0) + 1;
+                }
+            }
+        }
     });
 
-    const sortedDates = Object.keys(dailyCounts).sort();
+    const allDates = [...new Set([...Object.keys(dailyInflow), ...Object.keys(dailyOutflow)])].sort();
 
-    const trace = {
-        x: sortedDates,
-        y: sortedDates.map(date => dailyCounts[date]),
-        type: 'scatter',
-        mode: 'lines+markers',
-        line: { color: '#007bff', width: 3 },
-        marker: { color: '#007bff', size: 6 },
-        fill: 'tonexty',
-        fillcolor: 'rgba(0, 123, 255, 0.1)',
-        hovertemplate: '<b>%{x}</b><br>Incidents: %{y}<extra></extra>'
-    };
+    const traces = [
+        {
+            x: allDates,
+            y: allDates.map(date => dailyInflow[date] || 0),
+            type: 'scatter',
+            mode: 'lines+markers',
+            name: 'Inflow (Acknowledged by Analyst)',
+            line: {color: '#007bff', width: 3},
+            marker: {color: '#007bff', size: 6},
+            hovertemplate: '<b>%{x}</b><br>Created: %{y}<extra></extra>'
+        },
+        {
+            x: allDates,
+            y: allDates.map(date => dailyOutflow[date] || 0),
+            type: 'scatter',
+            mode: 'lines+markers',
+            name: 'Outflow (Closed by Analyst)',
+            line: {color: '#28a745', width: 3},
+            marker: {color: '#28a745', size: 6},
+            hovertemplate: '<b>%{x}</b><br>Closed: %{y}<extra></extra>'
+        }
+    ];
 
     const layout = {
-        margin: { l: 60, r: 20, t: 40, b: 60 },
-        font: { family: 'Segoe UI, sans-serif', size: 12 },
-        showlegend: false,
+        margin: {l: 60, r: 20, t: 20, b: 60},
+        font: {family: 'Segoe UI, sans-serif', size: 12},
+        showlegend: true,
+        legend: {x: 0, y: 1, bgcolor: 'rgba(255,255,255,0.8)'},
         plot_bgcolor: 'rgba(0,0,0,0)',
         paper_bgcolor: 'rgba(0,0,0,0)',
         xaxis: {
             gridcolor: 'rgba(128,128,128,0.2)',
-            tickangle: -45
+            tickangle: 90,
+            tickformat: '%m/%d',
+            dtick: 86400000 * 2
         },
         yaxis: {
             gridcolor: 'rgba(128,128,128,0.2)',
-            title: 'Number of Incidents'
+            title: 'Number of Cases'
         }
     };
 
-    const config = { responsive: true, displayModeBar: true, displaylogo: false };
-    Plotly.newPlot('timelineChart', [trace], layout, config);
+    const config = {responsive: true, displayModeBar: true, displaylogo: false};
+    Plotly.newPlot('timelineChart', traces, layout, config);
 }
 
 function createImpactChart() {
@@ -714,22 +748,22 @@ function createImpactChart() {
         hole: 0.3,
         marker: {
             colors: colorSchemes.countries,
-            line: { color: 'white', width: 2 }
+            line: {color: 'white', width: 2}
         },
         textinfo: 'label+value',
-        textfont: { size: 12 },
+        textfont: {size: 12},
         hovertemplate: '<b>%{label}</b><br>Count: %{value}<br>Percentage: %{percent}<extra></extra>'
     };
 
     const layout = {
-        margin: { l: 10, r: 10, t: 20, b: 20 },
-        font: { family: 'Segoe UI, sans-serif', size: 12 },
+        margin: {l: 10, r: 10, t: 20, b: 20},
+        font: {family: 'Segoe UI, sans-serif', size: 12},
         showlegend: false,
         plot_bgcolor: 'rgba(0,0,0,0)',
         paper_bgcolor: 'rgba(0,0,0,0)'
     };
 
-    const config = { responsive: true, displayModeBar: true, displaylogo: false };
+    const config = {responsive: true, displayModeBar: true, displaylogo: false};
     Plotly.newPlot('ticketTypeChart', [trace], layout, config);
 }
 
@@ -752,22 +786,22 @@ function createTicketTypeChart() {
         hole: 0.6,
         marker: {
             colors: colorSchemes.sources,
-            line: { color: 'white', width: 2 }
+            line: {color: 'white', width: 2}
         },
         textinfo: 'label+value',
-        textfont: { size: 11 },
+        textfont: {size: 11},
         hovertemplate: '<b>%{label}</b><br>Count: %{value}<br>Percentage: %{percent}<extra></extra>'
     };
 
     const layout = {
-        margin: { l: 20, r: 20, t: 40, b: 40 },
-        font: { family: 'Segoe UI, sans-serif', size: 12 },
+        margin: {l: 20, r: 20, t: 40, b: 40},
+        font: {family: 'Segoe UI, sans-serif', size: 12},
         showlegend: false,
         plot_bgcolor: 'rgba(0,0,0,0)',
         paper_bgcolor: 'rgba(0,0,0,0)'
     };
 
-    const config = { responsive: true, displayModeBar: true, displaylogo: false };
+    const config = {responsive: true, displayModeBar: true, displaylogo: false};
     Plotly.newPlot('severityChart', [trace], layout, config);
 }
 
@@ -794,22 +828,22 @@ function createOwnerChart() {
         orientation: 'h',
         marker: {
             color: colorSchemes.sources,
-            line: { color: 'rgba(255,255,255,0.8)', width: 1 }
+            line: {color: 'rgba(255,255,255,0.8)', width: 1}
         },
         hovertemplate: '<b>%{y}</b><br>Cases: %{x}<extra></extra>'
     };
 
     const layout = {
-        margin: { l: 120, r: 20, t: 20, b: 40 },
-        font: { family: 'Segoe UI, sans-serif', size: 12 },
+        margin: {l: 120, r: 20, t: 20, b: 40},
+        font: {family: 'Segoe UI, sans-serif', size: 12},
         showlegend: false,
         plot_bgcolor: 'rgba(0,0,0,0)',
         paper_bgcolor: 'rgba(0,0,0,0)',
-        xaxis: { gridcolor: 'rgba(128,128,128,0.2)', title: 'Number of Cases' },
-        yaxis: { gridcolor: 'rgba(128,128,128,0.2)' }
+        xaxis: {gridcolor: 'rgba(128,128,128,0.2)', title: 'Number of Cases'},
+        yaxis: {gridcolor: 'rgba(128,128,128,0.2)'}
     };
 
-    const config = { responsive: true, displayModeBar: true, displaylogo: false };
+    const config = {responsive: true, displayModeBar: true, displaylogo: false};
     Plotly.newPlot('heatmapChart', [trace], layout, config);
 }
 
@@ -832,19 +866,19 @@ function createFunnelChart() {
         textinfo: 'value+percent initial',
         marker: {
             color: ['#4472C4', '#70AD47', '#C5504B'],
-            line: { color: 'white', width: 2 }
+            line: {color: 'white', width: 2}
         },
         hovertemplate: '<b>%{y}</b><br>Count: %{x}<br>Percentage: %{percentInitial}<extra></extra>'
     };
 
     const layout = {
-        margin: { l: 150, r: 20, t: 20, b: 40 },
-        font: { family: 'Segoe UI, sans-serif', size: 12 },
+        margin: {l: 150, r: 20, t: 20, b: 40},
+        font: {family: 'Segoe UI, sans-serif', size: 12},
         plot_bgcolor: 'rgba(0,0,0,0)',
         paper_bgcolor: 'rgba(0,0,0,0)'
     };
 
-    const config = { responsive: true, displayModeBar: true, displaylogo: false };
+    const config = {responsive: true, displayModeBar: true, displaylogo: false};
     Plotly.newPlot('funnelChart', [trace], layout, config);
 }
 
@@ -889,11 +923,11 @@ function updateTable() {
                             if (columnId === 'id') {
                                 td.innerHTML = `<a href="https://msoar.crtx.us.paloaltonetworks.com/Custom/caseinfoid/${value}" target="_blank" style="color: #0046ad; text-decoration: underline;">${value}</a>`;
                             } else if (columnId === 'severity') {
-                                const severityMap = { 0: 'Unknown', 1: 'Low', 2: 'Medium', 3: 'High', 4: 'Critical' };
+                                const severityMap = {0: 'Unknown', 1: 'Low', 2: 'Medium', 3: 'High', 4: 'Critical'};
                                 const severity = severityMap[value] || 'Unknown';
                                 td.innerHTML = `<span class="severity-${severity.toLowerCase()}">${severity}</span>`;
                             } else if (columnId === 'status') {
-                                const statusMap = { 0: 'Pending', 1: 'Active', 2: 'Closed' };
+                                const statusMap = {0: 'Pending', 1: 'Active', 2: 'Closed'};
                                 const status = statusMap[value] || 'Unknown';
                                 td.innerHTML = `<span class="status-${status.toLowerCase()}">${status}</span>`;
                             } else {
@@ -921,8 +955,8 @@ function updateTable() {
 
 function exportToCSV() {
     const headers = ['ID', 'Name', 'Severity', 'Status', 'Country', 'Impact', 'Type', 'Created'];
-    const severityMap = { 0: 'Unknown', 1: 'Low', 2: 'Medium', 3: 'High', 4: 'Critical' };
-    const statusMap = { 0: 'Pending', 1: 'Active', 2: 'Closed' };
+    const severityMap = {0: 'Unknown', 1: 'Low', 2: 'Medium', 3: 'High', 4: 'Critical'};
+    const statusMap = {0: 'Pending', 1: 'Active', 2: 'Closed'};
 
     const csvContent = [
         headers.join(','),
@@ -971,7 +1005,7 @@ function getMostCommon(field) {
 }
 
 function downloadCSV(content, filename) {
-    const blob = new Blob([content], { type: 'text/csv' });
+    const blob = new Blob([content], {type: 'text/csv'});
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -1006,8 +1040,6 @@ function toggleAudio() {
     const icon = document.getElementById('music-icon');
     icon.style.opacity = icon.style.opacity === '0.5' ? '1' : '0.5';
 }
-
-
 
 
 // Table sorting functions
@@ -1110,7 +1142,7 @@ function setupColumnSelector() {
     loadColumnPreferences();
 
     // Toggle dropdown
-    btn.addEventListener('click', function(e) {
+    btn.addEventListener('click', function (e) {
         e.stopPropagation();
         dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
         if (dropdown.style.display === 'block') {
@@ -1119,7 +1151,7 @@ function setupColumnSelector() {
     });
 
     // Close dropdown when clicking outside
-    document.addEventListener('click', function(e) {
+    document.addEventListener('click', function (e) {
         if (!dropdown.contains(e.target) && !btn.contains(e.target)) {
             dropdown.style.display = 'none';
         }
@@ -1137,7 +1169,7 @@ function populateColumnSelector() {
         if (!categories[column.category]) {
             categories[column.category] = [];
         }
-        categories[column.category].push({ id: columnId, ...column });
+        categories[column.category].push({id: columnId, ...column});
     });
 
     // Create checkboxes grouped by category
@@ -1172,7 +1204,7 @@ function populateColumnSelector() {
                 }
             }
 
-            checkbox.addEventListener('change', function() {
+            checkbox.addEventListener('change', function () {
                 if (!isRequired) {
                     toggleColumn(column.id, this.checked);
                 }
@@ -1384,7 +1416,7 @@ function buildTableHeaders() {
             th.setAttribute('data-column', columnId);
             th.innerHTML = `${column.label} <span class="sort-indicator"></span>`;
             th.style.cursor = 'pointer';
-            th.addEventListener('click', function() {
+            th.addEventListener('click', function () {
                 sortTable(columnId);
             });
             thead.appendChild(th);
