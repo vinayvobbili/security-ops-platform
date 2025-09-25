@@ -17,9 +17,13 @@
 
 <audio id="music" src="" loop muted></audio>
 <div class="audio-controls">
-    <button onclick="toggleAudio()">
+    <button id="audioToggleBtn">
         <img src="/static/icons/volume-xmark-solid.svg" alt="Unmute Icon" class="music-icon" id="music-icon">
     </button>
+</div>
+<!-- Dark Mode Toggle -->
+<div class="theme-toggle" id="themeToggleWrapper">
+    <button id="themeToggleBtn" aria-label="Toggle dark mode" title="Toggle dark mode">🌙</button>
 </div>
 
 <div class="dashboard-container">
@@ -142,7 +146,7 @@
                     <span class="filter-tag">Last 30 days</span>
                 </span>
             </div>
-            <button class="clear-all-btn" onclick="resetFilters()">Reset</button>
+            <button class="clear-all-btn" id="resetFiltersBtn">Reset</button>
         </div>
     </div>
 
@@ -196,8 +200,8 @@
                         <div class="column-selector-header">
                             <span>Select Columns to Display</span>
                             <div class="column-selector-buttons">
-                                <button onclick="selectAllColumns()" class="select-all-btn">Select All</button>
-                                <button onclick="deselectAllColumns()" class="deselect-all-btn">Deselect All</button>
+                                <button id="selectAllColumnsBtn" class="select-all-btn">Select All</button>
+                                <button id="deselectAllColumnsBtn" class="deselect-all-btn">Deselect All</button>
                             </div>
                         </div>
                         <div id="columnCheckboxes" class="column-checkboxes">
@@ -236,17 +240,23 @@
             </table>
         </div>
         <div class="export-section">
-            <button class="export-btn" onclick="exportToCSV()">📥 Export to CSV</button>
-            <button class="export-btn" onclick="exportSummary()">📊 Export Summary</button>
+            <button class="export-btn" id="exportCsvBtn">📥 Export to CSV</button>
+            <button class="export-btn" id="exportSummaryBtn">📊 Export Summary</button>
         </div>
     </div>
 </div>
+
+<!-- Toast / Live region for accessibility -->
+<div id="toast" class="toast" role="status" aria-live="polite" aria-atomic="true"></div>
 
 <script src="/static/js/common.js"></script>
 <script src="{{ url_for('static', filename='js/meaningful_metrics.js') }}"></script>
 <script>
     initRandomMusic();
     initBurgerMenu();
+    if (typeof initTheme === 'function') {
+        initTheme();
+    }
 </script>
 </body>
 </html>
