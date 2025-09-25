@@ -1035,11 +1035,6 @@ function showDashboard() {
 
 // Navigation functions
 
-function toggleAudio() {
-    // Placeholder for audio functionality
-    const icon = document.getElementById('music-icon');
-    icon.style.opacity = icon.style.opacity === '0.5' ? '1' : '0.5';
-}
 
 
 // Table sorting functions
