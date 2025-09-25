@@ -216,13 +216,16 @@ function populateFilterOptions() {
     const countries = [...new Set(allData.map(item => item.affected_country))].filter(c => c && c !== 'Unknown').sort();
     const impacts = [...new Set(allData.map(item => item.impact))].filter(i => i && i !== 'Unknown').sort();
     const ticketTypes = [...new Set(allData.map(item => item.type))].filter(t => t && t !== 'Unknown').sort();
-    const automationLevels = [...new Set(allData.map(item => item.automation_level || 'Unknown'))].sort();
+    const automationLevels = [...new Set(allData.map(item => item.automation_level))].filter(a => a && a !== 'Unknown').sort();
 
     // Add "No Country" option to countries list
     countries.unshift('No Country');
 
     // Add "No Impact" option to impacts list
     impacts.unshift('No Impact');
+
+    // Add "No Level" option to automation levels list
+    automationLevels.unshift('No Level');
 
     populateCheckboxFilter('countryFilter', countries);
     populateCheckboxFilter('impactFilter', impacts);
@@ -308,7 +311,13 @@ function applyFilters() {
         if (severities.length > 0 && !severities.includes(item.severity.toString())) return false;
         if (ticketTypes.length > 0 && !ticketTypes.includes(item.type)) return false;
         if (statuses.length > 0 && !statuses.includes(item.status.toString())) return false;
-        if (automationLevels.length > 0 && !automationLevels.includes(item.automation_level || 'Unknown')) return false;
+        if (automationLevels.length > 0) {
+            const hasNoLevel = !item.automation_level || item.automation_level === 'Unknown' || item.automation_level.trim() === '';
+            const shouldShowNoLevel = automationLevels.includes('No Level') && hasNoLevel;
+            const shouldShowWithLevel = automationLevels.some(l => l !== 'No Level' && l === item.automation_level);
+
+            if (!shouldShowNoLevel && !shouldShowWithLevel) return false;
+        }
 
         // MTTR filter
         if (mttrFilter > 0) {
@@ -519,7 +528,7 @@ function updateDashboard() {
 
 function updateMetrics() {
     const totalIncidents = filteredData.length;
-    const responseSlaBreachers = filteredData.filter(item => {
+    const responseSlaBreaches = filteredData.filter(item => {
         const timeToRespond = item.timetorespond;
         return timeToRespond && (timeToRespond.breachTriggered === true || timeToRespond.breachTriggered === 'true');
     }).length;
@@ -544,10 +553,8 @@ function updateMetrics() {
         ? casesWithOwnerAndTimeToRespond.reduce((sum, item) => sum + item.timetorespond.totalDuration, 0) / casesWithOwnerAndTimeToRespond.length
         : 0;
 
-    // Calculate MTTC (Mean Time to Contain) - only for cases with an owner and host populated
+    // Calculate MTTC (Mean Time to Contain) - only for cases with hostname populated
     const casesWithOwnerAndTimeToContain = filteredData.filter(item =>
-        item.owner &&
-        item.owner.trim() !== '' &&
         item.hostname &&
         item.hostname.trim() !== '' &&
         item.hostname !== 'Unknown' &&
@@ -577,16 +584,16 @@ function updateMetrics() {
         <div class="metric-card">
             <div class="metric-title">⏱️ MTTR (mins:secs)</div>
             <div class="metric-value">${mttrFormatted}</div>
-            <div class="metric-subtitle">${casesWithOwnerAndTimeToRespond.length} cases</div>
+            <div class="metric-subtitle">${casesWithOwnerAndTimeToRespond.length} cases acknowledged</div>
         </div>
         <div class="metric-card">
             <div class="metric-title">🔒 MTTC (mins:secs)</div>
             <div class="metric-value">${mttcFormatted}</div>
-            <div class="metric-subtitle">${casesWithOwnerAndTimeToContain.length} cases</div>
+            <div class="metric-subtitle">${casesWithOwnerAndTimeToContain.length} cases with hostnames</div>
         </div>
         <div class="metric-card">
             <div class="metric-title">🚨 Response SLA Breaches</div>
-            <div class="metric-value">${responseSlaBreachers.toLocaleString()}</div>
+            <div class="metric-value">${responseSlaBreaches.toLocaleString()}</div>
         </div>
         <div class="metric-card">
             <div class="metric-title">🔒 Containment SLA Breaches</div>
@@ -607,9 +614,9 @@ function updateMetrics() {
 
 function updateCharts() {
     createGeoChart();
-    createSeverityChart();
-    createTimelineChart();
     createTicketTypeChart();
+    createTimelineChart();
+    createImpactChart();
     createHeatmapChart();
     createFunnelChart();
 }
@@ -649,41 +656,6 @@ function createGeoChart() {
     Plotly.newPlot('geoChart', [trace], layout, config);
 }
 
-function createSeverityChart() {
-    const severityMap = { 0: 'Unknown', 1: 'Low', 2: 'Medium', 3: 'High', 4: 'Critical' };
-    const counts = { 'Unknown': 0, 'Low': 0, 'Medium': 0, 'High': 0, 'Critical': 0 };
-
-    filteredData.forEach(item => {
-        const severity = severityMap[item.severity] || 'Unknown';
-        counts[severity]++;
-    });
-
-    const trace = {
-        labels: Object.keys(counts),
-        values: Object.values(counts),
-        type: 'pie',
-        hole: 0.4,
-        marker: {
-            colors: colorSchemes.severity,
-            line: { color: 'white', width: 2 }
-        },
-        textinfo: 'label+percent+value',
-        textfont: { size: 12 },
-        hovertemplate: '<b>%{label}</b><br>Count: %{value}<br>Percentage: %{percent}<extra></extra>'
-    };
-
-    const layout = {
-        margin: { l: 20, r: 20, t: 40, b: 40 },
-        font: { family: 'Segoe UI, sans-serif', size: 12 },
-        showlegend: true,
-        legend: { orientation: 'h', y: -0.1 },
-        plot_bgcolor: 'rgba(0,0,0,0)',
-        paper_bgcolor: 'rgba(0,0,0,0)'
-    };
-
-    const config = { responsive: true, displayModeBar: true, displaylogo: false };
-    Plotly.newPlot('severityChart', [trace], layout, config);
-}
 
 function createTimelineChart() {
     const dailyCounts = {};
@@ -726,6 +698,41 @@ function createTimelineChart() {
     Plotly.newPlot('timelineChart', [trace], layout, config);
 }
 
+function createImpactChart() {
+    const counts = {};
+    filteredData.forEach(item => {
+        const impact = item.impact || 'Unknown';
+        counts[impact] = (counts[impact] || 0) + 1;
+    });
+
+    const sortedEntries = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+
+    const trace = {
+        labels: sortedEntries.map(([impact, count]) => impact),
+        values: sortedEntries.map(([impact, count]) => count),
+        type: 'pie',
+        hole: 0.3,
+        marker: {
+            colors: colorSchemes.countries,
+            line: { color: 'white', width: 2 }
+        },
+        textinfo: 'label+value',
+        textfont: { size: 12 },
+        hovertemplate: '<b>%{label}</b><br>Count: %{value}<br>Percentage: %{percent}<extra></extra>'
+    };
+
+    const layout = {
+        margin: { l: 10, r: 10, t: 20, b: 20 },
+        font: { family: 'Segoe UI, sans-serif', size: 12 },
+        showlegend: false,
+        plot_bgcolor: 'rgba(0,0,0,0)',
+        paper_bgcolor: 'rgba(0,0,0,0)'
+    };
+
+    const config = { responsive: true, displayModeBar: true, displaylogo: false };
+    Plotly.newPlot('ticketTypeChart', [trace], layout, config);
+}
+
 function createTicketTypeChart() {
     const counts = {};
     filteredData.forEach(item => {
@@ -736,7 +743,10 @@ function createTicketTypeChart() {
     const sortedEntries = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 8);
 
     const trace = {
-        labels: sortedEntries.map(([ticketType, count]) => ticketType),
+        labels: sortedEntries.map(([ticketType, count]) => {
+            // Remove METCIRT prefix for display
+            return ticketType.startsWith('METCIRT') ? ticketType.replace(/^METCIRT[_\-\s]*/i, '') : ticketType;
+        }),
         values: sortedEntries.map(([ticketType, count]) => count),
         type: 'pie',
         hole: 0.6,
@@ -744,7 +754,7 @@ function createTicketTypeChart() {
             colors: colorSchemes.sources,
             line: { color: 'white', width: 2 }
         },
-        textinfo: 'label+percent',
+        textinfo: 'label+value',
         textfont: { size: 11 },
         hovertemplate: '<b>%{label}</b><br>Count: %{value}<br>Percentage: %{percent}<extra></extra>'
     };
@@ -752,14 +762,13 @@ function createTicketTypeChart() {
     const layout = {
         margin: { l: 20, r: 20, t: 40, b: 40 },
         font: { family: 'Segoe UI, sans-serif', size: 12 },
-        showlegend: true,
-        legend: { orientation: 'h', y: -0.1 },
+        showlegend: false,
         plot_bgcolor: 'rgba(0,0,0,0)',
         paper_bgcolor: 'rgba(0,0,0,0)'
     };
 
     const config = { responsive: true, displayModeBar: true, displaylogo: false };
-    Plotly.newPlot('ticketTypeChart', [trace], layout, config);
+    Plotly.newPlot('severityChart', [trace], layout, config);
 }
 
 function createHeatmapChart() {
