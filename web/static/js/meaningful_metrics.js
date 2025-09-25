@@ -134,6 +134,35 @@ function adaptChartTheme(chartId) {
 }
 
 // Initialize dashboard
+// Data freshness functions
+function updateDataTimestamp() {
+    const timestampElement = document.getElementById('dataTimestamp');
+    if (timestampElement) {
+        // Since data excludes "today" and is generated at 12:01 AM ET,
+        // show when the job last ran (this morning at 12:01 AM ET)
+        const today = new Date();
+
+        // Set to 12:01 AM today in ET timezone
+        const options = {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: true,
+            timeZone: 'America/New_York',
+            timeZoneName: 'short'
+        };
+
+        // Force the time to show 12:01 AM by setting the time
+        const todayAt1201 = new Date(today);
+        todayAt1201.setHours(0, 1, 0, 0);
+
+        const lastRun = todayAt1201.toLocaleString('en-US', options);
+        timestampElement.textContent = lastRun;
+    }
+}
+
 document.addEventListener('DOMContentLoaded', function () {
     loadData();
     setupEventListeners();
@@ -336,6 +365,7 @@ async function loadData() {
 
         if (result.success) {
             allData = result.data;
+            updateDataTimestamp();
             populateFilterOptions();
             applyFilters();
             hideLoading();

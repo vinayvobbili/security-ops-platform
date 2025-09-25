@@ -1296,6 +1296,39 @@ body.dark-mode .empty-state-action:hover {
     background: #5bb3f7;
 }
 
+/* Data Freshness Styling - Bottom of dashboard */
+.data-freshness {
+    text-align: center;
+    padding: 15px 20px;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    background: rgba(255, 255, 255, 0.7);
+    border-top: 1px solid rgba(0, 0, 0, 0.1);
+    margin-top: 20px;
+}
+
+.freshness-label {
+    opacity: 0.8;
+}
+
+.freshness-timestamp {
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+
+.freshness-note {
+    font-size: 0.7rem;
+    opacity: 0.6;
+    font-style: italic;
+}
+
+/* Dark mode data freshness */
+body.dark-mode .data-freshness {
+    background: rgba(17, 24, 39, 0.7);
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
 .back-btn {
     position: fixed;
     top: 20px;
