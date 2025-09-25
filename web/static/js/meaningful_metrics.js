@@ -748,7 +748,42 @@ function updateMetrics() {
     document.getElementById('metricsGrid').innerHTML = metricsHTML;
 }
 
+function showEmptyState() {
+    const chartsGrid = document.getElementById('chartsGrid');
+    const dataTableSection = document.getElementById('dataTableSection');
+    const metricsGrid = document.getElementById('metricsGrid');
+
+    // Hide existing content
+    chartsGrid.style.display = 'none';
+    dataTableSection.style.display = 'none';
+    metricsGrid.innerHTML = `
+        <div class="empty-state">
+            <div class="empty-state-icon">🔍</div>
+            <div class="empty-state-title">No Data Found</div>
+            <div class="empty-state-message">
+                Try adjusting your filters to see more results.<br>
+                Consider expanding the date range or removing some filter criteria.
+            </div>
+            <button class="empty-state-action" onclick="resetFilters()">Reset All Filters</button>
+        </div>
+    `;
+}
+
+function hideEmptyState() {
+    const chartsGrid = document.getElementById('chartsGrid');
+    const dataTableSection = document.getElementById('dataTableSection');
+
+    // Show content
+    chartsGrid.style.display = 'grid';
+    dataTableSection.style.display = 'block';
+}
+
 function updateCharts() {
+    if (filteredData.length === 0) {
+        showEmptyState();
+        return;
+    }
+    hideEmptyState();
     createGeoChart();
     createTicketTypeChart();
     createTimelineChart();

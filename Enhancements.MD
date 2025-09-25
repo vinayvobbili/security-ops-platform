@@ -36,7 +36,7 @@ These are low risk, high value and can be shipped independently.
 | 7  | MTTR box/violin by severity                          | Display distribution vs averages | [ ]    |
 | 8  | Automation adoption trend line                       | Show process maturity            | [ ]    |
 | 9  | Column heat shading (MTTR / severity)                | Visual scanning aid              | [ ]    |
-| 10 | Empty-state messaging for zero results               | Reduce confusion                 | [ ]    |
+| 10 | Empty-state messaging for zero results               | Reduce confusion                 | [x]    |
 | 11 | Data freshness timestamp + manual refresh            | Trust & transparency             | [ ]    |
 | 12 | Toast on anomaly spike (threshold)                   | Real-time awareness              | [ ]    |
 | 13 | Colorblind-safe palette toggle                       | Accessibility                    | [ ]    |
