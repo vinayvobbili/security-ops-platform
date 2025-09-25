@@ -26,7 +26,7 @@ body.dark-mode {
 /* Theme toggle button */
 .theme-toggle {
     position: fixed;
-    top: 70px;
+    top: 100px;
     right: 16px;
     z-index: 2000;
 }
@@ -910,6 +910,13 @@ body {
     padding: 10px;
     text-align: left;
     border-bottom: 1px solid #dee2e6;
+}
+
+/* Narrow columns for TTR and TTC duration columns */
+.data-table .duration-column {
+    width: 90px;
+    min-width: 90px;
+    max-width: 90px;
 }
 
 .data-table th {
