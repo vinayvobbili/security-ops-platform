@@ -8,20 +8,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/speak_up.css') }}">
 </head>
 <body>
-<div class="top-nav">
-    <div class="nav-burger" onclick="toggleMenu()">
-        <img src="{{ url_for('static', filename='icons/burger.svg') }}" alt="Menu" class="nav-icon">
-    </div>
-    <div id="burgerMenu" class="burger-menu-content" style="display:none;">
-        <a href="/">Home Dashboard</a>
-        <a href="/xsoar">XSOAR Dashboard</a>
-        <a href="/security-analytics">Security Analytics</a> <a href="/msoc-form">MSOC Form</a>
-        <a href="/xsoar-ticket-import-form">XSOAR Ticket Import</a>
-        <a href="/travel-form">Travel Form</a>
-        <a href="/red-team-testing-form">Red Team Testing</a>
-        <a href="/apt-other-names-search">APT Other Names Search</a>
-    </div>
-</div>
+{% include 'burger_menu.html' %}
 <div class="form-container">
     <h1>Report a CyberSecurity Incident</h1>
 
@@ -76,14 +63,10 @@
 
         <button type="submit">Submit Report</button>
     </form>
-    <!-- The Modal -->
     <div id="responseModal" class="modal">
-        <!-- Modal content -->
         <div class="modal-content">
             <span class="close">&times;</span>
-            <div id="response">
-                <!-- Response will be loaded here -->
-            </div>
+            <div id="response"></div>
         </div>
     </div>
     <audio id="music" src="" loop muted></audio>
@@ -92,38 +75,11 @@
             <img src="/static/icons/volume-xmark-solid.svg" alt="Unmute Icon" class="music-icon" id="music-icon">
         </button>
     </div>
-    <script src="{{ url_for('static', filename='js/speak_up.js') }}"></script>
     <script src="/static/js/common.js"></script>
+    <script src="{{ url_for('static', filename='js/speak_up.js') }}"></script>
     <script src="/static/js/speak_up_form.js"></script>
     <script>
         initRandomMusic();
-
-        function toggleMenu() {
-            var menu = document.getElementById('burgerMenu');
-            menu.style.display = (menu.style.display === 'none' || menu.style.display === '') ? 'block' : 'none';
-        }
-
-        // Close menu when a link is clicked
-        document.addEventListener('DOMContentLoaded', function () {
-            var burgerMenu = document.getElementById('burgerMenu');
-            if (burgerMenu) {
-                burgerMenu.querySelectorAll('a').forEach(function (link) {
-                    link.addEventListener('click', function () {
-                        burgerMenu.style.display = 'none';
-                    });
-                });
-            }
-        });
-
-        // Close burger menu when clicking outside
-        document.addEventListener('click', function (e) {
-            var burgerMenu = document.getElementById('burgerMenu');
-            var navBurger = document.querySelector('.nav-burger');
-
-            if (burgerMenu && !burgerMenu.contains(e.target) && !navBurger.contains(e.target)) {
-                burgerMenu.style.display = 'none';
-            }
-        });
     </script>
 </div>
 </body>
