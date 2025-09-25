@@ -692,24 +692,24 @@ function updateDashboard() {
     showDashboard();
 }
 
-function updateMetrics() {
-    const totalIncidents = filteredData.length;
-    const responseSlaBreaches = filteredData.filter(item => {
+function calculatePeriodMetrics(data) {
+    const totalIncidents = data.length;
+    
+    const responseSlaBreaches = data.filter(item => {
         const timeToRespond = item.timetorespond;
         return timeToRespond && (timeToRespond.breachTriggered === true || timeToRespond.breachTriggered === 'true');
     }).length;
 
-    const containmentSlaBreaches = filteredData.filter(item => {
-        // Only consider cases with host populated
+    const containmentSlaBreaches = data.filter(item => {
         const hasHost = item.hostname && item.hostname.trim() !== '' && item.hostname !== 'Unknown';
         const timeToContain = item.timetocontain;
         return hasHost && timeToContain && (timeToContain.breachTriggered === true || timeToContain.breachTriggered === 'true');
     }).length;
 
-    const openIncidents = filteredData.filter(item => item.status !== 2).length;
+    const openIncidents = data.filter(item => item.status !== 2).length;
 
-    // Calculate MTTR (Mean Time to Respond) - only for cases with an owner
-    const casesWithOwnerAndTimeToRespond = filteredData.filter(item =>
+    // Calculate MTTR
+    const casesWithOwnerAndTimeToRespond = data.filter(item =>
         item.owner &&
         item.owner.trim() !== '' &&
         item.timetorespond &&
@@ -719,8 +719,8 @@ function updateMetrics() {
         ? casesWithOwnerAndTimeToRespond.reduce((sum, item) => sum + item.timetorespond.totalDuration, 0) / casesWithOwnerAndTimeToRespond.length
         : 0;
 
-    // Calculate MTTC (Mean Time to Contain) - only for cases with hostname populated
-    const casesWithOwnerAndTimeToContain = filteredData.filter(item =>
+    // Calculate MTTC
+    const casesWithOwnerAndTimeToContain = data.filter(item =>
         item.hostname &&
         item.hostname.trim() !== '' &&
         item.hostname !== 'Unknown' &&
@@ -731,6 +731,91 @@ function updateMetrics() {
         ? casesWithOwnerAndTimeToContain.reduce((sum, item) => sum + item.timetocontain.totalDuration, 0) / casesWithOwnerAndTimeToContain.length
         : 0;
 
+    const uniqueCountries = new Set(data.map(item => item.affected_country)).size;
+
+    return {
+        totalIncidents,
+        responseSlaBreaches,
+        containmentSlaBreaches,
+        openIncidents,
+        mttr,
+        mttc,
+        uniqueCountries,
+        casesWithOwnerAndTimeToRespond: casesWithOwnerAndTimeToRespond.length,
+        casesWithOwnerAndTimeToContain: casesWithOwnerAndTimeToContain.length
+    };
+}
+
+function calculatePreviousPeriodMetrics() {
+    // Get current date range setting
+    const dateSlider = document.getElementById('dateRangeSlider');
+    const sliderValue = parseInt(dateSlider.value);
+    const dateRange = [7, 30, 60, 90][sliderValue] || 30;
+    
+    // For longer periods (60, 90 days), we likely don't have enough historical data
+    // Only show deltas for 7 and 30 day periods
+    if (dateRange > 30) {
+        return null; // No previous period comparison available
+    }
+    
+    // Calculate previous period dates
+    const now = new Date();
+    const currentPeriodStart = new Date(now);
+    currentPeriodStart.setDate(currentPeriodStart.getDate() - dateRange);
+    
+    const previousPeriodStart = new Date(currentPeriodStart);
+    previousPeriodStart.setDate(previousPeriodStart.getDate() - dateRange);
+    const previousPeriodEnd = currentPeriodStart;
+    
+    // Filter data for previous period
+    const previousPeriodData = allData.filter(item => {
+        const createdDate = new Date(item.created);
+        return createdDate >= previousPeriodStart && createdDate < previousPeriodEnd;
+    });
+    
+    // Only return metrics if we have reasonable data in the previous period
+    if (previousPeriodData.length < 5) {
+        return null; // Not enough data for meaningful comparison
+    }
+    
+    return calculatePeriodMetrics(previousPeriodData);
+}
+
+function createDeltaBadge(currentValue, previousValue, isPercentage = false, reverse = false) {
+    // No badge if no previous data available
+    if (previousValue === null || previousValue === undefined) {
+        return '';
+    }
+    
+    // Handle zero values separately
+    if (previousValue === 0) {
+        return '';
+    }
+    
+    const delta = currentValue - previousValue;
+    const percentChange = (delta / previousValue) * 100;
+    
+    if (Math.abs(percentChange) < 1) {
+        return '<span class="delta-badge neutral" title="Change vs previous period: ±0%">±0% vs prev</span>';
+    }
+    
+    const isImprovement = reverse ? delta < 0 : delta > 0;
+    const badgeClass = isImprovement ? 'improvement' : 'regression';
+    const sign = delta > 0 ? '+' : '';
+    const direction = delta > 0 ? '↑' : '↓';
+    
+    const tooltipText = `Change vs previous period: ${sign}${percentChange.toFixed(1)}% (was: ${previousValue.toLocaleString()})`;
+    
+    return `<span class="delta-badge ${badgeClass}" title="${tooltipText}">${direction}${Math.abs(percentChange).toFixed(1)}% vs prev</span>`;
+}
+
+function updateMetrics() {
+    // Calculate current period metrics
+    const currentMetrics = calculatePeriodMetrics(filteredData);
+    
+    // Calculate previous period metrics for comparison
+    const previousMetrics = calculatePreviousPeriodMetrics();
+
     // Convert seconds to mins:secs format for display
     const formatTime = (seconds) => {
         if (seconds === 0) return '0:00';
@@ -739,39 +824,60 @@ function updateMetrics() {
         return `${mins}:${secs.toString().padStart(2, '0')}`;
     };
 
-    const mttrFormatted = formatTime(mttr);
-    const mttcFormatted = formatTime(mttc);
+    const mttrFormatted = formatTime(currentMetrics.mttr);
+    const mttcFormatted = formatTime(currentMetrics.mttc);
 
     const metricsHTML = `
         <div class="metric-card">
             <div class="metric-title">🎫 Total Cases</div>
-            <div class="metric-value">${totalIncidents.toLocaleString()}</div>
+            <div class="metric-value">
+                ${currentMetrics.totalIncidents.toLocaleString()}
+                ${createDeltaBadge(currentMetrics.totalIncidents, previousMetrics?.totalIncidents)}
+            </div>
         </div>
         <div class="metric-card">
             <div class="metric-title">⏱️ MTTR (mins:secs)</div>
-            <div class="metric-value">${mttrFormatted}</div>
-            <div class="metric-subtitle">${casesWithOwnerAndTimeToRespond.length} cases acknowledged</div>
+            <div class="metric-value">
+                ${mttrFormatted}
+                ${createDeltaBadge(currentMetrics.mttr, previousMetrics?.mttr, false, true)}
+            </div>
+            <div class="metric-subtitle">${currentMetrics.casesWithOwnerAndTimeToRespond} cases acknowledged</div>
         </div>
         <div class="metric-card">
             <div class="metric-title">🔒 MTTC (mins:secs)</div>
-            <div class="metric-value">${mttcFormatted}</div>
-            <div class="metric-subtitle">${casesWithOwnerAndTimeToContain.length} cases with hostnames</div>
+            <div class="metric-value">
+                ${mttcFormatted}
+                ${createDeltaBadge(currentMetrics.mttc, previousMetrics?.mttc, false, true)}
+            </div>
+            <div class="metric-subtitle">${currentMetrics.casesWithOwnerAndTimeToContain} cases with hostnames</div>
         </div>
         <div class="metric-card">
             <div class="metric-title">🚨 Response SLA Breaches</div>
-            <div class="metric-value">${responseSlaBreaches.toLocaleString()}</div>
+            <div class="metric-value">
+                ${currentMetrics.responseSlaBreaches.toLocaleString()}
+                ${createDeltaBadge(currentMetrics.responseSlaBreaches, previousMetrics?.responseSlaBreaches, false, true)}
+            </div>
         </div>
         <div class="metric-card">
             <div class="metric-title">🔒 Containment SLA Breaches</div>
-            <div class="metric-value">${containmentSlaBreaches.toLocaleString()}</div>
+            <div class="metric-value">
+                ${currentMetrics.containmentSlaBreaches.toLocaleString()}
+                ${createDeltaBadge(currentMetrics.containmentSlaBreaches, previousMetrics?.containmentSlaBreaches, false, true)}
+            </div>
         </div>
         <div class="metric-card">
             <div class="metric-title">📈 Open</div>
-            <div class="metric-value">${openIncidents.toLocaleString()}</div>
+            <div class="metric-value">
+                ${currentMetrics.openIncidents.toLocaleString()}
+                ${createDeltaBadge(currentMetrics.openIncidents, previousMetrics?.openIncidents, false, true)}
+            </div>
         </div>
         <div class="metric-card">
             <div class="metric-title">🌍 Countries</div>
-            <div class="metric-value">${new Set(filteredData.map(item => item.affected_country)).size}</div>
+            <div class="metric-value">
+                ${currentMetrics.uniqueCountries}
+                ${createDeltaBadge(currentMetrics.uniqueCountries, previousMetrics?.uniqueCountries)}
+            </div>
         </div>
     `;
 
