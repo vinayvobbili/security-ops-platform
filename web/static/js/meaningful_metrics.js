@@ -41,13 +41,97 @@ const availableColumns = {
 let visibleColumns = ['id', 'name', 'severity', 'status', 'affected_country', 'impact', 'type', 'owner', 'created'];
 let columnOrder = [...visibleColumns]; // Maintains the order of columns
 
-// Color schemes for consistent theming
-const colorSchemes = {
-    severity: ['#6c757d', '#28a745', '#ffc107', '#fd7e14', '#dc3545'],
-    status: ['#ffc107', '#007bff', '#28a745', '#6c757d'],
-    countries: ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf'],
-    sources: ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FECA57', '#FF9FF3', '#54A0FF', '#5F27CD']
-};
+// Ensure colorSchemes exists (was removed during refactor) before any chart functions use it
+if (typeof window !== 'undefined' && !window.colorSchemes) {
+    window.colorSchemes = {
+        severity: ['#6c757d', '#28a745', '#ffc107', '#fd7e14', '#dc3545'],
+        status: ['#ffc107', '#007bff', '#28a745', '#6c757d'],
+        countries: ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf'],
+        sources: ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FECA57', '#FF9FF3', '#54A0FF', '#5F27CD']
+    };
+}
+const colorSchemes = window.colorSchemes; // local alias
+
+// THEME / CHART LAYOUT HELPERS (added)
+function isDarkMode() {
+    return document.body.classList.contains('dark-mode');
+}
+
+function getChartColors() {
+    if (!isDarkMode()) {
+        return {
+            font: '#1e293b',
+            grid: 'rgba(128,128,128,0.2)',
+            legendBg: 'rgba(255,255,255,0.8)',
+            axisLine: '#94a3b8'
+        };
+    }
+    return {
+        font: '#e2e8f0',
+        grid: 'rgba(148,163,184,0.18)',
+        legendBg: 'rgba(30,41,59,0.85)',
+        axisLine: '#475569'
+    };
+}
+
+function commonLayout(extra = {}) {
+    const c = getChartColors();
+    return Object.assign({
+        font: {family: 'Segoe UI, sans-serif', size: 12, color: c.font},
+        showlegend: true,
+        legend: {bgcolor: c.legendBg, bordercolor: 'rgba(0,0,0,0)', borderwidth: 0},
+        plot_bgcolor: 'rgba(0,0,0,0)',
+        paper_bgcolor: 'rgba(0,0,0,0)',
+        xaxis: {gridcolor: c.grid, linecolor: c.axisLine, zerolinecolor: c.grid},
+        yaxis: {gridcolor: c.grid, linecolor: c.axisLine, zerolinecolor: c.grid},
+        margin: {l: 60, r: 20, t: 40, b: 60}
+    }, extra);
+}
+
+// Replace previous themechange listener with smoother chart theme adaptation
+// Remove any existing themechange listeners added earlier by guarding with a new handler
+window.addEventListener('themechange', () => {
+    adaptAllChartsTheme();
+});
+
+// Keep a shared config reference
+const sharedPlotlyConfig = {responsive: true, displayModeBar: true, displaylogo: false};
+
+function adaptAllChartsTheme() {
+    const chartIds = ['geoChart', 'severityChart', 'timelineChart', 'ticketTypeChart', 'heatmapChart', 'funnelChart'];
+    chartIds.forEach(id => adaptChartTheme(id));
+}
+
+function adaptChartTheme(chartId) {
+    const el = document.getElementById(chartId);
+    if (!el || !el.data || !el.layout) return; // Chart not rendered yet
+    const c = getChartColors();
+    // Clone layout shallowly to avoid mutating Plotly internal references unexpectedly
+    const newLayout = JSON.parse(JSON.stringify(el.layout));
+    newLayout.font = newLayout.font || {};
+    newLayout.font.color = c.font;
+    if (newLayout.legend) {
+        newLayout.legend.bgcolor = c.legendBg;
+    }
+    // Axes (some charts like pie/funnel may not have axes)
+    ['xaxis', 'yaxis'].forEach(axis => {
+        if (newLayout[axis]) {
+            newLayout[axis].gridcolor = c.grid;
+            newLayout[axis].linecolor = c.axisLine;
+            newLayout[axis].zerolinecolor = c.grid;
+        }
+    });
+    // Use Plotly.react for smoother transition; provide same data & config
+    try {
+        Plotly.react(el, el.data, newLayout, sharedPlotlyConfig);
+    } catch (e) {
+        // Fallback: relayout if react fails
+        try {
+            Plotly.relayout(el, newLayout);
+        } catch (_) {
+        }
+    }
+}
 
 // Initialize dashboard
 document.addEventListener('DOMContentLoaded', function () {
@@ -159,6 +243,58 @@ function setupEventListeners() {
 
     // Setup column selector
     setupColumnSelector();
+
+    // Reset filters
+    const resetBtn = document.getElementById('resetFiltersBtn');
+    if (resetBtn && !resetBtn.dataset.bound) {
+        resetBtn.addEventListener('click', resetFilters);
+        resetBtn.dataset.bound = 'true';
+    }
+    // Export CSV
+    const exportCsvBtn = document.getElementById('exportCsvBtn');
+    if (exportCsvBtn && !exportCsvBtn.dataset.bound) {
+        exportCsvBtn.addEventListener('click', exportToCSV);
+        exportCsvBtn.dataset.bound = 'true';
+    }
+    // Export Summary
+    const exportSummaryBtn = document.getElementById('exportSummaryBtn');
+    if (exportSummaryBtn && !exportSummaryBtn.dataset.bound) {
+        exportSummaryBtn.addEventListener('click', exportSummary);
+        exportSummaryBtn.dataset.bound = 'true';
+    }
+    // Column selector open state persistence (applied after original setup)
+    const dropdown = document.getElementById('columnSelectorDropdown');
+    const btn = document.getElementById('columnSelectorBtn');
+    if (btn && !btn.dataset.openStateBound) {
+        btn.addEventListener('click', () => {
+            const isOpen = dropdown.style.display === 'block';
+            localStorage.setItem('mmColumnSelectorOpen', (!isOpen).toString());
+        });
+        btn.dataset.openStateBound = 'true';
+    }
+    document.addEventListener('click', (e) => {
+        if (dropdown && btn && dropdown.style.display === 'block' && !dropdown.contains(e.target) && !btn.contains(e.target)) {
+            localStorage.setItem('mmColumnSelectorOpen', 'false');
+        }
+    });
+    // Select / Deselect all buttons (now without inline handlers)
+    const selectAllBtn = document.getElementById('selectAllColumnsBtn');
+    if (selectAllBtn && !selectAllBtn.dataset.bound) {
+        selectAllBtn.addEventListener('click', selectAllColumns);
+        selectAllBtn.dataset.bound = 'true';
+    }
+    const deselectAllBtn = document.getElementById('deselectAllColumnsBtn');
+    if (deselectAllBtn && !deselectAllBtn.dataset.bound) {
+        deselectAllBtn.addEventListener('click', deselectAllColumns);
+        deselectAllBtn.dataset.bound = 'true';
+    }
+
+    // Restore column selector open state if previously open
+    const savedOpen = localStorage.getItem('mmColumnSelectorOpen');
+    if (savedOpen === 'true' && dropdown && btn) {
+        dropdown.style.display = 'block';
+        populateColumnSelector();
+    }
 }
 
 function updateSliderLabels(value) {
@@ -621,50 +757,31 @@ function updateCharts() {
     createFunnelChart();
 }
 
-function createGeoChart() {
+// Re-implement createGeoChart with shared config
+createGeoChart = function () {
     const counts = {};
     filteredData.forEach(item => {
         const country = item.affected_country || 'Unknown';
         counts[country] = (counts[country] || 0) + 1;
     });
-
     const sortedEntries = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 10);
-
     const trace = {
-        x: sortedEntries.map(([country, count]) => count),
-        y: sortedEntries.map(([country, count]) => country),
+        x: sortedEntries.map(e => e[1]),
+        y: sortedEntries.map(e => e[0]),
         type: 'bar',
         orientation: 'h',
-        marker: {
-            color: colorSchemes.countries,
-            line: {color: 'rgba(255,255,255,0.8)', width: 1}
-        },
+        marker: {color: colorSchemes.countries, line: {color: 'rgba(255,255,255,0.8)', width: 1}},
         hovertemplate: '<b>%{y}</b><br>Incidents: %{x}<extra></extra>'
     };
-
-    const layout = {
-        margin: {l: 120, r: 20, t: 40, b: 40},
-        font: {family: 'Segoe UI, sans-serif', size: 12},
-        showlegend: false,
-        plot_bgcolor: 'rgba(0,0,0,0)',
-        paper_bgcolor: 'rgba(0,0,0,0)',
-        xaxis: {gridcolor: 'rgba(128,128,128,0.2)'},
-        yaxis: {gridcolor: 'rgba(128,128,128,0.2)'}
-    };
-
-    const config = {responsive: true, displayModeBar: true, displaylogo: false};
-    Plotly.newPlot('geoChart', [trace], layout, config);
+    const layout = commonLayout({margin: {l: 120, r: 20, t: 40, b: 40}, showlegend: false});
+    Plotly.newPlot('geoChart', [trace], layout, sharedPlotlyConfig);
 }
-
 
 function createTimelineChart() {
     const dailyInflow = {};
     const dailyOutflow = {};
-
     filteredData.forEach(item => {
-        // Only include cases with owners
         if (item.owner && item.owner.trim() !== '') {
-            // Calculate inflow (created cases)
             if (item.created && item.created.trim() !== '') {
                 const createdDate = new Date(item.created);
                 if (!isNaN(createdDate.getTime()) && createdDate.getFullYear() >= 2020) {
@@ -672,8 +789,6 @@ function createTimelineChart() {
                     dailyInflow[date] = (dailyInflow[date] || 0) + 1;
                 }
             }
-
-            // Calculate outflow (closed cases)
             if (item.closed && item.closed.trim() !== '') {
                 const closedDate = new Date(item.closed);
                 if (!isNaN(closedDate.getTime()) && closedDate.getFullYear() >= 2020) {
@@ -683,53 +798,33 @@ function createTimelineChart() {
             }
         }
     });
-
     const allDates = [...new Set([...Object.keys(dailyInflow), ...Object.keys(dailyOutflow)])].sort();
-
-    const traces = [
-        {
-            x: allDates,
-            y: allDates.map(date => dailyInflow[date] || 0),
-            type: 'scatter',
-            mode: 'lines+markers',
-            name: 'Inflow (Acknowledged by Analyst)',
-            line: {color: '#007bff', width: 3},
-            marker: {color: '#007bff', size: 6},
-            hovertemplate: '<b>%{x}</b><br>Created: %{y}<extra></extra>'
-        },
-        {
-            x: allDates,
-            y: allDates.map(date => dailyOutflow[date] || 0),
-            type: 'scatter',
-            mode: 'lines+markers',
-            name: 'Outflow (Closed by Analyst)',
-            line: {color: '#28a745', width: 3},
-            marker: {color: '#28a745', size: 6},
-            hovertemplate: '<b>%{x}</b><br>Closed: %{y}<extra></extra>'
-        }
-    ];
-
-    const layout = {
+    const traces = [{
+        x: allDates,
+        y: allDates.map(d => dailyInflow[d] || 0),
+        type: 'scatter',
+        mode: 'lines+markers',
+        name: 'Inflow (Acknowledged by Analyst)',
+        line: {color: '#007bff', width: 3},
+        marker: {color: '#007bff', size: 6},
+        hovertemplate: '<b>%{x}</b><br>Created: %{y}<extra></extra>'
+    }, {
+        x: allDates,
+        y: allDates.map(d => dailyOutflow[d] || 0),
+        type: 'scatter',
+        mode: 'lines+markers',
+        name: 'Outflow (Closed by Analyst)',
+        line: {color: '#28a745', width: 3},
+        marker: {color: '#28a745', size: 6},
+        hovertemplate: '<b>%{x}</b><br>Closed: %{y}<extra></extra>'
+    }];
+    const layout = commonLayout({
+        legend: {x: 0, y: 1},
         margin: {l: 60, r: 20, t: 20, b: 60},
-        font: {family: 'Segoe UI, sans-serif', size: 12},
-        showlegend: true,
-        legend: {x: 0, y: 1, bgcolor: 'rgba(255,255,255,0.8)'},
-        plot_bgcolor: 'rgba(0,0,0,0)',
-        paper_bgcolor: 'rgba(0,0,0,0)',
-        xaxis: {
-            gridcolor: 'rgba(128,128,128,0.2)',
-            tickangle: 90,
-            tickformat: '%m/%d',
-            dtick: 86400000 * 2
-        },
-        yaxis: {
-            gridcolor: 'rgba(128,128,128,0.2)',
-            title: 'Number of Cases'
-        }
-    };
-
-    const config = {responsive: true, displayModeBar: true, displaylogo: false};
-    Plotly.newPlot('timelineChart', traces, layout, config);
+        yaxis: {title: 'Number of Cases', gridcolor: getChartColors().grid},
+        xaxis: {gridcolor: getChartColors().grid, tickangle: 90, tickformat: '%m/%d', dtick: 86400000 * 2}
+    });
+    Plotly.newPlot('timelineChart', traces, layout, {responsive: true, displayModeBar: true, displaylogo: false});
 }
 
 function createImpactChart() {
@@ -738,33 +833,19 @@ function createImpactChart() {
         const impact = item.impact || 'Unknown';
         counts[impact] = (counts[impact] || 0) + 1;
     });
-
     const sortedEntries = Object.entries(counts).sort((a, b) => b[1] - a[1]);
-
     const trace = {
-        labels: sortedEntries.map(([impact, count]) => impact),
-        values: sortedEntries.map(([impact, count]) => count),
+        labels: sortedEntries.map(([impact]) => impact),
+        values: sortedEntries.map(([, count]) => count),
         type: 'pie',
         hole: 0.3,
-        marker: {
-            colors: colorSchemes.countries,
-            line: {color: 'white', width: 2}
-        },
+        marker: {colors: colorSchemes.countries, line: {color: 'white', width: 2}},
         textinfo: 'label+value',
         textfont: {size: 12},
         hovertemplate: '<b>%{label}</b><br>Count: %{value}<br>Percentage: %{percent}<extra></extra>'
     };
-
-    const layout = {
-        margin: {l: 10, r: 10, t: 20, b: 20},
-        font: {family: 'Segoe UI, sans-serif', size: 12},
-        showlegend: false,
-        plot_bgcolor: 'rgba(0,0,0,0)',
-        paper_bgcolor: 'rgba(0,0,0,0)'
-    };
-
-    const config = {responsive: true, displayModeBar: true, displaylogo: false};
-    Plotly.newPlot('ticketTypeChart', [trace], layout, config);
+    const layout = commonLayout({showlegend: false, margin: {l: 10, r: 10, t: 20, b: 20}});
+    Plotly.newPlot('ticketTypeChart', [trace], layout, {responsive: true, displayModeBar: true, displaylogo: false});
 }
 
 function createTicketTypeChart() {
@@ -773,113 +854,57 @@ function createTicketTypeChart() {
         const ticketType = item.type || 'Unknown';
         counts[ticketType] = (counts[ticketType] || 0) + 1;
     });
-
     const sortedEntries = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 8);
-
     const trace = {
-        labels: sortedEntries.map(([ticketType, count]) => {
-            // Remove METCIRT prefix for display
-            return ticketType.startsWith('METCIRT') ? ticketType.replace(/^METCIRT[_\-\s]*/i, '') : ticketType;
-        }),
-        values: sortedEntries.map(([ticketType, count]) => count),
+        labels: sortedEntries.map(([ticketType]) => ticketType.startsWith('METCIRT') ? ticketType.replace(/^METCIRT[_\-\s]*/i, '') : ticketType),
+        values: sortedEntries.map(([, c]) => c),
         type: 'pie',
         hole: 0.6,
-        marker: {
-            colors: colorSchemes.sources,
-            line: {color: 'white', width: 2}
-        },
+        marker: {colors: colorSchemes.sources, line: {color: 'white', width: 2}},
         textinfo: 'label+value',
         textfont: {size: 11},
         hovertemplate: '<b>%{label}</b><br>Count: %{value}<br>Percentage: %{percent}<extra></extra>'
     };
-
-    const layout = {
-        margin: {l: 20, r: 20, t: 40, b: 40},
-        font: {family: 'Segoe UI, sans-serif', size: 12},
-        showlegend: false,
-        plot_bgcolor: 'rgba(0,0,0,0)',
-        paper_bgcolor: 'rgba(0,0,0,0)'
-    };
-
-    const config = {responsive: true, displayModeBar: true, displaylogo: false};
-    Plotly.newPlot('severityChart', [trace], layout, config);
+    const layout = commonLayout({showlegend: false, margin: {l: 20, r: 20, t: 40, b: 40}});
+    Plotly.newPlot('severityChart', [trace], layout, {responsive: true, displayModeBar: true, displaylogo: false});
 }
 
 function createOwnerChart() {
     const counts = {};
     filteredData.forEach(item => {
-        // Only include cases with actual owners (skip unassigned)
         if (item.owner && item.owner.trim() !== '') {
             let owner = item.owner;
-            // Remove @company.com suffix
-            if (owner.endsWith('@company.com')) {
-                owner = owner.replace('@company.com', '');
-            }
+            if (owner.endsWith('@company.com')) owner = owner.replace('@company.com', '');
             counts[owner] = (counts[owner] || 0) + 1;
         }
     });
-
     const sortedEntries = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 10);
-
     const trace = {
-        x: sortedEntries.map(([owner, count]) => count),
-        y: sortedEntries.map(([owner, count]) => owner),
+        x: sortedEntries.map(([, count]) => count),
+        y: sortedEntries.map(([owner]) => owner),
         type: 'bar',
         orientation: 'h',
-        marker: {
-            color: colorSchemes.sources,
-            line: {color: 'rgba(255,255,255,0.8)', width: 1}
-        },
+        marker: {color: colorSchemes.sources, line: {color: 'rgba(255,255,255,0.8)', width: 1}},
         hovertemplate: '<b>%{y}</b><br>Cases: %{x}<extra></extra>'
     };
-
-    const layout = {
-        margin: {l: 120, r: 20, t: 20, b: 40},
-        font: {family: 'Segoe UI, sans-serif', size: 12},
-        showlegend: false,
-        plot_bgcolor: 'rgba(0,0,0,0)',
-        paper_bgcolor: 'rgba(0,0,0,0)',
-        xaxis: {gridcolor: 'rgba(128,128,128,0.2)', title: 'Number of Cases'},
-        yaxis: {gridcolor: 'rgba(128,128,128,0.2)'}
-    };
-
-    const config = {responsive: true, displayModeBar: true, displaylogo: false};
-    Plotly.newPlot('heatmapChart', [trace], layout, config);
+    const layout = commonLayout({showlegend: false, margin: {l: 120, r: 20, t: 20, b: 40}, xaxis: {title: 'Number of Cases', gridcolor: getChartColors().grid}, yaxis: {gridcolor: getChartColors().grid}});
+    Plotly.newPlot('heatmapChart', [trace], layout, {responsive: true, displayModeBar: true, displaylogo: false});
 }
 
 function createFunnelChart() {
-    // Calculate the funnel stages
     const totalCases = filteredData.length;
-
-    const assignedCases = filteredData.filter(item =>
-        item.owner && item.owner.trim() !== ''
-    ).length;
-
-    const maliciousTruePositives = filteredData.filter(item => {
-        return item.impact === 'Malicious True Positive';
-    }).length;
-
+    const assignedCases = filteredData.filter(i => i.owner && i.owner.trim() !== '').length;
+    const maliciousTruePositives = filteredData.filter(i => i.impact === 'Malicious True Positive').length;
     const trace = {
         type: 'funnel',
         y: ['All Cases', 'Assigned Cases', 'Malicious True Positive'],
         x: [totalCases, assignedCases, maliciousTruePositives],
         textinfo: 'value+percent initial',
-        marker: {
-            color: ['#4472C4', '#70AD47', '#C5504B'],
-            line: {color: 'white', width: 2}
-        },
+        marker: {color: ['#4472C4', '#70AD47', '#C5504B'], line: {color: 'white', width: 2}},
         hovertemplate: '<b>%{y}</b><br>Count: %{x}<br>Percentage: %{percentInitial}<extra></extra>'
     };
-
-    const layout = {
-        margin: {l: 150, r: 20, t: 20, b: 40},
-        font: {family: 'Segoe UI, sans-serif', size: 12},
-        plot_bgcolor: 'rgba(0,0,0,0)',
-        paper_bgcolor: 'rgba(0,0,0,0)'
-    };
-
-    const config = {responsive: true, displayModeBar: true, displaylogo: false};
-    Plotly.newPlot('funnelChart', [trace], layout, config);
+    const layout = commonLayout({showlegend: false, margin: {l: 150, r: 20, t: 20, b: 40}});
+    Plotly.newPlot('funnelChart', [trace], layout, {responsive: true, displayModeBar: true, displaylogo: false});
 }
 
 function updateTable() {
@@ -1034,7 +1059,6 @@ function showDashboard() {
 }
 
 // Navigation functions
-
 
 
 // Table sorting functions
