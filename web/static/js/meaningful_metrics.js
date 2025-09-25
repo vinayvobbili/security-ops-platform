@@ -33,8 +33,8 @@ const availableColumns = {
     'category': {label: 'Category', category: 'Classification', path: 'category', type: 'string'},
     'sourceInstance': {label: 'Source Instance', category: 'Technical', path: 'sourceInstance', type: 'string'},
     'openDuration': {label: 'Open Duration', category: 'Metrics', path: 'openDuration', type: 'number'},
-    'timetorespond': {label: 'TTR (mins)', category: 'Metrics', path: 'timetorespond.totalDuration', type: 'duration'},
-    'timetocontain': {label: 'TTC (mins)', category: 'Metrics', path: 'timetocontain.totalDuration', type: 'duration'}
+    'timetorespond': {label: 'TTR', category: 'Metrics', path: 'timetorespond.totalDuration', type: 'duration'},
+    'timetocontain': {label: 'TTC', category: 'Metrics', path: 'timetocontain.totalDuration', type: 'duration'}
 };
 
 // Default visible columns and their order
@@ -84,7 +84,7 @@ function commonLayout(extra = {}) {
         paper_bgcolor: 'rgba(0,0,0,0)',
         xaxis: {gridcolor: c.grid, linecolor: c.axisLine, zerolinecolor: c.grid},
         yaxis: {gridcolor: c.grid, linecolor: c.axisLine, zerolinecolor: c.grid},
-        margin: {l: 60, r: 20, t: 40, b: 60}
+        margin: {l: 60, r: 40, t: 40, b: 60}
     }, extra);
 }
 
@@ -773,7 +773,7 @@ createGeoChart = function () {
         marker: {color: colorSchemes.countries, line: {color: 'rgba(255,255,255,0.8)', width: 1}},
         hovertemplate: '<b>%{y}</b><br>Incidents: %{x}<extra></extra>'
     };
-    const layout = commonLayout({margin: {l: 120, r: 20, t: 40, b: 40}, showlegend: false});
+    const layout = commonLayout({margin: {l: 120, r: 40, t: 40, b: 40}, showlegend: false});
     Plotly.newPlot('geoChart', [trace], layout, sharedPlotlyConfig);
 }
 
@@ -820,7 +820,7 @@ function createTimelineChart() {
     }];
     const layout = commonLayout({
         legend: {x: 0, y: 1},
-        margin: {l: 60, r: 20, t: 20, b: 60},
+        margin: {l: 60, r: 40, t: 20, b: 60},
         yaxis: {title: 'Number of Cases', gridcolor: getChartColors().grid},
         xaxis: {gridcolor: getChartColors().grid, tickangle: 90, tickformat: '%m/%d', dtick: 86400000 * 2}
     });
@@ -884,10 +884,16 @@ function createOwnerChart() {
         y: sortedEntries.map(([owner]) => owner),
         type: 'bar',
         orientation: 'h',
-        marker: {color: colorSchemes.sources, line: {color: 'rgba(255,255,255,0.8)', width: 1}},
+        text: sortedEntries.map(([, count]) => count),
+        textposition: 'inside',
+        textfont: {color: 'white', size: 12},
+        marker: {
+            color: sortedEntries.map((_, i) => colorSchemes.sources[i % colorSchemes.sources.length]),
+            line: {color: 'rgba(255,255,255,0.8)', width: 1}
+        },
         hovertemplate: '<b>%{y}</b><br>Cases: %{x}<extra></extra>'
     };
-    const layout = commonLayout({showlegend: false, margin: {l: 120, r: 20, t: 20, b: 40}, xaxis: {title: 'Number of Cases', gridcolor: getChartColors().grid}, yaxis: {gridcolor: getChartColors().grid}});
+    const layout = commonLayout({showlegend: false, margin: {l: 120, r: 40, t: 20, b: 40}, xaxis: {title: 'Number of Cases', gridcolor: getChartColors().grid}, yaxis: {gridcolor: getChartColors().grid}});
     Plotly.newPlot('heatmapChart', [trace], layout, {responsive: true, displayModeBar: true, displaylogo: false});
 }
 
@@ -903,7 +909,7 @@ function createFunnelChart() {
         marker: {color: ['#4472C4', '#70AD47', '#C5504B'], line: {color: 'white', width: 2}},
         hovertemplate: '<b>%{y}</b><br>Count: %{x}<br>Percentage: %{percentInitial}<extra></extra>'
     };
-    const layout = commonLayout({showlegend: false, margin: {l: 150, r: 20, t: 20, b: 40}});
+    const layout = commonLayout({showlegend: false, margin: {l: 150, r: 40, t: 20, b: 40}});
     Plotly.newPlot('funnelChart', [trace], layout, {responsive: true, displayModeBar: true, displaylogo: false});
 }
 
@@ -932,10 +938,16 @@ function updateTable() {
                     switch (column.type) {
                         case 'date':
                             if (value) {
-                                td.textContent = new Date(value).toLocaleDateString();
+                                const date = new Date(value);
+                                const month = (date.getMonth() + 1).toString().padStart(2, '0');
+                                const day = date.getDate().toString().padStart(2, '0');
+                                const year = date.getFullYear();
+                                td.textContent = `${month}/${day}/${year}`;
                             }
                             break;
                         case 'duration':
+                            td.style.textAlign = 'right';
+                            td.classList.add('duration-column');
                             if (value && value > 0) {
                                 const minutes = Math.floor(value / 60);
                                 const seconds = Math.round(value % 60);
@@ -1435,6 +1447,12 @@ function buildTableHeaders() {
             th.setAttribute('data-column', columnId);
             th.innerHTML = `${column.label} <span class="sort-indicator"></span>`;
             th.style.cursor = 'pointer';
+            if (column.type === 'duration') {
+                th.style.textAlign = 'right';
+                th.classList.add('duration-column');
+                th.title = 'mins:secs';
+                th.innerHTML = `${column.label} ℹ️ <span class="sort-indicator"></span>`;
+            }
             th.addEventListener('click', function () {
                 sortTable(columnId);
             });
