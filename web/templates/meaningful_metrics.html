@@ -45,7 +45,7 @@
                 <div class="slider-field">
                     <label class="date-range-label">📅<br>Created in past (days):</label>
                     <div class="date-range-slider-container">
-                        <input type="range" id="dateRangeSlider" class="date-range-slider" min="0" max="3" value="1" step="1">
+                        <label for="dateRangeSlider"></label><input type="range" id="dateRangeSlider" class="date-range-slider" min="0" max="3" value="1" step="1">
                         <div class="slider-labels">
                             <span data-value="0">7</span>
                             <span data-value="1" class="active">30</span>
@@ -57,7 +57,7 @@
                 <div class="slider-field">
                     <label class="date-range-label">⏱️<br>TTR<br>(mins:secs):</label>
                     <div class="date-range-slider-container">
-                        <input type="range" id="mttrRangeSlider" class="date-range-slider" min="0" max="3" value="0" step="1">
+                        <label for="mttrRangeSlider"></label><input type="range" id="mttrRangeSlider" class="date-range-slider" min="0" max="3" value="0" step="1">
                         <div class="slider-labels">
                             <span data-value="0" class="active">All</span>
                             <span data-value="1">≤3</span>
@@ -69,7 +69,7 @@
                 <div class="slider-field">
                     <label class="date-range-label">🔒<br>TTC<br>(mins:secs):</label>
                     <div class="date-range-slider-container">
-                        <input type="range" id="mttcRangeSlider" class="date-range-slider" min="0" max="3" value="0" step="1">
+                        <label for="mttcRangeSlider"></label><input type="range" id="mttcRangeSlider" class="date-range-slider" min="0" max="3" value="0" step="1">
                         <div class="slider-labels">
                             <span data-value="0" class="active">All</span>
                             <span data-value="1">≤5</span>
@@ -81,7 +81,7 @@
                 <div class="slider-field">
                     <label class="date-range-label">📆<br>Age<br>(days):</label>
                     <div class="date-range-slider-container">
-                        <input type="range" id="ageRangeSlider" class="date-range-slider" min="0" max="3" value="0" step="1">
+                        <label for="ageRangeSlider"></label><input type="range" id="ageRangeSlider" class="date-range-slider" min="0" max="3" value="0" step="1">
                         <div class="slider-labels">
                             <span data-value="0" class="active">All</span>
                             <span data-value="1">≤7</span>
@@ -163,7 +163,7 @@
     <!-- Charts Grid -->
     <div id="chartsGrid" class="charts-grid" style="display: none;">
         <div class="chart-container">
-            <div class="chart-title">🌍 Geographic Distribution</div>
+            <div class="chart-title">🌍 Geographic Distribution (Top 10)</div>
             <div id="geoChart" class="chart-canvas"></div>
         </div>
         <div class="chart-container">
