@@ -831,14 +831,14 @@ function updateMetrics() {
         <div class="metric-card">
             <div class="metric-title">🎫 Total Cases</div>
             <div class="metric-value">
-                ${currentMetrics.totalIncidents.toLocaleString()}
-                ${createDeltaBadge(currentMetrics.totalIncidents, previousMetrics?.totalIncidents)}
+                ${currentMetrics.totalIncidents.toLocaleString()}<br>
+                ${createDeltaBadge(currentMetrics.totalIncidents, previousMetrics?.totalIncidents, false, true)}
             </div>
         </div>
         <div class="metric-card">
             <div class="metric-title">⏱️ MTTR (mins:secs)</div>
             <div class="metric-value">
-                ${mttrFormatted}
+                ${mttrFormatted}<br>
                 ${createDeltaBadge(currentMetrics.mttr, previousMetrics?.mttr, false, true)}
             </div>
             <div class="metric-subtitle">${currentMetrics.casesWithOwnerAndTimeToRespond} cases acknowledged</div>
@@ -846,7 +846,7 @@ function updateMetrics() {
         <div class="metric-card">
             <div class="metric-title">🔒 MTTC (mins:secs)</div>
             <div class="metric-value">
-                ${mttcFormatted}
+                ${mttcFormatted}<br>
                 ${createDeltaBadge(currentMetrics.mttc, previousMetrics?.mttc, false, true)}
             </div>
             <div class="metric-subtitle">${currentMetrics.casesWithOwnerAndTimeToContain} cases with hostnames</div>
@@ -854,29 +854,29 @@ function updateMetrics() {
         <div class="metric-card">
             <div class="metric-title">🚨 Response SLA Breaches</div>
             <div class="metric-value">
-                ${currentMetrics.responseSlaBreaches.toLocaleString()}
+                ${currentMetrics.responseSlaBreaches.toLocaleString()}<br>
                 ${createDeltaBadge(currentMetrics.responseSlaBreaches, previousMetrics?.responseSlaBreaches, false, true)}
             </div>
         </div>
         <div class="metric-card">
             <div class="metric-title">🔒 Containment SLA Breaches</div>
             <div class="metric-value">
-                ${currentMetrics.containmentSlaBreaches.toLocaleString()}
+                ${currentMetrics.containmentSlaBreaches.toLocaleString()}<br>
                 ${createDeltaBadge(currentMetrics.containmentSlaBreaches, previousMetrics?.containmentSlaBreaches, false, true)}
             </div>
         </div>
         <div class="metric-card">
             <div class="metric-title">📈 Open</div>
             <div class="metric-value">
-                ${currentMetrics.openIncidents.toLocaleString()}
+                ${currentMetrics.openIncidents.toLocaleString()}<br>
                 ${createDeltaBadge(currentMetrics.openIncidents, previousMetrics?.openIncidents, false, true)}
             </div>
         </div>
         <div class="metric-card">
-            <div class="metric-title">🌍 Countries</div>
+            <div class="metric-title">🌍 Total Countries</div>
             <div class="metric-value">
-                ${currentMetrics.uniqueCountries}
-                ${createDeltaBadge(currentMetrics.uniqueCountries, previousMetrics?.uniqueCountries)}
+                ${currentMetrics.uniqueCountries}<br>
+                ${createDeltaBadge(currentMetrics.uniqueCountries, previousMetrics?.uniqueCountries, false, true)}
             </div>
         </div>
     `;
