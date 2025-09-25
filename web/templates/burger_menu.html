@@ -3,11 +3,10 @@
         <img src="{{ url_for('static', filename='icons/burger.svg') }}" alt="Menu" class="nav-icon">
     </div>
     {% if page_title %}
-        <h1 class="page-title">{{ page_title }}</h1>
+    <h1 class="page-title">{{ page_title }}</h1>
     {% endif %}
     <div id="burgerMenu" class="burger-menu-content" style="display:none;">
-        <a href="/">Home Dashboard</a>
-        <a href="/xsoar">XSOAR Dashboard</a>
+        <a href="/">Home</a>
         <a href="/meaningful-metrics">Meaningful Metrics</a>
         <a href="/shift-performance">Shift Performance</a>
         <a href="/msoc-form">MSOC Form</a>
