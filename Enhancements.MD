@@ -25,6 +25,12 @@
 
 These are low risk, high value and can be shipped independently.
 
+**✅ Recently Completed (2025-09-25):**
+- Zebra styling for table rows (improves readability)
+- Empty-state messaging for zero results (#10)
+- Data freshness timestamp display (#11)
+- Table row hover highlighting fixes (dark/light theme)
+
 | #  | Item                                                 | Goal                             | Status |
 |----|------------------------------------------------------|----------------------------------|--------|
 | 1  | KPI delta % badges                                   | Show change vs previous period   | [ ]    |
@@ -37,7 +43,7 @@ These are low risk, high value and can be shipped independently.
 | 8  | Automation adoption trend line                       | Show process maturity            | [ ]    |
 | 9  | Column heat shading (MTTR / severity)                | Visual scanning aid              | [ ]    |
 | 10 | Empty-state messaging for zero results               | Reduce confusion                 | [x]    |
-| 11 | Data freshness timestamp + manual refresh            | Trust & transparency             | [ ]    |
+| 11 | Data freshness timestamp + manual refresh            | Trust & transparency             | [x]    |
 | 12 | Toast on anomaly spike (threshold)                   | Real-time awareness              | [ ]    |
 | 13 | Colorblind-safe palette toggle                       | Accessibility                    | [ ]    |
 | 14 | LocalStorage persistence of filters (full)           | Session continuity               | [ ]    |
@@ -329,6 +335,7 @@ These are low risk, high value and can be shipped independently.
 | Date       | Change                              | Author           |
 |------------|-------------------------------------|------------------|
 | 2025-09-25 | Initial structured enhancement plan | System Assistant |
+| 2025-09-25 | Completed: Zebra table styling, empty states, data freshness | System Assistant |
 
 ---
 *Update this document as features are delivered. Commit early, iterate often.*
