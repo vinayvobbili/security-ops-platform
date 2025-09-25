@@ -3,7 +3,7 @@
  */
 
 // Initialize the page when DOM is loaded
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', function () {
     initializeShiftPerformance();
 });
 
@@ -25,48 +25,24 @@ function initializeShiftPerformance() {
 }
 
 function setupMenuHandlers() {
-    // Handle burger menu toggle
-    const burgerMenu = document.getElementById('burgerMenu');
-    if (burgerMenu) {
-        // Close menu when a link is clicked
-        burgerMenu.querySelectorAll('a').forEach(function(link) {
-            link.addEventListener('click', function() {
-                burgerMenu.style.display = 'none';
-            });
-        });
-    }
-
-    // Close burger menu when clicking outside
-    document.addEventListener('click', function(e) {
-        const burgerMenu = document.getElementById('burgerMenu');
-        const navBurger = document.querySelector('.nav-burger');
-
-        if (burgerMenu && !burgerMenu.contains(e.target) && !navBurger.contains(e.target)) {
-            burgerMenu.style.display = 'none';
-        }
-
+    // Retain only filter menu + ESC handling; burger menu behavior is centralized in common.js
+    document.addEventListener('click', function (e) {
         // Close filter menu when clicking outside
         const filterMenu = document.getElementById('filterMenu');
-        const filterToggle = document.querySelector('.filter-toggle');
         const filterDropdown = document.querySelector('.filter-dropdown');
-
         if (filterMenu && filterDropdown && !filterDropdown.contains(e.target)) {
             closeFilters();
         }
     });
 
     // Close filter menu on ESC key
-    document.addEventListener('keydown', function(e) {
+    document.addEventListener('keydown', function (e) {
         if (e.key === 'Escape') {
             closeFilters();
         }
     });
 }
 
-function toggleMenu() {
-    const menu = document.getElementById('burgerMenu');
-    menu.style.display = (menu.style.display === 'none' || menu.style.display === '') ? 'block' : 'none';
-}
 
 function filterShift(shiftType) {
     const rows = document.querySelectorAll('tbody tr');
@@ -236,7 +212,7 @@ function setupModalHandlers() {
     const modal = document.getElementById('shiftDetailsModal');
 
     // Close modal on ESC key
-    document.addEventListener('keydown', function(e) {
+    document.addEventListener('keydown', function (e) {
         if (e.key === 'Escape' && modal && modal.style.display === 'block') {
             closeShiftDetails();
         }
@@ -244,7 +220,7 @@ function setupModalHandlers() {
 
     // Close modal when clicking outside of modal content
     if (modal) {
-        modal.addEventListener('click', function(e) {
+        modal.addEventListener('click', function (e) {
             if (e.target === modal) {
                 closeShiftDetails();
             }
@@ -377,8 +353,8 @@ function showShiftDetails(shift) {
                         <h4>${team}</h4>
                         <div class="staff-list">
                             ${Array.isArray(members) && members.length > 0 && members[0] !== 'N/A (Excel file missing)'
-                                ? members.map(member => `<span class="staff-member">${member}</span>`).join('')
-                                : '<span class="no-staff">No staff assigned</span>'}
+        ? members.map(member => `<span class="staff-member">${member}</span>`).join('')
+        : '<span class="no-staff">No staff assigned</span>'}
                         </div>
                     </div>
                 `).join('')}
@@ -498,7 +474,7 @@ function hideLoadingSpinner() {
 }
 
 function showShiftDetailsFromGranular(data) {
-    const { summary, staffing, tickets, security } = data;
+    const {summary, staffing, tickets, security} = data;
 
     // Update modal title
     const modalTitle = document.getElementById('modalTitle');
@@ -594,8 +570,8 @@ function showShiftDetailsFromGranular(data) {
                         <h4>${team} (${staffing.basic_staffing.teams[team] || 0})</h4>
                         <div class="staff-list">
                             ${Array.isArray(members) && members.length > 0 && members[0] !== 'N/A (Excel file missing)'
-                                ? members.map(member => `<span class="staff-member">${member}</span>`).join('')
-                                : '<span class="no-staff">No staff assigned</span>'}
+        ? members.map(member => `<span class="staff-member">${member}</span>`).join('')
+        : '<span class="no-staff">No staff assigned</span>'}
                         </div>
                     </div>
                 `).join('')}
@@ -620,9 +596,9 @@ function showShiftDetailsFromGranular(data) {
 }
 
 // Add keyboard shortcuts
-document.addEventListener('keydown', function(e) {
+document.addEventListener('keydown', function (e) {
     if (e.ctrlKey || e.metaKey) {
-        switch(e.key) {
+        switch (e.key) {
             case 'r':
                 e.preventDefault();
                 refreshData();
@@ -638,7 +614,7 @@ document.addEventListener('keydown', function(e) {
 function addInteractiveEffects() {
     // Add click effects to metrics
     document.querySelectorAll('.metric-good, .metric-warning, .metric-bad').forEach(metric => {
-        metric.addEventListener('click', function() {
+        metric.addEventListener('click', function () {
             this.style.animation = 'none';
             setTimeout(() => {
                 this.style.animation = '';
@@ -657,7 +633,7 @@ function addInteractiveEffects() {
 
     // Add hover sound effect (optional)
     document.querySelectorAll('.summary-card').forEach(card => {
-        card.addEventListener('mouseenter', function() {
+        card.addEventListener('mouseenter', function () {
             // Optional: add a subtle hover sound
             // playHoverSound();
         });
@@ -669,7 +645,7 @@ function setupConfetti() {
     const exceptionalMetrics = document.querySelectorAll('.metric-good');
     exceptionalMetrics.forEach(metric => {
         if (parseInt(metric.textContent) > 20) { // Customize threshold
-            metric.addEventListener('click', function() {
+            metric.addEventListener('click', function () {
                 createConfetti(this);
             });
         }
@@ -744,8 +720,8 @@ document.head.appendChild(confettiStyles);
 
 // Performance monitoring (silent)
 if ('performance' in window) {
-    window.addEventListener('load', function() {
-        setTimeout(function() {
+    window.addEventListener('load', function () {
+        setTimeout(function () {
             const loadTime = performance.timing.loadEventEnd - performance.timing.navigationStart;
             console.log('🚀 Shift Performance page loaded in', loadTime, 'ms');
         }, 0);
@@ -926,13 +902,15 @@ function applyFilters() {
         }
     });
 
-    const timeRange = document.querySelector('input[name="timeRange"]:checked')?.value || '7';
+    var checkedTime = document.querySelector('input[name="timeRange"]:checked');
+    const timeRange = (checkedTime && checkedTime.value) ? checkedTime.value : '7';
 
     // Re-fetch data with filters (for now just filter existing data)
     const rows = document.querySelectorAll('#shifts-tbody tr');
     rows.forEach(row => {
-        const shiftType = row.getAttribute('data-shift')?.toLowerCase();
-        const showShift = shiftFilters.length === 0 || shiftFilters.includes(shiftType);
+        var ds = row.getAttribute('data-shift');
+        const shiftType = ds ? ds.toLowerCase() : null;
+        const showShift = shiftFilters.length === 0 || (shiftType && shiftFilters.includes(shiftType));
 
         if (showShift) {
             row.style.display = '';
@@ -953,8 +931,8 @@ function clearFilters() {
     });
 
     // Reset time range to 7 days
-    const timeRange = document.querySelector('input[name="timeRange"][value="7"]');
-    if (timeRange) timeRange.checked = true;
+    const timeRangeEl = document.querySelector('input[name="timeRange"][value="7"]');
+    if (timeRangeEl) timeRangeEl.checked = true;
 
     // Show all rows
     const rows = document.querySelectorAll('#shifts-tbody tr');

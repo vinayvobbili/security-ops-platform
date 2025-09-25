@@ -55,7 +55,7 @@ async function setRandomAudio() {
 function toggleAudio() {
     const music = document.getElementById('music');
     const icon = document.getElementById('music-icon');
-    console.log('Toggle audio called - music:', !!music, 'icon:', !!icon, 'src:', music?.src, 'muted:', music?.muted);
+    console.log('Toggle audio called - music:', !!music, 'icon:', !!icon, 'src:', music ? music.src : undefined, 'muted:', music ? music.muted : undefined);
     if (!music || !icon || !music.src) return;
 
     if (music.muted) {
@@ -97,9 +97,9 @@ function toggleAudio() {
 function persistMusicState() {
     const music = document.getElementById('music');
     if (!music) return;
-    localStorage.setItem('music-current-time', music.currentTime);
-    localStorage.setItem('music-muted', music.muted);
-    localStorage.setItem('music-playing', !music.paused);
+    localStorage.setItem('music-current-time', String(music.currentTime));
+    localStorage.setItem('music-muted', String(music.muted));
+    localStorage.setItem('music-playing', String(!music.paused));
     if (music.src) localStorage.setItem('music-src', music.src);
 }
 
@@ -153,32 +153,57 @@ function initRandomMusic() {
 // Burger menu functionality
 function toggleMenu() {
     var menu = document.getElementById('burgerMenu');
+    var trigger = document.querySelector('.nav-burger');
     if (menu) {
-        menu.style.display = (menu.style.display === 'none' || menu.style.display === '') ? 'block' : 'none';
+        const willShow = (menu.style.display === 'none' || menu.style.display === '');
+        menu.style.display = willShow ? 'block' : 'none';
+        menu.setAttribute('aria-hidden', willShow ? 'false' : 'true');
+        if (trigger) trigger.setAttribute('aria-expanded', willShow ? 'true' : 'false');
     }
 }
 
 // Initialize burger menu event handlers
 function initBurgerMenu() {
+    if (window.__burgerMenuInitialized) return; // guard against double-binding
+    window.__burgerMenuInitialized = true;
     document.addEventListener('DOMContentLoaded', function () {
         var burgerMenu = document.getElementById('burgerMenu');
+        var trigger = document.querySelector('.nav-burger');
+        if (trigger && !trigger.hasAttribute('aria-expanded')) {
+            trigger.setAttribute('aria-expanded', 'false');
+        }
         if (burgerMenu) {
-            // Close menu when a link is clicked
             burgerMenu.querySelectorAll('a').forEach(function (link) {
                 link.addEventListener('click', function () {
                     burgerMenu.style.display = 'none';
+                    burgerMenu.setAttribute('aria-hidden', 'true');
+                    if (trigger) trigger.setAttribute('aria-expanded', 'false');
                 });
             });
         }
-
-        // Close burger menu when clicking outside
+        // Keyboard accessibility for trigger
+        if (trigger && !trigger.__kbBound) {
+            trigger.addEventListener('keydown', function (e) {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    toggleMenu();
+                }
+                if (e.key === 'Escape') {
+                    if (burgerMenu && burgerMenu.style.display === 'block') {
+                        toggleMenu();
+                    }
+                }
+            });
+            trigger.__kbBound = true;
+        }
         document.addEventListener('click', function (e) {
-            var burgerMenu = document.getElementById('burgerMenu');
             var navBurger = document.querySelector('.nav-burger');
-
-            // Check if the click was outside the menu and burger button
             if (burgerMenu && !burgerMenu.contains(e.target) && navBurger && !navBurger.contains(e.target)) {
-                burgerMenu.style.display = 'none';
+                if (burgerMenu.style.display === 'block') {
+                    burgerMenu.style.display = 'none';
+                    burgerMenu.setAttribute('aria-hidden', 'true');
+                    if (trigger) trigger.setAttribute('aria-expanded', 'false');
+                }
             }
         });
     });
@@ -265,3 +290,12 @@ if (_origApplyTheme) {
         btn.dataset.bound = 'true';
     }
 })();
+
+// Auto-initialize burger menu listeners if not already initialized elsewhere
+if (typeof initBurgerMenu === 'function') {
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initBurgerMenu);
+    } else {
+        initBurgerMenu();
+    }
+}

@@ -1,11 +1,11 @@
 <div class="top-nav">
-    <div class="nav-burger" onclick="toggleMenu()">
+    <div class="nav-burger" onclick="toggleMenu()" role="button" tabindex="0" aria-label="Toggle navigation">
         <img src="{{ url_for('static', filename='icons/burger.svg') }}" alt="Menu" class="nav-icon">
     </div>
     {% if page_title %}
     <h1 class="page-title">{{ page_title }}</h1>
     {% endif %}
-    <div id="burgerMenu" class="burger-menu-content" style="display:none;">
+    <div id="burgerMenu" class="burger-menu-content" style="display:none;" aria-hidden="true">
         <a href="/">Home</a>
         <a href="/meaningful-metrics">Meaningful Metrics</a>
         <a href="/shift-performance">Shift Performance</a>

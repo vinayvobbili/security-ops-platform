@@ -8,20 +8,7 @@
     <link rel="stylesheet" href="/static/css/ticket_import.css">
 </head>
 <body>
-<div class="top-nav">
-    <div class="nav-burger" onclick="toggleMenu()">
-        <img src="{{ url_for('static', filename='icons/burger.svg') }}" alt="Menu" class="nav-icon">
-    </div>
-    <div id="burgerMenu" class="burger-menu-content" style="display:none;">
-        <a href="/">Home Dashboard</a>
-        <a href="/xsoar">XSOAR Dashboard</a>
-        <a href="/security-analytics">Security Analytics</a> <a href="/msoc-form">MSOC Form</a>
-        <a href="/speak-up-form">Speak Up Form</a>
-        <a href="/travel-form">Travel Form</a>
-        <a href="/red-team-testing-form">Red Team Testing</a>
-        <a href="/apt-other-names-search">APT Other Names Search</a>
-    </div>
-</div>
+{% include 'burger_menu.html' %}
 <div class="container">
     <div class="card">
         <div class="glossy-effect"></div>
@@ -58,36 +45,9 @@
 </div>
 <script src="/static/js/common.js"></script>
 <script src="/static/js/xsoar-ticket-import-form.js"></script>
+<script src="/static/js/ticket_import.js"></script>
 <script>
     initRandomMusic();
-
-    function toggleMenu() {
-        var menu = document.getElementById('burgerMenu');
-        menu.style.display = (menu.style.display === 'none' || menu.style.display === '') ? 'block' : 'none';
-    }
-
-    // Close menu when a link is clicked
-    document.addEventListener('DOMContentLoaded', function () {
-        var burgerMenu = document.getElementById('burgerMenu');
-        if (burgerMenu) {
-            burgerMenu.querySelectorAll('a').forEach(function (link) {
-                link.addEventListener('click', function () {
-                    burgerMenu.style.display = 'none';
-                });
-            });
-        }
-    });
-
-    // Close burger menu when clicking outside
-    document.addEventListener('click', function (e) {
-        var burgerMenu = document.getElementById('burgerMenu');
-        var navBurger = document.querySelector('.nav-burger');
-
-        if (burgerMenu && !burgerMenu.contains(e.target) && !navBurger.contains(e.target)) {
-            burgerMenu.style.display = 'none';
-        }
-    });
 </script>
-<script src="/static/js/ticket_import.js"></script>
 </body>
 </html>
