@@ -617,7 +617,7 @@ function updateCharts() {
     createTicketTypeChart();
     createTimelineChart();
     createImpactChart();
-    createHeatmapChart();
+    createOwnerChart();
     createFunnelChart();
 }
 
@@ -771,46 +771,42 @@ function createTicketTypeChart() {
     Plotly.newPlot('severityChart', [trace], layout, config);
 }
 
-function createHeatmapChart() {
-    const statusMap = { 0: 'Pending', 1: 'Active', 2: 'Closed', 3: 'Archive' };
-    const impacts = [...new Set(filteredData.map(item => item.impact))].filter(i => i && i !== 'Unknown').sort();
-    const statuses = [...new Set(filteredData.map(item => statusMap[item.status]))].filter(s => s).sort();
-
-    const matrix = [];
-    const hoverText = [];
-
-    statuses.forEach(status => {
-        const row = [];
-        const hoverRow = [];
-        impacts.forEach(impact => {
-            const count = filteredData.filter(item =>
-                item.impact === impact && statusMap[item.status] === status
-            ).length;
-            row.push(count);
-            hoverRow.push(`Impact: ${impact}<br>Status: ${status}<br>Count: ${count}`);
-        });
-        matrix.push(row);
-        hoverText.push(hoverRow);
+function createOwnerChart() {
+    const counts = {};
+    filteredData.forEach(item => {
+        // Only include cases with actual owners (skip unassigned)
+        if (item.owner && item.owner.trim() !== '') {
+            let owner = item.owner;
+            // Remove @company.com suffix
+            if (owner.endsWith('@company.com')) {
+                owner = owner.replace('@company.com', '');
+            }
+            counts[owner] = (counts[owner] || 0) + 1;
+        }
     });
 
+    const sortedEntries = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 10);
+
     const trace = {
-        z: matrix,
-        x: impacts,
-        y: statuses,
-        type: 'heatmap',
-        colorscale: 'Viridis',
-        hovertemplate: '%{text}<extra></extra>',
-        text: hoverText,
-        showscale: true
+        x: sortedEntries.map(([owner, count]) => count),
+        y: sortedEntries.map(([owner, count]) => owner),
+        type: 'bar',
+        orientation: 'h',
+        marker: {
+            color: colorSchemes.sources,
+            line: { color: 'rgba(255,255,255,0.8)', width: 1 }
+        },
+        hovertemplate: '<b>%{y}</b><br>Cases: %{x}<extra></extra>'
     };
 
     const layout = {
-        margin: { l: 80, r: 40, t: 40, b: 80 },
+        margin: { l: 120, r: 20, t: 20, b: 40 },
         font: { family: 'Segoe UI, sans-serif', size: 12 },
+        showlegend: false,
         plot_bgcolor: 'rgba(0,0,0,0)',
         paper_bgcolor: 'rgba(0,0,0,0)',
-        xaxis: { tickangle: -45 },
-        yaxis: { autorange: 'reversed' }
+        xaxis: { gridcolor: 'rgba(128,128,128,0.2)', title: 'Number of Cases' },
+        yaxis: { gridcolor: 'rgba(128,128,128,0.2)' }
     };
 
     const config = { responsive: true, displayModeBar: true, displaylogo: false };
@@ -818,30 +814,31 @@ function createHeatmapChart() {
 }
 
 function createFunnelChart() {
-    const statusMap = { 0: 'Pending', 1: 'Active', 2: 'Closed', 3: 'Archive' };
-    const escalationCounts = {};
+    // Calculate the funnel stages
+    const totalCases = filteredData.length;
 
-    filteredData.forEach(item => {
-        const escalation = item.escalation_state || 'Unknown';
-        escalationCounts[escalation] = (escalationCounts[escalation] || 0) + 1;
-    });
+    const assignedCases = filteredData.filter(item =>
+        item.owner && item.owner.trim() !== ''
+    ).length;
 
-    const sortedEntries = Object.entries(escalationCounts).sort((a, b) => b[1] - a[1]);
+    const maliciousTruePositives = filteredData.filter(item => {
+        return item.impact === 'Malicious True Positive';
+    }).length;
 
     const trace = {
         type: 'funnel',
-        y: sortedEntries.map(([escalation, count]) => escalation),
-        x: sortedEntries.map(([escalation, count]) => count),
+        y: ['All Cases', 'Assigned Cases', 'Malicious True Positive'],
+        x: [totalCases, assignedCases, maliciousTruePositives],
         textinfo: 'value+percent initial',
         marker: {
-            color: colorSchemes.status,
+            color: ['#4472C4', '#70AD47', '#C5504B'],
             line: { color: 'white', width: 2 }
         },
         hovertemplate: '<b>%{y}</b><br>Count: %{x}<br>Percentage: %{percentInitial}<extra></extra>'
     };
 
     const layout = {
-        margin: { l: 120, r: 20, t: 40, b: 40 },
+        margin: { l: 150, r: 20, t: 20, b: 40 },
         font: { family: 'Segoe UI, sans-serif', size: 12 },
         plot_bgcolor: 'rgba(0,0,0,0)',
         paper_bgcolor: 'rgba(0,0,0,0)'
