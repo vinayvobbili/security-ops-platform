@@ -1018,8 +1018,8 @@ function createTimelineChart() {
         hovertemplate: '<b>%{x}</b><br>Closed: %{y}<extra></extra>'
     }];
     const layout = commonLayout({
-        legend: {x: 0, y: 1},
-        margin: {l: 60, r: 40, t: 20, b: 60},
+        legend: {x: 0.5, y: -0.2, xanchor: 'center', orientation: 'h'},
+        margin: {l: 50, r: 10, t: 30, b: 40},
         yaxis: {title: 'Number of Cases', gridcolor: getChartColors().grid},
         xaxis: {gridcolor: getChartColors().grid, tickangle: 90, tickformat: '%m/%d', dtick: 86400000 * 2}
     });
