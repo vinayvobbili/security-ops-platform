@@ -12,6 +12,7 @@ sys.path.insert(0, str(ROOT_DIRECTORY))
 
 # Configure SSL for corporate proxy environments (Zscaler, etc.)
 from src.utils.ssl_config import configure_ssl_if_needed
+
 configure_ssl_if_needed()
 
 import webexpythonsdk.models.cards.inputs as INPUTS
@@ -522,7 +523,7 @@ class AnnounceThreatcon(Command):
 
             WebexTeamsAPI(access_token=config.webex_bot_access_token_toodles).messages.create(
                 roomId=config.webex_room_id_threatcon_collab,
-                text=f"🚨🚨 NEW THREATCON LEVEL ANNOUNCEMENT! 🚨🚨",
+                text=f"🚨 **NEW THREATCON LEVEL ANNOUNCEMENT!** 🚨",
                 files=[str(file_path)]
             )
 
