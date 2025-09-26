@@ -55,8 +55,9 @@
                     </div>
                 </div>
                 <div class="slider-field">
-                    <label class="date-range-label">⏱️<br>TTR<br>(mins:secs):</label>
-                    <div class="date-range-slider-container">
+                    <label class="date-range-label">⏱️<br>TTR<br>(mins):</label>
+                    <div class="date-range-slider-container" style="position: relative;">
+                        <div id="mttrRangeTooltip" class="slider-tooltip" style="position: absolute; top: -35px; left: 50%; transform: translateX(-50%); background: #333; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; white-space: nowrap; pointer-events: none; z-index: 10; display: none;">All</div>
                         <label for="mttrRangeSlider"></label><input type="range" id="mttrRangeSlider" class="date-range-slider" min="0" max="3" value="0" step="1">
                         <div class="slider-labels">
                             <span data-value="0" class="active">All</span>
@@ -67,8 +68,9 @@
                     </div>
                 </div>
                 <div class="slider-field">
-                    <label class="date-range-label">🔒<br>TTC<br>(mins:secs):</label>
-                    <div class="date-range-slider-container">
+                    <label class="date-range-label">🔒<br>TTC<br>(mins):</label>
+                    <div class="date-range-slider-container" style="position: relative;">
+                        <div id="mttcRangeTooltip" class="slider-tooltip" style="position: absolute; top: -35px; left: 50%; transform: translateX(-50%); background: #333; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; white-space: nowrap; pointer-events: none; z-index: 10; display: none;">All</div>
                         <label for="mttcRangeSlider"></label><input type="range" id="mttcRangeSlider" class="date-range-slider" min="0" max="3" value="0" step="1">
                         <div class="slider-labels">
                             <span data-value="0" class="active">All</span>
@@ -80,13 +82,13 @@
                 </div>
                 <div class="slider-field">
                     <label class="date-range-label">📆<br>Age<br>(days): <span title="Age filter applies only to currently open tickets (closed tickets stop aging)" style="cursor: help;">ℹ️</span></label>
-                    <div class="date-range-slider-container">
-                        <label for="ageRangeSlider"></label><input type="range" id="ageRangeSlider" class="date-range-slider" min="0" max="3" value="0" step="1">
+                    <div class="date-range-slider-container" style="position: relative;">
+                        <div id="ageRangeTooltip" class="slider-tooltip" style="position: absolute; top: -35px; left: 50%; transform: translateX(-50%); background: #333; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; white-space: nowrap; pointer-events: none; z-index: 10; display: none;">All</div>
+                        <label for="ageRangeSlider"></label><input type="range" id="ageRangeSlider" class="date-range-slider" min="0" max="60" value="0" step="1">
                         <div class="slider-labels">
-                            <span data-value="0" class="active">All</span>
-                            <span data-value="1">≤7</span>
-                            <span data-value="2">≤30</span>
-                            <span data-value="3">>30</span>
+                            <span class="range-preset" data-value="0" style="cursor: pointer;">All</span>
+                            <span class="range-preset" data-value="7" style="cursor: pointer;">7</span>
+                            <span class="range-preset" data-value="30" style="cursor: pointer;">30</span>
                         </div>
                     </div>
                 </div>
