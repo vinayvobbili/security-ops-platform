@@ -44,13 +44,13 @@
             <div class="header-right">
                 <div class="slider-field">
                     <label class="date-range-label">📅<br>Created in past (days):</label>
-                    <div class="date-range-slider-container">
-                        <label for="dateRangeSlider"></label><input type="range" id="dateRangeSlider" class="date-range-slider" min="0" max="3" value="1" step="1">
+                    <div class="date-range-slider-container" style="position: relative;">
+                        <div id="dateRangeTooltip" class="slider-tooltip" style="position: absolute; top: -35px; left: 50%; transform: translateX(-50%); background: #333; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; white-space: nowrap; pointer-events: none; z-index: 10; display: none;">30</div>
+                        <label for="dateRangeSlider"></label><input type="range" id="dateRangeSlider" class="date-range-slider" min="1" max="90" value="30" step="1">
                         <div class="slider-labels">
-                            <span data-value="0">7</span>
-                            <span data-value="1" class="active">30</span>
-                            <span data-value="2">60</span>
-                            <span data-value="3">90</span>
+                            <span class="range-preset" data-value="1" style="cursor: pointer;">1</span>
+                            <span class="range-preset" data-value="30" style="cursor: pointer;">30</span>
+                            <span class="range-preset" data-value="90" style="cursor: pointer;">90</span>
                         </div>
                     </div>
                 </div>
