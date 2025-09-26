@@ -443,7 +443,7 @@ function applyFilters() {
 
     const ageSlider = document.getElementById('ageRangeSlider');
     const ageValue = parseInt(ageSlider ? ageSlider.value : 0);
-    // Map slider positions to age ranges: 0=All, 1=≤7days, 2=≤30days, 3=≤90days
+    // Map slider positions to age ranges: 0=All, 1=≤7days, 2=≤30days, 3=>30days
     const ageFilter = ageValue;
 
     const countries = Array.from(document.querySelectorAll('#countryFilter input:checked')).map(cb => cb.value);
@@ -461,9 +461,8 @@ function applyFilters() {
     cutoffDate.setDate(cutoffDate.getDate() - dateRange);
 
     filteredData = allData.filter(item => {
-        // Date filter
-        const createdDate = new Date(item.created);
-        if (createdDate < cutoffDate) return false;
+        // Date filter - use pre-calculated days ago
+        if (item.created_days_ago !== null && item.created_days_ago > dateRange) return false;
 
         // Location filters (countries and regions are mutually exclusive)
         if (countries.length > 0 || regions.length > 0) {
@@ -528,15 +527,11 @@ function applyFilters() {
             if (mttcFilter === 3 && mttcSeconds <= 900) return false; // >15 mins (900 seconds)
         }
 
-        // Age filter - calculate days since creation
-        if (ageFilter > 0) {
-            const createdDate = new Date(item.created);
-            const currentDate = new Date();
-            const daysDiff = Math.floor((currentDate - createdDate) / (1000 * 60 * 60 * 24));
-
-            if (ageFilter === 1 && daysDiff > 7) return false; // ≤7 days
-            if (ageFilter === 2 && daysDiff > 30) return false; // ≤30 days
-            if (ageFilter === 3 && daysDiff > 90) return false; // ≤90 days
+        // Age filter - only applies to tickets with age data (i.e., open tickets)
+        if (ageFilter > 0 && item.age !== null) {
+            if (ageFilter === 1 && item.age > 7) return false; // ≤7 days
+            if (ageFilter === 2 && item.age > 30) return false; // ≤30 days
+            if (ageFilter === 3 && item.age <= 30) return false; // >30 days
         }
 
         return true;
@@ -583,7 +578,7 @@ function updateFilterSummary(dateRange, mttrFilter, mttcFilter, ageFilter, count
     if (ageFilter > 0) {
         const ageText = ageFilter === 1 ? 'Age ≤7 days' :
             ageFilter === 2 ? 'Age ≤30 days' :
-                ageFilter === 3 ? 'Age ≤90 days' : 'All Ages';
+                ageFilter === 3 ? 'Age >30 days' : 'All Ages';
         container.innerHTML += `<span class="filter-tag">${ageText} <button class="remove-filter-btn" onclick="removeFilter('age', '${ageFilter}')">×</button></span>`;
     }
 
@@ -734,7 +729,7 @@ function calculatePeriodMetrics(data) {
         return hasHost && timeToContain && (timeToContain.breachTriggered === true || timeToContain.breachTriggered === 'true');
     }).length;
 
-    const openIncidents = data.filter(item => item.status !== 2).length;
+    const openIncidents = data.filter(item => item.is_open).length;
 
     // Calculate MTTR
     const casesWithOwnerAndTimeToRespond = data.filter(item =>
@@ -1214,7 +1209,7 @@ function exportToCSV() {
 function exportSummary() {
     const totalIncidents = filteredData.length;
     const criticalIncidents = filteredData.filter(item => item.severity === 4).length;
-    const openIncidents = filteredData.filter(item => item.status !== 2).length;
+    const openIncidents = filteredData.filter(item => item.is_open).length;
 
     const summaryData = [
         ['Metric', 'Value'],
