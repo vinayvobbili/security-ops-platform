@@ -1,5 +1,6 @@
 import json
 import logging
+from datetime import datetime
 
 import requests
 import urllib3
@@ -225,7 +226,7 @@ class TicketHandler:
             return {"error": response.text}
 
     def cache_past_90_days_tickets(self):
-        """Cache past 90 days tickets from prod environment"""
+        """Cache past 90 days tickets from prod environment with pre-calculated derived fields"""
         from datetime import datetime, timedelta, timezone
         from pathlib import Path
 
@@ -238,14 +239,242 @@ class TicketHandler:
         tickets = self.get_tickets(query)
         log.info(f"Fetched {len(tickets)} tickets from prod for caching")
 
-        # save those tickets under today's date in web/static/charts
-        today_date = datetime.now().strftime('%m-%d-%Y')
-        output_path = root_directory / "web" / "static" / "charts" / today_date / "past_90_days_tickets.json"
-        output_path.parent.mkdir(parents=True, exist_ok=True)  # Ensure the directory exists
+        # Pre-calculate derived fields for each ticket
+        current_time = datetime.now(timezone.utc)
 
-        with open(output_path, 'w') as f:
+        for ticket in tickets:
+            try:
+                # Parse created date
+                created_date = None
+                if ticket.get('created'):
+                    try:
+                        created_date = datetime.fromisoformat(ticket['created'].replace('Z', '+00:00'))
+                    except ValueError:
+                        try:
+                            created_date = datetime.strptime(ticket['created'], '%Y-%m-%dT%H:%M:%S.%fZ').replace(tzinfo=timezone.utc)
+                        except ValueError:
+                            log.warning(f"Could not parse created date: {ticket.get('created')} for ticket {ticket.get('id')}")
+
+                # Parse closed date
+                closed_date = None
+                if ticket.get('closed'):
+                    try:
+                        closed_date = datetime.fromisoformat(ticket['closed'].replace('Z', '+00:00'))
+                    except ValueError:
+                        try:
+                            closed_date = datetime.strptime(ticket['closed'], '%Y-%m-%dT%H:%M:%S.%fZ').replace(tzinfo=timezone.utc)
+                        except ValueError:
+                            log.warning(f"Could not parse closed date: {ticket.get('closed')} for ticket {ticket.get('id')}")
+
+                # Calculate age in days (only for open tickets: status 0=Pending, 1=Active)
+                ticket['age_days'] = None
+                ticket['is_open'] = ticket.get('status', 0) in [0, 1]  # 0=Pending, 1=Active, 2=Closed
+
+                if created_date and ticket['is_open']:
+                    age_delta = current_time - created_date
+                    ticket['age_days'] = age_delta.days
+
+                # Calculate days since creation (for all tickets)
+                ticket['days_since_creation'] = None
+                if created_date:
+                    days_delta = current_time - created_date
+                    ticket['days_since_creation'] = days_delta.days
+
+                # Calculate time to resolution (for closed tickets)
+                ticket['resolution_time_days'] = None
+                if created_date and closed_date:
+                    resolution_delta = closed_date - created_date
+                    ticket['resolution_time_days'] = resolution_delta.days
+
+                # Add age filter categories for frontend filtering
+                ticket['age_category'] = 'all'  # Default category
+                if ticket['age_days'] is not None:
+                    if ticket['age_days'] <= 7:
+                        ticket['age_category'] = 'le7'  # ≤7 days
+                    elif ticket['age_days'] <= 30:
+                        ticket['age_category'] = 'le30'  # ≤30 days
+                    else:
+                        ticket['age_category'] = 'gt30'  # >30 days
+
+                # Debug logging for age calculation (remove after testing)
+                if ticket.get('id'):
+                    log.debug(f"Ticket {ticket['id']}: created={ticket.get('created')}, "
+                             f"age_days={ticket['age_days']}, is_open={ticket['is_open']}, "
+                             f"age_category={ticket['age_category']}")
+
+                # Add date ranges for quick filtering
+                if created_date:
+                    ticket['created_days_ago'] = (current_time - created_date).days
+
+            except Exception as e:
+                log.error(f"Error processing ticket {ticket.get('id', 'unknown')}: {str(e)}")
+                # Set default values for failed calculations
+                ticket.update({
+                    'age_days': None,
+                    'is_open': ticket.get('status', 0) in [0, 1],
+                    'days_since_creation': None,
+                    'resolution_time_days': None,
+                    'age_category': 'all',
+                    'created_days_ago': None
+                })
+
+        # save raw tickets data under today's date in web/static/charts
+        today_date = datetime.now().strftime('%m-%d-%Y')
+        raw_output_path = root_directory / "web" / "static" / "charts" / today_date / "past_90_days_tickets_raw.json"
+        raw_output_path.parent.mkdir(parents=True, exist_ok=True)  # Ensure the directory exists
+
+        with open(raw_output_path, 'w') as f:
             json.dump(tickets, f, indent=4)
-        log.info(f"Cached tickets to {output_path}")
+        log.info(f"Cached {len(tickets)} raw tickets with pre-calculated derived fields to {raw_output_path}")
+
+        # Generate lightweight UI data
+        ui_data = self.prep_data_for_UI(tickets)
+        ui_output_path = root_directory / "web" / "static" / "charts" / today_date / "past_90_days_tickets.json"
+
+        with open(ui_output_path, 'w') as f:
+            json.dump(ui_data, f, indent=2)
+        log.info(f"Generated lightweight UI data with {len(ui_data)} tickets to {ui_output_path}")
+
+    def prep_data_for_UI(self, raw_tickets):
+        """
+        Prepare fully flattened data for UI with all pre-calculated display values
+        """
+        from datetime import datetime, timezone
+
+        ui_data = []
+        datetime.now(timezone.utc)
+
+        for ticket in raw_tickets:
+            try:
+                # Skip tickets without valid ID
+                if not ticket.get('id'):
+                    continue
+
+                ui_ticket = {
+                    # Core identification
+                    'id': ticket.get('id'),
+                    'name': ticket.get('name', f"Ticket {ticket.get('id')}"),
+                    'type': ticket.get('type', 'Unknown'),
+
+                    # Status and priority (keep numeric for filtering, add display versions)
+                    'status': ticket.get('status', 0),
+                    'status_display': {0: 'Pending', 1: 'Active', 2: 'Closed'}.get(ticket.get('status', 0), 'Unknown'),
+                    'severity': ticket.get('severity', 0),
+                    'severity_display': {0: 'Unknown', 1: 'Low', 2: 'Medium', 3: 'High', 4: 'Critical'}.get(ticket.get('severity', 0), 'Unknown'),
+                    'impact': ticket.get('impact', 'Unknown'),
+
+                    # Geographic and organizational
+                    'affected_country': ticket.get('affected_country', 'Unknown'),
+                    'affected_region': ticket.get('affected_region', 'Unknown'),
+                    'owner': ticket.get('owner', 'Unknown'),
+                    'owner_display': self._clean_owner_name(ticket.get('owner', 'Unknown')),
+
+                    # Timestamps - formatted for display
+                    'created': ticket.get('created', ''),
+                    'created_display': self._format_date_for_display(ticket.get('created')),
+                    'closed': ticket.get('closed', ''),
+                    'closed_display': self._format_date_for_display(ticket.get('closed')),
+
+                    # Automation
+                    'automation_level': ticket.get('automation_level', 'Unknown'),
+
+                    # Pre-calculated metrics
+                    'age': ticket.get('age_days'),  # Only set for open tickets
+                    'age_display': self._format_age_display(ticket.get('age_days')),
+                    'is_open': ticket.get('is_open', False),
+                    'days_since_creation': ticket.get('days_since_creation'),
+                    'created_days_ago': ticket.get('created_days_ago'),
+
+                    # Time to respond/contain - flattened and formatted
+                    'ttr_seconds': self._extract_duration(ticket.get('timetorespond')),
+                    'ttr_display': self._format_duration(self._extract_duration(ticket.get('timetorespond'))),
+                    'ttr_breach': self._extract_breach_status(ticket.get('timetorespond')),
+
+                    'ttc_seconds': self._extract_duration(ticket.get('timetocontain')),
+                    'ttc_display': self._format_duration(self._extract_duration(ticket.get('timetocontain'))),
+                    'ttc_breach': self._extract_breach_status(ticket.get('timetocontain')),
+
+                    # Display-friendly type (remove METCIRT prefix)
+                    'type_display': self._clean_type_name(ticket.get('type', 'Unknown')),
+
+                    # Filter-friendly fields
+                    'has_host': bool(ticket.get('hostname') and ticket.get('hostname').strip() and ticket.get('hostname') != 'Unknown'),
+                    'has_owner': bool(ticket.get('owner') and ticket.get('owner').strip()),
+                    'has_ttr': bool(self._extract_duration(ticket.get('timetorespond'))),
+                    'has_ttc': bool(self._extract_duration(ticket.get('timetocontain'))),
+
+                    # Chart-friendly data
+                    'chart_date': self._extract_chart_date(ticket.get('created')),
+                }
+
+                ui_data.append(ui_ticket)
+
+            except Exception as e:
+                log.error(f"Error processing ticket {ticket.get('id', 'unknown')}: {str(e)}")
+                continue
+
+        log.info(f"Prepared flattened UI data: {len(ui_data)} tickets from {len(raw_tickets)} raw tickets")
+        return ui_data
+
+    def _clean_owner_name(self, owner):
+        """Remove @company.com from owner names"""
+        if not owner or owner == 'Unknown':
+            return owner
+        return owner.replace('@company.com', '') if owner.endswith('@company.com') else owner
+
+    def _clean_type_name(self, ticket_type):
+        """Remove METCIRT prefix from ticket types"""
+        if not ticket_type or ticket_type == 'Unknown':
+            return ticket_type
+        import re
+        return re.sub(r'^METCIRT[_\-\s]*', '', ticket_type, flags=re.IGNORECASE) if ticket_type.startswith('METCIRT') else ticket_type
+
+    def _format_date_for_display(self, date_str):
+        """Format date for display (MM/DD format)"""
+        if not date_str:
+            return ''
+        try:
+            date_obj = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+            return f"{date_obj.month:02d}/{date_obj.day:02d}"
+        except (ValueError, AttributeError):
+            return date_str
+
+    def _format_age_display(self, age_days):
+        """Format age for display"""
+        if age_days is None:
+            return ''
+        return f"{age_days}d" if age_days > 0 else '0d'
+
+    def _extract_duration(self, time_obj):
+        """Extract totalDuration from time object"""
+        if not time_obj or not isinstance(time_obj, dict):
+            return None
+        return time_obj.get('totalDuration')
+
+    def _extract_breach_status(self, time_obj):
+        """Extract breach status from time object"""
+        if not time_obj or not isinstance(time_obj, dict):
+            return False
+        breach = time_obj.get('breachTriggered')
+        return breach is True or breach == 'true'
+
+    def _format_duration(self, seconds):
+        """Format duration in MM:SS format"""
+        if not seconds or seconds <= 0:
+            return '0:00'
+        minutes = seconds // 60
+        secs = seconds % 60
+        return f"{minutes}:{secs:02d}"
+
+    def _extract_chart_date(self, date_str):
+        """Extract date in YYYY-MM-DD format for charts"""
+        if not date_str:
+            return None
+        try:
+            date_obj = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+            return date_obj.strftime('%Y-%m-%d')
+        except (ValueError, AttributeError):
+            return None
 
 
 class ListHandler:
