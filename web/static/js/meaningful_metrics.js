@@ -184,9 +184,22 @@ function setupEventListeners() {
     const dateSlider = document.getElementById('dateRangeSlider');
     if (dateSlider) {
         dateSlider.addEventListener('input', function () {
+            showSliderTooltip();
             updateSliderLabels(this.value);
             applyFilters();
         });
+
+        // Show tooltip when user starts interacting
+        dateSlider.addEventListener('mousedown', showSliderTooltip);
+        dateSlider.addEventListener('touchstart', showSliderTooltip);
+
+        // Hide tooltip when user stops interacting
+        dateSlider.addEventListener('mouseup', hideSliderTooltip);
+        dateSlider.addEventListener('touchend', hideSliderTooltip);
+        dateSlider.addEventListener('mouseleave', hideSliderTooltip);
+
+        // Initialize the slider position (but keep tooltip hidden)
+        updateSliderLabels(dateSlider.value);
     }
 
     // Add listener for MTTR range slider
@@ -221,17 +234,24 @@ function setupEventListeners() {
         checkbox.addEventListener('change', applyFilters);
     });
 
-    // Add listeners to date slider labels for click functionality
+    // Add listeners to date slider preset values for click functionality
     const dateContainer = document.getElementById('dateRangeSlider').parentElement;
-    dateContainer.querySelectorAll('.slider-labels span').forEach(label => {
-        label.addEventListener('click', function () {
+    dateContainer.querySelectorAll('.range-preset').forEach(preset => {
+        preset.addEventListener('click', function () {
             const value = this.getAttribute('data-value');
             dateSlider.value = value;
+            showSliderTooltip();
             updateSliderLabels(value);
             applyFilters();
+            // Hide tooltip after a brief delay when using presets
+            setTimeout(hideSliderTooltip, 1000);
         });
-        label.style.cursor = 'pointer';
     });
+
+    // Update current value display when slider changes
+    if (dateSlider) {
+        updateSliderLabels(dateSlider.value);
+    }
 
     // Add listeners to MTTR slider labels for click functionality
     const mttrContainer = document.getElementById('mttrRangeSlider').parentElement;
@@ -338,11 +358,35 @@ function setupEventListeners() {
 }
 
 function updateSliderLabels(value) {
-    const dateContainer = document.getElementById('dateRangeSlider').parentElement;
-    dateContainer.querySelectorAll('.slider-labels span').forEach(span => {
-        span.classList.remove('active');
-    });
-    dateContainer.querySelector(`.slider-labels span[data-value="${value}"]`).classList.add('active');
+    // Update the floating tooltip above the slider
+    const tooltip = document.getElementById('dateRangeTooltip');
+    const slider = document.getElementById('dateRangeSlider');
+    if (tooltip && slider) {
+        tooltip.textContent = value;
+
+        // Calculate position based on slider value
+        const min = parseInt(slider.min);
+        const max = parseInt(slider.max);
+        const val = parseInt(value);
+        const percentage = ((val - min) / (max - min)) * 100;
+
+        // Position tooltip above the thumb (accounting for thumb width)
+        tooltip.style.left = `calc(${percentage}% + ${8 - percentage * 0.16}px)`;
+    }
+}
+
+function showSliderTooltip() {
+    const tooltip = document.getElementById('dateRangeTooltip');
+    if (tooltip) {
+        tooltip.style.display = 'block';
+    }
+}
+
+function hideSliderTooltip() {
+    const tooltip = document.getElementById('dateRangeTooltip');
+    if (tooltip) {
+        tooltip.style.display = 'none';
+    }
 }
 
 function updateMttrSliderLabels(value) {
@@ -438,9 +482,7 @@ function populateCheckboxFilter(filterId, options) {
 
 function applyFilters() {
     const dateSlider = document.getElementById('dateRangeSlider');
-    const sliderValue = parseInt(dateSlider ? dateSlider.value : 1);
-    // Map slider positions to days: 0=7, 1=30, 2=60, 3=90
-    const dateRange = [7, 30, 60, 90][sliderValue] || 30;
+    const dateRange = parseInt(dateSlider ? dateSlider.value : 30);
 
     const mttrSlider = document.getElementById('mttrRangeSlider');
     // Map slider positions to MTTR ranges: 0=All, 1=≤3mins, 2=>3mins, 3=>5mins
@@ -554,12 +596,8 @@ function updateFilterSummary(dateRange, mttrFilter, mttcFilter, ageFilter, count
     const nonRemovableFilters = container.querySelectorAll('.filter-tag.non-removable');
     container.innerHTML = Array.from(nonRemovableFilters).map(filter => filter.outerHTML).join('');
 
-    // Date range - no X button, use radio buttons to change
-    const dateText = dateRange === 7 ? 'Last 7 days' :
-        dateRange === 30 ? 'Last 30 days' :
-            dateRange === 60 ? 'Last 60 days' :
-                dateRange === 90 ? 'Last 90 days' :
-                    dateRange === 365 ? 'Last year' : `Last ${dateRange} days`;
+    // Date range - no X button, use slider to change
+    const dateText = dateRange === 1 ? 'Last 1 day' : `Last ${dateRange} days`;
 
     container.innerHTML += `<span class="filter-tag">${dateText}</span>`;
 
@@ -676,11 +714,11 @@ function removeFilter(filterType, value) {
 }
 
 function resetFilters() {
-    // Reset date range slider to default (30 days, position 1)
+    // Reset date range slider to default (30 days)
     const dateSlider = document.getElementById('dateRangeSlider');
     if (dateSlider) {
-        dateSlider.value = 1;
-        updateSliderLabels(1);
+        dateSlider.value = 30;
+        updateSliderLabels(30);
     }
 
     // Reset MTTR range slider to default (All, position 0)
@@ -773,8 +811,7 @@ function calculatePeriodMetrics(data) {
 function calculatePreviousPeriodMetrics() {
     // Get current date range setting
     const dateSlider = document.getElementById('dateRangeSlider');
-    const sliderValue = parseInt(dateSlider.value);
-    const dateRange = [7, 30, 60, 90][sliderValue] || 30;
+    const dateRange = parseInt(dateSlider.value) || 30;
     
     // For longer periods (60, 90 days), we likely don't have enough historical data
     // Only show deltas for 7 and 30 day periods
