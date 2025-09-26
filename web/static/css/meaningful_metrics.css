@@ -1464,3 +1464,58 @@ body.dark-mode .toast {
         line-height: 1.4;
     }
 }
+
+/* Location Filter Tabs */
+.location-filter-tabs {
+    width: 100%;
+}
+
+.tab-buttons {
+    display: flex;
+    border-bottom: 1px solid var(--filter-border);
+    margin-bottom: -1px;
+}
+
+.tab-button {
+    flex: 1;
+    padding: 2px 12px;
+    background: transparent;
+    border: none;
+    color: #495057;
+    font-size: inherit;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border-bottom: 2px solid transparent;
+}
+
+.tab-button:hover {
+    background: var(--hover-bg);
+    color: var(--text-primary);
+}
+
+.tab-button.active {
+    color: var(--text-primary);
+    border-bottom-color: var(--text-primary);
+    font-weight: 700;
+}
+
+.tab-content {
+    min-height: 100px;
+}
+
+.tab-pane {
+    display: none;
+}
+
+.tab-pane.active {
+    display: block;
+}
+
+/* Region filter in three columns */
+#regionFilter.checkbox-filter {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 8px;
+    column-gap: 12px;
+}

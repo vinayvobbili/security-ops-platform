@@ -94,8 +94,21 @@
         </div>
         <div class="filters-grid">
             <div class="filter-group">
-                <label class="filter-label">🌍 Country</label>
-                <div id="countryFilter" class="checkbox-filter">
+                <div class="location-filter-tabs">
+                    <div class="tab-buttons">
+                        <button class="tab-button" data-tab="country">🏛️ Country</button>
+                        <button class="tab-button active" data-tab="region">🌍 Region</button>
+                    </div>
+                    <div class="tab-content">
+                        <div id="countryTab" class="tab-pane">
+                            <div id="countryFilter" class="checkbox-filter">
+                            </div>
+                        </div>
+                        <div id="regionTab" class="tab-pane active">
+                            <div id="regionFilter" class="checkbox-filter">
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
             <div class="filter-group">
