@@ -1235,38 +1235,10 @@ def api_meaningful_metrics_data():
             return jsonify({'success': False, 'error': 'Cache file not found'}), 404
 
         with open(cache_file, 'r') as f:
-            tickets = json.load(f)
+            processed_data = json.load(f)
 
-        # Process and extract relevant fields
-        processed_data = []
-        for ticket in tickets:
-            custom_fields = ticket.get('CustomFields', {})
-            processed_data.append({
-                'id': ticket.get('id', ''),
-                'name': ticket.get('name', ''),
-                'type': ticket.get('type', ''),
-                'severity': ticket.get('severity', 0),
-                'status': ticket.get('status', 0),
-                'owner': ticket.get('owner', ''),
-                'created': ticket.get('created', ''),
-                'modified': ticket.get('modified', ''),
-                'closed': ticket.get('closed', ''),
-                'phase': ticket.get('phase', ''),
-                'category': ticket.get('category', ''),
-                'affected_country': custom_fields.get('affectedcountry', 'Unknown'),
-                'affected_region': custom_fields.get('affectedregion', 'Unknown'),
-                'impact': custom_fields.get('impact', 'Unknown'),
-                'security_category': custom_fields.get('securitycategory', 'Unknown'),
-                'detection_source': custom_fields.get('detectionsource', 'Unknown'),
-                'device_environment': custom_fields.get('deviceenvironment', 'Unknown'),
-                'hostname': custom_fields.get('hostname', 'Unknown'),
-                'escalation_state': custom_fields.get('escalationstate', 'Unknown'),
-                'contained': custom_fields.get('contained', False),
-                'root_cause': custom_fields.get('rootcause', 'Unknown'),
-                'device_os': custom_fields.get('deviceos', 'Unknown'),
-                'timetorespond': custom_fields.get('timetorespond', {}),
-                'timetocontain': custom_fields.get('timetocontain', {}),
-            })
+        # Data is already processed and flattened by ticket_cache.py
+        # No additional processing needed
 
         return jsonify({
             'success': True,

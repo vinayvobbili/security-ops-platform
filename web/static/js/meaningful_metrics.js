@@ -2,6 +2,10 @@ let allData = [];
 let filteredData = [];
 let currentSort = {column: null, direction: 'asc'};
 
+// Feature flags
+const should_show_card_tooltips = false;
+const should_show_delta_values = false;
+
 // Column configuration with all available fields
 const availableColumns = {
     // Primary fields (commonly used)
@@ -14,17 +18,25 @@ const availableColumns = {
     'closed': {label: 'Closed', category: 'Primary', path: 'closed', type: 'date'},
     'owner': {label: 'Owner', category: 'Primary', path: 'owner', type: 'string'},
 
-    // Custom Fields (from data analysis)
+    // Custom Fields (extracted to top-level by ticket_cache.py)
     'affected_country': {label: 'Country', category: 'Location', path: 'affected_country', type: 'string'},
-    'affected_region': {label: 'Region', category: 'Location', path: 'CustomFields.affectedregion', type: 'string'},
+    'affected_region': {label: 'Region', category: 'Location', path: 'affected_region', type: 'string'},
     'impact': {label: 'Impact', category: 'Assessment', path: 'impact', type: 'string'},
-    'contained': {label: 'Contained', category: 'Status', path: 'CustomFields.contained', type: 'string'},
-    'automation': {label: 'Automation Level', category: 'Process', path: 'CustomFields.automation', type: 'string'},
-    'escalation_state': {label: 'Escalation State', category: 'Process', path: 'CustomFields.escalationstate', type: 'string'},
-    'source': {label: 'Source', category: 'Detection', path: 'CustomFields.source', type: 'string'},
-    'threat_type': {label: 'Threat Type', category: 'Assessment', path: 'CustomFields.threattype', type: 'string'},
-    'root_cause': {label: 'Root Cause', category: 'Assessment', path: 'CustomFields.rootcause', type: 'string'},
-    'breach_confirmation': {label: 'Breach Confirmation', category: 'Assessment', path: 'CustomFields.breachconfirmation', type: 'string'},
+    'automation_level': {label: 'Automation Level', category: 'Process', path: 'automation_level', type: 'string'},
+
+    // Calculated Fields (computed by ticket_cache.py)
+    'is_open': {label: 'Is Open', category: 'Status', path: 'is_open', type: 'boolean'},
+    'age_days': {label: 'Age (Days)', category: 'Timing', path: 'age_days', type: 'number'},
+    'days_since_creation': {label: 'Days Since Creation', category: 'Timing', path: 'days_since_creation', type: 'number'},
+    'resolution_time_days': {label: 'Resolution Time (Days)', category: 'Timing', path: 'resolution_time_days', type: 'number'},
+    'resolution_bucket': {label: 'Resolution Bucket', category: 'Status', path: 'resolution_bucket', type: 'string'},
+    'has_resolution_time': {label: 'Has Resolution Time', category: 'Status', path: 'has_resolution_time', type: 'boolean'},
+    'age_category': {label: 'Age Category', category: 'Status', path: 'age_category', type: 'string'},
+    'status_display': {label: 'Status Name', category: 'Display', path: 'status_display', type: 'string'},
+    'severity_display': {label: 'Severity Name', category: 'Display', path: 'severity_display', type: 'string'},
+    'created_display': {label: 'Created (MM/DD)', category: 'Display', path: 'created_display', type: 'string'},
+    'closed_display': {label: 'Closed (MM/DD)', category: 'Display', path: 'closed_display', type: 'string'},
+    'age_display': {label: 'Age Display', category: 'Display', path: 'age_display', type: 'string'},
 
     // Additional useful fields
     'occurred': {label: 'Occurred', category: 'Timing', path: 'occurred', type: 'date'},
@@ -33,8 +45,8 @@ const availableColumns = {
     'category': {label: 'Category', category: 'Classification', path: 'category', type: 'string'},
     'sourceInstance': {label: 'Source Instance', category: 'Technical', path: 'sourceInstance', type: 'string'},
     'openDuration': {label: 'Open Duration', category: 'Metrics', path: 'openDuration', type: 'number'},
-    'timetorespond': {label: 'TTR', category: 'Metrics', path: 'timetorespond.totalDuration', type: 'duration'},
-    'timetocontain': {label: 'TTC', category: 'Metrics', path: 'timetocontain.totalDuration', type: 'duration'}
+    'timetorespond': {label: 'TTR', category: 'Metrics', path: 'time_to_respond_secs', type: 'duration'},
+    'timetocontain': {label: 'TTC', category: 'Metrics', path: 'time_to_contain_secs', type: 'duration'}
 };
 
 // Default visible columns and their order
@@ -158,8 +170,7 @@ function updateDataTimestamp() {
         const todayAt1201 = new Date(today);
         todayAt1201.setHours(0, 1, 0, 0);
 
-        const lastRun = todayAt1201.toLocaleString('en-US', options);
-        timestampElement.textContent = lastRun;
+        timestampElement.textContent = todayAt1201.toLocaleString('en-US', options);
     }
 }
 
@@ -432,19 +443,16 @@ function applyFilters() {
     const dateRange = [7, 30, 60, 90][sliderValue] || 30;
 
     const mttrSlider = document.getElementById('mttrRangeSlider');
-    const mttrValue = parseInt(mttrSlider ? mttrSlider.value : 0);
     // Map slider positions to MTTR ranges: 0=All, 1=≤3mins, 2=>3mins, 3=>5mins
-    const mttrFilter = mttrValue;
+    const mttrFilter = parseInt(mttrSlider ? mttrSlider.value : 0);
 
     const mttcSlider = document.getElementById('mttcRangeSlider');
-    const mttcValue = parseInt(mttcSlider ? mttcSlider.value : 0);
     // Map slider positions to MTTC ranges: 0=All, 1=≤5mins, 2=≤15mins, 3=>15mins
-    const mttcFilter = mttcValue;
+    const mttcFilter = parseInt(mttcSlider ? mttcSlider.value : 0);
 
     const ageSlider = document.getElementById('ageRangeSlider');
-    const ageValue = parseInt(ageSlider ? ageSlider.value : 0);
     // Map slider positions to age ranges: 0=All, 1=≤7days, 2=≤30days, 3=>30days
-    const ageFilter = ageValue;
+    const ageFilter = parseInt(ageSlider ? ageSlider.value : 0);
 
     const countries = Array.from(document.querySelectorAll('#countryFilter input:checked')).map(cb => cb.value);
     const regions = Array.from(document.querySelectorAll('#regionFilter input:checked')).map(cb => cb.value);
@@ -506,7 +514,7 @@ function applyFilters() {
 
         // MTTR filter
         if (mttrFilter > 0) {
-            const mttrSeconds = item.timetorespond && item.timetorespond.totalDuration ? item.timetorespond.totalDuration : null;
+            const mttrSeconds = item.time_to_respond_secs ? item.time_to_respond_secs : null;
             if (mttrSeconds === null || mttrSeconds === 0) return false; // Skip items without MTTR data
 
             if (mttrFilter === 1 && mttrSeconds > 180) return false; // ≤3 mins (180 seconds)
@@ -516,10 +524,9 @@ function applyFilters() {
 
         // MTTC filter - only consider cases with host populated
         if (mttcFilter > 0) {
-            const hasHost = item.hostname && item.hostname.trim() !== '' && item.hostname !== 'Unknown';
-            if (!hasHost) return false; // Skip items without host
+            if (!item.has_hostname) return false; // Skip items without host
 
-            const mttcSeconds = item.timetocontain && item.timetocontain.totalDuration ? item.timetocontain.totalDuration : null;
+            const mttcSeconds = item.time_to_contain_secs ? item.time_to_contain_secs : null;
             if (mttcSeconds === null || mttcSeconds === 0) return false; // Skip items without MTTC data
 
             if (mttcFilter === 1 && mttcSeconds > 300) return false; // ≤5 mins (300 seconds)
@@ -545,9 +552,7 @@ function updateFilterSummary(dateRange, mttrFilter, mttcFilter, ageFilter, count
 
     // Preserve non-removable filters
     const nonRemovableFilters = container.querySelectorAll('.filter-tag.non-removable');
-    const nonRemovableHTML = Array.from(nonRemovableFilters).map(filter => filter.outerHTML).join('');
-
-    container.innerHTML = nonRemovableHTML;
+    container.innerHTML = Array.from(nonRemovableFilters).map(filter => filter.outerHTML).join('');
 
     // Date range - no X button, use radio buttons to change
     const dateText = dateRange === 7 ? 'Last 7 days' :
@@ -719,14 +724,12 @@ function calculatePeriodMetrics(data) {
     const totalIncidents = data.length;
     
     const responseSlaBreaches = data.filter(item => {
-        const timeToRespond = item.timetorespond;
-        return timeToRespond && (timeToRespond.breachTriggered === true || timeToRespond.breachTriggered === 'true');
+        return item.has_breached_response_sla === true;
     }).length;
 
     const containmentSlaBreaches = data.filter(item => {
         const hasHost = item.hostname && item.hostname.trim() !== '' && item.hostname !== 'Unknown';
-        const timeToContain = item.timetocontain;
-        return hasHost && timeToContain && (timeToContain.breachTriggered === true || timeToContain.breachTriggered === 'true');
+        return hasHost && item.has_breached_containment_sla === true;
     }).length;
 
     const openIncidents = data.filter(item => item.is_open).length;
@@ -735,23 +738,21 @@ function calculatePeriodMetrics(data) {
     const casesWithOwnerAndTimeToRespond = data.filter(item =>
         item.owner &&
         item.owner.trim() !== '' &&
-        item.timetorespond &&
-        item.timetorespond.totalDuration > 0
+        item.time_to_respond_secs &&
+        item.time_to_respond_secs > 0
     );
     const mttr = casesWithOwnerAndTimeToRespond.length > 0
-        ? casesWithOwnerAndTimeToRespond.reduce((sum, item) => sum + item.timetorespond.totalDuration, 0) / casesWithOwnerAndTimeToRespond.length
+        ? casesWithOwnerAndTimeToRespond.reduce((sum, item) => sum + item.time_to_respond_secs, 0) / casesWithOwnerAndTimeToRespond.length
         : 0;
 
     // Calculate MTTC
     const casesWithOwnerAndTimeToContain = data.filter(item =>
-        item.hostname &&
-        item.hostname.trim() !== '' &&
-        item.hostname !== 'Unknown' &&
-        item.timetocontain &&
-        item.timetocontain.totalDuration > 0
+        item.has_hostname &&
+        item.time_to_contain_secs &&
+        item.time_to_contain_secs > 0
     );
     const mttc = casesWithOwnerAndTimeToContain.length > 0
-        ? casesWithOwnerAndTimeToContain.reduce((sum, item) => sum + item.timetocontain.totalDuration, 0) / casesWithOwnerAndTimeToContain.length
+        ? casesWithOwnerAndTimeToContain.reduce((sum, item) => sum + item.time_to_contain_secs, 0) / casesWithOwnerAndTimeToContain.length
         : 0;
 
     const uniqueCountries = new Set(data.map(item => item.affected_country)).size;
@@ -804,32 +805,59 @@ function calculatePreviousPeriodMetrics() {
     return calculatePeriodMetrics(previousPeriodData);
 }
 
-function createDeltaBadge(currentValue, previousValue, isPercentage = false, reverse = false) {
+function createDeltaBadge(currentValue, previousValue, isPercentage = false, reverse = false, isTime = false) {
+    // Check feature flag
+    if (!should_show_delta_values) {
+        return '';
+    }
+
     // No badge if no previous data available
     if (previousValue === null || previousValue === undefined) {
         return '';
     }
-    
+
     // Handle zero values separately
     if (previousValue === 0) {
         return '';
     }
-    
+
     const delta = currentValue - previousValue;
     const percentChange = (delta / previousValue) * 100;
-    
-    if (Math.abs(percentChange) < 1) {
-        return '<span class="delta-badge neutral" title="Change vs previous period: ±0%">±0% vs prev</span>';
+
+    if (delta === 0) {
+        const tooltipAttr = should_show_card_tooltips ? 'title="No change vs previous period"' : '';
+        return `<span class="delta-badge neutral" ${tooltipAttr}>±0 vs prev</span>`;
     }
-    
+
     const isImprovement = reverse ? delta < 0 : delta > 0;
     const badgeClass = isImprovement ? 'improvement' : 'regression';
     const sign = delta > 0 ? '+' : '';
     const direction = delta > 0 ? '↑' : '↓';
-    
-    const tooltipText = `Change vs previous period: ${sign}${percentChange.toFixed(1)}% (was: ${previousValue.toLocaleString()})`;
-    
-    return `<span class="delta-badge ${badgeClass}" title="${tooltipText}">${direction}${Math.abs(percentChange).toFixed(1)}% vs prev</span>`;
+
+    // Format time values in min:sec format
+    const formatTime = (seconds) => {
+        if (seconds === 0) return '0:00';
+        const mins = Math.floor(Math.abs(seconds) / 60);
+        const secs = Math.round(Math.abs(seconds) % 60);
+        return `${mins}:${secs.toString().padStart(2, '0')}`;
+    };
+
+    let displayValue, tooltipValue, previousDisplayValue;
+
+    if (isTime) {
+        displayValue = formatTime(delta);
+        tooltipValue = `${sign}${formatTime(delta)}`;
+        previousDisplayValue = formatTime(previousValue);
+    } else {
+        displayValue = Math.abs(delta).toLocaleString();
+        tooltipValue = `${sign}${delta.toLocaleString()}`;
+        previousDisplayValue = previousValue.toLocaleString();
+    }
+
+    const tooltipText = `Change vs previous period: ${tooltipValue} (${sign}${percentChange.toFixed(1)}%, was: ${previousDisplayValue})`;
+    const tooltipAttr = should_show_card_tooltips ? `title="${tooltipText}"` : '';
+
+    return `<span class="delta-badge ${badgeClass}" ${tooltipAttr}>${direction}${displayValue} vs prev</span>`;
 }
 
 function updateMetrics() {
@@ -850,7 +878,7 @@ function updateMetrics() {
     const mttrFormatted = formatTime(currentMetrics.mttr);
     const mttcFormatted = formatTime(currentMetrics.mttc);
 
-    const metricsHTML = `
+    document.getElementById('metricsGrid').innerHTML = `
         <div class="metric-card">
             <div class="metric-title">🎫 Total Cases</div>
             <div class="metric-value">
@@ -862,7 +890,7 @@ function updateMetrics() {
             <div class="metric-title">⏱️ MTTR (mins:secs)</div>
             <div class="metric-value">
                 ${mttrFormatted}<br>
-                ${createDeltaBadge(currentMetrics.mttr, previousMetrics?.mttr, false, true)}
+                ${createDeltaBadge(currentMetrics.mttr, previousMetrics?.mttr, false, true, true)}
             </div>
             <div class="metric-subtitle">${currentMetrics.casesWithOwnerAndTimeToRespond} cases acknowledged</div>
         </div>
@@ -870,7 +898,7 @@ function updateMetrics() {
             <div class="metric-title">🔒 MTTC (mins:secs)</div>
             <div class="metric-value">
                 ${mttcFormatted}<br>
-                ${createDeltaBadge(currentMetrics.mttc, previousMetrics?.mttc, false, true)}
+                ${createDeltaBadge(currentMetrics.mttc, previousMetrics?.mttc, false, true, true)}
             </div>
             <div class="metric-subtitle">${currentMetrics.casesWithOwnerAndTimeToContain} cases with hostnames</div>
         </div>
@@ -903,8 +931,6 @@ function updateMetrics() {
             </div>
         </div>
     `;
-
-    document.getElementById('metricsGrid').innerHTML = metricsHTML;
 }
 
 function showEmptyState() {

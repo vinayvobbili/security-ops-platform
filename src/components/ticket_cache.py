@@ -1,5 +1,6 @@
 import json
 import logging
+import pprint
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Iterable, Union
@@ -20,20 +21,66 @@ LOOKBACK_DAYS = 90  # Change manually when needed.
 
 
 class TicketCache:
-    """Handles caching and data preparation for XSOAR tickets.
+    """Simple ticket caching: fetch raw data from XSOAR, process for UI, save both versions.
 
-    Simplicity focused: derives fields in a single pass; avoids over-engineering.
-    Normalizes ticket 'type' values by removing any leading 'METCIRT' prefix.
-
-    Lookback window is controlled by module-level LOOKBACK_DAYS for easy manual
-    adjustment (test vs prod) without touching broader config plumbing.
+    Process:
+    1. Fetch raw data from XSOAR
+    2. Process data for UI:
+       2.1 Extract system fields (id, name, type, status, etc.)
+       2.2 Extract custom fields from CustomFields object
+       2.3 Calculate derived fields (age, resolution time, display formats)
+       2.4 Apply transformations (remove METCIRT, @company.com, etc.)
+    3. Save both raw and processed versions
     """
 
     def __init__(self):
         self.ticket_handler = TicketHandler()
         self.root_directory = Path(__file__).parent.parent.parent
 
-    # ---------------------------- Internal Helpers (Simple + Reusable) ----------------------------
+    # System fields we want to extract
+    SYSTEM_FIELDS = {
+        'id': 'id',
+        'name': 'name',
+        'type': 'type',
+        'status': 'status',
+        'severity': 'severity',
+        'owner': 'owner',
+        'created': 'created',
+        'closed': 'closed',
+    }
+
+    # Custom fields we want to extract from CustomFields
+    CUSTOM_FIELDS = {
+        'affected_country': 'affectedcountry',
+        'affected_region': 'affectedregion',
+        'impact': 'impact',
+        'automation_level': 'automationlevel',
+        'hostname': 'hostname',
+    }
+
+    # Calculated fields we compute from other fields
+    CALCULATED_FIELDS = {
+        'is_open': 'status in (0, 1)',  # Pending or Active status
+        'age_days': '(current_time - created).days if open else None',  # Days since creation for open tickets
+        'days_since_creation': '(current_time - created).days',  # Total days since creation
+        'resolution_time_days': '(closed - created).days if both exist',  # Days to resolve
+        'resolution_bucket': 'categorical grouping of resolution_time_days',  # open, lt7, lt14, lt30, gt30
+        'has_resolution_time': 'resolution_time_days is not None',  # Boolean flag
+        'age_category': 'categorical grouping of age_days',  # le7, le30, gt30, all
+        'created_days_ago': 'alias for days_since_creation',  # Legacy field name
+        'status_display': 'human readable status names',  # Pending/Active/Closed
+        'severity_display': 'human readable severity names',  # Low/Medium/High/Critical
+        'created_display': 'MM/DD formatted creation date',  # Display format
+        'closed_display': 'MM/DD formatted close date',  # Display format
+        'age_display': 'formatted age with "d" suffix',  # e.g., "5d"
+        'has_breached_response_sla': 'timetorespond.breachTriggered boolean',  # Response SLA breach flag
+        'has_breached_containment_sla': 'timetocontain.breachTriggered boolean',  # Containment SLA breach flag
+        'time_to_respond_secs': 'timetorespond.totalDuration in seconds',  # Response time in seconds
+        'time_to_contain_secs': 'timetocontain.totalDuration in seconds',  # Containment time in seconds
+        'has_hostname': 'hostname field is not None/empty',  # Boolean flag for hostname presence
+    }
+
+    # ---------------------------- Data Transformations ----------------------------
     @staticmethod
     def _parse_date(raw: Optional[str]) -> Optional[datetime]:
         """Parse an ISO-ish timestamp (with optional trailing Z). Return None if invalid.
@@ -63,17 +110,18 @@ class TicketCache:
 
     @staticmethod
     def _clean_owner_name(owner: str) -> str:
+        """Remove @company.com suffix from owner names."""
         if not owner or owner == 'Unknown':
             return owner
-        return owner[:-12] if owner.endswith('@company.com') else owner
+        return owner.replace('@company.com', '')
 
     @staticmethod
     def _clean_type_name(ticket_type: str) -> str:
+        """Remove METCIRT prefix from ticket types."""
         if not ticket_type or ticket_type == 'Unknown':
             return ticket_type
         import re
-        cleaned = re.sub(r'^METCIRT[_\-\s]*', '', ticket_type, flags=re.IGNORECASE) if ticket_type.startswith('METCIRT') else ticket_type
-        return cleaned.strip()
+        return re.sub(r'^METCIRT[_\-\s]*', '', ticket_type, flags=re.IGNORECASE).strip()
 
     @staticmethod
     def _format_date_for_display(date_str: Optional[str]) -> str:
@@ -138,12 +186,24 @@ class TicketCache:
         return 'gt30'
 
     # ---------------------------- Core Pipeline ----------------------------
-    def generate(self, lookback_days=90) -> None:
-        """Fetch tickets for the past N days (default: LOOKBACK_DAYS), derive fields, cache raw + UI data.
+    @classmethod
+    def generate(cls, lookback_days=90) -> None:
+        """Simple 3-step process: fetch, process, save."""
 
-        Args:
-            lookback_days: Optional integer override for lookback days (e.g. 9 for faster tests). If None, uses LOOKBACK_DAYS.
-        """
+        # Create an instance for this operation
+        instance = cls()
+
+        # Step 1: Fetch raw data from XSOAR
+        raw_tickets = instance._fetch_raw_tickets(lookback_days)
+
+        # Step 2: Process for UI (flatten and transform)
+        ui_tickets = instance._process_for_ui(raw_tickets)
+
+        # Step 3: Save both versions
+        instance._save_tickets(raw_tickets, ui_tickets, lookback_days)
+
+    def _fetch_raw_tickets(self, lookback_days: int) -> List[Ticket]:
+        """Step 1: Fetch raw tickets from XSOAR."""
         end_date = datetime.now(timezone.utc)
         start_date = end_date - timedelta(days=lookback_days)
         query = (
@@ -153,169 +213,142 @@ class TicketCache:
         )
 
         print(f"🔍 Fetching tickets from XSOAR for past {lookback_days} days...")
-        raw_tickets: Union[List[Ticket], Iterable[Ticket], None] = self.ticket_handler.get_tickets(query)  # type: ignore[attr-defined]
-        tickets: List[Ticket] = [] if raw_tickets is None else [t for t in raw_tickets if isinstance(t, dict)]  # type: ignore[union-attr]
-        log.info(f"Fetched {len(tickets)} tickets (lookback={lookback_days}d) from prod for caching")
+        raw_tickets: Union[List[Ticket], Iterable[Ticket], None] = self.ticket_handler.get_tickets(query)
+        tickets: List[Ticket] = [] if raw_tickets is None else [t for t in raw_tickets if isinstance(t, dict)]
+        log.info(f"Fetched {len(tickets)} tickets (lookback={lookback_days}d) from XSOAR")
+        return tickets
 
+    def _process_for_ui(self, raw_tickets: List[Ticket]) -> List[Ticket]:
+        """Step 2: Process raw tickets into flattened UI format."""
+        ui_tickets = []
         current_time = datetime.now(timezone.utc)
-        print(f"⚙️  Processing {len(tickets)} tickets...")
-        for t in tqdm(tickets, desc="Processing tickets", unit="ticket"):
+
+        print(f"⚙️ Processing {len(raw_tickets)} tickets for UI...")
+        for ticket in tqdm(raw_tickets, desc="Processing tickets", unit="ticket"):
             try:
-                # Determine source type: prefer rawType (authoritative) then fallback to existing type
-                source_type = t.get('rawType') or t.get('type')
-                if isinstance(source_type, str):
-                    t['type'] = self._clean_type_name(source_type)
-                else:
-                    t['type'] = 'Unknown'
+                ui_ticket = self._flatten_ticket(ticket, current_time)
+                ui_tickets.append(ui_ticket)
+            except Exception as e:
+                log.warning(f"Failed to process ticket {ticket.get('id', 'unknown')}: {e}")
+                continue
 
-                # Authoritative extraction: affected_country MUST always come from CustomFields.affectedCountry
-                custom_fields = t.get('CustomFields')
-                if isinstance(custom_fields, dict):
-                    t['affected_country'] = custom_fields.get('affectedCountry') or 'Unknown'
-                    # Optional: region is secondary; only set if present (non-breaking)
-                    region_val = custom_fields.get('affectedRegion') or custom_fields.get('affected_region')
-                    if region_val:
-                        t['affected_region'] = region_val
-                else:
-                    t['affected_country'] = 'Unknown'
+        log.info(f"Processed {len(ui_tickets)} tickets for UI")
+        return ui_tickets
 
-                created_dt = self._parse_date(t.get('created'))
-                closed_dt = self._parse_date(t.get('closed'))
-                is_open_flag = t.get('status', 0) in (0, 1)
+    def _flatten_ticket(self, ticket: Ticket, current_time: datetime) -> Ticket:
+        """Convert a raw ticket to flattened UI format."""
+        # Extract system fields
+        ui_ticket = {}
+        for ui_field, system_field in self.SYSTEM_FIELDS.items():
+            ui_ticket[ui_field] = ticket.get(system_field, 'Unknown' if ui_field in ['name', 'owner'] else 0)
 
-                age_days = (current_time - created_dt).days if (created_dt and is_open_flag) else None
-                days_since_creation = (current_time - created_dt).days if created_dt else None
-                resolution_time_days = (closed_dt - created_dt).days if (created_dt and closed_dt) else None
-                created_days_ago = (current_time - created_dt).days if created_dt else None
+        # Extract custom fields
+        custom_fields = ticket.get('CustomFields', {})
+        for ui_field, custom_field in self.CUSTOM_FIELDS.items():
+            ui_ticket[ui_field] = custom_fields.get(custom_field, 'Unknown')
 
-                resolution_bucket = self._resolution_bucket(resolution_time_days, is_open_flag)
-                t.update({
-                    'is_open': is_open_flag,
-                    'age_days': age_days,
-                    'days_since_creation': days_since_creation,
-                    'resolution_time_days': resolution_time_days,
-                    'resolution_bucket': resolution_bucket,
-                    'has_resolution_time': resolution_time_days is not None,
-                    'age_category': self._age_category(age_days),
-                    'created_days_ago': created_days_ago,
-                })
-            except Exception as e:  # Trusted env: keep fallback simple
-                log.warning(f"Derivation failed for ticket {t.get('id', 'unknown')}: {e}")
-                t.setdefault('type', 'Unknown')
-                t.setdefault('is_open', t.get('status', 0) in (0, 1))
-                t.setdefault('age_days', None)
-                t.setdefault('days_since_creation', None)
-                t.setdefault('resolution_time_days', None)
-                t.setdefault('resolution_bucket', 'unknown')
-                t.setdefault('has_resolution_time', False)
-                t.setdefault('age_category', 'all')
-                t.setdefault('created_days_ago', None)
-                t.setdefault('affected_country', 'Unknown')
+        # Extract SLA timing objects for computed fields (from CustomFields)
+        ui_ticket['_timetorespond'] = custom_fields.get('timetorespond', {})
+        ui_ticket['_timetocontain'] = custom_fields.get('timetocontain', {})
 
-        # Persist raw enriched tickets
-        print("💾 Saving raw ticket data ...")
+        # Apply transformations
+        ui_ticket['type'] = self._clean_type_name(ui_ticket.get('type', 'Unknown'))
+        ui_ticket['owner'] = self._clean_owner_name(ui_ticket.get('owner', 'Unknown'))
+
+        # Add computed fields
+        self._add_computed_fields(ui_ticket, current_time)
+
+        # Remove temporary SLA objects (they're only needed for computation)
+        ui_ticket.pop('_timetorespond', None)
+        ui_ticket.pop('_timetocontain', None)
+
+        return ui_ticket
+
+    def _add_computed_fields(self, ticket: Ticket, current_time: datetime) -> None:
+        """Add computed fields like age, resolution time, etc."""
+        created_dt = self._parse_date(ticket.get('created'))
+        closed_dt = self._parse_date(ticket.get('closed'))
+        status = ticket.get('status', 0)
+        is_open = status in (0, 1)
+
+        # Age and timing calculations
+        age_days = (current_time - created_dt).days if (created_dt and is_open) else None
+        days_since_creation = (current_time - created_dt).days if created_dt else None
+        resolution_time_days = (closed_dt - created_dt).days if (created_dt and closed_dt) else None
+
+        # Extract SLA timing data
+        timetorespond = ticket.get('_timetorespond', {})
+        timetocontain = ticket.get('_timetocontain', {})
+
+        # Add all computed fields
+        ticket.update({
+            'is_open': is_open,
+            'age_days': age_days,
+            'days_since_creation': days_since_creation,
+            'resolution_time_days': resolution_time_days,
+            'resolution_bucket': self._resolution_bucket(resolution_time_days, is_open),
+            'has_resolution_time': resolution_time_days is not None,
+            'age_category': self._age_category(age_days),
+            'created_days_ago': days_since_creation,
+            # SLA fields
+            'has_breached_response_sla': bool(timetorespond.get('breachTriggered', False)),
+            'has_breached_containment_sla': bool(timetocontain.get('breachTriggered', False)),
+            'time_to_respond_secs': timetorespond.get('totalDuration', 0),
+            'time_to_contain_secs': timetocontain.get('totalDuration', 0),
+            # Hostname presence
+            'has_hostname': bool(ticket.get('hostname') and ticket['hostname'].strip() and ticket['hostname'] != 'Unknown'),
+            # Display fields
+            'status_display': {0: 'Pending', 1: 'Active', 2: 'Closed'}.get(status, 'Unknown'),
+            'severity_display': {0: 'Unknown', 1: 'Low', 2: 'Medium', 3: 'High', 4: 'Critical'}.get(ticket.get('severity', 0), 'Unknown'),
+            'created_display': self._format_date_for_display(ticket.get('created')),
+            'closed_display': self._format_date_for_display(ticket.get('closed')),
+            'age_display': self._format_age_display(age_days),
+        })
+
+    def _save_tickets(self, raw_tickets: List[Ticket], ui_tickets: List[Ticket], lookback_days: int) -> None:
+        """Step 3: Save both raw and UI ticket data."""
         today_date = datetime.now().strftime('%m-%d-%Y')
         charts_dir = self.root_directory / 'web' / 'static' / 'charts' / today_date
         charts_dir.mkdir(parents=True, exist_ok=True)
 
-        # Stable filenames retained for dashboard compatibility
+        # Save raw tickets
+        print("💾 Saving raw ticket data...")
         raw_path = charts_dir / 'past_90_days_tickets_raw.json'
         with open(raw_path, 'w') as f:
-            json.dump(tickets, f, indent=4)
-        log.info(f"Cached {len(tickets)} raw tickets (lookback={lookback_days}d) to {raw_path}")
+            json.dump(raw_tickets, f, indent=4)
+        log.info(f"Saved {len(raw_tickets)} raw tickets to {raw_path}")
 
-        print("📊 Generating UI data ...")
-        ui_data = self.prep_data_for_UI(tickets)
+        # Save UI tickets
+        print("📊 Saving UI ticket data...")
         ui_path = charts_dir / 'past_90_days_tickets.json'
         with open(ui_path, 'w') as f:
-            json.dump(ui_data, f, indent=2)
-        log.info(f"Generated UI data with {len(ui_data)} tickets to {ui_path}")
+            json.dump(ui_tickets, f, indent=2)
+        log.info(f"Saved {len(ui_tickets)} UI tickets to {ui_path}")
+
         print("✅ Ticket caching completed successfully!")
 
-    # ---------------------------- UI Prep ----------------------------
-    def prep_data_for_UI(self, raw_tickets: List[Ticket]) -> List[Ticket]:
-        ui_data: List[Ticket] = []
-        for t in tqdm(raw_tickets, desc="Preparing UI data", unit="ticket"):
-            try:
-                tid = t.get('id')
-                if not tid:
-                    continue
-
-                ttr_seconds = self._extract_duration(t.get('timetorespond'))
-                ttc_seconds = self._extract_duration(t.get('timetocontain'))
-
-                # Ensure resolution_time_days key exists (added per request)
-                t.setdefault('resolution_time_days', None)
-                t.setdefault('resolution_bucket', 'unknown')
-                t.setdefault('has_resolution_time', t.get('resolution_time_days') is not None)
-
-                # Legacy fallback (should be unnecessary after authoritative set in generate)
-                if 'affected_country' not in t:
-                    cf = t.get('CustomFields')
-                    if isinstance(cf, dict):
-                        t['affected_country'] = cf.get('affectedCountry') or 'Unknown'
-                    else:
-                        t['affected_country'] = 'Unknown'
-                if 'affected_region' not in t:
-                    cf = t.get('CustomFields')
-                    if isinstance(cf, dict):
-                        region_val = cf.get('affectedRegion') or cf.get('affected_region')
-                        if region_val:
-                            t['affected_region'] = region_val
-
-                status_val = t.get('status', 0)
-                ui_ticket: Ticket = {
-                    'id': tid,
-                    'name': t.get('name', f'Ticket {tid}'),
-                    'type': t.get('type', 'Unknown'),
-                    'type_display': t.get('type', 'Unknown'),
-                    'status': status_val,
-                    'status_display': {0: 'Pending', 1: 'Active', 2: 'Closed'}.get(status_val, 'Unknown'),
-                    'severity': t.get('severity', 0),
-                    'severity_display': {0: 'Unknown', 1: 'Low', 2: 'Medium', 3: 'High', 4: 'Critical'}.get(t.get('severity', 0), 'Unknown'),
-                    'impact': t.get('impact', 'Unknown'),
-                    'affected_country': t.get('affected_country', 'Unknown'),
-                    'affected_region': t.get('affected_region', 'Unknown'),
-                    'owner': t.get('owner', 'Unknown'),
-                    'owner_display': self._clean_owner_name(t.get('owner', 'Unknown')),
-                    'created': t.get('created', ''),
-                    'created_display': self._format_date_for_display(t.get('created')),
-                    'closed': t.get('closed', ''),
-                    'closed_display': self._format_date_for_display(t.get('closed')),
-                    'automation_level': t.get('automation_level', 'Unknown'),
-                    'age': t.get('age_days'),
-                    'age_display': self._format_age_display(t.get('age_days')),
-                    'is_open': t.get('is_open', status_val in (0, 1)),
-                    'days_since_creation': t.get('days_since_creation'),
-                    'created_days_ago': t.get('created_days_ago'),
-                    'resolution_time_days': t.get('resolution_time_days'),
-                    'resolution_bucket': t.get('resolution_bucket'),
-                    'has_resolution_time': t.get('has_resolution_time'),
-                    'ttr_seconds': ttr_seconds,
-                    'ttr_display': self._format_duration(ttr_seconds),
-                    'ttr_breach': self._extract_breach_status(t.get('timetorespond')),
-                    'ttc_seconds': ttc_seconds,
-                    'ttc_display': self._format_duration(ttc_seconds),
-                    'ttc_breach': self._extract_breach_status(t.get('timetocontain')),
-                    'has_host': bool(t.get('hostname') and t.get('hostname').strip() and t.get('hostname') != 'Unknown'),
-                    'has_owner': bool(t.get('owner') and t.get('owner').strip()),
-                    'has_ttr': bool(ttr_seconds),
-                    'has_ttc': bool(ttc_seconds),
-                    'chart_date': self._extract_chart_date(t.get('created')),
-                    'age_category': t.get('age_category', 'all'),
-                }
-                ui_data.append(ui_ticket)
-            except Exception as e:  # Simplicity: skip malformed
-                log.warning(f"UI flatten failed for ticket {t.get('id', 'unknown')}: {e}")
-                continue
-
-        log.info(f"Prepared flattened UI data: {len(ui_data)} tickets from {len(raw_tickets)} raw tickets")
-        return ui_data
 
 
 def main():
     log.info("Starting ticket caching process")
-    TicketCache().generate(lookback_days=9)
+    cache = TicketCache()
+    cache.generate(lookback_days=90)
+
+    # Pretty print first 3 tickets for visual inspection
+    ui_path = cache.root_directory / 'web' / 'static' / 'charts' / datetime.now().strftime('%m-%d-%Y') / 'past_90_days_tickets.json'
+    if ui_path.exists():
+        with open(ui_path, 'r') as f:
+            tickets = json.load(f)
+
+        print("\n" + "="*80)
+        print("SAMPLE UI TICKETS (first 3 for inspection):")
+        print("="*80)
+        pp = pprint.PrettyPrinter(indent=2, width=100)
+        for i, ticket in enumerate(tickets[:3], 1):
+            print(f"\n--- Ticket #{i} ---")
+            pp.pprint(ticket)
+        print("="*80)
+
     log.info("Ticket caching process completed")
 
 
