@@ -1,6 +1,7 @@
 import logging.handlers
 import os
 import random
+import ssl
 import sys
 import unittest
 from datetime import datetime
@@ -15,6 +16,7 @@ from webexpythonsdk.models.cards import (
     TextBlock, options, HorizontalAlignment
 )
 from webexteamssdk import WebexTeamsAPI
+
 
 from my_config import get_config
 from src.charts import aging_tickets
@@ -41,6 +43,10 @@ logging.basicConfig(
         logging.StreamHandler()
     ]
 )
+
+# Configure SSL for corporate proxy environments (Zscaler, etc.)
+from src.utils.ssl_config import configure_ssl_if_needed
+configure_ssl_if_needed()
 logger = logging.getLogger(__name__)
 
 # Initialize Webex API client
@@ -347,7 +353,7 @@ def get_random_chart_message():
 
 def moneyball_bot_factory():
     """Create MoneyBall bot instance"""
-    return WebexBot(
+    bot = WebexBot(
         config.webex_bot_access_token_moneyball,
         approved_rooms=[config.webex_room_id_vinay_test_space, config.webex_room_id_metrics],
         bot_name="MoneyBall - The Metrics & Analytics Bot",
@@ -355,6 +361,8 @@ def moneyball_bot_factory():
         log_level="ERROR",
         bot_help_subtitle="Your friendly neighborhood metrics bot! Click a button to get charts and reports!"
     )
+
+    return bot
 
 
 def moneyball_initialization(bot_instance=None):
