@@ -180,54 +180,17 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 
 function setupEventListeners() {
-    // Add listener for date range slider
-    const dateSlider = document.getElementById('dateRangeSlider');
-    if (dateSlider) {
-        dateSlider.addEventListener('input', function () {
-            showSliderTooltip();
-            updateSliderLabels(this.value);
-            applyFilters();
-        });
+    // Setup date range slider with tooltip
+    setupSliderTooltip('dateRangeSlider', 'dateRangeTooltip', applyFilters);
 
-        // Show tooltip when user starts interacting
-        dateSlider.addEventListener('mousedown', showSliderTooltip);
-        dateSlider.addEventListener('touchstart', showSliderTooltip);
+    // Setup MTTR range slider with tooltip
+    setupSliderTooltip('mttrRangeSlider', 'mttrRangeTooltip', applyFilters, formatMttrValue);
 
-        // Hide tooltip when user stops interacting
-        dateSlider.addEventListener('mouseup', hideSliderTooltip);
-        dateSlider.addEventListener('touchend', hideSliderTooltip);
-        dateSlider.addEventListener('mouseleave', hideSliderTooltip);
+    // Setup MTTC range slider with tooltip
+    setupSliderTooltip('mttcRangeSlider', 'mttcRangeTooltip', applyFilters, formatMttcValue);
 
-        // Initialize the slider position (but keep tooltip hidden)
-        updateSliderLabels(dateSlider.value);
-    }
-
-    // Add listener for MTTR range slider
-    const mttrSlider = document.getElementById('mttrRangeSlider');
-    if (mttrSlider) {
-        mttrSlider.addEventListener('input', function () {
-            updateMttrSliderLabels(this.value);
-            applyFilters();
-        });
-    }
-
-    // Add listener for MTTC range slider
-    const mttcSlider = document.getElementById('mttcRangeSlider');
-    if (mttcSlider) {
-        mttcSlider.addEventListener('input', function () {
-            updateMttcSliderLabels(this.value);
-            applyFilters();
-        });
-    }
-
-    // Add listener for age range slider
-    const ageSlider = document.getElementById('ageRangeSlider');
-    if (ageSlider) {
-        ageSlider.addEventListener('input', function () {
-            updateAgeSliderLabels(this.value);
-            applyFilters();
-        });
-    }
+    // Setup age range slider with tooltip
+    setupSliderTooltip('ageRangeSlider', 'ageRangeTooltip', applyFilters, formatAgeValue);
 
     // Add listeners for existing severity, status, and automation checkboxes
     document.querySelectorAll('#severityFilter input, #statusFilter input, #automationFilter input').forEach(checkbox => {
@@ -236,58 +199,78 @@ function setupEventListeners() {
 
     // Add listeners to date slider preset values for click functionality
     const dateContainer = document.getElementById('dateRangeSlider').parentElement;
-    dateContainer.querySelectorAll('.range-preset').forEach(preset => {
-        preset.addEventListener('click', function () {
-            const value = this.getAttribute('data-value');
-            dateSlider.value = value;
-            showSliderTooltip();
-            updateSliderLabels(value);
-            applyFilters();
-            // Hide tooltip after a brief delay when using presets
-            setTimeout(hideSliderTooltip, 1000);
+    const dateSlider = document.getElementById('dateRangeSlider');
+    if (dateContainer && dateSlider) {
+        dateContainer.querySelectorAll('.range-preset').forEach(preset => {
+            preset.addEventListener('click', function () {
+                const value = this.getAttribute('data-value');
+                dateSlider.value = value;
+                showSliderTooltip('dateRangeTooltip');
+                updateSliderLabels(value);
+                applyFilters();
+                // Hide tooltip after a brief delay when using presets
+                setTimeout(() => hideSliderTooltip('dateRangeTooltip'), 1000);
+            });
         });
-    });
+    }
 
-    // Update current value display when slider changes
-    if (dateSlider) {
-        updateSliderLabels(dateSlider.value);
+    // Initialize date slider display
+    const dateSliderInit = document.getElementById('dateRangeSlider');
+    if (dateSliderInit) {
+        updateSliderLabels(dateSliderInit.value);
     }
 
     // Add listeners to MTTR slider labels for click functionality
     const mttrContainer = document.getElementById('mttrRangeSlider').parentElement;
-    mttrContainer.querySelectorAll('.slider-labels span').forEach(label => {
-        label.addEventListener('click', function () {
-            const value = this.getAttribute('data-value');
-            mttrSlider.value = value;
-            updateMttrSliderLabels(value);
-            applyFilters();
+    const mttrSlider = document.getElementById('mttrRangeSlider');
+    if (mttrContainer && mttrSlider) {
+        mttrContainer.querySelectorAll('.slider-labels span').forEach(label => {
+            label.addEventListener('click', function () {
+                const value = this.getAttribute('data-value');
+                mttrSlider.value = value;
+                showSliderTooltip('mttrRangeTooltip');
+                updateSliderTooltip('mttrRangeSlider', 'mttrRangeTooltip', value, formatMttrValue);
+                updateMttrSliderLabels(value);
+                applyFilters();
+                setTimeout(() => hideSliderTooltip('mttrRangeTooltip'), 1000);
+            });
+            label.style.cursor = 'pointer';
         });
-        label.style.cursor = 'pointer';
-    });
+    }
 
     // Add listeners to MTTC slider labels for click functionality
     const mttcContainer = document.getElementById('mttcRangeSlider').parentElement;
-    mttcContainer.querySelectorAll('.slider-labels span').forEach(label => {
-        label.addEventListener('click', function () {
-            const value = this.getAttribute('data-value');
-            mttcSlider.value = value;
-            updateMttcSliderLabels(value);
-            applyFilters();
+    const mttcSlider = document.getElementById('mttcRangeSlider');
+    if (mttcContainer && mttcSlider) {
+        mttcContainer.querySelectorAll('.slider-labels span').forEach(label => {
+            label.addEventListener('click', function () {
+                const value = this.getAttribute('data-value');
+                mttcSlider.value = value;
+                showSliderTooltip('mttcRangeTooltip');
+                updateSliderTooltip('mttcRangeSlider', 'mttcRangeTooltip', value, formatMttcValue);
+                updateMttcSliderLabels(value);
+                applyFilters();
+                setTimeout(() => hideSliderTooltip('mttcRangeTooltip'), 1000);
+            });
+            label.style.cursor = 'pointer';
         });
-        label.style.cursor = 'pointer';
-    });
+    }
 
-    // Add listeners to age slider labels for click functionality
+    // Add listeners to age slider preset values for click functionality
     const ageContainer = document.getElementById('ageRangeSlider').parentElement;
-    ageContainer.querySelectorAll('.slider-labels span').forEach(label => {
-        label.addEventListener('click', function () {
-            const value = this.getAttribute('data-value');
-            ageSlider.value = value;
-            updateAgeSliderLabels(value);
-            applyFilters();
+    const ageSlider = document.getElementById('ageRangeSlider');
+    if (ageContainer && ageSlider) {
+        ageContainer.querySelectorAll('.range-preset').forEach(preset => {
+            preset.addEventListener('click', function () {
+                const value = this.getAttribute('data-value');
+                ageSlider.value = value;
+                showSliderTooltip('ageRangeTooltip');
+                updateSliderTooltip('ageRangeSlider', 'ageRangeTooltip', value, formatAgeValue);
+                applyFilters();
+                setTimeout(() => hideSliderTooltip('ageRangeTooltip'), 1000);
+            });
         });
-        label.style.cursor = 'pointer';
-    });
+    }
 
     // Add listeners for sortable table headers
     document.querySelectorAll('.sortable').forEach(header => {
@@ -357,12 +340,13 @@ function setupEventListeners() {
     }
 }
 
-function updateSliderLabels(value) {
-    // Update the floating tooltip above the slider
-    const tooltip = document.getElementById('dateRangeTooltip');
-    const slider = document.getElementById('dateRangeSlider');
+// Generic slider tooltip functions
+function updateSliderTooltip(sliderId, tooltipId, value, formatFunction = null) {
+    const tooltip = document.getElementById(tooltipId);
+    const slider = document.getElementById(sliderId);
     if (tooltip && slider) {
-        tooltip.textContent = value;
+        // Use custom format function if provided, otherwise just show the value
+        tooltip.textContent = formatFunction ? formatFunction(value) : value;
 
         // Calculate position based on slider value
         const min = parseInt(slider.min);
@@ -375,18 +359,71 @@ function updateSliderLabels(value) {
     }
 }
 
-function showSliderTooltip() {
-    const tooltip = document.getElementById('dateRangeTooltip');
+function showSliderTooltip(tooltipId) {
+    const tooltip = document.getElementById(tooltipId);
     if (tooltip) {
         tooltip.style.display = 'block';
     }
 }
 
-function hideSliderTooltip() {
-    const tooltip = document.getElementById('dateRangeTooltip');
+function hideSliderTooltip(tooltipId) {
+    const tooltip = document.getElementById(tooltipId);
     if (tooltip) {
         tooltip.style.display = 'none';
     }
+}
+
+function setupSliderTooltip(sliderId, tooltipId, updateCallback, formatFunction = null) {
+    const slider = document.getElementById(sliderId);
+    if (!slider) return;
+
+    // Show tooltip when user starts interacting
+    slider.addEventListener('mousedown', () => showSliderTooltip(tooltipId));
+    slider.addEventListener('touchstart', () => showSliderTooltip(tooltipId));
+
+    // Hide tooltip when user stops interacting
+    slider.addEventListener('mouseup', () => hideSliderTooltip(tooltipId));
+    slider.addEventListener('touchend', () => hideSliderTooltip(tooltipId));
+    slider.addEventListener('mouseleave', () => hideSliderTooltip(tooltipId));
+
+    // Update tooltip during sliding
+    slider.addEventListener('input', function () {
+        showSliderTooltip(tooltipId);
+        updateSliderTooltip(sliderId, tooltipId, this.value, formatFunction);
+        if (updateCallback) updateCallback();
+    });
+
+    // Initialize the slider position (but keep tooltip hidden)
+    updateSliderTooltip(sliderId, tooltipId, slider.value, formatFunction);
+}
+
+// Format functions for different slider types
+function formatMttrValue(value) {
+    const labels = ['All', '≤3', '>3', '>5'];
+    return labels[value] || 'All';
+}
+
+function formatMttcValue(value) {
+    const labels = ['All', '≤5', '≤15', '>15'];
+    return labels[value] || 'All';
+}
+
+function formatAgeValue(value) {
+    if (value == 0) return 'All';
+    return value;
+}
+
+// Legacy functions for date slider compatibility
+function updateSliderLabels(value) {
+    updateSliderTooltip('dateRangeSlider', 'dateRangeTooltip', value);
+}
+
+function showDateSliderTooltip() {
+    showSliderTooltip('dateRangeTooltip');
+}
+
+function hideDateSliderTooltip() {
+    hideSliderTooltip('dateRangeTooltip');
 }
 
 function updateMttrSliderLabels(value) {
@@ -406,11 +443,8 @@ function updateMttcSliderLabels(value) {
 }
 
 function updateAgeSliderLabels(value) {
-    const ageContainer = document.getElementById('ageRangeSlider').parentElement;
-    ageContainer.querySelectorAll('.slider-labels span').forEach(span => {
-        span.classList.remove('active');
-    });
-    ageContainer.querySelector(`.slider-labels span[data-value="${value}"]`).classList.add('active');
+    // This function is now handled by the generic tooltip system
+    // Keep for compatibility but no longer needed for discrete label updates
 }
 
 async function loadData() {
@@ -493,7 +527,7 @@ function applyFilters() {
     const mttcFilter = parseInt(mttcSlider ? mttcSlider.value : 0);
 
     const ageSlider = document.getElementById('ageRangeSlider');
-    // Map slider positions to age ranges: 0=All, 1=≤7days, 2=≤30days, 3=>30days
+    // Age filter now uses continuous values: 0=All, 1-60=specific days
     const ageFilter = parseInt(ageSlider ? ageSlider.value : 0);
 
     const countries = Array.from(document.querySelectorAll('#countryFilter input:checked')).map(cb => cb.value);
@@ -578,9 +612,7 @@ function applyFilters() {
 
         // Age filter - only applies to tickets with age data (i.e., open tickets)
         if (ageFilter > 0 && item.age !== null) {
-            if (ageFilter === 1 && item.age > 7) return false; // ≤7 days
-            if (ageFilter === 2 && item.age > 30) return false; // ≤30 days
-            if (ageFilter === 3 && item.age <= 30) return false; // >30 days
+            if (item.age > ageFilter) return false; // Age exceeds selected maximum
         }
 
         return true;
@@ -619,9 +651,7 @@ function updateFilterSummary(dateRange, mttrFilter, mttcFilter, ageFilter, count
 
     // Age filter
     if (ageFilter > 0) {
-        const ageText = ageFilter === 1 ? 'Age ≤7 days' :
-            ageFilter === 2 ? 'Age ≤30 days' :
-                ageFilter === 3 ? 'Age >30 days' : 'All Ages';
+        const ageText = ageFilter === 1 ? 'Age ≤1 day' : `Age ≤${ageFilter} days`;
         container.innerHTML += `<span class="filter-tag">${ageText} <button class="remove-filter-btn" onclick="removeFilter('age', '${ageFilter}')">×</button></span>`;
     }
 
@@ -735,11 +765,11 @@ function resetFilters() {
         updateMttcSliderLabels(0);
     }
 
-    // Reset age range slider to default (All, position 0)
+    // Reset age range slider to default (All, value 0)
     const ageSlider = document.getElementById('ageRangeSlider');
     if (ageSlider) {
         ageSlider.value = 0;
-        updateAgeSliderLabels(0);
+        updateSliderTooltip('ageRangeSlider', 'ageRangeTooltip', 0, formatAgeValue);
     }
 
     // Uncheck all checkboxes
