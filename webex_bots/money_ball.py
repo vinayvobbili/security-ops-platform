@@ -1,7 +1,6 @@
 import logging.handlers
 import os
 import random
-import ssl
 import sys
 import unittest
 from datetime import datetime
@@ -16,7 +15,6 @@ from webexpythonsdk.models.cards import (
     TextBlock, options, HorizontalAlignment
 )
 from webexteamssdk import WebexTeamsAPI
-
 
 from my_config import get_config
 from src.charts import aging_tickets
@@ -46,6 +44,7 @@ logging.basicConfig(
 
 # Configure SSL for corporate proxy environments (Zscaler, etc.)
 from src.utils.ssl_config import configure_ssl_if_needed
+
 configure_ssl_if_needed()
 logger = logging.getLogger(__name__)
 
