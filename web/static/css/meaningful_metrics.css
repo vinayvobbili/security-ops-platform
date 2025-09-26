@@ -561,7 +561,7 @@ body {
 
 .filters-grid {
     display: grid;
-    grid-template-columns: 1.5fr 0.8fr 0.8fr 1.6fr 0.8fr 1fr;
+    grid-template-columns: 1.4fr 0.7fr 0.7fr 1.8fr 0.7fr 0.9fr;
     gap: 12px;
     align-items: start;
 }
@@ -814,9 +814,9 @@ body {
 
 #countryFilter {
     display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-columns: 1fr 1fr;
     gap: 4px;
-    column-gap: 6px;
+    column-gap: 12px;
     height: 120px;
     overflow-y: scroll;
 }

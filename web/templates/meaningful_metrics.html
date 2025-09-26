@@ -79,14 +79,14 @@
                     </div>
                 </div>
                 <div class="slider-field">
-                    <label class="date-range-label">📆<br>Age<br>(days):</label>
+                    <label class="date-range-label">📆<br>Age<br>(days): <span title="Age filter applies only to currently open tickets (closed tickets stop aging)" style="cursor: help;">ℹ️</span></label>
                     <div class="date-range-slider-container">
                         <label for="ageRangeSlider"></label><input type="range" id="ageRangeSlider" class="date-range-slider" min="0" max="3" value="0" step="1">
                         <div class="slider-labels">
                             <span data-value="0" class="active">All</span>
                             <span data-value="1">≤7</span>
                             <span data-value="2">≤30</span>
-                            <span data-value="3">≤90</span>
+                            <span data-value="3">>30</span>
                         </div>
                     </div>
                 </div>
@@ -96,7 +96,7 @@
             <div class="filter-group">
                 <div class="location-filter-tabs">
                     <div class="tab-buttons">
-                        <button class="tab-button" data-tab="country">🏛️ Country</button>
+                        <button class="tab-button" data-tab="country">🇺🇸 Country</button>
                         <button class="tab-button active" data-tab="region">🌍 Region</button>
                     </div>
                     <div class="tab-content">
