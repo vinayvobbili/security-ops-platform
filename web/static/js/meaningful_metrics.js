@@ -380,12 +380,16 @@ async function loadData() {
 function populateFilterOptions() {
     // Populate filters with checkboxes
     const countries = [...new Set(allData.map(item => item.affected_country))].filter(c => c && c !== 'Unknown').sort();
+    const regions = [...new Set(allData.map(item => item.affected_region))].filter(r => r && r !== 'Unknown').sort();
     const impacts = [...new Set(allData.map(item => item.impact))].filter(i => i && i !== 'Unknown').sort();
     const ticketTypes = [...new Set(allData.map(item => item.type))].filter(t => t && t !== 'Unknown').sort();
     const automationLevels = [...new Set(allData.map(item => item.automation_level))].filter(a => a && a !== 'Unknown').sort();
 
     // Add "No Country" option to countries list
     countries.unshift('No Country');
+
+    // Add "No Region" option to regions list
+    regions.unshift('No Region');
 
     // Add "No Impact" option to impacts list
     impacts.unshift('No Impact');
@@ -394,6 +398,7 @@ function populateFilterOptions() {
     automationLevels.unshift('No Level');
 
     populateCheckboxFilter('countryFilter', countries);
+    populateCheckboxFilter('regionFilter', regions);
     populateCheckboxFilter('impactFilter', impacts);
     populateCheckboxFilter('ticketTypeFilter', ticketTypes);
     populateCheckboxFilter('automationFilter', automationLevels);
@@ -442,6 +447,7 @@ function applyFilters() {
     const ageFilter = ageValue;
 
     const countries = Array.from(document.querySelectorAll('#countryFilter input:checked')).map(cb => cb.value);
+    const regions = Array.from(document.querySelectorAll('#regionFilter input:checked')).map(cb => cb.value);
     const impacts = Array.from(document.querySelectorAll('#impactFilter input:checked')).map(cb => cb.value);
     const severities = Array.from(document.querySelectorAll('#severityFilter input:checked')).map(cb => cb.value);
     const ticketTypes = Array.from(document.querySelectorAll('#ticketTypeFilter input:checked')).map(cb => cb.value);
@@ -449,7 +455,7 @@ function applyFilters() {
     const automationLevels = Array.from(document.querySelectorAll('#automationFilter input:checked')).map(cb => cb.value);
 
     // Update filter summary
-    updateFilterSummary(dateRange, mttrFilter, mttcFilter, ageFilter, countries, impacts, severities, ticketTypes, statuses, automationLevels);
+    updateFilterSummary(dateRange, mttrFilter, mttcFilter, ageFilter, countries, regions, impacts, severities, ticketTypes, statuses, automationLevels);
 
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - dateRange);
@@ -459,13 +465,27 @@ function applyFilters() {
         const createdDate = new Date(item.created);
         if (createdDate < cutoffDate) return false;
 
-        // Other filters
-        if (countries.length > 0) {
-            const hasNoCountry = !item.affected_country || item.affected_country === 'Unknown' || item.affected_country.trim() === '';
-            const shouldShowNoCountry = countries.includes('No Country') && hasNoCountry;
-            const shouldShowWithCountry = countries.some(c => c !== 'No Country' && c === item.affected_country);
+        // Location filters (countries and regions are mutually exclusive)
+        if (countries.length > 0 || regions.length > 0) {
+            let locationMatch = false;
 
-            if (!shouldShowNoCountry && !shouldShowWithCountry) return false;
+            // Check countries if selected
+            if (countries.length > 0) {
+                const hasNoCountry = !item.affected_country || item.affected_country === 'Unknown' || item.affected_country.trim() === '';
+                const shouldShowNoCountry = countries.includes('No Country') && hasNoCountry;
+                const shouldShowWithCountry = countries.some(c => c !== 'No Country' && c === item.affected_country);
+                locationMatch = shouldShowNoCountry || shouldShowWithCountry;
+            }
+
+            // Check regions if selected
+            if (regions.length > 0) {
+                const hasNoRegion = !item.affected_region || item.affected_region === 'Unknown' || item.affected_region.trim() === '';
+                const shouldShowNoRegion = regions.includes('No Region') && hasNoRegion;
+                const shouldShowWithRegion = regions.some(r => r !== 'No Region' && r === item.affected_region);
+                locationMatch = shouldShowNoRegion || shouldShowWithRegion;
+            }
+
+            if (!locationMatch) return false;
         }
         if (impacts.length > 0) {
             const hasNoImpact = !item.impact || item.impact === 'Unknown' || item.impact.trim() === '';
@@ -525,7 +545,7 @@ function applyFilters() {
     updateDashboard();
 }
 
-function updateFilterSummary(dateRange, mttrFilter, mttcFilter, ageFilter, countries, impacts, severities, ticketTypes, statuses, automationLevels) {
+function updateFilterSummary(dateRange, mttrFilter, mttcFilter, ageFilter, countries, regions, impacts, severities, ticketTypes, statuses, automationLevels) {
     const container = document.getElementById('activeFiltersContainer');
 
     // Preserve non-removable filters
@@ -573,6 +593,11 @@ function updateFilterSummary(dateRange, mttrFilter, mttcFilter, ageFilter, count
             container.innerHTML += `<span class="filter-tag">Country: ${country} <button class="remove-filter-btn" onclick="removeFilter('country', '${country}')">×</button></span>`;
         });
     }
+    if (regions.length > 0) {
+        regions.forEach(region => {
+            container.innerHTML += `<span class="filter-tag">Region: ${region} <button class="remove-filter-btn" onclick="removeFilter('region', '${region}')">×</button></span>`;
+        });
+    }
     if (impacts.length > 0) {
         impacts.forEach(impact => {
             container.innerHTML += `<span class="filter-tag">Impact: ${impact} <button class="remove-filter-btn" onclick="removeFilter('impact', '${impact}')">×</button></span>`;
@@ -607,6 +632,9 @@ function updateFilterSummary(dateRange, mttrFilter, mttcFilter, ageFilter, count
 function removeFilter(filterType, value) {
     if (filterType === 'country') {
         const checkbox = document.querySelector(`#countryFilter input[value="${value}"]`);
+        if (checkbox) checkbox.checked = false;
+    } else if (filterType === 'region') {
+        const checkbox = document.querySelector(`#regionFilter input[value="${value}"]`);
         if (checkbox) checkbox.checked = false;
     } else if (filterType === 'impact') {
         const checkbox = document.querySelector(`#impactFilter input[value="${value}"]`);
@@ -1634,3 +1662,43 @@ function buildTableHeaders() {
     // Update sort indicators after rebuilding headers
     updateSortIndicators();
 }
+
+// Location Filter Tab Functionality
+function initLocationTabs() {
+    const tabButtons = document.querySelectorAll('.tab-button');
+
+    tabButtons.forEach(button => {
+        button.addEventListener('click', function() {
+            const targetTab = this.getAttribute('data-tab');
+
+            // Remove active class from all buttons and panes
+            tabButtons.forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.tab-pane').forEach(pane => pane.classList.remove('active'));
+
+            // Add active class to clicked button and corresponding pane
+            this.classList.add('active');
+            document.getElementById(targetTab + 'Tab').classList.add('active');
+
+            // Clear selections in the other tab (mutual exclusion)
+            if (targetTab === 'country') {
+                // Clear region selections
+                document.querySelectorAll('#regionFilter input[type="checkbox"]').forEach(checkbox => {
+                    checkbox.checked = false;
+                });
+            } else if (targetTab === 'region') {
+                // Clear country selections
+                document.querySelectorAll('#countryFilter input[type="checkbox"]').forEach(checkbox => {
+                    checkbox.checked = false;
+                });
+            }
+
+            // Update filters
+            applyFilters();
+        });
+    });
+}
+
+// Initialize location tabs when DOM is loaded
+document.addEventListener('DOMContentLoaded', function() {
+    initLocationTabs();
+});
