@@ -1,6 +1,7 @@
 let allData = [];
 let filteredData = [];
 let currentSort = {column: null, direction: 'asc'};
+let showAllRows = false; // pagination state: false = first 100, true = all
 
 // Feature flags
 const should_show_card_tooltips = false;
@@ -70,852 +71,865 @@ function isDarkMode() {
 
 function getChartColors() {
     if (!isDarkMode()) {
+        // Light theme - dark text on light background
         return {
-            font: '#1e293b', grid: 'rgba(128,128,128,0.2)', legendBg: 'rgba(255,255,255,0.8)', axisLine: '#94a3b8'
+            font: '#1f2937', grid: 'rgba(148,163,184,0.3)', legendBg: 'rgba(255,255,255,0.95)', axisLine: '#6b7280'
         };
     }
+    // Dark theme - light text on dark background
     return {
         font: '#e2e8f0', grid: 'rgba(148,163,184,0.18)', legendBg: 'rgba(30,41,59,0.85)', axisLine: '#475569'
     };
 }
 
-function commonLayout(extra = {}) {
-    const c = getChartColors();
-    return Object.assign({
-        font: {family: 'Segoe UI, sans-serif', size: 12, color: c.font},
-        showlegend: true,
-        legend: {bgcolor: c.legendBg, bordercolor: 'rgba(0,0,0,0)', borderwidth: 0},
-        plot_bgcolor: 'rgba(0,0,0,0)',
-        paper_bgcolor: 'rgba(0,0,0,0)',
-        xaxis: {gridcolor: c.grid, linecolor: c.axisLine, zerolinecolor: c.grid},
-        yaxis: {gridcolor: c.grid, linecolor: c.axisLine, zerolinecolor: c.grid},
-        margin: {l: 60, r: 40, t: 40, b: 60}
-    }, extra);
-}
+    function commonLayout(extra = {}) {
+        const c = getChartColors();
+        return Object.assign({
+            font: {family: 'Segoe UI, sans-serif', size: 12, color: c.font},
+            showlegend: true,
+            legend: {bgcolor: c.legendBg, bordercolor: 'rgba(0,0,0,0)', borderwidth: 0},
+            plot_bgcolor: 'rgba(0,0,0,0)',
+            paper_bgcolor: 'rgba(0,0,0,0)',
+            xaxis: {gridcolor: c.grid, linecolor: c.axisLine, zerolinecolor: c.grid},
+            yaxis: {gridcolor: c.grid, linecolor: c.axisLine, zerolinecolor: c.grid},
+            margin: {l: 60, r: 40, t: 40, b: 60}
+        }, extra);
+    }
 
 // Replace previous themechange listener with smoother chart theme adaptation
 // Remove any existing themechange listeners added earlier by guarding with a new handler
-window.addEventListener('themechange', () => {
-    adaptAllChartsTheme();
-});
+    window.addEventListener('themechange', () => {
+        adaptAllChartsTheme();
+    });
 
 // Keep a shared config reference
-const sharedPlotlyConfig = {responsive: true, displayModeBar: true, displaylogo: false};
+    const sharedPlotlyConfig = {responsive: true, displayModeBar: true, displaylogo: false};
 
-function adaptAllChartsTheme() {
-    const chartIds = ['geoChart', 'severityChart', 'timelineChart', 'ticketTypeChart', 'heatmapChart', 'funnelChart'];
-    chartIds.forEach(id => adaptChartTheme(id));
-}
-
-function adaptChartTheme(chartId) {
-    const el = document.getElementById(chartId);
-    if (!el || !el.data || !el.layout) return; // Chart not rendered yet
-    const c = getChartColors();
-    // Clone layout shallowly to avoid mutating Plotly internal references unexpectedly
-    const newLayout = JSON.parse(JSON.stringify(el.layout));
-    newLayout.font = newLayout.font || {};
-    newLayout.font.color = c.font;
-    if (newLayout.legend) {
-        newLayout.legend.bgcolor = c.legendBg;
+    function adaptAllChartsTheme() {
+        const chartIds = ['geoChart', 'severityChart', 'timelineChart', 'ticketTypeChart', 'heatmapChart', 'funnelChart'];
+        chartIds.forEach(id => adaptChartTheme(id));
     }
-    // Axes (some charts like pie/funnel may not have axes)
-    ['xaxis', 'yaxis'].forEach(axis => {
-        if (newLayout[axis]) {
-            newLayout[axis].gridcolor = c.grid;
-            newLayout[axis].linecolor = c.axisLine;
-            newLayout[axis].zerolinecolor = c.grid;
+
+    function adaptChartTheme(chartId) {
+        const el = document.getElementById(chartId);
+        if (!el || !el.data || !el.layout) return; // Chart not rendered yet
+        const c = getChartColors();
+
+        // Clone layout shallowly to avoid mutating Plotly internal references unexpectedly
+        const newLayout = JSON.parse(JSON.stringify(el.layout));
+        newLayout.font = newLayout.font || {};
+        newLayout.font.color = c.font;
+        if (newLayout.legend) {
+            newLayout.legend.bgcolor = c.legendBg;
         }
-    });
-    // Use Plotly.react for smoother transition; provide same data & config
-    try {
-        Plotly.react(el, el.data, newLayout, sharedPlotlyConfig);
-    } catch (e) {
-        // Fallback: relayout if react fails
+        // Axes (some charts like pie/funnel may not have axes)
+        ['xaxis', 'yaxis'].forEach(axis => {
+            if (newLayout[axis]) {
+                newLayout[axis].gridcolor = c.grid;
+                newLayout[axis].linecolor = c.axisLine;
+                newLayout[axis].zerolinecolor = c.grid;
+            }
+        });
+
+        // Clone data to update trace-level text colors (important for pie charts)
+        const newData = JSON.parse(JSON.stringify(el.data));
+        newData.forEach(trace => {
+            // Update textfont color for pie charts and other charts with text labels
+            if (trace.textfont && trace.textfont.color !== 'white') {
+                trace.textfont.color = c.font;
+            }
+        });
+
+        // Use Plotly.react for smoother transition; provide same data & config
         try {
-            Plotly.relayout(el, newLayout);
-        } catch (_) {
+            Plotly.react(el, newData, newLayout, sharedPlotlyConfig);
+        } catch (e) {
+            // Fallback: relayout if react fails
+            try {
+                Plotly.relayout(el, newLayout);
+            } catch (_) {
+            }
         }
     }
-}
 
 // Initialize dashboard
 // Data freshness functions
-function updateDataTimestamp() {
-    const timestampElement = document.getElementById('dataTimestamp');
-    if (timestampElement) {
-        // Since data excludes "today" and is generated at 12:01 AM ET,
-        // show when the job last ran (this morning at 12:01 AM ET)
-        const today = new Date();
+    function updateDataTimestamp() {
+        const timestampElement = document.getElementById('dataTimestamp');
+        if (timestampElement) {
+            // Since data excludes "today" and is generated at 12:01 AM ET,
+            // show when the job last ran (this morning at 12:01 AM ET)
+            const today = new Date();
 
-        // Set to 12:01 AM today in ET timezone
-        const options = {
-            year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'America/New_York', timeZoneName: 'short'
-        };
+            // Set to 12:01 AM today in ET timezone
+            const options = {
+                year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'America/New_York', timeZoneName: 'short'
+            };
 
-        // Force the time to show 12:01 AM by setting the time
-        const todayAt1201 = new Date(today);
-        todayAt1201.setHours(0, 1, 0, 0);
+            // Force the time to show 12:01 AM by setting the time
+            const todayAt1201 = new Date(today);
+            todayAt1201.setHours(0, 1, 0, 0);
 
-        timestampElement.textContent = todayAt1201.toLocaleString('en-US', options);
-    }
-}
-
-document.addEventListener('DOMContentLoaded', function () {
-    loadData();
-    setupEventListeners();
-});
-
-function setupEventListeners() {
-    // Setup date range slider with tooltip
-    setupSliderTooltip('dateRangeSlider', 'dateRangeTooltip', applyFilters);
-
-    // Setup MTTR range slider with tooltip
-    setupSliderTooltip('mttrRangeSlider', 'mttrRangeTooltip', applyFilters, formatMttrValue);
-
-    // Setup MTTC range slider with tooltip
-    setupSliderTooltip('mttcRangeSlider', 'mttcRangeTooltip', applyFilters, formatMttcValue);
-
-    // Setup age range slider with tooltip
-    setupSliderTooltip('ageRangeSlider', 'ageRangeTooltip', applyFilters, formatAgeValue);
-
-    // Add listeners for existing severity, status, and automation checkboxes
-    document.querySelectorAll('#severityFilter input, #statusFilter input, #automationFilter input').forEach(checkbox => {
-        checkbox.addEventListener('change', applyFilters);
-    });
-
-    // Add listeners to date slider preset values for click functionality
-    const dateContainer = document.getElementById('dateRangeSlider').parentElement;
-    const dateSlider = document.getElementById('dateRangeSlider');
-    if (dateContainer && dateSlider) {
-        dateContainer.querySelectorAll('.range-preset').forEach(preset => {
-            preset.addEventListener('click', function () {
-                const value = this.getAttribute('data-value');
-                dateSlider.value = value;
-                showSliderTooltip('dateRangeTooltip');
-                updateSliderLabels(value);
-                applyFilters();
-                // Hide tooltip after a brief delay when using presets
-                setTimeout(() => hideSliderTooltip('dateRangeTooltip'), 1000);
-            });
-        });
-    }
-
-    // Initialize date slider display
-    const dateSliderInit = document.getElementById('dateRangeSlider');
-    if (dateSliderInit) {
-        updateSliderLabels(dateSliderInit.value);
-    }
-
-    // Add listeners to MTTR slider labels for click functionality
-    const mttrContainer = document.getElementById('mttrRangeSlider').parentElement;
-    const mttrSlider = document.getElementById('mttrRangeSlider');
-    if (mttrContainer && mttrSlider) {
-        mttrContainer.querySelectorAll('.slider-labels span').forEach(label => {
-            label.addEventListener('click', function () {
-                const value = this.getAttribute('data-value');
-                mttrSlider.value = value;
-                showSliderTooltip('mttrRangeTooltip');
-                updateSliderTooltip('mttrRangeSlider', 'mttrRangeTooltip', value, formatMttrValue);
-                updateMttrSliderLabels(value);
-                applyFilters();
-                setTimeout(() => hideSliderTooltip('mttrRangeTooltip'), 1000);
-            });
-            label.style.cursor = 'pointer';
-        });
-    }
-
-    // Add listeners to MTTC slider labels for click functionality
-    const mttcContainer = document.getElementById('mttcRangeSlider').parentElement;
-    const mttcSlider = document.getElementById('mttcRangeSlider');
-    if (mttcContainer && mttcSlider) {
-        mttcContainer.querySelectorAll('.slider-labels span').forEach(label => {
-            label.addEventListener('click', function () {
-                const value = this.getAttribute('data-value');
-                mttcSlider.value = value;
-                showSliderTooltip('mttcRangeTooltip');
-                updateSliderTooltip('mttcRangeSlider', 'mttcRangeTooltip', value, formatMttcValue);
-                updateMttcSliderLabels(value);
-                applyFilters();
-                setTimeout(() => hideSliderTooltip('mttcRangeTooltip'), 1000);
-            });
-            label.style.cursor = 'pointer';
-        });
-    }
-
-    // Add listeners to age slider preset values for click functionality
-    const ageContainer = document.getElementById('ageRangeSlider').parentElement;
-    const ageSlider = document.getElementById('ageRangeSlider');
-    if (ageContainer && ageSlider) {
-        ageContainer.querySelectorAll('.range-preset').forEach(preset => {
-            preset.addEventListener('click', function () {
-                const value = this.getAttribute('data-value');
-                ageSlider.value = value;
-                showSliderTooltip('ageRangeTooltip');
-                updateSliderTooltip('ageRangeSlider', 'ageRangeTooltip', value, formatAgeValue);
-                applyFilters();
-                setTimeout(() => hideSliderTooltip('ageRangeTooltip'), 1000);
-            });
-        });
-    }
-
-    // Add listeners for sortable table headers
-    document.querySelectorAll('.sortable').forEach(header => {
-        header.addEventListener('click', function () {
-            const column = this.getAttribute('data-column');
-            sortTable(column);
-        });
-        header.style.cursor = 'pointer';
-    });
-
-    // Load sort preferences from cookies
-    loadSortPreferences();
-
-    // Setup column selector
-    setupColumnSelector();
-
-    // Reset filters
-    const resetBtn = document.getElementById('resetFiltersBtn');
-    if (resetBtn && !resetBtn.dataset.bound) {
-        resetBtn.addEventListener('click', resetFilters);
-        resetBtn.dataset.bound = 'true';
-    }
-    // Export CSV
-    const exportCsvBtn = document.getElementById('exportCsvBtn');
-    if (exportCsvBtn && !exportCsvBtn.dataset.bound) {
-        exportCsvBtn.addEventListener('click', exportToCSV);
-        exportCsvBtn.dataset.bound = 'true';
-    }
-    // Export Summary
-    const exportSummaryBtn = document.getElementById('exportSummaryBtn');
-    if (exportSummaryBtn && !exportSummaryBtn.dataset.bound) {
-        exportSummaryBtn.addEventListener('click', exportSummary);
-        exportSummaryBtn.dataset.bound = 'true';
-    }
-    // Column selector open state persistence (applied after original setup)
-    const dropdown = document.getElementById('columnSelectorDropdown');
-    const btn = document.getElementById('columnSelectorBtn');
-    if (btn && !btn.dataset.openStateBound) {
-        btn.addEventListener('click', () => {
-            const isOpen = dropdown.style.display === 'block';
-            localStorage.setItem('mmColumnSelectorOpen', (!isOpen).toString());
-        });
-        btn.dataset.openStateBound = 'true';
-    }
-    document.addEventListener('click', (e) => {
-        if (dropdown && btn && dropdown.style.display === 'block' && !dropdown.contains(e.target) && !btn.contains(e.target)) {
-            localStorage.setItem('mmColumnSelectorOpen', 'false');
+            timestampElement.textContent = todayAt1201.toLocaleString('en-US', options);
         }
-    });
-    // Select / Deselect all buttons (now without inline handlers)
-    const selectAllBtn = document.getElementById('selectAllColumnsBtn');
-    if (selectAllBtn && !selectAllBtn.dataset.bound) {
-        selectAllBtn.addEventListener('click', selectAllColumns);
-        selectAllBtn.dataset.bound = 'true';
-    }
-    const deselectAllBtn = document.getElementById('deselectAllColumnsBtn');
-    if (deselectAllBtn && !deselectAllBtn.dataset.bound) {
-        deselectAllBtn.addEventListener('click', deselectAllColumns);
-        deselectAllBtn.dataset.bound = 'true';
     }
 
-    // Restore column selector open state if previously open
-    const savedOpen = localStorage.getItem('mmColumnSelectorOpen');
-    if (savedOpen === 'true' && dropdown && btn) {
-        dropdown.style.display = 'block';
-        populateColumnSelector();
+    document.addEventListener('DOMContentLoaded', function () {
+        loadData();
+        setupEventListeners();
+    });
+
+    function setupEventListeners() {
+        // Setup date range slider with tooltip
+        setupSliderTooltip('dateRangeSlider', 'dateRangeTooltip', applyFilters);
+
+        // Setup MTTR range slider with tooltip
+        setupSliderTooltip('mttrRangeSlider', 'mttrRangeTooltip', applyFilters, formatMttrValue);
+
+        // Setup MTTC range slider with tooltip
+        setupSliderTooltip('mttcRangeSlider', 'mttcRangeTooltip', applyFilters, formatMttcValue);
+
+        // Setup age range slider with tooltip
+        setupSliderTooltip('ageRangeSlider', 'ageRangeTooltip', applyFilters, formatAgeValue);
+
+        // Add listeners for existing severity, status, and automation checkboxes
+        document.querySelectorAll('#severityFilter input, #statusFilter input, #automationFilter input').forEach(checkbox => {
+            checkbox.addEventListener('change', applyFilters);
+        });
+
+        // Add listeners to date slider preset values for click functionality
+        const dateContainer = document.getElementById('dateRangeSlider').parentElement;
+        const dateSlider = document.getElementById('dateRangeSlider');
+        if (dateContainer && dateSlider) {
+            dateContainer.querySelectorAll('.range-preset').forEach(preset => {
+                preset.addEventListener('click', function () {
+                    const value = this.getAttribute('data-value');
+                    dateSlider.value = value;
+                    showSliderTooltip('dateRangeTooltip');
+                    updateSliderLabels(value);
+                    applyFilters();
+                    // Hide tooltip after a brief delay when using presets
+                    setTimeout(() => hideSliderTooltip('dateRangeTooltip'), 1000);
+                });
+            });
+        }
+
+        // Initialize date slider display
+        const dateSliderInit = document.getElementById('dateRangeSlider');
+        if (dateSliderInit) {
+            updateSliderLabels(dateSliderInit.value);
+        }
+
+        // Add listeners to MTTR slider labels for click functionality
+        const mttrContainer = document.getElementById('mttrRangeSlider').parentElement;
+        const mttrSlider = document.getElementById('mttrRangeSlider');
+        if (mttrContainer && mttrSlider) {
+            mttrContainer.querySelectorAll('.slider-labels span').forEach(label => {
+                label.addEventListener('click', function () {
+                    const value = this.getAttribute('data-value');
+                    mttrSlider.value = value;
+                    showSliderTooltip('mttrRangeTooltip');
+                    updateSliderTooltip('mttrRangeSlider', 'mttrRangeTooltip', value, formatMttrValue);
+                    updateMttrSliderLabels(value);
+                    applyFilters();
+                    setTimeout(() => hideSliderTooltip('mttrRangeTooltip'), 1000);
+                });
+                label.style.cursor = 'pointer';
+            });
+        }
+
+        // Add listeners to MTTC slider labels for click functionality
+        const mttcContainer = document.getElementById('mttcRangeSlider').parentElement;
+        const mttcSlider = document.getElementById('mttcRangeSlider');
+        if (mttcContainer && mttcSlider) {
+            mttcContainer.querySelectorAll('.slider-labels span').forEach(label => {
+                label.addEventListener('click', function () {
+                    const value = this.getAttribute('data-value');
+                    mttcSlider.value = value;
+                    showSliderTooltip('mttcRangeTooltip');
+                    updateSliderTooltip('mttcRangeSlider', 'mttcRangeTooltip', value, formatMttcValue);
+                    updateMttcSliderLabels(value);
+                    applyFilters();
+                    setTimeout(() => hideSliderTooltip('mttcRangeTooltip'), 1000);
+                });
+                label.style.cursor = 'pointer';
+            });
+        }
+
+        // Add listeners to age slider preset values for click functionality
+        const ageContainer = document.getElementById('ageRangeSlider').parentElement;
+        const ageSlider = document.getElementById('ageRangeSlider');
+        if (ageContainer && ageSlider) {
+            ageContainer.querySelectorAll('.range-preset').forEach(preset => {
+                preset.addEventListener('click', function () {
+                    const value = this.getAttribute('data-value');
+                    ageSlider.value = value;
+                    showSliderTooltip('ageRangeTooltip');
+                    updateSliderTooltip('ageRangeSlider', 'ageRangeTooltip', value, formatAgeValue);
+                    applyFilters();
+                    setTimeout(() => hideSliderTooltip('ageRangeTooltip'), 1000);
+                });
+            });
+        }
+
+        // Add listeners for sortable table headers
+        document.querySelectorAll('.sortable').forEach(header => {
+            header.addEventListener('click', function () {
+                const column = this.getAttribute('data-column');
+                sortTable(column);
+            });
+            header.style.cursor = 'pointer';
+        });
+
+        // Load sort preferences from cookies
+        loadSortPreferences();
+
+        // Setup column selector
+        setupColumnSelector();
+
+        // Reset filters
+        const resetBtn = document.getElementById('resetFiltersBtn');
+        if (resetBtn && !resetBtn.dataset.bound) {
+            resetBtn.addEventListener('click', resetFilters);
+            resetBtn.dataset.bound = 'true';
+        }
+        // Export CSV
+        const exportCsvBtn = document.getElementById('exportCsvBtn');
+        if (exportCsvBtn && !exportCsvBtn.dataset.bound) {
+            exportCsvBtn.addEventListener('click', exportToCSV);
+            exportCsvBtn.dataset.bound = 'true';
+        }
+        // Export Summary
+        const exportSummaryBtn = document.getElementById('exportSummaryBtn');
+        if (exportSummaryBtn && !exportSummaryBtn.dataset.bound) {
+            exportSummaryBtn.addEventListener('click', exportSummary);
+            exportSummaryBtn.dataset.bound = 'true';
+        }
+        // Column selector open state persistence (applied after original setup)
+        const dropdown = document.getElementById('columnSelectorDropdown');
+        const btn = document.getElementById('columnSelectorBtn');
+        if (btn && !btn.dataset.openStateBound) {
+            btn.addEventListener('click', () => {
+                const isOpen = dropdown.style.display === 'block';
+                localStorage.setItem('mmColumnSelectorOpen', (!isOpen).toString());
+            });
+            btn.dataset.openStateBound = 'true';
+        }
+        document.addEventListener('click', (e) => {
+            if (dropdown && btn && dropdown.style.display === 'block' && !dropdown.contains(e.target) && !btn.contains(e.target)) {
+                localStorage.setItem('mmColumnSelectorOpen', 'false');
+            }
+        });
+        // Select / Deselect all buttons (now without inline handlers)
+        const selectAllBtn = document.getElementById('selectAllColumnsBtn');
+        if (selectAllBtn && !selectAllBtn.dataset.bound) {
+            selectAllBtn.addEventListener('click', selectAllColumns);
+            selectAllBtn.dataset.bound = 'true';
+        }
+        const deselectAllBtn = document.getElementById('deselectAllColumnsBtn');
+        if (deselectAllBtn && !deselectAllBtn.dataset.bound) {
+            deselectAllBtn.addEventListener('click', deselectAllColumns);
+            deselectAllBtn.dataset.bound = 'true';
+        }
+
+        // Restore column selector open state if previously open
+        const savedOpen = localStorage.getItem('mmColumnSelectorOpen');
+        if (savedOpen === 'true' && dropdown && btn) {
+            dropdown.style.display = 'block';
+            populateColumnSelector();
+        }
     }
-}
 
 // Generic slider tooltip functions
-function updateSliderTooltip(sliderId, tooltipId, value, formatFunction = null) {
-    const tooltip = document.getElementById(tooltipId);
-    const slider = document.getElementById(sliderId);
-    if (tooltip && slider) {
-        // Use custom format function if provided, otherwise just show the value
-        tooltip.textContent = formatFunction ? formatFunction(value) : value;
+    function updateSliderTooltip(sliderId, tooltipId, value, formatFunction = null) {
+        const tooltip = document.getElementById(tooltipId);
+        const slider = document.getElementById(sliderId);
+        if (tooltip && slider) {
+            // Use custom format function if provided, otherwise just show the value
+            tooltip.textContent = formatFunction ? formatFunction(value) : value;
 
-        // Calculate position based on slider value
-        const min = parseInt(slider.min);
-        const max = parseInt(slider.max);
-        const val = parseInt(value);
-        const percentage = ((val - min) / (max - min)) * 100;
+            // Calculate position based on slider value
+            const min = parseInt(slider.min);
+            const max = parseInt(slider.max);
+            const val = parseInt(value);
+            const percentage = ((val - min) / (max - min)) * 100;
 
-        // Position tooltip above the thumb (accounting for thumb width)
-        tooltip.style.left = `calc(${percentage}% + ${8 - percentage * 0.16}px)`;
+            // Position tooltip above the thumb (accounting for thumb width)
+            tooltip.style.left = `calc(${percentage}% + ${8 - percentage * 0.16}px)`;
+        }
     }
-}
 
-function showSliderTooltip(tooltipId) {
-    const tooltip = document.getElementById(tooltipId);
-    if (tooltip) {
-        tooltip.style.display = 'block';
+    function showSliderTooltip(tooltipId) {
+        const tooltip = document.getElementById(tooltipId);
+        if (tooltip) {
+            tooltip.style.display = 'block';
+        }
     }
-}
 
-function hideSliderTooltip(tooltipId) {
-    const tooltip = document.getElementById(tooltipId);
-    if (tooltip) {
-        tooltip.style.display = 'none';
+    function hideSliderTooltip(tooltipId) {
+        const tooltip = document.getElementById(tooltipId);
+        if (tooltip) {
+            tooltip.style.display = 'none';
+        }
     }
-}
 
-function setupSliderTooltip(sliderId, tooltipId, updateCallback, formatFunction = null) {
-    const slider = document.getElementById(sliderId);
-    if (!slider) return;
+    function setupSliderTooltip(sliderId, tooltipId, updateCallback, formatFunction = null) {
+        const slider = document.getElementById(sliderId);
+        if (!slider) return;
 
-    // Show tooltip when user starts interacting
-    slider.addEventListener('mousedown', () => showSliderTooltip(tooltipId));
-    slider.addEventListener('touchstart', () => showSliderTooltip(tooltipId));
+        // Show tooltip when user starts interacting
+        slider.addEventListener('mousedown', () => showSliderTooltip(tooltipId));
+        slider.addEventListener('touchstart', () => showSliderTooltip(tooltipId));
 
-    // Hide tooltip when user stops interacting
-    slider.addEventListener('mouseup', () => hideSliderTooltip(tooltipId));
-    slider.addEventListener('touchend', () => hideSliderTooltip(tooltipId));
-    slider.addEventListener('mouseleave', () => hideSliderTooltip(tooltipId));
+        // Hide tooltip when user stops interacting
+        slider.addEventListener('mouseup', () => hideSliderTooltip(tooltipId));
+        slider.addEventListener('touchend', () => hideSliderTooltip(tooltipId));
+        slider.addEventListener('mouseleave', () => hideSliderTooltip(tooltipId));
 
-    // Update tooltip during sliding
-    slider.addEventListener('input', function () {
-        showSliderTooltip(tooltipId);
-        updateSliderTooltip(sliderId, tooltipId, this.value, formatFunction);
-        if (updateCallback) updateCallback();
-    });
+        // Update tooltip during sliding
+        slider.addEventListener('input', function () {
+            showSliderTooltip(tooltipId);
+            updateSliderTooltip(sliderId, tooltipId, this.value, formatFunction);
+            if (updateCallback) updateCallback();
+        });
 
-    // Initialize the slider position (but keep tooltip hidden)
-    updateSliderTooltip(sliderId, tooltipId, slider.value, formatFunction);
-}
+        // Initialize the slider position (but keep tooltip hidden)
+        updateSliderTooltip(sliderId, tooltipId, slider.value, formatFunction);
+    }
 
 // Format functions for different slider types
-function formatMttrValue(value) {
-    const labels = ['All', '≤3', '>3', '>5'];
-    return labels[value] || 'All';
-}
+    function formatMttrValue(value) {
+        const labels = ['All', '≤3', '>3', '>5'];
+        return labels[value] || 'All';
+    }
 
-function formatMttcValue(value) {
-    const labels = ['All', '≤5', '≤15', '>15'];
-    return labels[value] || 'All';
-}
+    function formatMttcValue(value) {
+        const labels = ['All', '≤5', '≤15', '>15'];
+        return labels[value] || 'All';
+    }
 
-function formatAgeValue(value) {
-    if (value == 0) return 'All';
-    return value;
-}
+    function formatAgeValue(value) {
+        if (value == 0) return 'All';
+        return value;
+    }
 
 // Legacy functions for date slider compatibility
-function updateSliderLabels(value) {
-    updateSliderTooltip('dateRangeSlider', 'dateRangeTooltip', value);
-}
-
-function showDateSliderTooltip() {
-    showSliderTooltip('dateRangeTooltip');
-}
-
-function hideDateSliderTooltip() {
-    hideSliderTooltip('dateRangeTooltip');
-}
-
-function updateMttrSliderLabels(value) {
-    const mttrContainer = document.getElementById('mttrRangeSlider').parentElement;
-    mttrContainer.querySelectorAll('.slider-labels span').forEach(span => {
-        span.classList.remove('active');
-    });
-    mttrContainer.querySelector(`.slider-labels span[data-value="${value}"]`).classList.add('active');
-}
-
-function updateMttcSliderLabels(value) {
-    const mttcContainer = document.getElementById('mttcRangeSlider').parentElement;
-    mttcContainer.querySelectorAll('.slider-labels span').forEach(span => {
-        span.classList.remove('active');
-    });
-    mttcContainer.querySelector(`.slider-labels span[data-value="${value}"]`).classList.add('active');
-}
-
-function updateAgeSliderLabels(value) {
-    // This function is now handled by the generic tooltip system
-    // Keep for compatibility but no longer needed for discrete label updates
-}
-
-async function loadData() {
-    try {
-        const response = await fetch('/api/meaningful-metrics/data');
-        const result = await response.json();
-
-        if (result.success) {
-            allData = result.data;
-            updateDataTimestamp();
-            populateFilterOptions();
-            applyFilters();
-            hideLoading();
-        } else {
-            showError('Failed to load data: ' + result.error);
-        }
-    } catch (error) {
-        showError('Error loading data: ' + error.message);
+    function updateSliderLabels(value) {
+        updateSliderTooltip('dateRangeSlider', 'dateRangeTooltip', value);
     }
-}
 
-function populateFilterOptions() {
-    // Populate filters with checkboxes
-    const countries = [...new Set(allData.map(item => item.affected_country))].filter(c => c && c !== 'Unknown').sort();
-    const regions = [...new Set(allData.map(item => item.affected_region))].filter(r => r && r !== 'Unknown').sort();
-    const impacts = [...new Set(allData.map(item => item.impact))].filter(i => i && i !== 'Unknown').sort();
-    const ticketTypes = [...new Set(allData.map(item => item.type))].filter(t => t && t !== 'Unknown').sort();
-    const automationLevels = [...new Set(allData.map(item => item.automation_level))].filter(a => a && a !== 'Unknown').sort();
+    function showDateSliderTooltip() {
+        showSliderTooltip('dateRangeTooltip');
+    }
 
-    // Add "No Country" option to countries list
-    countries.unshift('No Country');
+    function hideDateSliderTooltip() {
+        hideSliderTooltip('dateRangeTooltip');
+    }
 
-    // Add "No Region" option to regions list
-    regions.unshift('No Region');
+    function updateMttrSliderLabels(value) {
+        const mttrContainer = document.getElementById('mttrRangeSlider').parentElement;
+        mttrContainer.querySelectorAll('.slider-labels span').forEach(span => {
+            span.classList.remove('active');
+        });
+        mttrContainer.querySelector(`.slider-labels span[data-value="${value}"]`).classList.add('active');
+    }
 
-    // Add "No Impact" option to impacts list
-    impacts.unshift('No Impact');
+    function updateMttcSliderLabels(value) {
+        const mttcContainer = document.getElementById('mttcRangeSlider').parentElement;
+        mttcContainer.querySelectorAll('.slider-labels span').forEach(span => {
+            span.classList.remove('active');
+        });
+        mttcContainer.querySelector(`.slider-labels span[data-value="${value}"]`).classList.add('active');
+    }
 
-    // Add "No Level" option to automation levels list
-    automationLevels.unshift('No Level');
+    function updateAgeSliderLabels(value) {
+        // This function is now handled by the generic tooltip system
+        // Keep for compatibility but no longer needed for discrete label updates
+    }
 
-    populateCheckboxFilter('countryFilter', countries);
-    populateCheckboxFilter('regionFilter', regions);
-    populateCheckboxFilter('impactFilter', impacts);
-    populateCheckboxFilter('ticketTypeFilter', ticketTypes);
-    populateCheckboxFilter('automationFilter', automationLevels);
-}
+    async function loadData() {
+        try {
+            const response = await fetch('/api/meaningful-metrics/data');
+            const result = await response.json();
 
-function populateCheckboxFilter(filterId, options) {
-    const container = document.getElementById(filterId);
-    options.forEach(option => {
-        const label = document.createElement('label');
-        const checkbox = document.createElement('input');
-        checkbox.type = 'checkbox';
-        checkbox.value = option;
-        checkbox.addEventListener('change', applyFilters);
-
-        // For ticket types, remove METCIRT prefix for display
-        let displayText = option;
-        if (filterId === 'ticketTypeFilter' && option.startsWith('METCIRT')) {
-            displayText = option.replace(/^METCIRT[_\-\s]*/i, '');
+            if (result.success) {
+                allData = result.data;
+                updateDataTimestamp();
+                populateFilterOptions();
+                applyFilters();
+                hideLoading();
+            } else {
+                showError('Failed to load data: ' + result.error);
+            }
+        } catch (error) {
+            showError('Error loading data: ' + error.message);
         }
+    }
 
-        label.appendChild(checkbox);
-        label.appendChild(document.createTextNode(' ' + displayText));
-        container.appendChild(label);
-    });
-}
+    function populateFilterOptions() {
+        // Populate filters with checkboxes
+        const countries = [...new Set(allData.map(item => item.affected_country))].filter(c => c && c !== 'Unknown').sort();
+        const regions = [...new Set(allData.map(item => item.affected_region))].filter(r => r && r !== 'Unknown').sort();
+        const impacts = [...new Set(allData.map(item => item.impact))].filter(i => i && i !== 'Unknown').sort();
+        const ticketTypes = [...new Set(allData.map(item => item.type))].filter(t => t && t !== 'Unknown').sort();
+        const automationLevels = [...new Set(allData.map(item => item.automation_level))].filter(a => a && a !== 'Unknown').sort();
 
-function applyFilters() {
-    const dateSlider = document.getElementById('dateRangeSlider');
-    const dateRange = parseInt(dateSlider ? dateSlider.value : 30);
+        // Add "No Country" option to countries list
+        countries.unshift('No Country');
 
-    const mttrSlider = document.getElementById('mttrRangeSlider');
-    // Map slider positions to MTTR ranges: 0=All, 1=≤3mins, 2=>3mins, 3=>5mins
-    const mttrFilter = parseInt(mttrSlider ? mttrSlider.value : 0);
+        // Add "No Region" option to regions list
+        regions.unshift('No Region');
 
-    const mttcSlider = document.getElementById('mttcRangeSlider');
-    // Map slider positions to MTTC ranges: 0=All, 1=≤5mins, 2=≤15mins, 3=>15mins
-    const mttcFilter = parseInt(mttcSlider ? mttcSlider.value : 0);
+        // Add "No Impact" option to impacts list
+        impacts.unshift('No Impact');
 
-    const ageSlider = document.getElementById('ageRangeSlider');
-    // Age filter now uses continuous values: 0=All, 1-60=specific days
-    const ageFilter = parseInt(ageSlider ? ageSlider.value : 0);
+        // Add "No Level" option to automation levels list
+        automationLevels.unshift('No Level');
 
-    const countries = Array.from(document.querySelectorAll('#countryFilter input:checked')).map(cb => cb.value);
-    const regions = Array.from(document.querySelectorAll('#regionFilter input:checked')).map(cb => cb.value);
-    const impacts = Array.from(document.querySelectorAll('#impactFilter input:checked')).map(cb => cb.value);
-    const severities = Array.from(document.querySelectorAll('#severityFilter input:checked')).map(cb => cb.value);
-    const ticketTypes = Array.from(document.querySelectorAll('#ticketTypeFilter input:checked')).map(cb => cb.value);
-    const statuses = Array.from(document.querySelectorAll('#statusFilter input:checked')).map(cb => cb.value);
-    const automationLevels = Array.from(document.querySelectorAll('#automationFilter input:checked')).map(cb => cb.value);
+        populateCheckboxFilter('countryFilter', countries);
+        populateCheckboxFilter('regionFilter', regions);
+        populateCheckboxFilter('impactFilter', impacts);
+        populateCheckboxFilter('ticketTypeFilter', ticketTypes);
+        populateCheckboxFilter('automationFilter', automationLevels);
+    }
 
-    // Update filter summary
-    updateFilterSummary(dateRange, mttrFilter, mttcFilter, ageFilter, countries, regions, impacts, severities, ticketTypes, statuses, automationLevels);
+    function populateCheckboxFilter(filterId, options) {
+        const container = document.getElementById(filterId);
+        options.forEach(option => {
+            const label = document.createElement('label');
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.value = option;
+            checkbox.addEventListener('change', applyFilters);
 
-    const cutoffDate = new Date();
-    cutoffDate.setDate(cutoffDate.getDate() - dateRange);
-
-    filteredData = allData.filter(item => {
-        // Date filter - use pre-calculated days ago
-        if (item.created_days_ago !== null && item.created_days_ago > dateRange) return false;
-
-        // Location filters (countries and regions are mutually exclusive)
-        if (countries.length > 0 || regions.length > 0) {
-            let locationMatch = false;
-
-            // Check countries if selected
-            if (countries.length > 0) {
-                const hasNoCountry = !item.affected_country || item.affected_country === 'Unknown' || item.affected_country.trim() === '';
-                const shouldShowNoCountry = countries.includes('No Country') && hasNoCountry;
-                const shouldShowWithCountry = countries.some(c => c !== 'No Country' && c === item.affected_country);
-                locationMatch = shouldShowNoCountry || shouldShowWithCountry;
+            // For ticket types, remove METCIRT prefix for display
+            let displayText = option;
+            if (filterId === 'ticketTypeFilter' && option.startsWith('METCIRT')) {
+                displayText = option.replace(/^METCIRT[_\-\s]*/i, '');
             }
 
-            // Check regions if selected
-            if (regions.length > 0) {
-                const hasNoRegion = !item.affected_region || item.affected_region === 'Unknown' || item.affected_region.trim() === '';
-                const shouldShowNoRegion = regions.includes('No Region') && hasNoRegion;
-                const shouldShowWithRegion = regions.some(r => r !== 'No Region' && r === item.affected_region);
-                locationMatch = shouldShowNoRegion || shouldShowWithRegion;
+            label.appendChild(checkbox);
+            label.appendChild(document.createTextNode(' ' + displayText));
+            container.appendChild(label);
+        });
+    }
+
+    function applyFilters() {
+        const dateSlider = document.getElementById('dateRangeSlider');
+        const dateRange = parseInt(dateSlider ? dateSlider.value : 30);
+
+        const mttrSlider = document.getElementById('mttrRangeSlider');
+        // Map slider positions to MTTR ranges: 0=All, 1=≤3mins, 2=>3mins, 3=>5mins
+        const mttrFilter = parseInt(mttrSlider ? mttrSlider.value : 0);
+
+        const mttcSlider = document.getElementById('mttcRangeSlider');
+        // Map slider positions to MTTC ranges: 0=All, 1=≤5mins, 2=≤15mins, 3=>15mins
+        const mttcFilter = parseInt(mttcSlider ? mttcSlider.value : 0);
+
+        const ageSlider = document.getElementById('ageRangeSlider');
+        // Age filter now uses continuous values: 0=All, 1-60=specific days
+        const ageFilter = parseInt(ageSlider ? ageSlider.value : 0);
+
+        const countries = Array.from(document.querySelectorAll('#countryFilter input:checked')).map(cb => cb.value);
+        const regions = Array.from(document.querySelectorAll('#regionFilter input:checked')).map(cb => cb.value);
+        const impacts = Array.from(document.querySelectorAll('#impactFilter input:checked')).map(cb => cb.value);
+        const severities = Array.from(document.querySelectorAll('#severityFilter input:checked')).map(cb => cb.value);
+        const ticketTypes = Array.from(document.querySelectorAll('#ticketTypeFilter input:checked')).map(cb => cb.value);
+        const statuses = Array.from(document.querySelectorAll('#statusFilter input:checked')).map(cb => cb.value);
+        const automationLevels = Array.from(document.querySelectorAll('#automationFilter input:checked')).map(cb => cb.value);
+
+        // Update filter summary
+        updateFilterSummary(dateRange, mttrFilter, mttcFilter, ageFilter, countries, regions, impacts, severities, ticketTypes, statuses, automationLevels);
+
+        const cutoffDate = new Date();
+        cutoffDate.setDate(cutoffDate.getDate() - dateRange);
+
+        filteredData = allData.filter(item => {
+            // Date filter - use pre-calculated days ago
+            if (item.created_days_ago !== null && item.created_days_ago > dateRange) return false;
+
+            // Location filters (countries and regions are mutually exclusive)
+            if (countries.length > 0 || regions.length > 0) {
+                let locationMatch = false;
+
+                // Check countries if selected
+                if (countries.length > 0) {
+                    const hasNoCountry = !item.affected_country || item.affected_country === 'Unknown' || item.affected_country.trim() === '';
+                    const shouldShowNoCountry = countries.includes('No Country') && hasNoCountry;
+                    const shouldShowWithCountry = countries.some(c => c !== 'No Country' && c === item.affected_country);
+                    locationMatch = shouldShowNoCountry || shouldShowWithCountry;
+                }
+
+                // Check regions if selected
+                if (regions.length > 0) {
+                    const hasNoRegion = !item.affected_region || item.affected_region === 'Unknown' || item.affected_region.trim() === '';
+                    const shouldShowNoRegion = regions.includes('No Region') && hasNoRegion;
+                    const shouldShowWithRegion = regions.some(r => r !== 'No Region' && r === item.affected_region);
+                    locationMatch = shouldShowNoRegion || shouldShowWithRegion;
+                }
+
+                if (!locationMatch) return false;
+            }
+            if (impacts.length > 0) {
+                const hasNoImpact = !item.impact || item.impact === 'Unknown' || item.impact.trim() === '';
+                const shouldShowNoImpact = impacts.includes('No Impact') && hasNoImpact;
+                const shouldShowWithImpact = impacts.some(i => i !== 'No Impact' && i === item.impact);
+
+                if (!shouldShowNoImpact && !shouldShowWithImpact) return false;
+            }
+            if (severities.length > 0 && !severities.includes(item.severity.toString())) return false;
+            if (ticketTypes.length > 0 && !ticketTypes.includes(item.type)) return false;
+            if (statuses.length > 0 && !statuses.includes(item.status.toString())) return false;
+            if (automationLevels.length > 0) {
+                const hasNoLevel = !item.automation_level || item.automation_level === 'Unknown' || item.automation_level.trim() === '';
+                const shouldShowNoLevel = automationLevels.includes('No Level') && hasNoLevel;
+                const shouldShowWithLevel = automationLevels.some(l => l !== 'No Level' && l === item.automation_level);
+
+                if (!shouldShowNoLevel && !shouldShowWithLevel) return false;
             }
 
-            if (!locationMatch) return false;
-        }
-        if (impacts.length > 0) {
-            const hasNoImpact = !item.impact || item.impact === 'Unknown' || item.impact.trim() === '';
-            const shouldShowNoImpact = impacts.includes('No Impact') && hasNoImpact;
-            const shouldShowWithImpact = impacts.some(i => i !== 'No Impact' && i === item.impact);
+            // MTTR filter
+            if (mttrFilter > 0) {
+                const mttrSeconds = item.time_to_respond_secs ? item.time_to_respond_secs : null;
+                if (mttrSeconds === null || mttrSeconds === 0) return false; // Skip items without MTTR data
 
-            if (!shouldShowNoImpact && !shouldShowWithImpact) return false;
-        }
-        if (severities.length > 0 && !severities.includes(item.severity.toString())) return false;
-        if (ticketTypes.length > 0 && !ticketTypes.includes(item.type)) return false;
-        if (statuses.length > 0 && !statuses.includes(item.status.toString())) return false;
-        if (automationLevels.length > 0) {
-            const hasNoLevel = !item.automation_level || item.automation_level === 'Unknown' || item.automation_level.trim() === '';
-            const shouldShowNoLevel = automationLevels.includes('No Level') && hasNoLevel;
-            const shouldShowWithLevel = automationLevels.some(l => l !== 'No Level' && l === item.automation_level);
+                if (mttrFilter === 1 && mttrSeconds > 180) return false; // ≤3 mins (180 seconds)
+                if (mttrFilter === 2 && mttrSeconds <= 180) return false; // >3 mins
+                if (mttrFilter === 3 && mttrSeconds <= 300) return false; // >5 mins (300 seconds)
+            }
 
-            if (!shouldShowNoLevel && !shouldShowWithLevel) return false;
-        }
+            // MTTC filter - only consider cases with host populated
+            if (mttcFilter > 0) {
+                if (!item.has_hostname) return false; // Skip items without host
+
+                const mttcSeconds = item.time_to_contain_secs ? item.time_to_contain_secs : null;
+                if (mttcSeconds === null || mttcSeconds === 0) return false; // Skip items without MTTC data
+
+                if (mttcFilter === 1 && mttcSeconds > 300) return false; // ≤5 mins (300 seconds)
+                if (mttcFilter === 2 && mttcSeconds > 900) return false; // ≤15 mins (900 seconds)
+                if (mttcFilter === 3 && mttcSeconds <= 900) return false; // >15 mins (900 seconds)
+            }
+
+            // Age filter - when set (>0), include ONLY tickets whose currently_aging_days exists and is strictly greater
+            if (ageFilter > 0) {
+                if (item.currently_aging_days === null || item.currently_aging_days === undefined) return false; // exclude items without age
+                if (Number(item.currently_aging_days) <= ageFilter) return false; // must be strictly greater than selected age
+            }
+
+            return true;
+        });
+
+        updateDashboard();
+    }
+
+    function updateFilterSummary(dateRange, mttrFilter, mttcFilter, ageFilter, countries, regions, impacts, severities, ticketTypes, statuses, automationLevels) {
+        const container = document.getElementById('activeFiltersContainer');
+
+        // Preserve non-removable filters
+        const nonRemovableFilters = container.querySelectorAll('.filter-tag.non-removable');
+        container.innerHTML = Array.from(nonRemovableFilters).map(filter => filter.outerHTML).join('');
+
+        // Date range - no X button, use slider to change
+        const dateText = `Created in Last ${dateRange} day${dateRange === 1 ? '' : 's'}`;
+
+        container.innerHTML += `<span class="filter-tag">${dateText}</span>`;
 
         // MTTR filter
         if (mttrFilter > 0) {
-            const mttrSeconds = item.time_to_respond_secs ? item.time_to_respond_secs : null;
-            if (mttrSeconds === null || mttrSeconds === 0) return false; // Skip items without MTTR data
-
-            if (mttrFilter === 1 && mttrSeconds > 180) return false; // ≤3 mins (180 seconds)
-            if (mttrFilter === 2 && mttrSeconds <= 180) return false; // >3 mins
-            if (mttrFilter === 3 && mttrSeconds <= 300) return false; // >5 mins (300 seconds)
+            const mttrText = mttrFilter === 1 ? 'MTTR ≤3 mins' : mttrFilter === 2 ? 'MTTR >3 mins' : mttrFilter === 3 ? 'MTTR >5 mins' : 'All MTTR';
+            container.innerHTML += `<span class="filter-tag">${mttrText} <button class="remove-filter-btn" onclick="removeFilter('mttr', '${mttrFilter}')">×</button></span>`;
         }
 
-        // MTTC filter - only consider cases with host populated
+        // MTTC filter
         if (mttcFilter > 0) {
-            if (!item.has_hostname) return false; // Skip items without host
-
-            const mttcSeconds = item.time_to_contain_secs ? item.time_to_contain_secs : null;
-            if (mttcSeconds === null || mttcSeconds === 0) return false; // Skip items without MTTC data
-
-            if (mttcFilter === 1 && mttcSeconds > 300) return false; // ≤5 mins (300 seconds)
-            if (mttcFilter === 2 && mttcSeconds > 900) return false; // ≤15 mins (900 seconds)
-            if (mttcFilter === 3 && mttcSeconds <= 900) return false; // >15 mins (900 seconds)
+            const mttcText = mttcFilter === 1 ? 'MTTC ≤5 mins' : mttcFilter === 2 ? 'MTTC ≤15 mins' : mttcFilter === 3 ? 'MTTC >15 mins' : 'All MTTC';
+            container.innerHTML += `<span class="filter-tag">${mttcText} <button class="remove-filter-btn" onclick="removeFilter('mttc', '${mttcFilter}')">×</button></span>`;
         }
 
-        // Age filter - when set (>0), include ONLY tickets whose currently_aging_days exists and is strictly greater
+        // Age filter
         if (ageFilter > 0) {
-            if (item.currently_aging_days === null || item.currently_aging_days === undefined) return false; // exclude items without age
-            if (Number(item.currently_aging_days) <= ageFilter) return false; // must be strictly greater than selected age
+            const ageText = ageFilter === 1 ? 'Age >1 day' : `Age >${ageFilter} days`;
+            container.innerHTML += `<span class="filter-tag">${ageText} <button class="remove-filter-btn" onclick="removeFilter('age', '${ageFilter}')">×</button></span>`;
         }
 
-        return true;
-    });
-
-    updateDashboard();
-}
-
-function updateFilterSummary(dateRange, mttrFilter, mttcFilter, ageFilter, countries, regions, impacts, severities, ticketTypes, statuses, automationLevels) {
-    const container = document.getElementById('activeFiltersContainer');
-
-    // Preserve non-removable filters
-    const nonRemovableFilters = container.querySelectorAll('.filter-tag.non-removable');
-    container.innerHTML = Array.from(nonRemovableFilters).map(filter => filter.outerHTML).join('');
-
-    // Date range - no X button, use slider to change
-    const dateText = `Created in Last ${dateRange} day${dateRange === 1 ? '' : 's'}`;
-
-    container.innerHTML += `<span class="filter-tag">${dateText}</span>`;
-
-    // MTTR filter
-    if (mttrFilter > 0) {
-        const mttrText = mttrFilter === 1 ? 'MTTR ≤3 mins' : mttrFilter === 2 ? 'MTTR >3 mins' : mttrFilter === 3 ? 'MTTR >5 mins' : 'All MTTR';
-        container.innerHTML += `<span class="filter-tag">${mttrText} <button class="remove-filter-btn" onclick="removeFilter('mttr', '${mttrFilter}')">×</button></span>`;
+        // Add other filters if selected
+        if (countries.length > 0) {
+            countries.forEach(country => {
+                container.innerHTML += `<span class="filter-tag">Country: ${country} <button class="remove-filter-btn" onclick="removeFilter('country', '${country}')">×</button></span>`;
+            });
+        }
+        if (regions.length > 0) {
+            regions.forEach(region => {
+                container.innerHTML += `<span class="filter-tag">Region: ${region} <button class="remove-filter-btn" onclick="removeFilter('region', '${region}')">×</button></span>`;
+            });
+        }
+        if (impacts.length > 0) {
+            impacts.forEach(impact => {
+                container.innerHTML += `<span class="filter-tag">Impact: ${impact} <button class="remove-filter-btn" onclick="removeFilter('impact', '${impact}')">×</button></span>`;
+            });
+        }
+        if (severities.length > 0) {
+            severities.forEach(severity => {
+                const severityName = severity === '4' ? 'Critical' : severity === '3' ? 'High' : severity === '2' ? 'Medium' : severity === '1' ? 'Low' : 'Unknown';
+                container.innerHTML += `<span class="filter-tag">Severity: ${severityName} <button class="remove-filter-btn" onclick="removeFilter('severity', '${severity}')">×</button></span>`;
+            });
+        }
+        if (ticketTypes.length > 0) {
+            ticketTypes.forEach(type => {
+                const displayType = type.startsWith('METCIRT') ? type.replace(/^METCIRT[_\-\s]*/i, '') : type;
+                container.innerHTML += `<span class="filter-tag">Type: ${displayType} <button class="remove-filter-btn" onclick="removeFilter('ticketType', '${type}')">×</button></span>`;
+            });
+        }
+        if (statuses.length > 0) {
+            statuses.forEach(status => {
+                const statusName = status === '0' ? 'Pending' : status === '1' ? 'Active' : status === '2' ? 'Closed' : 'Unknown';
+                container.innerHTML += `<span class="filter-tag">Status: ${statusName} <button class="remove-filter-btn" onclick="removeFilter('status', '${status}')">×</button></span>`;
+            });
+        }
+        if (automationLevels.length > 0) {
+            automationLevels.forEach(automation => {
+                const displayAutomation = automation === 'Semi-Automated' ? 'Semi-Auto' : automation;
+                container.innerHTML += `<span class="filter-tag">Automation: ${displayAutomation} <button class="remove-filter-btn" onclick="removeFilter('automation', '${automation}')">×</button></span>`;
+            });
+        }
     }
 
-    // MTTC filter
-    if (mttcFilter > 0) {
-        const mttcText = mttcFilter === 1 ? 'MTTC ≤5 mins' : mttcFilter === 2 ? 'MTTC ≤15 mins' : mttcFilter === 3 ? 'MTTC >15 mins' : 'All MTTC';
-        container.innerHTML += `<span class="filter-tag">${mttcText} <button class="remove-filter-btn" onclick="removeFilter('mttc', '${mttcFilter}')">×</button></span>`;
+    function removeFilter(filterType, value) {
+        if (filterType === 'country') {
+            const checkbox = document.querySelector(`#countryFilter input[value="${value}"]`);
+            if (checkbox) checkbox.checked = false;
+        } else if (filterType === 'region') {
+            const checkbox = document.querySelector(`#regionFilter input[value="${value}"]`);
+            if (checkbox) checkbox.checked = false;
+        } else if (filterType === 'impact') {
+            const checkbox = document.querySelector(`#impactFilter input[value="${value}"]`);
+            if (checkbox) checkbox.checked = false;
+        } else if (filterType === 'severity') {
+            const checkbox = document.querySelector(`#severityFilter input[value="${value}"]`);
+            if (checkbox) checkbox.checked = false;
+        } else if (filterType === 'ticketType') {
+            const checkbox = document.querySelector(`#ticketTypeFilter input[value="${value}"]`);
+            if (checkbox) checkbox.checked = false;
+        } else if (filterType === 'status') {
+            const checkbox = document.querySelector(`#statusFilter input[value="${value}"]`);
+            if (checkbox) checkbox.checked = false;
+        } else if (filterType === 'automation') {
+            const checkbox = document.querySelector(`#automationFilter input[value="${value}"]`);
+            if (checkbox) checkbox.checked = false;
+        } else if (filterType === 'mttr') {
+            const mttrSlider = document.getElementById('mttrRangeSlider');
+            if (mttrSlider) {
+                mttrSlider.value = 0;
+                updateMttrSliderLabels(0);
+            }
+        } else if (filterType === 'mttc') {
+            const mttcSlider = document.getElementById('mttcRangeSlider');
+            if (mttcSlider) {
+                mttcSlider.value = 0;
+                updateMttcSliderLabels(0);
+            }
+        } else if (filterType === 'age') {
+            const ageSlider = document.getElementById('ageRangeSlider');
+            if (ageSlider) {
+                ageSlider.value = 0;
+                updateAgeSliderLabels(0);
+            }
+        }
+
+        // Re-apply filters
+        applyFilters();
     }
 
-    // Age filter
-    if (ageFilter > 0) {
-        const ageText = ageFilter === 1 ? 'Age >1 day' : `Age >${ageFilter} days`;
-        container.innerHTML += `<span class="filter-tag">${ageText} <button class="remove-filter-btn" onclick="removeFilter('age', '${ageFilter}')">×</button></span>`;
-    }
+    function resetFilters() {
+        // Reset date range slider to default (30 days)
+        const dateSlider = document.getElementById('dateRangeSlider');
+        if (dateSlider) {
+            dateSlider.value = 30;
+            updateSliderLabels(30);
+        }
 
-    // Add other filters if selected
-    if (countries.length > 0) {
-        countries.forEach(country => {
-            container.innerHTML += `<span class="filter-tag">Country: ${country} <button class="remove-filter-btn" onclick="removeFilter('country', '${country}')">×</button></span>`;
-        });
-    }
-    if (regions.length > 0) {
-        regions.forEach(region => {
-            container.innerHTML += `<span class="filter-tag">Region: ${region} <button class="remove-filter-btn" onclick="removeFilter('region', '${region}')">×</button></span>`;
-        });
-    }
-    if (impacts.length > 0) {
-        impacts.forEach(impact => {
-            container.innerHTML += `<span class="filter-tag">Impact: ${impact} <button class="remove-filter-btn" onclick="removeFilter('impact', '${impact}')">×</button></span>`;
-        });
-    }
-    if (severities.length > 0) {
-        severities.forEach(severity => {
-            const severityName = severity === '4' ? 'Critical' : severity === '3' ? 'High' : severity === '2' ? 'Medium' : severity === '1' ? 'Low' : 'Unknown';
-            container.innerHTML += `<span class="filter-tag">Severity: ${severityName} <button class="remove-filter-btn" onclick="removeFilter('severity', '${severity}')">×</button></span>`;
-        });
-    }
-    if (ticketTypes.length > 0) {
-        ticketTypes.forEach(type => {
-            const displayType = type.startsWith('METCIRT') ? type.replace(/^METCIRT[_\-\s]*/i, '') : type;
-            container.innerHTML += `<span class="filter-tag">Type: ${displayType} <button class="remove-filter-btn" onclick="removeFilter('ticketType', '${type}')">×</button></span>`;
-        });
-    }
-    if (statuses.length > 0) {
-        statuses.forEach(status => {
-            const statusName = status === '0' ? 'Pending' : status === '1' ? 'Active' : status === '2' ? 'Closed' : 'Unknown';
-            container.innerHTML += `<span class="filter-tag">Status: ${statusName} <button class="remove-filter-btn" onclick="removeFilter('status', '${status}')">×</button></span>`;
-        });
-    }
-    if (automationLevels.length > 0) {
-        automationLevels.forEach(automation => {
-            const displayAutomation = automation === 'Semi-Automated' ? 'Semi-Auto' : automation;
-            container.innerHTML += `<span class="filter-tag">Automation: ${displayAutomation} <button class="remove-filter-btn" onclick="removeFilter('automation', '${automation}')">×</button></span>`;
-        });
-    }
-}
-
-function removeFilter(filterType, value) {
-    if (filterType === 'country') {
-        const checkbox = document.querySelector(`#countryFilter input[value="${value}"]`);
-        if (checkbox) checkbox.checked = false;
-    } else if (filterType === 'region') {
-        const checkbox = document.querySelector(`#regionFilter input[value="${value}"]`);
-        if (checkbox) checkbox.checked = false;
-    } else if (filterType === 'impact') {
-        const checkbox = document.querySelector(`#impactFilter input[value="${value}"]`);
-        if (checkbox) checkbox.checked = false;
-    } else if (filterType === 'severity') {
-        const checkbox = document.querySelector(`#severityFilter input[value="${value}"]`);
-        if (checkbox) checkbox.checked = false;
-    } else if (filterType === 'ticketType') {
-        const checkbox = document.querySelector(`#ticketTypeFilter input[value="${value}"]`);
-        if (checkbox) checkbox.checked = false;
-    } else if (filterType === 'status') {
-        const checkbox = document.querySelector(`#statusFilter input[value="${value}"]`);
-        if (checkbox) checkbox.checked = false;
-    } else if (filterType === 'automation') {
-        const checkbox = document.querySelector(`#automationFilter input[value="${value}"]`);
-        if (checkbox) checkbox.checked = false;
-    } else if (filterType === 'mttr') {
+        // Reset MTTR range slider to default (All, position 0)
         const mttrSlider = document.getElementById('mttrRangeSlider');
         if (mttrSlider) {
             mttrSlider.value = 0;
             updateMttrSliderLabels(0);
         }
-    } else if (filterType === 'mttc') {
+
+        // Reset MTTC range slider to default (All, position 0)
         const mttcSlider = document.getElementById('mttcRangeSlider');
         if (mttcSlider) {
             mttcSlider.value = 0;
             updateMttcSliderLabels(0);
         }
-    } else if (filterType === 'age') {
+
+        // Reset age range slider to default (All, value 0)
         const ageSlider = document.getElementById('ageRangeSlider');
         if (ageSlider) {
             ageSlider.value = 0;
-            updateAgeSliderLabels(0);
+            updateSliderTooltip('ageRangeSlider', 'ageRangeTooltip', 0, formatAgeValue);
         }
+
+        // Uncheck all checkboxes
+        document.querySelectorAll('#countryFilter input, #impactFilter input, #severityFilter input, #ticketTypeFilter input, #statusFilter input, #automationFilter input').forEach(checkbox => {
+            checkbox.checked = false;
+        });
+
+        // Re-apply filters
+        applyFilters();
     }
 
-    // Re-apply filters
-    applyFilters();
-}
-
-function resetFilters() {
-    // Reset date range slider to default (30 days)
-    const dateSlider = document.getElementById('dateRangeSlider');
-    if (dateSlider) {
-        dateSlider.value = 30;
-        updateSliderLabels(30);
+    function updateDashboard() {
+        updateMetrics();
+        updateCharts();
+        updateTable();
+        showDashboard();
     }
 
-    // Reset MTTR range slider to default (All, position 0)
-    const mttrSlider = document.getElementById('mttrRangeSlider');
-    if (mttrSlider) {
-        mttrSlider.value = 0;
-        updateMttrSliderLabels(0);
+    function calculatePeriodMetrics(data) {
+        const totalIncidents = data.length;
+
+        const responseSlaBreaches = data.filter(item => {
+            return item.has_breached_response_sla === true;
+        }).length;
+
+        const containmentSlaBreaches = data.filter(item => {
+            const hasHost = item.hostname && item.hostname.trim() !== '' && item.hostname !== 'Unknown';
+            return hasHost && item.has_breached_containment_sla === true;
+        }).length;
+
+        const openIncidents = data.filter(item => item.is_open).length;
+
+        // Calculate MTTR
+        const casesWithOwnerAndTimeToRespond = data.filter(item => item.owner && item.owner.trim() !== '' && item.time_to_respond_secs && item.time_to_respond_secs > 0);
+        const mttr = casesWithOwnerAndTimeToRespond.length > 0 ? casesWithOwnerAndTimeToRespond.reduce((sum, item) => sum + item.time_to_respond_secs, 0) / casesWithOwnerAndTimeToRespond.length : 0;
+
+        // Calculate MTTC
+        const casesWithOwnerAndTimeToContain = data.filter(item => item.has_hostname && item.time_to_contain_secs && item.time_to_contain_secs > 0);
+        const mttc = casesWithOwnerAndTimeToContain.length > 0 ? casesWithOwnerAndTimeToContain.reduce((sum, item) => sum + item.time_to_contain_secs, 0) / casesWithOwnerAndTimeToContain.length : 0;
+
+        const uniqueCountries = new Set(data.map(item => item.affected_country)).size;
+
+        return {
+            totalIncidents,
+            responseSlaBreaches,
+            containmentSlaBreaches,
+            openIncidents,
+            mttr,
+            mttc,
+            uniqueCountries,
+            casesWithOwnerAndTimeToRespond: casesWithOwnerAndTimeToRespond.length,
+            casesWithOwnerAndTimeToContain: casesWithOwnerAndTimeToContain.length
+        };
     }
 
-    // Reset MTTC range slider to default (All, position 0)
-    const mttcSlider = document.getElementById('mttcRangeSlider');
-    if (mttcSlider) {
-        mttcSlider.value = 0;
-        updateMttcSliderLabels(0);
+    function calculatePreviousPeriodMetrics() {
+        // Get current date range setting
+        const dateSlider = document.getElementById('dateRangeSlider');
+        const dateRange = parseInt(dateSlider.value) || 30;
+
+        // For longer periods (60, 90 days), we likely don't have enough historical data
+        // Only show deltas for 7 and 30 day periods
+        if (dateRange > 30) {
+            return null; // No previous period comparison available
+        }
+
+        // Calculate previous period dates
+        const now = new Date();
+        const currentPeriodStart = new Date(now);
+        currentPeriodStart.setDate(currentPeriodStart.getDate() - dateRange);
+
+        const previousPeriodStart = new Date(currentPeriodStart);
+        previousPeriodStart.setDate(previousPeriodStart.getDate() - dateRange);
+        const previousPeriodEnd = currentPeriodStart;
+
+        // Filter data for previous period
+        const previousPeriodData = allData.filter(item => {
+            const createdDate = new Date(item.created);
+            return createdDate >= previousPeriodStart && createdDate < previousPeriodEnd;
+        });
+
+        // Only return metrics if we have reasonable data in the previous period
+        if (previousPeriodData.length < 5) {
+            return null; // Not enough data for meaningful comparison
+        }
+
+        return calculatePeriodMetrics(previousPeriodData);
     }
 
-    // Reset age range slider to default (All, value 0)
-    const ageSlider = document.getElementById('ageRangeSlider');
-    if (ageSlider) {
-        ageSlider.value = 0;
-        updateSliderTooltip('ageRangeSlider', 'ageRangeTooltip', 0, formatAgeValue);
+    function createDeltaBadge(currentValue, previousValue, isPercentage = false, reverse = false, isTime = false) {
+        // Check feature flag
+        if (!should_show_delta_values) {
+            return '';
+        }
+
+        // No badge if no previous data available
+        if (previousValue === null || previousValue === undefined) {
+            return '';
+        }
+
+        // Handle zero values separately
+        if (previousValue === 0) {
+            return '';
+        }
+
+        const delta = currentValue - previousValue;
+        const percentChange = (delta / previousValue) * 100;
+
+        if (delta === 0) {
+            const tooltipAttr = should_show_card_tooltips ? 'title="No change vs previous period"' : '';
+            return `<span class="delta-badge neutral" ${tooltipAttr}>±0 vs prev</span>`;
+        }
+
+        const isImprovement = reverse ? delta < 0 : delta > 0;
+        const badgeClass = isImprovement ? 'improvement' : 'regression';
+        const sign = delta > 0 ? '+' : '';
+        const direction = delta > 0 ? '↑' : '↓';
+
+        // Format time values in min:sec format
+        const formatTime = (seconds) => {
+            if (seconds === 0) return '0:00';
+            const mins = Math.floor(Math.abs(seconds) / 60);
+            const secs = Math.round(Math.abs(seconds) % 60);
+            return `${mins}:${secs.toString().padStart(2, '0')}`;
+        };
+
+        let displayValue, tooltipValue, previousDisplayValue;
+
+        if (isTime) {
+            displayValue = formatTime(delta);
+            tooltipValue = `${sign}${formatTime(delta)}`;
+            previousDisplayValue = formatTime(previousValue);
+        } else {
+            displayValue = Math.abs(delta).toLocaleString();
+            tooltipValue = `${sign}${delta.toLocaleString()}`;
+            previousDisplayValue = previousValue.toLocaleString();
+        }
+
+        const tooltipText = `Change vs previous period: ${tooltipValue} (${sign}${percentChange.toFixed(1)}%, was: ${previousDisplayValue})`;
+        const tooltipAttr = should_show_card_tooltips ? `title="${tooltipText}"` : '';
+
+        return `<span class="delta-badge ${badgeClass}" ${tooltipAttr}>${direction}${displayValue} vs prev</span>`;
     }
 
-    // Uncheck all checkboxes
-    document.querySelectorAll('#countryFilter input, #impactFilter input, #severityFilter input, #ticketTypeFilter input, #statusFilter input, #automationFilter input').forEach(checkbox => {
-        checkbox.checked = false;
-    });
+    function updateMetrics() {
+        // Calculate current period metrics
+        const currentMetrics = calculatePeriodMetrics(filteredData);
 
-    // Re-apply filters
-    applyFilters();
-}
+        // Calculate previous period metrics for comparison
+        const previousMetrics = calculatePreviousPeriodMetrics();
 
-function updateDashboard() {
-    updateMetrics();
-    updateCharts();
-    updateTable();
-    showDashboard();
-}
+        // Convert seconds to mins:secs format for display
+        const formatTime = (seconds) => {
+            if (seconds === 0) return '0:00';
+            const mins = Math.floor(seconds / 60);
+            const secs = Math.round(seconds % 60);
+            return `${mins}:${secs.toString().padStart(2, '0')}`;
+        };
 
-function calculatePeriodMetrics(data) {
-    const totalIncidents = data.length;
+        const mttrFormatted = formatTime(currentMetrics.mttr);
+        const mttcFormatted = formatTime(currentMetrics.mttc);
 
-    const responseSlaBreaches = data.filter(item => {
-        return item.has_breached_response_sla === true;
-    }).length;
-
-    const containmentSlaBreaches = data.filter(item => {
-        const hasHost = item.hostname && item.hostname.trim() !== '' && item.hostname !== 'Unknown';
-        return hasHost && item.has_breached_containment_sla === true;
-    }).length;
-
-    const openIncidents = data.filter(item => item.is_open).length;
-
-    // Calculate MTTR
-    const casesWithOwnerAndTimeToRespond = data.filter(item => item.owner && item.owner.trim() !== '' && item.time_to_respond_secs && item.time_to_respond_secs > 0);
-    const mttr = casesWithOwnerAndTimeToRespond.length > 0 ? casesWithOwnerAndTimeToRespond.reduce((sum, item) => sum + item.time_to_respond_secs, 0) / casesWithOwnerAndTimeToRespond.length : 0;
-
-    // Calculate MTTC
-    const casesWithOwnerAndTimeToContain = data.filter(item => item.has_hostname && item.time_to_contain_secs && item.time_to_contain_secs > 0);
-    const mttc = casesWithOwnerAndTimeToContain.length > 0 ? casesWithOwnerAndTimeToContain.reduce((sum, item) => sum + item.time_to_contain_secs, 0) / casesWithOwnerAndTimeToContain.length : 0;
-
-    const uniqueCountries = new Set(data.map(item => item.affected_country)).size;
-
-    return {
-        totalIncidents,
-        responseSlaBreaches,
-        containmentSlaBreaches,
-        openIncidents,
-        mttr,
-        mttc,
-        uniqueCountries,
-        casesWithOwnerAndTimeToRespond: casesWithOwnerAndTimeToRespond.length,
-        casesWithOwnerAndTimeToContain: casesWithOwnerAndTimeToContain.length
-    };
-}
-
-function calculatePreviousPeriodMetrics() {
-    // Get current date range setting
-    const dateSlider = document.getElementById('dateRangeSlider');
-    const dateRange = parseInt(dateSlider.value) || 30;
-
-    // For longer periods (60, 90 days), we likely don't have enough historical data
-    // Only show deltas for 7 and 30 day periods
-    if (dateRange > 30) {
-        return null; // No previous period comparison available
-    }
-
-    // Calculate previous period dates
-    const now = new Date();
-    const currentPeriodStart = new Date(now);
-    currentPeriodStart.setDate(currentPeriodStart.getDate() - dateRange);
-
-    const previousPeriodStart = new Date(currentPeriodStart);
-    previousPeriodStart.setDate(previousPeriodStart.getDate() - dateRange);
-    const previousPeriodEnd = currentPeriodStart;
-
-    // Filter data for previous period
-    const previousPeriodData = allData.filter(item => {
-        const createdDate = new Date(item.created);
-        return createdDate >= previousPeriodStart && createdDate < previousPeriodEnd;
-    });
-
-    // Only return metrics if we have reasonable data in the previous period
-    if (previousPeriodData.length < 5) {
-        return null; // Not enough data for meaningful comparison
-    }
-
-    return calculatePeriodMetrics(previousPeriodData);
-}
-
-function createDeltaBadge(currentValue, previousValue, isPercentage = false, reverse = false, isTime = false) {
-    // Check feature flag
-    if (!should_show_delta_values) {
-        return '';
-    }
-
-    // No badge if no previous data available
-    if (previousValue === null || previousValue === undefined) {
-        return '';
-    }
-
-    // Handle zero values separately
-    if (previousValue === 0) {
-        return '';
-    }
-
-    const delta = currentValue - previousValue;
-    const percentChange = (delta / previousValue) * 100;
-
-    if (delta === 0) {
-        const tooltipAttr = should_show_card_tooltips ? 'title="No change vs previous period"' : '';
-        return `<span class="delta-badge neutral" ${tooltipAttr}>±0 vs prev</span>`;
-    }
-
-    const isImprovement = reverse ? delta < 0 : delta > 0;
-    const badgeClass = isImprovement ? 'improvement' : 'regression';
-    const sign = delta > 0 ? '+' : '';
-    const direction = delta > 0 ? '↑' : '↓';
-
-    // Format time values in min:sec format
-    const formatTime = (seconds) => {
-        if (seconds === 0) return '0:00';
-        const mins = Math.floor(Math.abs(seconds) / 60);
-        const secs = Math.round(Math.abs(seconds) % 60);
-        return `${mins}:${secs.toString().padStart(2, '0')}`;
-    };
-
-    let displayValue, tooltipValue, previousDisplayValue;
-
-    if (isTime) {
-        displayValue = formatTime(delta);
-        tooltipValue = `${sign}${formatTime(delta)}`;
-        previousDisplayValue = formatTime(previousValue);
-    } else {
-        displayValue = Math.abs(delta).toLocaleString();
-        tooltipValue = `${sign}${delta.toLocaleString()}`;
-        previousDisplayValue = previousValue.toLocaleString();
-    }
-
-    const tooltipText = `Change vs previous period: ${tooltipValue} (${sign}${percentChange.toFixed(1)}%, was: ${previousDisplayValue})`;
-    const tooltipAttr = should_show_card_tooltips ? `title="${tooltipText}"` : '';
-
-    return `<span class="delta-badge ${badgeClass}" ${tooltipAttr}>${direction}${displayValue} vs prev</span>`;
-}
-
-function updateMetrics() {
-    // Calculate current period metrics
-    const currentMetrics = calculatePeriodMetrics(filteredData);
-
-    // Calculate previous period metrics for comparison
-    const previousMetrics = calculatePreviousPeriodMetrics();
-
-    // Convert seconds to mins:secs format for display
-    const formatTime = (seconds) => {
-        if (seconds === 0) return '0:00';
-        const mins = Math.floor(seconds / 60);
-        const secs = Math.round(seconds % 60);
-        return `${mins}:${secs.toString().padStart(2, '0')}`;
-    };
-
-    const mttrFormatted = formatTime(currentMetrics.mttr);
-    const mttcFormatted = formatTime(currentMetrics.mttc);
-
-    document.getElementById('metricsGrid').innerHTML = `
+        document.getElementById('metricsGrid').innerHTML = `
         <div class="metric-card">
             <div class="metric-title">🎫 Total Cases</div>
             <div class="metric-value">
@@ -968,226 +982,757 @@ function updateMetrics() {
             </div>
         </div>
     `;
-}
+    }
 
 
 // Reusable Plotly helper to minimize flicker and reuse DOM
-function safePlot(chartId, data, layout, config = sharedPlotlyConfig) {
-    const el = document.getElementById(chartId);
-    if (!el) return;
-    try {
-        if (el.data && el.layout) {
-            Plotly.react(el, data, layout, config);
-        } else {
-            Plotly.newPlot(el, data, layout, config);
-        }
-    } catch (e) {
+    function safePlot(chartId, data, layout, config = sharedPlotlyConfig) {
+        const el = document.getElementById(chartId);
+        if (!el) return;
         try {
-            Plotly.newPlot(el, data, layout, config);
-        } catch (_) {
+            if (el.data && el.layout) {
+                Plotly.react(el, data, layout, config);
+            } else {
+                Plotly.newPlot(el, data, layout, config);
+            }
+        } catch (e) {
+            try {
+                Plotly.newPlot(el, data, layout, config);
+            } catch (_) {
+            }
         }
     }
-}
 
-function updateCharts() {
-    const chartIds = ['geoChart', 'severityChart', 'timelineChart', 'ticketTypeChart', 'heatmapChart', 'funnelChart'];
-    if (filteredData.length === 0) {
-        // Mark all chart containers as empty with skeleton + watermark
+    function updateCharts() {
+        const chartIds = ['geoChart', 'severityChart', 'timelineChart', 'ticketTypeChart', 'heatmapChart', 'funnelChart'];
+        if (filteredData.length === 0) {
+            // Mark all chart containers as empty with skeleton + watermark
+            chartIds.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) {
+                    try {
+                        if (el.data) Plotly.purge(el);
+                    } catch (e) {
+                    }
+                    el.innerHTML = '';
+                    const container = el.closest('.chart-container');
+                    if (container) container.classList.add('empty');
+                }
+            });
+            return;
+        }
+        // Remove empty state before drawing
         chartIds.forEach(id => {
             const el = document.getElementById(id);
             if (el) {
-                try {
-                    if (el.data) Plotly.purge(el);
-                } catch (e) {
-                }
-                el.innerHTML = '';
                 const container = el.closest('.chart-container');
-                if (container) container.classList.add('empty');
+                if (container) container.classList.remove('empty');
             }
         });
-        return;
+        createGeoChart();
+        createTicketTypeChart();
+        createTimelineChart();
+        createImpactChart();
+        createOwnerChart();
+        createFunnelChart();
     }
-    // Remove empty state before drawing
-    chartIds.forEach(id => {
-        const el = document.getElementById(id);
-        if (el) {
-            const container = el.closest('.chart-container');
-            if (container) container.classList.remove('empty');
-        }
-    });
-    createGeoChart();
-    createTicketTypeChart();
-    createTimelineChart();
-    createImpactChart();
-    createOwnerChart();
-    createFunnelChart();
-}
 
 // Re-implement createGeoChart with shared config
-createGeoChart = function () {
-    const counts = {};
-    filteredData.forEach(item => {
-        const country = item.affected_country || 'Unknown';
-        counts[country] = (counts[country] || 0) + 1;
-    });
-    const sortedEntries = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 10);
-    const trace = {
-        x: sortedEntries.map(e => e[1]),
-        y: sortedEntries.map(e => e[0]),
-        type: 'bar',
-        orientation: 'h',
-        marker: {color: colorSchemes.countries, line: {color: 'rgba(255,255,255,0.8)', width: 1}},
-        hovertemplate: '<b>%{y}</b><br>Incidents: %{x}<extra></extra>'
-    };
-    const layout = commonLayout({margin: {l: 120, r: 40, t: 40, b: 40}, showlegend: false});
-    safePlot('geoChart', [trace], layout);
-}
+    createGeoChart = function () {
+        const counts = {};
+        filteredData.forEach(item => {
+            const country = item.affected_country || 'Unknown';
+            counts[country] = (counts[country] || 0) + 1;
+        });
+        const sortedEntries = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 10);
+        const trace = {
+            x: sortedEntries.map(e => e[1]),
+            y: sortedEntries.map(e => e[0]),
+            type: 'bar',
+            orientation: 'h',
+            marker: {color: colorSchemes.countries, line: {color: 'rgba(255,255,255,0.8)', width: 1}},
+            hovertemplate: '<b>%{y}</b><br>Incidents: %{x}<extra></extra>'
+        };
+        const layout = commonLayout({margin: {l: 120, r: 40, t: 40, b: 40}, showlegend: false});
+        safePlot('geoChart', [trace], layout);
+    }
 
-function createTimelineChart() {
-    const dailyInflow = {};
-    const dailyOutflow = {};
-    filteredData.forEach(item => {
-        if (item.owner && item.owner.trim() !== '') {
-            if (item.created && item.created.trim() !== '') {
-                const createdDate = new Date(item.created);
-                if (!isNaN(createdDate.getTime()) && createdDate.getFullYear() >= 2020) {
-                    const date = createdDate.toISOString().split('T')[0];
-                    dailyInflow[date] = (dailyInflow[date] || 0) + 1;
+    function createTimelineChart() {
+        const dailyInflow = {};
+        const dailyOutflow = {};
+        filteredData.forEach(item => {
+            if (item.owner && item.owner.trim() !== '') {
+                if (item.created && item.created.trim() !== '') {
+                    const createdDate = new Date(item.created);
+                    if (!isNaN(createdDate.getTime()) && createdDate.getFullYear() >= 2020) {
+                        const date = createdDate.toISOString().split('T')[0];
+                        dailyInflow[date] = (dailyInflow[date] || 0) + 1;
+                    }
+                }
+                if (item.closed && item.closed.trim() !== '') {
+                    const closedDate = new Date(item.closed);
+                    if (!isNaN(closedDate.getTime()) && closedDate.getFullYear() >= 2020) {
+                        const date = closedDate.toISOString().split('T')[0];
+                        dailyOutflow[date] = (dailyOutflow[date] || 0) + 1;
+                    }
                 }
             }
-            if (item.closed && item.closed.trim() !== '') {
-                const closedDate = new Date(item.closed);
-                if (!isNaN(closedDate.getTime()) && closedDate.getFullYear() >= 2020) {
-                    const date = closedDate.toISOString().split('T')[0];
-                    dailyOutflow[date] = (dailyOutflow[date] || 0) + 1;
+        });
+        const allDates = [...new Set([...Object.keys(dailyInflow), ...Object.keys(dailyOutflow)])].sort();
+        const traces = [{
+            x: allDates,
+            y: allDates.map(d => dailyInflow[d] || 0),
+            type: 'scatter',
+            mode: 'lines+markers',
+            name: 'Inflow (Acknowledged by Analyst)',
+            line: {color: '#007bff', width: 3},
+            marker: {color: '#007bff', size: 6},
+            hovertemplate: '<b>%{x}</b><br>Created: %{y}<extra></extra>'
+        }, {
+            x: allDates,
+            y: allDates.map(d => dailyOutflow[d] || 0),
+            type: 'scatter',
+            mode: 'lines+markers',
+            name: 'Outflow (Closed by Analyst)',
+            line: {color: '#28a745', width: 3},
+            marker: {color: '#28a745', size: 6},
+            hovertemplate: '<b>%{x}</b><br>Closed: %{y}<extra></extra>'
+        }];
+        const layout = commonLayout({
+            legend: {x: 0.5, y: -0.2, xanchor: 'center', orientation: 'h'},
+            margin: {l: 50, r: 10, t: 30, b: 40},
+            yaxis: {title: 'Number of Cases', gridcolor: getChartColors().grid},
+            xaxis: {gridcolor: getChartColors().grid, tickangle: 90, tickformat: '%m/%d', dtick: 86400000 * 2}
+        });
+        safePlot('timelineChart', traces, layout, {responsive: true, displayModeBar: true, displaylogo: false});
+    }
+
+    function createImpactChart() {
+        const counts = {};
+        filteredData.forEach(item => {
+            const impact = item.impact || 'Unknown';
+            counts[impact] = (counts[impact] || 0) + 1;
+        });
+        const sortedEntries = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+        const trace = {
+            labels: sortedEntries.map(([impact]) => impact),
+            values: sortedEntries.map(([, count]) => count),
+            type: 'pie',
+            hole: 0.3,
+            marker: {colors: colorSchemes.countries, line: {color: 'white', width: 2}},
+            textinfo: 'label+value',
+            textfont: {size: 12, color: getChartColors().font},
+            hovertemplate: '<b>%{label}</b><br>Count: %{value}<br>Percentage: %{percent}<extra></extra>'
+        };
+        const layout = commonLayout({showlegend: false, margin: {l: 10, r: 10, t: 20, b: 20}});
+        safePlot('ticketTypeChart', [trace], layout, {responsive: true, displayModeBar: true, displaylogo: false});
+    }
+
+    function createTicketTypeChart() {
+        const counts = {};
+        filteredData.forEach(item => {
+            const ticketType = item.type || 'Unknown';
+            counts[ticketType] = (counts[ticketType] || 0) + 1;
+        });
+        const sortedEntries = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 8);
+        const trace = {
+            labels: sortedEntries.map(([ticketType]) => ticketType.startsWith('METCIRT') ? ticketType.replace(/^METCIRT[_\-\s]*/i, '') : ticketType),
+            values: sortedEntries.map(([, c]) => c),
+            type: 'pie',
+            hole: 0.6,
+            marker: {colors: colorSchemes.sources, line: {color: 'white', width: 2}},
+            textinfo: 'label+value',
+            textfont: {size: 11, color: getChartColors().font},
+            hovertemplate: '<b>%{label}</b><br>Count: %{value}<br>Percentage: %{percent}<extra></extra>'
+        };
+        const layout = commonLayout({showlegend: false, margin: {l: 20, r: 20, t: 40, b: 40}});
+        safePlot('severityChart', [trace], layout, {responsive: true, displayModeBar: true, displaylogo: false});
+    }
+
+    function createOwnerChart() {
+        const counts = {};
+        filteredData.forEach(item => {
+            if (item.owner && item.owner.trim() !== '') {
+                let owner = item.owner;
+                if (owner.endsWith('@company.com')) owner = owner.replace('@company.com', '');
+                counts[owner] = (counts[owner] || 0) + 1;
+            }
+        });
+        const sortedEntries = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 10);
+        const trace = {
+            x: sortedEntries.map(([, count]) => count),
+            y: sortedEntries.map(([owner]) => owner),
+            type: 'bar',
+            orientation: 'h',
+            text: sortedEntries.map(([, count]) => count),
+            textposition: 'inside',
+            textfont: {color: 'white', size: 12},
+            marker: {
+                color: sortedEntries.map((_, i) => colorSchemes.sources[i % colorSchemes.sources.length]), line: {color: 'rgba(255,255,255,0.8)', width: 1}
+            },
+            hovertemplate: '<b>%{y}</b><br>Cases: %{x}<extra></extra>'
+        };
+        const layout = commonLayout({showlegend: false, margin: {l: 120, r: 40, t: 20, b: 40}, xaxis: {title: 'Number of Cases', gridcolor: getChartColors().grid}, yaxis: {gridcolor: getChartColors().grid}});
+        safePlot('heatmapChart', [trace], layout, {responsive: true, displayModeBar: true, displaylogo: false});
+    }
+
+    function createFunnelChart() {
+        const totalCases = filteredData.length;
+        const assignedCases = filteredData.filter(i => i.owner && i.owner.trim() !== '').length;
+        const maliciousTruePositives = filteredData.filter(i => i.impact === 'Malicious True Positive').length;
+        const trace = {
+            type: 'funnel',
+            y: ['All Cases', 'Assigned Cases', 'Malicious True Positive'],
+            x: [totalCases, assignedCases, maliciousTruePositives],
+            textinfo: 'value+percent initial',
+            marker: {color: ['#4472C4', '#70AD47', '#C5504B'], line: {color: 'white', width: 2}},
+            hovertemplate: '<b>%{y}</b><br>Count: %{x}<br>Percentage: %{percentInitial}<extra></extra>'
+        };
+        const layout = commonLayout({showlegend: false, margin: {l: 150, r: 40, t: 20, b: 40}});
+        safePlot('funnelChart', [trace], layout, {responsive: true, displayModeBar: true, displaylogo: false});
+    }
+
+    let lastTableRowCount = null; // Tracks last announced row count for accessibility
+    function updateTable() {
+        const tbody = document.querySelector('#dataTable tbody');
+        const tableSection = document.getElementById('dataTableSection');
+        if (!tbody || !tableSection) return;
+
+        // Empty state handling: show shimmer + NO DATA watermark (CSS already defined)
+        if (filteredData.length === 0) {
+            tbody.innerHTML = '';
+            if (!tableSection.classList.contains('empty')) {
+                tableSection.classList.add('empty');
+            }
+            if (lastTableRowCount !== 0) {
+                announceTableStatus('No cases match the current filters. Adjust filters to see results.');
+                lastTableRowCount = 0;
+            }
+            return; // Nothing else to render
+        } else {
+            tableSection.classList.remove('empty');
+        }
+
+        tbody.innerHTML = '';
+
+        // Sort the filtered data before displaying
+        const sortedData = sortData(filteredData);
+        const total = filteredData.length;
+        if (total <= 100 && showAllRows) {
+            // Auto-reset if filters reduced total
+            showAllRows = false;
+        }
+        const limit = showAllRows ? total : 100;
+        const displayData = sortedData.slice(0, limit); // Limit to 100 rows for performance
+
+        displayData.forEach(item => {
+            const row = document.createElement('tr');
+
+            // Use column order, but only show visible columns
+            const orderedVisibleColumns = columnOrder.filter(col => visibleColumns.includes(col));
+
+            orderedVisibleColumns.forEach(columnId => {
+                const column = availableColumns[columnId];
+                if (column) {
+                    const td = document.createElement('td');
+                    let value = getNestedValue(item, column.path);
+
+                    // Format the value based on type
+                    if (value !== null && value !== undefined) {
+                        switch (column.type) {
+                            case 'date':
+                                if (value) {
+                                    const date = new Date(value);
+                                    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+                                    const day = date.getDate().toString().padStart(2, '0');
+                                    const year = date.getFullYear();
+                                    td.textContent = `${month}/${day}/${year}`;
+                                }
+                                break;
+                            case 'duration':
+                                td.style.textAlign = 'right';
+                                td.classList.add('duration-column');
+                                if (value && value > 0) {
+                                    const minutes = Math.floor(value / 60);
+                                    const seconds = Math.round(value % 60);
+                                    td.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+                                } else {
+                                    td.textContent = '--';
+                                }
+                                break;
+                            case 'number':
+                                if (columnId === 'id') {
+                                    td.innerHTML = `<a href="https://msoar.crtx.us.paloaltonetworks.com/Custom/caseinfoid/${value}" target="_blank" style="color: #0046ad; text-decoration: underline;">${value}</a>`;
+                                } else if (columnId === 'severity') {
+                                    const severityMap = {0: 'Unknown', 1: 'Low', 2: 'Medium', 3: 'High', 4: 'Critical'};
+                                    const severity = severityMap[value] || 'Unknown';
+                                    td.innerHTML = `<span class="severity-${severity.toLowerCase()}">${severity}</span>`;
+                                } else if (columnId === 'status') {
+                                    const statusMap = {0: 'Pending', 1: 'Active', 2: 'Closed'};
+                                    const status = statusMap[value] || 'Unknown';
+                                    td.innerHTML = `<span class="status-${status.toLowerCase()}">${status}</span>`;
+                                } else if (columnId === 'currently_aging_days') {
+                                    td.style.textAlign = 'center';
+                                    if (value === null || value === undefined) {
+                                        td.textContent = '--';
+                                        td.style.color = '#6c757d';
+                                    } else {
+                                        td.textContent = value;
+                                    }
+                                } else {
+                                    td.textContent = value;
+                                }
+                                break;
+                            default:
+                                if (columnId === 'name' && value.length > 50) {
+                                    td.innerHTML = `<span title="${value}">${value.substring(0, 50)}...</span>`;
+                                } else {
+                                    td.textContent = value || '';
+                                }
+                        }
+                    } else {
+                        td.textContent = '';
+                    }
+
+                    row.appendChild(td);
                 }
+            });
+
+            tbody.appendChild(row);
+        });
+
+        // Accessibility announcement only if count changed materially
+        if (lastTableRowCount !== filteredData.length) {
+            const total = filteredData.length;
+            const shown = displayData.length;
+            const msg = total > shown ? `Showing first ${shown} of ${total} cases.` : `Showing ${shown} case${shown === 1 ? '' : 's'}.`;
+            announceTableStatus(msg);
+            lastTableRowCount = filteredData.length;
+        }
+    }
+
+    function exportToCSV() {
+        const headers = ['ID', 'Name', 'Severity', 'Status', 'Country', 'Impact', 'Type', 'Created'];
+        const severityMap = {0: 'Unknown', 1: 'Low', 2: 'Medium', 3: 'High', 4: 'Critical'};
+        const statusMap = {0: 'Pending', 1: 'Active', 2: 'Closed'};
+
+        const csvContent = [headers.join(','), ...filteredData.map(item => [item.id, `"${item.name.replace(/"/g, '""')}"`, severityMap[item.severity] || 'Unknown', statusMap[item.status] || 'Unknown', item.affected_country, item.impact, item.type, new Date(item.created).toISOString()].join(','))].join('\n');
+
+        downloadCSV(csvContent, 'security_incidents.csv');
+    }
+
+    function exportSummary() {
+        const totalIncidents = filteredData.length;
+        const criticalIncidents = filteredData.filter(item => item.severity === 4).length;
+        const openIncidents = filteredData.filter(item => item.is_open).length;
+
+        const summaryData = [['Metric', 'Value'], ['Total Incidents', totalIncidents], ['Critical Incidents', criticalIncidents], ['Open Incidents', openIncidents], ['Countries Affected', new Set(filteredData.map(item => item.affected_country)).size], ['Top Country', getMostCommon('affected_country')], ['Top Ticket Type', getMostCommon('type')]];
+
+        const csvContent = summaryData.map(row => row.join(',')).join('\n');
+        downloadCSV(csvContent, 'incident_summary.csv');
+    }
+
+    function getMostCommon(field) {
+        const counts = {};
+        filteredData.forEach(item => {
+            const value = item[field] || 'Unknown';
+            counts[value] = (counts[value] || 0) + 1;
+        });
+
+        return Object.keys(counts).reduce((a, b) => counts[a] > counts[b] ? a : b, 'N/A');
+    }
+
+    function downloadCSV(content, filename) {
+        const blob = new Blob([content], {type: 'text/csv'});
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        a.click();
+        window.URL.revokeObjectURL(url);
+    }
+
+    function hideLoading() {
+        document.getElementById('loading').style.display = 'none';
+    }
+
+    function showError(message) {
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('error').textContent = message;
+        document.getElementById('error').style.display = 'block';
+    }
+
+    function showDashboard() {
+        document.getElementById('metricsGrid').style.display = 'grid';
+        document.getElementById('chartsGrid').style.display = 'grid';
+        document.getElementById('dataTableSection').style.display = 'block';
+
+        // Initialize table headers on first load
+        buildTableHeaders();
+    }
+
+// Navigation functions
+
+
+// Table sorting functions
+    function sortTable(column) {
+        if (currentSort.column === column) {
+            currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
+        } else {
+            currentSort.column = column;
+            currentSort.direction = 'asc';
+        }
+
+        // Save sort preferences to cookies
+        saveSortPreferences();
+
+        // Update sort indicators
+        updateSortIndicators();
+
+        // Re-render table with sorted data
+        updateTable();
+    }
+
+    function updateSortIndicators() {
+        // Clear all sort indicators
+        document.querySelectorAll('.sort-indicator').forEach(indicator => {
+            indicator.textContent = '';
+            indicator.parentElement.classList.remove('sort-asc', 'sort-desc');
+        });
+
+        // Set current sort indicator
+        if (currentSort.column) {
+            const header = document.querySelector(`[data-column="${currentSort.column}"]`);
+            if (header) {
+                const indicator = header.querySelector('.sort-indicator');
+                indicator.textContent = currentSort.direction === 'asc' ? ' ▲' : ' ▼';
+                header.classList.add(currentSort.direction === 'asc' ? 'sort-asc' : 'sort-desc');
             }
         }
-    });
-    const allDates = [...new Set([...Object.keys(dailyInflow), ...Object.keys(dailyOutflow)])].sort();
-    const traces = [{
-        x: allDates,
-        y: allDates.map(d => dailyInflow[d] || 0),
-        type: 'scatter',
-        mode: 'lines+markers',
-        name: 'Inflow (Acknowledged by Analyst)',
-        line: {color: '#007bff', width: 3},
-        marker: {color: '#007bff', size: 6},
-        hovertemplate: '<b>%{x}</b><br>Created: %{y}<extra></extra>'
-    }, {
-        x: allDates,
-        y: allDates.map(d => dailyOutflow[d] || 0),
-        type: 'scatter',
-        mode: 'lines+markers',
-        name: 'Outflow (Closed by Analyst)',
-        line: {color: '#28a745', width: 3},
-        marker: {color: '#28a745', size: 6},
-        hovertemplate: '<b>%{x}</b><br>Closed: %{y}<extra></extra>'
-    }];
-    const layout = commonLayout({
-        legend: {x: 0.5, y: -0.2, xanchor: 'center', orientation: 'h'},
-        margin: {l: 50, r: 10, t: 30, b: 40},
-        yaxis: {title: 'Number of Cases', gridcolor: getChartColors().grid},
-        xaxis: {gridcolor: getChartColors().grid, tickangle: 90, tickformat: '%m/%d', dtick: 86400000 * 2}
-    });
-    safePlot('timelineChart', traces, layout, {responsive: true, displayModeBar: true, displaylogo: false});
-}
+    }
 
-function createImpactChart() {
-    const counts = {};
-    filteredData.forEach(item => {
-        const impact = item.impact || 'Unknown';
-        counts[impact] = (counts[impact] || 0) + 1;
-    });
-    const sortedEntries = Object.entries(counts).sort((a, b) => b[1] - a[1]);
-    const trace = {
-        labels: sortedEntries.map(([impact]) => impact),
-        values: sortedEntries.map(([, count]) => count),
-        type: 'pie',
-        hole: 0.3,
-        marker: {colors: colorSchemes.countries, line: {color: 'white', width: 2}},
-        textinfo: 'label+value',
-        textfont: {size: 12},
-        hovertemplate: '<b>%{label}</b><br>Count: %{value}<br>Percentage: %{percent}<extra></extra>'
-    };
-    const layout = commonLayout({showlegend: false, margin: {l: 10, r: 10, t: 20, b: 20}});
-    safePlot('ticketTypeChart', [trace], layout, {responsive: true, displayModeBar: true, displaylogo: false});
-}
+    function sortData(data) {
+        if (!currentSort.column) return data;
 
-function createTicketTypeChart() {
-    const counts = {};
-    filteredData.forEach(item => {
-        const ticketType = item.type || 'Unknown';
-        counts[ticketType] = (counts[ticketType] || 0) + 1;
-    });
-    const sortedEntries = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 8);
-    const trace = {
-        labels: sortedEntries.map(([ticketType]) => ticketType.startsWith('METCIRT') ? ticketType.replace(/^METCIRT[_\-\s]*/i, '') : ticketType),
-        values: sortedEntries.map(([, c]) => c),
-        type: 'pie',
-        hole: 0.6,
-        marker: {colors: colorSchemes.sources, line: {color: 'white', width: 2}},
-        textinfo: 'label+value',
-        textfont: {size: 11},
-        hovertemplate: '<b>%{label}</b><br>Count: %{value}<br>Percentage: %{percent}<extra></extra>'
-    };
-    const layout = commonLayout({showlegend: false, margin: {l: 20, r: 20, t: 40, b: 40}});
-    safePlot('severityChart', [trace], layout, {responsive: true, displayModeBar: true, displaylogo: false});
-}
+        const column = availableColumns[currentSort.column];
+        if (!column) return data;
 
-function createOwnerChart() {
-    const counts = {};
-    filteredData.forEach(item => {
-        if (item.owner && item.owner.trim() !== '') {
-            let owner = item.owner;
-            if (owner.endsWith('@company.com')) owner = owner.replace('@company.com', '');
-            counts[owner] = (counts[owner] || 0) + 1;
+        return [...data].sort((a, b) => {
+            let aVal = getNestedValue(a, column.path);
+            let bVal = getNestedValue(b, column.path);
+
+            // Handle different data types
+            if (column.type === 'date') {
+                aVal = aVal ? new Date(aVal) : new Date(0);
+                bVal = bVal ? new Date(bVal) : new Date(0);
+            } else if (column.type === 'number' || column.type === 'duration') {
+                aVal = parseInt(aVal) || 0;
+                bVal = parseInt(bVal) || 0;
+            } else {
+                aVal = (aVal || '').toString().toLowerCase();
+                bVal = (bVal || '').toString().toLowerCase();
+            }
+
+            let comparison = 0;
+            if (aVal > bVal) comparison = 1; else if (aVal < bVal) comparison = -1;
+
+            return currentSort.direction === 'asc' ? comparison : -comparison;
+        });
+    }
+
+    function saveSortPreferences() {
+        const preferences = {
+            column: currentSort.column, direction: currentSort.direction
+        };
+        document.cookie = `tableSort=${JSON.stringify(preferences)}; path=/; max-age=${60 * 60 * 24 * 30}`; // 30 days
+    }
+
+    function loadSortPreferences() {
+        const cookies = document.cookie.split(';');
+        const sortCookie = cookies.find(cookie => cookie.trim().startsWith('tableSort='));
+
+        if (sortCookie) {
+            try {
+                const preferences = JSON.parse(sortCookie.split('=')[1]);
+                currentSort.column = preferences.column;
+                currentSort.direction = preferences.direction;
+                updateSortIndicators();
+            } catch (e) {
+                // Invalid cookie, ignore
+            }
         }
-    });
-    const sortedEntries = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 10);
-    const trace = {
-        x: sortedEntries.map(([, count]) => count),
-        y: sortedEntries.map(([owner]) => owner),
-        type: 'bar',
-        orientation: 'h',
-        text: sortedEntries.map(([, count]) => count),
-        textposition: 'inside',
-        textfont: {color: 'white', size: 12},
-        marker: {
-            color: sortedEntries.map((_, i) => colorSchemes.sources[i % colorSchemes.sources.length]), line: {color: 'rgba(255,255,255,0.8)', width: 1}
-        },
-        hovertemplate: '<b>%{y}</b><br>Cases: %{x}<extra></extra>'
-    };
-    const layout = commonLayout({showlegend: false, margin: {l: 120, r: 40, t: 20, b: 40}, xaxis: {title: 'Number of Cases', gridcolor: getChartColors().grid}, yaxis: {gridcolor: getChartColors().grid}});
-    safePlot('heatmapChart', [trace], layout, {responsive: true, displayModeBar: true, displaylogo: false});
-}
+    }
 
-function createFunnelChart() {
-    const totalCases = filteredData.length;
-    const assignedCases = filteredData.filter(i => i.owner && i.owner.trim() !== '').length;
-    const maliciousTruePositives = filteredData.filter(i => i.impact === 'Malicious True Positive').length;
-    const trace = {
-        type: 'funnel',
-        y: ['All Cases', 'Assigned Cases', 'Malicious True Positive'],
-        x: [totalCases, assignedCases, maliciousTruePositives],
-        textinfo: 'value+percent initial',
-        marker: {color: ['#4472C4', '#70AD47', '#C5504B'], line: {color: 'white', width: 2}},
-        hovertemplate: '<b>%{y}</b><br>Count: %{x}<br>Percentage: %{percentInitial}<extra></extra>'
-    };
-    const layout = commonLayout({showlegend: false, margin: {l: 150, r: 40, t: 20, b: 40}});
-    safePlot('funnelChart', [trace], layout, {responsive: true, displayModeBar: true, displaylogo: false});
-}
+// Column selector functions
+    function setupColumnSelector() {
+        const btn = document.getElementById('columnSelectorBtn');
+        const dropdown = document.getElementById('columnSelectorDropdown');
 
-function updateTable() {
-    const tbody = document.querySelector('#dataTable tbody');
-    tbody.innerHTML = '';
+        // Load column preferences
+        loadColumnPreferences();
 
-    // Sort the filtered data before displaying
-    const sortedData = sortData(filteredData);
-    const displayData = sortedData.slice(0, 100); // Limit to 100 rows for performance
+        // Toggle dropdown
+        btn.addEventListener('click', function (e) {
+            e.stopPropagation();
+            dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
+            if (dropdown.style.display === 'block') {
+                populateColumnSelector();
+            }
+        });
 
-    displayData.forEach(item => {
-        const row = document.createElement('tr');
+        // Close dropdown when clicking outside
+        document.addEventListener('click', function (e) {
+            if (!dropdown.contains(e.target) && !btn.contains(e.target)) {
+                dropdown.style.display = 'none';
+            }
+        });
+    }
+
+    function populateColumnSelector() {
+        const container = document.getElementById('columnCheckboxes');
+        container.innerHTML = '';
+
+        // Group columns by category
+        const categories = {};
+        Object.keys(availableColumns).forEach(columnId => {
+            const column = availableColumns[columnId];
+            if (!categories[column.category]) {
+                categories[column.category] = [];
+            }
+            categories[column.category].push({id: columnId, ...column});
+        });
+
+        // Create checkboxes grouped by category
+        Object.keys(categories).sort().forEach(categoryName => {
+            // Category header
+            const categoryHeader = document.createElement('div');
+            categoryHeader.className = 'column-category-header';
+            categoryHeader.innerHTML = `<strong>${categoryName}</strong>`;
+            categoryHeader.style.gridColumn = '1 / -1';
+            categoryHeader.style.marginTop = '10px';
+            categoryHeader.style.marginBottom = '5px';
+            categoryHeader.style.fontSize = '13px';
+            categoryHeader.style.color = '#666';
+            container.appendChild(categoryHeader);
+
+            categories[categoryName].forEach(column => {
+                const item = document.createElement('div');
+                item.className = 'column-checkbox-item';
+
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.id = `col-${column.id}`;
+                checkbox.checked = visibleColumns.includes(column.id);
+
+                // Disable ID and Name checkboxes - they cannot be unchecked
+                const isRequired = column.id === 'id' || column.id === 'name';
+                if (isRequired) {
+                    checkbox.disabled = true;
+                    checkbox.checked = true;
+                    if (!visibleColumns.includes(column.id)) {
+                        visibleColumns.push(column.id);
+                    }
+                }
+
+                checkbox.addEventListener('change', function () {
+                    if (!isRequired) {
+                        toggleColumn(column.id, this.checked);
+                    }
+                });
+
+                const label = document.createElement('label');
+                label.htmlFor = `col-${column.id}`;
+                label.textContent = column.label + (isRequired ? ' (Required)' : '');
+                if (isRequired) {
+                    label.style.color = '#6c757d';
+                    label.style.fontStyle = 'italic';
+                }
+
+                item.appendChild(checkbox);
+                item.appendChild(label);
+                container.appendChild(item);
+            });
+        });
+
+        // Populate column order list
+        populateColumnOrder();
+    }
+
+    function populateColumnOrder() {
+        const container = document.getElementById('columnOrderList');
+        container.innerHTML = '';
+
+        // Show only visible columns in order
+        const orderedVisibleColumns = columnOrder.filter(col => visibleColumns.includes(col));
+
+        orderedVisibleColumns.forEach((columnId, index) => {
+            const column = availableColumns[columnId];
+            if (column) {
+                const item = document.createElement('div');
+                item.className = 'column-order-item';
+                item.draggable = true;
+                item.dataset.columnId = columnId;
+                item.dataset.index = index;
+
+                item.innerHTML = `
+                <span class="drag-handle">⋮⋮</span>
+                <span class="column-order-label">${column.label}</span>
+            `;
+
+                // Add drag event listeners
+                item.addEventListener('dragstart', handleDragStart);
+                item.addEventListener('dragover', handleDragOver);
+                item.addEventListener('drop', handleDrop);
+                item.addEventListener('dragend', handleDragEnd);
+
+                container.appendChild(item);
+            }
+        });
+    }
+
+    function toggleColumn(columnId, isVisible) {
+        if (isVisible && !visibleColumns.includes(columnId)) {
+            visibleColumns.push(columnId);
+            // Add to column order if not present
+            if (!columnOrder.includes(columnId)) {
+                columnOrder.push(columnId);
+            }
+        } else if (!isVisible && visibleColumns.includes(columnId)) {
+            visibleColumns = visibleColumns.filter(id => id !== columnId);
+        }
+
+        // Save preferences and rebuild table
+        saveColumnPreferences();
+        rebuildTable();
+        populateColumnOrder();
+    }
+
+    function selectAllColumns() {
+        visibleColumns = Object.keys(availableColumns);
+        columnOrder = [...visibleColumns];
+        populateColumnSelector();
+        saveColumnPreferences();
+        rebuildTable();
+    }
+
+    function deselectAllColumns() {
+        // Keep required columns (id and name)
+        visibleColumns = ['id', 'name'];
+        populateColumnSelector();
+        saveColumnPreferences();
+        rebuildTable();
+    }
+
+// Drag and drop handlers
+    let draggedElement = null;
+
+    function handleDragStart(e) {
+        draggedElement = this;
+        this.classList.add('dragging');
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/html', this.outerHTML);
+    }
+
+    function handleDragOver(e) {
+        if (e.preventDefault) {
+            e.preventDefault();
+        }
+        e.dataTransfer.dropEffect = 'move';
+
+        // Add visual feedback
+        this.classList.add('drag-over');
+        return false;
+    }
+
+    function handleDrop(e) {
+        if (e.stopPropagation) {
+            e.stopPropagation();
+        }
+
+        if (draggedElement !== this) {
+            const draggedIndex = parseInt(draggedElement.dataset.index);
+            const targetIndex = parseInt(this.dataset.index);
+            const draggedColumnId = draggedElement.dataset.columnId;
+
+            // Remove dragged column from its current position in order
+            const currentOrderIndex = columnOrder.indexOf(draggedColumnId);
+            if (currentOrderIndex !== -1) {
+                columnOrder.splice(currentOrderIndex, 1);
+            }
+
+            // Insert at new position
+            const visibleOrderedColumns = columnOrder.filter(col => visibleColumns.includes(col));
+            const targetColumnId = this.dataset.columnId;
+            const newTargetIndex = columnOrder.indexOf(targetColumnId);
+
+            if (draggedIndex < targetIndex) {
+                columnOrder.splice(newTargetIndex + 1, 0, draggedColumnId);
+            } else {
+                columnOrder.splice(newTargetIndex, 0, draggedColumnId);
+            }
+
+            // Update UI and save
+            populateColumnOrder();
+            saveColumnPreferences();
+            rebuildTable();
+        }
+
+        // Clean up drag over styles
+        document.querySelectorAll('.drag-over').forEach(el => {
+            el.classList.remove('drag-over');
+        });
+
+        return false;
+    }
+
+    function handleDragEnd(e) {
+        this.classList.remove('dragging');
+        document.querySelectorAll('.drag-over').forEach(el => {
+            el.classList.remove('drag-over');
+        });
+        draggedElement = null;
+    }
+
+    function saveColumnPreferences() {
+        const preferences = {
+            visibleColumns: visibleColumns, columnOrder: columnOrder
+        };
+        document.cookie = `tableColumns=${JSON.stringify(preferences)}; path=/; max-age=${60 * 60 * 24 * 30}`; // 30 days
+    }
+
+    function loadColumnPreferences() {
+        const cookies = document.cookie.split(';');
+        const columnCookie = cookies.find(cookie => cookie.trim().startsWith('tableColumns='));
+
+        if (columnCookie) {
+            try {
+                const preferences = JSON.parse(columnCookie.split('=')[1]);
+                if (preferences.visibleColumns) {
+                    visibleColumns = preferences.visibleColumns;
+                }
+                if (preferences.columnOrder) {
+                    columnOrder = preferences.columnOrder;
+                }
+            } catch (e) {
+                // Invalid cookie, ignore
+            }
+        }
+    }
+
+    function getNestedValue(obj, path) {
+        return path.split('.').reduce((current, key) => {
+            return current && current[key] !== undefined ? current[key] : null;
+        }, obj);
+    }
+
+    function rebuildTable() {
+        buildTableHeaders();
+        updateTable();
+    }
+
+    function buildTableHeaders() {
+        const thead = document.querySelector('#dataTable thead tr');
+        thead.innerHTML = '';
 
         // Use column order, but only show visible columns
         const orderedVisibleColumns = columnOrder.filter(col => visibleColumns.includes(col));
@@ -1195,563 +1740,76 @@ function updateTable() {
         orderedVisibleColumns.forEach(columnId => {
             const column = availableColumns[columnId];
             if (column) {
-                const td = document.createElement('td');
-                let value = getNestedValue(item, column.path);
-
-                // Format the value based on type
-                if (value !== null && value !== undefined) {
-                    switch (column.type) {
-                        case 'date':
-                            if (value) {
-                                const date = new Date(value);
-                                const month = (date.getMonth() + 1).toString().padStart(2, '0');
-                                const day = date.getDate().toString().padStart(2, '0');
-                                const year = date.getFullYear();
-                                td.textContent = `${month}/${day}/${year}`;
-                            }
-                            break;
-                        case 'duration':
-                            td.style.textAlign = 'right';
-                            td.classList.add('duration-column');
-                            if (value && value > 0) {
-                                const minutes = Math.floor(value / 60);
-                                const seconds = Math.round(value % 60);
-                                td.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
-                            } else {
-                                td.textContent = '--';
-                            }
-                            break;
-                        case 'number':
-                            if (columnId === 'id') {
-                                td.innerHTML = `<a href="https://msoar.crtx.us.paloaltonetworks.com/Custom/caseinfoid/${value}" target="_blank" style="color: #0046ad; text-decoration: underline;">${value}</a>`;
-                            } else if (columnId === 'severity') {
-                                const severityMap = {0: 'Unknown', 1: 'Low', 2: 'Medium', 3: 'High', 4: 'Critical'};
-                                const severity = severityMap[value] || 'Unknown';
-                                td.innerHTML = `<span class="severity-${severity.toLowerCase()}">${severity}</span>`;
-                            } else if (columnId === 'status') {
-                                const statusMap = {0: 'Pending', 1: 'Active', 2: 'Closed'};
-                                const status = statusMap[value] || 'Unknown';
-                                td.innerHTML = `<span class="status-${status.toLowerCase()}">${status}</span>`;
-                            } else if (columnId === 'currently_aging_days') {
-                                console.log('Rendering currently_aging_days:', typeof value, value);
-                                // Center align this numeric column for clearer visual distinction
-                                td.style.textAlign = 'center';
-                                if (value === null || value === undefined) {
-                                    td.textContent = '--';
-                                    td.style.color = '#6c757d';
-                                } else {
-                                    td.textContent = value;
-                                }
-                            } else {
-                                td.textContent = value;
-                            }
-                            break;
-                        default:
-                            if (columnId === 'name' && value.length > 50) {
-                                td.innerHTML = `<span title="${value}">${value.substring(0, 50)}...</span>`;
-                            } else {
-                                td.textContent = value || '';
-                            }
-                    }
-                } else {
-                    td.textContent = '';
+                const th = document.createElement('th');
+                th.className = 'sortable';
+                th.setAttribute('data-column', columnId);
+                th.innerHTML = `${column.label} <span class="sort-indicator"></span>`;
+                th.style.cursor = 'pointer';
+                if (column.type === 'duration') {
+                    th.style.textAlign = 'right';
+                    th.classList.add('duration-column');
+                    th.title = 'mins:secs';
+                    th.innerHTML = `${column.label} ℹ️ <span class="sort-indicator"></span>`;
                 }
-
-                row.appendChild(td);
+                th.addEventListener('click', function () {
+                    sortTable(columnId);
+                });
+                thead.appendChild(th);
             }
         });
 
-        tbody.appendChild(row);
-    });
-}
-
-function exportToCSV() {
-    const headers = ['ID', 'Name', 'Severity', 'Status', 'Country', 'Impact', 'Type', 'Created'];
-    const severityMap = {0: 'Unknown', 1: 'Low', 2: 'Medium', 3: 'High', 4: 'Critical'};
-    const statusMap = {0: 'Pending', 1: 'Active', 2: 'Closed'};
-
-    const csvContent = [headers.join(','), ...filteredData.map(item => [item.id, `"${item.name.replace(/"/g, '""')}"`, severityMap[item.severity] || 'Unknown', statusMap[item.status] || 'Unknown', item.affected_country, item.impact, item.type, new Date(item.created).toISOString()].join(','))].join('\n');
-
-    downloadCSV(csvContent, 'security_incidents.csv');
-}
-
-function exportSummary() {
-    const totalIncidents = filteredData.length;
-    const criticalIncidents = filteredData.filter(item => item.severity === 4).length;
-    const openIncidents = filteredData.filter(item => item.is_open).length;
-
-    const summaryData = [['Metric', 'Value'], ['Total Incidents', totalIncidents], ['Critical Incidents', criticalIncidents], ['Open Incidents', openIncidents], ['Countries Affected', new Set(filteredData.map(item => item.affected_country)).size], ['Top Country', getMostCommon('affected_country')], ['Top Ticket Type', getMostCommon('type')]];
-
-    const csvContent = summaryData.map(row => row.join(',')).join('\n');
-    downloadCSV(csvContent, 'incident_summary.csv');
-}
-
-function getMostCommon(field) {
-    const counts = {};
-    filteredData.forEach(item => {
-        const value = item[field] || 'Unknown';
-        counts[value] = (counts[value] || 0) + 1;
-    });
-
-    return Object.keys(counts).reduce((a, b) => counts[a] > counts[b] ? a : b, 'N/A');
-}
-
-function downloadCSV(content, filename) {
-    const blob = new Blob([content], {type: 'text/csv'});
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    a.click();
-    window.URL.revokeObjectURL(url);
-}
-
-function hideLoading() {
-    document.getElementById('loading').style.display = 'none';
-}
-
-function showError(message) {
-    document.getElementById('loading').style.display = 'none';
-    document.getElementById('error').textContent = message;
-    document.getElementById('error').style.display = 'block';
-}
-
-function showDashboard() {
-    document.getElementById('metricsGrid').style.display = 'grid';
-    document.getElementById('chartsGrid').style.display = 'grid';
-    document.getElementById('dataTableSection').style.display = 'block';
-
-    // Initialize table headers on first load
-    buildTableHeaders();
-}
-
-// Navigation functions
-
-
-// Table sorting functions
-function sortTable(column) {
-    if (currentSort.column === column) {
-        currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
-    } else {
-        currentSort.column = column;
-        currentSort.direction = 'asc';
+        // Update sort indicators after rebuilding headers
+        updateSortIndicators();
     }
-
-    // Save sort preferences to cookies
-    saveSortPreferences();
-
-    // Update sort indicators
-    updateSortIndicators();
-
-    // Re-render table with sorted data
-    updateTable();
-}
-
-function updateSortIndicators() {
-    // Clear all sort indicators
-    document.querySelectorAll('.sort-indicator').forEach(indicator => {
-        indicator.textContent = '';
-        indicator.parentElement.classList.remove('sort-asc', 'sort-desc');
-    });
-
-    // Set current sort indicator
-    if (currentSort.column) {
-        const header = document.querySelector(`[data-column="${currentSort.column}"]`);
-        if (header) {
-            const indicator = header.querySelector('.sort-indicator');
-            indicator.textContent = currentSort.direction === 'asc' ? ' ▲' : ' ▼';
-            header.classList.add(currentSort.direction === 'asc' ? 'sort-asc' : 'sort-desc');
-        }
-    }
-}
-
-function sortData(data) {
-    if (!currentSort.column) return data;
-
-    const column = availableColumns[currentSort.column];
-    if (!column) return data;
-
-    return [...data].sort((a, b) => {
-        let aVal = getNestedValue(a, column.path);
-        let bVal = getNestedValue(b, column.path);
-
-        // Handle different data types
-        if (column.type === 'date') {
-            aVal = aVal ? new Date(aVal) : new Date(0);
-            bVal = bVal ? new Date(bVal) : new Date(0);
-        } else if (column.type === 'number' || column.type === 'duration') {
-            aVal = parseInt(aVal) || 0;
-            bVal = parseInt(bVal) || 0;
-        } else {
-            aVal = (aVal || '').toString().toLowerCase();
-            bVal = (bVal || '').toString().toLowerCase();
-        }
-
-        let comparison = 0;
-        if (aVal > bVal) comparison = 1; else if (aVal < bVal) comparison = -1;
-
-        return currentSort.direction === 'asc' ? comparison : -comparison;
-    });
-}
-
-function saveSortPreferences() {
-    const preferences = {
-        column: currentSort.column, direction: currentSort.direction
-    };
-    document.cookie = `tableSort=${JSON.stringify(preferences)}; path=/; max-age=${60 * 60 * 24 * 30}`; // 30 days
-}
-
-function loadSortPreferences() {
-    const cookies = document.cookie.split(';');
-    const sortCookie = cookies.find(cookie => cookie.trim().startsWith('tableSort='));
-
-    if (sortCookie) {
-        try {
-            const preferences = JSON.parse(sortCookie.split('=')[1]);
-            currentSort.column = preferences.column;
-            currentSort.direction = preferences.direction;
-            updateSortIndicators();
-        } catch (e) {
-            // Invalid cookie, ignore
-        }
-    }
-}
-
-// Column selector functions
-function setupColumnSelector() {
-    const btn = document.getElementById('columnSelectorBtn');
-    const dropdown = document.getElementById('columnSelectorDropdown');
-
-    // Load column preferences
-    loadColumnPreferences();
-
-    // Toggle dropdown
-    btn.addEventListener('click', function (e) {
-        e.stopPropagation();
-        dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
-        if (dropdown.style.display === 'block') {
-            populateColumnSelector();
-        }
-    });
-
-    // Close dropdown when clicking outside
-    document.addEventListener('click', function (e) {
-        if (!dropdown.contains(e.target) && !btn.contains(e.target)) {
-            dropdown.style.display = 'none';
-        }
-    });
-}
-
-function populateColumnSelector() {
-    const container = document.getElementById('columnCheckboxes');
-    container.innerHTML = '';
-
-    // Group columns by category
-    const categories = {};
-    Object.keys(availableColumns).forEach(columnId => {
-        const column = availableColumns[columnId];
-        if (!categories[column.category]) {
-            categories[column.category] = [];
-        }
-        categories[column.category].push({id: columnId, ...column});
-    });
-
-    // Create checkboxes grouped by category
-    Object.keys(categories).sort().forEach(categoryName => {
-        // Category header
-        const categoryHeader = document.createElement('div');
-        categoryHeader.className = 'column-category-header';
-        categoryHeader.innerHTML = `<strong>${categoryName}</strong>`;
-        categoryHeader.style.gridColumn = '1 / -1';
-        categoryHeader.style.marginTop = '10px';
-        categoryHeader.style.marginBottom = '5px';
-        categoryHeader.style.fontSize = '13px';
-        categoryHeader.style.color = '#666';
-        container.appendChild(categoryHeader);
-
-        categories[categoryName].forEach(column => {
-            const item = document.createElement('div');
-            item.className = 'column-checkbox-item';
-
-            const checkbox = document.createElement('input');
-            checkbox.type = 'checkbox';
-            checkbox.id = `col-${column.id}`;
-            checkbox.checked = visibleColumns.includes(column.id);
-
-            // Disable ID and Name checkboxes - they cannot be unchecked
-            const isRequired = column.id === 'id' || column.id === 'name';
-            if (isRequired) {
-                checkbox.disabled = true;
-                checkbox.checked = true;
-                if (!visibleColumns.includes(column.id)) {
-                    visibleColumns.push(column.id);
-                }
-            }
-
-            checkbox.addEventListener('change', function () {
-                if (!isRequired) {
-                    toggleColumn(column.id, this.checked);
-                }
-            });
-
-            const label = document.createElement('label');
-            label.htmlFor = `col-${column.id}`;
-            label.textContent = column.label + (isRequired ? ' (Required)' : '');
-            if (isRequired) {
-                label.style.color = '#6c757d';
-                label.style.fontStyle = 'italic';
-            }
-
-            item.appendChild(checkbox);
-            item.appendChild(label);
-            container.appendChild(item);
-        });
-    });
-
-    // Populate column order list
-    populateColumnOrder();
-}
-
-function populateColumnOrder() {
-    const container = document.getElementById('columnOrderList');
-    container.innerHTML = '';
-
-    // Show only visible columns in order
-    const orderedVisibleColumns = columnOrder.filter(col => visibleColumns.includes(col));
-
-    orderedVisibleColumns.forEach((columnId, index) => {
-        const column = availableColumns[columnId];
-        if (column) {
-            const item = document.createElement('div');
-            item.className = 'column-order-item';
-            item.draggable = true;
-            item.dataset.columnId = columnId;
-            item.dataset.index = index;
-
-            item.innerHTML = `
-                <span class="drag-handle">⋮⋮</span>
-                <span class="column-order-label">${column.label}</span>
-            `;
-
-            // Add drag event listeners
-            item.addEventListener('dragstart', handleDragStart);
-            item.addEventListener('dragover', handleDragOver);
-            item.addEventListener('drop', handleDrop);
-            item.addEventListener('dragend', handleDragEnd);
-
-            container.appendChild(item);
-        }
-    });
-}
-
-function toggleColumn(columnId, isVisible) {
-    if (isVisible && !visibleColumns.includes(columnId)) {
-        visibleColumns.push(columnId);
-        // Add to column order if not present
-        if (!columnOrder.includes(columnId)) {
-            columnOrder.push(columnId);
-        }
-    } else if (!isVisible && visibleColumns.includes(columnId)) {
-        visibleColumns = visibleColumns.filter(id => id !== columnId);
-    }
-
-    // Save preferences and rebuild table
-    saveColumnPreferences();
-    rebuildTable();
-    populateColumnOrder();
-}
-
-function selectAllColumns() {
-    visibleColumns = Object.keys(availableColumns);
-    columnOrder = [...visibleColumns];
-    populateColumnSelector();
-    saveColumnPreferences();
-    rebuildTable();
-}
-
-function deselectAllColumns() {
-    // Keep required columns (id and name)
-    visibleColumns = ['id', 'name'];
-    populateColumnSelector();
-    saveColumnPreferences();
-    rebuildTable();
-}
-
-// Drag and drop handlers
-let draggedElement = null;
-
-function handleDragStart(e) {
-    draggedElement = this;
-    this.classList.add('dragging');
-    e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/html', this.outerHTML);
-}
-
-function handleDragOver(e) {
-    if (e.preventDefault) {
-        e.preventDefault();
-    }
-    e.dataTransfer.dropEffect = 'move';
-
-    // Add visual feedback
-    this.classList.add('drag-over');
-    return false;
-}
-
-function handleDrop(e) {
-    if (e.stopPropagation) {
-        e.stopPropagation();
-    }
-
-    if (draggedElement !== this) {
-        const draggedIndex = parseInt(draggedElement.dataset.index);
-        const targetIndex = parseInt(this.dataset.index);
-        const draggedColumnId = draggedElement.dataset.columnId;
-
-        // Remove dragged column from its current position in order
-        const currentOrderIndex = columnOrder.indexOf(draggedColumnId);
-        if (currentOrderIndex !== -1) {
-            columnOrder.splice(currentOrderIndex, 1);
-        }
-
-        // Insert at new position
-        const visibleOrderedColumns = columnOrder.filter(col => visibleColumns.includes(col));
-        const targetColumnId = this.dataset.columnId;
-        const newTargetIndex = columnOrder.indexOf(targetColumnId);
-
-        if (draggedIndex < targetIndex) {
-            columnOrder.splice(newTargetIndex + 1, 0, draggedColumnId);
-        } else {
-            columnOrder.splice(newTargetIndex, 0, draggedColumnId);
-        }
-
-        // Update UI and save
-        populateColumnOrder();
-        saveColumnPreferences();
-        rebuildTable();
-    }
-
-    // Clean up drag over styles
-    document.querySelectorAll('.drag-over').forEach(el => {
-        el.classList.remove('drag-over');
-    });
-
-    return false;
-}
-
-function handleDragEnd(e) {
-    this.classList.remove('dragging');
-    document.querySelectorAll('.drag-over').forEach(el => {
-        el.classList.remove('drag-over');
-    });
-    draggedElement = null;
-}
-
-function saveColumnPreferences() {
-    const preferences = {
-        visibleColumns: visibleColumns, columnOrder: columnOrder
-    };
-    document.cookie = `tableColumns=${JSON.stringify(preferences)}; path=/; max-age=${60 * 60 * 24 * 30}`; // 30 days
-}
-
-function loadColumnPreferences() {
-    const cookies = document.cookie.split(';');
-    const columnCookie = cookies.find(cookie => cookie.trim().startsWith('tableColumns='));
-
-    if (columnCookie) {
-        try {
-            const preferences = JSON.parse(columnCookie.split('=')[1]);
-            if (preferences.visibleColumns) {
-                visibleColumns = preferences.visibleColumns;
-            }
-            if (preferences.columnOrder) {
-                columnOrder = preferences.columnOrder;
-            }
-        } catch (e) {
-            // Invalid cookie, ignore
-        }
-    }
-}
-
-function getNestedValue(obj, path) {
-    return path.split('.').reduce((current, key) => {
-        return current && current[key] !== undefined ? current[key] : null;
-    }, obj);
-}
-
-function rebuildTable() {
-    buildTableHeaders();
-    updateTable();
-}
-
-function buildTableHeaders() {
-    const thead = document.querySelector('#dataTable thead tr');
-    thead.innerHTML = '';
-
-    // Use column order, but only show visible columns
-    const orderedVisibleColumns = columnOrder.filter(col => visibleColumns.includes(col));
-
-    orderedVisibleColumns.forEach(columnId => {
-        const column = availableColumns[columnId];
-        if (column) {
-            const th = document.createElement('th');
-            th.className = 'sortable';
-            th.setAttribute('data-column', columnId);
-            th.innerHTML = `${column.label} <span class="sort-indicator"></span>`;
-            th.style.cursor = 'pointer';
-            if (column.type === 'duration') {
-                th.style.textAlign = 'right';
-                th.classList.add('duration-column');
-                th.title = 'mins:secs';
-                th.innerHTML = `${column.label} ℹ️ <span class="sort-indicator"></span>`;
-            }
-            th.addEventListener('click', function () {
-                sortTable(columnId);
-            });
-            thead.appendChild(th);
-        }
-    });
-
-    // Update sort indicators after rebuilding headers
-    updateSortIndicators();
-}
 
 // Location Filter Tab Functionality
-function initLocationTabs() {
-    const tabButtons = document.querySelectorAll('.tab-button');
+    function initLocationTabs() {
+        const tabButtons = document.querySelectorAll('.tab-button');
 
-    tabButtons.forEach(button => {
-        button.addEventListener('click', function () {
-            const targetTab = this.getAttribute('data-tab');
+        tabButtons.forEach(button => {
+            button.addEventListener('click', function () {
+                const targetTab = this.getAttribute('data-tab');
 
-            // Remove active class from all buttons and panes
-            tabButtons.forEach(btn => btn.classList.remove('active'));
-            document.querySelectorAll('.tab-pane').forEach(pane => pane.classList.remove('active'));
+                // Remove active class from all buttons and panes
+                tabButtons.forEach(btn => btn.classList.remove('active'));
+                document.querySelectorAll('.tab-pane').forEach(pane => pane.classList.remove('active'));
 
-            // Add active class to clicked button and corresponding pane
-            this.classList.add('active');
-            document.getElementById(targetTab + 'Tab').classList.add('active');
+                // Add active class to clicked button and corresponding pane
+                this.classList.add('active');
+                document.getElementById(targetTab + 'Tab').classList.add('active');
 
-            // Clear selections in the other tab (mutual exclusion)
-            if (targetTab === 'country') {
-                // Clear region selections
-                document.querySelectorAll('#regionFilter input[type="checkbox"]').forEach(checkbox => {
-                    checkbox.checked = false;
-                });
-            } else if (targetTab === 'region') {
-                // Clear country selections
-                document.querySelectorAll('#countryFilter input[type="checkbox"]').forEach(checkbox => {
-                    checkbox.checked = false;
-                });
-            }
+                // Clear selections in the other tab (mutual exclusion)
+                if (targetTab === 'country') {
+                    // Clear region selections
+                    document.querySelectorAll('#regionFilter input[type="checkbox"]').forEach(checkbox => {
+                        checkbox.checked = false;
+                    });
+                } else if (targetTab === 'region') {
+                    // Clear country selections
+                    document.querySelectorAll('#countryFilter input[type="checkbox"]').forEach(checkbox => {
+                        checkbox.checked = false;
+                    });
+                }
 
-            // Update filters
-            applyFilters();
+                // Update filters
+                applyFilters();
+            });
         });
-    });
-}
+    }
 
 // Initialize location tabs when DOM is loaded
-document.addEventListener('DOMContentLoaded', function () {
-    initLocationTabs();
-});
+    document.addEventListener('DOMContentLoaded', function () {
+        initLocationTabs();
+    });
+
+    function announceTableStatus(message) {
+        const live = document.getElementById('tableStatusLive');
+        if (!live) return;
+        // Clear then set so screen readers announce updates reliably
+        live.textContent = '';
+        // Slight delay to ensure DOM mutation is recognized
+        setTimeout(() => {
+            live.textContent = message;
+        }, 40);
+    }
+
