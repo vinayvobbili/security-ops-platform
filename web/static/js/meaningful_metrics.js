@@ -106,7 +106,7 @@ function getChartColors() {
     const sharedPlotlyConfig = {responsive: true, displayModeBar: true, displaylogo: false};
 
     function adaptAllChartsTheme() {
-        const chartIds = ['geoChart', 'severityChart', 'timelineChart', 'ticketTypeChart', 'heatmapChart', 'funnelChart'];
+        const chartIds = ['geoChart', 'severityChart', 'timelineChart', 'ticketTypeChart', 'heatmapChart', 'funnelChart', 'topHostsChart', 'topUsersChart', 'resolutionTimeChart'];
         chartIds.forEach(id => adaptChartTheme(id));
     }
 
@@ -1004,7 +1004,7 @@ function getChartColors() {
     }
 
     function updateCharts() {
-        const chartIds = ['geoChart', 'severityChart', 'timelineChart', 'ticketTypeChart', 'heatmapChart', 'funnelChart'];
+        const chartIds = ['geoChart', 'severityChart', 'timelineChart', 'ticketTypeChart', 'heatmapChart', 'funnelChart', 'topHostsChart', 'topUsersChart', 'resolutionTimeChart'];
         if (filteredData.length === 0) {
             // Mark all chart containers as empty with skeleton + watermark
             chartIds.forEach(id => {
@@ -1035,6 +1035,9 @@ function getChartColors() {
         createImpactChart();
         createOwnerChart();
         createFunnelChart();
+        createTopHostsChart();
+        createTopUsersChart();
+        createResolutionTimeChart();
     }
 
 // Re-implement createGeoChart with shared config
@@ -1160,15 +1163,15 @@ function getChartColors() {
         });
         const sortedEntries = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 10);
         const trace = {
-            x: sortedEntries.map(([, count]) => count),
-            y: sortedEntries.map(([owner]) => owner),
+            x: sortedEntries.map(([, count]) => count).reverse(),
+            y: sortedEntries.map(([owner]) => owner).reverse(),
             type: 'bar',
             orientation: 'h',
-            text: sortedEntries.map(([, count]) => count),
+            text: sortedEntries.map(([, count]) => count).reverse(),
             textposition: 'inside',
             textfont: {color: 'white', size: 12},
             marker: {
-                color: sortedEntries.map((_, i) => colorSchemes.sources[i % colorSchemes.sources.length]), line: {color: 'rgba(255,255,255,0.8)', width: 1}
+                color: sortedEntries.map((_, i) => colorSchemes.sources[i % colorSchemes.sources.length]).reverse(), line: {color: 'rgba(255,255,255,0.8)', width: 1}
             },
             hovertemplate: '<b>%{y}</b><br>Cases: %{x}<extra></extra>'
         };
@@ -1811,5 +1814,140 @@ function getChartColors() {
         setTimeout(() => {
             live.textContent = message;
         }, 40);
+    }
+
+    function createTopHostsChart() {
+        const counts = {};
+        filteredData.forEach(item => {
+            const hostname = item.hostname || 'Unknown';
+            if (hostname && hostname.trim() !== '' && hostname !== 'Unknown') {
+                counts[hostname] = (counts[hostname] || 0) + 1;
+            }
+        });
+        const sortedEntries = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 10);
+
+        if (sortedEntries.length === 0) {
+            const el = document.getElementById('topHostsChart');
+            if (el) {
+                try {
+                    if (el.data) Plotly.purge(el);
+                } catch (e) {}
+                el.innerHTML = '<div style="display: flex; align-items: center; justify-content: center; height: 100%; color: #666;">No hostname data available</div>';
+            }
+            return;
+        }
+
+        const trace = {
+            x: sortedEntries.map(e => e[1]).reverse(),
+            y: sortedEntries.map(e => e[0]).reverse(),
+            type: 'bar',
+            orientation: 'h',
+            text: sortedEntries.map(e => e[1]).reverse(),
+            textposition: 'inside',
+            textfont: {color: 'white', size: 12},
+            marker: {
+                color: sortedEntries.map((_, i) => colorSchemes.countries[i % colorSchemes.countries.length]).reverse(),
+                line: {color: 'rgba(255,255,255,0.8)', width: 1}
+            },
+            hovertemplate: '<b>%{y}</b><br>Tickets: %{x}<extra></extra>'
+        };
+        const layout = commonLayout({margin: {l: 200, r: 40, t: 40, b: 40}, showlegend: false});
+        safePlot('topHostsChart', [trace], layout);
+    }
+
+    function createTopUsersChart() {
+        const counts = {};
+        filteredData.forEach(item => {
+            const username = item.username || 'Unknown';
+            if (username && username.trim() !== '' && username !== 'Unknown') {
+                counts[username] = (counts[username] || 0) + 1;
+            }
+        });
+        const sortedEntries = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 10);
+
+        if (sortedEntries.length === 0) {
+            const el = document.getElementById('topUsersChart');
+            if (el) {
+                try {
+                    if (el.data) Plotly.purge(el);
+                } catch (e) {}
+                el.innerHTML = '<div style="display: flex; align-items: center; justify-content: center; height: 100%; color: #666;">No username data available</div>';
+            }
+            return;
+        }
+
+        const trace = {
+            x: sortedEntries.map(e => e[1]).reverse(),
+            y: sortedEntries.map(e => e[0]).reverse(),
+            type: 'bar',
+            orientation: 'h',
+            text: sortedEntries.map(e => e[1]).reverse(),
+            textposition: 'inside',
+            textfont: {color: 'white', size: 12},
+            marker: {
+                color: sortedEntries.map((_, i) => colorSchemes.severity[i % colorSchemes.severity.length]).reverse(),
+                line: {color: 'rgba(255,255,255,0.8)', width: 1}
+            },
+            hovertemplate: '<b>%{y}</b><br>Tickets: %{x}<extra></extra>'
+        };
+        const layout = commonLayout({margin: {l: 120, r: 40, t: 40, b: 40}, showlegend: false});
+        safePlot('topUsersChart', [trace], layout);
+    }
+
+    function createResolutionTimeChart() {
+        const typeResolutionData = {};
+
+        filteredData.forEach(item => {
+            const ticketType = item.type || 'Unknown';
+            if (item.resolution_time_days !== null && item.resolution_time_days !== undefined && item.resolution_time_days > 0) {
+                if (!typeResolutionData[ticketType]) {
+                    typeResolutionData[ticketType] = [];
+                }
+                typeResolutionData[ticketType].push(item.resolution_time_days);
+            }
+        });
+
+        const typeAverages = {};
+        Object.keys(typeResolutionData).forEach(type => {
+            const times = typeResolutionData[type];
+            if (times.length > 0) {
+                const average = times.reduce((sum, time) => sum + time, 0) / times.length;
+                typeAverages[type] = average;
+            }
+        });
+
+        const sortedEntries = Object.entries(typeAverages).sort((a, b) => b[1] - a[1]).slice(0, 10);
+
+        if (sortedEntries.length === 0) {
+            const el = document.getElementById('resolutionTimeChart');
+            if (el) {
+                try {
+                    if (el.data) Plotly.purge(el);
+                } catch (e) {}
+                el.innerHTML = '<div style="display: flex; align-items: center; justify-content: center; height: 100%; color: #666;">No resolution time data available</div>';
+            }
+            return;
+        }
+
+        const trace = {
+            x: sortedEntries.map(e => e[1].toFixed(1)).reverse(),
+            y: sortedEntries.map(([type]) => type.startsWith('METCIRT') ? type.replace(/^METCIRT[_\-\s]*/i, '') : type).reverse(),
+            type: 'bar',
+            orientation: 'h',
+            text: sortedEntries.map(e => e[1].toFixed(1)).reverse(),
+            textposition: 'inside',
+            textfont: {color: 'white', size: 12},
+            marker: {
+                color: sortedEntries.map((_, i) => colorSchemes.sources[i % colorSchemes.sources.length]).reverse(),
+                line: {color: 'rgba(255,255,255,0.8)', width: 1}
+            },
+            hovertemplate: '<b>%{y}</b><br>Avg Resolution: %{x} days<extra></extra>'
+        };
+        const layout = commonLayout({
+            margin: {l: 150, r: 40, t: 40, b: 40},
+            showlegend: false,
+            xaxis: {title: 'Average Resolution Time (Days)', gridcolor: getChartColors().grid}
+        });
+        safePlot('resolutionTimeChart', [trace], layout);
     }
 
