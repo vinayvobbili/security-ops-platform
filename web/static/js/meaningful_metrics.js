@@ -71,17 +71,11 @@ function isDarkMode() {
 function getChartColors() {
     if (!isDarkMode()) {
         return {
-            font: '#1e293b',
-            grid: 'rgba(128,128,128,0.2)',
-            legendBg: 'rgba(255,255,255,0.8)',
-            axisLine: '#94a3b8'
+            font: '#1e293b', grid: 'rgba(128,128,128,0.2)', legendBg: 'rgba(255,255,255,0.8)', axisLine: '#94a3b8'
         };
     }
     return {
-        font: '#e2e8f0',
-        grid: 'rgba(148,163,184,0.18)',
-        legendBg: 'rgba(30,41,59,0.85)',
-        axisLine: '#475569'
+        font: '#e2e8f0', grid: 'rgba(148,163,184,0.18)', legendBg: 'rgba(30,41,59,0.85)', axisLine: '#475569'
     };
 }
 
@@ -155,14 +149,7 @@ function updateDataTimestamp() {
 
         // Set to 12:01 AM today in ET timezone
         const options = {
-            year: 'numeric',
-            month: 'short',
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit',
-            hour12: true,
-            timeZone: 'America/New_York',
-            timeZoneName: 'short'
+            year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'America/New_York', timeZoneName: 'short'
         };
 
         // Force the time to show 12:01 AM by setting the time
@@ -635,17 +622,13 @@ function updateFilterSummary(dateRange, mttrFilter, mttcFilter, ageFilter, count
 
     // MTTR filter
     if (mttrFilter > 0) {
-        const mttrText = mttrFilter === 1 ? 'MTTR ≤3 mins' :
-            mttrFilter === 2 ? 'MTTR >3 mins' :
-                mttrFilter === 3 ? 'MTTR >5 mins' : 'All MTTR';
+        const mttrText = mttrFilter === 1 ? 'MTTR ≤3 mins' : mttrFilter === 2 ? 'MTTR >3 mins' : mttrFilter === 3 ? 'MTTR >5 mins' : 'All MTTR';
         container.innerHTML += `<span class="filter-tag">${mttrText} <button class="remove-filter-btn" onclick="removeFilter('mttr', '${mttrFilter}')">×</button></span>`;
     }
 
     // MTTC filter
     if (mttcFilter > 0) {
-        const mttcText = mttcFilter === 1 ? 'MTTC ≤5 mins' :
-            mttcFilter === 2 ? 'MTTC ≤15 mins' :
-                mttcFilter === 3 ? 'MTTC >15 mins' : 'All MTTC';
+        const mttcText = mttcFilter === 1 ? 'MTTC ≤5 mins' : mttcFilter === 2 ? 'MTTC ≤15 mins' : mttcFilter === 3 ? 'MTTC >15 mins' : 'All MTTC';
         container.innerHTML += `<span class="filter-tag">${mttcText} <button class="remove-filter-btn" onclick="removeFilter('mttc', '${mttcFilter}')">×</button></span>`;
     }
 
@@ -803,25 +786,12 @@ function calculatePeriodMetrics(data) {
     const openIncidents = data.filter(item => item.is_open).length;
 
     // Calculate MTTR
-    const casesWithOwnerAndTimeToRespond = data.filter(item =>
-        item.owner &&
-        item.owner.trim() !== '' &&
-        item.time_to_respond_secs &&
-        item.time_to_respond_secs > 0
-    );
-    const mttr = casesWithOwnerAndTimeToRespond.length > 0
-        ? casesWithOwnerAndTimeToRespond.reduce((sum, item) => sum + item.time_to_respond_secs, 0) / casesWithOwnerAndTimeToRespond.length
-        : 0;
+    const casesWithOwnerAndTimeToRespond = data.filter(item => item.owner && item.owner.trim() !== '' && item.time_to_respond_secs && item.time_to_respond_secs > 0);
+    const mttr = casesWithOwnerAndTimeToRespond.length > 0 ? casesWithOwnerAndTimeToRespond.reduce((sum, item) => sum + item.time_to_respond_secs, 0) / casesWithOwnerAndTimeToRespond.length : 0;
 
     // Calculate MTTC
-    const casesWithOwnerAndTimeToContain = data.filter(item =>
-        item.has_hostname &&
-        item.time_to_contain_secs &&
-        item.time_to_contain_secs > 0
-    );
-    const mttc = casesWithOwnerAndTimeToContain.length > 0
-        ? casesWithOwnerAndTimeToContain.reduce((sum, item) => sum + item.time_to_contain_secs, 0) / casesWithOwnerAndTimeToContain.length
-        : 0;
+    const casesWithOwnerAndTimeToContain = data.filter(item => item.has_hostname && item.time_to_contain_secs && item.time_to_contain_secs > 0);
+    const mttc = casesWithOwnerAndTimeToContain.length > 0 ? casesWithOwnerAndTimeToContain.reduce((sum, item) => sum + item.time_to_contain_secs, 0) / casesWithOwnerAndTimeToContain.length : 0;
 
     const uniqueCountries = new Set(data.map(item => item.affected_country)).size;
 
@@ -1001,19 +971,50 @@ function updateMetrics() {
 }
 
 
+// Reusable Plotly helper to minimize flicker and reuse DOM
+function safePlot(chartId, data, layout, config = sharedPlotlyConfig) {
+    const el = document.getElementById(chartId);
+    if (!el) return;
+    try {
+        if (el.data && el.layout) {
+            Plotly.react(el, data, layout, config);
+        } else {
+            Plotly.newPlot(el, data, layout, config);
+        }
+    } catch (e) {
+        try {
+            Plotly.newPlot(el, data, layout, config);
+        } catch (_) {
+        }
+    }
+}
+
 function updateCharts() {
-    // Keep chart cards visible; if no data, just clear their contents (no replacement card)
     const chartIds = ['geoChart', 'severityChart', 'timelineChart', 'ticketTypeChart', 'heatmapChart', 'funnelChart'];
     if (filteredData.length === 0) {
+        // Mark all chart containers as empty with skeleton + watermark
         chartIds.forEach(id => {
             const el = document.getElementById(id);
             if (el) {
-                try { if (el.data) Plotly.purge(el); } catch (e) {}
+                try {
+                    if (el.data) Plotly.purge(el);
+                } catch (e) {
+                }
                 el.innerHTML = '';
+                const container = el.closest('.chart-container');
+                if (container) container.classList.add('empty');
             }
         });
-        return; // Skip rendering charts
+        return;
     }
+    // Remove empty state before drawing
+    chartIds.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            const container = el.closest('.chart-container');
+            if (container) container.classList.remove('empty');
+        }
+    });
     createGeoChart();
     createTicketTypeChart();
     createTimelineChart();
@@ -1039,7 +1040,7 @@ createGeoChart = function () {
         hovertemplate: '<b>%{y}</b><br>Incidents: %{x}<extra></extra>'
     };
     const layout = commonLayout({margin: {l: 120, r: 40, t: 40, b: 40}, showlegend: false});
-    Plotly.newPlot('geoChart', [trace], layout, sharedPlotlyConfig);
+    safePlot('geoChart', [trace], layout);
 }
 
 function createTimelineChart() {
@@ -1089,7 +1090,7 @@ function createTimelineChart() {
         yaxis: {title: 'Number of Cases', gridcolor: getChartColors().grid},
         xaxis: {gridcolor: getChartColors().grid, tickangle: 90, tickformat: '%m/%d', dtick: 86400000 * 2}
     });
-    Plotly.newPlot('timelineChart', traces, layout, {responsive: true, displayModeBar: true, displaylogo: false});
+    safePlot('timelineChart', traces, layout, {responsive: true, displayModeBar: true, displaylogo: false});
 }
 
 function createImpactChart() {
@@ -1110,7 +1111,7 @@ function createImpactChart() {
         hovertemplate: '<b>%{label}</b><br>Count: %{value}<br>Percentage: %{percent}<extra></extra>'
     };
     const layout = commonLayout({showlegend: false, margin: {l: 10, r: 10, t: 20, b: 20}});
-    Plotly.newPlot('ticketTypeChart', [trace], layout, {responsive: true, displayModeBar: true, displaylogo: false});
+    safePlot('ticketTypeChart', [trace], layout, {responsive: true, displayModeBar: true, displaylogo: false});
 }
 
 function createTicketTypeChart() {
@@ -1131,7 +1132,7 @@ function createTicketTypeChart() {
         hovertemplate: '<b>%{label}</b><br>Count: %{value}<br>Percentage: %{percent}<extra></extra>'
     };
     const layout = commonLayout({showlegend: false, margin: {l: 20, r: 20, t: 40, b: 40}});
-    Plotly.newPlot('severityChart', [trace], layout, {responsive: true, displayModeBar: true, displaylogo: false});
+    safePlot('severityChart', [trace], layout, {responsive: true, displayModeBar: true, displaylogo: false});
 }
 
 function createOwnerChart() {
@@ -1153,13 +1154,12 @@ function createOwnerChart() {
         textposition: 'inside',
         textfont: {color: 'white', size: 12},
         marker: {
-            color: sortedEntries.map((_, i) => colorSchemes.sources[i % colorSchemes.sources.length]),
-            line: {color: 'rgba(255,255,255,0.8)', width: 1}
+            color: sortedEntries.map((_, i) => colorSchemes.sources[i % colorSchemes.sources.length]), line: {color: 'rgba(255,255,255,0.8)', width: 1}
         },
         hovertemplate: '<b>%{y}</b><br>Cases: %{x}<extra></extra>'
     };
     const layout = commonLayout({showlegend: false, margin: {l: 120, r: 40, t: 20, b: 40}, xaxis: {title: 'Number of Cases', gridcolor: getChartColors().grid}, yaxis: {gridcolor: getChartColors().grid}});
-    Plotly.newPlot('heatmapChart', [trace], layout, {responsive: true, displayModeBar: true, displaylogo: false});
+    safePlot('heatmapChart', [trace], layout, {responsive: true, displayModeBar: true, displaylogo: false});
 }
 
 function createFunnelChart() {
@@ -1175,7 +1175,7 @@ function createFunnelChart() {
         hovertemplate: '<b>%{y}</b><br>Count: %{x}<br>Percentage: %{percentInitial}<extra></extra>'
     };
     const layout = commonLayout({showlegend: false, margin: {l: 150, r: 40, t: 20, b: 40}});
-    Plotly.newPlot('funnelChart', [trace], layout, {responsive: true, displayModeBar: true, displaylogo: false});
+    safePlot('funnelChart', [trace], layout, {responsive: true, displayModeBar: true, displaylogo: false});
 }
 
 function updateTable() {
@@ -1270,19 +1270,7 @@ function exportToCSV() {
     const severityMap = {0: 'Unknown', 1: 'Low', 2: 'Medium', 3: 'High', 4: 'Critical'};
     const statusMap = {0: 'Pending', 1: 'Active', 2: 'Closed'};
 
-    const csvContent = [
-        headers.join(','),
-        ...filteredData.map(item => [
-            item.id,
-            `"${item.name.replace(/"/g, '""')}"`,
-            severityMap[item.severity] || 'Unknown',
-            statusMap[item.status] || 'Unknown',
-            item.affected_country,
-            item.impact,
-            item.type,
-            new Date(item.created).toISOString()
-        ].join(','))
-    ].join('\n');
+    const csvContent = [headers.join(','), ...filteredData.map(item => [item.id, `"${item.name.replace(/"/g, '""')}"`, severityMap[item.severity] || 'Unknown', statusMap[item.status] || 'Unknown', item.affected_country, item.impact, item.type, new Date(item.created).toISOString()].join(','))].join('\n');
 
     downloadCSV(csvContent, 'security_incidents.csv');
 }
@@ -1292,15 +1280,7 @@ function exportSummary() {
     const criticalIncidents = filteredData.filter(item => item.severity === 4).length;
     const openIncidents = filteredData.filter(item => item.is_open).length;
 
-    const summaryData = [
-        ['Metric', 'Value'],
-        ['Total Incidents', totalIncidents],
-        ['Critical Incidents', criticalIncidents],
-        ['Open Incidents', openIncidents],
-        ['Countries Affected', new Set(filteredData.map(item => item.affected_country)).size],
-        ['Top Country', getMostCommon('affected_country')],
-        ['Top Ticket Type', getMostCommon('type')]
-    ];
+    const summaryData = [['Metric', 'Value'], ['Total Incidents', totalIncidents], ['Critical Incidents', criticalIncidents], ['Open Incidents', openIncidents], ['Countries Affected', new Set(filteredData.map(item => item.affected_country)).size], ['Top Country', getMostCommon('affected_country')], ['Top Ticket Type', getMostCommon('type')]];
 
     const csvContent = summaryData.map(row => row.join(',')).join('\n');
     downloadCSV(csvContent, 'incident_summary.csv');
@@ -1408,8 +1388,7 @@ function sortData(data) {
         }
 
         let comparison = 0;
-        if (aVal > bVal) comparison = 1;
-        else if (aVal < bVal) comparison = -1;
+        if (aVal > bVal) comparison = 1; else if (aVal < bVal) comparison = -1;
 
         return currentSort.direction === 'asc' ? comparison : -comparison;
     });
@@ -1417,8 +1396,7 @@ function sortData(data) {
 
 function saveSortPreferences() {
     const preferences = {
-        column: currentSort.column,
-        direction: currentSort.direction
+        column: currentSort.column, direction: currentSort.direction
     };
     document.cookie = `tableSort=${JSON.stringify(preferences)}; path=/; max-age=${60 * 60 * 24 * 30}`; // 30 days
 }
@@ -1671,8 +1649,7 @@ function handleDragEnd(e) {
 
 function saveColumnPreferences() {
     const preferences = {
-        visibleColumns: visibleColumns,
-        columnOrder: columnOrder
+        visibleColumns: visibleColumns, columnOrder: columnOrder
     };
     document.cookie = `tableColumns=${JSON.stringify(preferences)}; path=/; max-age=${60 * 60 * 24 * 30}`; // 30 days
 }
