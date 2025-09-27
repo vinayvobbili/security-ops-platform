@@ -56,6 +56,7 @@ class TicketCache:
         'impact': 'impact',
         'automation_level': 'automationlevel',
         'hostname': 'hostname',
+        'username': 'username',
     }
 
     # Calculated fields we compute from other fields
