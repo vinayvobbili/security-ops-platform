@@ -1,7 +1,8 @@
-from webexpythonsdk import WebexAPI
-from datetime import datetime
-import pytz
 import logging
+from datetime import datetime
+
+import pytz
+from webexpythonsdk import WebexAPI
 
 from my_config import get_config
 from services.xsoar import TicketHandler
@@ -187,7 +188,7 @@ def start(room_id):
         day_name = now_eastern.strftime('%A')
         shift_name = get_current_shift()
         staffing_data = get_staffing_data(day_name, shift_name)
-        shift_lead = staffing_data.get('SA', ['Unknown'])[0] if staffing_data.get('SA') else 'Unknown'
+        shift_lead = staffing_data.get('senior_analysts', ['Unknown'])[0] if staffing_data.get('senior_analysts') else 'Unknown'
 
         # Process all tickets and calculate urgency
         processed_tickets = []
@@ -216,7 +217,6 @@ def start(room_id):
         )
 
     except Exception as e:
-        error_message = f"❌ **Error processing response SLA tickets:** {str(e)}"
         logger.error(f"Critical error in response SLA processing: {e}", exc_info=True)
 
 

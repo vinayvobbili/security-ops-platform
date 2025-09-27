@@ -216,7 +216,11 @@
     </div>
 
     <!-- Data Table -->
-    <div id="dataTableSection" class="data-table-section" style="display: none;">
+    <div id="dataTableSection" class="data-table-section" style="display: none; position: relative;">
+        <!-- Empty state hint (shown only when .empty class present) -->
+        <div id="dataTableEmptyHint" class="empty-hint" aria-hidden="true">No data. Adjust filters to see results.</div>
+        <!-- Live region for table status updates -->
+        <div id="tableStatusLive" class="sr-only" aria-live="polite" aria-atomic="true"></div>
         <div class="table-controls">
             <div class="table-header">📋 Case Details (showing first 100 results)</div>
             <div class="column-selector">
@@ -265,6 +269,8 @@
                 </tbody>
             </table>
         </div>
+        <!-- Table info / pagination bar -->
+        <div id="tableInfoBar" class="table-info-bar" aria-live="polite"></div>
         <div class="export-section">
             <button class="export-btn" id="exportCsvBtn">📥 Export to CSV</button>
             <button class="export-btn" id="exportSummaryBtn">📊 Export Summary</button>
