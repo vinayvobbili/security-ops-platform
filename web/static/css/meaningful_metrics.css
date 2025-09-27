@@ -949,6 +949,57 @@ body.dark-mode .delta-badge.neutral {
 .chart-canvas {
     height: 400px;
     width: 100%;
+    position: relative; /* allow skeleton & watermark pseudo-elements */
+}
+
+/* Empty chart state (watermark + skeleton shimmer) */
+.chart-container.empty {
+    position: relative;
+    overflow: hidden;
+}
+
+.chart-container.empty::after {
+    content: 'No Data';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 1.4rem;
+    font-weight: 600;
+    letter-spacing: 1px;
+    color: #64748b;
+    opacity: 0.35;
+    pointer-events: none;
+    text-transform: uppercase;
+}
+
+.chart-container.empty .chart-canvas::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, #f1f5f9 0%, #e2e8f0 40%, #f1f5f9 80%);
+    background-size: 200% 100%;
+    animation: skeletonPulse 1.15s linear infinite;
+    border-radius: 8px;
+    filter: saturate(0.9);
+}
+
+body.dark-mode .chart-container.empty::after {
+    color: #94a3b8;
+    opacity: 0.28;
+}
+
+body.dark-mode .chart-container.empty .chart-canvas::before {
+    background: linear-gradient(90deg, #334155 0%, #475569 40%, #334155 80%);
+}
+
+@keyframes skeletonPulse {
+    0% {
+        background-position: 0% 50%;
+    }
+    100% {
+        background-position: -200% 50%;
+    }
 }
 
 .data-table-section {
