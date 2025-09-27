@@ -61,18 +61,17 @@ class TicketCache:
     # Calculated fields we compute from other fields
     CALCULATED_FIELDS = {
         'is_open': 'status in (0, 1)',  # Pending or Active status
-        'age_days': '(current_time - created).days if open else None',  # Days since creation for open tickets
+        'currently_aging_days': '(current_time - created).days if open else None',  # Days since creation for open tickets
         'days_since_creation': '(current_time - created).days',  # Total days since creation
         'resolution_time_days': '(closed - created).days if both exist',  # Days to resolve
         'resolution_bucket': 'categorical grouping of resolution_time_days',  # open, lt7, lt14, lt30, gt30
         'has_resolution_time': 'resolution_time_days is not None',  # Boolean flag
-        'age_category': 'categorical grouping of age_days',  # le7, le30, gt30, all
+        'age_category': 'categorical grouping of currently_aging_days',  # le7, le30, gt30, all
         'created_days_ago': 'alias for days_since_creation',  # Legacy field name
         'status_display': 'human readable status names',  # Pending/Active/Closed
         'severity_display': 'human readable severity names',  # Low/Medium/High/Critical
         'created_display': 'MM/DD formatted creation date',  # Display format
         'closed_display': 'MM/DD formatted close date',  # Display format
-        'age_display': 'formatted age with "d" suffix',  # e.g., "5d"
         'has_breached_response_sla': 'timetorespond.breachTriggered boolean',  # Response SLA breach flag
         'has_breached_containment_sla': 'timetocontain.breachTriggered boolean',  # Containment SLA breach flag
         'time_to_respond_secs': 'timetorespond.totalDuration in seconds',  # Response time in seconds
@@ -99,12 +98,12 @@ class TicketCache:
         return None
 
     @staticmethod
-    def _age_category(age_days: Optional[int]) -> str:
-        if age_days is None:
+    def _age_category(currently_aging_days: Optional[int]) -> str:
+        if currently_aging_days is None:
             return 'all'
-        if age_days <= 7:
+        if currently_aging_days <= 7:
             return 'le7'
-        if age_days <= 30:
+        if currently_aging_days <= 30:
             return 'le30'
         return 'gt30'
 
@@ -132,12 +131,6 @@ class TicketCache:
             return f"{d.month:02d}/{d.day:02d}"
         except Exception:
             return date_str
-
-    @staticmethod
-    def _format_age_display(age_days: Optional[int]) -> str:
-        if age_days is None:
-            return ''
-        return f"{age_days}d"
 
     @staticmethod
     def _extract_duration(time_obj: Optional[Dict[str, Any]]) -> Optional[int]:
@@ -200,7 +193,7 @@ class TicketCache:
         ui_tickets = instance._process_for_ui(raw_tickets)
 
         # Step 3: Save both versions
-        instance._save_tickets(raw_tickets, ui_tickets, lookback_days)
+        instance._save_tickets(raw_tickets, ui_tickets)
 
     def _fetch_raw_tickets(self, lookback_days: int) -> List[Ticket]:
         """Step 1: Fetch raw tickets from XSOAR."""
@@ -272,7 +265,7 @@ class TicketCache:
         is_open = status in (0, 1)
 
         # Age and timing calculations
-        age_days = (current_time - created_dt).days if (created_dt and is_open) else None
+        currently_aging_days = (current_time - created_dt).days if (created_dt and is_open) else None
         days_since_creation = (current_time - created_dt).days if created_dt else None
         resolution_time_days = (closed_dt - created_dt).days if (created_dt and closed_dt) else None
 
@@ -283,12 +276,12 @@ class TicketCache:
         # Add all computed fields
         ticket.update({
             'is_open': is_open,
-            'age_days': age_days,
+            'currently_aging_days': currently_aging_days,
             'days_since_creation': days_since_creation,
             'resolution_time_days': resolution_time_days,
             'resolution_bucket': self._resolution_bucket(resolution_time_days, is_open),
             'has_resolution_time': resolution_time_days is not None,
-            'age_category': self._age_category(age_days),
+            'age_category': self._age_category(currently_aging_days),
             'created_days_ago': days_since_creation,
             # SLA fields
             'has_breached_response_sla': bool(timetorespond.get('breachTriggered', False)),
@@ -302,10 +295,9 @@ class TicketCache:
             'severity_display': {0: 'Unknown', 1: 'Low', 2: 'Medium', 3: 'High', 4: 'Critical'}.get(ticket.get('severity', 0), 'Unknown'),
             'created_display': self._format_date_for_display(ticket.get('created')),
             'closed_display': self._format_date_for_display(ticket.get('closed')),
-            'age_display': self._format_age_display(age_days),
         })
 
-    def _save_tickets(self, raw_tickets: List[Ticket], ui_tickets: List[Ticket], lookback_days: int) -> None:
+    def _save_tickets(self, raw_tickets: List[Ticket], ui_tickets: List[Ticket]) -> None:
         """Step 3: Save both raw and UI ticket data."""
         today_date = datetime.now().strftime('%m-%d-%Y')
         charts_dir = self.root_directory / 'web' / 'static' / 'charts' / today_date
@@ -328,7 +320,6 @@ class TicketCache:
         print("✅ Ticket caching completed successfully!")
 
 
-
 def main():
     log.info("Starting ticket caching process")
     cache = TicketCache()
@@ -340,14 +331,14 @@ def main():
         with open(ui_path, 'r') as f:
             tickets = json.load(f)
 
-        print("\n" + "="*80)
+        print("\n" + "=" * 80)
         print("SAMPLE UI TICKETS (first 3 for inspection):")
-        print("="*80)
+        print("=" * 80)
         pp = pprint.PrettyPrinter(indent=2, width=100)
         for i, ticket in enumerate(tickets[:3], 1):
             print(f"\n--- Ticket #{i} ---")
             pp.pprint(ticket)
-        print("="*80)
+        print("=" * 80)
 
     log.info("Ticket caching process completed")
 
