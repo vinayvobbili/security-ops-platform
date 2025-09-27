@@ -26,7 +26,7 @@ const availableColumns = {
 
     // Calculated Fields (computed by ticket_cache.py)
     'is_open': {label: 'Is Open', category: 'Status', path: 'is_open', type: 'boolean'},
-    'age_days': {label: 'Age (Days)', category: 'Timing', path: 'age_days', type: 'number'},
+    'currently_aging_days': {label: 'Currently Aging (Days)', category: 'Timing', path: 'currently_aging_days', type: 'number'},
     'days_since_creation': {label: 'Days Since Creation', category: 'Timing', path: 'days_since_creation', type: 'number'},
     'resolution_time_days': {label: 'Resolution Time (Days)', category: 'Timing', path: 'resolution_time_days', type: 'number'},
     'resolution_bucket': {label: 'Resolution Bucket', category: 'Status', path: 'resolution_bucket', type: 'string'},
@@ -36,7 +36,6 @@ const availableColumns = {
     'severity_display': {label: 'Severity Name', category: 'Display', path: 'severity_display', type: 'string'},
     'created_display': {label: 'Created (MM/DD)', category: 'Display', path: 'created_display', type: 'string'},
     'closed_display': {label: 'Closed (MM/DD)', category: 'Display', path: 'closed_display', type: 'string'},
-    'age_display': {label: 'Age Display', category: 'Display', path: 'age_display', type: 'string'},
 
     // Additional useful fields
     'occurred': {label: 'Occurred', category: 'Timing', path: 'occurred', type: 'date'},
@@ -610,9 +609,10 @@ function applyFilters() {
             if (mttcFilter === 3 && mttcSeconds <= 900) return false; // >15 mins (900 seconds)
         }
 
-        // Age filter - only applies to tickets with age data (i.e., open tickets)
-        if (ageFilter > 0 && item.age !== null) {
-            if (item.age > ageFilter) return false; // Age exceeds selected maximum
+        // Age filter - when set (>0), include ONLY tickets whose currently_aging_days exists and is strictly greater
+        if (ageFilter > 0) {
+            if (item.currently_aging_days === null || item.currently_aging_days === undefined) return false; // exclude items without age
+            if (Number(item.currently_aging_days) <= ageFilter) return false; // must be strictly greater than selected age
         }
 
         return true;
@@ -629,7 +629,7 @@ function updateFilterSummary(dateRange, mttrFilter, mttcFilter, ageFilter, count
     container.innerHTML = Array.from(nonRemovableFilters).map(filter => filter.outerHTML).join('');
 
     // Date range - no X button, use slider to change
-    const dateText = dateRange === 1 ? 'Last 1 day' : `Last ${dateRange} days`;
+    const dateText = `Created in Last ${dateRange} day${dateRange === 1 ? '' : 's'}`;
 
     container.innerHTML += `<span class="filter-tag">${dateText}</span>`;
 
@@ -651,7 +651,7 @@ function updateFilterSummary(dateRange, mttrFilter, mttcFilter, ageFilter, count
 
     // Age filter
     if (ageFilter > 0) {
-        const ageText = ageFilter === 1 ? 'Age ≤1 day' : `Age ≤${ageFilter} days`;
+        const ageText = ageFilter === 1 ? 'Age >1 day' : `Age >${ageFilter} days`;
         container.innerHTML += `<span class="filter-tag">${ageText} <button class="remove-filter-btn" onclick="removeFilter('age', '${ageFilter}')">×</button></span>`;
     }
 
@@ -790,7 +790,7 @@ function updateDashboard() {
 
 function calculatePeriodMetrics(data) {
     const totalIncidents = data.length;
-    
+
     const responseSlaBreaches = data.filter(item => {
         return item.has_breached_response_sla === true;
     }).length;
@@ -842,33 +842,33 @@ function calculatePreviousPeriodMetrics() {
     // Get current date range setting
     const dateSlider = document.getElementById('dateRangeSlider');
     const dateRange = parseInt(dateSlider.value) || 30;
-    
+
     // For longer periods (60, 90 days), we likely don't have enough historical data
     // Only show deltas for 7 and 30 day periods
     if (dateRange > 30) {
         return null; // No previous period comparison available
     }
-    
+
     // Calculate previous period dates
     const now = new Date();
     const currentPeriodStart = new Date(now);
     currentPeriodStart.setDate(currentPeriodStart.getDate() - dateRange);
-    
+
     const previousPeriodStart = new Date(currentPeriodStart);
     previousPeriodStart.setDate(previousPeriodStart.getDate() - dateRange);
     const previousPeriodEnd = currentPeriodStart;
-    
+
     // Filter data for previous period
     const previousPeriodData = allData.filter(item => {
         const createdDate = new Date(item.created);
         return createdDate >= previousPeriodStart && createdDate < previousPeriodEnd;
     });
-    
+
     // Only return metrics if we have reasonable data in the previous period
     if (previousPeriodData.length < 5) {
         return null; // Not enough data for meaningful comparison
     }
-    
+
     return calculatePeriodMetrics(previousPeriodData);
 }
 
@@ -930,7 +930,7 @@ function createDeltaBadge(currentValue, previousValue, isPercentage = false, rev
 function updateMetrics() {
     // Calculate current period metrics
     const currentMetrics = calculatePeriodMetrics(filteredData);
-    
+
     // Calculate previous period metrics for comparison
     const previousMetrics = calculatePreviousPeriodMetrics();
 
@@ -1254,6 +1254,15 @@ function updateTable() {
                                 const statusMap = {0: 'Pending', 1: 'Active', 2: 'Closed'};
                                 const status = statusMap[value] || 'Unknown';
                                 td.innerHTML = `<span class="status-${status.toLowerCase()}">${status}</span>`;
+                            } else if (columnId === 'currently_aging_days') {
+                                console.log('Rendering currently_aging_days:', typeof value, value);
+                                if (value === null || value === undefined) {
+                                    td.textContent = '--';
+                                    td.style.color = '#6c757d';
+                                } else {
+                                    td.textContent = value;
+                                    td.style.textAlign = 'right';
+                                }
                             } else {
                                 td.textContent = value;
                             }
@@ -1756,7 +1765,7 @@ function initLocationTabs() {
     const tabButtons = document.querySelectorAll('.tab-button');
 
     tabButtons.forEach(button => {
-        button.addEventListener('click', function() {
+        button.addEventListener('click', function () {
             const targetTab = this.getAttribute('data-tab');
 
             // Remove active class from all buttons and panes
@@ -1787,6 +1796,6 @@ function initLocationTabs() {
 }
 
 // Initialize location tabs when DOM is loaded
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', function () {
     initLocationTabs();
 });
