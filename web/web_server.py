@@ -1235,17 +1235,27 @@ def api_meaningful_metrics_data():
             return jsonify({'success': False, 'error': 'Cache file not found'}), 404
 
         with open(cache_file, 'r') as f:
-            processed_data = json.load(f)
+            cached_data = json.load(f)
 
-        # Data is already processed and flattened by ticket_cache.py
-        # No additional processing needed
-
-        return jsonify({
-            'success': True,
-            'data': processed_data,
-            'total_count': len(processed_data),
-            'cache_date': today_date
-        })
+        # Check if data is in new format (with metadata) or old format (just array)
+        if isinstance(cached_data, dict) and 'data' in cached_data:
+            # New format: already has metadata including data_generated_at
+            return jsonify({
+                'success': True,
+                'data': cached_data['data'],
+                'total_count': cached_data.get('total_count', len(cached_data['data'])),
+                'cache_date': cached_data.get('cache_date', today_date),
+                'data_generated_at': cached_data.get('data_generated_at')
+            })
+        else:
+            # Old format: just the array of tickets (fallback)
+            return jsonify({
+                'success': True,
+                'data': cached_data,
+                'total_count': len(cached_data),
+                'cache_date': today_date,
+                'data_generated_at': None  # Will use fallback in frontend
+            })
 
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
