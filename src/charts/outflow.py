@@ -1,10 +1,10 @@
 import json
 import re
+import ssl
 import sys
+import urllib.request
 from datetime import datetime, timedelta
 from pathlib import Path
-import urllib.request
-import ssl
 
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -88,6 +88,7 @@ SPLUNK_LOGO_SIZE = 0.02  # Splunk logos
 IOC_HUNT_LOGO_SIZE = 0.03  # IOC Hunt logos
 AREA1_LOGO_SIZE = 0.06  # Area1 logos
 LEAKED_CREDS_LOGO_SIZE = 0.04  # Leaked Credentials logos
+AKAMAI_LOGO_SIZE = 0.04
 
 # Create a mapping of detection sources to logo URLs and filenames
 LOGO_URL_MAPPING = {
@@ -109,6 +110,8 @@ LOGO_URL_MAPPING = {
     "ioc hunt": ("https://www.pngitem.com/pimgs/b/104-1049518_detective-silhouette-png.png", "ioc_hunt.png"),
     "area1 alert": ("https://logowik.com/content/uploads/images/area-1-security8161.jpg", "area1.png"),
     "leaked creds": ("https://www.shutterstock.com/image-vector/data-personal-leak-vector-identity-600nw-2143054971.jpg", "leaked_credentials.png"),
+    "akamai": ("https://www.vhv.rs/dpng/d/79-796343_akamai-logo-png-transparent-png.png", "akamai.png"),
+    "akamai alert": ("https://www.vhv.rs/dpng/d/79-796343_akamai-logo-png-transparent-png.png", "akamai.png"),
     "unknown": ("https://cdn-icons-png.flaticon.com/512/2534/2534590.png", "unknown.png")
 }
 
@@ -276,12 +279,16 @@ def create_graph(tickets):
                         logo_size = AREA1_LOGO_SIZE
                     elif "leaked cred" in source_lower:
                         logo_size = LEAKED_CREDS_LOGO_SIZE
+                    elif "akamai" in source_lower:
+                        logo_size = AKAMAI_LOGO_SIZE
                     else:
                         logo_size = DEFAULT_LOGO_SIZE
 
                     # Create matplotlib image
                     imagebox = OffsetImage(image_with_bg, zoom=logo_size)  # Use source-specific logo size
-                    x_pos = bottom[i] + max(bottom) * 0.005  # Position very close to bar end
+                    # Smaller offset for larger logos to keep them closer to bars
+                    offset = 0.1 if logo_size >= 0.07 else 0.3
+                    x_pos = bottom[i] + offset
                     ab = AnnotationBbox(imagebox, (x_pos, i), frameon=False, xycoords='data',
                                         box_alignment=(0, 0.5))
                     ax.add_artist(ab)
