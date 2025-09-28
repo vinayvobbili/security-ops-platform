@@ -317,8 +317,7 @@ class TicketCache:
         ui_data_with_metadata = {
             'data': ui_tickets,
             'data_generated_at': datetime.now().isoformat(),
-            'total_count': len(ui_tickets),
-            'cache_date': today_date
+            'total_count': len(ui_tickets)
         }
         with open(ui_path, 'w') as f:
             json.dump(ui_data_with_metadata, f, indent=2)
