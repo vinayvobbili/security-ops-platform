@@ -6,12 +6,12 @@ import schedule
 
 import secops
 from my_config import get_config
-
+from src.components.ticket_cache import TicketCache
 # Configure SSL for corporate proxy environments (Zscaler, etc.)
 from src.utils.ssl_config import configure_ssl_if_needed
+
 configure_ssl_if_needed()
 
-from services.xsoar import TicketHandler  # Added import for caching past 90 days tickets
 from src import helper_methods, verify_host_online_status
 from src.charts import mttr_mttc, outflow, lifespan, heatmap, sla_breaches, aging_tickets, inflow, qradar_rule_efficacy, de_stories, days_since_incident, re_stories, threatcon_level, vectra_volume, \
     crowdstrike_volume, threat_tippers, crowdstrike_efficacy
@@ -65,7 +65,7 @@ def main():
 
     schedule.every().day.at("00:01", eastern).do(lambda: (
         make_dir_for_todays_charts(helper_methods.CHARTS_DIR_PATH),
-        TicketHandler().cache_past_90_days_tickets(),
+        TicketCache.generate(),
         aging_tickets.make_chart(),
         crowdstrike_efficacy.make_chart(),
         crowdstrike_volume.make_chart(),
