@@ -1244,7 +1244,6 @@ def api_meaningful_metrics_data():
                 'success': True,
                 'data': cached_data['data'],
                 'total_count': cached_data.get('total_count', len(cached_data['data'])),
-                'cache_date': cached_data.get('cache_date', today_date),
                 'data_generated_at': cached_data.get('data_generated_at')
             })
         else:
@@ -1253,7 +1252,6 @@ def api_meaningful_metrics_data():
                 'success': True,
                 'data': cached_data,
                 'total_count': len(cached_data),
-                'cache_date': today_date,
                 'data_generated_at': None  # Will use fallback in frontend
             })
 
