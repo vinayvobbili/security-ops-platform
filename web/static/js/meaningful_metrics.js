@@ -154,23 +154,26 @@ function getChartColors() {
 
 // Initialize dashboard
 // Data freshness functions
-    function updateDataTimestamp() {
+    function updateDataTimestamp(dataGeneratedAt) {
         const timestampElement = document.getElementById('dataTimestamp');
         if (timestampElement) {
-            // Since data excludes "today" and is generated at 12:01 AM ET,
-            // show when the job last ran (this morning at 12:01 AM ET)
-            const today = new Date();
-
-            // Set to 12:01 AM today in ET timezone
-            const options = {
-                year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'America/New_York', timeZoneName: 'short'
-            };
-
-            // Force the time to show 12:01 AM by setting the time
-            const todayAt1201 = new Date(today);
-            todayAt1201.setHours(0, 1, 0, 0);
-
-            timestampElement.textContent = todayAt1201.toLocaleString('en-US', options);
+            if (dataGeneratedAt) {
+                // Use the actual timestamp from the API
+                const timestamp = new Date(dataGeneratedAt);
+                const options = {
+                    year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'America/New_York', timeZoneName: 'short'
+                };
+                timestampElement.textContent = timestamp.toLocaleString('en-US', options);
+            } else {
+                // Fallback to previous behavior if timestamp not provided
+                const today = new Date();
+                const options = {
+                    year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'America/New_York', timeZoneName: 'short'
+                };
+                const todayAt1201 = new Date(today);
+                todayAt1201.setHours(0, 1, 0, 0);
+                timestampElement.textContent = todayAt1201.toLocaleString('en-US', options);
+            }
         }
     }
 
@@ -454,7 +457,7 @@ function getChartColors() {
 
             if (result.success) {
                 allData = result.data;
-                updateDataTimestamp();
+                updateDataTimestamp(result.data_generated_at);
                 populateFilterOptions();
                 applyFilters();
                 hideLoading();

@@ -311,11 +311,17 @@ class TicketCache:
             json.dump(raw_tickets, f, indent=4)
         log.info(f"Saved {len(raw_tickets)} raw tickets to {raw_path}")
 
-        # Save UI tickets
+        # Save UI tickets with metadata
         print("📊 Saving UI ticket data...")
         ui_path = charts_dir / 'past_90_days_tickets.json'
+        ui_data_with_metadata = {
+            'data': ui_tickets,
+            'data_generated_at': datetime.now().isoformat(),
+            'total_count': len(ui_tickets),
+            'cache_date': today_date
+        }
         with open(ui_path, 'w') as f:
-            json.dump(ui_tickets, f, indent=2)
+            json.dump(ui_data_with_metadata, f, indent=2)
         log.info(f"Saved {len(ui_tickets)} UI tickets to {ui_path}")
 
         print("✅ Ticket caching completed successfully!")
@@ -330,7 +336,15 @@ def main():
     ui_path = cache.root_directory / 'web' / 'static' / 'charts' / datetime.now().strftime('%m-%d-%Y') / 'past_90_days_tickets.json'
     if ui_path.exists():
         with open(ui_path, 'r') as f:
-            tickets = json.load(f)
+            cached_data = json.load(f)
+
+        # Extract tickets from new format (with metadata) or old format (just array)
+        if isinstance(cached_data, dict) and 'data' in cached_data:
+            tickets = cached_data['data']
+            print(f"\n📊 Data generated at: {cached_data.get('data_generated_at', 'Unknown')}")
+            print(f"📦 Total tickets: {cached_data.get('total_count', len(tickets))}")
+        else:
+            tickets = cached_data  # Old format fallback
 
         print("\n" + "=" * 80)
         print("SAMPLE UI TICKETS (first 3 for inspection):")
