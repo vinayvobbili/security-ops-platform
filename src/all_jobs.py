@@ -98,7 +98,7 @@ def main():
     schedule.every().monday.at("08:00", eastern).do(lambda: (
         # phish_fort.fetch_and_report_incidents(),
         oncall.announce_change(),
-        qa_tickets.generate, config.webex_room_id_qa_tickets
+        qa_tickets.generate(config.webex_room_id_qa_tickets)
     ))
     schedule.every().day.at("17:00", eastern).do(approved_security_testing.removed_expired_entries)
     schedule.every().day.at("07:00", eastern).do(thithi.main)
