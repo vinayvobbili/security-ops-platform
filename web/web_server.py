@@ -614,10 +614,12 @@ def main():
     charts_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), 'static/charts'))
     app.config['CHARTS_DIR'] = charts_dir
 
-    # Start proxy server in a separate thread
-    proxy_thread = threading.Thread(target=start_proxy_server, daemon=True)
-    proxy_thread.start()
-    print(f"High-performance proxy server thread started on port {PROXY_PORT}")
+    # Only start proxy server in main process (not in reloader child process)
+    if os.environ.get('WERKZEUG_RUN_MAIN') != 'true':
+        # Start proxy server in a separate thread
+        proxy_thread = threading.Thread(target=start_proxy_server, daemon=True)
+        proxy_thread.start()
+        print(f"High-performance proxy server thread started on port {PROXY_PORT}")
 
     # Start Flask server in main thread
     port = 80
