@@ -196,6 +196,8 @@ class TicketCache:
         # Step 3: Save both versions
         instance._save_tickets(raw_tickets, ui_tickets)
 
+        #
+
     def _fetch_raw_tickets(self, lookback_days: int) -> List[Ticket]:
         """Step 1: Fetch raw tickets from XSOAR."""
         end_date = datetime.now(timezone.utc)
