@@ -1,7 +1,13 @@
+# Configure SSL for corporate proxy environments (Zscaler, etc.) - MUST BE FIRST
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from src.utils.ssl_config import configure_ssl_if_needed
+configure_ssl_if_needed(verbose=True)  # Re-enabled due to ZScaler connectivity issues
+
 import logging.handlers
 import random
 from datetime import datetime
-from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import fasteners
@@ -18,10 +24,6 @@ from webexteamssdk import WebexTeamsAPI
 from my_config import get_config
 from src.epp import ring_tag_cs_hosts, cs_hosts_without_ring_tag, cs_servers_with_invalid_ring_tags
 from src.epp.tanium_hosts_without_ring_tag import create_processor
-
-# Configure SSL for corporate proxy environments (Zscaler, etc.)
-# from src.utils.ssl_config import configure_ssl_if_needed
-# configure_ssl_if_needed()  # Disabled after proper ZScaler Root CA installation
 from src.utils.logging_utils import log_activity
 
 CONFIG = get_config()

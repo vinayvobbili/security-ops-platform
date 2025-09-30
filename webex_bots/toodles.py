@@ -1,8 +1,14 @@
+# Configure SSL for corporate proxy environments (Zscaler, etc.) - MUST BE FIRST
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from src.utils.ssl_config import configure_ssl_if_needed
+configure_ssl_if_needed(verbose=True)  # Re-enabled due to ZScaler connectivity issues
+
 import ipaddress
 import logging.handlers
 import re
 from datetime import datetime, timedelta
-from pathlib import Path
 from urllib.parse import quote
 from zoneinfo import ZoneInfo
 
@@ -23,10 +29,6 @@ from webexpythonsdk.models.cards.actions import Submit
 import src.components.oncall as oncall
 from data.data_maps import azdo_projects, azdo_orgs, azdo_area_paths
 from my_config import get_config
-
-# Configure SSL for corporate proxy environments (Zscaler, etc.)
-# from src.utils.ssl_config import configure_ssl_if_needed
-# configure_ssl_if_needed()  # Disabled after proper ZScaler Root CA installation
 
 from services import xsoar, azdo
 from services.approved_testing_utils import add_approved_testing_entry
