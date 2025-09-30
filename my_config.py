@@ -44,7 +44,7 @@ def get_config():
         xsoar_lists_filename=os.environ["XSOAR_LISTS_FILENAME"],
         barnacles_approved_users=os.environ["BARNACLES_APPROVED_USERS"],
         team_name=os.environ["TEAM_NAME"],
-        ollama_llm_model=os.environ.get("OLLAMA_LLM_MODEL", "qwen2.5:32b"),
+        ollama_llm_model=os.environ.get("OLLAMA_LLM_MODEL"),
         ollama_embedding_model=os.environ.get("OLLAMA_EMBEDDING_MODEL", "nomic-embed-text"),
         azdo_org=os.environ["AZDO_ORGANIZATION"],
         azdo_de_project=os.environ["AZDO_DE_PROJECT"],
