@@ -1,10 +1,10 @@
-import streamlit as st
 import json
-import pandas as pd
 from datetime import datetime
 from pathlib import Path
+
+import pandas as pd
 import plotly.express as px
-import plotly.graph_objects as go
+import streamlit as st
 
 # Page config
 st.set_page_config(
@@ -12,6 +12,7 @@ st.set_page_config(
     page_icon="🎫",
     layout="wide"
 )
+
 
 @st.cache_data
 def load_cached_tickets():
@@ -28,6 +29,7 @@ def load_cached_tickets():
         tickets = json.load(f)
 
     return tickets
+
 
 def parse_ticket_data(tickets):
     """Convert ticket data to pandas DataFrame"""
@@ -56,7 +58,9 @@ def parse_ticket_data(tickets):
 
     return df
 
+
 def main():
+    date_range = ''
     st.title("🎫 XSOAR Ticket Dashboard")
     st.markdown("Interactive dashboard for analyzing cached XSOAR ticket data")
 
@@ -104,13 +108,13 @@ def main():
     filtered_df = df[
         (df['severity'].isin(selected_severities)) &
         (df['status'].isin(selected_statuses))
-    ]
+        ]
 
     if len(date_range) == 2:
         filtered_df = filtered_df[
             (filtered_df['created'].dt.date >= date_range[0]) &
             (filtered_df['created'].dt.date <= date_range[1])
-        ]
+            ]
 
     # Main dashboard
     col1, col2, col3, col4 = st.columns(4)
@@ -197,6 +201,7 @@ def main():
             file_name=f"xsoar_tickets_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
             mime="text/csv"
         )
+
 
 if __name__ == "__main__":
     main()
