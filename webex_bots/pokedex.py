@@ -18,26 +18,25 @@ ARCHITECTURE APPROACH:
 - Synchronous processing in WebX threads with agent-driven intelligence
 - Source attribution handled by agent prompts and tool responses
 """
+
+# Configure SSL for corporate proxy environments (Zscaler, etc.) - MUST BE FIRST
+import sys
+from pathlib import Path
+PROJECT_ROOT = Path(__file__).parent.parent
+sys.path.insert(0, str(PROJECT_ROOT))
+from src.utils.ssl_config import configure_ssl_if_needed
+configure_ssl_if_needed(verbose=True)  # Re-enabled due to ZScaler connectivity issues
+
 import csv
 import logging.handlers
 import os
 import random
-import sys
 from datetime import datetime
-from pathlib import Path
-
-# Add project root to Python path
-PROJECT_ROOT = Path(__file__).parent.parent
-sys.path.insert(0, str(PROJECT_ROOT))
 
 from pytz import timezone
 from webex_bot.webex_bot import WebexBot
 
 from my_config import get_config
-
-# Configure SSL for corporate proxy environments (Zscaler, etc.)
-# from src.utils.ssl_config import configure_ssl_if_needed
-# configure_ssl_if_needed()  # Disabled after proper ZScaler Root CA installation
 from my_bot.core.my_model import ask, initialize_model_and_agent
 from my_bot.core.session_manager import get_session_manager
 from services.bot_rooms import get_room_name
