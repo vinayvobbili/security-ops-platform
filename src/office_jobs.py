@@ -1,3 +1,10 @@
+import matplotlib
+
+matplotlib.rcParams.update({
+    "font.family": "DejaVu Sans",
+    "axes.unicode_minus": False,
+})
+
 import time
 
 import pytz
