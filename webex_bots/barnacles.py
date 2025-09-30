@@ -11,9 +11,8 @@ ROOT_DIRECTORY = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT_DIRECTORY))
 
 # Configure SSL for corporate proxy environments (Zscaler, etc.)
-from src.utils.ssl_config import configure_ssl_if_needed
-
-configure_ssl_if_needed()
+# from src.utils.ssl_config import configure_ssl_if_needed
+# configure_ssl_if_needed()  # Disabled after proper ZScaler Root CA installation
 
 import webexpythonsdk.models.cards.inputs as INPUTS
 import webexpythonsdk.models.cards.options as OPTIONS
