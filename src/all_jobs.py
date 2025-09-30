@@ -8,9 +8,8 @@ import secops
 from my_config import get_config
 from src.components.ticket_cache import TicketCache
 # Configure SSL for corporate proxy environments (Zscaler, etc.)
-from src.utils.ssl_config import configure_ssl_if_needed
-
-configure_ssl_if_needed()
+# from src.utils.ssl_config import configure_ssl_if_needed
+# configure_ssl_if_needed()  # Disabled after proper ZScaler Root CA installation
 
 from src import helper_methods, verify_host_online_status
 from src.charts import mttr_mttc, outflow, lifespan, heatmap, sla_breaches, aging_tickets, inflow, qradar_rule_efficacy, de_stories, days_since_incident, re_stories, threatcon_level, vectra_volume, \
