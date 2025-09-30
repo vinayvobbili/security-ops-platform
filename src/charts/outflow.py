@@ -6,13 +6,16 @@ import urllib.request
 from datetime import datetime, timedelta
 from pathlib import Path
 
+from matplotlib import transforms
+from matplotlib.offsetbox import OffsetImage, AnnotationBbox
+from matplotlib.ticker import MaxNLocator
 import matplotlib.pyplot as plt
 import pandas as pd
 import pytz
 from PIL import Image
-from matplotlib import transforms
-from matplotlib.offsetbox import OffsetImage, AnnotationBbox
-from matplotlib.ticker import MaxNLocator
+
+from src.charts.chart_style import apply_chart_style
+apply_chart_style()
 
 # Add the project root to Python path
 project_root = Path(__file__).parent.parent.parent
@@ -125,8 +128,8 @@ def create_graph(tickets):
     plt.style.use('default')
 
     # Configure matplotlib fonts
-    import matplotlib
-    matplotlib.rcParams['font.family'] = ['DejaVu Sans', 'Arial Unicode MS', 'Arial']
+    # import matplotlib
+    # matplotlib.rcParams['font.family'] = ['DejaVu Sans', 'Arial Unicode MS', 'Arial']
 
     # Process data
     df = pd.DataFrame(tickets)

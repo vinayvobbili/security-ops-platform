@@ -7,6 +7,8 @@ import matplotlib.transforms as transforms
 import numpy as np
 from matplotlib import pyplot as plt
 from pytz import timezone
+from .chart_style import apply_chart_style
+apply_chart_style()
 
 # Add the project root to Python path
 project_root = Path(__file__).parent.parent.parent
@@ -100,8 +102,8 @@ def save_mttr_mttc_chart(ticket_slas_by_periods):
     plt.style.use('default')
 
     # Configure matplotlib fonts
-    import matplotlib
-    matplotlib.rcParams['font.family'] = ['DejaVu Sans', 'Arial Unicode MS', 'Arial']
+    # import matplotlib
+    # matplotlib.rcParams['font.family'] = ['DejaVu Sans', 'Arial Unicode MS', 'Arial']
 
     # Calculate metrics in minutes for each period
     thirty_days_total_ticket_count = ticket_slas_by_periods['Past 30 days'].total_ticket_count

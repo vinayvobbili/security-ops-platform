@@ -10,7 +10,9 @@ import numpy as np
 import pandas as pd
 import pytz
 from matplotlib.patches import FancyBboxPatch
-from webexpythonsdk import WebexAPI
+# Add centralized style
+from .chart_style import apply_chart_style
+apply_chart_style()
 
 # Add the project root to Python path
 project_root = Path(__file__).parent.parent.parent
@@ -55,9 +57,9 @@ def generate_plot(tickets):
     # Set up the plot style
     plt.style.use('seaborn-v0_8-whitegrid')
 
-    # Configure matplotlib to suppress emoji warnings or use a different approach
-    import matplotlib
-    matplotlib.rcParams['font.family'] = ['DejaVu Sans', 'Arial Unicode MS', 'Arial']
+    # Removed per-file font family override to rely on centralized style
+    # import matplotlib
+    # matplotlib.rcParams['font.family'] = ['DejaVu Sans', 'Arial Unicode MS', 'Arial']
 
     if df.empty:
         # Create an enhanced "no data" visualization

@@ -7,6 +7,8 @@ import matplotlib.transforms as transforms
 import numpy as np
 from matplotlib import pyplot as plt
 from pytz import timezone
+from .chart_style import apply_chart_style
+apply_chart_style()
 
 # Add the project root to Python path
 project_root = Path(__file__).parent.parent.parent
@@ -85,10 +87,6 @@ def get_tickets_by_periods(tickets):
 def save_sla_breaches_chart(ticket_slas_by_periods):
     # Set up enhanced plot style without grids
     plt.style.use('default')
-
-    # Configure matplotlib fonts
-    import matplotlib
-    matplotlib.rcParams['font.family'] = ['DejaVu Sans', 'Arial Unicode MS', 'Arial']
 
     thirty_days_ticket_count = ticket_slas_by_periods['Past 30 days'].total_ticket_count
     seven_days_ticket_count = ticket_slas_by_periods['Past 7 days'].total_ticket_count

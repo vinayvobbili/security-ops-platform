@@ -11,6 +11,8 @@ import pandas as pd
 import pytz
 from matplotlib import transforms
 from webexpythonsdk import WebexAPI
+from .chart_style import apply_chart_style
+apply_chart_style()
 
 from data.data_maps import impact_colors
 from my_config import get_config
@@ -128,10 +130,6 @@ class QRadarEfficacyChart:
 
         # Set up enhanced plot style without grids
         plt.style.use('default')
-
-        # Configure matplotlib fonts
-        import matplotlib
-        matplotlib.rcParams['font.family'] = ['DejaVu Sans', 'Arial Unicode MS', 'Arial']
 
         # Create enhanced figure with better proportions and styling
         fig, ax = plt.subplots(figsize=(20, 12), facecolor='#f8f9fa')
