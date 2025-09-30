@@ -1,18 +1,16 @@
+# Configure SSL for corporate proxy environments (Zscaler, etc.) - MUST BE FIRST
+import sys
+from pathlib import Path
+ROOT_DIRECTORY = Path(__file__).parent.parent
+sys.path.insert(0, str(ROOT_DIRECTORY))
+from src.utils.ssl_config import configure_ssl_if_needed
+configure_ssl_if_needed(verbose=True)  # Re-enabled due to ZScaler connectivity issues
+
 import json
 import logging.handlers
 import random
-import sys
 from datetime import datetime, timedelta
-from pathlib import Path
 from zoneinfo import ZoneInfo
-
-# Add the root directory to Python path for imports
-ROOT_DIRECTORY = Path(__file__).parent.parent
-sys.path.insert(0, str(ROOT_DIRECTORY))
-
-# Configure SSL for corporate proxy environments (Zscaler, etc.)
-# from src.utils.ssl_config import configure_ssl_if_needed
-# configure_ssl_if_needed()  # Disabled after proper ZScaler Root CA installation
 
 import webexpythonsdk.models.cards.inputs as INPUTS
 import webexpythonsdk.models.cards.options as OPTIONS
