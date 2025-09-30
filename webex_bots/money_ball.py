@@ -43,9 +43,8 @@ logging.basicConfig(
 )
 
 # Configure SSL for corporate proxy environments (Zscaler, etc.)
-from src.utils.ssl_config import configure_ssl_if_needed
-
-configure_ssl_if_needed()
+# from src.utils.ssl_config import configure_ssl_if_needed
+# configure_ssl_if_needed()  # Disabled after proper ZScaler Root CA installation
 logger = logging.getLogger(__name__)
 
 # Initialize Webex API client

@@ -35,8 +35,8 @@ from webex_bot.webex_bot import WebexBot
 from my_config import get_config
 
 # Configure SSL for corporate proxy environments (Zscaler, etc.)
-from src.utils.ssl_config import configure_ssl_if_needed
-configure_ssl_if_needed()
+# from src.utils.ssl_config import configure_ssl_if_needed
+# configure_ssl_if_needed()  # Disabled after proper ZScaler Root CA installation
 
 from my_bot.core.my_model import ask, initialize_model_and_agent
 from my_bot.core.session_manager import get_session_manager

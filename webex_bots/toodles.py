@@ -25,8 +25,8 @@ from data.data_maps import azdo_projects, azdo_orgs, azdo_area_paths
 from my_config import get_config
 
 # Configure SSL for corporate proxy environments (Zscaler, etc.)
-from src.utils.ssl_config import configure_ssl_if_needed
-configure_ssl_if_needed()
+# from src.utils.ssl_config import configure_ssl_if_needed
+# configure_ssl_if_needed()  # Disabled after proper ZScaler Root CA installation
 
 from services import xsoar, azdo
 from services.approved_testing_utils import add_approved_testing_entry
