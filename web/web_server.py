@@ -123,7 +123,7 @@ def get_ir_dashboard_slide_show():
 @app.route("/<path:filename>.pac")
 def proxy_pac_file(filename):
     """Handle PAC file requests to reduce log clutter."""
-    # Return empty PAC file content
+    # Return empty PAC file content for any PAC file request
     pac_content = """function FindProxyForURL(url, host) {
     return "DIRECT";
 }"""
@@ -387,30 +387,66 @@ connection_pool = ConnectionPool(max_connections=MAX_CONNECTIONS)
 # Optimized proxy class with async support
 def _relay_sockets(client, target):
     """Simple synchronous socket relay that avoids HTTP processing"""
-    sockets = [client, target]
+    try:
+        # Set non-blocking mode to handle disconnections gracefully
+        client.settimeout(1.0)
+        target.settimeout(1.0)
+        
+        sockets = [client, target]
 
-    # Keep transferring data between client and target
-    while True:
-        # Wait until a socket is ready to be read
-        readable, _, exceptional = select.select(sockets, [], sockets, 60)
-
-        if exceptional:
-            break
-
-        if not readable:
-            continue  # Timeout, try again
-
-        for sock in readable:
-            # Determine the destination socket
-            dest = target if sock is client else client
-
+        # Keep transferring data between client and target
+        while True:
             try:
-                data = sock.recv(BUFFER_SIZE)
-                if not data:
-                    return  # Connection closed
-                dest.sendall(data)
-            except (socket.error, ConnectionResetError, BrokenPipeError):
-                return  # Any socket error means we're done
+                # Check if sockets are still valid before select
+                if client.fileno() == -1 or target.fileno() == -1:
+                    break
+                    
+                # Wait until a socket is ready to be read
+                readable, _, exceptional = select.select(sockets, [], sockets, 1.0)
+
+                if exceptional:
+                    break
+
+                if not readable:
+                    continue  # Timeout, try again
+
+                for sock in readable:
+                    # Check socket validity again
+                    if sock.fileno() == -1:
+                        continue
+                        
+                    # Determine the destination socket
+                    dest = target if sock is client else client
+                    
+                    # Check destination socket validity
+                    if dest.fileno() == -1:
+                        return
+
+                    try:
+                        data = sock.recv(BUFFER_SIZE)
+                        if not data:
+                            return  # Connection closed
+                        dest.sendall(data)
+                    except (socket.error, ConnectionResetError, BrokenPipeError, OSError) as e:
+                        if e.errno == 9:  # Bad file descriptor
+                            return
+                        return  # Any socket error means we're done
+            except (OSError, ValueError) as e:
+                # Handle select errors gracefully
+                if hasattr(e, 'errno') and e.errno == 9:  # Bad file descriptor
+                    break
+                return
+    except Exception as e:
+        # Catch any other unexpected errors
+        pass
+    finally:
+        # Ensure sockets are properly closed
+        for sock in [client, target]:
+            try:
+                if sock and sock.fileno() != -1:
+                    sock.close()
+            except (OSError, AttributeError):
+                pass
 
 
 async def _async_select(client_sock, target_sock):
@@ -490,37 +526,70 @@ class OptimizedProxy(http.server.SimpleHTTPRequestHandler):
         self.proxy_http_request()
 
     def do_CONNECT(self):
-        # Parse target address
-        target_host, target_port = self.path.split(':', 1)
-        target_port = int(target_port)
-
-        timestamp = datetime.now(eastern).strftime('%Y-%m-%d %H:%M:%S %Z')
-        client_ip = self.client_address[0] if hasattr(self, 'client_address') else 'Unknown'
-        print(f"[{timestamp}] CONNECT request from {client_ip} to {target_host}:{target_port}")
-
+        target_host = "unknown"
+        target_port = "unknown"
+        
         try:
+            # Parse target address
+            target_host, target_port = self.path.split(':', 1)
+            target_port = int(target_port)
+
+            timestamp = datetime.now(eastern).strftime('%Y-%m-%d %H:%M:%S %Z')
+            client_ip = self.client_address[0] if hasattr(self, 'client_address') else 'Unknown'
+            print(f"[{timestamp}] CONNECT request from {client_ip} to {target_host}:{target_port}")
+
             # Connect to target server
-            target_sock = socket.create_connection((target_host, target_port), timeout=60)
+            target_sock = socket.create_connection((target_host, target_port), timeout=30)
 
             # Send 200 Connection Established response
-            self.wfile.write(b"HTTP/1.1 200 Connection established\r\n\r\n")
+            try:
+                self.wfile.write(b"HTTP/1.1 200 Connection established\r\n\r\n")
+                self.wfile.flush()
+            except (BrokenPipeError, ConnectionResetError, OSError):
+                target_sock.close()
+                return
 
             # Create connection pipes
             client_socket = self.connection
 
             # Set reasonable timeouts
-            client_socket.settimeout(60)
-            target_sock.settimeout(60)
+            try:
+                client_socket.settimeout(30)
+                target_sock.settimeout(30)
+            except (OSError, AttributeError):
+                target_sock.close()
+                return
 
             # Start bidirectional relay
             _relay_sockets(client_socket, target_sock)
 
-            return
-
+        except ValueError:
+            # Invalid target address format
+            try:
+                self.send_error(400, "Bad Request: Invalid target address")
+            except (BrokenPipeError, ConnectionResetError, OSError):
+                pass
+        except (socket.timeout, socket.gaierror):
+            # Connection timeout or DNS resolution error
+            try:
+                self.send_error(502, f"Cannot connect to {target_host}:{target_port}")
+            except (BrokenPipeError, ConnectionResetError, OSError):
+                pass
+        except (ConnectionRefusedError, OSError) as e:
+            # Connection refused or other OS-level errors
+            try:
+                if hasattr(e, 'errno') and e.errno == 9:  # Bad file descriptor
+                    return  # Client already disconnected
+                self.send_error(502, f"Cannot connect to {target_host}:{target_port}")
+            except (BrokenPipeError, ConnectionResetError, OSError):
+                pass
         except Exception as e:
-            print(f"CONNECT error: {e}")
-            self.send_error(502, f"Cannot connect to {target_host}:{target_port}")
-            return
+            # Catch any other unexpected errors
+            try:
+                print(f"CONNECT error: {e}")
+                self.send_error(502, f"Cannot connect to {target_host}:{target_port}")
+            except (BrokenPipeError, ConnectionResetError, OSError):
+                pass
 
     def proxy_http_request(self):
         # This part handles regular HTTP requests (not HTTPS via CONNECT)
@@ -592,9 +661,20 @@ class OptimizedProxy(http.server.SimpleHTTPRequestHandler):
             # Send response data to client
             self.wfile.write(content)
 
+        except (BrokenPipeError, ConnectionResetError, OSError) as e:
+            if hasattr(e, 'errno') and e.errno == 9:  # Bad file descriptor
+                return  # Client already disconnected, no need to respond
+            print(f"Connection error during HTTP proxy request: {e}")
+            try:
+                self.send_error(502, "Bad Gateway")
+            except (BrokenPipeError, ConnectionResetError, OSError):
+                pass
         except Exception as e:
             print(f"Error during HTTP proxy request: {e}")
-            self.send_error(502, "Bad Gateway")
+            try:
+                self.send_error(502, "Bad Gateway")
+            except (BrokenPipeError, ConnectionResetError, OSError):
+                pass
 
 
 # Add a function to start the optimized proxy server
@@ -621,10 +701,17 @@ def main():
         proxy_thread.start()
         print(f"High-performance proxy server thread started on port {PROXY_PORT}")
 
-    # Start Flask server in main thread
+    # Start Flask server using waitress WSGI server for production stability
     port = 80
     print(f"Starting web server on port {port}")
-    app.run(debug=True, host='0.0.0.0', port=port, threaded=True, use_reloader=True, extra_files=['static'])
+    try:
+        from waitress import serve
+        print("Using Waitress WSGI server for production deployment")
+        serve(app, host='0.0.0.0', port=port, threads=20, channel_timeout=120)
+    except ImportError:
+        print("Waitress not available, falling back to Flask dev server")
+        app.run(debug=True, host='0.0.0.0', port=port, threaded=True, use_reloader=True, 
+                extra_files=['static'])
 
 
 @app.route("/api/apt-names", methods=["GET"])
