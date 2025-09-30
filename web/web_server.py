@@ -707,10 +707,10 @@ def main():
     try:
         from waitress import serve
         print("Using Waitress WSGI server for production deployment")
-        serve(app, host='0.0.0.0', port=port, threads=20, channel_timeout=120)
+        serve(app, host='127.0.0.1', port=port, threads=20, channel_timeout=120)
     except ImportError:
         print("Waitress not available, falling back to Flask dev server")
-        app.run(debug=True, host='0.0.0.0', port=port, threaded=True, use_reloader=True, 
+        app.run(debug=True, host='127.0.0.1', port=port, threaded=True, use_reloader=True, 
                 extra_files=['static'])
 
 
