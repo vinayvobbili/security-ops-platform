@@ -9,6 +9,7 @@ import select
 import socket
 import socketserver
 import threading
+import argparse
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta
 from typing import List, Dict
@@ -1323,30 +1324,76 @@ def api_meaningful_metrics_data():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@app.route("/healthz")
+def healthz():
+    """Lightweight health probe endpoint for load balancers / monitoring."""
+    try:
+        return jsonify({
+            "status": "ok",
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "team": getattr(CONFIG, 'team_name', 'unknown'),
+            "service": "ir_web_server"
+        }), 200
+    except Exception as e:
+        return jsonify({"status": "error", "error": str(e)}), 500
+
+
 def main():
+    """Entry point for launching the web server.
+
+    Supports configuration via CLI args or environment variables:
+      --host / WEB_HOST (default 0.0.0.0 for LAN access)
+      --port / WEB_PORT (default 8080)
+      --proxy flag enables internal proxy (default disabled)
+    """
+    parser = argparse.ArgumentParser(description="IR Web Server")
+    parser.add_argument("--host", default=os.environ.get("WEB_HOST", "0.0.0.0"), help="Host/IP to bind (default 0.0.0.0 for network access)")
+    parser.add_argument("--port", type=int, default=int(os.environ.get("WEB_PORT", "8080")), help="Port to bind (default 8080)")
+    parser.add_argument("--proxy", action="store_true", help="Enable internal proxy component")
+    args = parser.parse_args()
+
     charts_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), 'static/charts'))
     app.config['CHARTS_DIR'] = charts_dir
 
+    # Decide if proxy should start
+    start_proxy = args.proxy or (os.environ.get("START_PROXY", "false").lower() == "true")
+
     # Only start proxy server in main process (not in reloader child process) and if enabled
-    if SHOULD_START_PROXY and os.environ.get('WERKZEUG_RUN_MAIN') != 'true':
-        # Start proxy server in a separate thread
+    if start_proxy and os.environ.get('WERKZEUG_RUN_MAIN') != 'true':
         proxy_thread = threading.Thread(target=start_proxy_server, daemon=True)
         proxy_thread.start()
         print(f"High-performance proxy server thread started on port {PROXY_PORT}")
-    elif not SHOULD_START_PROXY:
-        print(f"Proxy server disabled (SHOULD_START_PROXY = {SHOULD_START_PROXY})")
+    elif not start_proxy:
+        print(f"Proxy server disabled (pass --proxy to enable)")
 
-    # Start Flask server using waitress WSGI server for production stability
-    port = 80
-    print(f"Starting web server on port {port}")
+    port = args.port
+    host = args.host
+
+    print(f"Attempting to start web server on http://{host}:{port}")
     try:
         from waitress import serve
         print("Using Waitress WSGI server for production deployment")
-        serve(app, host='127.0.0.1', port=port, threads=20, channel_timeout=120)
+        try:
+            serve(app, host=host, port=port, threads=20, channel_timeout=120)
+        except OSError as e:
+            # Permission denied for privileged port without sudo/capability
+            if port < 1024 and e.errno == 13:  # Permission denied
+                fallback_port = 8080
+                print(f"Permission denied binding to port {port}. Falling back to {fallback_port}. (Run with sudo or grant cap_net_bind_service to use {port}).")
+                serve(app, host=host, port=fallback_port, threads=20, channel_timeout=120)
+            else:
+                raise
     except ImportError:
         print("Waitress not available, falling back to Flask dev server")
-        app.run(debug=True, host='127.0.0.1', port=port, threaded=True, use_reloader=True,
-                extra_files=['static'])
+        try:
+            app.run(debug=True, host=host, port=port, threaded=True, use_reloader=True, extra_files=['static'])
+        except OSError as e:
+            if port < 1024 and e.errno == 13:
+                fallback_port = 8080
+                print(f"Permission denied binding to port {port}. Falling back to {fallback_port}. (Run with sudo or grant capability to use {port}).")
+                app.run(debug=True, host=host, port=fallback_port, threaded=True, use_reloader=True, extra_files=['static'])
+            else:
+                raise
 
 
 if __name__ == "__main__":
