@@ -25,6 +25,7 @@ from src import secops
 from src.components import apt_names_fetcher
 from src.utils.logging_utils import log_web_activity, is_scanner_request
 
+SHOULD_START_PROXY = False
 # Define the proxy port
 PROXY_PORT = 8080
 # Optimize buffer size for better performance (increase from default 4096)
@@ -391,7 +392,7 @@ def _relay_sockets(client, target):
         # Set non-blocking mode to handle disconnections gracefully
         client.settimeout(1.0)
         target.settimeout(1.0)
-        
+
         sockets = [client, target]
 
         # Keep transferring data between client and target
@@ -400,7 +401,7 @@ def _relay_sockets(client, target):
                 # Check if sockets are still valid before select
                 if client.fileno() == -1 or target.fileno() == -1:
                     break
-                    
+
                 # Wait until a socket is ready to be read
                 readable, _, exceptional = select.select(sockets, [], sockets, 1.0)
 
@@ -414,10 +415,10 @@ def _relay_sockets(client, target):
                     # Check socket validity again
                     if sock.fileno() == -1:
                         continue
-                        
+
                     # Determine the destination socket
                     dest = target if sock is client else client
-                    
+
                     # Check destination socket validity
                     if dest.fileno() == -1:
                         return
@@ -528,7 +529,7 @@ class OptimizedProxy(http.server.SimpleHTTPRequestHandler):
     def do_CONNECT(self):
         target_host = "unknown"
         target_port = "unknown"
-        
+
         try:
             # Parse target address
             target_host, target_port = self.path.split(':', 1)
@@ -694,12 +695,14 @@ def main():
     charts_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), 'static/charts'))
     app.config['CHARTS_DIR'] = charts_dir
 
-    # Only start proxy server in main process (not in reloader child process)
-    if os.environ.get('WERKZEUG_RUN_MAIN') != 'true':
+    # Only start proxy server in main process (not in reloader child process) and if enabled
+    if SHOULD_START_PROXY and os.environ.get('WERKZEUG_RUN_MAIN') != 'true':
         # Start proxy server in a separate thread
         proxy_thread = threading.Thread(target=start_proxy_server, daemon=True)
         proxy_thread.start()
         print(f"High-performance proxy server thread started on port {PROXY_PORT}")
+    elif not SHOULD_START_PROXY:
+        print(f"Proxy server disabled (SHOULD_START_PROXY = {SHOULD_START_PROXY})")
 
     # Start Flask server using waitress WSGI server for production stability
     port = 80
@@ -710,7 +713,7 @@ def main():
         serve(app, host='127.0.0.1', port=port, threads=20, channel_timeout=120)
     except ImportError:
         print("Waitress not available, falling back to Flask dev server")
-        app.run(debug=True, host='127.0.0.1', port=port, threaded=True, use_reloader=True, 
+        app.run(debug=True, host='127.0.0.1', port=port, threaded=True, use_reloader=True,
                 extra_files=['static'])
 
 
