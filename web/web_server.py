@@ -689,32 +689,6 @@ def start_proxy_server():
         print(f"Failed to start proxy: {e}")
 
 
-def main():
-    charts_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), 'static/charts'))
-    app.config['CHARTS_DIR'] = charts_dir
-
-    # Only start proxy server in main process (not in reloader child process) and if enabled
-    if SHOULD_START_PROXY and os.environ.get('WERKZEUG_RUN_MAIN') != 'true':
-        # Start proxy server in a separate thread
-        proxy_thread = threading.Thread(target=start_proxy_server, daemon=True)
-        proxy_thread.start()
-        print(f"High-performance proxy server thread started on port {PROXY_PORT}")
-    elif not SHOULD_START_PROXY:
-        print(f"Proxy server disabled (SHOULD_START_PROXY = {SHOULD_START_PROXY})")
-
-    # Start Flask server using waitress WSGI server for production stability
-    port = 80
-    print(f"Starting web server on port {port}")
-    try:
-        from waitress import serve
-        print("Using Waitress WSGI server for production deployment")
-        serve(app, host='127.0.0.1', port=port, threads=20, channel_timeout=120)
-    except ImportError:
-        print("Waitress not available, falling back to Flask dev server")
-        app.run(debug=True, host='127.0.0.1', port=port, threaded=True, use_reloader=True,
-                extra_files=['static'])
-
-
 @app.route("/api/apt-names", methods=["GET"])
 @log_web_activity
 def api_apt_names():
@@ -1347,6 +1321,32 @@ def api_meaningful_metrics_data():
 
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
+
+
+def main():
+    charts_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), 'static/charts'))
+    app.config['CHARTS_DIR'] = charts_dir
+
+    # Only start proxy server in main process (not in reloader child process) and if enabled
+    if SHOULD_START_PROXY and os.environ.get('WERKZEUG_RUN_MAIN') != 'true':
+        # Start proxy server in a separate thread
+        proxy_thread = threading.Thread(target=start_proxy_server, daemon=True)
+        proxy_thread.start()
+        print(f"High-performance proxy server thread started on port {PROXY_PORT}")
+    elif not SHOULD_START_PROXY:
+        print(f"Proxy server disabled (SHOULD_START_PROXY = {SHOULD_START_PROXY})")
+
+    # Start Flask server using waitress WSGI server for production stability
+    port = 80
+    print(f"Starting web server on port {port}")
+    try:
+        from waitress import serve
+        print("Using Waitress WSGI server for production deployment")
+        serve(app, host='127.0.0.1', port=port, threads=20, channel_timeout=120)
+    except ImportError:
+        print("Waitress not available, falling back to Flask dev server")
+        app.run(debug=True, host='127.0.0.1', port=port, threaded=True, use_reloader=True,
+                extra_files=['static'])
 
 
 if __name__ == "__main__":
