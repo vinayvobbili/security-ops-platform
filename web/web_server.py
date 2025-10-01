@@ -11,7 +11,7 @@ import socketserver
 import threading
 import argparse
 from concurrent.futures import ThreadPoolExecutor
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import List, Dict
 from urllib.parse import urlsplit
 
@@ -1328,9 +1328,13 @@ def api_meaningful_metrics_data():
 def healthz():
     """Lightweight health probe endpoint for load balancers / monitoring."""
     try:
+        # Use timezone-aware UTC datetime (portable across Python versions)
+        ts = datetime.now(timezone.utc)
+        # Represent in RFC3339 style with trailing Z
+        timestamp = ts.isoformat().replace('+00:00', 'Z')
         return jsonify({
             "status": "ok",
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "timestamp": timestamp,
             "team": getattr(CONFIG, 'team_name', 'unknown'),
             "service": "ir_web_server"
         }), 200
