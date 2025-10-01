@@ -78,8 +78,6 @@ def get_image_files() -> List[str]:
         f"charts/{today_date}/Inflow Yesterday.png",
         f"charts/{today_date}/Inflow Past 60 Days.png",
         f"charts/{today_date}/Inflow Past 12 Months - Impact Only.png",
-        f"charts/{today_date}/Inflow Past 12 Months - Ticket Type Only.png",
-        f"charts/{today_date}/Inflow Past 12 Months.png",
         f"charts/{today_date}/Outflow.png",
         f"charts/{today_date}/SLA Breaches.png",
         f"charts/{today_date}/MTTR MTTC.png",
