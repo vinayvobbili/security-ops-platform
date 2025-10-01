@@ -18,7 +18,7 @@ from my_config import get_config
 from src.utils.http_utils import get_session
 
 DATA_DIR = Path(__file__).parent.parent / "data" / "transient" / "epp_device_tagging"
-SHOULD_USE_PROXY = True
+SHOULD_USE_PROXY = False
 CS_FETCH_MAX_WORKERS = 10
 
 # Get robust HTTP session instance
