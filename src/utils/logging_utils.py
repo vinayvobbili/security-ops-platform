@@ -16,6 +16,31 @@ config = get_config()
 # Directory for logs (should be set by the main app)
 LOG_FILE_DIR = Path(__file__).parent.parent.parent / 'data' / 'transient' / 'logs'
 
+
+# Ensure log directory exists (lazy creation helper)
+def _ensure_log_dir():
+    try:
+        LOG_FILE_DIR.mkdir(parents=True, exist_ok=True)
+    except Exception as e:
+        # Last resort: print but don't break core functionality
+        print(f"Warning: could not create log directory {LOG_FILE_DIR}: {e}")
+
+
+def _append_csv_with_header(file_path: Path, headers: list[str], row: list[str]):
+    """Append a row to a CSV file, writing headers first if the file is new/empty."""
+    try:
+        # Open in append+read mode so we can detect emptiness portably
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+        is_new = not file_path.exists() or file_path.stat().st_size == 0
+        with open(file_path, 'a', newline='') as f:
+            writer = csv.writer(f, quoting=csv.QUOTE_MINIMAL)
+            if is_new:
+                writer.writerow(headers)
+            writer.writerow(row)
+    except Exception as e:
+        print(f"Error writing CSV log {file_path.name}: {e}")
+
+
 # Define patterns for known security scanners to filter from logs
 SCANNER_PATTERNS = [
     # Qualys scanner patterns
@@ -52,16 +77,19 @@ def log_activity(bot_access_token, log_file_name):
             activity = args[3]
             now_eastern = datetime.now(eastern).strftime('%m/%d/%Y %I:%M:%S %p %Z')
             try:
+                _ensure_log_dir()
                 actor = activity["actor"]["displayName"]
                 if actor != config.my_name:
-                    with open(LOG_FILE_DIR / log_file_name, "a", newline="") as f:
-                        writer = csv.writer(f, quoting=csv.QUOTE_MINIMAL)
-                        writer.writerow([
+                    _append_csv_with_header(
+                        LOG_FILE_DIR / log_file_name,
+                        headers=["actor", "command_keyword", "room_name", "timestamp_eastern"],
+                        row=[
                             actor,
                             attachment_actions.json_data.get('inputs', {}).get('command_keyword'),
                             get_room_name(attachment_actions.json_data['roomId'], bot_access_token),
                             now_eastern
-                        ])
+                        ]
+                    )
             except Exception as e:
                 print(f"Error logging activity for {log_file_name}: {e}")
             return func(*args, **kwargs)
@@ -104,14 +132,17 @@ def log_web_activity(func):
         now_eastern = datetime.now(eastern).strftime('%m/%d/%Y %I:%M:%S %p %Z')
         log_file_name = "web_server_activity_log.csv"
         try:
-            with open(LOG_FILE_DIR / log_file_name, "a", newline="") as f:
-                writer = csv.writer(f, quoting=csv.QUOTE_MINIMAL)
-                writer.writerow([
+            _ensure_log_dir()
+            _append_csv_with_header(
+                LOG_FILE_DIR / log_file_name,
+                headers=["remote_addr", "method", "path", "timestamp_eastern"],
+                row=[
                     request.remote_addr,
                     request.method,
                     request.path,
                     now_eastern
-                ])
+                ]
+            )
         except Exception as e:
             print(f"Error logging web activity: {e}")
         return func(*args, **kwargs)
