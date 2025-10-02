@@ -7,6 +7,9 @@ import json
 import requests
 
 from my_config import get_config
+from src.utils.ssl_config import configure_ssl_for_corporate_proxy
+
+configure_ssl_for_corporate_proxy()
 
 # GraphQL introspection query
 INTROSPECTION_QUERY = """
