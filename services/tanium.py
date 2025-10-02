@@ -114,14 +114,14 @@ def get_package_id_for_device_type(device_type: str) -> str:
         return "38355"  # Default to Windows
 
 
-def build_tag_update_variables(tanium_id: str, tags: List[str], package_id: str) -> dict:
+def build_tag_update_variables(tanium_id: str, tags: List[str], package_id: str, action: str) -> dict:
     """Build GraphQL variables for tag update mutation."""
     endpoint_id = int(tanium_id) if tanium_id.isdigit() else tanium_id
 
     logger.info(f"Building GraphQL variables - tanium_id: {tanium_id}, tags: {tags}, package_id: {package_id}")
 
     return {
-        "name": f"Add Custom Tags to {tanium_id}",
+        "name": f"{action} Custom Tags to {tanium_id}",
         "tag": ",".join(tags),
         "packageID": package_id,
         "endpoints": [endpoint_id],
@@ -287,7 +287,7 @@ class TaniumInstance:
 
         updated_tags = computer.custom_tags + [tag]
         package_id = get_package_id_for_device_type("windows")
-        variables = build_tag_update_variables(computer.id, updated_tags, package_id)
+        variables = build_tag_update_variables(computer.id, updated_tags, package_id, action="Add")
         result = self.query(UPDATE_TAGS_MUTATION, variables)
 
         # Extract action creation result from GraphQL response
@@ -312,7 +312,7 @@ class TaniumInstance:
 
         updated_tags = [t for t in computer.custom_tags if t != tag]
         package_id = get_package_id_for_device_type("windows")
-        variables = build_tag_update_variables(computer.id, updated_tags, package_id)
+        variables = build_tag_update_variables(computer.id, updated_tags, package_id, action="Remove")
         result = self.query(UPDATE_TAGS_MUTATION, variables)
 
         # Extract action creation result from GraphQL response
@@ -480,7 +480,7 @@ class TaniumClient:
 
         updated_tags = computer.custom_tags + [tag]
         package_id = get_package_id_for_device_type(device_type)
-        variables = build_tag_update_variables(tanium_id, updated_tags, package_id)
+        variables = build_tag_update_variables(tanium_id, updated_tags, package_id, action="Add")
 
         # Log GraphQL variables for debugging
         logger.info(f"GraphQL variables for tagging {tanium_id}: {variables}")
@@ -510,7 +510,7 @@ class TaniumClient:
 
         updated_tags = [t for t in computer.custom_tags if t != tag]
         package_id = get_package_id_for_device_type(device_type)
-        variables = build_tag_update_variables(tanium_id, updated_tags, package_id)
+        variables = build_tag_update_variables(tanium_id, updated_tags, package_id, action="Remove")
 
         # Log GraphQL variables for debugging
         logger.info(f"GraphQL variables for removing tag from {tanium_id}: {variables}")
@@ -554,9 +554,9 @@ def main():
         # Test: Direct tagging with known Tanium ID (no hostname lookup needed)
         test_hostname = "uscku1metu03c7l.METNET.NET"  # Full hostname from Tanium
         test_tanium_id = "621122"  # We already confirmed this ID matches the hostname
-        test_tag = "TestTag1234"  # Simple test tag
+        test_tag = "TestTag123"  # Simple test tag
         write_instance = "Cloud-Write"
-        tag_action = 'add'  # or 'remove'
+        tag_action = 'remove'  # or 'remove'
 
         # First, test if write token can read data
         logger.info("Testing if write token can read computer data...")
