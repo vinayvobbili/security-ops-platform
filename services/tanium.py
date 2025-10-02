@@ -20,6 +20,9 @@ import urllib3
 from urllib3.exceptions import InsecureRequestWarning
 
 from my_config import get_config
+from src.utils.ssl_config import configure_ssl_for_corporate_proxy
+
+configure_ssl_for_corporate_proxy()
 
 # Disable SSL warnings for on-prem connections
 urllib3.disable_warnings(InsecureRequestWarning)
@@ -155,11 +158,11 @@ class TaniumInstance:
             headers = self.headers.copy()
             headers['Content-Type'] = 'application/json'
 
+            # Note: verify parameter intentionally omitted to use SSL config defaults
             response = requests.post(
                 self.graphql_url,
                 json=payload,
                 headers=headers,
-                verify=self.verify_ssl,
                 timeout=30
             )
             response.raise_for_status()
@@ -245,11 +248,11 @@ class TaniumInstance:
 
     def validate_token(self) -> bool:
         """Validate the API token"""
+        # Note: verify parameter intentionally omitted to use SSL config defaults
         response = requests.post(
             f"{self.server_url}/api/v2/session/validate",
             json={'session': self.token},
             headers=self.headers,
-            verify=self.verify_ssl,
             timeout=10
         )
         return response.status_code == 200
@@ -551,8 +554,9 @@ def main():
         # Test: Direct tagging with known Tanium ID (no hostname lookup needed)
         test_hostname = "uscku1metu03c7l.METNET.NET"  # Full hostname from Tanium
         test_tanium_id = "621122"  # We already confirmed this ID matches the hostname
-        test_tag = "TestTag123"  # Simple test tag
+        test_tag = "TestTag1234"  # Simple test tag
         write_instance = "Cloud-Write"
+        tag_action = 'add'  # or 'remove'
 
         # First, test if write token can read data
         logger.info("Testing if write token can read computer data...")
@@ -568,14 +572,24 @@ def main():
                 logger.error(f"✗ Write token CANNOT read computer data: {e}")
 
         # Now test tagging
-        logger.info(f"Testing direct tagging for {test_hostname} (ID: {test_tanium_id}) with write token...")
-        tag_result = client.add_tag(
-            test_tanium_id,
-            test_tag,
-            write_instance,
-            "linux",  # Test with non-Windows to see if package ID 38356 works
-        )
-        logger.info(f"Tagging result for {test_hostname} (ID: {test_tanium_id}) with tag '{test_tag}' using {write_instance}: {tag_result}")
+        if tag_action == 'add':
+            logger.info(f"Testing direct tagging for {test_hostname} (ID: {test_tanium_id}) with write token...")
+            tag_result = client.add_tag(
+                test_tanium_id,
+                test_tag,
+                write_instance,
+                "linux",  # Test with non-Windows to see if package ID 38356 works
+            )
+            logger.info(f"Tagging result for {test_hostname} (ID: {test_tanium_id}) with tag '{test_tag}' using {write_instance}: {tag_result}")
+        elif tag_action == 'remove':
+            logger.info(f"Testing direct untagging for {test_hostname} (ID: {test_tanium_id}) with write token...")
+            tag_result = client.remove_tag(
+                test_tanium_id,
+                test_tag,
+                write_instance,
+                "linux",  # Test with non-Windows to see if package ID 38356 works
+            )
+            logger.info(f"Tagging result for {test_hostname} (ID: {test_tanium_id}) with tag '{test_tag}' using {write_instance}: {tag_result}")
 
     except Exception as e:
         logger.error(f"Error during execution: {e}")
