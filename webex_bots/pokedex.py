@@ -22,9 +22,11 @@ ARCHITECTURE APPROACH:
 # Configure SSL for corporate proxy environments (Zscaler, etc.) - MUST BE FIRST
 import sys
 from pathlib import Path
+
 PROJECT_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 from src.utils.ssl_config import configure_ssl_if_needed
+
 configure_ssl_if_needed(verbose=True)  # Re-enabled due to ZScaler connectivity issues
 
 import csv
@@ -93,6 +95,10 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARNING)  # Ensure bot logger also uses WARNING level
+
+# Suppress noisy third-party loggers
+logging.getLogger('webex_websocket_client').setLevel(logging.WARNING)
+logging.getLogger('webex_bot').setLevel(logging.WARNING)
 
 # Configuration
 WEBEX_ACCESS_TOKEN = CONFIG.webex_bot_access_token_pokedex
