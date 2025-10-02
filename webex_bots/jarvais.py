@@ -1,8 +1,10 @@
 # Configure SSL for corporate proxy environments (Zscaler, etc.) - MUST BE FIRST
 import sys
 from pathlib import Path
+
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from src.utils.ssl_config import configure_ssl_if_needed
+
 configure_ssl_if_needed(verbose=True)  # Re-enabled due to ZScaler connectivity issues
 
 import logging.handlers
@@ -241,7 +243,7 @@ def seek_approval_to_delete_invalid_ring_tags(room_id):
         logger.error(f"Failed to send approval card: {e}")
 
 
-class CSHostsWithoutRingTag(Command):
+class GetCSHostsWithoutRingTag(Command):
     def __init__(self):
         super().__init__(
             command_keyword="cs_no_ring_tag",
@@ -329,7 +331,7 @@ class DontRingTagCSHosts(Command):
         return f"Alright {activity['actor']['displayName']}, I won't tag no more. Until next time!👋🏾"
 
 
-class CSHostsWithInvalidRingTags(Command):
+class GetCSHostsWithInvalidRingTags(Command):
     def __init__(self):
         super().__init__(
             command_keyword="cs_invalid_ring_tag",
@@ -606,10 +608,10 @@ def jarvais_initialization(bot_instance=None):
     """Initialize Jarvais commands"""
     if bot_instance:
         # Add commands to the bot
-        bot_instance.add_command(CSHostsWithoutRingTag())
+        bot_instance.add_command(GetCSHostsWithoutRingTag())
         bot_instance.add_command(RingTagCSHosts())
         bot_instance.add_command(DontRingTagCSHosts())
-        bot_instance.add_command(CSHostsWithInvalidRingTags())
+        bot_instance.add_command(GetCSHostsWithInvalidRingTags())
         bot_instance.add_command(RemoveInvalidRings())
         bot_instance.add_command(DontRemoveInvalidRings())
         bot_instance.add_command(GetTaniumHostsWithoutRingTag())
