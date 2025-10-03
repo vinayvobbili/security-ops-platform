@@ -218,7 +218,7 @@ def seek_approval_to_ring_tag_tanium(room_id):
                     Column(
                         width="stretch",
                         items=[
-                            TextBlock(text="Do you want these Tanium hosts to be Ring tagged?", wrap=True)
+                            TextBlock(text="Since we are still in Testing phase, do you want 10 random Tanium hosts to be Ring tagged?", wrap=True)
                         ],
                         verticalContentAlignment=VerticalContentAlignment.CENTER
                     )
@@ -552,10 +552,163 @@ class RingTagTaniumHosts(Command):
     @log_activity(bot_access_token=CONFIG.webex_bot_access_token_jarvais, log_file_name="jarvais_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
         room_id = attachment_actions.roomId
+        loading_msg = get_random_loading_message()
         webex_api.messages.create(
             roomId=room_id,
-            markdown=f"Hello {activity['actor']['displayName']}! 🚧 **Tanium ring tagging workflow is not yet implemented.** This feature is coming soon!"
+            markdown=f"Hello {activity['actor']['displayName']}! {loading_msg}\n\n🏷️**Starting ring tagging for 10 random Tanium hosts...**\nEstimated completion: ~5 minutes ⏰"
         )
+
+        lock_path = ROOT_DIRECTORY / "src" / "epp" / "ring_tag_tanium_hosts.lock"
+        try:
+            with fasteners.InterProcessLock(lock_path):
+                self._apply_tags_to_random_hosts(room_id, activity['actor']['displayName'])
+        except Exception as e:
+            logger.error(f"Error in RingTagTaniumHosts execute: {e}")
+            webex_api.messages.create(
+                roomId=room_id,
+                markdown=f"❌ An error occurred while processing your request: {e}"
+            )
+        finally:
+            if lock_path.exists():
+                try:
+                    lock_path.unlink()
+                except Exception as e:
+                    logger.error(f"Failed to remove lock file {lock_path}: {e}")
+
+    def _apply_tags_to_random_hosts(self, room_id, user_display_name):
+        """Apply ring tags to 10 random Tanium hosts"""
+        from services.tanium import TaniumClient
+
+        today_date = datetime.now(EASTERN_TZ).strftime('%m-%d-%Y')
+        report_dir = ROOT_DIRECTORY / "web" / "static" / "charts" / today_date
+        report_path = report_dir / "Tanium_Ring_Tags_Report.xlsx"
+
+        if not report_path.exists():
+            webex_api.messages.create(
+                roomId=room_id,
+                markdown=f"❌ **Error**: Ring tags report not found. Please run the 'tanium_hosts_without_ring_tag' command first to generate the report."
+            )
+            return
+
+        try:
+            # Read the report
+            df = pd.read_excel(report_path)
+
+            # Filter hosts that have generated tags and no errors
+            hosts_to_tag = df[
+                (df['Generated Tag'].notna()) &
+                (df['Generated Tag'] != '') &
+                (~df['Comments'].str.contains('missing|couldn\'t be generated|error', case=False, na=False))
+            ]
+
+            if len(hosts_to_tag) == 0:
+                webex_api.messages.create(
+                    roomId=room_id,
+                    markdown=f"❌ **No hosts available for tagging**. All hosts in the report have issues that prevent tagging."
+                )
+                return
+
+            # Select 10 random hosts (or fewer if less than 10 available)
+            num_to_tag = min(10, len(hosts_to_tag))
+            random_hosts = hosts_to_tag.sample(n=num_to_tag, random_state=random.randint(0, 10000))
+
+            # Initialize Tanium client
+            tanium_client = TaniumClient()
+
+            # Track results
+            successful_tags = []
+            failed_tags = []
+
+            # Apply tags to each host
+            for idx, row in random_hosts.iterrows():
+                computer_name = row['Computer Name']
+                tanium_id = str(row['Tanium ID'])
+                source = row['Source']
+                ring_tag = row['Generated Tag']
+                current_tags = row.get('Current Tags', '')
+                comments = row.get('Comments', '')
+
+                try:
+                    # Get the appropriate instance
+                    instance = tanium_client.get_instance_by_name(source)
+                    if not instance:
+                        failed_tags.append({
+                            'name': computer_name,
+                            'tag': ring_tag,
+                            'source': source,
+                            'current_tags': current_tags,
+                            'comments': comments,
+                            'error': f"Instance '{source}' not found"
+                        })
+                        continue
+
+                    # Add the tag
+                    logger.info(f"Tagging {computer_name} with {ring_tag} in {source}")
+                    result = instance.add_tag_by_name(computer_name, ring_tag)
+
+                    # Extract action ID from result
+                    action_id = result.get('action', {}).get('scheduledAction', {}).get('id', 'N/A')
+
+                    successful_tags.append({
+                        'name': computer_name,
+                        'tag': ring_tag,
+                        'source': source,
+                        'current_tags': current_tags,
+                        'comments': comments,
+                        'action_id': action_id
+                    })
+
+                except Exception as e:
+                    logger.error(f"Failed to tag {computer_name}: {e}")
+                    failed_tags.append({
+                        'name': computer_name,
+                        'tag': ring_tag,
+                        'source': source,
+                        'current_tags': current_tags,
+                        'comments': comments,
+                        'error': str(e)
+                    })
+
+            # Send summary report
+            summary_md = f"## 🎉 Tanium Ring Tagging Complete!\n\n"
+            summary_md += f"**Successfully tagged:** {len(successful_tags)}/{num_to_tag} hosts\n\n"
+
+            if successful_tags:
+                summary_md += "### ✅ Successfully Tagged Hosts:\n"
+                for host in successful_tags:
+                    summary_md += f"\n**{host['name']}**\n"
+                    summary_md += f"  - Instance: `{host['source']}`\n"
+                    summary_md += f"  - New Tag: `{host['tag']}`\n"
+                    summary_md += f"  - Action ID: `{host['action_id']}`\n"
+                    if host['current_tags'] and str(host['current_tags']).strip():
+                        summary_md += f"  - Current Tags: `{host['current_tags']}`\n"
+                    if host['comments'] and str(host['comments']).strip():
+                        summary_md += f"  - Notes: {host['comments']}\n"
+                summary_md += "\n"
+
+            if failed_tags:
+                summary_md += "### ❌ Failed to Tag:\n"
+                for host in failed_tags:
+                    summary_md += f"\n**{host['name']}**\n"
+                    summary_md += f"  - Instance: `{host['source']}`\n"
+                    summary_md += f"  - Attempted Tag: `{host['tag']}`\n"
+                    summary_md += f"  - Error: {host['error']}\n"
+                    if host['current_tags'] and str(host['current_tags']).strip():
+                        summary_md += f"  - Current Tags: `{host['current_tags']}`\n"
+                    if host['comments'] and str(host['comments']).strip():
+                        summary_md += f"  - Notes: {host['comments']}\n"
+
+            webex_api.messages.create(
+                roomId=room_id,
+                markdown=summary_md
+            )
+
+        except Exception as e:
+            logger.error(f"Error applying Tanium ring tags: {e}")
+            webex_api.messages.create(
+                roomId=room_id,
+                markdown=f"❌ Failed to apply ring tags: {str(e)}"
+            )
 
 
 class DontRingTagTaniumHosts(Command):

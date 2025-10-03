@@ -510,45 +510,29 @@ class FileHandler:
                 host.status_message or ('Ring tag generated' if host.new_crowd_strike_tag else 'No tag generated'),
             ])
 
-        # Apply professional formatting
-        from openpyxl.styles import Font, PatternFill
-        from openpyxl.utils import get_column_letter
-
-        # Format the header row
-        header_font = Font(bold=True)
-        header_fill = PatternFill(start_color="D3D3D3", end_color="D3D3D3", fill_type="solid")
-
-        for col_num in range(1, len(headers) + 1):
-            cell = sheet.cell(row=1, column=col_num)
-            cell.font = header_font
-            cell.fill = header_fill
-
-        # Freeze the top row
-        sheet.freeze_panes = "A2"
-
-        # Add auto filter
-        sheet.auto_filter.ref = f"A1:{get_column_letter(len(headers))}{len(hosts) + 1}"
-
-        # Auto-adjust column widths
-        for column in sheet.columns:
-            max_length = 0
-            column_letter = get_column_letter(column[0].column)
-
-            for cell in column:
-                try:
-                    if len(str(cell.value)) > max_length:
-                        max_length = len(str(cell.value))
-                except:
-                    pass
-
-            # Set a reasonable minimum and maximum width
-            adjusted_width = min(max(max_length + 2, 12), 60)
-            sheet.column_dimensions[column_letter].width = adjusted_width
-
         # Save the workbook
         try:
             output_file.parent.mkdir(parents=True, exist_ok=True)
             workbook.save(output_file)
+
+            # Apply professional formatting
+            from src.utils.excel_formatting import apply_professional_formatting
+            column_widths = {
+                'name': 40,
+                'cs device id': 25,
+                'category': 18,
+                'environment': 22,
+                'life cycle status': 20,
+                'country': 22,
+                'region': 18,
+                'was country guessed': 20,
+                'current cs tags': 50,
+                'generated cs tag': 35,
+                'status': 60
+            }
+            wrap_columns = {'current cs tags', 'generated cs tag', 'status', 'environment'}
+            apply_professional_formatting(output_file, column_widths=column_widths, wrap_columns=wrap_columns)
+
             print(f"Results written to new file: {output_file}")
         except Exception as e:
             print(f"An error occurred while saving the workbook: {e}")
