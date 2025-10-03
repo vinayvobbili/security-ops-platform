@@ -3,6 +3,7 @@ import json
 import logging
 import time
 import os
+import threading
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
@@ -36,18 +37,28 @@ class ServiceNowTokenManager:
         self.access_token = None
         self.refresh_token = None
         self.token_expiry = None
+        self._refresh_lock = threading.Lock()  # Thread-safe token refresh
         self._load_token()
 
     def _load_token(self):
         if TOKEN_FILE.exists():
-            logger.info(f"Loading token from {TOKEN_FILE}")
+            logger.info(f"Loading cached token from {TOKEN_FILE}")
             with open(TOKEN_FILE) as f:
                 data = json.load(f)
                 self.access_token = data.get('access_token')
                 self.refresh_token = data.get('refresh_token')
                 self.token_expiry = data.get('token_expiry')
 
+            # Check if loaded token is still valid
+            if self.token_expiry:
+                time_remaining = self.token_expiry - time.time()
+                if time_remaining > 0:
+                    logger.info(f"✓ Loaded valid cached token, expires in {time_remaining/60:.1f} minutes")
+                else:
+                    logger.info(f"⚠ Cached token expired {-time_remaining/60:.1f} minutes ago, fetching new token")
+
         if not self.access_token or (self.token_expiry and time.time() >= self.token_expiry):
+            logger.info("No valid cached token available, requesting new token")
             self._get_new_token()
 
     def _save_token(self):
@@ -77,13 +88,16 @@ class ServiceNowTokenManager:
             'X-IBM-Client-Id': self.client_id
         }
 
+        logger.info(f"Requesting new ServiceNow token from {url}")
         response = requests.get(url, headers=headers, auth=(self.username, self.password))
         response.raise_for_status()
+        logger.info("✓ Successfully obtained new ServiceNow token")
         self._update_token(response.json())
         self._save_token()
 
     def _refresh_token(self):
         if not self.refresh_token:
+            logger.info("No refresh token available, requesting new token")
             self._get_new_token()
             return
 
@@ -91,21 +105,38 @@ class ServiceNowTokenManager:
         headers = {'Content-Type': 'application/json', 'X-IBM-Client-Id': self.client_id}
         data = {'refresh_token': self.refresh_token}
 
+        logger.info("Attempting to refresh ServiceNow token")
         response = requests.post(url, headers=headers, json=data)
         if response.status_code == 200:
+            logger.info("✓ Successfully refreshed ServiceNow token")
             self._update_token(response.json())
             self._save_token()
         else:
+            logger.warning(f"Token refresh failed with status {response.status_code}, requesting new token")
             self._get_new_token()
 
     def _update_token(self, token_data):
         self.access_token = token_data.get('access_token')
         self.refresh_token = token_data.get('refresh_token')
-        self.token_expiry = time.time() + token_data.get('expires_in', 1800)
+
+        if 'expires_in' not in token_data:
+            logger.warning("⚠ API response missing 'expires_in', using default 59 minutes")
+
+        expires_in = token_data.get('expires_in', 3540)  # 59 minutes default (ServiceNow tokens valid for 60 min)
+        self.token_expiry = time.time() + expires_in
+        logger.info(f"✓ Token updated, expires in {expires_in}s ({expires_in/60:.1f} minutes)")
 
     def get_auth_headers(self):
-        if not self.token_expiry or time.time() >= self.token_expiry:
-            self._refresh_token()
+        # Check if token needs refresh (refresh 2 min before expiry to avoid mid-batch expiration)
+        if not self.token_expiry or time.time() >= self.token_expiry - 120:
+            # Use lock to ensure only one thread refreshes at a time
+            with self._refresh_lock:
+                # Double-check after acquiring lock (another thread may have refreshed)
+                if not self.token_expiry or time.time() >= self.token_expiry - 120:
+                    logger.info("Token expired or expiring soon, refreshing...")
+                    self._refresh_token()
+                else:
+                    logger.debug("Token already refreshed by another thread, skipping")
 
         return {
             'Authorization': f"Bearer {self.access_token}",
