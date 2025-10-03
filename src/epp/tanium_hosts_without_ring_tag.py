@@ -200,7 +200,7 @@ class TaniumDataLoader:
         output_dir.mkdir(parents=True, exist_ok=True)
 
         client = TaniumClient()
-        self.logger.info("Fetching fresh data from Tanium (cache disabled)...")
+        print("\n🔄 Fetching fresh data from Tanium (cache disabled)...")
         all_hosts_filename = client.get_and_export_all_computers()
 
         if not all_hosts_filename:
@@ -215,13 +215,13 @@ class TaniumDataLoader:
         # the line below may be used for testing code changes on small subsets of data
         # filtered_computers = [c for c in filtered_computers if c.name.startswith("MININT")]
 
-        self.logger.info(f"Total hosts found: {total_computers}")
-        self.logger.info(f"Hosts with existing Ring/PowerMode tags: {computers_with_tags}")
-        self.logger.info(f"Hosts without Ring tags (to be processed): {len(filtered_computers)}")
+        print(f"\n📊 Total hosts found: {total_computers}")
+        print(f"✅ Hosts with existing Ring/PowerMode tags: {computers_with_tags}")
+        print(f"🔄 Hosts without Ring tags (to be processed): {len(filtered_computers)}")
 
         if test_limit is not None and test_limit > 0:
             filtered_computers = filtered_computers[:test_limit]
-            self.logger.info(f"Test mode: limiting to {test_limit} hosts")
+            print(f"🧪 Test mode: limiting to {test_limit} hosts")
         return filtered_computers
 
     def _parse_excel_file(self, filename: str) -> List[Computer]:
@@ -303,7 +303,7 @@ class ServiceNowComputerEnricher:
 
     def enrich_computers(self, computers: List[Computer]) -> List[EnrichedComputer]:
         """Enrich computers with ServiceNow data"""
-        self.logger.info(f"Enriching {len(computers)} hosts with ServiceNow data to generate Ring tags...")
+        print(f"🔍 Enriching {len(computers)} hosts with ServiceNow data to generate Ring tags...\n")
 
         # Export computers to Excel for ServiceNow enrichment
         client = TaniumClient()
