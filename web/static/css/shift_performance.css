@@ -863,6 +863,64 @@ h1 {
     font-size: 12px;
 }
 
+/* MTP badge styles */
+.mtp-cell {
+    display: inline-block;
+    min-width: 28px;
+    padding: 4px 8px;
+    border-radius: 16px;
+    font-weight: 600;
+    font-size: 11px;
+    line-height: 1;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+    transition: transform .2s ease, box-shadow .2s ease;
+}
+.mtp-cell:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.25);
+}
+.mtp-zero { background: linear-gradient(135deg,#2ecc71,#27ae60); color:#fff; }
+.mtp-low { background: linear-gradient(135deg,#fdcb6e,#f39c12); color:#2d3436; }
+.mtp-high { background: linear-gradient(135deg,#e17055,#d63031); color:#fff; animation: pulseHigh 1.8s infinite; }
+@keyframes pulseHigh { 0%,100% { box-shadow:0 0 0 0 rgba(214,48,49,0.6);} 50% { box-shadow:0 0 0 6px rgba(214,48,49,0); } }
+
+/* MTP popover */
+.mtp-popover {
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translate(-50%, 8px);
+    background: #1e1e2f;
+    color: #fff;
+    padding: 8px 12px;
+    border-radius: 10px;
+    box-shadow: 0 8px 18px rgba(0,0,0,0.3);
+    z-index: 1500;
+    font-size: 11px;
+    min-width: 180px;
+    max-width: 260px;
+    display: none;
+    opacity: 0;
+    transition: opacity .18s ease, transform .18s ease;
+}
+.mtp-popover.visible { display: block; opacity: 1; transform: translate(-50%, 4px); }
+.mtp-popover h5 { margin: 0 0 4px 0; font-size: 11px; letter-spacing:.5px; text-transform: uppercase; color:#a29bfe; }
+.mtp-popover ul { list-style: none; margin:0; padding:0; max-height:140px; overflow:auto; }
+.mtp-popover li { margin:2px 0; }
+.mtp-popover a { color:#74b9ff; text-decoration:none; }
+.mtp-popover a:hover { text-decoration:underline; }
+
+/* Scrollbar tweaks */
+.mtp-popover ul::-webkit-scrollbar { width:6px; }
+.mtp-popover ul::-webkit-scrollbar-track { background:rgba(255,255,255,0.05); border-radius:3px; }
+.mtp-popover ul::-webkit-scrollbar-thumb { background:rgba(255,255,255,0.3); border-radius:3px; }
+
+/* Modal MTP link styling */
+.mtp-list { list-style:none; padding-left:0; margin:8px 0 0 0; }
+.mtp-list li { margin:4px 0; }
+.mtp-link { color:#2980b9; font-weight:600; text-decoration:none; }
+.mtp-link:hover { text-decoration:underline; }
+
 /* Animations */
 @keyframes fadeIn {
     from { opacity: 0; }
@@ -1093,3 +1151,35 @@ h1 {
     border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
+/* Spinner override so only ring spins and elapsed seconds stay static */
+#loadingOverlay .loading-spinner {
+    position: relative;
+    width: 70px;
+    height: 70px;
+    margin: 0 auto 20px auto;
+    border: none; /* remove original border */
+    animation: none !important; /* stop rotating the whole container */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+#loadingOverlay .loading-spinner .spinner-ring {
+    position: absolute;
+    inset: 0;
+    border: 4px solid #e3e3e3;
+    border-top: 4px solid #667eea;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    box-sizing: border-box;
+}
+#loadingOverlay .loading-spinner .spinner-elapsed {
+    position: relative;
+    font-weight: 600;
+    font-size: 14px;
+    font-variant-numeric: tabular-nums;
+    color: #444;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.15);
+}
+#loadingOverlay .loading-spinner .spinner-elapsed.load-time-good { color: #2d9d5b; }
+#loadingOverlay .loading-spinner .spinner-elapsed.load-time-warn { color: #e0a300; }
+#loadingOverlay .loading-spinner .spinner-elapsed.load-time-slow { color: #d64545; }

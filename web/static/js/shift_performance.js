@@ -85,17 +85,17 @@ function updateFilteredSummary(shiftType) {
     rows.forEach(row => {
         if (shiftType === 'all' || row.getAttribute('data-shift') === shiftType) {
             const cells = row.querySelectorAll('td');
-            if (cells.length >= 11) {
-                totalInflow += parseInt(cells[3].textContent) || 0;
-                totalOutflow += parseInt(cells[4].textContent) || 0;
-                totalMaliciousTp += parseInt(cells[5].textContent) || 0;
-                totalStaff += parseInt(cells[10].textContent) || 0;
+            // Expecting structure: 0 Date,1 Day,2 Shift,3 Staff,4 Tickets In,5 Tickets Out,6 MTPs(count),7 MTTR,8 MTTC,9 Resp SLA,10 Contain SLA,11 Actions
+            if (cells.length >= 12 && !row.classList.contains('skeleton-row')) {
+                totalStaff += parseInt(cells[3].textContent) || 0;
+                totalInflow += parseInt(cells[4].textContent) || 0;
+                totalOutflow += parseInt(cells[5].textContent) || 0;
+                totalMaliciousTp += parseInt(cells[6].textContent) || 0;
                 visibleRows++;
             }
         }
     });
 
-    // Update summary cards if they exist
     const summaryCards = document.querySelectorAll('.summary-value');
     if (summaryCards.length >= 4) {
         summaryCards[0].textContent = totalInflow;
@@ -121,14 +121,27 @@ function sortTable(columnIndex) {
     const tbody = table.querySelector('tbody');
     const rows = Array.from(tbody.querySelectorAll('tr'));
 
+    // Helper to parse numeric or mm:ss
+    const parseValue = (cellText) => {
+        if (!cellText) return 0;
+        const trimmed = cellText.trim();
+        // mm:ss pattern
+        if (/^\d+:\d{2}$/.test(trimmed)) {
+            const [m, s] = trimmed.split(':').map(Number);
+            return m + (s / 60);
+        }
+        // pure number
+        const num = parseFloat(trimmed.replace(/[^0-9.]/g, ''));
+        return isNaN(num) ? 0 : num;
+    };
+
     // Determine sort direction
     const isAscending = !table.dataset.sortAsc || table.dataset.sortAsc === 'false';
     table.dataset.sortAsc = isAscending;
 
-    // Sort rows
     rows.sort((a, b) => {
-        const aVal = parseFloat(a.cells[columnIndex].textContent) || 0;
-        const bVal = parseFloat(b.cells[columnIndex].textContent) || 0;
+        const aVal = parseValue(a.cells[columnIndex].textContent);
+        const bVal = parseValue(b.cells[columnIndex].textContent);
         return isAscending ? aVal - bVal : bVal - aVal;
     });
 
@@ -136,11 +149,9 @@ function sortTable(columnIndex) {
     document.querySelectorAll('.performance-table th').forEach(th => {
         th.classList.remove('sort-asc', 'sort-desc');
     });
-
     const header = document.querySelectorAll('.performance-table th')[columnIndex];
     header.classList.add(isAscending ? 'sort-asc' : 'sort-desc');
 
-    // Re-append sorted rows
     rows.forEach(row => tbody.appendChild(row));
 }
 
@@ -280,6 +291,14 @@ async function loadShiftDetailsGranular(shiftId) {
     };
 }
 
+function formatTime(minutes) {
+    if (minutes == null || isNaN(minutes) || minutes <= 0) return '0:00';
+    let mins = Math.floor(minutes);
+    let secs = Math.round((minutes - mins) * 60);
+    if (secs === 60) { mins += 1; secs = 0; }
+    return `${mins}:${secs.toString().padStart(2,'0')}`;
+}
+
 function showShiftDetails(shift) {
     // Update modal title
     const modalTitle = document.getElementById('modalTitle');
@@ -301,11 +320,11 @@ function showShiftDetails(shift) {
                 </div>
                 <div class="key-metric">
                     <div class="metric-label">Mean Time to Respond</div>
-                    <div class="metric-value ${shift.avg_response_time_min <= 30 ? 'metric-good' : shift.avg_response_time_min <= 60 ? 'metric-warning' : 'metric-bad'}">${shift.avg_response_time_min.toFixed(1)}min</div>
+                    <div class="metric-value ${shift.avg_response_time_min <= 30 ? 'metric-good' : shift.avg_response_time_min <= 60 ? 'metric-warning' : 'metric-bad'}">${formatTime(shift.avg_response_time_min)}</div>
                 </div>
                 <div class="key-metric">
                     <div class="metric-label">Mean Time to Contain</div>
-                    <div class="metric-value ${shift.avg_containment_time_min <= 120 ? 'metric-good' : shift.avg_containment_time_min <= 240 ? 'metric-warning' : 'metric-bad'}">${shift.avg_containment_time_min.toFixed(1)}min</div>
+                    <div class="metric-value ${shift.avg_containment_time_min <= 120 ? 'metric-good' : shift.avg_containment_time_min <= 240 ? 'metric-warning' : 'metric-bad'}">${formatTime(shift.avg_containment_time_min)}</div>
                 </div>
             </div>
         </div>
@@ -385,86 +404,77 @@ function closeShiftDetails() {
 }
 
 function showLoadingSpinner() {
-    // Fun loading messages that rotate every 5 seconds
     const loadingMessages = [
-        '🎭 Magic building...',
-        '🧙‍♂️ Summoning data wizards...',
-        '⚡ Charging quantum processors...',
-        '🔮 Consulting crystal ball...',
-        '🚀 Launching data rockets...',
-        '🎪 Setting up data circus...',
-        '🌟 Sprinkling fairy dust...',
-        '🎨 Painting performance pixels...',
-        '🎯 Targeting shift statistics...',
-        '🔥 Igniting analytics engine...',
-        '🎵 Composing data symphony...',
-        '🎪 Training performance monkeys...',
-        '⚗️ Brewing shift potions...',
-        '🎪 Juggling staff schedules...',
-        '🎭 Rehearsing data drama...'
+        '🎭 Magic building...', '🧙‍♂️ Summoning data wizards...', '⚡ Charging quantum processors...', '🔮 Consulting crystal ball...',
+        '🚀 Launching data rockets...', '🎪 Setting up data circus...', '🌟 Sprinkling fairy dust...', '🎨 Painting performance pixels...',
+        '🎯 Targeting shift statistics...', '🔥 Igniting analytics engine...', '🎵 Composing data symphony...', '🎪 Training performance monkeys...',
+        '⚗️ Brewing shift potions...', '🎪 Juggling staff schedules...', '🎭 Rehearsing data drama...'
     ];
-
     let currentMessageIndex = 0;
     let messageInterval;
+    window.loadingStartTime = performance.now();
 
-    // Keep skeleton rows but make them transparent to maintain table height
-    const skeletonRows = document.querySelectorAll('.skeleton-row');
-    skeletonRows.forEach(row => {
-        row.style.opacity = '0.1';
-        row.style.pointerEvents = 'none';
-    });
+    // Dim skeleton rows
+    document.querySelectorAll('.skeleton-row').forEach(r => { r.style.opacity = '0.1'; r.style.pointerEvents = 'none'; });
 
-    // Create loading spinner overlay
     const loadingOverlay = document.createElement('div');
     loadingOverlay.id = 'loadingOverlay';
     loadingOverlay.innerHTML = `
         <div class="loading-spinner-container">
-            <div class="loading-spinner"></div>
+            <div class="loading-spinner">
+                <div class="spinner-ring"></div>
+                <div id="loadingElapsedInside" class="spinner-elapsed">0.0s</div>
+            </div>
             <div class="loading-message" id="loadingMessage">${loadingMessages[0]}</div>
             <div class="loading-subtext">Fetching shift performance data...</div>
         </div>
     `;
-
-    // Insert loading overlay into table container
     const tableContainer = document.querySelector('.table-container');
-    if (tableContainer) {
-        tableContainer.appendChild(loadingOverlay);
-    }
+    if (tableContainer) tableContainer.appendChild(loadingOverlay);
 
-    // Rotate messages every 5 seconds
     messageInterval = setInterval(() => {
         currentMessageIndex = (currentMessageIndex + 1) % loadingMessages.length;
-        const messageElement = document.getElementById('loadingMessage');
-        if (messageElement) {
-            messageElement.style.opacity = '0';
-            setTimeout(() => {
-                messageElement.textContent = loadingMessages[currentMessageIndex];
-                messageElement.style.opacity = '1';
-            }, 300);
-        }
+        const el = document.getElementById('loadingMessage');
+        if (!el) return;
+        el.style.opacity = '0';
+        setTimeout(() => { el.textContent = loadingMessages[currentMessageIndex]; el.style.opacity = '1'; }, 300);
     }, 5000);
-
-    // Store interval ID for cleanup
     window.loadingMessageInterval = messageInterval;
+
+    window.loadingElapsedInterval = setInterval(() => {
+        const elapsedEl = document.getElementById('loadingElapsedInside');
+        if (!elapsedEl || window.loadingStartTime == null) return;
+        const secsFloat = (performance.now() - window.loadingStartTime) / 1000;
+        const display = secsFloat >= 30 ? Math.round(secsFloat) + 's' : secsFloat.toFixed(1) + 's';
+        let cls = 'load-time-good'; // <30s
+        if (secsFloat >= 60) cls = 'load-time-slow';
+        else if (secsFloat >= 30) cls = 'load-time-warn';
+        elapsedEl.textContent = display;
+        elapsedEl.className = 'spinner-elapsed ' + cls;
+    }, 200);
 }
 
 function hideLoadingSpinner() {
-    // Clear the message rotation interval
     if (window.loadingMessageInterval) {
         clearInterval(window.loadingMessageInterval);
         window.loadingMessageInterval = null;
     }
-
-    // Remove loading overlay
+    if (window.loadingElapsedInterval) {
+        clearInterval(window.loadingElapsedInterval);
+        window.loadingElapsedInterval = null;
+    }
+    // Compute final load duration for status display
+    if (window.loadingStartTime != null) {
+        const totalSecs = (performance.now() - window.loadingStartTime) / 1000;
+        window.finalLoadDurationSeconds = totalSecs; // store for updateStatusInfo
+        const finalDisplay = totalSecs >= 30 ? Math.round(totalSecs) : totalSecs.toFixed(1);
+        console.log(`⚡ Shift data loaded in ${finalDisplay}s`); // feature #5 logging
+    }
     const loadingOverlay = document.getElementById('loadingOverlay');
     if (loadingOverlay) {
         loadingOverlay.style.opacity = '0';
-        setTimeout(() => {
-            loadingOverlay.remove();
-        }, 300);
+        setTimeout(() => { loadingOverlay.remove(); }, 300);
     }
-
-    // Restore skeleton rows (they'll be replaced by real data)
     const skeletonRows = document.querySelectorAll('.skeleton-row');
     skeletonRows.forEach(row => {
         row.style.opacity = '1';
@@ -496,11 +506,11 @@ function showShiftDetailsFromGranular(data) {
                 </div>
                 <div class="key-metric">
                     <div class="metric-label">Mean Time to Respond</div>
-                    <div class="metric-value ${tickets.response_time_minutes <= 30 ? 'metric-good' : tickets.response_time_minutes <= 60 ? 'metric-warning' : 'metric-bad'}">${tickets.response_time_minutes}min</div>
+                    <div class="metric-value ${tickets.response_time_minutes <= 30 ? 'metric-good' : tickets.response_time_minutes <= 60 ? 'metric-warning' : 'metric-bad'}">${formatTime(tickets.response_time_minutes)}</div>
                 </div>
                 <div class="key-metric">
                     <div class="metric-label">Mean Time to Contain</div>
-                    <div class="metric-value ${tickets.contain_time_minutes <= 120 ? 'metric-good' : tickets.contain_time_minutes <= 240 ? 'metric-warning' : 'metric-bad'}">${tickets.contain_time_minutes}min</div>
+                    <div class="metric-value ${tickets.contain_time_minutes <= 120 ? 'metric-good' : tickets.contain_time_minutes <= 240 ? 'metric-warning' : 'metric-bad'}">${formatTime(tickets.contain_time_minutes)}</div>
                 </div>
             </div>
         </div>
@@ -593,6 +603,54 @@ function showShiftDetailsFromGranular(data) {
             }
         }, 500);
     }
+}
+
+// Summary card update logic
+function updateSummaryCards(shiftData) {
+    let totalIn = 0, totalOut = 0, totalMtp = 0, totalStaff = 0, countedShifts = 0;
+    shiftData.forEach(s => {
+        totalIn += s.tickets_inflow || 0;
+        totalOut += s.tickets_closed || 0;
+        const mtpIds = (s.mtp_ticket_ids || '').split(/\s*,\s*/).filter(x => x);
+        totalMtp += mtpIds.length;
+        totalStaff += s.total_staff || 0;
+        countedShifts += 1;
+    });
+    const avgPerStaff = totalStaff > 0 ? (totalOut / totalStaff).toFixed(1) : '0.0';
+    const cardsContainer = document.getElementById('summaryCards');
+    if (cardsContainer) cardsContainer.style.display = 'flex';
+    const map = [
+        ['summaryTotalIn', totalIn],
+        ['summaryTotalOut', totalOut],
+        ['summaryTotalMtp', totalMtp],
+        ['summaryAvgPerStaff', avgPerStaff]
+    ];
+    map.forEach(([id, val]) => { const el = document.getElementById(id); if (el) el.textContent = val; });
+}
+
+function openMtpModal(mtpIds, shiftId) {
+    const modal = document.getElementById('mtpModal');
+    const body = document.getElementById('mtpModalBody');
+    if (!modal || !body) return;
+    const base = (typeof window !== 'undefined' && window.XSOAR_BASE) ? window.XSOAR_BASE.replace(/\/$/, '') : 'https://msoar.crtx.us.paloaltonetworks.com';
+    if (!mtpIds.length) {
+        body.innerHTML = '<p>No Malicious True Positives for this shift.</p>';
+    } else {
+        const list = mtpIds.map(rawId => {
+            const id = (rawId || '').toString().trim();
+            const url = `${base}/Custom/caseinfoid/${encodeURIComponent(id)}`;
+            return `<li class=\"mtp-id\"><a href=\"${url}\" target=\"_blank\" rel=\"noopener noreferrer\" class=\"mtp-link\">${id}</a></li>`;
+        }).join('');
+        body.innerHTML = `<p><strong>${mtpIds.length}</strong> MTP ticket(s) in shift <code>${shiftId}</code>:</p><ul class=\"mtp-list\">${list}</ul>`;
+    }
+    modal.style.display = 'block';
+    document.body.style.overflow = 'hidden';
+}
+
+function closeMtpModal() {
+    const modal = document.getElementById('mtpModal');
+    if (modal) modal.style.display = 'none';
+    document.body.style.overflow = 'auto';
 }
 
 // Add keyboard shortcuts
@@ -760,46 +818,43 @@ function loadInitialData() {
 
 function updateStatusInfo(shiftData) {
     const now = new Date();
-
-    // Format timestamp with timezone (client-side browser timezone)
-    const timeOptions = {
-        year: 'numeric',
-        month: 'numeric',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        timeZoneName: 'short',
-        hour12: true
-    };
+    const timeOptions = { year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', timeZoneName: 'short', hour12: true };
     const timeString = now.toLocaleString('en-US', timeOptions);
-
-    // Update status info in bottom corner (shows user's browser timezone)
-    document.getElementById('last-updated').textContent = `Last updated: ${timeString}`;
+    const el = document.getElementById('last-updated');
+    if (!el) return;
+    let text = `Last updated: ${timeString}`;
+    if (window.finalLoadDurationSeconds != null) {
+        const secs = window.finalLoadDurationSeconds;
+        const display = secs >= 30 ? Math.round(secs) : secs.toFixed(1);
+        let cls = 'load-time-good';
+        if (secs >= 60) cls = 'load-time-slow';
+        else if (secs >= 30) cls = 'load-time-warn';
+        text += ` • Loaded in <span class="load-duration ${cls}">${display}s</span>`;
+    }
+    el.innerHTML = text;
 }
 
 function populateTable(shiftData) {
     const tbody = document.getElementById('shifts-tbody');
-
-    // Clear skeleton loading
     tbody.innerHTML = '';
-
-    // Add each shift row with staggered animation
+    updateSummaryCards(shiftData);
     shiftData.forEach((shift, index) => {
         setTimeout(() => {
             const row = document.createElement('tr');
             row.className = `shift-${shift.shift.toLowerCase()} shift-status-${shift.status}`;
             row.setAttribute('data-shift', shift.shift);
             row.setAttribute('data-status', shift.status);
-
-            // Format time as mins:secs
             const formatTime = (minutes) => {
-                if (minutes === 0) return '0:00';
+                if (!minutes || minutes === 0) return '0:00';
                 const mins = Math.floor(minutes);
                 const secs = Math.round((minutes - mins) * 60);
                 return `${mins}:${secs.toString().padStart(2, '0')}`;
             };
-
+            const mtpListRaw = shift.mtp_ticket_ids || '';
+            const mtpIds = mtpListRaw.split(/\s*,\s*/).filter(id => id);
+            const mtpCount = mtpIds.length;
+            const mtpSeverityClass = mtpCount === 0 ? 'mtp-zero' : mtpCount <= 2 ? 'mtp-low' : 'mtp-high';
+            const mtpCellContent = `<span class=\"mtp-cell ${mtpSeverityClass}\" data-shift-id=\"${shift.id}\" data-mtp-ids=\"${mtpIds.join(',')}\" title=\"${mtpIds.length ? 'MTP IDs: ' + mtpIds.join(', ') : 'No MTPs'}\">${mtpCount}</span>`;
             row.innerHTML = `
                 <td>${shift.date}</td>
                 <td>${shift.day}</td>
@@ -807,29 +862,31 @@ function populateTable(shiftData) {
                 <td>${shift.total_staff}</td>
                 <td>${shift.tickets_inflow}</td>
                 <td>${shift.tickets_closed}</td>
+                <td>${mtpCellContent}</td>
                 <td>${formatTime(shift.response_time_minutes)}</td>
                 <td>${formatTime(shift.contain_time_minutes)}</td>
                 <td>${shift.response_sla_breaches}</td>
                 <td>${shift.containment_sla_breaches}</td>
                 <td>
-                    <button class="load-details-btn" onclick="loadShiftDetails('${shift.id}', this)" data-shift-id="${shift.id}">
-                        📊 Details
-                    </button>
-                </td>
-            `;
-
+                    <button class="load-details-btn" onclick="loadShiftDetails('${shift.id}', this)" data-shift-id="${shift.id}">📊 Details</button>
+                </td>`;
             row.style.opacity = '0';
             row.style.transform = 'translateX(-20px)';
             tbody.appendChild(row);
-
-            // Animate in
+            const mtpCell = row.querySelector('.mtp-cell');
+            if (mtpCell) {
+                mtpCell.addEventListener('click', () => {
+                    const ids = (mtpCell.getAttribute('data-mtp-ids') || '').split(/\s*,\s*/).filter(x => x);
+                    openMtpModal(ids, mtpCell.getAttribute('data-shift-id'));
+                });
+                mtpCell.style.cursor = 'pointer';
+            }
             setTimeout(() => {
                 row.style.transition = 'all 0.5s ease';
                 row.style.opacity = '1';
                 row.style.transform = 'translateX(0)';
             }, 10);
-
-        }, index * 100); // Staggered timing
+        }, index * 100);
     });
 }
 
@@ -943,3 +1000,97 @@ function clearFilters() {
     // Close filter menu
     closeFilters();
 }
+
+function applySavedFilters() {
+    try {
+        const saved = JSON.parse(localStorage.getItem('shiftFiltersState') || '{}');
+        if (saved.shiftTypes) {
+            document.querySelectorAll('input[type="checkbox"][value]')
+                .forEach(cb => { cb.checked = saved.shiftTypes.includes(cb.value); });
+        }
+        if (saved.timeRange) {
+            const radio = document.querySelector(`input[name="timeRange"][value="${saved.timeRange}"]`);
+            if (radio) radio.checked = true;
+        }
+    } catch (_) { /* ignore */ }
+}
+
+function persistFilters() {
+    const shiftTypes = Array.from(document.querySelectorAll('input[type="checkbox"]'))
+        .filter(cb => cb.checked)
+        .map(cb => cb.value);
+    const timeRangeEl = document.querySelector('input[name="timeRange"]:checked');
+    const timeRange = timeRangeEl ? timeRangeEl.value : '7';
+    localStorage.setItem('shiftFiltersState', JSON.stringify({ shiftTypes, timeRange }));
+}
+
+// Override applyFilters to persist state
+const _origApplyFilters = applyFilters;
+applyFilters = function() { _origApplyFilters(); persistFilters(); };
+const _origClearFilters = clearFilters;
+clearFilters = function() { _origClearFilters(); persistFilters(); };
+
+// MTP hover popover (preview first N IDs)
+let activeMtpPopover = null;
+function attachMtpPopover(mtpCell, ids) {
+    const maxPreview = 8;
+    mtpCell.addEventListener('mouseenter', () => {
+        if (activeMtpPopover) { activeMtpPopover.remove(); activeMtpPopover = null; }
+        const pop = document.createElement('div');
+        pop.className = 'mtp-popover';
+        const base = (typeof window !== 'undefined' && window.XSOAR_BASE) ? window.XSOAR_BASE.replace(/\/$/, '') : '';
+        const preview = ids.slice(0, maxPreview).map(id => `<li><a href="${base}/Custom/caseinfoid/${encodeURIComponent(id)}" target="_blank" rel="noopener noreferrer">${id}</a></li>`).join('');
+        const more = ids.length > maxPreview ? `<div style='margin-top:4px;font-size:10px;opacity:.7;'>+${ids.length - maxPreview} more...</div>` : '';
+        pop.innerHTML = `<h5>MTP Tickets</h5><ul>${preview || '<li>None</li>'}</ul>${more}`;
+        mtpCell.style.position = 'relative';
+        mtpCell.appendChild(pop);
+        requestAnimationFrame(() => pop.classList.add('visible'));
+        activeMtpPopover = pop;
+    });
+    ['mouseleave','click','blur'].forEach(evt => {
+        mtpCell.addEventListener(evt, () => {
+            if (activeMtpPopover) {
+                activeMtpPopover.classList.remove('visible');
+                const ref = activeMtpPopover; activeMtpPopover = null;
+                setTimeout(() => ref && ref.remove(), 120);
+            }
+        });
+    });
+}
+
+function deepLinkIfRequested(shiftData) {
+    const params = new URLSearchParams(window.location.search);
+    const shiftId = params.get('shift_id');
+    if (!shiftId) return;
+    const mtpOpen = params.get('mtp') === '1';
+    // If shift exists open details
+    if (shiftData.some(s => s.id === shiftId)) {
+        // Use granular pathway
+        loadShiftDetailsGranular(shiftId)
+            .then(data => {
+                showShiftDetailsFromGranular(data);
+                if (mtpOpen) {
+                    const mtpIds = (data.security && data.security.malicious_true_positive_ids) || [];
+                    if (mtpIds.length) openMtpModal(mtpIds, shiftId);
+                }
+            })
+            .catch(err => console.warn('Deep-link load failed', err));
+    }
+}
+
+// Patch populateTable to attach popovers after cells exist (wrap original)
+const _origPopulateTable = populateTable;
+populateTable = function(shiftData) {
+    _origPopulateTable(shiftData);
+    // Attach popovers & deep link after small delay to ensure DOM laid out
+    setTimeout(() => {
+        document.querySelectorAll('.mtp-cell').forEach(cell => {
+            const ids = (cell.getAttribute('data-mtp-ids') || '').split(/\s*,\s*/).filter(x => x);
+            attachMtpPopover(cell, ids);
+        });
+        deepLinkIfRequested(shiftData);
+    }, 50);
+};
+
+// On initial load apply saved filters before fetching
+applySavedFilters();
