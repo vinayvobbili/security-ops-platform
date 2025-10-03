@@ -239,56 +239,63 @@ function setupModalHandlers() {
     }
 }
 
+// Store shift data globally so Details button can use it
+let globalShiftData = [];
+
 function loadShiftDetails(shiftId, button) {
     // Show loading state
     const originalText = button.textContent;
     button.textContent = '⏳ Loading...';
     button.disabled = true;
 
-    // Use new granular approach for better performance
-    loadShiftDetailsGranular(shiftId)
-        .then(data => {
-            showShiftDetailsFromGranular(data);
-        })
-        .catch(error => {
-            console.error('Error loading shift details:', error);
-            showToast('❌ Network error loading shift details', 'warning');
-        })
-        .finally(() => {
-            // Restore button state
-            button.textContent = originalText;
-            button.disabled = false;
-        });
-}
+    // Find the shift in already-loaded data
+    const shiftData = globalShiftData.find(s => s.id === shiftId);
 
-async function loadShiftDetailsGranular(shiftId) {
-    // Load data in parallel using granular endpoints
-    const [summaryResponse, staffingResponse, ticketsResponse, securityResponse] = await Promise.all([
-        fetch(`/api/shift-summary/${shiftId}`).then(r => r.json()),
-        fetch(`/api/shift-staffing/${shiftId}`).then(r => r.json()),
-        fetch(`/api/shift-tickets/${shiftId}`).then(r => r.json()),
-        fetch(`/api/shift-security/${shiftId}`).then(r => r.json())
-    ]);
-
-    // Check if all requests were successful
-    if (!summaryResponse.success || !staffingResponse.success ||
-        !ticketsResponse.success || !securityResponse.success) {
-        const errors = [
-            !summaryResponse.success ? summaryResponse.error : null,
-            !staffingResponse.success ? staffingResponse.error : null,
-            !ticketsResponse.success ? ticketsResponse.error : null,
-            !securityResponse.success ? securityResponse.error : null
-        ].filter(e => e).join(', ');
-        throw new Error(errors);
+    if (!shiftData) {
+        console.error('Shift data not found for:', shiftId);
+        showToast('❌ Shift data not found', 'warning');
+        button.textContent = originalText;
+        button.disabled = false;
+        return;
     }
 
-    // Combine all data
-    return {
-        summary: summaryResponse.data,
-        staffing: staffingResponse.data,
-        tickets: ticketsResponse.data,
-        security: securityResponse.data
-    };
+    // Use cached data - no API calls needed!
+    try {
+        const data = {
+            summary: {
+                shift_name: shiftData.shift,
+                day_name: shiftData.day,
+                date: shiftData.date
+            },
+            staffing: {
+                shift_lead: shiftData.shift_lead || 'N/A',
+                basic_staffing: shiftData.basic_staffing || { total_staff: 0, teams: {} },
+                detailed_staffing: shiftData.detailed_staffing || {}
+            },
+            tickets: {
+                tickets_inflow: shiftData.tickets_inflow || 0,
+                tickets_closed: shiftData.tickets_closed || 0,
+                response_time_minutes: shiftData.response_time_minutes || 0,
+                contain_time_minutes: shiftData.contain_time_minutes || 0
+            },
+            security: shiftData.security_actions || {
+                iocs_blocked: 0,
+                domains_blocked: 0,
+                malicious_true_positives: 0
+            },
+            inflow: { tickets: shiftData.inflow_tickets || [] },
+            outflow: { tickets: shiftData.outflow_tickets || [] }
+        };
+
+        showShiftDetailsFromGranular(data);
+        button.textContent = originalText;
+        button.disabled = false;
+    } catch (error) {
+        console.error('Error displaying shift details:', error);
+        showToast('❌ Error displaying shift details', 'warning');
+        button.textContent = originalText;
+        button.disabled = false;
+    }
 }
 
 function formatTime(minutes) {
@@ -484,15 +491,110 @@ function hideLoadingSpinner() {
 }
 
 function showShiftDetailsFromGranular(data) {
-    const {summary, staffing, tickets, security} = data;
+    const {summary, staffing, tickets, security, inflow, outflow} = data;
 
     // Update modal title
     const modalTitle = document.getElementById('modalTitle');
     modalTitle.textContent = `${summary.shift_name} Shift - ${summary.day_name}, ${summary.date}`;
 
-    // Build modal content using granular data
+    // Helper function to convert minutes to mm:ss format
+    const formatMinutesToTime = (minutes) => {
+        if (minutes === null || minutes === undefined || isNaN(minutes)) return 'N/A';
+        const mins = Math.floor(minutes);
+        const secs = Math.round((minutes - mins) * 60);
+        return `${mins}:${secs.toString().padStart(2, '0')}`;
+    };
+
+    // Helper function to generate ticket table
+    const generateInflowTable = (tickets) => {
+        if (!tickets || tickets.length === 0) {
+            return '<div class="empty-state">No inflow tickets for this shift</div>';
+        }
+        const base = (typeof window !== 'undefined' && window.XSOAR_BASE) ? window.XSOAR_BASE.replace(/\/$/, '') : 'https://msoar.crtx.us.paloaltonetworks.com';
+        return `
+            <table class="ticket-table">
+                <thead>
+                    <tr>
+                        <th>Ticket #</th>
+                        <th>Name</th>
+                        <th>Type</th>
+                        <th>Owner</th>
+                        <th>TTR (mm:ss)</th>
+                        <th>TTC (mm:ss)</th>
+                        <th>Created (ET)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${tickets.map(ticket => `
+                        <tr>
+                            <td><a href="${base}/Custom/caseinfoid/${ticket.id}" target="_blank" rel="noopener noreferrer">${ticket.id}</a></td>
+                            <td>${ticket.name || 'N/A'}</td>
+                            <td><span class="ticket-type-badge">${ticket.type || 'N/A'}</span></td>
+                            <td>${ticket.owner || 'Unassigned'}</td>
+                            <td>${formatMinutesToTime(ticket.ttr)}</td>
+                            <td>${formatMinutesToTime(ticket.ttc)}</td>
+                            <td>${ticket.created || 'N/A'}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        `;
+    };
+
+    const generateOutflowTable = (tickets) => {
+        if (!tickets || tickets.length === 0) {
+            return '<div class="empty-state">No outflow tickets for this shift</div>';
+        }
+        const base = (typeof window !== 'undefined' && window.XSOAR_BASE) ? window.XSOAR_BASE.replace(/\/$/, '') : 'https://msoar.crtx.us.paloaltonetworks.com';
+        return `
+            <table class="ticket-table">
+                <thead>
+                    <tr>
+                        <th>Ticket #</th>
+                        <th>Name</th>
+                        <th>Type</th>
+                        <th>Owner</th>
+                        <th>Closed (ET)</th>
+                        <th>Impact</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${tickets.map(ticket => `
+                        <tr>
+                            <td><a href="${base}/Custom/caseinfoid/${ticket.id}" target="_blank" rel="noopener noreferrer">${ticket.id}</a></td>
+                            <td>${ticket.name || 'N/A'}</td>
+                            <td><span class="ticket-type-badge">${ticket.type || 'N/A'}</span></td>
+                            <td>${ticket.owner || 'Unassigned'}</td>
+                            <td>${ticket.closed || 'N/A'}</td>
+                            <td>${ticket.impact || 'Unknown'}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        `;
+    };
+
+    // Build modal content using granular data with tabs
     const modalBody = document.getElementById('modalBody');
     modalBody.innerHTML = `
+        <div class="modal-tabs">
+            <button class="modal-tab active" onclick="switchTab(event, 'inflow-tab')">📥 Inflow (${inflow.tickets.length})</button>
+            <button class="modal-tab" onclick="switchTab(event, 'outflow-tab')">📤 Outflow (${outflow.tickets.length})</button>
+            <button class="modal-tab" onclick="switchTab(event, 'metrics-tab')">📊 Metrics</button>
+            <button class="modal-tab" onclick="switchTab(event, 'staff-tab')">👥 Staff</button>
+        </div>
+
+        <div id="inflow-tab" class="tab-content active">
+            <h3>📥 Inflow Tickets</h3>
+            ${generateInflowTable(inflow.tickets)}
+        </div>
+
+        <div id="outflow-tab" class="tab-content">
+            <h3>📤 Outflow Tickets (Closed)</h3>
+            ${generateOutflowTable(outflow.tickets)}
+        </div>
+
+        <div id="metrics-tab" class="tab-content">
         <div class="detail-section">
             <h3>🎯 Key Performance Metrics</h3>
             <div class="key-metrics-grid">
@@ -571,20 +673,36 @@ function showShiftDetailsFromGranular(data) {
                 </div>
             </div>
         </div>
+        </div>
 
-        <div class="detail-section staffing-section">
-            <h3>👥 Full Shift Staff</h3>
-            <div class="staff-grid">
-                ${Object.entries(staffing.detailed_staffing).map(([team, members]) => `
-                    <div class="staff-team">
-                        <h4>${team} (${staffing.basic_staffing.teams[team] || 0})</h4>
-                        <div class="staff-list">
-                            ${Array.isArray(members) && members.length > 0 && members[0] !== 'N/A (Excel file missing)'
-        ? members.map(member => `<span class="staff-member">${member}</span>`).join('')
-        : '<span class="no-staff">No staff assigned</span>'}
-                        </div>
+        <div id="staff-tab" class="tab-content">
+            <div class="detail-section">
+                <h3>👤 Shift Leadership</h3>
+                <div class="leadership-info">
+                    <div class="shift-lead">
+                        <strong>Shift Lead:</strong> ${staffing.shift_lead}
                     </div>
-                `).join('')}
+                    <div class="shift-stats">
+                        <span>Total Staff: ${staffing.basic_staffing.total_staff}</span> •
+                        <span>Tickets per Staff: ${staffing.basic_staffing.total_staff > 0 ? (tickets.tickets_closed / staffing.basic_staffing.total_staff).toFixed(1) : 'N/A'}</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="detail-section staffing-section">
+                <h3>👥 Full Shift Staff</h3>
+                <div class="staff-grid">
+                    ${Object.entries(staffing.detailed_staffing).map(([team, members]) => `
+                        <div class="staff-team">
+                            <h4>${team} (${staffing.basic_staffing.teams[team] || 0})</h4>
+                            <div class="staff-list">
+                                ${Array.isArray(members) && members.length > 0 && members[0] !== 'N/A (Excel file missing)'
+            ? members.map(member => `<span class="staff-member">${member}</span>`).join('')
+            : '<span class="no-staff">No staff assigned</span>'}
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
             </div>
         </div>
     `;
@@ -602,6 +720,32 @@ function showShiftDetailsFromGranular(data) {
                 createConfetti(modalContent);
             }
         }, 500);
+    }
+}
+
+// Tab switching function for modal
+function switchTab(event, tabId) {
+    // Hide all tab contents
+    const tabContents = document.querySelectorAll('.tab-content');
+    tabContents.forEach(content => {
+        content.classList.remove('active');
+    });
+
+    // Remove active class from all tabs
+    const tabs = document.querySelectorAll('.modal-tab');
+    tabs.forEach(tab => {
+        tab.classList.remove('active');
+    });
+
+    // Show the selected tab content
+    const selectedTab = document.getElementById(tabId);
+    if (selectedTab) {
+        selectedTab.classList.add('active');
+    }
+
+    // Add active class to the clicked tab
+    if (event && event.currentTarget) {
+        event.currentTarget.classList.add('active');
     }
 }
 
@@ -835,9 +979,11 @@ function updateStatusInfo(shiftData) {
 }
 
 function populateTable(shiftData) {
+    // Store shift data globally for use in Details modal
+    globalShiftData = shiftData;
+
     const tbody = document.getElementById('shifts-tbody');
     tbody.innerHTML = '';
-    updateSummaryCards(shiftData);
     shiftData.forEach((shift, index) => {
         setTimeout(() => {
             const row = document.createElement('tr');
@@ -873,14 +1019,6 @@ function populateTable(shiftData) {
             row.style.opacity = '0';
             row.style.transform = 'translateX(-20px)';
             tbody.appendChild(row);
-            const mtpCell = row.querySelector('.mtp-cell');
-            if (mtpCell) {
-                mtpCell.addEventListener('click', () => {
-                    const ids = (mtpCell.getAttribute('data-mtp-ids') || '').split(/\s*,\s*/).filter(x => x);
-                    openMtpModal(ids, mtpCell.getAttribute('data-shift-id'));
-                });
-                mtpCell.style.cursor = 'pointer';
-            }
             setTimeout(() => {
                 row.style.transition = 'all 0.5s ease';
                 row.style.opacity = '1';
@@ -1063,31 +1201,52 @@ function deepLinkIfRequested(shiftData) {
     const shiftId = params.get('shift_id');
     if (!shiftId) return;
     const mtpOpen = params.get('mtp') === '1';
-    // If shift exists open details
-    if (shiftData.some(s => s.id === shiftId)) {
-        // Use granular pathway
-        loadShiftDetailsGranular(shiftId)
-            .then(data => {
-                showShiftDetailsFromGranular(data);
-                if (mtpOpen) {
-                    const mtpIds = (data.security && data.security.malicious_true_positive_ids) || [];
-                    if (mtpIds.length) openMtpModal(mtpIds, shiftId);
-                }
-            })
-            .catch(err => console.warn('Deep-link load failed', err));
+
+    // Find shift in cached data
+    const shift = shiftData.find(s => s.id === shiftId);
+    if (!shift) return;
+
+    // Build data from cached shift
+    const data = {
+        summary: {
+            shift_name: shift.shift,
+            day_name: shift.day,
+            date: shift.date
+        },
+        staffing: {
+            shift_lead: shift.shift_lead || 'N/A',
+            basic_staffing: shift.basic_staffing || { total_staff: 0, teams: {} },
+            detailed_staffing: shift.detailed_staffing || {}
+        },
+        tickets: {
+            tickets_inflow: shift.tickets_inflow || 0,
+            tickets_closed: shift.tickets_closed || 0,
+            response_time_minutes: shift.response_time_minutes || 0,
+            contain_time_minutes: shift.contain_time_minutes || 0
+        },
+        security: shift.security_actions || {
+            iocs_blocked: 0,
+            domains_blocked: 0,
+            malicious_true_positives: 0
+        },
+        inflow: { tickets: shift.inflow_tickets || [] },
+        outflow: { tickets: shift.outflow_tickets || [] }
+    };
+
+    showShiftDetailsFromGranular(data);
+
+    if (mtpOpen) {
+        const mtpIds = shift.mtp_ticket_ids ? shift.mtp_ticket_ids.split(',').map(id => id.trim()).filter(id => id) : [];
+        if (mtpIds.length) openMtpModal(mtpIds, shiftId);
     }
 }
 
-// Patch populateTable to attach popovers after cells exist (wrap original)
+// Patch populateTable to handle deep linking after cells exist (wrap original)
 const _origPopulateTable = populateTable;
 populateTable = function(shiftData) {
     _origPopulateTable(shiftData);
-    // Attach popovers & deep link after small delay to ensure DOM laid out
+    // Deep link after small delay to ensure DOM laid out
     setTimeout(() => {
-        document.querySelectorAll('.mtp-cell').forEach(cell => {
-            const ids = (cell.getAttribute('data-mtp-ids') || '').split(/\s*,\s*/).filter(x => x);
-            attachMtpPopover(cell, ids);
-        });
         deepLinkIfRequested(shiftData);
     }, 50);
 };

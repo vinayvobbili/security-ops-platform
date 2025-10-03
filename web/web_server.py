@@ -970,11 +970,91 @@ def get_shift_list():
                         shift_start_hour = shift_hour_map.get(shift_name.lower(), 4.5)
                         ticket_metrics = secops.get_shift_ticket_metrics(days_back, shift_start_hour)
                         security_actions = secops.get_shift_security_actions(days_back, shift_start_hour)
+
+                        # Get staffing details
+                        detailed_staffing = secops.get_staffing_data(day_name, shift_name)
+                        basic_staffing = secops.get_basic_shift_staffing(day_name, shift_name.lower())
+
+                        # Determine shift lead (prefer first SA)
+                        sa_list = detailed_staffing.get('SA') or detailed_staffing.get('senior_analysts') or []
+                        shift_lead = None
+                        if isinstance(sa_list, list) and sa_list:
+                            first_sa = sa_list[0]
+                            if first_sa and 'N/A' not in str(first_sa):
+                                shift_lead = str(first_sa)
+                        if not shift_lead:
+                            shift_lead = secops.get_shift_lead(day_name, shift_name)
+                        if not shift_lead or 'N/A' in str(shift_lead):
+                            shift_lead = 'N/A'
+
                         # Inflow via cached helper
                         base_date = datetime(target_date.year, target_date.month, target_date.day)
-                        _, inflow_tickets, _ = _fetch_inflow_for_window(base_date, shift_name)
+                        _, inflow_tickets, (start_dt, end_dt) = _fetch_inflow_for_window(base_date, shift_name)
                         mtp_ids = [t.get('id') for t in inflow_tickets if t.get('CustomFields', {}).get('impact') == 'Malicious True Positive']
                         sla_metrics = _extract_sla_metrics(inflow_tickets)
+
+                        # Fetch outflow tickets
+                        time_format = '%Y-%m-%dT%H:%M:%S %z'
+                        start_str = start_dt.strftime(time_format)
+                        end_str = end_dt.strftime(time_format)
+                        time_filter = f'created:>="{start_str}" created:<="{end_str}"'
+                        outflow_query = f'{secops.BASE_QUERY} {time_filter} status:closed'
+                        outflow_tickets = incident_handler.get_tickets(query=outflow_query)
+
+                        # Serialize inflow tickets
+                        inflow_list = []
+                        for ticket in inflow_tickets:
+                            custom_fields = ticket.get('CustomFields', {})
+                            ttr_minutes = None
+                            ttc_minutes = None
+                            if 'timetorespond' in custom_fields and custom_fields['timetorespond']:
+                                ttr_minutes = round(custom_fields['timetorespond'].get('totalDuration', 0) / 60, 2)
+                            if 'timetocontain' in custom_fields and custom_fields['timetocontain']:
+                                ttc_minutes = round(custom_fields['timetocontain'].get('totalDuration', 0) / 60, 2)
+
+                            created_str = ticket.get('created', '')
+                            created_et = ''
+                            if created_str:
+                                try:
+                                    created_dt = datetime.fromisoformat(created_str.replace('Z', '+00:00'))
+                                    created_et = created_dt.astimezone(eastern).strftime('%Y-%m-%d %H:%M:%S %Z')
+                                except:
+                                    created_et = created_str
+
+                            inflow_list.append({
+                                'id': ticket.get('id', ''),
+                                'name': ticket.get('name', ''),
+                                'type': ticket.get('type', ''),
+                                'owner': ticket.get('owner', ''),
+                                'ttr': ttr_minutes,
+                                'ttc': ttc_minutes,
+                                'created': created_et
+                            })
+
+                        # Serialize outflow tickets
+                        outflow_list = []
+                        for ticket in outflow_tickets:
+                            custom_fields = ticket.get('CustomFields', {})
+                            closed_str = ticket.get('closed', '')
+                            closed_et = ''
+                            if closed_str:
+                                try:
+                                    closed_dt = datetime.fromisoformat(closed_str.replace('Z', '+00:00'))
+                                    closed_et = closed_dt.astimezone(eastern).strftime('%Y-%m-%d %H:%M:%S %Z')
+                                except:
+                                    closed_et = closed_str
+
+                            impact = custom_fields.get('impact', {}).get('simple', 'Unknown') if isinstance(custom_fields.get('impact'), dict) else custom_fields.get('impact', 'Unknown')
+
+                            outflow_list.append({
+                                'id': ticket.get('id', ''),
+                                'name': ticket.get('name', ''),
+                                'type': ticket.get('type', ''),
+                                'owner': ticket.get('owner', ''),
+                                'closed': closed_et,
+                                'impact': impact
+                            })
+
                         shift_data.append({
                             'id': shift_id,
                             'date': date_str,
@@ -990,7 +1070,13 @@ def get_shift_list():
                             'response_sla_breaches': sla_metrics['response_breaches'],
                             'containment_sla_breaches': sla_metrics['containment_breaches'],
                             'security_actions': security_actions,
-                            'mtp_ticket_ids': ', '.join(map(str, mtp_ids))
+                            'mtp_ticket_ids': ', '.join(map(str, mtp_ids)),
+                            'inflow_tickets': inflow_list,
+                            'outflow_tickets': outflow_list,
+                            # Staffing details for modal
+                            'shift_lead': shift_lead,
+                            'basic_staffing': basic_staffing,
+                            'detailed_staffing': detailed_staffing
                         })
                 except Exception as e:
                     print(f"Error getting staffing or metrics for {day_name} {shift_name}: {e}")
@@ -1024,7 +1110,13 @@ def get_shift_list():
                             'contain_time_minutes': 0,
                             'response_sla_breaches': 0,
                             'containment_sla_breaches': 0,
-                            'mtp_ticket_ids': ''
+                            'mtp_ticket_ids': '',
+                            'inflow_tickets': [],
+                            'outflow_tickets': [],
+                            'shift_lead': 'N/A',
+                            'basic_staffing': {'total_staff': 0, 'teams': {}},
+                            'detailed_staffing': {},
+                            'security_actions': {'iocs_blocked': 0, 'domains_blocked': 0, 'malicious_true_positives': 0}
                         })
         return jsonify({'success': True, 'data': shift_data})
     except Exception as e:
@@ -1221,166 +1313,6 @@ def _extract_sla_metrics(tickets):
         'response_breaches': response_breaches,
         'containment_breaches': contain_breaches
     }
-
-
-@app.route('/api/shift-security/<shift_id>')
-@log_web_activity
-def get_shift_security(shift_id):
-    """Get security actions data for a specific shift"""
-    try:
-        date_str, shift_name = shift_id.split('_')
-        target_date = datetime.strptime(date_str, '%Y-%m-%d')
-        days_back = (datetime.now(eastern).date() - target_date.date()).days
-
-        # Calculate shift start hour
-        if shift_name.lower() == 'morning':
-            shift_start_hour = 4.5
-        elif shift_name.lower() == 'afternoon':
-            shift_start_hour = 12.5
-        else:  # night
-            shift_start_hour = 20.5
-
-        # Add MTP IDs via inflow fetch
-        base_date = datetime(target_date.year, target_date.month, target_date.day)
-        _, inflow_tickets, _ = _fetch_inflow_for_window(base_date, shift_name)
-        mtp_ids = [t.get('id') for t in inflow_tickets if t.get('CustomFields', {}).get('impact') == 'Malicious True Positive']
-        security_actions = secops.get_shift_security_actions(days_back, shift_start_hour)
-        security_actions['malicious_true_positive_ids'] = mtp_ids
-        return jsonify({
-            'success': True,
-            'data': security_actions
-        })
-
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-
-@app.route('/api/shift-summary/<shift_id>')
-@log_web_activity
-def get_shift_summary(shift_id):
-    """Get combined summary data for a shift (lighter than full details)"""
-    try:
-        date_str, shift_name = shift_id.split('_')
-        target_date = datetime.strptime(date_str, '%Y-%m-%d')
-        day_name = target_date.strftime('%A')
-        days_back = (datetime.now(eastern).date() - target_date.date()).days
-
-        # Calculate shift start hour
-        if shift_name.lower() == 'morning':
-            shift_start_hour = 4.5
-        elif shift_name.lower() == 'afternoon':
-            shift_start_hour = 12.5
-        else:  # night
-            shift_start_hour = 20.5
-
-        # Get basic data for summary
-        basic_staffing = secops.get_basic_shift_staffing(day_name, shift_name.lower())
-        shift_lead = secops.get_shift_lead(day_name, shift_name.lower())
-        ticket_metrics = secops.get_shift_ticket_metrics(days_back, shift_start_hour)
-
-        # Calculate key summary metrics
-        summary = {
-            'shift_id': shift_id,
-            'date': date_str,
-            'shift_name': shift_name.title(),
-            'day_name': day_name,
-            'shift_lead': shift_lead,
-            'total_staff': basic_staffing['total_staff'],
-            'tickets_inflow': ticket_metrics['tickets_inflow'],
-            'tickets_closed': ticket_metrics['tickets_closed'],
-            'response_time_minutes': ticket_metrics['response_time_minutes'],
-            'contain_time_minutes': ticket_metrics['contain_time_minutes']
-        }
-
-        return jsonify({
-            'success': True,
-            'data': summary
-        })
-
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-
-@app.route('/api/shift-staffing/<shift_id>')
-@log_web_activity
-def get_shift_staffing(shift_id):
-    """Granular staffing endpoint for shift performance modal.
-    Returns shift lead, basic counts, and detailed staffing.
-    Now prefers first Senior Analyst (SA) as shift lead if available.
-    """
-    try:
-        date_str, raw_shift = shift_id.split('_')
-        shift_name = raw_shift.lower()
-        target_date = datetime.strptime(date_str, '%Y-%m-%d')
-        day_name = target_date.strftime('%A')
-        detailed = secops.get_staffing_data(day_name, shift_name)
-        basic = secops.get_basic_shift_staffing(day_name, shift_name)
-        # Prefer first senior analyst (key variations: 'SA', 'senior_analysts')
-        sa_list = detailed.get('SA') or detailed.get('senior_analysts') or []
-        shift_lead = None
-        if isinstance(sa_list, list) and sa_list:
-            first_sa = sa_list[0]
-            if first_sa and 'N/A' not in str(first_sa):
-                shift_lead = str(first_sa)
-        if not shift_lead:
-            # Fallback to existing Excel shift lead logic
-            shift_lead = secops.get_shift_lead(day_name, shift_name)
-        if not shift_lead or 'N/A' in str(shift_lead):
-            shift_lead = 'N/A'
-        return jsonify({
-            'success': True,
-            'data': {
-                'shift_id': shift_id,
-                'date': date_str,
-                'shift_name': shift_name.title(),
-                'shift_lead': shift_lead,
-                'basic_staffing': basic,
-                'detailed_staffing': detailed,
-                'generated_at': datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
-            }
-        })
-    except Exception as e:
-        logger.error(f"Error in get_shift_staffing for {shift_id}: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-
-@app.route('/api/shift-tickets/<shift_id>')
-@log_web_activity
-def get_shift_tickets(shift_id):
-    """Granular ticket metrics endpoint for shift performance modal.
-    Supplies inflow/outflow counts and MTTR/MTTC minutes.
-    """
-    try:
-        date_str, raw_shift = shift_id.split('_')
-        shift_name = raw_shift.lower()
-        target_date = datetime.strptime(date_str, '%Y-%m-%d')
-
-        base_date = datetime(target_date.year, target_date.month, target_date.day)
-        _, inflow_tickets, (start_dt, end_dt) = _fetch_inflow_for_window(base_date, shift_name)
-        time_format = '%Y-%m-%dT%H:%M:%S %z'
-        start_str = start_dt.strftime(time_format)
-        end_str = end_dt.strftime(time_format)
-        time_filter = f'created:>="{start_str}" created:<="{end_str}"'
-        outflow_query = f'{secops.BASE_QUERY} {time_filter} status:closed'
-        outflow_tickets = incident_handler.get_tickets(query=outflow_query)
-        sla_metrics = _extract_sla_metrics(inflow_tickets)
-        return jsonify({
-            'success': True,
-            'data': {
-                'shift_id': shift_id,
-                'date': date_str,
-                'shift_name': shift_name.title(),
-                'tickets_inflow': len(inflow_tickets),
-                'tickets_closed': len(outflow_tickets),
-                'response_time_minutes': sla_metrics['avg_response'],
-                'contain_time_minutes': sla_metrics['avg_containment'],
-                'response_sla_breaches': sla_metrics['response_breaches'],
-                'containment_sla_breaches': sla_metrics['containment_breaches']
-            }
-        })
-    except Exception as e:
-        logger.error(f"Error in get_shift_tickets for {shift_id}: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 @app.route('/meaningful-metrics')
