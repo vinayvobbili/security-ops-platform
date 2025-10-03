@@ -578,7 +578,11 @@ class RingTagTaniumHosts(Command):
     @staticmethod
     def _apply_tags_to_random_hosts(room_id):
         """Apply ring tags to 10 random Tanium hosts"""
+        import time
         from services.tanium import TaniumClient
+
+        # Start timing
+        start_time = time.time()
 
         today_date = datetime.now(EASTERN_TZ).strftime('%m-%d-%Y')
         report_dir = ROOT_DIRECTORY / "data" / "transient" / "epp_device_tagging" / today_date
@@ -593,14 +597,20 @@ class RingTagTaniumHosts(Command):
 
         try:
             # Read the report
+            read_start = time.time()
             df = pd.read_excel(report_path)
+            read_duration = time.time() - read_start
+
+            total_hosts_in_report = len(df)
 
             # Filter hosts that have generated tags and no errors
+            filter_start = time.time()
             hosts_to_tag = df[
                 (df['Generated Tag'].notna()) &
                 (df['Generated Tag'] != '') &
                 (~df['Comments'].str.contains('missing|couldn\'t be generated|error', case=False, na=False))
                 ]
+            filter_duration = time.time() - filter_start
 
             if len(hosts_to_tag) == 0:
                 webex_api.messages.create(
@@ -621,6 +631,7 @@ class RingTagTaniumHosts(Command):
             failed_tags = []
 
             # Apply tags to each host
+            apply_start = time.time()
             for idx, row in random_hosts.iterrows():
                 computer_name = str(row['Computer Name'])
                 source = str(row['Source'])
@@ -668,39 +679,78 @@ class RingTagTaniumHosts(Command):
                         'comments': comments,
                         'error': str(e)
                     })
+            apply_duration = time.time() - apply_start
 
-            # Send summary report
+            # Create Excel report with results
+            results_data = []
+            for host in successful_tags:
+                results_data.append({
+                    'Computer Name': host['name'],
+                    'Source': host['source'],
+                    'Ring Tag': host['tag'],
+                    'Action ID': host['action_id'],
+                    'Current Tags': host['current_tags'],
+                    'Comments': host['comments'],
+                    'Status': 'Successfully Tagged'
+                })
+            for host in failed_tags:
+                results_data.append({
+                    'Computer Name': host['name'],
+                    'Source': host['source'],
+                    'Ring Tag': host['tag'],
+                    'Action ID': 'N/A',
+                    'Current Tags': host['current_tags'],
+                    'Comments': host['comments'],
+                    'Status': f"Failed: {host['error']}"
+                })
+
+            # Create DataFrame and save to Excel
+            results_df = pd.DataFrame(results_data)
+            current_time_eastern = datetime.now(EASTERN_TZ)
+            tz_name = "EST" if current_time_eastern.dst().total_seconds() == 0 else "EDT"
+            timestamp = current_time_eastern.strftime(f'%m_%d_%Y %I:%M %p {tz_name}')
+            output_filename = report_dir / f'Tanium_Ring_Tagging_Results_{timestamp}.xlsx'
+
+            results_df.to_excel(output_filename, index=False)
+
+            # Calculate total duration
+            total_duration = time.time() - start_time
+
+            # Format timing information
+            def format_duration(seconds):
+                """Format seconds into a human-readable duration string."""
+                import math
+                minutes, secs = divmod(seconds, 60)
+                hours, minutes = divmod(minutes, 60)
+                secs = math.ceil(secs)
+                parts = []
+                if hours > 0:
+                    parts.append(f"{int(hours)} hour{'s' if hours != 1 else ''}")
+                if minutes > 0:
+                    parts.append(f"{int(minutes)} minute{'s' if minutes != 1 else ''}")
+                if secs > 0 or not parts:
+                    parts.append(f"{int(secs)} second{'s' if secs != 1 else ''}")
+                return " ".join(parts)
+
+            # Generate summary with timing
             summary_md = f"## 🎉 Tanium Ring Tagging Complete!\n\n"
-            summary_md += f"**Successfully tagged:** {len(successful_tags)}/{num_to_tag} hosts\n\n"
-
-            if successful_tags:
-                summary_md += "### ✅ Successfully Tagged Hosts:\n"
-                for host in successful_tags:
-                    summary_md += f"\n**{host['name']}**\n"
-                    summary_md += f"  - Instance: `{host['source']}`\n"
-                    summary_md += f"  - New Tag: `{host['tag']}`\n"
-                    summary_md += f"  - Action ID: `{host['action_id']}`\n"
-                    if host['current_tags'] and str(host['current_tags']).strip():
-                        summary_md += f"  - Current Tags: `{host['current_tags']}`\n"
-                    if host['comments'] and str(host['comments']).strip():
-                        summary_md += f"  - Notes: {host['comments']}\n"
-                summary_md += "\n"
-
-            if failed_tags:
-                summary_md += "### ❌ Failed to Tag:\n"
-                for host in failed_tags:
-                    summary_md += f"\n**{host['name']}**\n"
-                    summary_md += f"  - Instance: `{host['source']}`\n"
-                    summary_md += f"  - Attempted Tag: `{host['tag']}`\n"
-                    summary_md += f"  - Error: {host['error']}\n"
-                    if host['current_tags'] and str(host['current_tags']).strip():
-                        summary_md += f"  - Current Tags: `{host['current_tags']}`\n"
-                    if host['comments'] and str(host['comments']).strip():
-                        summary_md += f"  - Notes: {host['comments']}\n"
+            summary_md += f"**Summary:**\n"
+            summary_md += f"- Total hosts in report: {total_hosts_in_report:,}\n"
+            summary_md += f"- Hosts eligible for tagging: {len(hosts_to_tag):,}\n"
+            summary_md += f"- Hosts processed (random sample): {num_to_tag}\n"
+            summary_md += f"- Hosts tagged successfully: {len(successful_tags)}\n"
+            summary_md += f"- Hosts failed to tag: {len(failed_tags)}\n\n"
+            summary_md += f"**Timing:**\n"
+            summary_md += f"- Reading report: {format_duration(read_duration)}\n"
+            summary_md += f"- Filtering hosts: {format_duration(filter_duration)}\n"
+            summary_md += f"- Applying tags: {format_duration(apply_duration)}\n"
+            summary_md += f"- Total execution time: {format_duration(total_duration)}\n\n"
+            summary_md += f"📊 **Detailed results are attached in the Excel report.**\n"
 
             webex_api.messages.create(
                 roomId=room_id,
-                markdown=summary_md
+                markdown=summary_md,
+                files=[str(output_filename)]
             )
 
         except Exception as e:
