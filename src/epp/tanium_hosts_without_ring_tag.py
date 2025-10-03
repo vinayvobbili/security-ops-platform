@@ -650,11 +650,6 @@ class ExcelReportExporter:
         ]
         ws.append(headers)
 
-        # Make headers bold
-        from openpyxl.styles import Font
-        for cell in ws[1]:
-            cell.font = Font(bold=True, size=14)
-
         # Add data
         for computer in computers:
             current_tags = ""
@@ -679,29 +674,26 @@ class ExcelReportExporter:
                 computer.status
             ])
 
-        # Format columns - Updated column widths to accommodate new column
-        column_widths = {
-            'A': 40,  # Computer Name
-            'B': 25,  # Tanium ID
-            'C': 12,  # Source
-            'D': 18,  # Category
-            'E': 22,  # Environment
-            'F': 22,  # Country
-            'G': 18,  # Region
-            'H': 14,  # Was Country Guessed
-            'I': 50,  # Current Tags
-            'J': 28,  # Generated Tag
-            'K': 80  # Comments
-        }
-        for col, width in column_widths.items():
-            ws.column_dimensions[col].width = width
-
-        # Add filters and freeze panes - Updated range to include new column
-        ws.auto_filter.ref = f"A1:K{len(computers) + 1}"
-        ws.freeze_panes = "A2"
-
         # Save file
         wb.save(output_path)
+
+        # Apply professional formatting
+        from src.utils.excel_formatting import apply_professional_formatting
+        column_widths = {
+            'computer name': 40,
+            'tanium id': 25,
+            'source': 12,
+            'category': 18,
+            'environment': 22,
+            'country': 22,
+            'region': 18,
+            'was country guessed': 20,
+            'current tags': 50,
+            'generated tag': 35,
+            'comments': 80
+        }
+        wrap_columns = {'current tags', 'comments', 'generated tag'}
+        apply_professional_formatting(output_path, column_widths=column_widths, wrap_columns=wrap_columns)
 
         self.logger.info(f"Exported {len(computers)} computers to {output_path}")
         return str(output_path)

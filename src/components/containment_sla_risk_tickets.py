@@ -112,7 +112,7 @@ def build_ticket_message(seconds_remaining, ticket, due_date_str, index):
     if ticket_owner:
         # Use Webex person email format to make it clickable
         if '@' in ticket_owner:
-            owner_text = f"<@personEmail:{ticket_owner}>"
+            owner_text = f"\n<@personEmail:{ticket_owner}>"
         else:
             # If it's just a username, assume it's the part before @ and add domain if needed
             owner_text = ticket_owner
