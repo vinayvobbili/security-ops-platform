@@ -581,7 +581,7 @@ class RingTagTaniumHosts(Command):
         from services.tanium import TaniumClient
 
         today_date = datetime.now(EASTERN_TZ).strftime('%m-%d-%Y')
-        report_dir = ROOT_DIRECTORY / "web" / "static" / "charts" / today_date
+        report_dir = ROOT_DIRECTORY / "data" / "transient" / "epp_device_tagging" / today_date
         report_path = report_dir / "Tanium_Ring_Tags_Report.xlsx"
 
         if not report_path.exists():
@@ -600,7 +600,7 @@ class RingTagTaniumHosts(Command):
                 (df['Generated Tag'].notna()) &
                 (df['Generated Tag'] != '') &
                 (~df['Comments'].str.contains('missing|couldn\'t be generated|error', case=False, na=False))
-            ]
+                ]
 
             if len(hosts_to_tag) == 0:
                 webex_api.messages.create(

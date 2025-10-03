@@ -235,7 +235,7 @@ class TaniumDataLoader:
             ws = wb.active
 
             for row_num, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
-                if not row or len(row) < 6:
+                if not row or len(row) < 7:
                     continue
 
                 if not row[0]:  # name is required
@@ -247,9 +247,9 @@ class TaniumDataLoader:
                             name=str(row[0]).strip(),
                             id=str(row[1]).strip() if row[1] else "",
                             ip=str(row[2]).strip() if row[2] else "",
-                            eidLastSeen=row[3],
-                            source=str(row[4]).strip() if row[4] else "",
-                            custom_tags=[tag.strip() for tag in str(row[5]).split(',') if tag.strip()] if row[5] else []
+                            eidLastSeen=row[4],  # Column 5: Last Seen (was row[3])
+                            source=str(row[5]).strip() if row[5] else "",  # Column 6: Source (was row[4])
+                            custom_tags=[tag.strip() for tag in str(row[6]).split(',') if tag.strip()] if row[6] else []  # Column 7: Current Tags (was row[5])
                         )
                     )
                 except Exception as e:
@@ -777,7 +777,7 @@ class TaniumRingTagProcessor:
             date_format = '%m-%d-%Y'
             today_date = datetime.now(EASTERN_TZ).strftime(date_format)
             root_directory = Path(__file__).parent.parent.parent
-            output_dir = root_directory / "web" / "static" / "charts" / today_date
+            output_dir = root_directory / "data" / "transient" / "epp_device_tagging" / today_date
             os.makedirs(output_dir, exist_ok=True)
             output_path = os.path.join(output_dir, "Tanium_Ring_Tags_Report.xlsx")
 
