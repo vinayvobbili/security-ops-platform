@@ -204,6 +204,45 @@ def seek_approval_to_ring_tag(room_id):
         logger.error(f"Failed to send approval card: {e}")
 
 
+def seek_approval_to_ring_tag_tanium(room_id):
+    card = AdaptiveCard(
+        body=[
+            TextBlock(
+                text="Tanium Ring Tagging Approval",
+                color=options.Colors.ACCENT,
+                size=options.FontSize.LARGE,
+                weight=options.FontWeight.BOLDER,
+                horizontalAlignment=HorizontalAlignment.CENTER),
+            ColumnSet(
+                columns=[
+                    Column(
+                        width="stretch",
+                        items=[
+                            TextBlock(text="Do you want these Tanium hosts to be Ring tagged?", wrap=True)
+                        ],
+                        verticalContentAlignment=VerticalContentAlignment.CENTER
+                    )
+                ]
+            )
+        ],
+        actions=[
+            Submit(title="No!", data={"callback_keyword": "dont_ring_tag_tanium_hosts"},
+                   style=options.ActionStyle.DESTRUCTIVE),
+            Submit(title="Yes! Put a 💍 On It!", data={"callback_keyword": "ring_tag_tanium_hosts"},
+                   style=options.ActionStyle.POSITIVE)
+        ]
+    )
+
+    try:
+        webex_api.messages.create(
+            roomId=room_id,
+            text="Please approve the Tanium tagging action.",
+            attachments=[{"contentType": "application/vnd.microsoft.card.adaptive", "content": card.to_dict()}]
+        )
+    except Exception as e:
+        logger.error(f"Failed to send Tanium approval card: {e}")
+
+
 def seek_approval_to_delete_invalid_ring_tags(room_id):
     card = AdaptiveCard(
         body=[
@@ -500,6 +539,35 @@ class GetTaniumHostsWithoutRingTag(Command):
             markdown=message,
             files=[str(filepath)]
         )
+        seek_approval_to_ring_tag_tanium(room_id)
+
+
+class RingTagTaniumHosts(Command):
+    def __init__(self):
+        super().__init__(
+            command_keyword="ring_tag_tanium_hosts",
+            delete_previous_message=True,
+        )
+
+    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_jarvais, log_file_name="jarvais_activity_log.csv")
+    def execute(self, message, attachment_actions, activity):
+        room_id = attachment_actions.roomId
+        webex_api.messages.create(
+            roomId=room_id,
+            markdown=f"Hello {activity['actor']['displayName']}! 🚧 **Tanium ring tagging workflow is not yet implemented.** This feature is coming soon!"
+        )
+
+
+class DontRingTagTaniumHosts(Command):
+    def __init__(self):
+        super().__init__(
+            command_keyword="dont_ring_tag_tanium_hosts",
+            delete_previous_message=True,
+        )
+
+    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_jarvais, log_file_name="jarvais_activity_log.csv")
+    def execute(self, message, attachment_actions, activity):
+        return f"Alright {activity['actor']['displayName']}, I won't tag Tanium hosts. Until next time!👋🏾"
 
 
 class GetTaniumUnhealthyHosts(Command):
@@ -615,6 +683,8 @@ def jarvais_initialization(bot_instance=None):
         bot_instance.add_command(RemoveInvalidRings())
         bot_instance.add_command(DontRemoveInvalidRings())
         bot_instance.add_command(GetTaniumHostsWithoutRingTag())
+        bot_instance.add_command(RingTagTaniumHosts())
+        bot_instance.add_command(DontRingTagTaniumHosts())
         bot_instance.add_command(GetTaniumUnhealthyHosts())
         bot_instance.add_command(GetBotHealth())
         bot_instance.add_command(Hi())
