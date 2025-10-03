@@ -40,7 +40,7 @@ body {
 .performance-table {
     width: 100%;
     border-collapse: separate;
-    border-spacing: 0;
+    border-spacing: 0 6px;
     margin: 0;
     font-size: 12px;
     animation: slideUp 0.6s ease-out;
@@ -49,11 +49,12 @@ body {
 .performance-table th,
 .performance-table td {
     border: none;
-    padding: 12px 8px;
+    padding: 14px 12px;
     text-align: center;
     white-space: nowrap;
     position: relative;
     transition: all 0.3s ease;
+    font-size: 14px;
 }
 
 .performance-table thead {
@@ -73,36 +74,103 @@ body {
     background-clip: padding-box;
 }
 
-.performance-table tr {
+.performance-table tbody tr {
     transition: all 0.3s ease;
     animation: fadeInRow 0.5s ease-out;
     animation-fill-mode: both;
+    margin-bottom: 4px;
 }
 
-.performance-table tr:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+.performance-table tbody tr:hover {
+    transform: translateY(-2px) scale(1.01);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+    z-index: 10;
+}
+
+.performance-table tbody td {
+    font-weight: 500;
+}
+
+/* Make numeric columns stand out more */
+.performance-table tbody td:nth-child(4),  /* Staff */
+.performance-table tbody td:nth-child(5),  /* Tickets In */
+.performance-table tbody td:nth-child(6),  /* Tickets Out */
+.performance-table tbody td:nth-child(7),  /* MTPs */
+.performance-table tbody td:nth-child(8),  /* MTTR */
+.performance-table tbody td:nth-child(9),  /* MTTC */
+.performance-table tbody td:nth-child(10), /* Response SLA */
+.performance-table tbody td:nth-child(11)  /* Contain SLA */
+{
+    font-weight: 600;
+    font-size: 15px;
+    font-variant-numeric: tabular-nums;
 }
 
 .shift-morning {
-    background: linear-gradient(135deg, #ffeaa7 0%, #fab1a0 50%, #fd79a8 100%);
+    background: linear-gradient(135deg, #fff8e1 0%, #ffe0b2 100%);
     color: #2d3436;
+    border-left: 4px solid #ffb74d;
+    border-radius: 8px;
+}
+
+.shift-morning td:first-child {
+    border-radius: 8px 0 0 8px;
+}
+
+.shift-morning td:last-child {
+    border-radius: 0 8px 8px 0;
 }
 
 .shift-afternoon {
-    background: linear-gradient(135deg, #74b9ff 0%, #0984e3 50%, #6c5ce7 100%);
-    color: white;
+    background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+    color: #1565c0;
+    border-left: 4px solid #42a5f5;
+    border-radius: 8px;
+}
+
+.shift-afternoon td:first-child {
+    border-radius: 8px 0 0 8px;
+}
+
+.shift-afternoon td:last-child {
+    border-radius: 0 8px 8px 0;
 }
 
 .shift-night {
-    background: linear-gradient(135deg, #a29bfe 0%, #6c5ce7 50%, #2d3436 100%);
-    color: white;
+    background: linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%);
+    color: #4a148c;
+    border-left: 4px solid #9c27b0;
+    border-radius: 8px;
+}
+
+.shift-night td:first-child {
+    border-radius: 8px 0 0 8px;
+}
+
+.shift-night td:last-child {
+    border-radius: 0 8px 8px 0;
 }
 
 .shift-status-active {
-    border: 3px solid #ff7675 !important;
-    box-shadow: 0 0 15px rgba(255, 118, 117, 0.5) !important;
-    animation: currentShiftPulse 2s infinite;
+    border-left: 6px solid #e74c3c !important;
+    box-shadow: 0 0 20px rgba(231, 76, 60, 0.3) !important;
+    position: relative;
+}
+
+.shift-status-active::before {
+    content: "🔴 LIVE";
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: #e74c3c;
+    color: white;
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    animation: pulse 2s infinite;
 }
 
 .shift-status-error {
@@ -474,25 +542,32 @@ h1 {
 }
 
 .load-details-btn {
-    background: linear-gradient(135deg, #74b9ff 0%, #0984e3 100%);
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     color: white;
     border: none;
-    padding: 6px 12px;
-    border-radius: 15px;
+    padding: 8px 16px;
+    border-radius: 8px;
     cursor: pointer;
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 600;
-    transition: all 0.3s ease;
-    box-shadow: 0 2px 8px rgba(116, 185, 255, 0.3);
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+    letter-spacing: 0.3px;
 }
 
 .load-details-btn:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 15px rgba(116, 185, 255, 0.5);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+}
+
+.load-details-btn:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 6px rgba(102, 126, 234, 0.3);
 }
 
 .load-details-btn:disabled {
-    opacity: 0.6;
+    opacity: 0.5;
     cursor: not-allowed;
     transform: none;
 }
@@ -632,15 +707,15 @@ h1 {
 
 .modal-content {
     background-color: #fefefe;
-    margin: 5% auto;
+    margin: 3% auto;
     padding: 0;
     border: none;
-    width: 90%;
-    max-width: 800px;
+    width: 95%;
+    max-width: 1400px;
     border-radius: 8px;
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
     animation: slideIn 0.3s;
-    max-height: 80vh;
+    max-height: 90vh;
     overflow-y: auto;
 }
 
@@ -863,26 +938,13 @@ h1 {
     font-size: 12px;
 }
 
-/* MTP badge styles */
+/* MTP cell styles */
 .mtp-cell {
-    display: inline-block;
-    min-width: 28px;
-    padding: 4px 8px;
-    border-radius: 16px;
     font-weight: 600;
-    font-size: 11px;
-    line-height: 1;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.15);
-    transition: transform .2s ease, box-shadow .2s ease;
 }
-.mtp-cell:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 8px rgba(0,0,0,0.25);
-}
-.mtp-zero { background: linear-gradient(135deg,#2ecc71,#27ae60); color:#fff; }
-.mtp-low { background: linear-gradient(135deg,#fdcb6e,#f39c12); color:#2d3436; }
-.mtp-high { background: linear-gradient(135deg,#e17055,#d63031); color:#fff; animation: pulseHigh 1.8s infinite; }
-@keyframes pulseHigh { 0%,100% { box-shadow:0 0 0 0 rgba(214,48,49,0.6);} 50% { box-shadow:0 0 0 6px rgba(214,48,49,0); } }
+.mtp-zero { color: #00b894; }
+.mtp-low { color: #fdcb6e; }
+.mtp-high { color: #e17055; }
 
 /* MTP popover */
 .mtp-popover {
@@ -1183,3 +1245,111 @@ h1 {
 #loadingOverlay .loading-spinner .spinner-elapsed.load-time-good { color: #2d9d5b; }
 #loadingOverlay .loading-spinner .spinner-elapsed.load-time-warn { color: #e0a300; }
 #loadingOverlay .loading-spinner .spinner-elapsed.load-time-slow { color: #d64545; }
+
+/* Tab Styles for Modal */
+.modal-tabs {
+    display: flex;
+    border-bottom: 2px solid #e9ecef;
+    background: #f8f9fa;
+    margin: -20px -20px 0 -20px;
+    padding: 0 20px;
+}
+
+.modal-tab {
+    padding: 12px 24px;
+    cursor: pointer;
+    border: none;
+    background: transparent;
+    font-size: 14px;
+    font-weight: 600;
+    color: #636e72;
+    border-bottom: 3px solid transparent;
+    transition: all 0.3s ease;
+    outline: none;
+}
+
+.modal-tab:hover {
+    color: #667eea;
+    background: rgba(102, 126, 234, 0.05);
+}
+
+.modal-tab.active {
+    color: #667eea;
+    border-bottom-color: #667eea;
+    background: white;
+}
+
+.tab-content {
+    display: none;
+    padding: 20px;
+    animation: fadeIn 0.3s;
+}
+
+.tab-content.active {
+    display: block;
+}
+
+/* Ticket Table Styles */
+.ticket-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 15px;
+    font-size: 13px;
+}
+
+.ticket-table thead {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+}
+
+.ticket-table th {
+    padding: 10px 8px;
+    text-align: left;
+    font-weight: 600;
+    border-right: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.ticket-table th:last-child {
+    border-right: none;
+}
+
+.ticket-table tbody tr {
+    border-bottom: 1px solid #e9ecef;
+    transition: background 0.2s ease;
+}
+
+.ticket-table tbody tr:hover {
+    background: #f8f9fa;
+}
+
+.ticket-table td {
+    padding: 10px 8px;
+    vertical-align: middle;
+}
+
+.ticket-table a {
+    color: #667eea;
+    text-decoration: none;
+    font-weight: 600;
+}
+
+.ticket-table a:hover {
+    text-decoration: underline;
+}
+
+.ticket-type-badge {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    background: #e9ecef;
+    color: #495057;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 40px 20px;
+    color: #999;
+    font-style: italic;
+}
