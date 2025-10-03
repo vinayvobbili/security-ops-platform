@@ -101,7 +101,7 @@ This file provides guidance to AI CLI agents (Claude Code, Gemini, etc.) when wo
 - Environment variables loaded from `data/transient/.env`
 - Logging configured for operations with rotating file handlers
 - Web dashboard includes proxy functionality and security request filtering
-- Bot architecture uses native LangChain tool calling with proper multi-step conversation flow:
+- Bot architecture uses native LangChain tool calling with proper multistep conversation flow:
     1. LLM receives query and determines tool usage
     2. Tools are executed and results returned to LLM
     3. LLM generates final response incorporating tool results
@@ -125,7 +125,8 @@ The project integrates with enterprise security tools:
 - Keep it simple and concise
 - Follow SOLID principles and Clean Code practices
 - All my code runs in a trusted environment, so no need of excessive defensive coding. Only exception is Pokédex.py which must be protected against prompt injection
-- Git stage code files
+- Use abundant debug logging to speed up troubleshooting
+- Use type hints and docstrings for all functions and classes
 
 ## Architecture Principles
 
@@ -143,7 +144,7 @@ The project integrates with enterprise security tools:
     2. Tool results are added to conversation context
     3. Final invoke() generates response incorporating tool results
 
-    - **This multi-step flow is correct architecture, not a design flaw**
+    - **This multistep flow is correct architecture, not a design flaw**
 - **Avoid manual orchestration** - no regex parsing of responses or custom tool detection
 - **Clean tool implementation** - use `@tool` decorators, not manager classes or factory functions
 - **No agent frameworks** - direct LLM invocation with native tool binding handles everything
