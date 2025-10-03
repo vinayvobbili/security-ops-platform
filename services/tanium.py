@@ -533,9 +533,9 @@ def main():
         #     logger.warning("No data to export")
 
         # Test: Add and Remove tags
-        test_hostname = "PMDESK101169.pmli.corp"  # Known computer from earlier test
-        test_tag = "TestTag1234"
-        instance_name = "Cloud"  # or "On-Prem"
+        test_hostname = "VV10-MLKH3-042.acme.co.kr"
+        test_tag = "TestTag123"
+        instance_name = "On-Prem"  # or "On-Prem"
         tag_action = 'add'  # Change to 'remove' to test removal
 
         instance = client.get_instance_by_name(instance_name)
