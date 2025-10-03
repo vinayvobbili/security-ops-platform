@@ -71,10 +71,11 @@ class ResilientBot:
                  keepalive_interval: int = 120,  # More frequent for proxy handling
                  max_keepalive_interval: int = 600,
                  websocket_ping_interval: int = 30,  # WebSocket ping frequency
-                 proxy_detection: bool = True):  # Enable ZScaler proxy detection
+                 proxy_detection: bool = True,  # Enable ZScaler proxy detection
+                 proactive_reconnection_interval: Optional[int] = None):  # Proactive reconnect (seconds)
         """
         Initialize resilient bot runner
-        
+
         Args:
             bot_factory: Function that creates and returns a bot instance
             initialization_func: Optional function for custom initialization
@@ -84,6 +85,9 @@ class ResilientBot:
             max_retry_delay: Maximum delay between retries (seconds)
             keepalive_interval: Normal keepalive ping interval (seconds)
             max_keepalive_interval: Maximum keepalive ping interval (seconds)
+            websocket_ping_interval: WebSocket ping frequency (seconds)
+            proxy_detection: Enable ZScaler proxy detection
+            proactive_reconnection_interval: Force clean reconnect at this interval (seconds, None to disable)
         """
         self.bot_name = bot_name  # Will be set after bot creation if not provided
         self.bot_factory = bot_factory
@@ -95,17 +99,20 @@ class ResilientBot:
         self.max_keepalive_interval = max_keepalive_interval
         self.websocket_ping_interval = websocket_ping_interval
         self.proxy_detection = proxy_detection
+        self.proactive_reconnection_interval = proactive_reconnection_interval
 
         # Runtime state
         self.bot_instance = None
         self.shutdown_requested = False
         self.keepalive_thread = None
         self.websocket_monitor_thread = None
+        self.proactive_reconnection_thread = None
         self.exception_handler_thread = None
         self.last_successful_ping = datetime.now()
         self.consecutive_failures = 0
         self._reconnection_needed = False
         self._last_reconnection_attempt = datetime.min
+        self._bot_start_time = None
 
         # Setup signal handlers
         self._setup_signal_handlers()
@@ -170,7 +177,7 @@ class ResilientBot:
         try:
             import subprocess
             import os
-            
+
             # Check for ZScaler process
             result = subprocess.run(["ps", "aux"], capture_output=True, text=True)
             if "zscaler" in result.stdout.lower():
@@ -178,15 +185,19 @@ class ResilientBot:
                 # Reduce ping intervals for proxy environments
                 self.keepalive_interval = min(60, self.keepalive_interval)
                 self.websocket_ping_interval = min(20, self.websocket_ping_interval)
+                # Enable proactive reconnection every 10 minutes if not already set
+                if self.proactive_reconnection_interval is None:
+                    self.proactive_reconnection_interval = 600  # 10 minutes
+                    logger.info(f"🔄 Proactive reconnection enabled: every {self.proactive_reconnection_interval}s to avoid ZScaler timeouts")
                 return True
-                
+
             # Check environment variables
             proxy_vars = ['HTTP_PROXY', 'HTTPS_PROXY', 'http_proxy', 'https_proxy']
             for var in proxy_vars:
                 if os.environ.get(var):
                     logger.info(f"🛡️ Proxy environment detected for {self.bot_name}: {var}")
                     return True
-                    
+
             return False
         except Exception as e:
             logger.warning(f"Could not detect proxy environment: {e}")
@@ -273,6 +284,32 @@ class ResilientBot:
         except Exception as e:
             logger.error(f"Error running {self.bot_name}: {e}")
             raise
+
+    def _proactive_reconnection_monitor(self):
+        """Proactively reconnect at regular intervals to avoid proxy timeouts"""
+        while not self.shutdown_requested:
+            try:
+                if self._bot_start_time is None:
+                    # Wait for bot to start
+                    time.sleep(10)
+                    continue
+
+                # Calculate time since bot started
+                uptime = (datetime.now() - self._bot_start_time).total_seconds()
+
+                # If we're approaching the reconnection interval, trigger clean reconnect
+                if uptime >= self.proactive_reconnection_interval:
+                    logger.info(f"⏰ Proactive reconnection triggered for {self.bot_name} after {uptime:.0f}s uptime")
+                    self._trigger_reconnection("Proactive reconnection to avoid proxy timeout")
+                    break
+
+                # Sleep and check again
+                time.sleep(30)  # Check every 30 seconds
+
+            except Exception as e:
+                if not self.shutdown_requested:
+                    logger.warning(f"Proactive reconnection monitor error for {self.bot_name}: {e}")
+                    time.sleep(60)
 
     def _websocket_monitor(self):
         """Monitor WebSocket connection health with proxy-aware logic and future exception handling"""
@@ -365,6 +402,8 @@ class ResilientBot:
                 logger.info("Stopping keepalive monitoring...")
             if self.websocket_monitor_thread and self.websocket_monitor_thread.is_alive():
                 logger.info("Stopping WebSocket monitoring...")
+            if self.proactive_reconnection_thread and self.proactive_reconnection_thread.is_alive():
+                logger.info("Stopping proactive reconnection monitoring...")
 
             # Properly close bot instance and WebSocket connections
             if self.bot_instance:
@@ -458,6 +497,9 @@ class ResilientBot:
                 logger.info(f"🚀 {self.bot_name} is up and running (startup in {init_duration:.1f}s)...")
                 print(f"🚀 {self.bot_name} is up and running (startup in {init_duration:.1f}s)...")
 
+                # Record bot start time for proactive reconnection
+                self._bot_start_time = datetime.now()
+
                 # Start the bot (this will block and run forever, or until reconnection is needed)
                 logger.info(f"🌐 Starting {self.bot_name} main loop...")
 
@@ -467,7 +509,32 @@ class ResilientBot:
                 # Check if reconnection was requested
                 if self._reconnection_needed:
                     self._reconnection_needed = False
+                    self.shutdown_requested = False  # Reset shutdown flag for reconnection
+                    self._bot_start_time = None  # Reset start time
                     logger.info(f"🔄 Reconnection requested for {self.bot_name}, restarting...")
+
+                    # Restart monitoring threads after reconnection
+                    logger.info(f"🔄 Restarting monitoring threads...")
+
+                    # Restart keepalive thread
+                    if not self.keepalive_thread or not self.keepalive_thread.is_alive():
+                        self.keepalive_thread = threading.Thread(target=self._keepalive_ping, daemon=True)
+                        self.keepalive_thread.start()
+                        logger.info(f"💓 Keepalive monitoring restarted")
+
+                    # Restart WebSocket monitor thread
+                    if not self.websocket_monitor_thread or not self.websocket_monitor_thread.is_alive():
+                        self.websocket_monitor_thread = threading.Thread(target=self._websocket_monitor, daemon=True)
+                        self.websocket_monitor_thread.start()
+                        logger.info(f"🔌 WebSocket monitoring restarted")
+
+                    # Restart proactive reconnection thread if enabled
+                    if self.proactive_reconnection_interval:
+                        if not self.proactive_reconnection_thread or not self.proactive_reconnection_thread.is_alive():
+                            self.proactive_reconnection_thread = threading.Thread(target=self._proactive_reconnection_monitor, daemon=True)
+                            self.proactive_reconnection_thread.start()
+                            logger.info(f"⏰ Proactive reconnection monitoring restarted")
+
                     continue
 
                 # If we reach here, the bot stopped normally
@@ -640,11 +707,17 @@ class ResilientBot:
             self.keepalive_thread = threading.Thread(target=self._keepalive_ping, daemon=True)
             self.keepalive_thread.start()
             logger.info(f"💓 Keepalive monitoring started for {self.bot_name}")
-            
+
             # Start WebSocket monitoring thread for enhanced proxy handling
             self.websocket_monitor_thread = threading.Thread(target=self._websocket_monitor, daemon=True)
             self.websocket_monitor_thread.start()
             logger.info(f"🔌 WebSocket monitoring started for {self.bot_name}")
+
+            # Start proactive reconnection thread if enabled
+            if self.proactive_reconnection_interval:
+                self.proactive_reconnection_thread = threading.Thread(target=self._proactive_reconnection_monitor, daemon=True)
+                self.proactive_reconnection_thread.start()
+                logger.info(f"⏰ Proactive reconnection monitoring started for {self.bot_name} (interval: {self.proactive_reconnection_interval}s)")
 
             # Run bot with reconnection logic
             self.run_with_reconnection()
