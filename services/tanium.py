@@ -200,6 +200,7 @@ class TaniumInstance:
             payload['variables'] = variables
 
         logger.debug(f"Querying {self.name} at URL: {self.graphql_url}")
+        logger.debug(f"GraphQL payload: {payload}")
 
         try:
             headers = self.headers.copy()
@@ -244,21 +245,30 @@ class TaniumInstance:
         after_cursor = None
         computers_fetched = 0
 
+        logger.info(f"Starting pagination for {self.name} with page_size={self.DEFAULT_PAGE_SIZE}, limit={limit}")
+
         with tqdm.tqdm(desc=f"Fetching computers from {self.name}", unit="host") as pbar:
+            page_num = 0
             while True:
+                page_num += 1
                 variables = {'first': self.DEFAULT_PAGE_SIZE}
                 if after_cursor:
                     variables['after'] = after_cursor
 
+                logger.debug(f"Fetching page {page_num} with variables: {variables}")
                 data = self.query(ENDPOINTS_QUERY, variables)
                 endpoints = data['data']['endpoints']
                 edges = endpoints['edges']
+                page_info = endpoints['pageInfo']
+
+                logger.info(f"Page {page_num}: received {len(edges)} computers, hasNextPage={page_info['hasNextPage']}")
 
                 if not edges:
                     break
 
                 for edge in edges:
                     if limit and computers_fetched >= limit:
+                        logger.info(f"Reached limit of {limit} computers, stopping pagination")
                         return
 
                     computer = self.extract_computer_from_node(edge['node'])
@@ -267,10 +277,12 @@ class TaniumInstance:
 
                 pbar.update(len(edges))
 
-                if not endpoints['pageInfo']['hasNextPage']:
+                if not page_info['hasNextPage']:
+                    logger.info(f"No more pages available. Total computers fetched: {computers_fetched}")
                     break
 
-                after_cursor = endpoints['pageInfo']['endCursor']
+                after_cursor = page_info['endCursor']
+                logger.debug(f"Moving to next page with cursor: {after_cursor}")
 
     def extract_computer_from_node(self, node: Dict[str, Any]) -> Computer:
         """Extract computer data from GraphQL node"""

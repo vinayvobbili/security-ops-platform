@@ -27,3 +27,5 @@ logs/
 # Generated data and indexes
 faiss_index_ollama/
 performance_data.json
+
+*.lock
