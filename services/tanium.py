@@ -142,8 +142,8 @@ class Computer:
             self.custom_tags = []
 
     def has_epp_ring_tag(self) -> bool:
-        """Check if computer has an EPP Ring tag"""
-        return any(tag.startswith('EPP') and 'Ring' in tag for tag in self.custom_tags)
+        """Check if computer has an EPP Ring tag (case-insensitive)"""
+        return any(str(tag).upper().startswith('EPP') and 'RING' in str(tag).upper() for tag in self.custom_tags)
 
     def has_epp_power_mode_tag(self) -> bool:
         """Check if computer has an EPP Power Mode tag EPP_POWERMODE (case-insensitive)"""
