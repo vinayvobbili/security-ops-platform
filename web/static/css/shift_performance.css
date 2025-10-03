@@ -154,26 +154,30 @@ body {
 .shift-status-active {
     border-left: 6px solid #e74c3c !important;
     box-shadow: 0 0 20px rgba(231, 76, 60, 0.3) !important;
+    position: relative;
 }
 
-.shift-status-active .load-details-btn::after {
-    content: "LIVE";
+.shift-status-active td:first-child {
+    position: relative;
+}
+
+.shift-status-active td:first-child::before {
+    content: "🔴 LIVE";
     position: absolute;
-    top: -8px;
-    right: -8px;
+    left: -8px;
+    top: 50%;
+    transform: translateY(-50%);
     background: #e74c3c;
     color: white;
-    padding: 2px 8px;
-    border-radius: 8px;
-    font-size: 9px;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 10px;
     font-weight: 700;
     letter-spacing: 0.5px;
     animation: pulse 2s infinite;
-    box-shadow: 0 2px 6px rgba(231, 76, 60, 0.4);
-}
-
-.shift-status-active .load-details-btn {
-    position: relative;
+    box-shadow: 0 2px 8px rgba(231, 76, 60, 0.5);
+    white-space: nowrap;
+    z-index: 10;
 }
 
 /* Prevent LIVE badge from showing in legend */
