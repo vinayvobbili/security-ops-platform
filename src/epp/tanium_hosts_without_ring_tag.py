@@ -303,7 +303,7 @@ class ServiceNowComputerEnricher:
 
     def enrich_computers(self, computers: List[Computer]) -> List[EnrichedComputer]:
         """Enrich computers with ServiceNow data"""
-        print(f"🔍 Enriching {len(computers)} hosts with ServiceNow data to generate Ring tags...\n")
+        print(f"🔍 Enriching {len(computers)} hosts with ServiceNow data to generate Ring tags...")
 
         # Export computers to Excel for ServiceNow enrichment
         client = TaniumClient()
