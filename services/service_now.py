@@ -128,6 +128,7 @@ def _parse_discovery_date(item):
 
 class ServiceNowClient:
     def __init__(self):
+        logger.debug("Initializing ServiceNowClient")
         self.token_manager = ServiceNowTokenManager(
             instance_url=config.snow_base_url,
             username=config.snow_functional_account_id,
@@ -137,6 +138,19 @@ class ServiceNowClient:
         base_url = config.snow_base_url.rstrip('/')
         self.server_url = f"{base_url}/itsm-compute/compute/instances"
         self.workstation_url = f"{base_url}/itsm-compute/compute/computers"
+
+        # Create persistent session with connection pooling
+        logger.info("Creating HTTP session with connection pooling (pool_size=100, max_retries=3)")
+        self.session = requests.Session()
+        adapter = requests.adapters.HTTPAdapter(
+            pool_connections=100,
+            pool_maxsize=100,
+            max_retries=3,
+            pool_block=False
+        )
+        self.session.mount('http://', adapter)
+        self.session.mount('https://', adapter)
+        logger.debug("ServiceNowClient initialized successfully")
 
     def get_host_details(self, hostname):
         """Get host details by hostname, checking servers first then workstations."""
@@ -167,19 +181,26 @@ class ServiceNowClient:
         params = {'name': hostname}
 
         try:
-            response = requests.get(endpoint, headers=headers, params=params, timeout=5, verify=False)
+            logger.debug(f"Querying {endpoint} for hostname: {hostname}")
+            start_time = time.time()
+            response = self.session.get(endpoint, headers=headers, params=params, timeout=10, verify=False)
+            elapsed_ms = (time.time() - start_time) * 1000
+            logger.debug(f"ServiceNow API response for {hostname}: {response.status_code} in {elapsed_ms:.0f}ms")
             response.raise_for_status()
 
             data = response.json()
             items = data.get('items', data) if isinstance(data, dict) else data
 
             if not items:
+                logger.debug(f"No items found for {hostname}")
                 return None
 
             # Return most recently discovered item
             if len(items) > 1:
+                logger.debug(f"Multiple items found for {hostname}, selecting most recent")
                 items = sorted(items, key=_parse_discovery_date, reverse=True)
 
+            logger.debug(f"Successfully retrieved details for {hostname}")
             return items[0]
         except requests.exceptions.RequestException as e:
             logger.error(f"Error fetching details for {hostname}: {str(e)}")
@@ -192,7 +213,7 @@ class ServiceNowClient:
         # endpoint = 'https://acmeprod.service-now.com/api/x_metli_acme_it/process/changes'
         headers = self.token_manager.get_auth_headers()
         try:
-            response = requests.get(endpoint, headers=headers, params=params, timeout=10, verify=False)
+            response = self.session.get(endpoint, headers=headers, params=params, timeout=10, verify=False)
             response.raise_for_status()
             return response.json()
         except requests.exceptions.RequestException as e:
@@ -258,12 +279,16 @@ def enrich_host_report(input_file):
     output_file = DATA_DIR / today / f"Enriched {input_name}"
 
     if output_file.exists():
-        logger.info(f"Enriched file already exists: {output_file}")
+        logger.info(f"✓ Using cached enriched file: {output_file}")
         return output_file
+
+    logger.info(f"Starting new enrichment process for {input_file}")
+    logger.debug(f"Output will be saved to: {output_file}")
 
     # Read input data
     logger.info(f"Reading input file: {input_file}")
     df = pd.read_excel(input_file, engine="openpyxl")
+    logger.debug(f"Loaded {len(df)} rows, {len(df.columns)} columns from Excel")
 
     # Detect hostname column
     hostname_col = None
@@ -274,12 +299,16 @@ def enrich_host_report(input_file):
 
     if not hostname_col:
         logger.error("Could not find hostname column in the input file")
+        logger.debug(f"Available columns: {list(df.columns)}")
         return input_file
 
     logger.info(f"Using column '{hostname_col}' for hostnames")
 
     # Clean the dataframe: remove rows with empty hostnames
+    original_count = len(df)
     df = df.dropna(subset=[hostname_col])
+    if original_count != len(df):
+        logger.debug(f"Removed {original_count - len(df)} rows with empty hostnames")
 
     # Extract hostnames and filter out any None or empty values
     hostnames = [h for h in df[hostname_col].tolist() if h and isinstance(h, str)]
@@ -288,23 +317,46 @@ def enrich_host_report(input_file):
     client = ServiceNowClient()
     snow_data = {}
     errors_occurred = False
+    error_count = 0
+    success_count = 0
 
     def enrich_single_host(hostname):
         details = client.get_host_details(hostname)
         short_hostname = str(hostname).split('.')[0].lower() if hostname and isinstance(hostname, str) else ""
         return short_hostname, details
 
-    max_workers = 30  # Safe parallelism, tune as needed
+    max_workers = 75  # Increased from 30 for better throughput with connection pooling
+    logger.info(f"Starting parallel enrichment with {max_workers} workers for {len(hostnames)} hosts")
+
+    start_time = time.time()
+    last_log_time = start_time
+
     with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = {executor.submit(enrich_single_host, hostname): hostname for hostname in hostnames}
+        logger.info(f"Submitted {len(futures)} tasks to thread pool")
+
         for idx, future in enumerate(tqdm(concurrent.futures.as_completed(futures), total=len(futures), desc="Enriching hosts with ServiceNow"), 1):
             short_hostname, details = future.result()
             if details:
                 snow_data[short_hostname] = details
-            if details and 'error' in details:
-                errors_occurred = True
+                if 'error' in details:
+                    errors_occurred = True
+                    error_count += 1
+                else:
+                    success_count += 1
+
+            # Log throughput every 100 hosts
             if idx % 100 == 0 or idx == len(futures):
-                logger.info(f"Enriched {idx}/{len(futures)} hosts with ServiceNow data...")
+                elapsed = time.time() - start_time
+                throughput = idx / elapsed if elapsed > 0 else 0
+                recent_elapsed = time.time() - last_log_time
+                recent_throughput = 100 / recent_elapsed if recent_elapsed > 0 and idx % 100 == 0 else throughput
+                logger.info(f"Progress: {idx}/{len(futures)} hosts | Overall: {throughput:.1f} hosts/s | Recent: {recent_throughput:.1f} hosts/s | Success: {success_count} | Errors: {error_count}")
+                last_log_time = time.time()
+
+    total_elapsed = time.time() - start_time
+    avg_throughput = len(hostnames) / total_elapsed if total_elapsed > 0 else 0
+    logger.info(f"Enrichment complete: {len(hostnames)} hosts in {total_elapsed:.1f}s ({avg_throughput:.1f} hosts/s) | Success: {success_count} | Errors: {error_count}")
 
     if not snow_data:
         logger.error("No ServiceNow data collected, cannot enrich report")
@@ -312,6 +364,7 @@ def enrich_host_report(input_file):
 
     # Add ServiceNow data to the original dataframe
     logger.info(f"Retrieved data for {len(snow_data)} hosts from ServiceNow")
+    logger.info("Merging ServiceNow data into dataframe...")
 
     # Create new columns for ServiceNow data
     snow_columns = ['id', 'ciClass', 'environment', 'lifecycleStatus', 'country',
@@ -321,6 +374,8 @@ def enrich_host_report(input_file):
         df[f'SNOW_{col}'] = ''
 
     # For each row in the dataframe, add the ServiceNow data
+    logger.debug(f"Processing {len(df)} rows to add ServiceNow enrichment")
+    merge_start = time.time()
     for idx, row in df.iterrows():
         hostname = row[hostname_col]
         if not isinstance(hostname, str):
@@ -335,20 +390,26 @@ def enrich_host_report(input_file):
                 if col in result and not (col == 'category' and result.get('status') == 'ServiceNow API Error'):
                     df.at[idx, f'SNOW_{col}'] = result[col]
 
+    merge_elapsed = time.time() - merge_start
+    logger.info(f"Merged ServiceNow data into dataframe in {merge_elapsed:.1f}s")
+
     # Save results with adjusted column widths
+    logger.info("Saving enriched data to Excel file...")
     output_file.parent.mkdir(parents=True, exist_ok=True)
 
     # Save Excel file
     df.to_excel(output_file, index=False, engine="openpyxl")
-    
+    logger.debug(f"Excel file written to {output_file}")
+
     # Apply professional formatting
+    logger.debug("Applying professional formatting to Excel file")
     from src.utils.excel_formatting import apply_professional_formatting
     apply_professional_formatting(output_file)
 
     if errors_occurred:
-        logger.warning(f"Enriched report saved with some errors to {output_file}")
+        logger.warning(f"⚠ Enriched report saved with {error_count} errors to {output_file}")
     else:
-        logger.info(f"Successfully enriched report saved to {output_file}")
+        logger.info(f"✓ Successfully enriched report saved to {output_file}")
 
     return output_file
 
