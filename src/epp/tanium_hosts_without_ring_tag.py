@@ -212,16 +212,21 @@ class TaniumDataLoader:
             raise ValueError("No computers retrieved from any instance!")
 
         computers = self._parse_excel_file(all_hosts_filename)
+        total_computers = len(computers)
 
         # Filter and limit
         filtered_computers = [c for c in computers if not c.has_epp_ring_tag() and not c.has_epp_power_mode_tag()]
+        computers_with_tags = total_computers - len(filtered_computers)
         # the line below may be used for testing code changes on small subsets of data
         # filtered_computers = [c for c in filtered_computers if c.name.startswith("MININT")]
 
+        self.logger.info(f"Total hosts found: {total_computers}")
+        self.logger.info(f"Hosts with existing Ring/PowerMode tags: {computers_with_tags}")
+        self.logger.info(f"Hosts without Ring tags (to be processed): {len(filtered_computers)}")
+
         if test_limit is not None and test_limit > 0:
             filtered_computers = filtered_computers[:test_limit]
-
-        self.logger.info(f"Loaded {len(filtered_computers)} computers without ring tags")
+            self.logger.info(f"Test mode: limiting to {test_limit} hosts")
         return filtered_computers
 
     def _parse_excel_file(self, filename: str) -> List[Computer]:
@@ -303,6 +308,8 @@ class ServiceNowComputerEnricher:
 
     def enrich_computers(self, computers: List[Computer]) -> List[EnrichedComputer]:
         """Enrich computers with ServiceNow data"""
+        self.logger.info(f"Enriching {len(computers)} hosts with ServiceNow data to generate Ring tags...")
+
         # Export computers to Excel for ServiceNow enrichment
         client = TaniumClient()
         temp_filename = self.temp_dir / "temp_computers_for_enrichment.xlsx"
