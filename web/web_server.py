@@ -42,6 +42,7 @@ CONFIG = get_config()
 
 # Configure logging to suppress werkzeug INFO logs for PAC files and other noise
 logging.getLogger('werkzeug').setLevel(logging.WARNING)
+logging.getLogger('waitress').setLevel(logging.WARNING)
 
 # Connection pool for HTTP requests
 http_pool = ThreadPoolExecutor(max_workers=NUM_WORKERS)
