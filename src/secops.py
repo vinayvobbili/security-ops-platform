@@ -238,12 +238,18 @@ class TicketMetricsCalculator:
 
     @staticmethod
     def create_shift_period(days_back, shift_start_hour):
-        """Create time period dict for shift."""
+        """Create time period dict for shift.
+        The XSOAR incidents/search period hours must be integers. Some shift offsets
+        (e.g. 4.5, 12.5, 20.5) produce half-hour values (19.5, 11.5). We truncate to int
+        to satisfy API requirements (API rejects floats like 19.5 with unmarshalling error).
+        """
+        start_hours = (days_back * 24) + (24 - shift_start_hour)
+        end_hours = (days_back * 24) + (16 - shift_start_hour)
         return {
             "byFrom": "hours",
-            "fromValue": (days_back * 24) + (24 - shift_start_hour),
+            "fromValue": int(start_hours),
             "byTo": "hours",
-            "toValue": (days_back * 24) + (16 - shift_start_hour)
+            "toValue": int(end_hours)
         }
 
     @staticmethod
@@ -346,10 +352,10 @@ class SecurityActionsCalculator:
     """Handles security actions calculations."""
 
     @staticmethod
-    def count_domains_in_period(start_time, end_time):
+    def count_domains_blocked_in_period(start_time, end_time):
         """Count domains blocked during a specific time period."""
         try:
-            domain_list = list_handler.get_list_data_by_name(config.xsoar_domain_blocking_list_name)
+            domain_list = list_handler.get_list_data_by_name(f'{config.team_name} Blocked Domains')
             if not domain_list:
                 return 0
 
@@ -391,7 +397,7 @@ def get_shift_security_actions(days_back, shift_start_hour):
         shift_start, shift_end = SecurityActionsCalculator.calculate_shift_time_bounds(
             days_back, shift_start_hour
         )
-        domain_blocks = SecurityActionsCalculator.count_domains_in_period(shift_start, shift_end)
+        domain_blocks = SecurityActionsCalculator.count_domains_blocked_in_period(shift_start, shift_end)
 
         return {
             'malicious_true_positives': len(malicious_tp),
