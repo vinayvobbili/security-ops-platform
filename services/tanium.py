@@ -475,13 +475,8 @@ class TaniumClient:
         return str(output_path)
 
     def get_and_export_all_computers(self, filename: Optional[str] = None) -> Optional[str]:
-        """Get all computers from all instances and export to Excel, using cache if available."""
-        # Determine today's output path
-        today = datetime.now().strftime('%m-%d-%Y')
+        """Get all computers from all instances and export to Excel (always fetches fresh data)."""
         default_filename = filename or 'All Tanium Hosts.xlsx'
-        output_path = Path(__file__).parent.parent / "data" / "transient" / "epp_device_tagging" / today / default_filename
-        if output_path.exists():
-            return str(output_path)
         all_computers = self._get_all_computers()
         if not all_computers:
             return None

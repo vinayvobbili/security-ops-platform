@@ -198,15 +198,10 @@ class TaniumDataLoader:
         today = datetime.now(EASTERN_TZ).strftime('%m-%d-%Y')
         output_dir = self.data_dir / "transient" / "epp_device_tagging" / today
         output_dir.mkdir(parents=True, exist_ok=True)
-        all_hosts_file = output_dir / "All Tanium Hosts.xlsx"
 
         client = TaniumClient()
-
-        if all_hosts_file.exists():
-            all_hosts_filename = str(all_hosts_file)
-            self.logger.info(f"Using existing hosts file: {all_hosts_filename}")
-        else:
-            all_hosts_filename = client.get_and_export_all_computers()
+        self.logger.info("Fetching fresh data from Tanium (cache disabled)...")
+        all_hosts_filename = client.get_and_export_all_computers()
 
         if not all_hosts_filename:
             raise ValueError("No computers retrieved from any instance!")
