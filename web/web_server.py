@@ -1,3 +1,4 @@
+import argparse
 import asyncio
 import http.client
 import http.server
@@ -9,7 +10,6 @@ import select
 import socket
 import socketserver
 import threading
-import argparse
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta, timezone
 from typing import List, Dict
@@ -52,6 +52,9 @@ blocked_ip_ranges = []  # ["10.49.70.0/24", "10.50.70.0/24"]
 
 list_handler = xsoar.ListHandler()
 incident_handler = xsoar.TicketHandler()
+
+# Add module logger (was missing previously)
+logger = logging.getLogger(__name__)
 
 
 @app.before_request
@@ -436,7 +439,7 @@ def _relay_sockets(client, target):
                 if hasattr(e, 'errno') and e.errno == 9:  # Bad file descriptor
                     break
                 return
-    except Exception as e:
+    except Exception:
         # Catch any other unexpected errors
         pass
     finally:
@@ -450,8 +453,12 @@ def _relay_sockets(client, target):
 
 
 async def _async_select(client_sock, target_sock):
-    """Async-compatible version of select operation"""
-    loop = asyncio.get_event_loop()
+    """Async-compatible version of select operation using running loop (Python 3.13 safe)."""
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        # Fallback: no running loop (shouldn't generally happen here)
+        loop = asyncio.get_event_loop_policy().new_event_loop()
     readable = []
     for sock in [client_sock, target_sock]:
         try:
@@ -463,20 +470,25 @@ async def _async_select(client_sock, target_sock):
 
 
 def relay_data_async(client_sock, target_sock):
-    """Efficiently relays data bidirectionally between client_sock and target_sock."""
+    """Efficiently relays data bidirectionally between client_sock and target_sock.
+    Uses a dedicated event loop to avoid deprecated get_event_loop() patterns.
+    """
+    loop = asyncio.new_event_loop()
     try:
+        asyncio.set_event_loop(loop)
         # Use two separate buffers for better performance
         client_to_target = bytearray(BUFFER_SIZE)
         target_to_client = bytearray(BUFFER_SIZE)
 
         while True:
-            # Select with a timeout to prevent high CPU usage
-            r, _, _ = asyncio.get_event_loop().run_until_complete(
-                asyncio.wait_for(
-                    _async_select(client_sock, target_sock),
-                    timeout=2.0
+            try:
+                r = loop.run_until_complete(
+                    asyncio.wait_for(_async_select(client_sock, target_sock), timeout=2.0)
                 )
-            )
+            except asyncio.TimeoutError:
+                r = []
+            except Exception:
+                break
 
             if not r:
                 # Check if connections are still alive
@@ -484,7 +496,6 @@ def relay_data_async(client_sock, target_sock):
                     break
 
             if client_sock in r:
-                # Use memory view for zero-copy slicing
                 view = memoryview(client_to_target)
                 bytes_read = client_sock.recv_into(view)
                 if not bytes_read:
@@ -500,6 +511,10 @@ def relay_data_async(client_sock, target_sock):
     except Exception as e:
         print(f"Error during relay: {e}")
     finally:
+        try:
+            loop.close()
+        except Exception:
+            pass
         for sock in [client_sock, target_sock]:
             try:
                 sock.close()
@@ -852,7 +867,7 @@ def api_xsoar_add_participant(incident_id):
 @log_web_activity
 def shift_performance_dashboard():
     """Display shift performance page - loads instantly with empty structure"""
-    return render_template('shift_performance.html')
+    return render_template('shift_performance.html', xsoar_prod_ui_base=getattr(CONFIG, 'xsoar_prod_ui_base_url', 'https://msoar.crtx.us.paloaltonetworks.com'))
 
 
 def _shift_has_passed(shift_name, current_shift):
@@ -866,40 +881,80 @@ def _shift_has_passed(shift_name, current_shift):
         return False
 
 
+# Simple in-memory cache for inflow queries (query -> (timestamp, tickets))
+SHIFT_INFLOW_CACHE = {}
+SHIFT_INFLOW_CACHE_TTL_SECONDS = 300  # 5 minutes
+
+
+def _get_cached_inflow(query: str):
+    now = datetime.now(timezone.utc).timestamp()
+    entry = SHIFT_INFLOW_CACHE.get(query)
+    if entry:
+        ts, tickets = entry
+        if now - ts < SHIFT_INFLOW_CACHE_TTL_SECONDS:
+            return tickets
+        else:
+            SHIFT_INFLOW_CACHE.pop(query, None)
+    return None
+
+
+def _set_cached_inflow(query: str, tickets):
+    SHIFT_INFLOW_CACHE[query] = (datetime.now(timezone.utc).timestamp(), tickets)
+
+
+def _compute_shift_window(date_obj: datetime, shift_name: str):
+    """Return (start_dt_eastern, end_dt_eastern, start_str, end_str) for a shift date+name."""
+    if shift_name.lower() == 'morning':
+        shift_start_hour = 4.5
+    elif shift_name.lower() == 'afternoon':
+        shift_start_hour = 12.5
+    else:
+        shift_start_hour = 20.5
+    start_hour_int = int(shift_start_hour)
+    start_minute = int((shift_start_hour % 1) * 60)
+    start_dt_naive = datetime(date_obj.year, date_obj.month, date_obj.day, start_hour_int, start_minute)
+    start_dt = eastern.localize(start_dt_naive)
+    end_dt = start_dt + timedelta(hours=8)
+    time_format = '%Y-%m-%dT%H:%M:%S %z'
+    return start_dt, end_dt, start_dt.strftime(time_format), end_dt.strftime(time_format)
+
+
+def _fetch_inflow_for_window(date_obj: datetime, shift_name: str):
+    start_dt, end_dt, start_str, end_str = _compute_shift_window(date_obj, shift_name)
+    time_filter = f'created:>="{start_str}" created:<="{end_str}"'
+    inflow_query = f'{secops.BASE_QUERY} {time_filter}'
+    cached = _get_cached_inflow(inflow_query)
+    if cached is not None:
+        return inflow_query, cached, (start_dt, end_dt)
+    tickets = incident_handler.get_tickets(query=inflow_query)
+    _set_cached_inflow(inflow_query, tickets)
+    return inflow_query, tickets, (start_dt, end_dt)
+
+
 @app.route('/api/shift-list')
 @log_web_activity
 def get_shift_list():
-    """Get basic shift list data for the past week"""
+    """Get basic shift list data for the past week including MTP ticket IDs (comma separated).
+    Now also derives MTTR (response_time_minutes), MTTC (contain_time_minutes), and SLA breach counts from inflow tickets.
+    """
     status = 'unknown'
     try:
-        # Generate lightweight shift data for past 7 days
         shift_data = []
         shifts = ['morning', 'afternoon', 'night']
-
-        for days_back in range(7):  # Past 7 days
+        for days_back in range(7):
             target_date = datetime.now(eastern) - timedelta(days=days_back)
             day_name = target_date.strftime('%A')
             date_str = target_date.strftime('%Y-%m-%d')
-
             for shift_name in shifts:
-                # Just get basic staffing data without heavy ticket queries
                 try:
                     staffing = secops.get_staffing_data(day_name, shift_name)
                     total_staff = sum(len(staff) for staff in staffing.values() if staff != ['N/A (Excel file missing)'])
-
-                    # Create unique ID for this shift for AJAX loading
                     shift_id = f"{date_str}_{shift_name}"
-
-                    # Determine if this shift should be shown
                     current_shift = secops.get_current_shift()
-
-                    # Only show data for current and past shifts
                     if days_back > 0:
-                        # Past day - show all shifts
                         status = 'completed'
                         show_shift = True
                     elif days_back == 0:
-                        # Today - check if shift has started or is current
                         if shift_name.lower() == current_shift:
                             status = 'active'
                             show_shift = True
@@ -907,31 +962,19 @@ def get_shift_list():
                             status = 'completed'
                             show_shift = True
                         else:
-                            # Future shift - don't include it
                             show_shift = False
                     else:
-                        # Future day - don't include
                         show_shift = False
-
                     if show_shift:
-                        # Get performance metrics for this shift
-                        shift_hour_map = {
-                            'morning': 4.5,
-                            'afternoon': 12.5,
-                            'night': 20.5
-                        }
+                        shift_hour_map = {'morning': 4.5, 'afternoon': 12.5, 'night': 20.5}
                         shift_start_hour = shift_hour_map.get(shift_name.lower(), 4.5)
-
-                        # Get ticket metrics
                         ticket_metrics = secops.get_shift_ticket_metrics(days_back, shift_start_hour)
-
-                        # Get security actions
                         security_actions = secops.get_shift_security_actions(days_back, shift_start_hour)
-
-                        # Get SLA breach data (would need actual implementation)
-                        response_sla_breaches = 0  # Placeholder - implement actual logic
-                        containment_sla_breaches = 0  # Placeholder - implement actual logic
-
+                        # Inflow via cached helper
+                        base_date = datetime(target_date.year, target_date.month, target_date.day)
+                        _, inflow_tickets, _ = _fetch_inflow_for_window(base_date, shift_name)
+                        mtp_ids = [t.get('id') for t in inflow_tickets if t.get('CustomFields', {}).get('impact') == 'Malicious True Positive']
+                        sla_metrics = _extract_sla_metrics(inflow_tickets)
                         shift_data.append({
                             'id': shift_id,
                             'date': date_str,
@@ -941,24 +984,21 @@ def get_shift_list():
                             'status': status,
                             'tickets_inflow': ticket_metrics['tickets_inflow'],
                             'tickets_closed': ticket_metrics['tickets_closed'],
-                            'response_time_minutes': ticket_metrics['response_time_minutes'],
-                            'contain_time_minutes': ticket_metrics['contain_time_minutes'],
-                            'response_sla_breaches': response_sla_breaches,
-                            'containment_sla_breaches': containment_sla_breaches,
-                            'security_actions': security_actions
+                            # Override with derived averages (minutes already)
+                            'response_time_minutes': sla_metrics['avg_response'],
+                            'contain_time_minutes': sla_metrics['avg_containment'],
+                            'response_sla_breaches': sla_metrics['response_breaches'],
+                            'containment_sla_breaches': sla_metrics['containment_breaches'],
+                            'security_actions': security_actions,
+                            'mtp_ticket_ids': ', '.join(map(str, mtp_ids))
                         })
-
                 except Exception as e:
-                    print(f"Error getting staffing for {day_name} {shift_name}: {e}")
-
-                    # Same logic for error cases - only show current/past shifts
+                    print(f"Error getting staffing or metrics for {day_name} {shift_name}: {e}")
                     current_shift = secops.get_current_shift()
                     if days_back > 0:
-                        # Past day - show all shifts
                         show_shift = True
                         status = 'error'
                     elif days_back == 0:
-                        # Today - check if shift has started or is current
                         if shift_name.lower() == current_shift:
                             show_shift = True
                             status = 'error'
@@ -966,12 +1006,9 @@ def get_shift_list():
                             show_shift = True
                             status = 'error'
                         else:
-                            # Future shift - don't include it
                             show_shift = False
                     else:
-                        # Future day - don't include
                         show_shift = False
-
                     if show_shift:
                         shift_id = f"{date_str}_{shift_name}"
                         shift_data.append({
@@ -986,11 +1023,10 @@ def get_shift_list():
                             'response_time_minutes': 0,
                             'contain_time_minutes': 0,
                             'response_sla_breaches': 0,
-                            'containment_sla_breaches': 0
+                            'containment_sla_breaches': 0,
+                            'mtp_ticket_ids': ''
                         })
-
         return jsonify({'success': True, 'data': shift_data})
-
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
@@ -998,207 +1034,193 @@ def get_shift_list():
 @app.route('/api/shift-details/<shift_id>')
 @log_web_activity
 def get_shift_details(shift_id):
-    """Get detailed performance metrics for a specific shift via AJAX"""
+    """Get detailed performance metrics for a specific shift via AJAX.
+    Derives MTTR/MTTC and SLA breach counts locally from inflow tickets (robust parsing).
+    """
     try:
-        # Parse shift_id format: "YYYY-MM-DD_shiftname"
         date_str, shift_name = shift_id.split('_')
         target_date = datetime.strptime(date_str, '%Y-%m-%d')
-        day_name = target_date.strftime('%A')
 
-        # Calculate days back from today
-        days_back = (datetime.now(eastern).date() - target_date.date()).days
-
-        # Calculate 8-hour periods for this shift
         if shift_name.lower() == 'morning':
             shift_start_hour = 4.5
         elif shift_name.lower() == 'afternoon':
             shift_start_hour = 12.5
-        else:  # night
+        else:
             shift_start_hour = 20.5
-
-        # Get performance data for this shift period
-        period = {
-            "byFrom": "hours",
-            "fromValue": int(24 - shift_start_hour + (days_back * 24)),
-            "byTo": "hours",
-            "toValue": int(16 - shift_start_hour + (days_back * 24))
-        }
-
-        # Get ticket data for the shift period
-        inflow = incident_handler.get_tickets(
-            query=secops.BASE_QUERY,
-            period=period
-        )
-        outflow = incident_handler.get_tickets(
-            query=secops.BASE_QUERY + ' status:closed',
-            period=period
-        )
-
-        malicious_tp = incident_handler.get_tickets(
-            query=secops.BASE_QUERY + ' status:closed impact:"Malicious True Positive"',
-            period=period
-        )
-
-        response_sla_breaches = incident_handler.get_tickets(
-            query=secops.BASE_QUERY + ' timetorespond.slaStatus:late',
-            period=period
-        )
-
-        containment_sla_breaches = incident_handler.get_tickets(
-            query=secops.BASE_QUERY + ' timetocontain.slaStatus:late',
-            period=period
-        )
-
-        # Calculate metrics
+        start_hour_int = int(shift_start_hour)
+        start_minute = int((shift_start_hour % 1) * 60)
+        start_dt_naive = datetime(target_date.year, target_date.month, target_date.day, start_hour_int, start_minute)
+        start_dt = eastern.localize(start_dt_naive)
+        end_dt = start_dt + timedelta(hours=8)
+        time_format = '%Y-%m-%dT%H:%M:%S %z'
+        start_str = start_dt.strftime(time_format)
+        end_str = end_dt.strftime(time_format)
+        time_filter = f'created:>="{start_str}" created:<="{end_str}"'
+        inflow_query = f'{secops.BASE_QUERY} {time_filter}'
+        outflow_query = f'{secops.BASE_QUERY} {time_filter} status:closed'
+        inflow = incident_handler.get_tickets(query=inflow_query)
+        outflow = incident_handler.get_tickets(query=outflow_query)
+        malicious_tp_ids = [t.get('id') for t in inflow if t.get('CustomFields', {}).get('impact') == 'Malicious True Positive']
+        malicious_tp_count = len(malicious_tp_ids)
         inflow_count = len(inflow)
         outflow_count = len(outflow)
-        malicious_tp_count = len(malicious_tp)
-        response_breaches = len(response_sla_breaches)
-        containment_breaches = len(containment_sla_breaches)
-
-        # Calculate average response times
-        total_response_time = 0
-        total_containment_time = 0
-
-        for ticket in inflow:
-            if 'timetorespond' in ticket.get('CustomFields', {}):
-                total_response_time += ticket['CustomFields']['timetorespond']['totalDuration']
-            elif 'responsesla' in ticket.get('CustomFields', {}):
-                total_response_time += ticket['CustomFields']['responsesla']['totalDuration']
-
-        inflow_with_hosts = [t for t in inflow if t.get('CustomFields', {}).get('hostname')]
-        for ticket in inflow_with_hosts:
-            if 'timetocontain' in ticket.get('CustomFields', {}):
-                total_containment_time += ticket['CustomFields']['timetocontain']['totalDuration']
-            elif 'containmentsla' in ticket.get('CustomFields', {}):
-                total_containment_time += ticket['CustomFields']['containmentsla']['totalDuration']
-
-        avg_response_time = round(total_response_time / inflow_count / 60, 2) if inflow_count > 0 else 0
-        avg_containment_time = round(total_containment_time / len(inflow_with_hosts) / 60, 2) if inflow_with_hosts else 0
-
-        # Get staffing data
+        sla_metrics = _extract_sla_metrics(inflow)
+        day_name = start_dt.strftime('%A')
         staffing = secops.get_staffing_data(day_name, shift_name.lower())
         total_staff = sum(len(staff) for staff in staffing.values() if staff != ['N/A (Excel file missing)'])
         tickets_per_analyst = round(outflow_count / total_staff, 2) if total_staff > 0 else 0
-
-        # Determine shift lead (first person in SA team typically)
-        shift_lead = "N/A"
-        if staffing.get('SA') and staffing['SA'] and staffing['SA'][0] != 'N/A (Excel file missing)':
-            shift_lead = staffing['SA'][0]
-
-        # Get IOCs blocked (simplified - you may want to enhance this)
-        # This would require integration with your IOC blocking system
-        iocs_blocked = 0  # Placeholder - implement based on your IOC tracking
-
-        # Get domains blocked during shift period
+        shift_lead = 'N/A'
+        if staffing.get('senior_analysts') and staffing['senior_analysts'] and staffing['senior_analysts'][0] != 'N/A (Excel file missing)':
+            shift_lead = staffing['senior_analysts'][0]
+        iocs_blocked = 0
         domains_blocked = 0
         try:
-            # Get domains blocked during this shift period
             all_domains = list_handler.get_list_data_by_name(f'{CONFIG.team_name} Blocked Domains')
             if all_domains:
-                # Count domains blocked during this shift timeframe
-                shift_start = target_date.replace(hour=int(shift_start_hour), minute=int((shift_start_hour % 1) * 60))
-                shift_end = shift_start + timedelta(hours=8)
-
-                for domain in all_domains:
-                    if 'blocked_at' in domain:
+                shift_start_naive = start_dt.replace(tzinfo=None)
+                shift_end_naive = end_dt.replace(tzinfo=None)
+                for item in all_domains:
+                    ts = item.get('blocked_at') or item.get('modified')
+                    if ts:
                         try:
-                            blocked_time = secops.safe_parse_datetime(domain['blocked_at'])
-                            if shift_start <= blocked_time <= shift_end:
+                            dt = secops.safe_parse_datetime(ts)
+                            if dt and shift_start_naive <= dt <= shift_end_naive:
                                 domains_blocked += 1
-                        except (ValueError, TypeError):
-                            pass
-        except Exception as e:
-            print(f"Error counting blocked domains: {e}")
-
+                        except Exception:
+                            continue
+        except Exception:
+            pass
         return jsonify({
             'success': True,
-            'data': {
-                'date': date_str,
-                'day': day_name,
-                'shift': shift_name.title(),
-                'shift_lead': shift_lead,
-                'inflow': inflow_count,
-                'outflow': outflow_count,
-                'malicious_tp': malicious_tp_count,
-                'response_breaches': response_breaches,
-                'containment_breaches': containment_breaches,
-                'avg_response_time_min': avg_response_time,
-                'avg_containment_time_min': avg_containment_time,
-                'total_staff': total_staff,
-                'tickets_per_analyst': tickets_per_analyst,
-                'staffing': staffing,
-                'iocs_blocked': iocs_blocked,
-                'domains_blocked': domains_blocked,
-                'shift_times': {
-                    'start': f"{int(shift_start_hour):02d}:{int((shift_start_hour % 1) * 60):02d}",
-                    'end': f"{int((shift_start_hour + 8) % 24):02d}:{int(((shift_start_hour + 8) % 1) * 60):02d}"
-                }
-            }
+            'shift_id': shift_id,
+            'shift': shift_name.title(),
+            'date': date_str,
+            'start_time': start_str,
+            'end_time': end_str,
+            'tickets_inflow': inflow_count,
+            'tickets_closed': outflow_count,
+            'malicious_true_positives': malicious_tp_count,
+            'malicious_true_positive_ids': malicious_tp_ids,
+            'response_sla_breaches': sla_metrics['response_breaches'],
+            'containment_sla_breaches': sla_metrics['containment_breaches'],
+            'avg_response_time_minutes': sla_metrics['avg_response'],
+            'avg_containment_time_minutes': sla_metrics['avg_containment'],
+            'tickets_per_analyst': tickets_per_analyst,
+            'shift_lead': shift_lead,
+            'domains_blocked': domains_blocked,
+            'iocs_blocked': iocs_blocked,
+            'staffing': staffing
         })
-
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
-@app.route('/api/shift-staffing/<shift_id>')
-@log_web_activity
-def get_shift_staffing(shift_id):
-    """Get basic staffing information for a specific shift"""
-    try:
-        date_str, shift_name = shift_id.split('_')
-        target_date = datetime.strptime(date_str, '%Y-%m-%d')
-        day_name = target_date.strftime('%A')
+# Helper to robustly extract SLA metrics from inflow tickets
+# Adaptive: totalDuration could be minutes, seconds, or milliseconds.
+# Heuristic conversion order:
+#   >= 3,600,000 -> treat as milliseconds (divide by 60,000)
+#   >= 600       -> treat as seconds (divide by 60)
+#   else         -> treat as minutes already
+# Breach detection only checks breachTriggered.
+def _extract_sla_metrics(tickets):
+    """Compute SLA metrics (MTTR / MTTC averages & breach counts) from tickets.
 
-        # Get basic staffing info
-        basic_staffing = secops.get_basic_shift_staffing(day_name, shift_name.lower())
+    Fixes prior incorrect heuristic that treated small second-based durations as minutes.
+    Assumptions:
+      - totalDuration fields are primarily in SECONDS (as evidenced by typical small values like 57)
+      - Some edge cases may surface durations in milliseconds (large numbers > 3_600_000 and divisible by 1000)
+    We normalize:
+      seconds -> minutes via /60
+      milliseconds -> minutes via /1000/60
+    We log per-ticket debug information for diagnostics.
+    """
 
-        # Get shift lead
-        shift_lead = secops.get_shift_lead(day_name, shift_name.lower())
+    def _duration_to_minutes(raw):
+        if not isinstance(raw, (int, float)) or raw <= 0:
+            return None, None
+        # Detect millisecond values (very large and divisible by 1000) to avoid inflating minutes incorrectly
+        if raw >= 3_600_000 and raw % 1000 == 0:  # >= 1 hour expressed in ms
+            minutes = raw / 1000.0 / 60.0
+            unit = 'ms'
+        else:
+            minutes = raw / 60.0  # treat as seconds
+            unit = 's'
+        return minutes, unit
 
-        # Get detailed staffing for staff list
-        detailed_staffing = secops.get_staffing_data(day_name, shift_name.lower())
+    response_total_min = 0.0
+    response_count = 0
+    response_breaches = 0
+    contain_total_min = 0.0
+    contain_count = 0
+    contain_breaches = 0
 
-        return jsonify({
-            'success': True,
-            'data': {
-                'basic_staffing': basic_staffing,
-                'shift_lead': shift_lead,
-                'detailed_staffing': detailed_staffing
-            }
-        })
+    for t in tickets:
+        cf = t.get('CustomFields', {}) or {}
+        ticket_id = t.get('id', 'UNKNOWN')
 
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
+        # Prefer explicit timetorespond but allow legacy responsesla fallback
+        resp_obj = cf.get('timetorespond') or cf.get('responsesla')
+        cont_obj = None
+        # Only evaluate containment for host-based tickets
+        if cf.get('hostname'):
+            cont_obj = cf.get('timetocontain') or cf.get('containmentsla')
 
+        raw_resp = raw_cont = None
+        resp_min = cont_min = None
+        resp_unit = cont_unit = None
 
-@app.route('/api/shift-tickets/<shift_id>')
-@log_web_activity
-def get_shift_tickets(shift_id):
-    """Get ticket metrics for a specific shift"""
-    try:
-        date_str, shift_name = shift_id.split('_')
-        target_date = datetime.strptime(date_str, '%Y-%m-%d')
-        days_back = (datetime.now(eastern).date() - target_date.date()).days
+        if isinstance(resp_obj, dict):
+            raw_resp = resp_obj.get('totalDuration')
+            resp_min, resp_unit = _duration_to_minutes(raw_resp)
+            if resp_min is not None:
+                response_total_min += resp_min
+                response_count += 1
+            if str(resp_obj.get('breachTriggered')).lower() == 'true':
+                response_breaches += 1
 
-        # Calculate shift start hour
-        if shift_name.lower() == 'morning':
-            shift_start_hour = 4.5
-        elif shift_name.lower() == 'afternoon':
-            shift_start_hour = 12.5
-        else:  # night
-            shift_start_hour = 20.5
+        if isinstance(cont_obj, dict):
+            raw_cont = cont_obj.get('totalDuration')
+            cont_min, cont_unit = _duration_to_minutes(raw_cont)
+            if cont_min is not None:
+                contain_total_min += cont_min
+                contain_count += 1
+            if str(cont_obj.get('breachTriggered')).lower() == 'true':
+                contain_breaches += 1
 
-        # Get ticket metrics using the new granular method
-        ticket_metrics = secops.get_shift_ticket_metrics(days_back, shift_start_hour)
+        # Debug logging per ticket
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(
+                "SLA_METRICS ticket=%s resp_raw=%s%s resp_min=%.3f cont_raw=%s%s cont_min=%.3f has_hostname=%s resp_breach=%s cont_breach=%s",
+                ticket_id,
+                raw_resp if raw_resp is not None else '-',
+                f"{resp_unit}" if resp_unit else '',
+                resp_min if resp_min is not None else -1,
+                raw_cont if raw_cont is not None else '-',
+                f"{cont_unit}" if cont_unit else '',
+                cont_min if cont_min is not None else -1,
+                bool(cf.get('hostname')),
+                str(resp_obj.get('breachTriggered')) if isinstance(resp_obj, dict) else '-',
+                str(cont_obj.get('breachTriggered')) if isinstance(cont_obj, dict) else '-'
+            )
 
-        return jsonify({
-            'success': True,
-            'data': ticket_metrics
-        })
+    avg_response = round(response_total_min / response_count, 2) if response_count else 0.0
+    avg_contain = round(contain_total_min / contain_count, 2) if contain_count else 0.0
 
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
+    # Final aggregate debug summary
+    if logger.isEnabledFor(logging.DEBUG):
+        logger.debug(
+            "SLA_METRICS_SUMMARY resp_count=%d resp_total_min=%.3f avg_resp=%.2f cont_count=%d cont_total_min=%.3f avg_cont=%.2f resp_breaches=%d cont_breaches=%d",
+            response_count, response_total_min, avg_response,
+            contain_count, contain_total_min, avg_contain,
+            response_breaches, contain_breaches
+        )
+
+    return {
+        'avg_response': avg_response,  # MTTR in minutes
+        'avg_containment': avg_contain,  # MTTC in minutes
+        'response_breaches': response_breaches,
+        'containment_breaches': contain_breaches
+    }
 
 
 @app.route('/api/shift-security/<shift_id>')
@@ -1218,9 +1240,12 @@ def get_shift_security(shift_id):
         else:  # night
             shift_start_hour = 20.5
 
-        # Get security actions using the new granular method
+        # Add MTP IDs via inflow fetch
+        base_date = datetime(target_date.year, target_date.month, target_date.day)
+        _, inflow_tickets, _ = _fetch_inflow_for_window(base_date, shift_name)
+        mtp_ids = [t.get('id') for t in inflow_tickets if t.get('CustomFields', {}).get('impact') == 'Malicious True Positive']
         security_actions = secops.get_shift_security_actions(days_back, shift_start_hour)
-
+        security_actions['malicious_true_positive_ids'] = mtp_ids
         return jsonify({
             'success': True,
             'data': security_actions
@@ -1273,6 +1298,88 @@ def get_shift_summary(shift_id):
         })
 
     except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/shift-staffing/<shift_id>')
+@log_web_activity
+def get_shift_staffing(shift_id):
+    """Granular staffing endpoint for shift performance modal.
+    Returns shift lead, basic counts, and detailed staffing.
+    Now prefers first Senior Analyst (SA) as shift lead if available.
+    """
+    try:
+        date_str, raw_shift = shift_id.split('_')
+        shift_name = raw_shift.lower()
+        target_date = datetime.strptime(date_str, '%Y-%m-%d')
+        day_name = target_date.strftime('%A')
+        detailed = secops.get_staffing_data(day_name, shift_name)
+        basic = secops.get_basic_shift_staffing(day_name, shift_name)
+        # Prefer first senior analyst (key variations: 'SA', 'senior_analysts')
+        sa_list = detailed.get('SA') or detailed.get('senior_analysts') or []
+        shift_lead = None
+        if isinstance(sa_list, list) and sa_list:
+            first_sa = sa_list[0]
+            if first_sa and 'N/A' not in str(first_sa):
+                shift_lead = str(first_sa)
+        if not shift_lead:
+            # Fallback to existing Excel shift lead logic
+            shift_lead = secops.get_shift_lead(day_name, shift_name)
+        if not shift_lead or 'N/A' in str(shift_lead):
+            shift_lead = 'N/A'
+        return jsonify({
+            'success': True,
+            'data': {
+                'shift_id': shift_id,
+                'date': date_str,
+                'shift_name': shift_name.title(),
+                'shift_lead': shift_lead,
+                'basic_staffing': basic,
+                'detailed_staffing': detailed,
+                'generated_at': datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
+            }
+        })
+    except Exception as e:
+        logger.error(f"Error in get_shift_staffing for {shift_id}: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/shift-tickets/<shift_id>')
+@log_web_activity
+def get_shift_tickets(shift_id):
+    """Granular ticket metrics endpoint for shift performance modal.
+    Supplies inflow/outflow counts and MTTR/MTTC minutes.
+    """
+    try:
+        date_str, raw_shift = shift_id.split('_')
+        shift_name = raw_shift.lower()
+        target_date = datetime.strptime(date_str, '%Y-%m-%d')
+
+        base_date = datetime(target_date.year, target_date.month, target_date.day)
+        _, inflow_tickets, (start_dt, end_dt) = _fetch_inflow_for_window(base_date, shift_name)
+        time_format = '%Y-%m-%dT%H:%M:%S %z'
+        start_str = start_dt.strftime(time_format)
+        end_str = end_dt.strftime(time_format)
+        time_filter = f'created:>="{start_str}" created:<="{end_str}"'
+        outflow_query = f'{secops.BASE_QUERY} {time_filter} status:closed'
+        outflow_tickets = incident_handler.get_tickets(query=outflow_query)
+        sla_metrics = _extract_sla_metrics(inflow_tickets)
+        return jsonify({
+            'success': True,
+            'data': {
+                'shift_id': shift_id,
+                'date': date_str,
+                'shift_name': shift_name.title(),
+                'tickets_inflow': len(inflow_tickets),
+                'tickets_closed': len(outflow_tickets),
+                'response_time_minutes': sla_metrics['avg_response'],
+                'contain_time_minutes': sla_metrics['avg_containment'],
+                'response_sla_breaches': sla_metrics['response_breaches'],
+                'containment_sla_breaches': sla_metrics['containment_breaches']
+            }
+        })
+    except Exception as e:
+        logger.error(f"Error in get_shift_tickets for {shift_id}: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
