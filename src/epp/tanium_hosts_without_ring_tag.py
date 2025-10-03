@@ -249,7 +249,7 @@ class TaniumDataLoader:
                             ip=str(row[2]).strip() if row[2] else "",
                             eidLastSeen=row[4],  # Column 5: Last Seen (was row[3])
                             source=str(row[5]).strip() if row[5] else "",  # Column 6: Source (was row[4])
-                            custom_tags=[tag.strip() for tag in str(row[6]).split(',') if tag.strip()] if row[6] else []  # Column 7: Current Tags (was row[5])
+                            custom_tags=[tag.strip() for tag in str(row[6]).split('\n') if tag.strip()] if row[6] else []  # Column 7: Current Tags - split by newline to match export format
                         )
                     )
                 except Exception as e:
