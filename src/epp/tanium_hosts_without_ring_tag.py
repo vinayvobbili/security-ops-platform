@@ -642,11 +642,20 @@ class ExcelReportExporter:
         ws = wb.active
         ws.title = "Ring Assignments"
 
-        # Headers - Added "Source" column
+        # Headers aligned with the actual data appended below and
+        # with downstream consumers (jarvais.py) expecting these names
         headers = [
-            "Computer Name", "Tanium ID", "Source", "Category", "Environment",
-            "Country", "Region", "Was Country Guessed", "Current Tags",
-            "Generated Tag", "Comments"
+            "Computer Name",
+            "Tanium ID",
+            "Source",
+            "Category",
+            "Environment",
+            "Country",
+            "Region",
+            "Was Country Guessed",
+            "Current Tags",
+            "Generated Tag",
+            "Comments"
         ]
         ws.append(headers)
 
@@ -660,10 +669,11 @@ class ExcelReportExporter:
 
             category_display = "Workstation" if computer.is_workstation else "Server" if computer.is_server else computer.category
 
+            # Data order must match headers exactly
             ws.append([
                 computer.computer.name,
                 computer.computer.id,
-                computer.computer.source,  # Added Source column
+                computer.computer.source,  # Source column
                 category_display,
                 computer.environment,
                 computer.country,
@@ -677,12 +687,12 @@ class ExcelReportExporter:
         # Save file
         wb.save(output_path)
 
-        # Apply professional formatting
+        # Apply professional formatting (keys are lower-cased inside util)
         from src.utils.excel_formatting import apply_professional_formatting
         column_widths = {
             'computer name': 40,
             'tanium id': 25,
-            'source': 12,
+            'source': 14,
             'category': 18,
             'environment': 22,
             'country': 22,
