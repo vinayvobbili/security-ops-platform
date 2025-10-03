@@ -561,7 +561,7 @@ class RingTagTaniumHosts(Command):
         lock_path = ROOT_DIRECTORY / "src" / "epp" / "ring_tag_tanium_hosts.lock"
         try:
             with fasteners.InterProcessLock(lock_path):
-                self._apply_tags_to_random_hosts(room_id, activity['actor']['displayName'])
+                self._apply_tags_to_random_hosts(room_id)
         except Exception as e:
             logger.error(f"Error in RingTagTaniumHosts execute: {e}")
             webex_api.messages.create(
@@ -575,7 +575,8 @@ class RingTagTaniumHosts(Command):
                 except Exception as e:
                     logger.error(f"Failed to remove lock file {lock_path}: {e}")
 
-    def _apply_tags_to_random_hosts(self, room_id, user_display_name):
+    @staticmethod
+    def _apply_tags_to_random_hosts(room_id):
         """Apply ring tags to 10 random Tanium hosts"""
         from services.tanium import TaniumClient
 
@@ -621,12 +622,11 @@ class RingTagTaniumHosts(Command):
 
             # Apply tags to each host
             for idx, row in random_hosts.iterrows():
-                computer_name = row['Computer Name']
-                tanium_id = str(row['Tanium ID'])
-                source = row['Source']
-                ring_tag = row['Generated Tag']
-                current_tags = row.get('Current Tags', '')
-                comments = row.get('Comments', '')
+                computer_name = str(row['Computer Name'])
+                source = str(row['Source'])
+                ring_tag = str(row['Generated Tag'])
+                current_tags = str(row.get('Current Tags', ''))
+                comments = str(row.get('Comments', ''))
 
                 try:
                     # Get the appropriate instance
