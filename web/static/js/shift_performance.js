@@ -121,21 +121,21 @@ function setupTableSorting() {
         0: 0,   // Date
         1: 1,   // Day
         2: 2,   // Shift
-        // Skip colspan header "Staffing"
-        // Skip colspan header "Tickets"
-        4: 7,   // MTPs
-        // Skip colspan header "Mean Time To"
-        // Skip colspan header "SLA Breaches"
-        7: 12,  // Score
-        8: 13,  // Actions
-        9: 3,   // Scheduled (row 2)
-        10: 4,  // Actual (row 2)
-        11: 5,  // Acknowledged (row 2)
-        12: 6,  // Closed (row 2)
-        13: 8,  // Respond (row 2)
-        14: 9,  // Contain (row 2)
-        15: 10, // Response (row 2)
-        16: 11  // Containment (row 2)
+        // index 3: "Staffing" (colspan, parent header - NOT sortable)
+        // index 4: "Tickets" (colspan, parent header - NOT sortable)
+        5: 7,   // MTPs
+        // index 6: "Mean Time To" (colspan, parent header - NOT sortable)
+        // index 7: "SLA Breaches" (colspan, parent header - NOT sortable)
+        8: 12,  // Score
+        9: 13,  // Actions
+        10: 3,  // Scheduled (row 2)
+        11: 4,  // Actual (row 2)
+        12: 5,  // Acknowledged (row 2)
+        13: 6,  // Closed (row 2)
+        14: 8,  // Respond (row 2)
+        15: 9,  // Contain (row 2)
+        16: 10, // Response (row 2)
+        17: 11  // Containment (row 2)
     };
 
     const headers = document.querySelectorAll('.performance-table th');
