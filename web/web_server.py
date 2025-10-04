@@ -1230,6 +1230,22 @@ def get_shift_list():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@app.route('/api/clear-cache', methods=['POST'])
+@log_web_activity
+def clear_shift_cache():
+    """Clear the server-side shift list cache file"""
+    try:
+        if os.path.exists(SHIFT_LIST_CACHE_FILE):
+            os.remove(SHIFT_LIST_CACHE_FILE)
+            print(f"✅ Server cache cleared: {SHIFT_LIST_CACHE_FILE}")
+            return jsonify({'success': True, 'message': 'Server cache cleared successfully'})
+        else:
+            return jsonify({'success': True, 'message': 'No cache file to clear'})
+    except Exception as e:
+        print(f"❌ Error clearing server cache: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.route('/api/shift-details/<shift_id>')
 @log_web_activity
 def get_shift_details(shift_id):
