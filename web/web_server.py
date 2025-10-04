@@ -3,6 +3,7 @@ import asyncio
 import http.client
 import http.server
 import ipaddress
+import json
 import logging
 import os
 import random
@@ -27,6 +28,8 @@ from src.components import apt_names_fetcher
 from src.utils.logging_utils import log_web_activity, is_scanner_request
 
 SHOULD_START_PROXY = False
+SHOULD_CACHE_SHIFT_DATA = True  # Set to False to disable caching for testing
+USE_DEBUG_MODE = True  # Set to False to use Waitress production server
 # Define the proxy port
 PROXY_PORT = 8080
 # Optimize buffer size for better performance (increase from default 4096)
@@ -932,12 +935,44 @@ def _fetch_inflow_for_window(date_obj: datetime, shift_name: str):
     return inflow_query, tickets, (start_dt, end_dt)
 
 
+# Cache file for shift list data
+SHIFT_LIST_CACHE_FILE = '/tmp/shift_list_cache.json'
+
+
+def _load_shift_list_cache():
+    """Load cached shift list data if it exists."""
+    if not os.path.exists(SHIFT_LIST_CACHE_FILE):
+        return None
+    try:
+        with open(SHIFT_LIST_CACHE_FILE, 'r') as f:
+            return json.load(f)
+    except Exception as e:
+        print(f"Error loading shift list cache: {e}")
+        return None
+
+
+def _save_shift_list_cache(data):
+    """Save shift list data to cache."""
+    try:
+        with open(SHIFT_LIST_CACHE_FILE, 'w') as f:
+            json.dump(data, f)
+    except Exception as e:
+        print(f"Error saving shift list cache: {e}")
+
+
 @app.route('/api/shift-list')
 @log_web_activity
 def get_shift_list():
     """Get basic shift list data for the past week including MTP ticket IDs (comma separated).
     Now also derives MTTR (response_time_minutes), MTTC (contain_time_minutes), and SLA breach counts from inflow tickets.
     """
+    # Check cache first if enabled
+    if SHOULD_CACHE_SHIFT_DATA:
+        cached_data = _load_shift_list_cache()
+        if cached_data is not None:
+            print("Using cached shift list data")
+            return jsonify(cached_data)
+
     status = 'unknown'
     try:
         shift_data = []
@@ -1056,12 +1091,72 @@ def get_shift_list():
                                 'impact': impact
                             })
 
+                        # Calculate actual staff from distinct owners in inflow tickets
+                        distinct_owners = set()
+                        for ticket in inflow_tickets:
+                            owner = ticket.get('owner', '').strip()
+                            if owner and owner.lower() not in ['', 'unassigned', 'admin']:
+                                distinct_owners.add(owner)
+                        actual_staff = len(distinct_owners)
+
+                        # Calculate performance score (1-10 scale)
+                        # Only measures what analysts control: closed tickets, response/containment times, SLA compliance
+                        staff_count = max(actual_staff, 1)  # Avoid division by zero
+
+                        score = 0
+
+                        # 1. Tickets Closed Productivity (up to 20 points)
+                        # Analysts control how efficiently they close tickets
+                        tickets_closed_per_analyst = ticket_metrics['tickets_closed'] / staff_count
+                        score += min(tickets_closed_per_analyst * 10, 20)
+
+                        # 2. Backlog Clearing (+10 bonus or -10 penalty)
+                        # Analysts control whether they clear backlog by closing >= acknowledged
+                        # Low-volume shifts SHOULD use the opportunity to clear backlog
+                        if ticket_metrics['tickets_closed'] >= ticket_metrics['tickets_inflow']:
+                            score += 10  # Cleared backlog or kept up
+                        else:
+                            score -= 10  # Failed to keep up or didn't use low volume to clear backlog
+
+                        # 3. Response Time Quality (up to 25 points)
+                        avg_response = sla_metrics['avg_response']
+                        if avg_response <= 5:  # Excellent: under 5 min
+                            score += 25
+                        elif avg_response <= 15:  # Good: under 15 min
+                            score += 18
+                        elif avg_response <= 30:  # Acceptable: under 30 min
+                            score += 10
+                        # Bad: >30 min gets 0 points
+
+                        # 4. Containment Time Quality (up to 25 points)
+                        avg_containment = sla_metrics['avg_containment']
+                        if avg_containment <= 30:  # Excellent: under 30 min
+                            score += 25
+                        elif avg_containment <= 60:  # Good: under 60 min
+                            score += 18
+                        elif avg_containment <= 120:  # Acceptable: under 2 hours
+                            score += 10
+                        # Bad: >2 hours gets 0 points
+
+                        # 5. Response SLA Compliance (up to 10 points, -2pts per breach)
+                        response_sla_score = 10 - (sla_metrics['response_breaches'] * 2)
+                        score += max(0, response_sla_score)
+
+                        # 6. Containment SLA Compliance (up to 10 points, -2pts per breach)
+                        containment_sla_score = 10 - (sla_metrics['containment_breaches'] * 2)
+                        score += max(0, containment_sla_score)
+
+                        # Cap score between 0 and 100, then convert to 1-10 scale
+                        score = max(0, min(100, score))
+                        score = max(1, min(10, int(round(score / 10))))
+
                         shift_data.append({
                             'id': shift_id,
                             'date': date_str,
                             'day': day_name,
                             'shift': shift_name.title(),
                             'total_staff': total_staff,
+                            'actual_staff': actual_staff,
                             'status': status,
                             'tickets_inflow': ticket_metrics['tickets_inflow'],
                             'tickets_closed': ticket_metrics['tickets_closed'],
@@ -1077,7 +1172,9 @@ def get_shift_list():
                             # Staffing details for modal
                             'shift_lead': shift_lead,
                             'basic_staffing': basic_staffing,
-                            'detailed_staffing': detailed_staffing
+                            'detailed_staffing': detailed_staffing,
+                            # Performance score
+                            'score': score
                         })
                 except Exception as e:
                     print(f"Error getting staffing or metrics for {day_name} {shift_name}: {e}")
@@ -1104,6 +1201,7 @@ def get_shift_list():
                             'day': day_name,
                             'shift': shift_name.title(),
                             'total_staff': 0,
+                            'actual_staff': 0,
                             'status': status,
                             'tickets_inflow': 0,
                             'tickets_closed': 0,
@@ -1117,9 +1215,17 @@ def get_shift_list():
                             'shift_lead': 'N/A',
                             'basic_staffing': {'total_staff': 0, 'teams': {}},
                             'detailed_staffing': {},
-                            'security_actions': {'iocs_blocked': 0, 'domains_blocked': 0, 'malicious_true_positives': 0}
+                            'security_actions': {'iocs_blocked': 0, 'domains_blocked': 0, 'malicious_true_positives': 0},
+                            'score': 0
                         })
-        return jsonify({'success': True, 'data': shift_data})
+        result = {'success': True, 'data': shift_data}
+
+        # Save to cache if enabled
+        if SHOULD_CACHE_SHIFT_DATA:
+            _save_shift_list_cache(result)
+            print("Saved shift list data to cache")
+
+        return jsonify(result)
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
@@ -1414,30 +1520,43 @@ def main():
     host = args.host
 
     print(f"Attempting to start web server on http://{host}:{port}")
-    try:
-        from waitress import serve
-        print("Using Waitress WSGI server for production deployment")
+
+    if USE_DEBUG_MODE:
+        print("Using Flask dev server with auto-reload (debug mode)")
         try:
-            serve(app, host=host, port=port, threads=20, channel_timeout=120)
-        except OSError as e:
-            # Permission denied for privileged port without sudo/capability
-            if port < 1024 and e.errno == 13:  # Permission denied
-                fallback_port = 8080
-                print(f"Permission denied binding to port {port}. Falling back to {fallback_port}. (Run with sudo or grant cap_net_bind_service to use {port}).")
-                serve(app, host=host, port=fallback_port, threads=20, channel_timeout=120)
-            else:
-                raise
-    except ImportError:
-        print("Waitress not available, falling back to Flask dev server")
-        try:
-            app.run(debug=True, host=host, port=port, threaded=True, use_reloader=True, extra_files=['static'])
+            app.run(debug=True, host=host, port=port, threaded=True, use_reloader=True)
         except OSError as e:
             if port < 1024 and e.errno == 13:
                 fallback_port = 8080
                 print(f"Permission denied binding to port {port}. Falling back to {fallback_port}. (Run with sudo or grant capability to use {port}).")
-                app.run(debug=True, host=host, port=fallback_port, threaded=True, use_reloader=True, extra_files=['static'])
+                app.run(debug=True, host=host, port=fallback_port, threaded=True, use_reloader=True)
             else:
                 raise
+    else:
+        try:
+            from waitress import serve
+            print("Using Waitress WSGI server for production deployment")
+            try:
+                serve(app, host=host, port=port, threads=20, channel_timeout=120)
+            except OSError as e:
+                # Permission denied for privileged port without sudo/capability
+                if port < 1024 and e.errno == 13:  # Permission denied
+                    fallback_port = 8080
+                    print(f"Permission denied binding to port {port}. Falling back to {fallback_port}. (Run with sudo or grant cap_net_bind_service to use {port}).")
+                    serve(app, host=host, port=fallback_port, threads=20, channel_timeout=120)
+                else:
+                    raise
+        except ImportError:
+            print("Waitress not available, falling back to Flask dev server")
+            try:
+                app.run(debug=True, host=host, port=port, threaded=True, use_reloader=True)
+            except OSError as e:
+                if port < 1024 and e.errno == 13:
+                    fallback_port = 8080
+                    print(f"Permission denied binding to port {port}. Falling back to {fallback_port}. (Run with sudo or grant capability to use {port}).")
+                    app.run(debug=True, host=host, port=fallback_port, threaded=True, use_reloader=True)
+                else:
+                    raise
 
 
 if __name__ == "__main__":

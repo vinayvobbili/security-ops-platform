@@ -85,12 +85,12 @@ function updateFilteredSummary(shiftType) {
     rows.forEach(row => {
         if (shiftType === 'all' || row.getAttribute('data-shift') === shiftType) {
             const cells = row.querySelectorAll('td');
-            // Expecting structure: 0 Date,1 Day,2 Shift,3 Staff,4 Tickets In,5 Tickets Out,6 MTPs(count),7 MTTR,8 MTTC,9 Resp SLA,10 Contain SLA,11 Actions
-            if (cells.length >= 12 && !row.classList.contains('skeleton-row')) {
+            // Expecting structure: 0 Date,1 Day,2 Shift,3 Scheduled,4 Actual,5 Acknowledged,6 Closed,7 MTPs,8 MTTR,9 MTTC,10 Resp SLA,11 Contain SLA,12 Score,13 Actions
+            if (cells.length >= 14 && !row.classList.contains('skeleton-row')) {
                 totalStaff += parseInt(cells[3].textContent) || 0;
-                totalInflow += parseInt(cells[4].textContent) || 0;
-                totalOutflow += parseInt(cells[5].textContent) || 0;
-                totalMaliciousTp += parseInt(cells[6].textContent) || 0;
+                totalInflow += parseInt(cells[5].textContent) || 0;
+                totalOutflow += parseInt(cells[6].textContent) || 0;
+                totalMaliciousTp += parseInt(cells[7].textContent) || 0;
                 visibleRows++;
             }
         }
@@ -106,17 +106,43 @@ function updateFilteredSummary(shiftType) {
 }
 
 function setupTableSorting() {
+    // Map header cells to their actual column index in tbody
+    // Row 1: Date(0), Day(1), Shift(2), Staffing(colspan=2), Tickets(colspan=2), MTPs(7), Mean Time To(colspan=2), SLA Breaches(colspan=2), Score(12), Actions(13)
+    // Row 2: Scheduled(3), Actual(4), Acknowledged(5), Closed(6), Respond(8), Contain(9), Response(10), Containment(11)
+
+    const headerMap = {
+        0: 0,   // Date
+        1: 1,   // Day
+        2: 2,   // Shift
+        // Skip colspan header "Staffing"
+        // Skip colspan header "Tickets"
+        4: 7,   // MTPs
+        // Skip colspan header "Mean Time To"
+        // Skip colspan header "SLA Breaches"
+        7: 12,  // Score
+        8: 13,  // Actions
+        9: 3,   // Scheduled (row 2)
+        10: 4,  // Actual (row 2)
+        11: 5,  // Acknowledged (row 2)
+        12: 6,  // Closed (row 2)
+        13: 8,  // Respond (row 2)
+        14: 9,  // Contain (row 2)
+        15: 10, // Response (row 2)
+        16: 11  // Containment (row 2)
+    };
+
     const headers = document.querySelectorAll('.performance-table th');
     headers.forEach((header, index) => {
-        if (index > 2) { // Skip Date, Day, Shift columns
+        const colIndex = headerMap[index];
+        if (colIndex !== undefined && colIndex >= 3 && colIndex <= 12) {
             header.style.cursor = 'pointer';
-            header.title = 'Click to sort';
-            header.addEventListener('click', () => sortTable(index));
+            header.title = 'Click to sort (ascending → descending → original)';
+            header.addEventListener('click', () => sortTable(colIndex, header));
         }
     });
 }
 
-function sortTable(columnIndex) {
+function sortTable(columnIndex, headerElement) {
     const table = document.querySelector('.performance-table');
     const tbody = table.querySelector('tbody');
     const rows = Array.from(tbody.querySelectorAll('tr'));
@@ -135,24 +161,43 @@ function sortTable(columnIndex) {
         return isNaN(num) ? 0 : num;
     };
 
-    // Determine sort direction
-    const isAscending = !table.dataset.sortAsc || table.dataset.sortAsc === 'false';
-    table.dataset.sortAsc = isAscending;
+    // Three-state toggle: none -> asc -> desc -> none
+    const currentSort = headerElement.dataset.sortDirection || 'none';
+    let newSort;
 
-    rows.sort((a, b) => {
-        const aVal = parseValue(a.cells[columnIndex].textContent);
-        const bVal = parseValue(b.cells[columnIndex].textContent);
-        return isAscending ? aVal - bVal : bVal - aVal;
-    });
+    if (currentSort === 'none') {
+        newSort = 'asc';
+    } else if (currentSort === 'asc') {
+        newSort = 'desc';
+    } else {
+        newSort = 'none';
+    }
 
-    // Update visual indicators
+    // Update visual indicators - clear all first
     document.querySelectorAll('.performance-table th').forEach(th => {
         th.classList.remove('sort-asc', 'sort-desc');
+        delete th.dataset.sortDirection;
     });
-    const header = document.querySelectorAll('.performance-table th')[columnIndex];
-    header.classList.add(isAscending ? 'sort-asc' : 'sort-desc');
 
-    rows.forEach(row => tbody.appendChild(row));
+    if (newSort === 'none') {
+        // Restore original order
+        tbody.innerHTML = '';
+        originalRowOrder.forEach(row => tbody.appendChild(row));
+    } else {
+        // Sort rows
+        const isAscending = newSort === 'asc';
+        rows.sort((a, b) => {
+            const aVal = parseValue(a.cells[columnIndex].textContent);
+            const bVal = parseValue(b.cells[columnIndex].textContent);
+            return isAscending ? aVal - bVal : bVal - aVal;
+        });
+
+        // Set indicator on clicked header
+        headerElement.dataset.sortDirection = newSort;
+        headerElement.classList.add(newSort === 'asc' ? 'sort-asc' : 'sort-desc');
+
+        rows.forEach(row => tbody.appendChild(row));
+    }
 }
 
 function refreshData() {
@@ -241,6 +286,8 @@ function setupModalHandlers() {
 
 // Store shift data globally so Details button can use it
 let globalShiftData = [];
+// Store original row order for sort reset
+let originalRowOrder = [];
 
 function loadShiftDetails(shiftId, button) {
     // Show loading state
@@ -276,7 +323,13 @@ function loadShiftDetails(shiftId, button) {
                 tickets_inflow: shiftData.tickets_inflow || 0,
                 tickets_closed: shiftData.tickets_closed || 0,
                 response_time_minutes: shiftData.response_time_minutes || 0,
-                contain_time_minutes: shiftData.contain_time_minutes || 0
+                contain_time_minutes: shiftData.contain_time_minutes || 0,
+                response_sla_breaches: shiftData.response_sla_breaches || 0,
+                containment_sla_breaches: shiftData.containment_sla_breaches || 0
+            },
+            performance: {
+                score: shiftData.score || 1,
+                actual_staff: shiftData.actual_staff || 0
             },
             security: shiftData.security_actions || {
                 iocs_blocked: 0,
@@ -491,7 +544,7 @@ function hideLoadingSpinner() {
 }
 
 function showShiftDetailsFromGranular(data) {
-    const {summary, staffing, tickets, security, inflow, outflow} = data;
+    const {summary, staffing, tickets, security, inflow, outflow, performance} = data;
 
     // Update modal title
     const modalTitle = document.getElementById('modalTitle');
@@ -598,8 +651,12 @@ function showShiftDetailsFromGranular(data) {
         <div class="detail-section">
             <h3>🎯 Key Performance Metrics</h3>
             <div class="key-metrics-grid">
+                <div class="key-metric score-highlight">
+                    <div class="metric-label">Performance Score</div>
+                    <div class="metric-value metric-score ${performance.score >= 9 ? 'metric-good' : performance.score >= 7 ? 'metric-warning' : 'metric-bad'}">${performance.score}/10</div>
+                </div>
                 <div class="key-metric">
-                    <div class="metric-label">Tickets Inflow</div>
+                    <div class="metric-label">Tickets Acknowledged</div>
                     <div class="metric-value ${tickets.tickets_inflow > 15 ? 'metric-bad' : tickets.tickets_inflow > 10 ? 'metric-warning' : 'metric-good'}">${tickets.tickets_inflow}</div>
                 </div>
                 <div class="key-metric">
@@ -613,6 +670,50 @@ function showShiftDetailsFromGranular(data) {
                 <div class="key-metric">
                     <div class="metric-label">Mean Time to Contain</div>
                     <div class="metric-value ${tickets.contain_time_minutes <= 120 ? 'metric-good' : tickets.contain_time_minutes <= 240 ? 'metric-warning' : 'metric-bad'}">${formatTime(tickets.contain_time_minutes)}</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="detail-section score-breakdown">
+            <h3>📈 Score Breakdown</h3>
+            <div class="score-explanation">
+                <p><strong>How the score is calculated (1-10 scale):</strong></p>
+                <div class="score-factors">
+                    <div class="score-factor">
+                        <span class="factor-icon">📊</span>
+                        <div class="factor-details">
+                            <strong>Productivity (30%)</strong>
+                            <ul>
+                                <li>Tickets closed per analyst: ${performance.actual_staff > 0 ? (tickets.tickets_closed / performance.actual_staff).toFixed(1) : 'N/A'} tickets/analyst</li>
+                                <li>${tickets.tickets_closed >= tickets.tickets_inflow ? '✓ Closed ≥ Acknowledged (+10pts bonus)' : '✗ Closed < Acknowledged (-10pts penalty)'}</li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div class="score-factor">
+                        <span class="factor-icon">⚡</span>
+                        <div class="factor-details">
+                            <strong>Response Quality (50%)</strong>
+                            <ul>
+                                <li>Response time: ${formatTime(tickets.response_time_minutes)} ${tickets.response_time_minutes <= 5 ? '(excellent)' : tickets.response_time_minutes <= 15 ? '(good)' : tickets.response_time_minutes <= 30 ? '(acceptable)' : '(needs improvement)'}</li>
+                                <li>Containment time: ${formatTime(tickets.contain_time_minutes)} ${tickets.contain_time_minutes <= 30 ? '(excellent)' : tickets.contain_time_minutes <= 60 ? '(good)' : tickets.contain_time_minutes <= 120 ? '(acceptable)' : '(needs improvement)'}</li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div class="score-factor">
+                        <span class="factor-icon">⚠️</span>
+                        <div class="factor-details">
+                            <strong>SLA Compliance (20%)</strong>
+                            <ul>
+                                <li>Response SLA breaches: ${tickets.response_sla_breaches || 0} ${tickets.response_sla_breaches > 0 ? '(-2pts each)' : '(0 breaches ✓)'}</li>
+                                <li>Containment SLA breaches: ${tickets.containment_sla_breaches || 0} ${tickets.containment_sla_breaches > 0 ? '(-2pts each)' : '(0 breaches ✓)'}</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                <div class="score-legend">
+                    <span class="legend-item"><span class="legend-color metric-good"></span> 9-10: Excellent</span>
+                    <span class="legend-item"><span class="legend-color metric-warning"></span> 7-8: Average</span>
+                    <span class="legend-item"><span class="legend-color metric-bad"></span> 1-6: Needs Improvement</span>
                 </div>
             </div>
         </div>
@@ -984,6 +1085,8 @@ function populateTable(shiftData) {
 
     const tbody = document.getElementById('shifts-tbody');
     tbody.innerHTML = '';
+    originalRowOrder = []; // Clear previous order
+
     shiftData.forEach((shift, index) => {
         setTimeout(() => {
             const row = document.createElement('tr');
@@ -999,26 +1102,38 @@ function populateTable(shiftData) {
             const mtpListRaw = shift.mtp_ticket_ids || '';
             const mtpIds = mtpListRaw.split(/\s*,\s*/).filter(id => id);
             const mtpCount = mtpIds.length;
-            const mtpSeverityClass = mtpCount === 0 ? 'mtp-zero' : mtpCount <= 2 ? 'mtp-low' : 'mtp-high';
-            const mtpCellContent = `<span class=\"mtp-cell ${mtpSeverityClass}\" data-shift-id=\"${shift.id}\" data-mtp-ids=\"${mtpIds.join(',')}\" title=\"${mtpIds.length ? 'MTP IDs: ' + mtpIds.join(', ') : 'No MTPs'}\">${mtpCount}</span>`;
+            const mtpCellContent = `<span class=\"mtp-cell\" data-shift-id=\"${shift.id}\" data-mtp-ids=\"${mtpIds.join(',')}\" title=\"${mtpIds.length ? 'MTP IDs: ' + mtpIds.join(', ') : 'No MTPs'}\">${mtpCount}</span>`;
+
+            // Format score with color coding (1-10 scale)
+            const score = shift.score || 1;
+            let scoreClass = 'metric-bad';  // Red for < 7
+            if (score >= 9) {
+                scoreClass = 'metric-good';  // Green for >= 9
+            } else if (score >= 7) {
+                scoreClass = 'metric-warning';  // Orange for >= 7
+            }
+
             row.innerHTML = `
                 <td>${shift.date}</td>
                 <td>${shift.day}</td>
                 <td><strong>${shift.shift}</strong></td>
                 <td>${shift.total_staff}</td>
+                <td>${shift.actual_staff || 0}</td>
                 <td>${shift.tickets_inflow}</td>
-                <td>${shift.tickets_closed}</td>
+                <td class="${shift.tickets_closed >= shift.tickets_inflow ? 'metric-good' : ''}">${shift.tickets_closed}</td>
                 <td>${mtpCellContent}</td>
                 <td>${formatTime(shift.response_time_minutes)}</td>
                 <td>${formatTime(shift.contain_time_minutes)}</td>
                 <td>${shift.response_sla_breaches}</td>
                 <td>${shift.containment_sla_breaches}</td>
+                <td><strong class="${scoreClass}">${score}</strong></td>
                 <td>
                     <button class="load-details-btn" onclick="loadShiftDetails('${shift.id}', this)" data-shift-id="${shift.id}">📊 Details</button>
                 </td>`;
             row.style.opacity = '0';
             row.style.transform = 'translateX(-20px)';
             tbody.appendChild(row);
+            originalRowOrder.push(row); // Store original order
             setTimeout(() => {
                 row.style.transition = 'all 0.5s ease';
                 row.style.opacity = '1';
@@ -1222,7 +1337,13 @@ function deepLinkIfRequested(shiftData) {
             tickets_inflow: shift.tickets_inflow || 0,
             tickets_closed: shift.tickets_closed || 0,
             response_time_minutes: shift.response_time_minutes || 0,
-            contain_time_minutes: shift.contain_time_minutes || 0
+            contain_time_minutes: shift.contain_time_minutes || 0,
+            response_sla_breaches: shift.response_sla_breaches || 0,
+            containment_sla_breaches: shift.containment_sla_breaches || 0
+        },
+        performance: {
+            score: shift.score || 1,
+            actual_staff: shift.actual_staff || 0
         },
         security: shift.security_actions || {
             iocs_blocked: 0,
