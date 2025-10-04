@@ -176,7 +176,7 @@ def start(room_id):
     """
     try:
         ticket_handler = TicketHandler()
-        query = '-status:closed -category:job type:METCIRT timetorespond.runStatus:running timetorespond.slaStatus:2 -hostname:""'
+        query = '-category:job type:METCIRT -owner:"" timetorespond.runStatus:running (timetorespond.slaStatus:risk or timetorespond.slaStatus:2)'
         tickets = ticket_handler.get_tickets(query)
 
         if not tickets:
