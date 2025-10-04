@@ -963,8 +963,21 @@ def _save_shift_list_cache(data):
 @app.route('/api/shift-list')
 @log_web_activity
 def get_shift_list():
-    """Get basic shift list data for the past week including MTP ticket IDs (comma separated).
-    Now also derives MTTR (response_time_minutes), MTTC (contain_time_minutes), and SLA breach counts from inflow tickets.
+    """Single source of truth for shift performance data.
+
+    Returns comprehensive shift data for the past week including:
+    - Ticket counts (inflow/outflow)
+    - Full ticket details (inflow_tickets, outflow_tickets arrays)
+    - Metrics (MTTR, MTTC, SLA breaches)
+    - Staffing info
+    - Performance scores
+
+    Architecture:
+    - Frontend loads this data ONCE on page load
+    - Frontend stores data in globalShiftData
+    - Table displays summary counts from this data
+    - Details modal slices/dices the SAME data (no additional API calls)
+    - All counts derived from actual ticket arrays for consistency
     """
     # Check cache first if enabled
     if SHOULD_CACHE_SHIFT_DATA:
@@ -1004,7 +1017,6 @@ def get_shift_list():
                     if show_shift:
                         shift_hour_map = {'morning': 4.5, 'afternoon': 12.5, 'night': 20.5}
                         shift_start_hour = shift_hour_map.get(shift_name.lower(), 4.5)
-                        ticket_metrics = secops.get_shift_ticket_metrics(days_back, shift_start_hour)
                         security_actions = secops.get_shift_security_actions(days_back, shift_start_hour)
 
                         # Get staffing details
@@ -1105,15 +1117,19 @@ def get_shift_list():
 
                         score = 0
 
+                        # Use actual ticket counts from inflow/outflow lists
+                        tickets_inflow_count = len(inflow_list)
+                        tickets_closed_count = len(outflow_list)
+
                         # 1. Tickets Closed Productivity (up to 20 points)
                         # Analysts control how efficiently they close tickets
-                        tickets_closed_per_analyst = ticket_metrics['tickets_closed'] / staff_count
+                        tickets_closed_per_analyst = tickets_closed_count / staff_count
                         score += min(tickets_closed_per_analyst * 10, 20)
 
                         # 2. Backlog Clearing (+10 bonus or -10 penalty)
                         # Analysts control whether they clear backlog by closing >= acknowledged
                         # Low-volume shifts SHOULD use the opportunity to clear backlog
-                        if ticket_metrics['tickets_closed'] >= ticket_metrics['tickets_inflow']:
+                        if tickets_closed_count >= tickets_inflow_count:
                             score += 10  # Cleared backlog or kept up
                         else:
                             score -= 10  # Failed to keep up or didn't use low volume to clear backlog
@@ -1158,8 +1174,8 @@ def get_shift_list():
                             'total_staff': total_staff,
                             'actual_staff': actual_staff,
                             'status': status,
-                            'tickets_inflow': ticket_metrics['tickets_inflow'],
-                            'tickets_closed': ticket_metrics['tickets_closed'],
+                            'tickets_inflow': len(inflow_list),  # Use actual inflow ticket count
+                            'tickets_closed': len(outflow_list),  # Use actual outflow ticket count
                             # Override with derived averages (minutes already)
                             'response_time_minutes': sla_metrics['avg_response'],
                             'contain_time_minutes': sla_metrics['avg_containment'],
@@ -1246,88 +1262,6 @@ def clear_shift_cache():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
-@app.route('/api/shift-details/<shift_id>')
-@log_web_activity
-def get_shift_details(shift_id):
-    """Get detailed performance metrics for a specific shift via AJAX.
-    Derives MTTR/MTTC and SLA breach counts locally from inflow tickets (robust parsing).
-    """
-    try:
-        date_str, shift_name = shift_id.split('_')
-        target_date = datetime.strptime(date_str, '%Y-%m-%d')
-
-        if shift_name.lower() == 'morning':
-            shift_start_hour = 4.5
-        elif shift_name.lower() == 'afternoon':
-            shift_start_hour = 12.5
-        else:
-            shift_start_hour = 20.5
-        start_hour_int = int(shift_start_hour)
-        start_minute = int((shift_start_hour % 1) * 60)
-        start_dt_naive = datetime(target_date.year, target_date.month, target_date.day, start_hour_int, start_minute)
-        start_dt = eastern.localize(start_dt_naive)
-        end_dt = start_dt + timedelta(hours=8)
-        time_format = '%Y-%m-%dT%H:%M:%S %z'
-        start_str = start_dt.strftime(time_format)
-        end_str = end_dt.strftime(time_format)
-        time_filter = f'created:>="{start_str}" created:<="{end_str}"'
-        inflow_query = f'{secops.BASE_QUERY} {time_filter}'
-        outflow_query = f'{secops.BASE_QUERY} {time_filter} status:closed'
-        inflow = incident_handler.get_tickets(query=inflow_query)
-        outflow = incident_handler.get_tickets(query=outflow_query)
-        malicious_tp_ids = [t.get('id') for t in inflow if t.get('CustomFields', {}).get('impact') == 'Malicious True Positive']
-        malicious_tp_count = len(malicious_tp_ids)
-        inflow_count = len(inflow)
-        outflow_count = len(outflow)
-        sla_metrics = _extract_sla_metrics(inflow)
-        day_name = start_dt.strftime('%A')
-        staffing = secops.get_staffing_data(day_name, shift_name.lower())
-        total_staff = sum(len(staff) for staff in staffing.values() if staff != ['N/A (Excel file missing)'])
-        tickets_per_analyst = round(outflow_count / total_staff, 2) if total_staff > 0 else 0
-        shift_lead = 'N/A'
-        if staffing.get('senior_analysts') and staffing['senior_analysts'] and staffing['senior_analysts'][0] != 'N/A (Excel file missing)':
-            shift_lead = staffing['senior_analysts'][0]
-        iocs_blocked = 0
-        domains_blocked = 0
-        try:
-            all_domains = list_handler.get_list_data_by_name(f'{CONFIG.team_name} Blocked Domains')
-            if all_domains:
-                shift_start_naive = start_dt.replace(tzinfo=None)
-                shift_end_naive = end_dt.replace(tzinfo=None)
-                for item in all_domains:
-                    ts = item.get('blocked_at') or item.get('modified')
-                    if ts:
-                        try:
-                            dt = secops.safe_parse_datetime(ts)
-                            if dt and shift_start_naive <= dt <= shift_end_naive:
-                                domains_blocked += 1
-                        except Exception:
-                            continue
-        except Exception:
-            pass
-        return jsonify({
-            'success': True,
-            'shift_id': shift_id,
-            'shift': shift_name.title(),
-            'date': date_str,
-            'start_time': start_str,
-            'end_time': end_str,
-            'tickets_inflow': inflow_count,
-            'tickets_closed': outflow_count,
-            'malicious_true_positives': malicious_tp_count,
-            'malicious_true_positive_ids': malicious_tp_ids,
-            'response_sla_breaches': sla_metrics['response_breaches'],
-            'containment_sla_breaches': sla_metrics['containment_breaches'],
-            'avg_response_time_minutes': sla_metrics['avg_response'],
-            'avg_containment_time_minutes': sla_metrics['avg_containment'],
-            'tickets_per_analyst': tickets_per_analyst,
-            'shift_lead': shift_lead,
-            'domains_blocked': domains_blocked,
-            'iocs_blocked': iocs_blocked,
-            'staffing': staffing
-        })
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 # Helper to robustly extract SLA metrics from inflow tickets

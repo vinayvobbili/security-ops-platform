@@ -311,7 +311,25 @@ class TicketMetricsCalculator:
 
 
 def get_shift_ticket_metrics(days_back, shift_start_hour):
-    """Get ticket metrics for a specific shift period."""
+    """Get ticket metrics for a specific shift period.
+
+    ⚠️ DEPRECATION WARNING ⚠️
+    This function has a KNOWN BUG: it truncates shift times to integer hours,
+    causing 30-minute offsets for shifts at 4.5, 12.5, 20.5 hours.
+
+    Example: Morning shift (4:30 AM) queries 4:00 AM instead, missing tickets
+    from 4:00-4:30 and incorrectly including 12:00-12:30.
+
+    RECOMMENDATION: Use exact timestamp queries instead:
+        start_dt = eastern.localize(datetime(year, month, day, hour, minute))
+        end_dt = start_dt + timedelta(hours=8)
+        query = f'{BASE_QUERY} created:>="{start_dt.isoformat()}" created:<="{end_dt.isoformat()}"'
+
+    Currently used by:
+        - my_bot/tools/staffing_tools.py (chatbot tools)
+
+    See /api/shift-list in web_server.py for corrected implementation.
+    """
     try:
         period = TicketMetricsCalculator.create_shift_period(days_back, shift_start_hour)
         incident_fetcher = TicketHandler()
@@ -338,6 +356,79 @@ def get_shift_ticket_metrics(days_back, shift_start_hour):
         }
     except Exception as e:
         logger.error(f"Error getting ticket metrics: {e}")
+        return {
+            'tickets_inflow': 0,
+            'tickets_closed': 0,
+            'mean_response_time': 0,
+            'mean_contain_time': 0,
+            'response_time_minutes': 0,
+            'contain_time_minutes': 0
+        }
+
+
+def get_shift_ticket_metrics_v2(days_back, shift_start_hour):
+    """Get ticket metrics for a specific shift period using EXACT timestamps.
+
+    This is the CORRECTED version that uses precise datetime ranges instead of
+    truncated integer hours. Use this instead of get_shift_ticket_metrics().
+
+    Args:
+        days_back: Number of days back from today (0 = today, 1 = yesterday)
+        shift_start_hour: Shift start time in decimal hours (4.5 = 4:30 AM)
+
+    Returns:
+        Dict with ticket counts and metrics using exact shift windows
+    """
+    try:
+        eastern = pytz.timezone(ShiftConstants.EASTERN_TZ)
+        incident_fetcher = TicketHandler()
+
+        # Calculate exact shift window
+        target_date = datetime.now(eastern) - timedelta(days=days_back)
+        start_hour_int = int(shift_start_hour)
+        start_minute = int((shift_start_hour % 1) * 60)
+
+        start_dt_naive = datetime(
+            target_date.year,
+            target_date.month,
+            target_date.day,
+            start_hour_int,
+            start_minute
+        )
+        start_dt = eastern.localize(start_dt_naive)
+        end_dt = start_dt + timedelta(hours=8)
+
+        # Build query with exact timestamps
+        time_format = '%Y-%m-%dT%H:%M:%S %z'
+        start_str = start_dt.strftime(time_format)
+        end_str = end_dt.strftime(time_format)
+        time_filter = f'created:>="{start_str}" created:<="{end_str}"'
+
+        inflow_query = f'{BASE_QUERY} {time_filter}'
+        outflow_query = f'{BASE_QUERY} {time_filter} status:closed'
+
+        # Get tickets
+        inflow = incident_fetcher.get_tickets(query=inflow_query)
+        outflow = incident_fetcher.get_tickets(query=outflow_query)
+
+        # Calculate metrics
+        total_response_time, response_count = TicketMetricsCalculator.calculate_response_times(inflow)
+        total_contain_time, contain_count = TicketMetricsCalculator.calculate_containment_times(inflow)
+
+        return {
+            'tickets_inflow': len(inflow),
+            'tickets_closed': len(outflow),
+            'mean_response_time': TicketMetricsCalculator.safe_divide(total_response_time, response_count),
+            'mean_contain_time': TicketMetricsCalculator.safe_divide(total_contain_time, contain_count),
+            'response_time_minutes': TicketMetricsCalculator.convert_to_minutes(
+                TicketMetricsCalculator.safe_divide(total_response_time, response_count)
+            ),
+            'contain_time_minutes': TicketMetricsCalculator.convert_to_minutes(
+                TicketMetricsCalculator.safe_divide(total_contain_time, contain_count)
+            )
+        }
+    except Exception as e:
+        logger.error(f"Error getting ticket metrics v2: {e}")
         return {
             'tickets_inflow': 0,
             'tickets_closed': 0,
