@@ -29,9 +29,10 @@
                     </div>
                     <div class="filter-group">
                         <h4>Time Range</h4>
+                        <label><input type="radio" name="timeRange" value="today"> Today</label>
+                        <label><input type="radio" name="timeRange" value="yesterday"> Yesterday</label>
                         <label><input type="radio" name="timeRange" value="3"> Last 3 Days</label>
                         <label><input type="radio" name="timeRange" value="7" checked> Last 7 Days</label>
-                        <label><input type="radio" name="timeRange" value="14"> Last 14 Days</label>
                     </div>
                     <div class="filter-actions">
                         <button class="clear-btn" onclick="clearFilters()">Clear</button>
@@ -454,6 +455,14 @@
     </div>
 
     <!-- Data will be loaded via AJAX -->
+</div>
+
+<!-- Cache Clear Button -->
+<div class="cache-controls">
+    <button onclick="clearCacheAndReload()" title="Clear cached data and reload fresh from server">
+        <span class="cache-icon">🗑️</span>
+        <span class="cache-text">Clear Cache</span>
+    </button>
 </div>
 
 <audio id="music" src="" loop muted></audio>
