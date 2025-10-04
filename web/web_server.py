@@ -997,7 +997,7 @@ def get_shift_list():
             for shift_name in shifts:
                 try:
                     staffing = secops.get_staffing_data(day_name, shift_name)
-                    total_staff = sum(len(staff) for staff in staffing.values() if staff != ['N/A (Excel file missing)'])
+                    total_staff = sum(len(staff) for team, staff in staffing.items() if team != 'On-Call' and staff != ['N/A (Excel file missing)'])
                     shift_id = f"{date_str}_{shift_name}"
                     current_shift = secops.get_current_shift()
                     if days_back > 0:
