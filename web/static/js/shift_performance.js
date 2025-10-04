@@ -291,6 +291,17 @@ function setupModalHandlers() {
     }
 }
 
+// ============================================================================
+// DATA ARCHITECTURE
+// ============================================================================
+// All shift data comes from a SINGLE API endpoint: /api/shift-list
+// - Loads once on page load
+// - Cached in globalShiftData for instant access
+// - Table and Details modal both use this same data source
+// - All ticket counts derived from inflow_tickets/outflow_tickets arrays
+// - No additional API calls when opening Details modal
+// ============================================================================
+
 // Store shift data globally so Details button can use it
 let globalShiftData = [];
 // Store original row order for sort reset
@@ -302,7 +313,7 @@ function loadShiftDetails(shiftId, button) {
     button.textContent = '⏳ Loading...';
     button.disabled = true;
 
-    // Find the shift in already-loaded data
+    // Find the shift in already-loaded data (no API call needed!)
     const shiftData = globalShiftData.find(s => s.id === shiftId);
 
     if (!shiftData) {

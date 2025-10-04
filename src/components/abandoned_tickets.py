@@ -63,9 +63,9 @@ def send_report():
 
     today_minus_7 = pd.Timestamp.now(tz=eastern) - pd.Timedelta(days=7)
 
+    # Query for all open tickets (no time filter needed for abandoned tickets check)
     query = f'-status:closed type:{config.ticket_type_prefix} -type:"{config.ticket_type_prefix} Third Party Compromise"'
-    period = {"byTo": "months", "toValue": None, "byFrom": "months", "fromValue": None}
-    tickets = TicketHandler().get_tickets(query=query, period=period)
+    tickets = TicketHandler().get_tickets(query=query)
 
     if not tickets:
         logger.info("No tickets found.")

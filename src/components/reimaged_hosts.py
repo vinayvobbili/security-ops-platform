@@ -1,4 +1,5 @@
 import logging
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import pytz
@@ -18,9 +19,18 @@ root_directory = Path(__file__).parent.parent.parent
 
 def get_details():
     try:
-        query = ' -category:job reimagerequired:Yes'
-        period = {"byFrom": "ytd", "fromValue": 0}
-        tickets = TicketHandler().get_tickets(query=query, period=period)
+        # Get year-to-date tickets using explicit timestamps
+        now = datetime.now(eastern)
+        start_of_year = datetime(now.year, 1, 1, 0, 0, 0)
+        start_of_year_eastern = eastern.localize(start_of_year)
+        end_date = now.replace(hour=23, minute=59, second=59, microsecond=999999)
+
+        # Convert to UTC for API query
+        start_str = start_of_year_eastern.astimezone(pytz.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+        end_str = end_date.astimezone(pytz.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+
+        query = f'-category:job reimagerequired:Yes created:>={start_str} created:<={end_str}'
+        tickets = TicketHandler().get_tickets(query=query)
         result = []
         tuc_seconds_list = []
         for t in tickets:
