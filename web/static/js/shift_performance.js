@@ -15,6 +15,13 @@ function initializeShiftPerformance() {
     addInteractiveEffects();
     setupConfetti();
 
+    // Log caching info to console
+    console.log('%c💾 Shift Performance Caching Enabled', 'color: #00d4ff; font-weight: bold; font-size: 14px;');
+    console.log('%cData is cached for 1 hour to speed up subsequent loads.', 'color: #888;');
+    console.log('%cTo fetch fresh data:', 'color: #888;');
+    console.log('%c  • Hard refresh: Ctrl+Shift+R (Windows/Linux) or Cmd+Shift+R (Mac)', 'color: #888;');
+    console.log('%c  • Clear cache: clearShiftCache() then reload', 'color: #888;');
+
     // Show fun loading spinner immediately
     showLoadingSpinner();
 
@@ -316,7 +323,7 @@ function loadShiftDetails(shiftId, button) {
             },
             staffing: {
                 shift_lead: shiftData.shift_lead || 'N/A',
-                basic_staffing: shiftData.basic_staffing || { total_staff: 0, teams: {} },
+                basic_staffing: shiftData.basic_staffing || {total_staff: 0, teams: {}},
                 detailed_staffing: shiftData.detailed_staffing || {}
             },
             tickets: {
@@ -336,8 +343,8 @@ function loadShiftDetails(shiftId, button) {
                 domains_blocked: 0,
                 malicious_true_positives: 0
             },
-            inflow: { tickets: shiftData.inflow_tickets || [] },
-            outflow: { tickets: shiftData.outflow_tickets || [] }
+            inflow: {tickets: shiftData.inflow_tickets || []},
+            outflow: {tickets: shiftData.outflow_tickets || []}
         };
 
         showShiftDetailsFromGranular(data);
@@ -355,8 +362,11 @@ function formatTime(minutes) {
     if (minutes == null || isNaN(minutes) || minutes <= 0) return '0:00';
     let mins = Math.floor(minutes);
     let secs = Math.round((minutes - mins) * 60);
-    if (secs === 60) { mins += 1; secs = 0; }
-    return `${mins}:${secs.toString().padStart(2,'0')}`;
+    if (secs === 60) {
+        mins += 1;
+        secs = 0;
+    }
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
 }
 
 function showShiftDetails(shift) {
@@ -473,20 +483,25 @@ function showLoadingSpinner() {
     let currentMessageIndex = 0;
     let messageInterval;
     window.loadingStartTime = performance.now();
+    const EXPECTED_LOAD_TIME_MS = 90000; // 90 seconds average load time
 
     // Dim skeleton rows
-    document.querySelectorAll('.skeleton-row').forEach(r => { r.style.opacity = '0.1'; r.style.pointerEvents = 'none'; });
+    document.querySelectorAll('.skeleton-row').forEach(r => {
+        r.style.opacity = '0.1';
+        r.style.pointerEvents = 'none';
+    });
 
     const loadingOverlay = document.createElement('div');
     loadingOverlay.id = 'loadingOverlay';
     loadingOverlay.innerHTML = `
         <div class="loading-spinner-container">
-            <div class="loading-spinner">
-                <div class="spinner-ring"></div>
-                <div id="loadingElapsedInside" class="spinner-elapsed">0.0s</div>
+            <div class="loading-progress-bar-container">
+                <div class="loading-progress-bar">
+                    <div id="loadingProgressFill" class="loading-progress-fill"></div>
+                </div>
+                <div id="loadingElapsedInside" class="loading-elapsed">0s / ~90s</div>
             </div>
             <div class="loading-message" id="loadingMessage">${loadingMessages[0]}</div>
-            <div class="loading-subtext">Fetching shift performance data...</div>
         </div>
     `;
     const tableContainer = document.querySelector('.table-container');
@@ -497,21 +512,42 @@ function showLoadingSpinner() {
         const el = document.getElementById('loadingMessage');
         if (!el) return;
         el.style.opacity = '0';
-        setTimeout(() => { el.textContent = loadingMessages[currentMessageIndex]; el.style.opacity = '1'; }, 300);
+        setTimeout(() => {
+            el.textContent = loadingMessages[currentMessageIndex];
+            el.style.opacity = '1';
+        }, 300);
     }, 5000);
     window.loadingMessageInterval = messageInterval;
 
     window.loadingElapsedInterval = setInterval(() => {
         const elapsedEl = document.getElementById('loadingElapsedInside');
-        if (!elapsedEl || window.loadingStartTime == null) return;
-        const secsFloat = (performance.now() - window.loadingStartTime) / 1000;
-        const display = secsFloat >= 30 ? Math.round(secsFloat) + 's' : secsFloat.toFixed(1) + 's';
-        let cls = 'load-time-good'; // <30s
-        if (secsFloat >= 60) cls = 'load-time-slow';
-        else if (secsFloat >= 30) cls = 'load-time-warn';
-        elapsedEl.textContent = display;
-        elapsedEl.className = 'spinner-elapsed ' + cls;
-    }, 200);
+        const progressFill = document.getElementById('loadingProgressFill');
+        if (!elapsedEl || !progressFill || window.loadingStartTime == null) return;
+
+        const elapsedMs = performance.now() - window.loadingStartTime;
+        const secsFloat = elapsedMs / 1000;
+        const display = Math.round(secsFloat);
+
+        // Calculate progress percentage based on expected load time
+        const progressPercent = Math.min((elapsedMs / EXPECTED_LOAD_TIME_MS) * 100, 100);
+        progressFill.style.width = progressPercent + '%';
+
+        // Color coding for both text and progress bar
+        let cls = 'load-time-good'; // <60s
+        let progressColor = 'linear-gradient(90deg, #667eea 0%, #764ba2 100%)'; // Blue/purple
+
+        if (secsFloat >= 90) {
+            cls = 'load-time-slow';
+            progressColor = 'linear-gradient(90deg, #e74c3c 0%, #c0392b 100%)'; // Red
+        } else if (secsFloat >= 60) {
+            cls = 'load-time-warn';
+            progressColor = 'linear-gradient(90deg, #f39c12 0%, #e67e22 100%)'; // Orange/yellow
+        }
+
+        progressFill.style.background = progressColor;
+        elapsedEl.textContent = `${display}s / ~90s`;
+        elapsedEl.className = 'loading-elapsed ' + cls;
+    }, 1000);
 }
 
 function hideLoadingSpinner() {
@@ -533,7 +569,9 @@ function hideLoadingSpinner() {
     const loadingOverlay = document.getElementById('loadingOverlay');
     if (loadingOverlay) {
         loadingOverlay.style.opacity = '0';
-        setTimeout(() => { loadingOverlay.remove(); }, 300);
+        setTimeout(() => {
+            loadingOverlay.remove();
+        }, 300);
     }
     const skeletonRows = document.querySelectorAll('.skeleton-row');
     skeletonRows.forEach(row => {
@@ -798,8 +836,8 @@ function showShiftDetailsFromGranular(data) {
                             <h4>${team} (${staffing.basic_staffing.teams[team] || 0})</h4>
                             <div class="staff-list">
                                 ${Array.isArray(members) && members.length > 0 && members[0] !== 'N/A (Excel file missing)'
-            ? members.map(member => `<span class="staff-member">${member}</span>`).join('')
-            : '<span class="no-staff">No staff assigned</span>'}
+        ? members.map(member => `<span class="staff-member">${member}</span>`).join('')
+        : '<span class="no-staff">No staff assigned</span>'}
                             </div>
                         </div>
                     `).join('')}
@@ -870,7 +908,10 @@ function updateSummaryCards(shiftData) {
         ['summaryTotalMtp', totalMtp],
         ['summaryAvgPerStaff', avgPerStaff]
     ];
-    map.forEach(([id, val]) => { const el = document.getElementById(id); if (el) el.textContent = val; });
+    map.forEach(([id, val]) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = val;
+    });
 }
 
 function openMtpModal(mtpIds, shiftId) {
@@ -1032,11 +1073,49 @@ if ('performance' in window) {
 }
 
 function loadInitialData() {
+    const CACHE_KEY = 'shift_performance_data';
+    const CACHE_DURATION_MS = 60 * 60 * 1000; // 1 hour
+
+    // Check for cached data
+    try {
+        const cachedItem = localStorage.getItem(CACHE_KEY);
+        if (cachedItem) {
+            const {timestamp, data} = JSON.parse(cachedItem);
+            const age = Date.now() - timestamp;
+
+            if (age < CACHE_DURATION_MS) {
+                // Use cached data
+                console.log(`Using cached data (${Math.round(age / 1000)}s old)`);
+                hideLoadingSpinner();
+                updateStatusInfo(data.data);
+                populateTable(data.data);
+                showToast(`📦 Loaded from cache (${Math.round(age / 60000)}min old) • Use Clear cache button at the bottom right corner for fresh data`, 'info');
+                return;
+            } else {
+                console.log('Cache expired, fetching fresh data');
+            }
+        }
+    } catch (e) {
+        console.warn('Cache read error:', e);
+    }
+
     // Make AJAX call to get shift list data
     fetch('/api/shift-list')
         .then(response => response.json())
         .then(data => {
             if (data.success) {
+                // Cache the data
+                try {
+                    const cacheItem = {
+                        timestamp: Date.now(),
+                        data: data
+                    };
+                    localStorage.setItem(CACHE_KEY, JSON.stringify(cacheItem));
+                    console.log('Data cached successfully');
+                } catch (e) {
+                    console.warn('Cache write error:', e);
+                }
+
                 // Hide loading spinner
                 hideLoadingSpinner();
 
@@ -1061,9 +1140,84 @@ function loadInitialData() {
         });
 }
 
+/**
+ * Manually clear the shift performance cache
+ * Usage: Call clearShiftCache() from browser console or programmatically
+ */
+function clearShiftCache() {
+    const CACHE_KEY = 'shift_performance_data';
+    try {
+        localStorage.removeItem(CACHE_KEY);
+        console.log('✅ Cache cleared successfully');
+        showToast('🗑️ Cache cleared! Reload page to fetch fresh data.', 'success');
+        return true;
+    } catch (e) {
+        console.error('❌ Error clearing cache:', e);
+        return false;
+    }
+}
+
+/**
+ * Clear both client-side and server-side cache, then reload
+ * Used by the UI button
+ */
+function clearCacheAndReload() {
+    const CACHE_KEY = 'shift_performance_data';
+
+    // Show loading toast
+    showToast('🗑️ Clearing cache...', 'info');
+
+    try {
+        // 1. Clear client-side localStorage
+        localStorage.removeItem(CACHE_KEY);
+        console.log('✅ Client cache cleared');
+
+        // 2. Clear server-side cache via API
+        fetch('/api/clear-cache', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    console.log('✅ Server cache cleared');
+                    showToast('🔄 Fetching fresh data...', 'info');
+                    // 3. Force reload from server
+                    setTimeout(() => {
+                        location.reload(true);
+                    }, 500);
+                } else {
+                    console.error('❌ Server cache clear failed:', data.error);
+                    showToast('⚠️ Warning: Server cache may not be cleared', 'warning');
+                    // Reload anyway
+                    setTimeout(() => {
+                        location.reload(true);
+                    }, 1000);
+                }
+            })
+            .catch(error => {
+                console.error('❌ Error calling clear-cache API:', error);
+                showToast('⚠️ Warning: Server cache may not be cleared', 'warning');
+                // Reload anyway
+                setTimeout(() => {
+                    location.reload(true);
+                }, 1000);
+            });
+    } catch (e) {
+        console.error('❌ Error clearing cache:', e);
+        showToast('❌ Error clearing cache', 'warning');
+    }
+}
+
+// Make functions globally accessible
+window.clearShiftCache = clearShiftCache;
+window.clearCacheAndReload = clearCacheAndReload;
+
 function updateStatusInfo(shiftData) {
     const now = new Date();
-    const timeOptions = { year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', timeZoneName: 'short', hour12: true };
+    const timeOptions = {year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', timeZoneName: 'short', hour12: true};
     const timeString = now.toLocaleString('en-US', timeOptions);
     const el = document.getElementById('last-updated');
     if (!el) return;
@@ -1088,58 +1242,60 @@ function populateTable(shiftData) {
     originalRowOrder = []; // Clear previous order
 
     shiftData.forEach((shift, index) => {
+        const row = document.createElement('tr');
+        row.className = `shift-${shift.shift.toLowerCase()} shift-status-${shift.status}`;
+        row.setAttribute('data-shift', shift.shift.toLowerCase());
+        row.setAttribute('data-status', shift.status);
+        row.setAttribute('data-date', shift.date);
+
+        const formatTime = (minutes) => {
+            if (!minutes || minutes === 0) return '0:00';
+            const mins = Math.floor(minutes);
+            const secs = Math.round((minutes - mins) * 60);
+            return `${mins}:${secs.toString().padStart(2, '0')}`;
+        };
+        const mtpListRaw = shift.mtp_ticket_ids || '';
+        const mtpIds = mtpListRaw.split(/\s*,\s*/).filter(id => id);
+        const mtpCount = mtpIds.length;
+        const mtpCellContent = `<span class=\"mtp-cell\" data-shift-id=\"${shift.id}\" data-mtp-ids=\"${mtpIds.join(',')}\" title=\"${mtpIds.length ? 'MTP IDs: ' + mtpIds.join(', ') : 'No MTPs'}\">${mtpCount}</span>`;
+
+        // Format score with color coding (1-10 scale)
+        const score = shift.score || 1;
+        let scoreClass = 'metric-bad';  // Red for < 7
+        if (score >= 9) {
+            scoreClass = 'metric-good';  // Green for >= 9
+        } else if (score >= 7) {
+            scoreClass = 'metric-warning';  // Orange for >= 7
+        }
+
+        row.innerHTML = `
+            <td>${shift.date}</td>
+            <td>${shift.day}</td>
+            <td><strong>${shift.shift}</strong></td>
+            <td>${shift.total_staff}</td>
+            <td>${shift.actual_staff || 0}</td>
+            <td>${shift.tickets_inflow}</td>
+            <td class="${shift.tickets_closed >= shift.tickets_inflow ? 'metric-good' : ''}">${shift.tickets_closed}</td>
+            <td>${mtpCellContent}</td>
+            <td>${formatTime(shift.response_time_minutes)}</td>
+            <td>${formatTime(shift.contain_time_minutes)}</td>
+            <td>${shift.response_sla_breaches}</td>
+            <td>${shift.containment_sla_breaches}</td>
+            <td><strong class="${scoreClass}">${score}</strong></td>
+            <td>
+                <button class="load-details-btn" onclick="loadShiftDetails('${shift.id}', this)" data-shift-id="${shift.id}">📊 Details</button>
+            </td>`;
+        row.style.opacity = '0';
+        row.style.transform = 'translateX(-20px)';
+        tbody.appendChild(row);
+        originalRowOrder.push(row); // Store original order
+
+        // Stagger the animation only, not the DOM insertion
         setTimeout(() => {
-            const row = document.createElement('tr');
-            row.className = `shift-${shift.shift.toLowerCase()} shift-status-${shift.status}`;
-            row.setAttribute('data-shift', shift.shift);
-            row.setAttribute('data-status', shift.status);
-            const formatTime = (minutes) => {
-                if (!minutes || minutes === 0) return '0:00';
-                const mins = Math.floor(minutes);
-                const secs = Math.round((minutes - mins) * 60);
-                return `${mins}:${secs.toString().padStart(2, '0')}`;
-            };
-            const mtpListRaw = shift.mtp_ticket_ids || '';
-            const mtpIds = mtpListRaw.split(/\s*,\s*/).filter(id => id);
-            const mtpCount = mtpIds.length;
-            const mtpCellContent = `<span class=\"mtp-cell\" data-shift-id=\"${shift.id}\" data-mtp-ids=\"${mtpIds.join(',')}\" title=\"${mtpIds.length ? 'MTP IDs: ' + mtpIds.join(', ') : 'No MTPs'}\">${mtpCount}</span>`;
-
-            // Format score with color coding (1-10 scale)
-            const score = shift.score || 1;
-            let scoreClass = 'metric-bad';  // Red for < 7
-            if (score >= 9) {
-                scoreClass = 'metric-good';  // Green for >= 9
-            } else if (score >= 7) {
-                scoreClass = 'metric-warning';  // Orange for >= 7
-            }
-
-            row.innerHTML = `
-                <td>${shift.date}</td>
-                <td>${shift.day}</td>
-                <td><strong>${shift.shift}</strong></td>
-                <td>${shift.total_staff}</td>
-                <td>${shift.actual_staff || 0}</td>
-                <td>${shift.tickets_inflow}</td>
-                <td class="${shift.tickets_closed >= shift.tickets_inflow ? 'metric-good' : ''}">${shift.tickets_closed}</td>
-                <td>${mtpCellContent}</td>
-                <td>${formatTime(shift.response_time_minutes)}</td>
-                <td>${formatTime(shift.contain_time_minutes)}</td>
-                <td>${shift.response_sla_breaches}</td>
-                <td>${shift.containment_sla_breaches}</td>
-                <td><strong class="${scoreClass}">${score}</strong></td>
-                <td>
-                    <button class="load-details-btn" onclick="loadShiftDetails('${shift.id}', this)" data-shift-id="${shift.id}">📊 Details</button>
-                </td>`;
-            row.style.opacity = '0';
-            row.style.transform = 'translateX(-20px)';
-            tbody.appendChild(row);
-            originalRowOrder.push(row); // Store original order
-            setTimeout(() => {
-                row.style.transition = 'all 0.5s ease';
-                row.style.opacity = '1';
-                row.style.transform = 'translateX(0)';
-            }, 10);
-        }, index * 100);
+            row.style.transition = 'all 0.5s ease';
+            row.style.opacity = '1';
+            row.style.transform = 'translateX(0)';
+        }, index * 50);
     });
 }
 
@@ -1154,7 +1310,7 @@ function showToast(message, type = 'info') {
         padding: 15px 20px;
         border-radius: 8px;
         z-index: 10000;
-        animation: slideInToast 0.3s ease-out;
+        animation: slideInToast 1s ease-out;
         font-weight: 600;
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
     `;
@@ -1203,92 +1359,137 @@ function closeFilters() {
 }
 
 function applyFilters() {
+    // Get selected shift types
     const shiftFilters = [];
-    const checkboxes = document.querySelectorAll('input[type="checkbox"]');
-
+    const checkboxes = document.querySelectorAll('.filter-group input[type="checkbox"]');
     checkboxes.forEach(cb => {
-        if (cb.checked && cb.value !== 'all') {
-            shiftFilters.push(cb.value);
+        if (cb.checked) {
+            shiftFilters.push(cb.value.toLowerCase());
         }
     });
 
-    var checkedTime = document.querySelector('input[name="timeRange"]:checked');
-    const timeRange = (checkedTime && checkedTime.value) ? checkedTime.value : '7';
+    // Get selected time range
+    const checkedTime = document.querySelector('input[name="timeRange"]:checked');
+    const timeRangeValue = checkedTime ? checkedTime.value : '7';
 
-    // Re-fetch data with filters (for now just filter existing data)
+    console.log('=== FILTER DEBUG ===');
+    console.log('Selected shift types:', shiftFilters);
+    console.log('Selected time range:', timeRangeValue);
+
+    // Calculate date range based on time range selection
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    let cutoffDate;
+    let maxDate;
+
+    if (timeRangeValue === 'today') {
+        cutoffDate = new Date(today);
+        maxDate = new Date(today);
+    } else if (timeRangeValue === 'yesterday') {
+        const yesterday = new Date(today);
+        yesterday.setDate(yesterday.getDate() - 1);
+        cutoffDate = new Date(yesterday);
+        maxDate = new Date(yesterday);
+    } else {
+        // Last N days including today
+        const days = parseInt(timeRangeValue);
+        cutoffDate = new Date(today);
+        cutoffDate.setDate(cutoffDate.getDate() - days + 1);
+        maxDate = new Date(today);
+    }
+
+    console.log('Today:', today.toISOString().split('T')[0]);
+    console.log('Cutoff date:', cutoffDate.toISOString().split('T')[0]);
+    console.log('Max date:', maxDate.toISOString().split('T')[0]);
+
+    // Apply filters to all rows
     const rows = document.querySelectorAll('#shifts-tbody tr');
-    rows.forEach(row => {
-        var ds = row.getAttribute('data-shift');
-        const shiftType = ds ? ds.toLowerCase() : null;
-        const showShift = shiftFilters.length === 0 || (shiftType && shiftFilters.includes(shiftType));
+    let visibleCount = 0;
 
-        if (showShift) {
+    rows.forEach((row, idx) => {
+        // Check shift type filter
+        const shiftType = row.getAttribute('data-shift');
+        const showShift = shiftFilters.length === 0 || shiftFilters.includes(shiftType);
+
+        // Check date filter
+        const dateStr = row.getAttribute('data-date');
+
+        if (idx < 3) {
+            console.log(`Row ${idx}: data-date="${dateStr}", data-shift="${shiftType}"`);
+        }
+
+        let showDate = true;
+        if (dateStr) {
+            // Parse date - handle both YYYY-MM-DD and MM/DD/YYYY formats
+            let rowDate;
+            if (dateStr.includes('-')) {
+                // YYYY-MM-DD format
+                rowDate = new Date(dateStr + 'T00:00:00');
+            } else {
+                // MM/DD/YYYY format
+                const dateParts = dateStr.split('/');
+                if (dateParts.length === 3) {
+                    rowDate = new Date(parseInt(dateParts[2]), parseInt(dateParts[0]) - 1, parseInt(dateParts[1]));
+                }
+            }
+
+            if (rowDate) {
+                rowDate.setHours(0, 0, 0, 0);
+                showDate = rowDate >= cutoffDate && rowDate <= maxDate;
+
+                if (idx < 3) {
+                    console.log(`Row ${idx}: parsed=${rowDate.toISOString().split('T')[0]}, showDate=${showDate}`);
+                }
+            }
+        } else {
+            if (idx < 3) {
+                console.log(`Row ${idx}: NO data-date attribute found!`);
+            }
+        }
+
+        // Show or hide row
+        if (showShift && showDate) {
             row.style.display = '';
+            visibleCount++;
         } else {
             row.style.display = 'none';
         }
     });
+
+    console.log(`Filters applied: ${visibleCount} rows visible out of ${rows.length}`);
+    console.log('===================');
 
     // Close filter menu after applying
     closeFilters();
 }
 
 function clearFilters() {
-    // Reset all checkboxes to default state
-    const checkboxes = document.querySelectorAll('input[type="checkbox"]');
+    // Reset all checkboxes to default state (all checked)
+    const checkboxes = document.querySelectorAll('.filter-group input[type="checkbox"]');
     checkboxes.forEach(cb => {
-        cb.checked = (cb.value === 'morning' || cb.value === 'afternoon' || cb.value === 'night');
+        cb.checked = true;
     });
 
     // Reset time range to 7 days
     const timeRangeEl = document.querySelector('input[name="timeRange"][value="7"]');
     if (timeRangeEl) timeRangeEl.checked = true;
 
-    // Show all rows
-    const rows = document.querySelectorAll('#shifts-tbody tr');
-    rows.forEach(row => {
-        row.style.display = '';
-    });
-
-    // Close filter menu
-    closeFilters();
+    // Apply filters to show all rows
+    applyFilters();
 }
 
-function applySavedFilters() {
-    try {
-        const saved = JSON.parse(localStorage.getItem('shiftFiltersState') || '{}');
-        if (saved.shiftTypes) {
-            document.querySelectorAll('input[type="checkbox"][value]')
-                .forEach(cb => { cb.checked = saved.shiftTypes.includes(cb.value); });
-        }
-        if (saved.timeRange) {
-            const radio = document.querySelector(`input[name="timeRange"][value="${saved.timeRange}"]`);
-            if (radio) radio.checked = true;
-        }
-    } catch (_) { /* ignore */ }
-}
-
-function persistFilters() {
-    const shiftTypes = Array.from(document.querySelectorAll('input[type="checkbox"]'))
-        .filter(cb => cb.checked)
-        .map(cb => cb.value);
-    const timeRangeEl = document.querySelector('input[name="timeRange"]:checked');
-    const timeRange = timeRangeEl ? timeRangeEl.value : '7';
-    localStorage.setItem('shiftFiltersState', JSON.stringify({ shiftTypes, timeRange }));
-}
-
-// Override applyFilters to persist state
-const _origApplyFilters = applyFilters;
-applyFilters = function() { _origApplyFilters(); persistFilters(); };
-const _origClearFilters = clearFilters;
-clearFilters = function() { _origClearFilters(); persistFilters(); };
 
 // MTP hover popover (preview first N IDs)
 let activeMtpPopover = null;
+
 function attachMtpPopover(mtpCell, ids) {
     const maxPreview = 8;
     mtpCell.addEventListener('mouseenter', () => {
-        if (activeMtpPopover) { activeMtpPopover.remove(); activeMtpPopover = null; }
+        if (activeMtpPopover) {
+            activeMtpPopover.remove();
+            activeMtpPopover = null;
+        }
         const pop = document.createElement('div');
         pop.className = 'mtp-popover';
         const base = (typeof window !== 'undefined' && window.XSOAR_BASE) ? window.XSOAR_BASE.replace(/\/$/, '') : '';
@@ -1300,11 +1501,12 @@ function attachMtpPopover(mtpCell, ids) {
         requestAnimationFrame(() => pop.classList.add('visible'));
         activeMtpPopover = pop;
     });
-    ['mouseleave','click','blur'].forEach(evt => {
+    ['mouseleave', 'click', 'blur'].forEach(evt => {
         mtpCell.addEventListener(evt, () => {
             if (activeMtpPopover) {
                 activeMtpPopover.classList.remove('visible');
-                const ref = activeMtpPopover; activeMtpPopover = null;
+                const ref = activeMtpPopover;
+                activeMtpPopover = null;
                 setTimeout(() => ref && ref.remove(), 120);
             }
         });
@@ -1330,7 +1532,7 @@ function deepLinkIfRequested(shiftData) {
         },
         staffing: {
             shift_lead: shift.shift_lead || 'N/A',
-            basic_staffing: shift.basic_staffing || { total_staff: 0, teams: {} },
+            basic_staffing: shift.basic_staffing || {total_staff: 0, teams: {}},
             detailed_staffing: shift.detailed_staffing || {}
         },
         tickets: {
@@ -1350,8 +1552,8 @@ function deepLinkIfRequested(shiftData) {
             domains_blocked: 0,
             malicious_true_positives: 0
         },
-        inflow: { tickets: shift.inflow_tickets || [] },
-        outflow: { tickets: shift.outflow_tickets || [] }
+        inflow: {tickets: shift.inflow_tickets || []},
+        outflow: {tickets: shift.outflow_tickets || []}
     };
 
     showShiftDetailsFromGranular(data);
@@ -1364,13 +1566,10 @@ function deepLinkIfRequested(shiftData) {
 
 // Patch populateTable to handle deep linking after cells exist (wrap original)
 const _origPopulateTable = populateTable;
-populateTable = function(shiftData) {
+populateTable = function (shiftData) {
     _origPopulateTable(shiftData);
     // Deep link after small delay to ensure DOM laid out
     setTimeout(() => {
         deepLinkIfRequested(shiftData);
     }, 50);
 };
-
-// On initial load apply saved filters before fetching
-applySavedFilters();
