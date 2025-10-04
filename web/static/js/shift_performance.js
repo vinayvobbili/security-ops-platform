@@ -401,11 +401,11 @@ function showShiftDetails(shift) {
                 </div>
                 <div class="key-metric">
                     <div class="metric-label">Mean Time to Respond</div>
-                    <div class="metric-value ${shift.avg_response_time_min <= 30 ? 'metric-good' : shift.avg_response_time_min <= 60 ? 'metric-warning' : 'metric-bad'}">${formatTime(shift.avg_response_time_min)}</div>
+                    <div class="metric-value ${shift.avg_response_time_min <= 3 ? 'metric-good' : shift.avg_response_time_min <= 4 ? 'metric-warning' : 'metric-bad'}">${formatTime(shift.avg_response_time_min)}</div>
                 </div>
                 <div class="key-metric">
                     <div class="metric-label">Mean Time to Contain</div>
-                    <div class="metric-value ${shift.avg_containment_time_min <= 120 ? 'metric-good' : shift.avg_containment_time_min <= 240 ? 'metric-warning' : 'metric-bad'}">${formatTime(shift.avg_containment_time_min)}</div>
+                    <div class="metric-value ${shift.avg_containment_time_min <= 15 ? 'metric-good' : shift.avg_containment_time_min <= 30 ? 'metric-warning' : 'metric-bad'}">${formatTime(shift.avg_containment_time_min)}</div>
                 </div>
             </div>
         </div>
@@ -714,11 +714,11 @@ function showShiftDetailsFromGranular(data) {
                 </div>
                 <div class="key-metric">
                     <div class="metric-label">Mean Time to Respond</div>
-                    <div class="metric-value ${tickets.response_time_minutes <= 30 ? 'metric-good' : tickets.response_time_minutes <= 60 ? 'metric-warning' : 'metric-bad'}">${formatTime(tickets.response_time_minutes)}</div>
+                    <div class="metric-value ${tickets.response_time_minutes <= 3 ? 'metric-good' : tickets.response_time_minutes <= 4 ? 'metric-warning' : 'metric-bad'}">${formatTime(tickets.response_time_minutes)}</div>
                 </div>
                 <div class="key-metric">
                     <div class="metric-label">Mean Time to Contain</div>
-                    <div class="metric-value ${tickets.contain_time_minutes <= 120 ? 'metric-good' : tickets.contain_time_minutes <= 240 ? 'metric-warning' : 'metric-bad'}">${formatTime(tickets.contain_time_minutes)}</div>
+                    <div class="metric-value ${tickets.contain_time_minutes <= 15 ? 'metric-good' : tickets.contain_time_minutes <= 30 ? 'metric-warning' : 'metric-bad'}">${formatTime(tickets.contain_time_minutes)}</div>
                 </div>
             </div>
         </div>
@@ -743,8 +743,8 @@ function showShiftDetailsFromGranular(data) {
                         <div class="factor-details">
                             <strong>Response Quality (50%)</strong>
                             <ul>
-                                <li>Response time: ${formatTime(tickets.response_time_minutes)} ${tickets.response_time_minutes <= 5 ? '(excellent)' : tickets.response_time_minutes <= 15 ? '(good)' : tickets.response_time_minutes <= 30 ? '(acceptable)' : '(needs improvement)'}</li>
-                                <li>Containment time: ${formatTime(tickets.contain_time_minutes)} ${tickets.contain_time_minutes <= 30 ? '(excellent)' : tickets.contain_time_minutes <= 60 ? '(good)' : tickets.contain_time_minutes <= 120 ? '(acceptable)' : '(needs improvement)'}</li>
+                                <li>Response time: ${formatTime(tickets.response_time_minutes)} ${tickets.response_time_minutes <= 1 ? '(excellent)' : tickets.response_time_minutes <= 3 ? '(good)' : tickets.response_time_minutes <= 4 ? '(acceptable)' : '(needs improvement)'}</li>
+                                <li>Containment time: ${formatTime(tickets.contain_time_minutes)} ${tickets.contain_time_minutes <= 8 ? '(excellent)' : tickets.contain_time_minutes <= 15 ? '(good)' : tickets.contain_time_minutes <= 30 ? '(acceptable)' : '(needs improvement)'}</li>
                             </ul>
                         </div>
                     </div>
