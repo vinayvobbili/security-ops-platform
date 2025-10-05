@@ -115,11 +115,12 @@ LOGO_URL_MAPPING = {
     "leaked creds": ("https://www.shutterstock.com/image-vector/data-personal-leak-vector-identity-600nw-2143054971.jpg", "leaked_credentials.png"),
     "akamai": ("https://www.vhv.rs/dpng/d/79-796343_akamai-logo-png-transparent-png.png", "akamai.png"),
     "akamai alert": ("https://www.vhv.rs/dpng/d/79-796343_akamai-logo-png-transparent-png.png", "akamai.png"),
+    "varonis": ("https://logowik.com/content/uploads/images/varonis6799.jpg", "varonis.png"),
     "unknown": ("https://cdn-icons-png.flaticon.com/512/2534/2534590.png", "unknown.png")
 }
 
 
-def create_graph(tickets):
+def create_graph(tickets, period_label="Yesterday"):
     if not tickets:
         print("No tickets to plot.")
         return
@@ -332,7 +333,7 @@ def create_graph(tickets):
     fig.patches.append(fancy_box)
 
     # Enhanced titles and labels
-    plt.suptitle(f'Outflow Yesterday ({len(tickets)})', fontsize=20, fontweight='bold', color='#1A237E', y=0.95)
+    plt.suptitle(f'Outflow {period_label} ({len(tickets)})', fontsize=20, fontweight='bold', color='#1A237E', y=0.95)
 
     # Add labels with enhanced styling
     ax.set_yticks(range(len(pyramid_sources)))
@@ -389,15 +390,28 @@ def create_graph(tickets):
 
 def make_chart() -> None:
     # Calculate exact yesterday window in Eastern time, then convert to UTC for query
-    yesterday_start = datetime.now(eastern).replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=1)
-    yesterday_end = yesterday_start + timedelta(days=1)
+    # On Mondays, include both Saturday and Sunday
+    now = datetime.now(eastern).replace(hour=0, minute=0, second=0, microsecond=0)
+
+    # If today is Monday (weekday 0), include both Saturday and Sunday
+    if now.weekday() == 0:
+        # Saturday is 2 days ago, Sunday is 1 day ago
+        yesterday_start = now - timedelta(days=2)
+        yesterday_end = now  # End at Monday 00:00
+        period_label = "Weekend"
+    else:
+        # Regular case: just yesterday
+        yesterday_start = now - timedelta(days=1)
+        yesterday_end = now
+        period_label = "Yesterday"
+
     # Convert Eastern time to UTC for the API query
     yesterday_start_utc = yesterday_start.astimezone(pytz.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
     yesterday_end_utc = yesterday_end.astimezone(pytz.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
 
     query = QUERY_TEMPLATE.format(ticket_type_prefix=config.team_name, start=yesterday_start_utc, end=yesterday_end_utc)
     tickets = TicketHandler().get_tickets(query=query)
-    create_graph(tickets)
+    create_graph(tickets, period_label)
 
 
 if __name__ in ('__main__', '__builtin__', 'builtins'):

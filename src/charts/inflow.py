@@ -420,12 +420,16 @@ class TicketChartGenerator:
             print('No tickets found for yesterday')
             return time.time() - start_time
 
+        # Determine title and filename based on day of week
+        is_monday = datetime.now(self.eastern).weekday() == 0
+        period_label = "Weekend" if is_monday else "Yesterday"
+
         processed_data = DataProcessor.process_tickets_for_inflow(tickets)
         fig = self.stacked_chart.create_inflow_chart(
-            processed_data, f"Inflow Yesterday ({len(tickets)})"
+            processed_data, f"Inflow {period_label} ({len(tickets)})"
         )
 
-        self._finalize_and_save_chart(fig, "Inflow Yesterday.png")
+        self._finalize_and_save_chart(fig, f"Inflow {period_label}.png")
         return time.time() - start_time
 
     def generate_60_day_chart(self) -> float:
@@ -493,14 +497,21 @@ class TicketChartGenerator:
         return time.time() - start_time
 
     def _get_yesterday_range(self) -> Tuple[str, str]:
-        """Get yesterday's date range in UTC."""
-        yesterday_start = (datetime.now(self.eastern)
-                           .replace(hour=0, minute=0, second=0, microsecond=0)
-                           - timedelta(days=1))
-        yesterday_end = yesterday_start + timedelta(days=1)
+        """Get yesterday's date range in UTC. On Mondays, includes both Saturday and Sunday."""
+        now = datetime.now(self.eastern).replace(hour=0, minute=0, second=0, microsecond=0)
 
-        return (yesterday_start.astimezone(pytz.utc).strftime('%Y-%m-%dT%H:%M:%SZ'),
-                yesterday_end.astimezone(pytz.utc).strftime('%Y-%m-%dT%H:%M:%SZ'))
+        # If today is Monday (weekday 0), include both Saturday and Sunday
+        if now.weekday() == 0:
+            # Saturday is 2 days ago, Sunday is 1 day ago
+            period_start = now - timedelta(days=2)
+            period_end = now  # End at Monday 00:00
+        else:
+            # Regular case: just yesterday
+            period_start = now - timedelta(days=1)
+            period_end = now
+
+        return (period_start.astimezone(pytz.utc).strftime('%Y-%m-%dT%H:%M:%SZ'),
+                period_end.astimezone(pytz.utc).strftime('%Y-%m-%dT%H:%M:%SZ'))
 
     def _get_expected_months(self) -> List[Any]:
         """Get list of expected months for the past 12 months."""

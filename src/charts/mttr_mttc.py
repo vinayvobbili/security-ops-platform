@@ -35,7 +35,14 @@ def get_tickets_by_periods(tickets):
     current_date = datetime.now()
 
     # Calculate reference dates
-    yesterday = (current_date - timedelta(days=1)).date()
+    # On Mondays, include both Saturday and Sunday in "Yesterday"
+    if current_date.weekday() == 0:  # Monday
+        yesterday_start = (current_date - timedelta(days=2)).date()  # Saturday
+        yesterday_end = (current_date - timedelta(days=1)).date()  # Sunday
+    else:
+        yesterday_start = (current_date - timedelta(days=1)).date()
+        yesterday_end = yesterday_start
+
     seven_days_ago = (current_date - timedelta(days=7)).date()
     thirty_days_ago = (current_date - timedelta(days=30)).date()
 
@@ -58,7 +65,7 @@ def get_tickets_by_periods(tickets):
         response_duration = custom_fields.get('timetorespond', {}).get('totalDuration', custom_fields.get('responsesla', {}).get('totalDuration', 0))
 
         # Update metrics for each time period
-        if incident_date == yesterday:
+        if yesterday_start <= incident_date <= yesterday_end:
             ticket_times_by_periods['Yesterday'].time_to_respond_secs += response_duration
             ticket_times_by_periods['Yesterday'].total_ticket_count += 1
 
@@ -82,7 +89,7 @@ def get_tickets_by_periods(tickets):
         containment_duration = custom_fields.get('timetocontain', {}).get('totalDuration', custom_fields.get('containmentsla', {}).get('totalDuration', 0))
 
         # Update metrics for each time period
-        if incident_date == yesterday:
+        if yesterday_start <= incident_date <= yesterday_end:
             ticket_times_by_periods['Yesterday'].time_to_contain_secs += containment_duration
             ticket_times_by_periods['Yesterday'].host_ticket_count += 1
 
@@ -97,7 +104,7 @@ def get_tickets_by_periods(tickets):
     return ticket_times_by_periods
 
 
-def save_mttr_mttc_chart(ticket_slas_by_periods):
+def save_mttr_mttc_chart(ticket_slas_by_periods, period_label="Yesterday"):
     # Set up enhanced plot style without grids
     plt.style.use('default')
 
@@ -163,7 +170,7 @@ def save_mttr_mttc_chart(ticket_slas_by_periods):
                    label=f'Past 7 days ({seven_days_total_ticket_count})',
                    color=colors['7days'], edgecolor='white', linewidth=1.5, alpha=0.95)
     bar3 = ax1.bar(x + width, [mttr_yesterday], width,
-                   label=f'Yesterday ({yesterday_total_ticket_count})',
+                   label=f'{period_label} ({yesterday_total_ticket_count})',
                    color=colors['yesterday'], edgecolor='white', linewidth=1.5, alpha=0.95)
 
     # Plot MTTC bars on right y-axis (ax2) - offset to the right
@@ -325,6 +332,9 @@ def make_chart():
     start_date = end_date - timedelta(days=30)
     start_date = start_date.replace(hour=0, minute=0, second=0, microsecond=0)
 
+    # Determine period label based on day of week
+    period_label = "Weekend" if datetime.now().weekday() == 0 else "Yesterday"
+
     # Convert to UTC for API query
     import pytz
     start_str = start_date.astimezone(pytz.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
@@ -335,7 +345,7 @@ def make_chart():
     incident_fetcher = TicketHandler()
     tickets = incident_fetcher.get_tickets(query=query)
     tickets_by_periods = get_tickets_by_periods(tickets)
-    save_mttr_mttc_chart(tickets_by_periods)
+    save_mttr_mttc_chart(tickets_by_periods, period_label)
 
 
 if __name__ == '__main__':
