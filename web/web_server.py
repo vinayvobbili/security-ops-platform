@@ -28,7 +28,6 @@ from src.components import apt_names_fetcher
 from src.utils.logging_utils import log_web_activity, is_scanner_request
 
 SHOULD_START_PROXY = False
-SHOULD_CACHE_SHIFT_DATA = True  # Set to False to disable caching for testing
 USE_DEBUG_MODE = True  # Set to False to use Waitress production server
 # Define the proxy port
 PROXY_PORT = 8080
@@ -935,31 +934,6 @@ def _fetch_inflow_for_window(date_obj: datetime, shift_name: str):
     return inflow_query, tickets, (start_dt, end_dt)
 
 
-# Cache file for shift list data
-SHIFT_LIST_CACHE_FILE = '/tmp/shift_list_cache.json'
-
-
-def _load_shift_list_cache():
-    """Load cached shift list data if it exists."""
-    if not os.path.exists(SHIFT_LIST_CACHE_FILE):
-        return None
-    try:
-        with open(SHIFT_LIST_CACHE_FILE, 'r') as f:
-            return json.load(f)
-    except Exception as e:
-        print(f"Error loading shift list cache: {e}")
-        return None
-
-
-def _save_shift_list_cache(data):
-    """Save shift list data to cache."""
-    try:
-        with open(SHIFT_LIST_CACHE_FILE, 'w') as f:
-            json.dump(data, f)
-    except Exception as e:
-        print(f"Error saving shift list cache: {e}")
-
-
 @app.route('/api/shift-list')
 @log_web_activity
 def get_shift_list():
@@ -979,13 +953,6 @@ def get_shift_list():
     - Details modal slices/dices the SAME data (no additional API calls)
     - All counts derived from actual ticket arrays for consistency
     """
-    # Check cache first if enabled
-    if SHOULD_CACHE_SHIFT_DATA:
-        cached_data = _load_shift_list_cache()
-        if cached_data is not None:
-            print("Using cached shift list data")
-            return jsonify(cached_data)
-
     status = 'unknown'
     try:
         shift_data = []
@@ -1235,12 +1202,6 @@ def get_shift_list():
                             'score': 0
                         })
         result = {'success': True, 'data': shift_data}
-
-        # Save to cache if enabled
-        if SHOULD_CACHE_SHIFT_DATA:
-            _save_shift_list_cache(result)
-            print("Saved shift list data to cache")
-
         return jsonify(result)
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
@@ -1249,17 +1210,9 @@ def get_shift_list():
 @app.route('/api/clear-cache', methods=['POST'])
 @log_web_activity
 def clear_shift_cache():
-    """Clear the server-side shift list cache file"""
-    try:
-        if os.path.exists(SHIFT_LIST_CACHE_FILE):
-            os.remove(SHIFT_LIST_CACHE_FILE)
-            print(f"✅ Server cache cleared: {SHIFT_LIST_CACHE_FILE}")
-            return jsonify({'success': True, 'message': 'Server cache cleared successfully'})
-        else:
-            return jsonify({'success': True, 'message': 'No cache file to clear'})
-    except Exception as e:
-        print(f"❌ Error clearing server cache: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+    """No-op endpoint for compatibility with frontend cache clearing.
+    Backend caching has been removed - only frontend localStorage cache exists."""
+    return jsonify({'success': True, 'message': 'No backend cache (frontend-only caching)'})
 
 
 
