@@ -1685,3 +1685,102 @@ h1 {
 .cache-controls button:active {
     transform: scale(0.95);
 }
+
+/* Score Analysis Styles */
+.score-analysis {
+    margin-top: 15px;
+}
+
+.score-calculation {
+    margin-bottom: 25px;
+}
+
+.score-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 15px 0;
+    background: white;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.score-table thead {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.score-table th {
+    color: white;
+    padding: 12px;
+    text-align: left;
+    font-weight: 600;
+    font-size: 13px;
+}
+
+.score-table td {
+    padding: 10px 12px;
+    text-align: left;
+    border-bottom: 1px solid #e2e8f0;
+    font-size: 13px;
+}
+
+.score-table tbody tr:hover {
+    background: #f7fafc;
+}
+
+.score-table tr.score-good {
+    background: rgba(72, 187, 120, 0.1);
+}
+
+.score-table tr.score-warning {
+    background: rgba(237, 137, 54, 0.1);
+}
+
+.score-table tr.score-bad {
+    background: rgba(245, 101, 101, 0.1);
+}
+
+.score-table tr.score-total {
+    background: #edf2f7;
+    font-weight: 600;
+    border-top: 2px solid #cbd5e0;
+}
+
+.score-table tr.score-final {
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.2) 0%, rgba(118, 75, 162, 0.2) 100%);
+    font-size: 15px;
+    font-weight: 700;
+}
+
+.score-tips {
+    background: #f7fafc;
+    padding: 20px;
+    border-radius: 8px;
+    border-left: 4px solid #667eea;
+    margin-top: 20px;
+}
+
+.score-tips h4 {
+    margin: 0 0 15px 0;
+    color: #2d3748;
+    font-size: 16px;
+}
+
+.score-tips ul {
+    margin: 0;
+    padding-left: 20px;
+}
+
+.score-tips li {
+    margin-bottom: 10px;
+    color: #4a5568;
+    line-height: 1.6;
+}
+
+.score-tips li:last-child {
+    margin-bottom: 0;
+}
+
+.score-tips strong {
+    color: #2d3748;
+}

@@ -721,6 +721,20 @@ function showShiftDetailsFromGranular(data) {
                     <div class="metric-value ${tickets.contain_time_minutes <= 15 ? 'metric-good' : tickets.contain_time_minutes <= 30 ? 'metric-warning' : 'metric-bad'}">${formatTime(tickets.contain_time_minutes)}</div>
                 </div>
             </div>
+            <div class="key-metrics-grid" style="margin-top: 20px;">
+                <div class="key-metric">
+                    <div class="metric-label">Response SLA Breaches</div>
+                    <div class="metric-value ${(tickets.response_sla_breaches || 0) === 0 ? 'metric-good' : 'metric-bad'}">${tickets.response_sla_breaches || 0} ${(tickets.response_sla_breaches || 0) > 0 ? '(-2pts each)' : ''}</div>
+                </div>
+                <div class="key-metric">
+                    <div class="metric-label">Containment SLA Breaches</div>
+                    <div class="metric-value ${(tickets.containment_sla_breaches || 0) === 0 ? 'metric-good' : 'metric-bad'}">${tickets.containment_sla_breaches || 0} ${(tickets.containment_sla_breaches || 0) > 0 ? '(-2pts each)' : ''}</div>
+                </div>
+                <div class="key-metric">
+                    <div class="metric-label">SLA Compliance</div>
+                    <div class="metric-value ${(tickets.response_sla_breaches || 0) === 0 && (tickets.containment_sla_breaches || 0) === 0 ? 'metric-good' : 'metric-bad'}">${(tickets.response_sla_breaches || 0) === 0 && (tickets.containment_sla_breaches || 0) === 0 ? '100%' : ((1 - Math.min((tickets.response_sla_breaches || 0) + (tickets.containment_sla_breaches || 0), tickets.tickets_inflow) / Math.max(tickets.tickets_inflow, 1)) * 100).toFixed(0) + '%'}</div>
+                </div>
+            </div>
         </div>
 
         <div class="detail-section score-breakdown">
@@ -768,6 +782,119 @@ function showShiftDetailsFromGranular(data) {
         </div>
 
         <div class="detail-section">
+            <h3>🔍 Detailed Score Analysis</h3>
+            <div class="score-analysis">
+                ${(() => {
+                    const staff = Math.max(performance.actual_staff, 1);
+                    const ticketsPerAnalyst = tickets.tickets_closed / staff;
+
+                    // 1. Productivity (up to 20 pts)
+                    const productivityPts = Math.min(ticketsPerAnalyst * 10, 20);
+
+                    // 2. Backlog clearing (+10 or -10)
+                    const backlogPts = tickets.tickets_closed >= tickets.tickets_inflow ? 10 : -10;
+
+                    // 3. Response time (up to 25 pts)
+                    let responsePts = 0;
+                    if (tickets.response_time_minutes <= 5) responsePts = 25;
+                    else if (tickets.response_time_minutes <= 15) responsePts = 18;
+                    else if (tickets.response_time_minutes <= 30) responsePts = 10;
+
+                    // 4. Containment time (up to 25 pts)
+                    let containmentPts = 0;
+                    if (tickets.contain_time_minutes <= 30) containmentPts = 25;
+                    else if (tickets.contain_time_minutes <= 60) containmentPts = 18;
+                    else if (tickets.contain_time_minutes <= 120) containmentPts = 10;
+
+                    // 5. Response SLA (up to 10 pts)
+                    const responseSLAPts = Math.max(0, 10 - (tickets.response_sla_breaches || 0) * 2);
+
+                    // 6. Containment SLA (up to 10 pts)
+                    const containmentSLAPts = Math.max(0, 10 - (tickets.containment_sla_breaches || 0) * 2);
+
+                    const totalPts = productivityPts + backlogPts + responsePts + containmentPts + responseSLAPts + containmentSLAPts;
+                    const cappedTotal = Math.max(0, Math.min(100, totalPts));
+                    const finalScore = Math.max(1, Math.min(10, Math.round(cappedTotal / 10)));
+
+                    return `
+                        <div class="score-calculation">
+                            <table class="score-table">
+                                <thead>
+                                    <tr>
+                                        <th>Component</th>
+                                        <th>Calculation</th>
+                                        <th>Points</th>
+                                        <th>Max</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr class="${productivityPts >= 15 ? 'score-good' : productivityPts >= 10 ? 'score-warning' : 'score-bad'}">
+                                        <td><strong>1. Productivity</strong></td>
+                                        <td>${ticketsPerAnalyst.toFixed(1)} tickets/analyst × 10</td>
+                                        <td>${productivityPts.toFixed(1)}</td>
+                                        <td>20</td>
+                                    </tr>
+                                    <tr class="${backlogPts > 0 ? 'score-good' : 'score-bad'}">
+                                        <td><strong>2. Backlog Clearing</strong></td>
+                                        <td>${tickets.tickets_closed} closed ${tickets.tickets_closed >= tickets.tickets_inflow ? '≥' : '<'} ${tickets.tickets_inflow} ack</td>
+                                        <td>${backlogPts > 0 ? '+' : ''}${backlogPts}</td>
+                                        <td>+10/-10</td>
+                                    </tr>
+                                    <tr class="${responsePts >= 20 ? 'score-good' : responsePts >= 15 ? 'score-warning' : 'score-bad'}">
+                                        <td><strong>3. Response Time</strong></td>
+                                        <td>${formatTime(tickets.response_time_minutes)} avg</td>
+                                        <td>${responsePts}</td>
+                                        <td>25</td>
+                                    </tr>
+                                    <tr class="${containmentPts >= 20 ? 'score-good' : containmentPts >= 15 ? 'score-warning' : 'score-bad'}">
+                                        <td><strong>4. Containment Time</strong></td>
+                                        <td>${formatTime(tickets.contain_time_minutes)} avg</td>
+                                        <td>${containmentPts}</td>
+                                        <td>25</td>
+                                    </tr>
+                                    <tr class="${responseSLAPts >= 8 ? 'score-good' : responseSLAPts >= 5 ? 'score-warning' : 'score-bad'}">
+                                        <td><strong>5. Response SLA</strong></td>
+                                        <td>10 - (${tickets.response_sla_breaches || 0} × 2)</td>
+                                        <td>${responseSLAPts}</td>
+                                        <td>10</td>
+                                    </tr>
+                                    <tr class="${containmentSLAPts >= 8 ? 'score-good' : containmentSLAPts >= 5 ? 'score-warning' : 'score-bad'}">
+                                        <td><strong>6. Containment SLA</strong></td>
+                                        <td>10 - (${tickets.containment_sla_breaches || 0} × 2)</td>
+                                        <td>${containmentSLAPts}</td>
+                                        <td>10</td>
+                                    </tr>
+                                    <tr class="score-total">
+                                        <td colspan="2"><strong>TOTAL</strong></td>
+                                        <td><strong>${cappedTotal}</strong></td>
+                                        <td><strong>100</strong></td>
+                                    </tr>
+                                    <tr class="score-final">
+                                        <td colspan="2"><strong>FINAL SCORE (÷ 10)</strong></td>
+                                        <td colspan="2"><strong>${finalScore}/10</strong></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="score-tips">
+                            <h4>💡 Tips to Improve Score</h4>
+                            <ul>
+                                ${productivityPts < 15 ? '<li><strong>Boost Productivity:</strong> Increase tickets closed per analyst. Target: 2+ tickets/analyst for full 20pts</li>' : ''}
+                                ${backlogPts < 0 ? `<li><strong>Clear Backlog:</strong> Close ≥ acknowledged tickets. ${tickets.tickets_inflow - tickets.tickets_closed} more needed for +10pts bonus</li>` : ''}
+                                ${responsePts < 25 ? `<li><strong>Faster Response:</strong> Reduce avg response time to &lt;5min for full 25pts (currently ${formatTime(tickets.response_time_minutes)})</li>` : ''}
+                                ${containmentPts < 25 ? `<li><strong>Faster Containment:</strong> Reduce avg containment to &lt;30min for full 25pts (currently ${formatTime(tickets.contain_time_minutes)})</li>` : ''}
+                                ${responseSLAPts < 10 ? `<li><strong>Response SLA:</strong> Avoid breaches. ${tickets.response_sla_breaches} breach${tickets.response_sla_breaches > 1 ? 'es' : ''} cost ${(tickets.response_sla_breaches || 0) * 2}pts</li>` : ''}
+                                ${containmentSLAPts < 10 ? `<li><strong>Containment SLA:</strong> Avoid breaches. ${tickets.containment_sla_breaches} breach${tickets.containment_sla_breaches > 1 ? 'es' : ''} cost ${(tickets.containment_sla_breaches || 0) * 2}pts</li>` : ''}
+                                ${finalScore >= 9 ? '<li><strong>🎉 Excellent Work!</strong> This shift met all performance targets!</li>' : ''}
+                            </ul>
+                        </div>
+                    `;
+                })()}
+            </div>
+        </div>
+
+        <div class="detail-section">
             <h3>👤 Shift Leadership</h3>
             <div class="leadership-info">
                 <div class="shift-lead">
@@ -794,10 +921,6 @@ function showShiftDetailsFromGranular(data) {
                 <div class="security-item">
                     <strong>Malicious True Positives</strong>
                     <div class="security-value">${security.malicious_true_positives}</div>
-                </div>
-                <div class="security-item">
-                    <strong>SLA Compliance</strong>
-                    <div class="security-value ${security.malicious_true_positives === 0 ? 'metric-good' : 'metric-warning'}">${security.malicious_true_positives === 0 ? '100%' : '< 100%'}</div>
                 </div>
             </div>
         </div>
