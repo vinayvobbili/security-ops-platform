@@ -99,29 +99,21 @@ def process_ticket(ticket):
 
 
 def build_ticket_message(seconds_remaining, ticket, index, shift_lead, due_date_str=None):
-    """Build formatted message for a single ticket."""
+    """Build formatted message for a single ticket at risk."""
     ticket_id = ticket.get('id')
     ticket_name = ticket.get('name') or ticket.get('title') or 'No Title'
     incident_url = CONFIG.xsoar_prod_ui_base_url + '/Custom/caseinfoid/' + ticket_id
 
-    # Check if ticket has breached
-    timetorespond = ticket.get('CustomFields', {}).get('timetorespond', {})
-    breach_triggered = timetorespond.get('breachTriggered', False)
-    run_status = timetorespond.get('runStatus', '')
-
     # Use shift lead instead of ticket owner for response SLA tickets (unassigned)
     owner_text = shift_lead
 
-    # Format time remaining or breach status
-    if breach_triggered or run_status == 'ended' or seconds_remaining == 0:
-        time_text = "⚠️ **SLA BREACHED**"
+    # Format time remaining
+    minutes = seconds_remaining // 60
+    seconds = seconds_remaining % 60
+    if minutes > 0:
+        time_text = f"{minutes} min{'s' if minutes != 1 else ''} {seconds} sec{'s' if seconds != 1 else ''}"
     else:
-        minutes = seconds_remaining // 60
-        seconds = seconds_remaining % 60
-        if minutes > 0:
-            time_text = f"{minutes} min{'s' if minutes != 1 else ''} {seconds} sec{'s' if seconds != 1 else ''}"
-        else:
-            time_text = f"{seconds} sec{'s' if seconds != 1 else ''}"
+        time_text = f"{seconds} sec{'s' if seconds != 1 else ''}"
 
     # Extract SLA due date if available
     sla_info = ""
@@ -139,16 +131,10 @@ def build_ticket_message(seconds_remaining, ticket, index, shift_lead, due_date_
             logger.debug(f"Failed to parse or format due date for ticket: {e}")
             pass
 
-    if breach_triggered or run_status == 'ended' or seconds_remaining == 0:
-        return (
-            f"{index}. [{ticket_id}]({incident_url}) - {ticket_name} \n"
-            f"   {owner_text}, {time_text} {sla_info}"
-        )
-    else:
-        return (
-            f"{index}. [{ticket_id}]({incident_url}) - {ticket_name} \n"
-            f"   {owner_text}, act within the next {time_text} {sla_info}"
-        )
+    return (
+        f"{index}. [{ticket_id}]({incident_url}) - {ticket_name} \n"
+        f"   {owner_text}, act within the next {time_text} {sla_info}"
+    )
 
 
 def start(room_id):
@@ -194,7 +180,21 @@ def start(room_id):
         processed_tickets = []
         for ticket in tickets:
             seconds_remaining, ticket_data, due_date_str = process_ticket(ticket)
+
+            # Only include tickets that are at risk, not already breached
+            timetorespond = ticket_data.get('CustomFields', {}).get('timetorespond', {})
+            breach_triggered = timetorespond.get('breachTriggered', False)
+            run_status = timetorespond.get('runStatus', '')
+
+            # Skip tickets that have already breached
+            if breach_triggered or run_status == 'ended':
+                continue
+
             processed_tickets.append((seconds_remaining, ticket_data, due_date_str))
+
+        # If no at-risk tickets remain after filtering, return silently
+        if not processed_tickets:
+            return
 
         # Sort by urgency (least time remaining first)
         processed_tickets.sort(key=lambda x: x[0])
