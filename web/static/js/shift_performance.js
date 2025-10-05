@@ -51,67 +51,6 @@ function setupMenuHandlers() {
 }
 
 
-function filterShift(shiftType) {
-    const rows = document.querySelectorAll('tbody tr');
-    const buttons = document.querySelectorAll('.filter-controls button');
-
-    // Update active button
-    buttons.forEach(btn => btn.classList.remove('active'));
-    const activeBtn = document.getElementById('btn-' + (shiftType === 'all' ? 'all' : shiftType.toLowerCase()));
-    if (activeBtn) {
-        activeBtn.classList.add('active');
-    }
-
-    // Filter rows with animation
-    rows.forEach((row, index) => {
-        if (shiftType === 'all' || row.getAttribute('data-shift') === shiftType) {
-            row.style.display = '';
-            row.style.opacity = '0';
-            setTimeout(() => {
-                row.style.opacity = '1';
-            }, index * 50); // Staggered animation
-        } else {
-            row.style.opacity = '0';
-            setTimeout(() => {
-                row.style.display = 'none';
-            }, 200);
-        }
-    });
-
-    updateFilteredSummary(shiftType);
-}
-
-function updateFilteredSummary(shiftType) {
-    const rows = document.querySelectorAll('tbody tr');
-    let totalInflow = 0;
-    let totalOutflow = 0;
-    let totalMaliciousTp = 0;
-    let totalStaff = 0;
-    let visibleRows = 0;
-
-    rows.forEach(row => {
-        if (shiftType === 'all' || row.getAttribute('data-shift') === shiftType) {
-            const cells = row.querySelectorAll('td');
-            // Expecting structure: 0 Date,1 Day,2 Shift,3 Scheduled,4 Actual,5 Acknowledged,6 Closed,7 MTPs,8 MTTR,9 MTTC,10 Resp SLA,11 Contain SLA,12 Score,13 Actions
-            if (cells.length >= 14 && !row.classList.contains('skeleton-row')) {
-                totalStaff += parseInt(cells[3].textContent) || 0;
-                totalInflow += parseInt(cells[5].textContent) || 0;
-                totalOutflow += parseInt(cells[6].textContent) || 0;
-                totalMaliciousTp += parseInt(cells[7].textContent) || 0;
-                visibleRows++;
-            }
-        }
-    });
-
-    const summaryCards = document.querySelectorAll('.summary-value');
-    if (summaryCards.length >= 4) {
-        summaryCards[0].textContent = totalInflow;
-        summaryCards[1].textContent = totalOutflow;
-        summaryCards[2].textContent = totalMaliciousTp;
-        summaryCards[3].textContent = visibleRows > 0 ? (totalStaff / visibleRows).toFixed(1) : '0.0';
-    }
-}
-
 function setupTableSorting() {
     // Map header cells to their actual column index in tbody
     // Row 1: Date(0), Day(1), Shift(2), Staffing(colspan=2), Tickets(colspan=2), MTPs(7), Mean Time To(colspan=2), SLA Breaches(colspan=2), Score(12), Actions(13)
@@ -378,104 +317,6 @@ function formatTime(minutes) {
         secs = 0;
     }
     return `${mins}:${secs.toString().padStart(2, '0')}`;
-}
-
-function showShiftDetails(shift) {
-    // Update modal title
-    const modalTitle = document.getElementById('modalTitle');
-    modalTitle.textContent = `${shift.shift} Shift - ${shift.day}, ${shift.date} (${shift.shift_times.start} - ${shift.shift_times.end})`;
-
-    // Build modal content focusing on key metrics
-    const modalBody = document.getElementById('modalBody');
-    modalBody.innerHTML = `
-        <div class="detail-section">
-            <h3>🎯 Key Performance Metrics</h3>
-            <div class="key-metrics-grid">
-                <div class="key-metric">
-                    <div class="metric-label">Tickets Inflow</div>
-                    <div class="metric-value ${shift.inflow > 15 ? 'metric-bad' : shift.inflow > 10 ? 'metric-warning' : 'metric-good'}">${shift.inflow}</div>
-                </div>
-                <div class="key-metric">
-                    <div class="metric-label">Tickets Closed</div>
-                    <div class="metric-value ${shift.outflow >= shift.inflow ? 'metric-good' : shift.outflow < shift.inflow * 0.5 ? 'metric-bad' : 'metric-warning'}">${shift.outflow}</div>
-                </div>
-                <div class="key-metric">
-                    <div class="metric-label">Mean Time to Respond</div>
-                    <div class="metric-value ${shift.avg_response_time_min <= 3 ? 'metric-good' : shift.avg_response_time_min <= 4 ? 'metric-warning' : 'metric-bad'}">${formatTime(shift.avg_response_time_min)}</div>
-                </div>
-                <div class="key-metric">
-                    <div class="metric-label">Mean Time to Contain</div>
-                    <div class="metric-value ${shift.avg_containment_time_min <= 15 ? 'metric-good' : shift.avg_containment_time_min <= 30 ? 'metric-warning' : 'metric-bad'}">${formatTime(shift.avg_containment_time_min)}</div>
-                </div>
-            </div>
-        </div>
-
-        <div class="detail-section">
-            <h3>👤 Shift Leadership</h3>
-            <div class="leadership-info">
-                <div class="shift-lead">
-                    <strong>Shift Lead:</strong> ${shift.shift_lead}
-                </div>
-                <div class="shift-stats">
-                    <span>Total Staff: ${shift.total_staff}</span> •
-                    <span>Tickets/Analyst: ${shift.tickets_per_analyst}</span>
-                </div>
-            </div>
-        </div>
-
-        <div class="detail-section">
-            <h3>🛡️ Security Actions</h3>
-            <div class="security-grid">
-                <div class="security-item">
-                    <strong>IOCs Blocked</strong>
-                    <div class="security-value">${shift.iocs_blocked || 0}</div>
-                </div>
-                <div class="security-item">
-                    <strong>Domains Blocked</strong>
-                    <div class="security-value">${shift.domains_blocked || 0}</div>
-                </div>
-                <div class="security-item">
-                    <strong>Malicious TPs</strong>
-                    <div class="security-value">${shift.malicious_tp}</div>
-                </div>
-                <div class="security-item">
-                    <strong>SLA Breaches</strong>
-                    <div class="security-value ${(shift.response_breaches + shift.containment_breaches) === 0 ? 'metric-good' : 'metric-warning'}">${shift.response_breaches + shift.containment_breaches}</div>
-                </div>
-            </div>
-        </div>
-
-        <div class="detail-section staffing-section">
-            <h3>👥 Full Shift Staff</h3>
-            <div class="staff-grid">
-                ${Object.entries(shift.staffing).map(([team, members]) => `
-                    <div class="staff-team">
-                        <h4>${team}</h4>
-                        <div class="staff-list">
-                            ${Array.isArray(members) && members.length > 0 && members[0] !== 'N/A (Excel file missing)'
-        ? members.map(member => `<span class="staff-member">${member}</span>`).join('')
-        : '<span class="no-staff">No staff assigned</span>'}
-                        </div>
-                    </div>
-                `).join('')}
-            </div>
-        </div>
-    `;
-
-    // Show modal
-    const modal = document.getElementById('shiftDetailsModal');
-    modal.style.display = 'block';
-    document.body.style.overflow = 'hidden'; // Prevent background scrolling
-
-    // Trigger confetti for excellent performance
-    if (shift.response_breaches === 0 && shift.containment_breaches === 0 && shift.outflow >= shift.inflow) {
-        setTimeout(() => {
-            const modalContent = document.querySelector('.modal-content');
-            if (modalContent) {
-                createConfetti(modalContent);
-            }
-        }, 500);
-    }
 }
 
 function closeShiftDetails() {
@@ -1022,32 +863,6 @@ function switchTab(event, tabId) {
     }
 }
 
-// Summary card update logic
-function updateSummaryCards(shiftData) {
-    let totalIn = 0, totalOut = 0, totalMtp = 0, totalStaff = 0, countedShifts = 0;
-    shiftData.forEach(s => {
-        totalIn += s.tickets_inflow || 0;
-        totalOut += s.tickets_closed || 0;
-        const mtpIds = (s.mtp_ticket_ids || '').split(/\s*,\s*/).filter(x => x);
-        totalMtp += mtpIds.length;
-        totalStaff += s.total_staff || 0;
-        countedShifts += 1;
-    });
-    const avgPerStaff = totalStaff > 0 ? (totalOut / totalStaff).toFixed(1) : '0.0';
-    const cardsContainer = document.getElementById('summaryCards');
-    if (cardsContainer) cardsContainer.style.display = 'flex';
-    const map = [
-        ['summaryTotalIn', totalIn],
-        ['summaryTotalOut', totalOut],
-        ['summaryTotalMtp', totalMtp],
-        ['summaryAvgPerStaff', avgPerStaff]
-    ];
-    map.forEach(([id, val]) => {
-        const el = document.getElementById(id);
-        if (el) el.textContent = val;
-    });
-}
-
 function openMtpModal(mtpIds, shiftId) {
     const modal = document.getElementById('mtpModal');
     const body = document.getElementById('mtpModalBody');
@@ -1221,7 +1036,7 @@ function loadInitialData() {
                 // Use cached data
                 console.log(`Using cached data (${Math.round(age / 1000)}s old)`);
                 hideLoadingSpinner();
-                updateStatusInfo(data.data);
+                updateStatusInfo();
                 populateTable(data.data);
                 showToast(`📦 Loaded from cache (${Math.round(age / 60000)}min old) • Use Clear cache button at the bottom right corner for fresh data`, 'info');
                 return;
@@ -1254,7 +1069,7 @@ function loadInitialData() {
                 hideLoadingSpinner();
 
                 // Update status info
-                updateStatusInfo(data.data);
+                updateStatusInfo();
 
                 // Populate table
                 populateTable(data.data);
@@ -1349,7 +1164,7 @@ function clearCacheAndReload() {
 window.clearShiftCache = clearShiftCache;
 window.clearCacheAndReload = clearCacheAndReload;
 
-function updateStatusInfo(shiftData) {
+function updateStatusInfo() {
     const now = new Date();
     const timeOptions = {year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', timeZoneName: 'short', hour12: true};
     const timeString = now.toLocaleString('en-US', timeOptions);
@@ -1613,39 +1428,6 @@ function clearFilters() {
     applyFilters();
 }
 
-
-// MTP hover popover (preview first N IDs)
-let activeMtpPopover = null;
-
-function attachMtpPopover(mtpCell, ids) {
-    const maxPreview = 8;
-    mtpCell.addEventListener('mouseenter', () => {
-        if (activeMtpPopover) {
-            activeMtpPopover.remove();
-            activeMtpPopover = null;
-        }
-        const pop = document.createElement('div');
-        pop.className = 'mtp-popover';
-        const base = (typeof window !== 'undefined' && window.XSOAR_BASE) ? window.XSOAR_BASE.replace(/\/$/, '') : '';
-        const preview = ids.slice(0, maxPreview).map(id => `<li><a href="${base}/Custom/caseinfoid/${encodeURIComponent(id)}" target="_blank" rel="noopener noreferrer">${id}</a></li>`).join('');
-        const more = ids.length > maxPreview ? `<div style='margin-top:4px;font-size:10px;opacity:.7;'>+${ids.length - maxPreview} more...</div>` : '';
-        pop.innerHTML = `<h5>MTP Tickets</h5><ul>${preview || '<li>None</li>'}</ul>${more}`;
-        mtpCell.style.position = 'relative';
-        mtpCell.appendChild(pop);
-        requestAnimationFrame(() => pop.classList.add('visible'));
-        activeMtpPopover = pop;
-    });
-    ['mouseleave', 'click', 'blur'].forEach(evt => {
-        mtpCell.addEventListener(evt, () => {
-            if (activeMtpPopover) {
-                activeMtpPopover.classList.remove('visible');
-                const ref = activeMtpPopover;
-                activeMtpPopover = null;
-                setTimeout(() => ref && ref.remove(), 120);
-            }
-        });
-    });
-}
 
 function deepLinkIfRequested(shiftData) {
     const params = new URLSearchParams(window.location.search);
