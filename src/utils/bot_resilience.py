@@ -149,7 +149,7 @@ class ResilientBot:
                     logger.warning(f"Asyncio exception caught for {self.bot_name}: {exception}")
 
                     # Check if this is a connection-related error
-                    if (isinstance(exception, (ConnectionResetError, ConnectionAbortedError, OSError)) or
+                    if (isinstance(exception, (ConnectionResetError, ConnectionAbortedError, OSError, RequestsConnectionError, ProtocolError)) or
                         self._is_proxy_related_error(exception)):
                         logger.warning(f"Connection-related asyncio exception detected for {self.bot_name}")
                         if not self.shutdown_requested:
@@ -325,7 +325,7 @@ class ResilientBot:
                             if hasattr(ws_client.websocket, 'ping'):
                                 ws_client.websocket.ping()
                                 logger.debug(f"WebSocket ping sent for {self.bot_name}")
-                        except (ConnectionResetError, ConnectionAbortedError, OSError) as conn_error:
+                        except (ConnectionResetError, ConnectionAbortedError, OSError, RequestsConnectionError, ProtocolError) as conn_error:
                             logger.warning(f"WebSocket ping failed with connection error for {self.bot_name}: {conn_error}")
                             self._trigger_reconnection(f"WebSocket connection error: {type(conn_error).__name__}")
                             break
@@ -346,7 +346,7 @@ class ResilientBot:
                             break
 
                 time.sleep(self.websocket_ping_interval)
-            except (ConnectionResetError, ConnectionAbortedError, OSError) as conn_error:
+            except (ConnectionResetError, ConnectionAbortedError, OSError, RequestsConnectionError, ProtocolError) as conn_error:
                 if not self.shutdown_requested:
                     logger.warning(f"WebSocket monitor connection error for {self.bot_name}: {conn_error}")
                     self._trigger_reconnection(f"WebSocket monitor connection error: {type(conn_error).__name__}")
@@ -370,7 +370,7 @@ class ResilientBot:
                     wait = self.keepalive_interval  # Reset to normal interval
                     logger.debug(f"Keepalive ping successful for {self.bot_name}")
                 time.sleep(wait)
-            except (ConnectionResetError, ConnectionAbortedError, OSError) as conn_error:
+            except (ConnectionResetError, ConnectionAbortedError, OSError, RequestsConnectionError, ProtocolError) as conn_error:
                 if not self.shutdown_requested:
                     self.consecutive_failures += 1
                     logger.warning(f"Keepalive ping failed for {self.bot_name} with connection error (failure #{self.consecutive_failures}): {conn_error}")
@@ -544,7 +544,7 @@ class ResilientBot:
             except KeyboardInterrupt:
                 logger.info(f"🛑 {self.bot_name} stopped by user (Ctrl+C)")
                 break
-            except (ConnectionResetError, ConnectionAbortedError, OSError) as conn_error:
+            except (ConnectionResetError, ConnectionAbortedError, OSError, RequestsConnectionError, ProtocolError) as conn_error:
                 logger.error(f"❌ {self.bot_name} crashed with connection error: {conn_error}")
                 logger.warning(f"🔗 Connection-related crash detected for {self.bot_name}")
                 retry_delay = min(retry_delay * 1.2, self.max_retry_delay)  # Gentle backoff for connection issues
