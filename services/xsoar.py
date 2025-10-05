@@ -61,12 +61,78 @@ class TicketHandler:
         self.prod_base = CONFIG.xsoar_prod_api_base_url
         self.dev_base = CONFIG.xsoar_dev_api_base_url
 
-    def get_tickets(self, query, period=None, size=20000):
+    def get_tickets(self, query, period=None, size=20000, paginate=False):
         """Fetch security incidents from XSOAR"""
         full_query = query + f' -category:job -type:"{CONFIG.team_name} Ticket QA" -type:"{CONFIG.team_name} SNOW Whitelist Request"'
 
         log.debug(f"Making API call for query: {query}")
+
+        if paginate:
+            return self._fetch_paginated(full_query, period)
         return self._fetch_from_api(full_query, period, size)
+
+    def _fetch_paginated(self, query, period, page_size=1000):
+        """Fetch tickets with pagination to avoid max response size limit"""
+        all_tickets = []
+        page = 0
+        max_pages = 100  # Safety limit to prevent infinite loops
+
+        try:
+            while page < max_pages:
+                payload = {
+                    "filter": {
+                        "query": query,
+                        "page": page,
+                        "size": page_size,
+                        "sort": [{"field": "created", "asc": False}]
+                    }
+                }
+                if period:
+                    payload["filter"]["period"] = period
+
+                log.debug(f"Fetching page {page} with size {page_size}")
+
+                response = http_session.post(
+                    f"{self.prod_base}/incidents/search",
+                    headers=prod_headers,
+                    json=payload,
+                    timeout=300,
+                    verify=False
+                )
+                if response is None:
+                    raise requests.exceptions.ConnectionError("Failed to connect after multiple retries")
+                response.raise_for_status()
+
+                data = response.json().get('data', [])
+                if not data:
+                    break  # No more results
+
+                all_tickets.extend(data)
+                # Show progress every 5 pages to reduce verbosity
+                if page % 5 == 0 or len(data) < page_size:
+                    print(f"  Fetched {len(all_tickets)} tickets so far...")
+                log.info(f"Fetched page {page}: {len(data)} tickets (total so far: {len(all_tickets)})")
+
+                # If we got fewer results than page_size, we've reached the end
+                if len(data) < page_size:
+                    print(f"Completed: {len(all_tickets)} total tickets fetched")
+                    break
+
+                page += 1
+
+            if page >= max_pages:
+                print(f"Warning: Reached max_pages limit ({max_pages}). Total: {len(all_tickets)} tickets")
+
+            log.info(f"Total tickets fetched: {len(all_tickets)}")
+            return all_tickets
+
+        except Exception as e:
+            log.error(f"Error in _fetch_paginated: {str(e)}")
+            log.error(f"Query that failed: {query}")
+            if hasattr(e, 'response') and e.response is not None:
+                log.error(f"Response status: {e.response.status_code}")
+                log.error(f"Response body: {e.response.text}")
+            return all_tickets  # Return what we have so far
 
     def _fetch_from_api(self, query, period, size):
         """Fetch tickets directly from XSOAR API"""
@@ -82,6 +148,8 @@ class TicketHandler:
             if period:
                 payload["filter"]["period"] = period
 
+            log.debug(f"API Request payload: {json.dumps(payload, indent=2)}")
+
             response = http_session.post(
                 f"{self.prod_base}/incidents/search",
                 headers=prod_headers,
@@ -95,6 +163,11 @@ class TicketHandler:
             return response.json().get('data', [])
         except Exception as e:
             log.error(f"Error in _fetch_from_api: {str(e)}")
+            log.error(f"Query that failed: {query}")
+            log.error(f"Payload that failed: {json.dumps(payload, indent=2)}")
+            if hasattr(e, 'response') and e.response is not None:
+                log.error(f"Response status: {e.response.status_code}")
+                log.error(f"Response body: {e.response.text}")
             return []
 
     def get_entries(self, incident_id):
