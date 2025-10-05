@@ -99,6 +99,18 @@ class ColorSchemes:
     # Order for visual display with MTP at top (same as IMPACT_ORDER)
     VISUAL_ORDER = IMPACT_ORDER
 
+    # Color palette for ticket types (soft pastel colors)
+    TYPE_COLORS = {
+        "Crowdstrike Detection": "#E8B4B8",  # Soft dusty rose
+        "Crowdstrike Incident": "#E8D4B8",   # Soft peach
+        "Prisma Runtime": "#D4B896",         # Warm tan
+        "Prisma Compute": "#B8D4B8",         # Soft sage green
+        "Splunk Alert": "#A8D5E2",           # Soft sky blue
+        "UEBA Prisma": "#D4B8C8",            # Soft lavender
+        "Phishing": "#E8D4E8",               # Soft orchid
+        "Unknown": "#D4C8B8"                 # Soft taupe
+    }
+
 
 class ChartStyler:
     """Handles chart styling and visual elements."""
@@ -329,7 +341,7 @@ class PeriodChart:
 
     def _calculate_daily_totals(self, pivot_data: Dict[str, np.ndarray]) -> np.ndarray:
         """Calculate daily totals from pivot data."""
-        return sum(pivot_data.values())
+        return np.sum(list(pivot_data.values()), axis=0)
 
     def _plot_stacked_bars(self, ax, dates: List[str], pivot_data: Dict[str, np.ndarray], daily_totals: np.ndarray) -> None:
         """Plot stacked bars for each impact category."""
@@ -345,9 +357,10 @@ class PeriodChart:
                 bottom += values
 
         # Enhanced total labels
-        for i, total in enumerate(daily_totals):
+        for i in range(len(daily_totals)):
+            total = daily_totals[i]
             if total > 0:
-                ax.text(x[i], total + max(daily_totals) * 0.02, f'{int(total)}',
+                ax.text(float(x[i]), float(total) + float(np.max(daily_totals)) * 0.02, f'{int(total)}',
                         ha='center', va='bottom', fontsize=10, fontweight='bold',
                         color='#1A237E',
                         bbox=dict(boxstyle="round,pad=0.3", facecolor='white', alpha=0.95,
@@ -364,7 +377,7 @@ class PeriodChart:
         """Configure axes for period chart."""
         x = np.arange(len(dates))
         ax.set_xticks(x)
-        ax.set_ylim(0, daily_totals.max() * 1.15)
+        ax.set_ylim(0, float(np.max(daily_totals)) * 1.15)
 
         # Show every 5th label to prevent crowding
         date_labels = [dates[i] if i % 5 == 0 else "" for i in range(len(dates))]
@@ -457,8 +470,16 @@ class TicketChartGenerator:
         self._finalize_and_save_chart(fig, "Inflow Past 60 Days.png")
         return time.time() - start_time
 
-    def generate_12_month_chart(self) -> float:
-        """Generate past 12 months impact chart using explicit timestamps."""
+    def generate_12_month_impact_chart(self) -> Tuple[float, List[Dict[str, Any]]]:
+        """Generate past 12 months impact chart using explicit timestamps.
+
+        Returns:
+            Tuple of (execution_time, tickets_data) where tickets_data can be reused
+
+        Note:
+            Uses pagination to fetch all tickets in batches of 1000 to avoid
+            API "Max Response Size Exceeded (55010)" error.
+        """
         start_time = time.time()
 
         # Calculate exact 12-month window
@@ -467,14 +488,14 @@ class TicketChartGenerator:
         start_date = start_date.replace(hour=0, minute=0, second=0, microsecond=0)
 
         start_str = start_date.astimezone(pytz.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
-        end_str = end_date.astimezone(pytz.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
 
-        query = f'type:{self.config.team_name} -owner:"" created:>={start_str} created:<={end_str}'
-        tickets = self.ticket_handler.get_tickets(query=query, size=20000)
+        query = f'type:{self.config.team_name} -owner:"" created:>{start_str}'
+        print(f"Fetching 12-month tickets with pagination...")
+        tickets = self.ticket_handler.get_tickets(query=query, paginate=True)
 
         if not tickets:
             print("No tickets found for Past 12 Months.")
-            return time.time() - start_time
+            return time.time() - start_time, []
 
         df = pd.DataFrame(tickets)
         df['created_dt'] = pd.to_datetime(df['created'], format='ISO8601', errors='coerce').dt.tz_convert('UTC')
@@ -494,6 +515,57 @@ class TicketChartGenerator:
         )
 
         self._finalize_and_save_chart(fig, "Inflow Past 12 Months - Impact Only.png")
+        return time.time() - start_time, tickets
+
+    def generate_12_month_type_chart(self, tickets: List[Dict[str, Any]] = None) -> float:
+        """Generate past 12 months ticket type chart using explicit timestamps."""
+        start_time = time.time()
+
+        # If tickets not provided, fetch them
+        if tickets is None:
+            # Calculate exact 12-month window
+            end_date = datetime.now(self.eastern).replace(hour=23, minute=59, second=59, microsecond=999999)
+            start_date = end_date - timedelta(days=365)
+            start_date = start_date.replace(hour=0, minute=0, second=0, microsecond=0)
+
+            start_str = start_date.astimezone(pytz.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+            end_str = end_date.astimezone(pytz.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+
+            query = f'type:{self.config.team_name} -owner:"" created:>={start_str} created:<={end_str}'
+            tickets = self.ticket_handler.get_tickets(query=query, size=20000)
+
+            if not tickets:
+                print("No tickets found for Past 12 Months (Type Chart).")
+                return time.time() - start_time
+
+        df = pd.DataFrame(tickets)
+        df['created_dt'] = pd.to_datetime(df['created'], format='ISO8601', errors='coerce').dt.tz_convert('UTC')
+        df['created_month'] = df['created_dt'].dt.tz_localize(None).dt.to_period('M')
+
+        # Process ticket type
+        df['ticket_type'] = df['type'].fillna('Unknown')
+        df['ticket_type'] = df['ticket_type'].replace('', 'Unknown')
+        # Remove METCIRT prefix from ticket type names
+        df['ticket_type'] = df['ticket_type'].str.replace(r'^METCIRT\s*', '', regex=True)
+        # Shorten long ticket type names
+        df['ticket_type'] = df['ticket_type'].replace({
+            'CrowdStrike Falcon Detection': 'Crowdstrike Detection',
+            'CrowdStrike Falcon Incident': 'Crowdstrike Incident',
+            'Prisma Cloud Runtime Alert': 'Prisma Runtime',
+            'Prisma Cloud Compute Runtime Alert': 'Prisma Compute',
+            'Splunk Alert': 'Splunk Alert',
+            'UEBA Prisma Cloud': 'UEBA Prisma'
+        })
+
+        expected_months = self._get_expected_months()
+        month_labels = [month.strftime('%b %Y') for month in expected_months]
+        month_type_counts = df.groupby(['created_month', 'ticket_type']).size().reset_index(name='count')
+
+        fig = self._create_monthly_type_chart(
+            expected_months, month_labels, month_type_counts, tickets
+        )
+
+        self._finalize_and_save_chart(fig, "Inflow past 12 months - Ticket Type Only.png")
         return time.time() - start_time
 
     def _get_yesterday_range(self) -> Tuple[str, str]:
@@ -554,9 +626,10 @@ class TicketChartGenerator:
                 linewidth=2.5, label='Monthly Volume', zorder=10)
 
         # Enhanced count labels with better styling
-        for i, total in enumerate(monthly_totals):
+        for i in range(len(monthly_totals)):
+            total = monthly_totals[i]
             if total > 0:
-                ax.text(x_pos[i], total + 20, f'{int(total)}',
+                ax.text(float(x_pos[i]), float(total) + 20, f'{int(total)}',
                         ha='center', va='bottom', fontsize=12, fontweight='bold',
                         color='#1A237E',
                         bbox=dict(boxstyle="round,pad=0.3", facecolor='white', alpha=0.95,
@@ -564,7 +637,7 @@ class TicketChartGenerator:
 
         # Configure axes with enhanced styling
         ax.set_xticks(x_pos)
-        ax.set_ylim(0, impact_bottom.max() * 1.15)
+        ax.set_ylim(0, float(np.max(impact_bottom)) * 1.15)
         ax.set_xticklabels(month_labels, rotation=45, ha='right', fontsize=12, fontweight='bold')
         ax.tick_params(axis='y', colors=self.chart_config.border_color, labelsize=12, width=1.5)
         ax.tick_params(axis='x', colors=self.chart_config.border_color, labelsize=12, width=1.5, pad=10)
@@ -588,6 +661,95 @@ class TicketChartGenerator:
                 custom_labels.append(label)
 
         legend = ax.legend(handles, custom_labels, title="Impact",
+                           title_fontproperties={'weight': 'bold', 'size': 14},
+                           loc='upper left', bbox_to_anchor=(1.01, 1), fontsize=11,
+                           frameon=True, fancybox=True, shadow=True)
+        legend.get_frame().set_facecolor('white')
+        legend.get_frame().set_alpha(0.95)
+        legend.get_frame().set_edgecolor(self.chart_config.border_color)
+        legend.get_frame().set_linewidth(2)
+
+        return fig
+
+    def _create_monthly_type_chart(self, expected_months: List[Any], month_labels: List[str],
+                                    month_type_counts: pd.DataFrame, tickets: List[Dict[str, Any]]) -> plt.Figure:
+        """Create monthly ticket type distribution chart."""
+        fig, ax = plt.subplots(figsize=(20, 12), facecolor='#f8f9fa')
+        fig.patch.set_facecolor('#f8f9fa')
+        self.styler.apply_base_styling(fig, ax)
+
+        # Get unique ticket types from the data
+        unique_types = sorted(month_type_counts['ticket_type'].unique())
+
+        # Create pivot data
+        type_pivot_data = {ticket_type: np.zeros(len(expected_months)) for ticket_type in unique_types}
+        monthly_totals = np.zeros(len(expected_months))
+
+        for _, row in month_type_counts.iterrows():
+            if row['created_month'] in expected_months:
+                month_idx = expected_months.index(row['created_month'])
+                type_pivot_data[row['ticket_type']][month_idx] += row['count']
+                monthly_totals[month_idx] += row['count']
+
+        # Plot bars
+        x_pos = np.arange(len(month_labels))
+        type_bottom = np.zeros(len(expected_months))
+
+        # Sort types by total count for better visualization
+        type_totals = {t: type_pivot_data[t].sum() for t in unique_types}
+        sorted_types = sorted(unique_types, key=lambda t: type_totals[t], reverse=True)
+
+        for ticket_type in sorted_types:
+            values = type_pivot_data[ticket_type]
+            if values.sum() > 0:
+                # Get color from predefined colors or generate a default
+                color = ColorSchemes.TYPE_COLORS.get(ticket_type, f'#{hash(ticket_type) % 0xFFFFFF:06x}')
+                ax.bar(x_pos, values, bottom=type_bottom, width=0.4,
+                       label=ticket_type, color=color)
+                type_bottom += values
+
+        # Add average line and trend
+        monthly_average = monthly_totals.mean()
+        ax.axhline(monthly_average, color='blue', linestyle='--', linewidth=2,
+                   label=f'Monthly Average ({int(monthly_average)})')
+        ax.plot(x_pos, monthly_totals, color='red', marker='o', markersize=8,
+                linewidth=2.5, label='Monthly Volume', zorder=10)
+
+        # Enhanced count labels with better styling
+        for i in range(len(monthly_totals)):
+            total = monthly_totals[i]
+            if total > 0:
+                ax.text(float(x_pos[i]), float(total) + 20, f'{int(total)}',
+                        ha='center', va='bottom', fontsize=12, fontweight='bold',
+                        color='#1A237E',
+                        bbox=dict(boxstyle="round,pad=0.3", facecolor='white', alpha=0.95,
+                                  edgecolor='#1A237E', linewidth=1.5))
+
+        # Configure axes with enhanced styling
+        ax.set_xticks(x_pos)
+        ax.set_ylim(0, float(np.max(type_bottom)) * 1.15)
+        ax.set_xticklabels(month_labels, rotation=45, ha='right', fontsize=12, fontweight='bold')
+        ax.tick_params(axis='y', colors=self.chart_config.border_color, labelsize=12, width=1.5)
+        ax.tick_params(axis='x', colors=self.chart_config.border_color, labelsize=12, width=1.5, pad=10)
+
+        # Enhanced titles and subtitle
+        fig.suptitle('Ticket Type Distribution Over the Past 12 Months',
+                     fontweight='bold', fontsize=24, color=self.chart_config.border_color, y=0.95)
+        ax.set_title(f"Total: {len(tickets)} tickets", fontsize=16,
+                     color='#3F51B5', pad=20, fontweight='bold')
+        ax.set_ylabel("Number of Tickets", fontweight='bold', fontsize=14,
+                      color=self.chart_config.border_color, labelpad=15)
+
+        # Enhanced legend with counts and better positioning
+        handles, labels = ax.get_legend_handles_labels()
+        custom_labels = []
+        for label in labels:
+            if label in type_totals:
+                custom_labels.append(f"{label} ({int(type_totals[label])})")
+            else:
+                custom_labels.append(label)
+
+        legend = ax.legend(handles, custom_labels, title="Ticket Type",
                            title_fontproperties={'weight': 'bold', 'size': 14},
                            loc='upper left', bbox_to_anchor=(1.01, 1), fontsize=11,
                            frameon=True, fancybox=True, shadow=True)
@@ -632,7 +794,10 @@ class TicketChartGenerator:
         try:
             self.generate_yesterday_chart()
             self.generate_60_day_chart()
-            self.generate_12_month_chart()
+            # Generate 12-month impact chart and reuse tickets for type chart
+            _, tickets = self.generate_12_month_impact_chart()
+            if tickets:
+                self.generate_12_month_type_chart(tickets)
             print("All charts generated successfully")
         except Exception as e:
             print(f"Error generating charts: {e}")
