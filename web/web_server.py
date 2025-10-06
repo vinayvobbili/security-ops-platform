@@ -29,6 +29,7 @@ from src.utils.logging_utils import log_web_activity, is_scanner_request
 
 SHOULD_START_PROXY = False
 USE_DEBUG_MODE = True  # Set to False to use Waitress production server
+ENABLE_POKEDEX_CHAT = True  # Set to True to enable Pokédex chat functionality
 # Define the proxy port
 PROXY_PORT = 8080
 # Optimize buffer size for better performance (increase from default 4096)
@@ -779,6 +780,185 @@ def random_audio():
     return jsonify({'filename': random.choice(files)})
 
 
+@app.route('/pokedex-chat')
+@log_web_activity
+def pokedex_chat():
+    """Pokedex AI chat interface"""
+    return render_template('pokedex_chat.html')
+
+
+@app.route('/api/pokedex-status')
+def api_pokedex_status():
+    """Health check endpoint for Pokedex chat availability"""
+    try:
+        from my_bot.core.state_manager import get_state_manager
+
+        state_manager = get_state_manager()
+
+        if not state_manager or not state_manager.is_initialized:
+            return jsonify({
+                'ready': False,
+                'status': 'not_initialized',
+                'message': 'Pokedex chat is not available. Ollama may not be running or configured.',
+                'instructions': [
+                    'Ensure Ollama is installed and running',
+                    'Check that the configured model is available',
+                    'Restart the web server with ENABLE_POKEDEX_CHAT = True'
+                ]
+            })
+
+        # Perform health check
+        health = state_manager.health_check()
+
+        if health.get('status') == 'initialized':
+            return jsonify({
+                'ready': True,
+                'status': 'healthy',
+                'message': 'Pokedex chat is ready',
+                'components': health.get('components', {})
+            })
+        else:
+            return jsonify({
+                'ready': False,
+                'status': 'partial',
+                'message': 'Pokedex chat is partially initialized',
+                'components': health.get('components', {})
+            })
+
+    except Exception as e:
+        logger.error(f"Error checking Pokedex status: {e}")
+        return jsonify({
+            'ready': False,
+            'status': 'error',
+            'message': 'Error checking chat status',
+            'error': str(e)
+        })
+
+
+@app.route('/api/pokedex-chat', methods=['POST'])
+@log_web_activity
+def api_pokedex_chat():
+    """API endpoint for Pokedex chat messages"""
+    try:
+        data = request.get_json()
+        user_message = data.get('message', '').strip()
+        session_id = data.get('session_id', '')
+
+        if not user_message:
+            return jsonify({'success': False, 'error': 'Message is required'}), 400
+
+        if not session_id:
+            return jsonify({'success': False, 'error': 'Session ID is required'}), 400
+
+        # Use IP address + session ID as identifier for context management
+        # This mimics how Webex bot uses person_id + room_id
+        user_ip = request.remote_addr
+        user_identifier = f"web_{user_ip}_{session_id}"
+
+        # Import the ask function from the same module Pokédex uses
+        try:
+            from my_bot.core.my_model import ask
+        except ImportError as e:
+            logger.error(f"Failed to import ask function: {e}")
+            return jsonify({
+                'success': False,
+                'error': 'Chat service is not available. Please ensure Pokedex bot components are initialized.'
+            }), 500
+
+        # Use the ask function to get LLM response
+        # The ask function handles conversation context via session management
+        try:
+            response_text = ask(
+                user_message,
+                user_id=user_identifier,
+                room_id="web_chat"  # Use a common room_id for web chats
+            )
+        except Exception as e:
+            logger.error(f"Error getting LLM response: {e}", exc_info=True)
+            return jsonify({
+                'success': False,
+                'error': 'Failed to get response from AI. Please try again.'
+            }), 500
+
+        return jsonify({
+            'success': True,
+            'response': response_text
+        })
+
+    except Exception as e:
+        logger.error(f"Error in Pokedex chat API: {e}", exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': 'An unexpected error occurred. Please try again.'
+        }), 500
+
+
+@app.route('/api/pokedex-chat-stream', methods=['POST'])
+@log_web_activity
+def api_pokedex_chat_stream():
+    """Streaming API endpoint for Pokédex chat messages using Server-Sent Events"""
+    try:
+        data = request.get_json()
+        user_message = data.get('message', '').strip()
+        session_id = data.get('session_id', '')
+
+        if not user_message:
+            return jsonify({'success': False, 'error': 'Message is required'}), 400
+
+        if not session_id:
+            return jsonify({'success': False, 'error': 'Session ID is required'}), 400
+
+        # Use IP address + session ID as identifier
+        user_ip = request.remote_addr
+        user_identifier = f"web_{user_ip}_{session_id}"
+
+        # Import the streaming ask function
+        try:
+            from my_bot.core.my_model import ask_stream
+        except ImportError as e:
+            logger.error(f"Failed to import ask_stream function: {e}")
+            return jsonify({
+                'success': False,
+                'error': 'Chat service is not available. Please ensure Pokedex bot components are initialized.'
+            }), 500
+
+        def generate():
+            """Generator function for Server-Sent Events"""
+            try:
+                for token in ask_stream(
+                    user_message,
+                    user_id=user_identifier,
+                    room_id="web_chat"
+                ):
+                    # Format as Server-Sent Event
+                    yield f"data: {json.dumps({'token': token})}\n\n"
+
+                # Send completion event
+                yield f"data: {json.dumps({'done': True})}\n\n"
+
+            except Exception as e:
+                logger.error(f"Error in streaming response: {e}", exc_info=True)
+                yield f"data: {json.dumps({'error': 'Streaming error occurred'})}\n\n"
+
+        # Return SSE response
+        return app.response_class(
+            generate(),
+            mimetype='text/event-stream',
+            headers={
+                'Cache-Control': 'no-cache',
+                'X-Accel-Buffering': 'no',  # Disable buffering in nginx
+                'Connection': 'keep-alive'
+            }
+        )
+
+    except Exception as e:
+        logger.error(f"Error in Pokedex streaming chat API: {e}", exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': 'An unexpected error occurred. Please try again.'
+        }), 500
+
+
 @app.route('/xsoar')
 @log_web_activity
 def xsoar_dashboard():
@@ -1405,6 +1585,21 @@ def main():
     parser.add_argument("--port", type=int, default=int(os.environ.get("WEB_PORT", "8080")), help="Port to bind (default 8080)")
     parser.add_argument("--proxy", action="store_true", help="Enable internal proxy component")
     args = parser.parse_args()
+
+    # Initialize Pokédex bot components if enabled via flag
+    if ENABLE_POKEDEX_CHAT:
+        try:
+            print("🤖 Initializing Pokedex chat components...")
+            from my_bot.core.my_model import initialize_model_and_agent
+            if initialize_model_and_agent():
+                print("✅ Pokedex chat ready!")
+            else:
+                print("⚠️ Pokedex chat initialization failed - chat endpoint will return errors")
+        except Exception as e:
+            print(f"⚠️ Failed to initialize Pokedex chat: {e}")
+            print("   Chat endpoint will be available but may return errors")
+    else:
+        print("ℹ️ Pokedex chat disabled (set ENABLE_POKEDEX_CHAT = True to enable)")
 
     charts_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), 'static/charts'))
     app.config['CHARTS_DIR'] = charts_dir

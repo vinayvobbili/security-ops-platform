@@ -101,25 +101,25 @@ def initialize_model_and_agent():
 def ask(user_message: str, user_id: str = "default", room_id: str = "default") -> str:
     """
     SOC Q&A function with persistent sessions and enhanced error recovery:
-    
+
     1. Retrieves conversation context from persistent SQLite storage
     2. Passes message to LLM agent with enhanced error handling
     3. Agent decides what tools/documents are needed with retry logic
     4. Gracefully handles tool failures with context-aware fallbacks
     5. Stores conversation in persistent session for future context
     6. Returns complete response with proper attribution
-    
+
     Features:
     - Persistent conversation context across bot restarts
     - Enhanced error recovery with intelligent fallbacks
     - Automatic session cleanup and health monitoring
     - Fast responses for simple queries (health, greetings)
-    
+
     Args:
         user_message: The user's question or request
         user_id: Unique identifier for the user (default: "default")
         room_id: Unique identifier for the chat room (default: "default")
-        
+
     Returns:
         str: Complete response from the SOC assistant
     """
@@ -227,3 +227,93 @@ def ask(user_message: str, user_id: str = "default", room_id: str = "default") -
     except Exception as e:
         logging.error(f"Ask function failed: {e}")
         return "❌ An error occurred. Please try again or contact support."
+
+
+def ask_stream(user_message: str, user_id: str = "default", room_id: str = "default"):
+    """
+    SOC Q&A function with streaming support for real-time responses.
+
+    Similar to ask() but yields response tokens as they are generated,
+    enabling real-time streaming to browser clients.
+
+    Args:
+        user_message: The user's question or request
+        user_id: Unique identifier for the user (default: "default")
+        room_id: Unique identifier for the chat room (default: "default")
+
+    Yields:
+        str: Response tokens as they are generated
+    """
+    try:
+        # Basic validation
+        if not user_message or not user_message.strip():
+            yield "Please ask me a question!"
+            return
+
+        import re
+
+        query = user_message.strip()
+        original_query = query
+
+        # Remove bot name mentions
+        bot_names = ['DnR_Pokedex', 'Pokedex', 'pokedex', 'dnr_pokedex',
+                     'HAL9000', 'hal9000', 'Jarvais', 'jarvais',
+                     'Toodles', 'toodles', 'Barnacles', 'barnacles']
+
+        for bot_name in bot_names:
+            if bot_name.lower() in query.lower():
+                pattern = re.compile(re.escape(bot_name), re.IGNORECASE)
+                query = pattern.sub('', query)
+
+        # Clean up whitespace
+        query = re.sub(r'\s+', ' ', query)
+        query = re.sub(r'[,\s]*,\s*', ', ', query)
+        query = query.strip(' ,')
+
+        # Create session key
+        session_key = f"{user_id}_{room_id}"
+
+        # Get state manager
+        state_manager = get_state_manager()
+        if state_manager and not state_manager.is_initialized:
+            yield "❌ Bot not ready. Please try again in a moment."
+            return
+
+        # Get session manager
+        session_manager = get_session_manager()
+        session_manager.cleanup_old_sessions()
+
+        # Get conversation context
+        conversation_context = session_manager.get_conversation_context(session_key)
+
+        # Quick responses for simple queries
+        simple_query = query.lower().strip()
+        if simple_query in ['hi', 'status', 'health', 'are you working']:
+            response = "✅ System online and ready"
+            session_manager.add_message(session_key, "user", query)
+            session_manager.add_message(session_key, "assistant", response)
+            yield response
+            return
+
+        # Prepare input with context
+        agent_input = query
+        if conversation_context:
+            agent_input = conversation_context + " " + query
+
+        # Set logging context
+        from src.utils.tool_logging import set_logging_context
+        set_logging_context(session_key)
+
+        # Stream response
+        full_response = ""
+        for token in state_manager.execute_query_stream(agent_input):
+            full_response += token
+            yield token
+
+        # Store conversation
+        session_manager.add_message(session_key, "user", query)
+        session_manager.add_message(session_key, "assistant", full_response)
+
+    except Exception as e:
+        logging.error(f"Ask stream function failed: {e}")
+        yield "❌ An error occurred. Please try again or contact support."
