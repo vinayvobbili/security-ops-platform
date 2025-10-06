@@ -210,21 +210,21 @@ class SecurityBotStateManager:
                 {"role": "system", "content": "You are a security operations assistant. Your responses will be sent as Webex messages, so you can use Webex markdown formatting."},
                 {"role": "user", "content": query}
             ]
-            
+
             # Get initial response (may contain tool calls)
             response = self.llm_with_tools.invoke(messages)
-            
+
             # If there are tool calls, execute them and get final response
             if hasattr(response, 'tool_calls') and response.tool_calls:
                 # Add the AI message with tool calls to conversation
                 messages.append({"role": "assistant", "content": response.content})
-                
+
                 # Execute each tool call
                 for tool_call in response.tool_calls:
                     tool_name = tool_call['name']
                     tool_args = tool_call.get('args', {})
                     tool_id = tool_call['id']
-                    
+
                     if tool_name in self.available_tools:
                         try:
                             tool_result = self.available_tools[tool_name].invoke(tool_args)
@@ -232,19 +232,68 @@ class SecurityBotStateManager:
                             tool_result = f"Error executing {tool_name}: {str(e)}"
                     else:
                         tool_result = f"Tool {tool_name} not found"
-                    
+
                     # Add tool result to conversation
                     messages.append({"role": "tool", "content": str(tool_result), "tool_call_id": tool_id})
-                
+
                 # Get final response with tool results
                 final_response = self.llm_with_tools.invoke(messages)
                 return final_response.content
             else:
                 # No tool calls, return direct response
                 return response.content
-            
+
         except Exception as e:
             return f"Error: {str(e)}"
+
+    def execute_query_stream(self, query: str):
+        """Execute query using native tool calling with streaming support
+
+        Yields tokens as they are generated for real-time streaming to clients.
+        """
+        try:
+            messages = [
+                {"role": "system", "content": "You are a security operations assistant. Provide clear, helpful responses."},
+                {"role": "user", "content": query}
+            ]
+
+            # Get initial response (may contain tool calls)
+            response = self.llm_with_tools.invoke(messages)
+
+            # If there are tool calls, execute them first then stream final response
+            if hasattr(response, 'tool_calls') and response.tool_calls:
+                # Add the AI message with tool calls to conversation
+                messages.append({"role": "assistant", "content": response.content})
+
+                # Execute each tool call
+                for tool_call in response.tool_calls:
+                    tool_name = tool_call['name']
+                    tool_args = tool_call.get('args', {})
+                    tool_id = tool_call['id']
+
+                    if tool_name in self.available_tools:
+                        try:
+                            tool_result = self.available_tools[tool_name].invoke(tool_args)
+                        except Exception as e:
+                            tool_result = f"Error executing {tool_name}: {str(e)}"
+                    else:
+                        tool_result = f"Tool {tool_name} not found"
+
+                    # Add tool result to conversation
+                    messages.append({"role": "tool", "content": str(tool_result), "tool_call_id": tool_id})
+
+                # Stream final response with tool results
+                for chunk in self.llm_with_tools.stream(messages):
+                    if hasattr(chunk, 'content') and chunk.content:
+                        yield chunk.content
+            else:
+                # No tool calls, stream direct response
+                for chunk in self.llm_with_tools.stream(messages):
+                    if hasattr(chunk, 'content') and chunk.content:
+                        yield chunk.content
+
+        except Exception as e:
+            yield f"Error: {str(e)}"
 
 
     def _shutdown_handler(self):
