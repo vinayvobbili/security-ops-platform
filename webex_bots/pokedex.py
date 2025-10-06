@@ -29,6 +29,11 @@ from src.utils.ssl_config import configure_ssl_if_needed
 
 configure_ssl_if_needed(verbose=True)  # Re-enabled due to ZScaler connectivity issues
 
+# Apply enhanced WebSocket client patch for better connection resilience
+# MUST be imported after SSL config but before any WebexBot creation
+from src.utils.enhanced_websocket_client import patch_websocket_client
+patch_websocket_client()
+
 import csv
 import logging.handlers
 import os

@@ -27,6 +27,10 @@ sys.path.insert(0, str(PROJECT_ROOT))
 from src.utils.ssl_config import configure_ssl_if_needed
 configure_ssl_if_needed(verbose=True)  # Re-enabled due to ZScaler connectivity issues
 
+# Apply enhanced WebSocket client patch for better connection resilience
+from src.utils.enhanced_websocket_client import patch_websocket_client
+patch_websocket_client()
+
 import csv
 import logging.handlers
 import random
@@ -368,14 +372,6 @@ class Bot(WebexBot):
 def main():
     """HAL9000 main with resilience framework"""
     from src.utils.bot_resilience import ResilientBot
-    
-    # NOTE: To enable ZScaler resilience (when ZScaler gets upgraded on this machine):
-    # 1. Change "needs_resilience": False to True in src/utils/zscaler_resilience.py for "HAL9000"
-    # 2. OR replace the imports above with:
-    #    from src.utils.zscaler_resilience import should_use_zscaler_resilience, ZScalerResilientBot
-    #    And use the same pattern as Pokedx.py to automatically choose resilience framework
-    # 
-    # Currently using standard resilience since ZScaler 4.1.0.161 works fine.
 
     resilient_runner = ResilientBot(
         bot_factory=lambda: Bot(

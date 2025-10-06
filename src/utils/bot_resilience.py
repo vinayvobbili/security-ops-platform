@@ -409,20 +409,56 @@ class ResilientBot:
             if self.bot_instance:
                 logger.info("Closing WebSocket connections...")
                 try:
-                    # Try multiple ways to close WebSocket properly
-                    if hasattr(self.bot_instance, 'stop'):
-                        self.bot_instance.stop()
-                    elif hasattr(self.bot_instance, 'websocket_client') and self.bot_instance.websocket_client:
-                        if hasattr(self.bot_instance.websocket_client, 'close'):
-                            self.bot_instance.websocket_client.close()
-                        if hasattr(self.bot_instance.websocket_client, 'websocket') and self.bot_instance.websocket_client.websocket:
+                    # Enhanced WebSocket cleanup with asyncio event loop handling
+                    if hasattr(self.bot_instance, 'websocket_client') and self.bot_instance.websocket_client:
+                        ws_client = self.bot_instance.websocket_client
+
+                        # Close the WebSocket connection
+                        if hasattr(ws_client, 'websocket') and ws_client.websocket:
                             import asyncio
                             try:
-                                # Close WebSocket connection properly
-                                if hasattr(self.bot_instance.websocket_client.websocket, 'close'):
-                                    asyncio.run(self.bot_instance.websocket_client.websocket.close())
+                                # Get or create event loop for cleanup
+                                try:
+                                    loop = asyncio.get_event_loop()
+                                    if loop.is_closed():
+                                        raise RuntimeError("Event loop is closed")
+                                except RuntimeError:
+                                    # Create new event loop if needed
+                                    loop = asyncio.new_event_loop()
+                                    asyncio.set_event_loop(loop)
+                                    logger.debug("Created new event loop for WebSocket cleanup")
+
+                                # Close WebSocket with timeout
+                                if hasattr(ws_client.websocket, 'close'):
+                                    try:
+                                        close_task = ws_client.websocket.close()
+                                        loop.run_until_complete(asyncio.wait_for(close_task, timeout=5.0))
+                                        logger.info("WebSocket closed gracefully")
+                                    except asyncio.TimeoutError:
+                                        logger.warning("WebSocket close timed out, forcing closure")
+                                    except Exception as ws_close_error:
+                                        logger.warning(f"WebSocket close error: {ws_close_error}")
+
+                                # Give time for cleanup
+                                import time
+                                time.sleep(0.5)
+
                             except Exception as ws_error:
-                                logger.warning(f"WebSocket close error: {ws_error}")
+                                logger.warning(f"WebSocket cleanup error: {ws_error}")
+
+                        # Try additional cleanup methods
+                        if hasattr(ws_client, 'close'):
+                            try:
+                                ws_client.close()
+                            except Exception as e:
+                                logger.debug(f"WebSocket client close method error: {e}")
+
+                    # Try bot-level stop method
+                    if hasattr(self.bot_instance, 'stop'):
+                        try:
+                            self.bot_instance.stop()
+                        except Exception as e:
+                            logger.debug(f"Bot stop method error: {e}")
 
                     logger.info("WebSocket connections closed")
                 except Exception as close_error:
