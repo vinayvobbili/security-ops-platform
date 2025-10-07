@@ -29,7 +29,7 @@ logger = logging.getLogger("tenacity.retry")
 logging.basicConfig(level=logging.INFO)
 
 config = get_config()
-webex_api = WebexAPI(config.webex_bot_access_token_soar)
+webex_api = WebexAPI(config.webex_bot_access_token_soar, disable_ssl_verify=True)
 list_handler = ListHandler()
 BASE_QUERY = f'type:{config.team_name} -owner:""'
 root_directory = Path(__file__).parent.parent
@@ -748,20 +748,20 @@ class ShiftChangeFormatter:
         return {
             'shift_timings': ShiftChangeFormatter.get_shift_timings(shift_name),
             'management_notes': ShiftChangeFormatter.get_management_notes(),
-            'hosts_in_containment': ShiftChangeFormatter.get_hosts_in_containment(),
+            # 'hosts_in_containment': ShiftChangeFormatter.get_hosts_in_containment(),
             'staffing_table': staffing_table
         }
 
 
 def _create_shift_change_message(shift_name, shift_data):
     """Create the markdown message for shift change announcement."""
-    hosts_text = '\n'.join(shift_data['hosts_in_containment']) if shift_data['hosts_in_containment'] else ''
+    # hosts_text = '\n'.join(shift_data['hosts_in_containment']) if shift_data['hosts_in_containment'] else ''
 
     return (
         f"Good **{shift_name.upper()}**! A new shift's starting now!\n"
         f"Timings: {shift_data['shift_timings']}\n"
         f"Open {config.team_name}* tickets: {get_open_tickets()}\n"
-        f"Hosts in Containment (TUC): \n{hosts_text}\n\n"
+        # f"Hosts in Containment (TUC): \n{hosts_text}\n\n"
         f"**Management Notes**: {shift_data['management_notes']}\n"
         f"Scheduled Staffing:\n"
         f"```\n{shift_data['staffing_table']}\n```"
@@ -802,8 +802,8 @@ def announce_shift_change(shift_name, room_id, sleep_time=30):
 
 def main():
     """Main function to run the scheduled jobs."""
-    room_id = config.webex_room_id_vinay_test_space
-    announce_shift_change('night', room_id, sleep_time=0)
+    room_id = config.webex_room_id_soc_shift_updates
+    announce_shift_change('morning', room_id, sleep_time=0)
     print(get_staffing_data())
 
 

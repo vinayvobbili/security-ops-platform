@@ -93,7 +93,7 @@ IOC_HUNT_LOGO_SIZE = 0.03  # IOC Hunt logos
 AREA1_LOGO_SIZE = 0.06  # Area1 logos
 LEAKED_CREDS_LOGO_SIZE = 0.04  # Leaked Credentials logos
 AKAMAI_LOGO_SIZE = 0.04
-VARONIS_LOGO_SIZE = 0.04
+VARONIS_LOGO_SIZE = 0.08
 
 # Create a mapping of detection sources to logo URLs and filenames
 LOGO_URL_MAPPING = {
@@ -115,9 +115,8 @@ LOGO_URL_MAPPING = {
     "ioc hunt": ("https://www.pngitem.com/pimgs/b/104-1049518_detective-silhouette-png.png", "ioc_hunt.png"),
     "area1 alert": ("https://logowik.com/content/uploads/images/area-1-security8161.jpg", "area1.png"),
     "leaked creds": ("https://www.shutterstock.com/image-vector/data-personal-leak-vector-identity-600nw-2143054971.jpg", "leaked_credentials.png"),
-    "akamai": ("https://www.vhv.rs/dpng/d/79-796343_akamai-logo-png-transparent-png.png", "akamai.png"),
     "akamai alert": ("https://www.vhv.rs/dpng/d/79-796343_akamai-logo-png-transparent-png.png", "akamai.png"),
-    "varonis": ("https://logowik.com/content/uploads/images/varonis6799.jpg", "varonis.png"),
+    "varonis alert": ("https://logowik.com/content/uploads/images/varonis6799.jpg", "varonis.png"),
     "unknown": ("https://cdn-icons-png.flaticon.com/512/2534/2534590.png", "unknown.png")
 }
 
