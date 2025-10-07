@@ -17,7 +17,7 @@ from src.secops import (
     get_staffing_data,
     get_shift_lead,
     get_basic_shift_staffing,
-    get_shift_ticket_metrics_v2,  # Using v2 with exact timestamps (fixes 30-min offset bug)
+    get_shift_ticket_metrics,  # Uses exact timestamps for accurate metrics
     get_shift_security_actions
 )
 
@@ -191,7 +191,7 @@ def get_shift_performance_metrics(days_back: int = 0, shift_name: str = None) ->
         shift_start_hour = shift_hour_map.get(shift_name.lower(), 4.5)
 
         # Get ticket metrics (using v2 for exact timestamps)
-        ticket_metrics = get_shift_ticket_metrics_v2(days_back, shift_start_hour)
+        ticket_metrics = get_shift_ticket_metrics(days_back, shift_start_hour)
 
         # Get security actions
         security_actions = get_shift_security_actions(days_back, shift_start_hour)
@@ -249,7 +249,7 @@ def get_comprehensive_shift_data(day_name: str = None, shift_name: str = None, d
                 }
                 shift_start_hour = shift_hour_map.get(shift_name.lower(), 4.5)
 
-                ticket_metrics = get_shift_ticket_metrics_v2(days_back, shift_start_hour)
+                ticket_metrics = get_shift_ticket_metrics(days_back, shift_start_hour)
                 security_actions = get_shift_security_actions(days_back, shift_start_hour)
 
                 performance_data = {

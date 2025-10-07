@@ -311,126 +311,59 @@ class TicketMetricsCalculator:
 
 
 def get_shift_ticket_metrics(days_back, shift_start_hour):
-    """Get ticket metrics for a specific shift period.
+    """Get ticket metrics for a specific shift period using EXACT timestamps.
 
-    ⚠️ DEPRECATION WARNING ⚠️
-    This function has a KNOWN BUG: it truncates shift times to integer hours,
-    causing 30-minute offsets for shifts at 4.5, 12.5, 20.5 hours.
+    Uses the secops_shift_metrics component for consistent metric calculation
+    across all interfaces (web API, chatbot, CLI).
 
-    Example: Morning shift (4:30 AM) queries 4:00 AM instead, missing tickets
-    from 4:00-4:30 and incorrectly including 12:00-12:30.
+    Args:
+        days_back: Number of days back from today (0 = today, 1 = yesterday)
+        shift_start_hour: Shift start time in decimal hours (4.5 = 4:30 AM, 12.5 = 12:30 PM, 20.5 = 8:30 PM)
 
-    RECOMMENDATION: Use exact timestamp queries instead:
-        start_dt = eastern.localize(datetime(year, month, day, hour, minute))
-        end_dt = start_dt + timedelta(hours=8)
-        query = f'{BASE_QUERY} created:>="{start_dt.isoformat()}" created:<="{end_dt.isoformat()}"'
-
-    Currently used by:
-        - my_bot/tools/staffing_tools.py (chatbot tools)
-
-    See /api/shift-list in web_server.py for corrected implementation.
+    Returns:
+        Dict with ticket counts and metrics using exact shift windows:
+        - tickets_acknowledged: Number of tickets acknowledged/worked by analysts
+        - tickets_closed: Number of tickets closed
+        - mean_response_time: Average response time in milliseconds
+        - mean_contain_time: Average containment time in milliseconds
+        - response_time_minutes: Average response time in minutes
+        - contain_time_minutes: Average containment time in minutes
     """
     try:
-        period = TicketMetricsCalculator.create_shift_period(days_back, shift_start_hour)
+        from src.components import secops_shift_metrics
+
+        eastern = pytz.timezone(ShiftConstants.EASTERN_TZ)
         incident_fetcher = TicketHandler()
 
-        # Get tickets
-        inflow = incident_fetcher.get_tickets(query=BASE_QUERY, period=period)
-        outflow = incident_fetcher.get_tickets(query=BASE_QUERY + ' status:closed', period=period)
+        # Calculate target date
+        target_date = datetime.now(eastern) - timedelta(days=days_back)
 
-        # Calculate metrics
-        total_response_time, response_count = TicketMetricsCalculator.calculate_response_times(inflow)
-        total_contain_time, contain_count = TicketMetricsCalculator.calculate_containment_times(inflow)
+        # Determine shift name from shift_start_hour
+        shift_name_map = {4.5: 'morning', 12.5: 'afternoon', 20.5: 'night'}
+        shift_name = shift_name_map.get(shift_start_hour, 'morning')
 
+        # Use component to get metrics
+        base_date = datetime(target_date.year, target_date.month, target_date.day)
+        metrics = secops_shift_metrics.get_shift_metrics(
+            date_obj=base_date,
+            shift_name=shift_name,
+            ticket_handler=incident_fetcher
+        )
+
+        # Convert to legacy format for backward compatibility
+        # Note: response/contain times are already in minutes in the new component
         return {
-            'tickets_inflow': len(inflow),
-            'tickets_closed': len(outflow),
-            'mean_response_time': TicketMetricsCalculator.safe_divide(total_response_time, response_count),
-            'mean_contain_time': TicketMetricsCalculator.safe_divide(total_contain_time, contain_count),
-            'response_time_minutes': TicketMetricsCalculator.convert_to_minutes(
-                TicketMetricsCalculator.safe_divide(total_response_time, response_count)
-            ),
-            'contain_time_minutes': TicketMetricsCalculator.convert_to_minutes(
-                TicketMetricsCalculator.safe_divide(total_contain_time, contain_count)
-            )
+            'tickets_acknowledged': metrics['tickets_acknowledged'],
+            'tickets_closed': metrics['tickets_closed'],
+            'mean_response_time': metrics['response_time_minutes'] * 60000,  # Convert back to ms
+            'mean_contain_time': metrics['contain_time_minutes'] * 60000,  # Convert back to ms
+            'response_time_minutes': metrics['response_time_minutes'],
+            'contain_time_minutes': metrics['contain_time_minutes']
         }
     except Exception as e:
         logger.error(f"Error getting ticket metrics: {e}")
         return {
-            'tickets_inflow': 0,
-            'tickets_closed': 0,
-            'mean_response_time': 0,
-            'mean_contain_time': 0,
-            'response_time_minutes': 0,
-            'contain_time_minutes': 0
-        }
-
-
-def get_shift_ticket_metrics_v2(days_back, shift_start_hour):
-    """Get ticket metrics for a specific shift period using EXACT timestamps.
-
-    This is the CORRECTED version that uses precise datetime ranges instead of
-    truncated integer hours. Use this instead of get_shift_ticket_metrics().
-
-    Args:
-        days_back: Number of days back from today (0 = today, 1 = yesterday)
-        shift_start_hour: Shift start time in decimal hours (4.5 = 4:30 AM)
-
-    Returns:
-        Dict with ticket counts and metrics using exact shift windows
-    """
-    try:
-        eastern = pytz.timezone(ShiftConstants.EASTERN_TZ)
-        incident_fetcher = TicketHandler()
-
-        # Calculate exact shift window
-        target_date = datetime.now(eastern) - timedelta(days=days_back)
-        start_hour_int = int(shift_start_hour)
-        start_minute = int((shift_start_hour % 1) * 60)
-
-        start_dt_naive = datetime(
-            target_date.year,
-            target_date.month,
-            target_date.day,
-            start_hour_int,
-            start_minute
-        )
-        start_dt = eastern.localize(start_dt_naive)
-        end_dt = start_dt + timedelta(hours=8)
-
-        # Build query with exact timestamps
-        time_format = '%Y-%m-%dT%H:%M:%S %z'
-        start_str = start_dt.strftime(time_format)
-        end_str = end_dt.strftime(time_format)
-        time_filter = f'created:>="{start_str}" created:<="{end_str}"'
-
-        inflow_query = f'{BASE_QUERY} {time_filter}'
-        outflow_query = f'{BASE_QUERY} {time_filter} status:closed'
-
-        # Get tickets
-        inflow = incident_fetcher.get_tickets(query=inflow_query)
-        outflow = incident_fetcher.get_tickets(query=outflow_query)
-
-        # Calculate metrics
-        total_response_time, response_count = TicketMetricsCalculator.calculate_response_times(inflow)
-        total_contain_time, contain_count = TicketMetricsCalculator.calculate_containment_times(inflow)
-
-        return {
-            'tickets_inflow': len(inflow),
-            'tickets_closed': len(outflow),
-            'mean_response_time': TicketMetricsCalculator.safe_divide(total_response_time, response_count),
-            'mean_contain_time': TicketMetricsCalculator.safe_divide(total_contain_time, contain_count),
-            'response_time_minutes': TicketMetricsCalculator.convert_to_minutes(
-                TicketMetricsCalculator.safe_divide(total_response_time, response_count)
-            ),
-            'contain_time_minutes': TicketMetricsCalculator.convert_to_minutes(
-                TicketMetricsCalculator.safe_divide(total_contain_time, contain_count)
-            )
-        }
-    except Exception as e:
-        logger.error(f"Error getting ticket metrics v2: {e}")
-        return {
-            'tickets_inflow': 0,
+            'tickets_acknowledged': 0,
             'tickets_closed': 0,
             'mean_response_time': 0,
             'mean_contain_time': 0,
@@ -473,22 +406,50 @@ class SecurityActionsCalculator:
 
 
 def get_shift_security_actions(days_back, shift_start_hour):
-    """Get security actions data for a specific shift period."""
+    """Get security actions data for a specific shift period using EXACT timestamps.
+
+    Args:
+        days_back: Number of days back from today (0 = today, 1 = yesterday)
+        shift_start_hour: Shift start time in decimal hours (4.5 = 4:30 AM)
+
+    Returns:
+        Dict with malicious_true_positives, domains_blocked, iocs_blocked counts
+    """
     try:
-        period = TicketMetricsCalculator.create_shift_period(days_back, shift_start_hour)
+        eastern = pytz.timezone(ShiftConstants.EASTERN_TZ)
         incident_fetcher = TicketHandler()
 
-        # Get malicious true positives
-        malicious_tp = incident_fetcher.get_tickets(
-            query=BASE_QUERY + ' status:closed impact:"Malicious True Positive"',
-            period=period
-        )
+        # Calculate exact shift window
+        target_date = datetime.now(eastern) - timedelta(days=days_back)
+        start_hour_int = int(shift_start_hour)
+        start_minute = int((shift_start_hour % 1) * 60)
 
-        # Count domain blocks during shift
-        shift_start, shift_end = SecurityActionsCalculator.calculate_shift_time_bounds(
-            days_back, shift_start_hour
+        start_dt_naive = datetime(
+            target_date.year,
+            target_date.month,
+            target_date.day,
+            start_hour_int,
+            start_minute
         )
-        domain_blocks = SecurityActionsCalculator.count_domains_blocked_in_period(shift_start, shift_end)
+        start_dt = eastern.localize(start_dt_naive)
+        end_dt = start_dt + timedelta(hours=8)
+
+        # Build query with exact timestamps
+        time_format = '%Y-%m-%dT%H:%M:%S %z'
+        start_str = start_dt.strftime(time_format)
+        end_str = end_dt.strftime(time_format)
+        time_filter = f'created:>="{start_str}" created:<="{end_str}"'
+
+        # Get malicious true positives
+        mtp_query = f'{BASE_QUERY} {time_filter} status:closed impact:"Malicious True Positive"'
+        malicious_tp = incident_fetcher.get_tickets(query=mtp_query)
+
+        # Count domain blocks during shift (using naive datetime for list comparison)
+        shift_start_naive = start_dt.replace(tzinfo=None)
+        shift_end_naive = end_dt.replace(tzinfo=None)
+        domain_blocks = SecurityActionsCalculator.count_domains_blocked_in_period(
+            shift_start_naive, shift_end_naive
+        )
 
         return {
             'malicious_true_positives': len(malicious_tp),
@@ -505,39 +466,56 @@ def get_shift_security_actions(days_back, shift_start_hour):
 
 
 def announce_previous_shift_performance(room_id, shift_name):
-    """Announce the performance of the previous shift in the Webex room."""
+    """Announce the performance of the previous shift in the Webex room using EXACT timestamps."""
     try:
-        # Send previous shift performance to Webex room
-        day_name = datetime.now().strftime("%A")
-        period = {
-            "byFrom": "hours",
-            "fromValue": 8,
-            "byTo": "hours",
-            "toValue": 0
+        from src.components import secops_shift_metrics
+
+        # Determine previous shift
+        previous_shift_mapping = {
+            'morning': ('night', 1),  # Previous night (yesterday)
+            'afternoon': ('morning', 0),  # This morning
+            'night': ('afternoon', 0),  # This afternoon
         }
+
+        if shift_name not in previous_shift_mapping:
+            logger.error(f"Invalid shift_name: {shift_name}")
+            return
+
+        prev_shift_name, days_back = previous_shift_mapping[shift_name]
+        eastern = pytz.timezone(ShiftConstants.EASTERN_TZ)
+        target_date = datetime.now(eastern) - timedelta(days=days_back)
+        day_name = target_date.strftime("%A")
+
+        # Get shift metrics using the component
         incident_fetcher = TicketHandler()
+        base_date = datetime(target_date.year, target_date.month, target_date.day)
 
-        inflow = incident_fetcher.get_tickets(
-            query=BASE_QUERY,
-            period=period
-        )
-        outflow = incident_fetcher.get_tickets(
-            query=BASE_QUERY + ' status:closed',
-            period=period
-        )
+        # Calculate exact shift window for additional queries
+        shift_hour_map = {'morning': 4.5, 'afternoon': 12.5, 'night': 20.5}
+        shift_start_hour = shift_hour_map[prev_shift_name]
+        start_hour_int = int(shift_start_hour)
+        start_minute = int((shift_start_hour % 1) * 60)
 
+        start_dt_naive = datetime(base_date.year, base_date.month, base_date.day, start_hour_int, start_minute)
+        start_dt = eastern.localize(start_dt_naive)
+        end_dt = start_dt + timedelta(hours=8)
+
+        time_format = '%Y-%m-%dT%H:%M:%S %z'
+        start_str = start_dt.strftime(time_format)
+        end_str = end_dt.strftime(time_format)
+        time_filter = f'created:>="{start_str}" created:<="{end_str}"'
+
+        # Get tickets with exact timestamps
+        inflow = incident_fetcher.get_tickets(query=f'{BASE_QUERY} {time_filter}')
+        outflow = incident_fetcher.get_tickets(query=f'{BASE_QUERY} {time_filter} status:closed')
         malicious_true_positives = incident_fetcher.get_tickets(
-            query=BASE_QUERY + ' impact:"Malicious True Positive"',
-            period=period
+            query=f'{BASE_QUERY} {time_filter} impact:"Malicious True Positive"'
         )
-
         response_sla_breaches = incident_fetcher.get_tickets(
-            query=BASE_QUERY + ' timetorespond.slaStatus:late',
-            period=period
+            query=f'{BASE_QUERY} {time_filter} timetorespond.slaStatus:late'
         )
         containment_sla_breaches = incident_fetcher.get_tickets(
-            query=BASE_QUERY + ' timetocontain.slaStatus:late',
-            period=period
+            query=f'{BASE_QUERY} {time_filter} timetocontain.slaStatus:late'
         )
         total_time_to_respond = 0
         total_time_to_contain = 0
@@ -558,51 +536,38 @@ def announce_previous_shift_performance(room_id, shift_name):
         if inflow_tickets_with_host:
             mean_time_to_contain = total_time_to_contain / len(inflow_tickets_with_host)
 
-        previous_shift_mapping = {
-            'morning': ((datetime.now() - timedelta(days=1)).strftime("%A"), 'night'),
-            'afternoon': (day_name, 'morning'),
-            'night': (day_name, 'afternoon'),
-        }
+        # Get staffing data for previous shift
+        previous_shift_staffing_data = get_staffing_data(day_name, prev_shift_name)
 
-        previous_shift_day, previous_shift_name = previous_shift_mapping.get(shift_name, (None, None))
+        # Use exact shift window for IOCs/domains/hosts comparison (naive datetime)
+        shift_start_naive = start_dt.replace(tzinfo=None)
+        shift_end_naive = end_dt.replace(tzinfo=None)
 
-        if previous_shift_name is None:
-            print(f"Warning: No previous shift defined for {shift_name}")
-            return
-
-        previous_shift_staffing_data = get_staffing_data(previous_shift_day, previous_shift_name)
-
-        # total_staff_count = sum(len(staff) for staff in previous_shift_staffing_data.values())
-        # tickets_closed_per_analyst = len(outflow) / total_staff_count if total_staff_count > 0 else 0
-
-        # Use naive datetime for comparison
-        eight_hours_ago = datetime.now() - timedelta(hours=8)
-
-        # Process domains blocked
+        # Process domains blocked during shift window
         all_domains = list_handler.get_list_data_by_name(f'{config.team_name} Blocked Domains')
         domains_blocked = []
         for item in all_domains:
             if 'blocked_at' in item:
                 item_datetime = safe_parse_datetime(item['blocked_at'])
-                if item_datetime and item_datetime >= eight_hours_ago:
+                if item_datetime and shift_start_naive <= item_datetime <= shift_end_naive:
                     domains_blocked.append(item['domain'])
 
-        # Process IP addresses blocked
+        # Process IP addresses blocked during shift window
         all_ips = list_handler.get_list_data_by_name(f'{config.team_name} Blocked IP Addresses')
         ip_addresses_blocked = []
         for item in all_ips:
             if 'blocked_at' in item:
                 item_datetime = safe_parse_datetime(item['blocked_at'])
-                if item_datetime and item_datetime >= eight_hours_ago:
+                if item_datetime and shift_start_naive <= item_datetime <= shift_end_naive:
                     ip_addresses_blocked.append(item['ip_address'])
 
-        # Process hosts contained
+        # Process hosts contained during shift window
         all_hosts = list_handler.get_list_data_by_name(f'{config.team_name} Contained Hosts')
         hosts_contained_list = []
         for item in all_hosts:
             if 'contained_at' in item:
                 item_datetime = safe_parse_datetime(item['contained_at'])
-                if item_datetime and item_datetime >= eight_hours_ago:
+                if item_datetime and shift_start_naive <= item_datetime <= shift_end_naive:
                     hosts_contained_list.append(item['hostname'])
 
         hosts_contained = ', '.join(hosts_contained_list)
