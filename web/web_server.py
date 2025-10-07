@@ -799,10 +799,8 @@ def api_pokedex_status():
             return jsonify({
                 'ready': False,
                 'status': 'not_initialized',
-                'message': 'Pokedex chat is not available. Ollama may not be running or configured.',
+                'message': 'Pokedex chat is not available. Please ensure all components are initialized.',
                 'instructions': [
-                    'Ensure Ollama is installed and running',
-                    'Check that the configured model is available',
                     'Restart the web server with ENABLE_POKEDEX_CHAT = True'
                 ]
             })

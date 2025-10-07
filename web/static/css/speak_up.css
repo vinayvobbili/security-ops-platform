@@ -335,32 +335,9 @@ button:hover {
     transform: translateX(5px);
 }
 
-.burger-menu-content a::before {
-    content: "🔗";
-    margin-right: 8px;
-    opacity: 0.7;
-}
-
 .burger-menu-content a:hover::before {
     opacity: 1;
     transform: scale(1.1);
-}
-
-/* Audio Controls styling */
-.audio-controls button {
-    background: rgba(0, 70, 173, 0.8);
-    border: 3px solid var(--acme-green);
-    border-radius: 50%;
-    padding: 10px;
-    cursor: pointer;
-    backdrop-filter: blur(10px);
-    transition: all 0.3s ease;
-    width: 45px;
-    height: 45px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    box-shadow: 0 4px 15px rgba(0, 166, 81, 0.4);
 }
 
 .audio-controls button:hover {

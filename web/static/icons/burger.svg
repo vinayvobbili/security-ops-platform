@@ -10,7 +10,7 @@
   <circle cx="320" cy="75" r="4" fill="#F5DEB3"/>
   <circle cx="380" cy="90" r="5" fill="#F5DEB3"/>
 
-  <!-- Lettuce (Acme Green) -->
+  <!-- Lettuce (Green) -->
   <path d="M60 180h392c13.3 0 24 10.7 24 24s-10.7 24-24 24H60c-13.3 0-24-10.7-24-24s10.7-24 24-24z" fill="#68B92F"/>
 
   <!-- Meat patty -->

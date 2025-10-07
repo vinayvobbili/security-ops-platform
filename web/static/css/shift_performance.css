@@ -7,14 +7,11 @@ body {
 
 .container {
     max-width: 100%;
-    margin: 0 auto;
     padding: 15px;
-    padding-top: 15px;
     overflow-x: auto;
     background: rgba(255, 255, 255, 0.95);
     border-radius: 15px;
-    margin: 15px;
-    margin-top: 70px;
+    margin: 70px auto 0;
     box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
     backdrop-filter: blur(10px);
 }
