@@ -51,13 +51,6 @@
     border-radius: 0 0 8px 8px;
 }
 
-.autocomplete-item::before {
-    content: "🎯";
-    margin-right: 8px;
-    opacity: 0.7;
-    transition: all 0.2s ease;
-}
-
 .autocomplete-item:hover::before,
 .autocomplete-item.highlighted::before {
     opacity: 1;

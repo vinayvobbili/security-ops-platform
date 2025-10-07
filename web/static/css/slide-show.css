@@ -107,19 +107,6 @@ body {
     box-shadow: inset 0 0 15px rgba(0, 166, 81, 0.2);
 }
 
-.burger-menu-content a::before {
-    content: "🔗";
-    margin-right: 10px;
-    opacity: 0.85;
-    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.3));
-    font-size: 16px;
-    transition: all 0.3s ease;
-}
-
-.burger-menu-content a[href="/shift-performance"]::before {
-    content: "🎯";
-}
-
 .burger-menu-content a:hover::before {
     opacity: 1;
     transform: scale(1.15) rotate(5deg);
@@ -450,24 +437,6 @@ body {
         padding: 8px 12px;
         font-size: 10px;
     }
-}
-
-/* Enhanced Audio Controls with Acme styling - Made more prominent */
-
-.audio-controls button {
-    background: rgba(0, 70, 173, 0.8);
-    border: 3px solid var(--acme-green);
-    border-radius: 50%;
-    padding: 10px; /* Reduced padding from 15px to 10px for smaller circle */
-    cursor: pointer;
-    backdrop-filter: blur(10px);
-    transition: all 0.3s ease;
-    width: 45px; /* Reduced from 55px to 45px for smaller circle */
-    height: 45px; /* Reduced from 55px to 45px for smaller circle */
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    box-shadow: 0 4px 15px rgba(0, 166, 81, 0.4);
 }
 
 .audio-controls button:hover {
