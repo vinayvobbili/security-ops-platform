@@ -277,7 +277,7 @@ function loadShiftDetails(shiftId, button) {
                 detailed_staffing: shiftData.detailed_staffing || {}
             },
             tickets: {
-                tickets_inflow: shiftData.tickets_inflow || 0,
+                tickets_acknowledged: shiftData.tickets_acknowledged || 0,
                 tickets_closed: shiftData.tickets_closed || 0,
                 response_time_minutes: shiftData.response_time_minutes || 0,
                 contain_time_minutes: shiftData.contain_time_minutes || 0,
@@ -547,11 +547,11 @@ function showShiftDetailsFromGranular(data) {
                 </div>
                 <div class="key-metric">
                     <div class="metric-label">Tickets Acknowledged</div>
-                    <div class="metric-value ${tickets.tickets_inflow > 15 ? 'metric-bad' : tickets.tickets_inflow > 10 ? 'metric-warning' : 'metric-good'}">${tickets.tickets_inflow}</div>
+                    <div class="metric-value ${tickets.tickets_acknowledged > 15 ? 'metric-bad' : tickets.tickets_acknowledged > 10 ? 'metric-warning' : 'metric-good'}">${tickets.tickets_acknowledged}</div>
                 </div>
                 <div class="key-metric">
                     <div class="metric-label">Tickets Closed</div>
-                    <div class="metric-value ${tickets.tickets_closed >= tickets.tickets_inflow ? 'metric-good' : tickets.tickets_closed < tickets.tickets_inflow * 0.5 ? 'metric-bad' : 'metric-warning'}">${tickets.tickets_closed}</div>
+                    <div class="metric-value ${tickets.tickets_closed >= tickets.tickets_acknowledged ? 'metric-good' : tickets.tickets_closed < tickets.tickets_acknowledged * 0.5 ? 'metric-bad' : 'metric-warning'}">${tickets.tickets_closed}</div>
                 </div>
                 <div class="key-metric">
                     <div class="metric-label">Mean Time to Respond</div>
@@ -573,7 +573,7 @@ function showShiftDetailsFromGranular(data) {
                 </div>
                 <div class="key-metric">
                     <div class="metric-label">SLA Compliance</div>
-                    <div class="metric-value ${(tickets.response_sla_breaches || 0) === 0 && (tickets.containment_sla_breaches || 0) === 0 ? 'metric-good' : 'metric-bad'}">${(tickets.response_sla_breaches || 0) === 0 && (tickets.containment_sla_breaches || 0) === 0 ? '100%' : ((1 - Math.min((tickets.response_sla_breaches || 0) + (tickets.containment_sla_breaches || 0), tickets.tickets_inflow) / Math.max(tickets.tickets_inflow, 1)) * 100).toFixed(0) + '%'}</div>
+                    <div class="metric-value ${(tickets.response_sla_breaches || 0) === 0 && (tickets.containment_sla_breaches || 0) === 0 ? 'metric-good' : 'metric-bad'}">${(tickets.response_sla_breaches || 0) === 0 && (tickets.containment_sla_breaches || 0) === 0 ? '100%' : ((1 - Math.min((tickets.response_sla_breaches || 0) + (tickets.containment_sla_breaches || 0), tickets.tickets_acknowledged) / Math.max(tickets.tickets_acknowledged, 1)) * 100).toFixed(0) + '%'}</div>
                 </div>
             </div>
         </div>
@@ -589,7 +589,7 @@ function showShiftDetailsFromGranular(data) {
                             <strong>Productivity (30%)</strong>
                             <ul>
                                 <li>Tickets closed per analyst: ${performance.actual_staff > 0 ? (tickets.tickets_closed / performance.actual_staff).toFixed(1) : 'N/A'} tickets/analyst</li>
-                                <li>${tickets.tickets_closed >= tickets.tickets_inflow ? '✓ Closed ≥ Acknowledged (+10pts bonus)' : '✗ Closed < Acknowledged (-10pts penalty)'}</li>
+                                <li>${tickets.tickets_closed >= tickets.tickets_acknowledged ? '✓ Closed ≥ Acknowledged (+10pts bonus)' : '✗ Closed < Acknowledged (-10pts penalty)'}</li>
                             </ul>
                         </div>
                     </div>
@@ -633,7 +633,7 @@ function showShiftDetailsFromGranular(data) {
                     const productivityPts = Math.min(ticketsPerAnalyst * 10, 20);
 
                     // 2. Backlog clearing (+10 or -10)
-                    const backlogPts = tickets.tickets_closed >= tickets.tickets_inflow ? 10 : -10;
+                    const backlogPts = tickets.tickets_closed >= tickets.tickets_acknowledged ? 10 : -10;
 
                     // 3. Response time (up to 25 pts)
                     let responsePts = 0;
@@ -677,7 +677,7 @@ function showShiftDetailsFromGranular(data) {
                                     </tr>
                                     <tr class="${backlogPts > 0 ? 'score-good' : 'score-bad'}">
                                         <td><strong>2. Backlog Clearing</strong></td>
-                                        <td>${tickets.tickets_closed} closed ${tickets.tickets_closed >= tickets.tickets_inflow ? '≥' : '<'} ${tickets.tickets_inflow} ack</td>
+                                        <td>${tickets.tickets_closed} closed ${tickets.tickets_closed >= tickets.tickets_acknowledged ? '≥' : '<'} ${tickets.tickets_acknowledged} ack</td>
                                         <td>${backlogPts > 0 ? '+' : ''}${backlogPts}</td>
                                         <td>+10/-10</td>
                                     </tr>
@@ -722,7 +722,7 @@ function showShiftDetailsFromGranular(data) {
                             <h4>💡 Tips to Improve Score</h4>
                             <ul>
                                 ${productivityPts < 15 ? '<li><strong>Boost Productivity:</strong> Increase tickets closed per analyst. Target: 2+ tickets/analyst for full 20pts</li>' : ''}
-                                ${backlogPts < 0 ? `<li><strong>Clear Backlog:</strong> Close ≥ acknowledged tickets. ${tickets.tickets_inflow - tickets.tickets_closed} more needed for +10pts bonus</li>` : ''}
+                                ${backlogPts < 0 ? `<li><strong>Clear Backlog:</strong> Close ≥ acknowledged tickets. ${tickets.tickets_acknowledged - tickets.tickets_closed} more needed for +10pts bonus</li>` : ''}
                                 ${responsePts < 25 ? `<li><strong>Faster Response:</strong> Reduce avg response time to &lt;5min for full 25pts (currently ${formatTime(tickets.response_time_minutes)})</li>` : ''}
                                 ${containmentPts < 25 ? `<li><strong>Faster Containment:</strong> Reduce avg containment to &lt;30min for full 25pts (currently ${formatTime(tickets.contain_time_minutes)})</li>` : ''}
                                 ${responseSLAPts < 10 ? `<li><strong>Response SLA:</strong> Avoid breaches. ${tickets.response_sla_breaches} breach${tickets.response_sla_breaches > 1 ? 'es' : ''} cost ${(tickets.response_sla_breaches || 0) * 2}pts</li>` : ''}
@@ -775,7 +775,7 @@ function showShiftDetailsFromGranular(data) {
                 </div>
                 <div class="metric-row">
                     <span class="metric-label">Shift Effectiveness:</span>
-                    <span class="metric-value ${tickets.tickets_closed >= tickets.tickets_inflow ? 'metric-good' : 'metric-warning'}">${tickets.tickets_inflow > 0 ? ((tickets.tickets_closed / tickets.tickets_inflow) * 100).toFixed(0) + '%' : 'N/A'}</span>
+                    <span class="metric-value ${tickets.tickets_closed >= tickets.tickets_acknowledged ? 'metric-good' : 'metric-warning'}">${tickets.tickets_acknowledged > 0 ? ((tickets.tickets_closed / tickets.tickets_acknowledged) * 100).toFixed(0) + '%' : 'N/A'}</span>
                 </div>
                 <div class="metric-row">
                     <span class="metric-label">Team Coverage:</span>
@@ -827,7 +827,7 @@ function showShiftDetailsFromGranular(data) {
     document.body.style.overflow = 'hidden'; // Prevent background scrolling
 
     // Trigger confetti for excellent performance
-    if (security.malicious_true_positives === 0 && tickets.tickets_closed >= tickets.tickets_inflow) {
+    if (security.malicious_true_positives === 0 && tickets.tickets_closed >= tickets.tickets_acknowledged) {
         setTimeout(() => {
             const modalContent = document.querySelector('.modal-content');
             if (modalContent) {
@@ -1223,8 +1223,8 @@ function populateTable(shiftData) {
             <td><strong>${shift.shift}</strong></td>
             <td>${shift.total_staff}</td>
             <td>${shift.actual_staff || 0}</td>
-            <td>${shift.tickets_inflow}</td>
-            <td class="${shift.tickets_closed >= shift.tickets_inflow ? 'metric-good' : ''}">${shift.tickets_closed}</td>
+            <td>${shift.tickets_acknowledged}</td>
+            <td class="${shift.tickets_closed >= shift.tickets_acknowledged ? 'metric-good' : ''}">${shift.tickets_closed}</td>
             <td>${mtpCellContent}</td>
             <td>${formatTime(shift.response_time_minutes)}</td>
             <td>${formatTime(shift.contain_time_minutes)}</td>
@@ -1452,7 +1452,7 @@ function deepLinkIfRequested(shiftData) {
             detailed_staffing: shift.detailed_staffing || {}
         },
         tickets: {
-            tickets_inflow: shift.tickets_inflow || 0,
+            tickets_acknowledged: shift.tickets_acknowledged || 0,
             tickets_closed: shift.tickets_closed || 0,
             response_time_minutes: shift.response_time_minutes || 0,
             contain_time_minutes: shift.contain_time_minutes || 0,

@@ -24,7 +24,7 @@ from my_config import get_config
 from services import xsoar
 from services.approved_testing_utils import add_approved_testing_entry
 from src import secops
-from src.components import apt_names_fetcher
+from src.components import apt_names_fetcher, secops_shift_metrics
 from src.utils.logging_utils import log_web_activity, is_scanner_request
 
 SHOULD_START_PROXY = False
@@ -1065,56 +1065,6 @@ def _shift_has_passed(shift_name, current_shift):
         return False
 
 
-# Simple in-memory cache for inflow queries (query -> (timestamp, tickets))
-SHIFT_INFLOW_CACHE = {}
-SHIFT_INFLOW_CACHE_TTL_SECONDS = 300  # 5 minutes
-
-
-def _get_cached_inflow(query: str):
-    now = datetime.now(timezone.utc).timestamp()
-    entry = SHIFT_INFLOW_CACHE.get(query)
-    if entry:
-        ts, tickets = entry
-        if now - ts < SHIFT_INFLOW_CACHE_TTL_SECONDS:
-            return tickets
-        else:
-            SHIFT_INFLOW_CACHE.pop(query, None)
-    return None
-
-
-def _set_cached_inflow(query: str, tickets):
-    SHIFT_INFLOW_CACHE[query] = (datetime.now(timezone.utc).timestamp(), tickets)
-
-
-def _compute_shift_window(date_obj: datetime, shift_name: str):
-    """Return (start_dt_eastern, end_dt_eastern, start_str, end_str) for a shift date+name."""
-    if shift_name.lower() == 'morning':
-        shift_start_hour = 4.5
-    elif shift_name.lower() == 'afternoon':
-        shift_start_hour = 12.5
-    else:
-        shift_start_hour = 20.5
-    start_hour_int = int(shift_start_hour)
-    start_minute = int((shift_start_hour % 1) * 60)
-    start_dt_naive = datetime(date_obj.year, date_obj.month, date_obj.day, start_hour_int, start_minute)
-    start_dt = eastern.localize(start_dt_naive)
-    end_dt = start_dt + timedelta(hours=8)
-    time_format = '%Y-%m-%dT%H:%M:%S %z'
-    return start_dt, end_dt, start_dt.strftime(time_format), end_dt.strftime(time_format)
-
-
-def _fetch_inflow_for_window(date_obj: datetime, shift_name: str):
-    start_dt, end_dt, start_str, end_str = _compute_shift_window(date_obj, shift_name)
-    time_filter = f'created:>="{start_str}" created:<="{end_str}"'
-    inflow_query = f'{secops.BASE_QUERY} {time_filter}'
-    cached = _get_cached_inflow(inflow_query)
-    if cached is not None:
-        return inflow_query, cached, (start_dt, end_dt)
-    tickets = incident_handler.get_tickets(query=inflow_query)
-    _set_cached_inflow(inflow_query, tickets)
-    return inflow_query, tickets, (start_dt, end_dt)
-
-
 @app.route('/api/shift-list')
 @log_web_activity
 def get_shift_list():
@@ -1163,11 +1113,11 @@ def get_shift_list():
                     else:
                         show_shift = False
                     if show_shift:
+                        # Get staffing and security actions
                         shift_hour_map = {'morning': 4.5, 'afternoon': 12.5, 'night': 20.5}
                         shift_start_hour = shift_hour_map.get(shift_name.lower(), 4.5)
                         security_actions = secops.get_shift_security_actions(days_back, shift_start_hour)
 
-                        # Get staffing details
                         detailed_staffing = secops.get_staffing_data(day_name, shift_name)
                         basic_staffing = secops.get_basic_shift_staffing(day_name, shift_name.lower())
 
@@ -1183,162 +1133,43 @@ def get_shift_list():
                         if not shift_lead or 'N/A' in str(shift_lead):
                             shift_lead = 'N/A'
 
-                        # Inflow via cached helper
+                        # Calculate all shift metrics using the component
                         base_date = datetime(target_date.year, target_date.month, target_date.day)
-                        _, inflow_tickets, (start_dt, end_dt) = _fetch_inflow_for_window(base_date, shift_name)
-                        mtp_ids = [t.get('id') for t in inflow_tickets if t.get('CustomFields', {}).get('impact') == 'Malicious True Positive']
-                        sla_metrics = _extract_sla_metrics(inflow_tickets)
+                        metrics = secops_shift_metrics.get_shift_metrics(
+                            date_obj=base_date,
+                            shift_name=shift_name,
+                            ticket_handler=incident_handler,
+                            day_name=day_name,
+                            total_staff=total_staff,
+                            security_actions=security_actions,
+                            shift_lead=shift_lead,
+                            basic_staffing=basic_staffing,
+                            detailed_staffing=detailed_staffing
+                        )
 
-                        # Fetch outflow tickets
-                        time_format = '%Y-%m-%dT%H:%M:%S %z'
-                        start_str = start_dt.strftime(time_format)
-                        end_str = end_dt.strftime(time_format)
-                        time_filter = f'created:>="{start_str}" created:<="{end_str}"'
-                        outflow_query = f'{secops.BASE_QUERY} {time_filter} status:closed'
-                        outflow_tickets = incident_handler.get_tickets(query=outflow_query)
-
-                        # Serialize inflow tickets
-                        inflow_list = []
-                        for ticket in inflow_tickets:
-                            custom_fields = ticket.get('CustomFields', {})
-                            ttr_minutes = None
-                            ttc_minutes = None
-                            if 'timetorespond' in custom_fields and custom_fields['timetorespond']:
-                                ttr_minutes = round(custom_fields['timetorespond'].get('totalDuration', 0) / 60, 2)
-                            if 'timetocontain' in custom_fields and custom_fields['timetocontain']:
-                                ttc_minutes = round(custom_fields['timetocontain'].get('totalDuration', 0) / 60, 2)
-
-                            created_str = ticket.get('created', '')
-                            created_et = ''
-                            if created_str:
-                                try:
-                                    created_dt = datetime.fromisoformat(created_str.replace('Z', '+00:00'))
-                                    created_et = created_dt.astimezone(eastern).strftime('%Y-%m-%d %H:%M:%S %Z')
-                                except:
-                                    created_et = created_str
-
-                            inflow_list.append({
-                                'id': ticket.get('id', ''),
-                                'name': ticket.get('name', ''),
-                                'type': ticket.get('type', ''),
-                                'owner': ticket.get('owner', ''),
-                                'ttr': ttr_minutes,
-                                'ttc': ttc_minutes,
-                                'created': created_et
-                            })
-
-                        # Serialize outflow tickets
-                        outflow_list = []
-                        for ticket in outflow_tickets:
-                            custom_fields = ticket.get('CustomFields', {})
-                            closed_str = ticket.get('closed', '')
-                            closed_et = ''
-                            if closed_str:
-                                try:
-                                    closed_dt = datetime.fromisoformat(closed_str.replace('Z', '+00:00'))
-                                    closed_et = closed_dt.astimezone(eastern).strftime('%Y-%m-%d %H:%M:%S %Z')
-                                except:
-                                    closed_et = closed_str
-
-                            impact = custom_fields.get('impact', {}).get('simple', 'Unknown') if isinstance(custom_fields.get('impact'), dict) else custom_fields.get('impact', 'Unknown')
-
-                            outflow_list.append({
-                                'id': ticket.get('id', ''),
-                                'name': ticket.get('name', ''),
-                                'type': ticket.get('type', ''),
-                                'owner': ticket.get('owner', ''),
-                                'closed': closed_et,
-                                'impact': impact
-                            })
-
-                        # Calculate actual staff from distinct owners in inflow tickets
-                        distinct_owners = set()
-                        for ticket in inflow_tickets:
-                            owner = ticket.get('owner', '').strip()
-                            if owner and owner.lower() not in ['', 'unassigned', 'admin']:
-                                distinct_owners.add(owner)
-                        actual_staff = len(distinct_owners)
-
-                        # Calculate performance score (1-10 scale)
-                        # Only measures what analysts control: closed tickets, response/containment times, SLA compliance
-                        staff_count = max(actual_staff, 1)  # Avoid division by zero
-
-                        score = 0
-
-                        # Use actual ticket counts from inflow/outflow lists
-                        tickets_inflow_count = len(inflow_list)
-                        tickets_closed_count = len(outflow_list)
-
-                        # 1. Tickets Closed Productivity (up to 20 points)
-                        # Analysts control how efficiently they close tickets
-                        tickets_closed_per_analyst = tickets_closed_count / staff_count
-                        score += min(tickets_closed_per_analyst * 10, 20)
-
-                        # 2. Backlog Clearing (+10 bonus or -10 penalty)
-                        # Analysts control whether they clear backlog by closing >= acknowledged
-                        # Low-volume shifts SHOULD use the opportunity to clear backlog
-                        if tickets_closed_count >= tickets_inflow_count:
-                            score += 10  # Cleared backlog or kept up
-                        else:
-                            score -= 10  # Failed to keep up or didn't use low volume to clear backlog
-
-                        # 3. Response Time Quality (up to 25 points)
-                        avg_response = sla_metrics['avg_response']
-                        if avg_response <= 5:  # Excellent: under 5 min
-                            score += 25
-                        elif avg_response <= 15:  # Good: under 15 min
-                            score += 18
-                        elif avg_response <= 30:  # Acceptable: under 30 min
-                            score += 10
-                        # Bad: >30 min gets 0 points
-
-                        # 4. Containment Time Quality (up to 25 points)
-                        avg_containment = sla_metrics['avg_containment']
-                        if avg_containment <= 30:  # Excellent: under 30 min
-                            score += 25
-                        elif avg_containment <= 60:  # Good: under 60 min
-                            score += 18
-                        elif avg_containment <= 120:  # Acceptable: under 2 hours
-                            score += 10
-                        # Bad: >2 hours gets 0 points
-
-                        # 5. Response SLA Compliance (up to 10 points, -2pts per breach)
-                        response_sla_score = 10 - (sla_metrics['response_breaches'] * 2)
-                        score += max(0, response_sla_score)
-
-                        # 6. Containment SLA Compliance (up to 10 points, -2pts per breach)
-                        containment_sla_score = 10 - (sla_metrics['containment_breaches'] * 2)
-                        score += max(0, containment_sla_score)
-
-                        # Cap score between 0 and 100, then convert to 1-10 scale
-                        score = max(0, min(100, score))
-                        score = max(1, min(10, int(round(score / 10))))
-
+                        # Build shift data entry
                         shift_data.append({
                             'id': shift_id,
                             'date': date_str,
-                            'day': day_name,
+                            'day': metrics['day'],
                             'shift': shift_name.title(),
-                            'total_staff': total_staff,
-                            'actual_staff': actual_staff,
+                            'total_staff': metrics['total_staff'],
+                            'actual_staff': metrics['actual_staff'],
                             'status': status,
-                            'tickets_inflow': len(inflow_list),  # Use actual inflow ticket count
-                            'tickets_closed': len(outflow_list),  # Use actual outflow ticket count
-                            # Override with derived averages (minutes already)
-                            'response_time_minutes': sla_metrics['avg_response'],
-                            'contain_time_minutes': sla_metrics['avg_containment'],
-                            'response_sla_breaches': sla_metrics['response_breaches'],
-                            'containment_sla_breaches': sla_metrics['containment_breaches'],
-                            'security_actions': security_actions,
-                            'mtp_ticket_ids': ', '.join(map(str, mtp_ids)),
-                            'inflow_tickets': inflow_list,
-                            'outflow_tickets': outflow_list,
-                            # Staffing details for modal
-                            'shift_lead': shift_lead,
-                            'basic_staffing': basic_staffing,
-                            'detailed_staffing': detailed_staffing,
-                            # Performance score
-                            'score': score
+                            'tickets_acknowledged': metrics['tickets_acknowledged'],
+                            'tickets_closed': metrics['tickets_closed'],
+                            'response_time_minutes': metrics['response_time_minutes'],
+                            'contain_time_minutes': metrics['contain_time_minutes'],
+                            'response_sla_breaches': metrics['response_sla_breaches'],
+                            'containment_sla_breaches': metrics['containment_sla_breaches'],
+                            'security_actions': metrics['security_actions'],
+                            'mtp_ticket_ids': metrics['mtp_ticket_ids'],
+                            'inflow_tickets': metrics['inflow_tickets'],
+                            'outflow_tickets': metrics['outflow_tickets'],
+                            'shift_lead': metrics['shift_lead'],
+                            'basic_staffing': metrics['basic_staffing'],
+                            'detailed_staffing': metrics['detailed_staffing'],
+                            'score': metrics['score']
                         })
                 except Exception as e:
                     print(f"Error getting staffing or metrics for {day_name} {shift_name}: {e}")
@@ -1367,7 +1198,7 @@ def get_shift_list():
                             'total_staff': 0,
                             'actual_staff': 0,
                             'status': status,
-                            'tickets_inflow': 0,
+                            'tickets_acknowledged': 0,
                             'tickets_closed': 0,
                             'response_time_minutes': 0,
                             'contain_time_minutes': 0,
@@ -1405,107 +1236,6 @@ def clear_shift_cache():
 #   >= 600       -> treat as seconds (divide by 60)
 #   else         -> treat as minutes already
 # Breach detection only checks breachTriggered.
-def _extract_sla_metrics(tickets):
-    """Compute SLA metrics (MTTR / MTTC averages & breach counts) from tickets.
-
-    Fixes prior incorrect heuristic that treated small second-based durations as minutes.
-    Assumptions:
-      - totalDuration fields are primarily in SECONDS (as evidenced by typical small values like 57)
-      - Some edge cases may surface durations in milliseconds (large numbers > 3_600_000 and divisible by 1000)
-    We normalize:
-      seconds -> minutes via /60
-      milliseconds -> minutes via /1000/60
-    We log per-ticket debug information for diagnostics.
-    """
-
-    def _duration_to_minutes(raw):
-        if not isinstance(raw, (int, float)) or raw <= 0:
-            return None, None
-        # Detect millisecond values (very large and divisible by 1000) to avoid inflating minutes incorrectly
-        if raw >= 3_600_000 and raw % 1000 == 0:  # >= 1 hour expressed in ms
-            minutes = raw / 1000.0 / 60.0
-            unit = 'ms'
-        else:
-            minutes = raw / 60.0  # treat as seconds
-            unit = 's'
-        return minutes, unit
-
-    response_total_min = 0.0
-    response_count = 0
-    response_breaches = 0
-    contain_total_min = 0.0
-    contain_count = 0
-    contain_breaches = 0
-
-    for t in tickets:
-        cf = t.get('CustomFields', {}) or {}
-        ticket_id = t.get('id', 'UNKNOWN')
-
-        # Prefer explicit timetorespond but allow legacy responsesla fallback
-        resp_obj = cf.get('timetorespond') or cf.get('responsesla')
-        cont_obj = None
-        # Only evaluate containment for host-based tickets
-        if cf.get('hostname'):
-            cont_obj = cf.get('timetocontain') or cf.get('containmentsla')
-
-        raw_resp = raw_cont = None
-        resp_min = cont_min = None
-        resp_unit = cont_unit = None
-
-        if isinstance(resp_obj, dict):
-            raw_resp = resp_obj.get('totalDuration')
-            resp_min, resp_unit = _duration_to_minutes(raw_resp)
-            if resp_min is not None:
-                response_total_min += resp_min
-                response_count += 1
-            if str(resp_obj.get('breachTriggered')).lower() == 'true':
-                response_breaches += 1
-
-        if isinstance(cont_obj, dict):
-            raw_cont = cont_obj.get('totalDuration')
-            cont_min, cont_unit = _duration_to_minutes(raw_cont)
-            if cont_min is not None:
-                contain_total_min += cont_min
-                contain_count += 1
-            if str(cont_obj.get('breachTriggered')).lower() == 'true':
-                contain_breaches += 1
-
-        # Debug logging per ticket
-        if logger.isEnabledFor(logging.DEBUG):
-            logger.debug(
-                "SLA_METRICS ticket=%s resp_raw=%s%s resp_min=%.3f cont_raw=%s%s cont_min=%.3f has_hostname=%s resp_breach=%s cont_breach=%s",
-                ticket_id,
-                raw_resp if raw_resp is not None else '-',
-                f"{resp_unit}" if resp_unit else '',
-                resp_min if resp_min is not None else -1,
-                raw_cont if raw_cont is not None else '-',
-                f"{cont_unit}" if cont_unit else '',
-                cont_min if cont_min is not None else -1,
-                bool(cf.get('hostname')),
-                str(resp_obj.get('breachTriggered')) if isinstance(resp_obj, dict) else '-',
-                str(cont_obj.get('breachTriggered')) if isinstance(cont_obj, dict) else '-'
-            )
-
-    avg_response = round(response_total_min / response_count, 2) if response_count else 0.0
-    avg_contain = round(contain_total_min / contain_count, 2) if contain_count else 0.0
-
-    # Final aggregate debug summary
-    if logger.isEnabledFor(logging.DEBUG):
-        logger.debug(
-            "SLA_METRICS_SUMMARY resp_count=%d resp_total_min=%.3f avg_resp=%.2f cont_count=%d cont_total_min=%.3f avg_cont=%.2f resp_breaches=%d cont_breaches=%d",
-            response_count, response_total_min, avg_response,
-            contain_count, contain_total_min, avg_contain,
-            response_breaches, contain_breaches
-        )
-
-    return {
-        'avg_response': avg_response,  # MTTR in minutes
-        'avg_containment': avg_contain,  # MTTC in minutes
-        'response_breaches': response_breaches,
-        'containment_breaches': contain_breaches
-    }
-
-
 @app.route('/meaningful-metrics')
 @log_web_activity
 def meaningful_metrics():
