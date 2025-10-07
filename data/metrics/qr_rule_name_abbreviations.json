@@ -118,5 +118,9 @@
   ".*_AE_Suspicious Connection to Apache Guacamole.*": "Suspicious Connection to Apache Guacamole",
   ".*_AE_Expedited CrowdStrike Monitoring for Erlang hosts CVE-2025-32433.*": "Expedited CrowdStrike Monitoring for Erlang hosts CVE-2025-32433",
   ".*_AE_T02\\.U006\\.R193\\.Email Security Alert Followed by EDR Detection\\.TA0001\\.T1566\\.001.*": "Email Security Alert Followed by EDR Detection",
-  ".*_AE_ToolShellCVE-2025-53770 Exploit Attempt Detected.*": "ToolShell CVE-2025-53770 Exploit Attempt Detected"
+  ".*_AE_ToolShellCVE-2025-53770 Exploit Attempt Detected.*": "ToolShell CVE-2025-53770 Exploit Attempt Detected",
+  ".*Excessive Failed Attempts to Access a Network Shared Resource From a Compromised Host.*": "Excessive Failed Attempts to Access Network Shared Resource",
+  ".*_AE_ESXi - Member Added To Veeam or ESX Administrators Group.*": "ESXi - Member Added To Veeam or ESX Administrators Group",
+  ".*_AE_Unusual Command Line Activity on Vulnerable NetScaler Device \\(Updated\\).*": "Unusual Command Line Activity on Vulnerable NetScaler Device",
+  ".*_AE_T07\\.U018\\.R229\\.Windows Credential Dumping Activities Detected\\.TA0006\\.T1003.*": "Windows Credential Dumping Activities Detected"
 }
