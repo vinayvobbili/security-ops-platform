@@ -46,7 +46,7 @@ from webex_bot.webex_bot import WebexBot
 from my_config import get_config
 from my_bot.core.my_model import ask, initialize_model_and_agent
 from my_bot.core.session_manager import get_session_manager
-from services.bot_rooms import get_room_name
+from services.webex import get_room_name
 from src.utils.bot_messages import THINKING_MESSAGES, DONE_MESSAGES
 
 CONFIG = get_config()
