@@ -135,15 +135,15 @@ class TicketHandler:
 
     def _fetch_from_api(self, query, period, size):
         """Fetch tickets directly from XSOAR API"""
-        try:
-            payload = {
-                "filter": {
-                    "query": query,
-                    "page": 0,
-                    "size": size,
-                    "sort": [{"field": "created", "asc": False}]
-                }
+        payload = {
+            "filter": {
+                "query": query,
+                "page": 0,
+                "size": size,
+                "sort": [{"field": "created", "asc": False}]
             }
+        }
+        try:
             if period:
                 payload["filter"]["period"] = period
 
