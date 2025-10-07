@@ -1,6 +1,5 @@
 import json
 import logging
-from datetime import datetime
 
 import requests
 import urllib3
@@ -71,7 +70,7 @@ class TicketHandler:
             return self._fetch_paginated(full_query, period)
         return self._fetch_from_api(full_query, period, size)
 
-    def _fetch_paginated(self, query, period, page_size=1000):
+    def _fetch_paginated(self, query, period, page_size=10000):
         """Fetch tickets with pagination to avoid max response size limit"""
         all_tickets = []
         page = 0
@@ -297,7 +296,6 @@ class TicketHandler:
             return response.json()
         else:
             return {"error": response.text}
-
 
 
 class ListHandler:
