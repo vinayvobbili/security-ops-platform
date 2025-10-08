@@ -89,9 +89,10 @@ def patch_websocket_client():
 
                 logger.info(f"Opening websocket connection to {ws_url}")
 
-                # Create SSL context
-                ssl_context = ssl.create_default_context()
-                ssl_context.load_verify_locations(certifi.where())
+                # Create SSL context - unverified for corporate proxy (ZScaler) compatibility
+                ssl_context = ssl._create_unverified_context()
+                ssl_context.check_hostname = False
+                ssl_context.verify_mode = ssl.CERT_NONE
 
                 # Setup connection with enhanced parameters
                 connect_kwargs = {
