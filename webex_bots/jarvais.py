@@ -21,6 +21,7 @@ from zoneinfo import ZoneInfo
 
 import fasteners
 import pandas as pd
+from tqdm import tqdm
 from webex_bot.models.command import Command
 from webex_bot.webex_bot import WebexBot
 from webexpythonsdk.models.cards import (
@@ -33,6 +34,7 @@ from webexteamssdk import WebexTeamsAPI
 from my_config import get_config
 from src.epp import ring_tag_cs_hosts, cs_hosts_without_ring_tag, cs_servers_with_invalid_ring_tags
 from src.epp.tanium_hosts_without_ring_tag import create_processor
+from src.utils.excel_formatting import apply_professional_formatting
 from src.utils.logging_utils import log_activity
 
 CONFIG = get_config()
@@ -620,7 +622,7 @@ class RingTagTaniumHosts(Command):
 
             # Filter for only CLOUD hosts
             hosts_to_tag = hosts_to_tag[
-                hosts_to_tag['computer.instance'].str.contains('CLOUD', case=False, na=False)
+                hosts_to_tag['Source'].str.contains('Cloud', case=False, na=False)
             ]
             filter_duration = time.time() - filter_start
 
@@ -643,7 +645,7 @@ class RingTagTaniumHosts(Command):
 
             # Apply tags to each host
             apply_start = time.time()
-            for idx, row in hosts_to_tag.iterrows():
+            for idx, row in tqdm(hosts_to_tag.iterrows(), total=len(hosts_to_tag), desc="Tagging hosts"):
                 computer_name = str(row['Computer Name'])
                 source = str(row['Source'])
                 ring_tag = str(row['Generated Tag'])
@@ -723,6 +725,19 @@ class RingTagTaniumHosts(Command):
             output_filename = report_dir / f'Tanium_Ring_Tagging_Results_{timestamp}.xlsx'
 
             results_df.to_excel(output_filename, index=False)
+
+            # Apply professional formatting to the Excel file
+            column_widths = {
+                'computer name': 35,
+                'source': 15,
+                'ring tag': 35,
+                'action id': 15,
+                'current tags': 50,
+                'comments': 60,
+                'status': 40
+            }
+            wrap_columns = {'current tags', 'comments', 'status'}
+            apply_professional_formatting(output_filename, column_widths=column_widths, wrap_columns=wrap_columns)
 
             # Calculate total duration
             total_duration = time.time() - start_time
