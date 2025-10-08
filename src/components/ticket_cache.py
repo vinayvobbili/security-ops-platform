@@ -4,6 +4,7 @@ import pprint
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Iterable, Union
+from zoneinfo import ZoneInfo
 
 from tqdm import tqdm
 
@@ -318,7 +319,7 @@ class TicketCache:
         ui_path = charts_dir / 'past_90_days_tickets.json'
         ui_data_with_metadata = {
             'data': ui_tickets,
-            'data_generated_at': datetime.now().isoformat(),
+            'data_generated_at': datetime.now(ZoneInfo("America/New_York")).isoformat(),
             'total_count': len(ui_tickets)
         }
         with open(ui_path, 'w') as f:
