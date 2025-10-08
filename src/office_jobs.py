@@ -1,4 +1,7 @@
+#!/usr/bin/python3
+
 from src.charts.chart_style import apply_chart_style
+
 apply_chart_style()
 
 import time

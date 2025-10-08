@@ -1,12 +1,17 @@
+#!/usr/bin/python3
+
 # Configure SSL for corporate proxy environments (Zscaler, etc.) - MUST BE FIRST
 import sys
 from pathlib import Path
+
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from src.utils.ssl_config import configure_ssl_if_needed
+
 configure_ssl_if_needed(verbose=True)  # Re-enabled due to ZScaler connectivity issues
 
 # Apply enhanced WebSocket client patch for better connection resilience
 from src.utils.enhanced_websocket_client import patch_websocket_client
+
 patch_websocket_client()
 
 import ipaddress

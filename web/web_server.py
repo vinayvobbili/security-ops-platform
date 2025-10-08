@@ -1,3 +1,5 @@
+#!/usr/bin/python3
+
 import argparse
 import asyncio
 import http.client
@@ -20,6 +22,8 @@ import pytz
 import requests
 from flask import Flask, request, abort, jsonify, render_template
 
+from my_bot.core.my_model import ask, ask_stream
+from my_bot.core.state_manager import get_state_manager
 from my_config import get_config
 from services import xsoar
 from services.approved_testing_utils import add_approved_testing_entry
@@ -789,9 +793,8 @@ def pokedex_chat():
 
 @app.route('/api/pokedex-status')
 def api_pokedex_status():
-    """Health check endpoint for Pokedex chat availability"""
+    """Health check endpoint for Pokédex chat availability"""
     try:
-        from my_bot.core.state_manager import get_state_manager
 
         state_manager = get_state_manager()
 
@@ -853,16 +856,6 @@ def api_pokedex_chat():
         user_ip = request.remote_addr
         user_identifier = f"web_{user_ip}_{session_id}"
 
-        # Import the ask function from the same module Pokédex uses
-        try:
-            from my_bot.core.my_model import ask
-        except ImportError as e:
-            logger.error(f"Failed to import ask function: {e}")
-            return jsonify({
-                'success': False,
-                'error': 'Chat service is not available. Please ensure Pokedex bot components are initialized.'
-            }), 500
-
         # Use the ask function to get LLM response
         # The ask function handles conversation context via session management
         try:
@@ -910,23 +903,13 @@ def api_pokedex_chat_stream():
         user_ip = request.remote_addr
         user_identifier = f"web_{user_ip}_{session_id}"
 
-        # Import the streaming ask function
-        try:
-            from my_bot.core.my_model import ask_stream
-        except ImportError as e:
-            logger.error(f"Failed to import ask_stream function: {e}")
-            return jsonify({
-                'success': False,
-                'error': 'Chat service is not available. Please ensure Pokedex bot components are initialized.'
-            }), 500
-
         def generate():
             """Generator function for Server-Sent Events"""
             try:
                 for token in ask_stream(
-                    user_message,
-                    user_id=user_identifier,
-                    room_id="web_chat"
+                        user_message,
+                        user_id=user_identifier,
+                        room_id="web_chat"
                 ):
                     # Format as Server-Sent Event
                     yield f"data: {json.dumps({'token': token})}\n\n"
@@ -1223,8 +1206,6 @@ def clear_shift_cache():
     """No-op endpoint for compatibility with frontend cache clearing.
     Backend caching has been removed - only frontend localStorage cache exists."""
     return jsonify({'success': True, 'message': 'No backend cache (frontend-only caching)'})
-
-
 
 
 # Helper to robustly extract SLA metrics from inflow tickets
