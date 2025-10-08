@@ -48,7 +48,7 @@ query getEndpoints($first: Int, $after: Cursor) {
         os {
           platform
         }
-        sensorReadings(sensors: [{name: "Custom Tags"}]) {
+        sensorReadings(sensors: [{name: "Custom Tags"}, {name: "Online"}]) {
           columns {
             name
             values
@@ -72,7 +72,7 @@ query getEndpointByName($name: String!) {
         os {
           platform
         }
-        sensorReadings(sensors: [{name: "Custom Tags"}]) {
+        sensorReadings(sensors: [{name: "Custom Tags"}, {name: "Online"}]) {
           columns {
             name
             values
@@ -96,7 +96,7 @@ query searchEndpointsByName($searchTerm: String!, $limit: Int!) {
         os {
           platform
         }
-        sensorReadings(sensors: [{name: "Custom Tags"}]) {
+        sensorReadings(sensors: [{name: "Custom Tags"}, {name: "Online"}]) {
           columns {
             name
             values
@@ -135,6 +135,7 @@ class Computer:
     eidLastSeen: str
     source: str  # Tracks which instance this came from
     os_platform: str = ""  # Operating system platform (Windows, Linux, Mac)
+    eid_status: str = ""  # Online/Offline status from Tanium
     custom_tags: List[str] = None
 
     def __post_init__(self):
@@ -286,7 +287,9 @@ class TaniumInstance:
 
     def extract_computer_from_node(self, node: Dict[str, Any]) -> Computer:
         """Extract computer data from GraphQL node"""
-        custom_tags = self._extract_custom_tags(node.get('sensorReadings', {}))
+        sensor_readings = node.get('sensorReadings', {})
+        custom_tags = self._extract_custom_tags(sensor_readings)
+        online_status = self._extract_online_status(sensor_readings)
         os_data = node.get('os', {})
         os_platform = os_data.get('platform', '') if os_data else ''
 
@@ -297,6 +300,7 @@ class TaniumInstance:
             eidLastSeen=node.get('eidLastSeen'),
             source=self.name,
             os_platform=os_platform,
+            eid_status=online_status,
             custom_tags=custom_tags
         )
 
@@ -305,9 +309,27 @@ class TaniumInstance:
         tags = []
         columns = sensor_readings.get('columns', [])
         for column in columns:
-            values = column.get('values', [])
-            tags.extend([tag for tag in values if tag != self.NO_TAGS_PLACEHOLDER])
+            if column.get('name') == 'Custom Tags':
+                values = column.get('values', [])
+                tags.extend([tag for tag in values if tag != self.NO_TAGS_PLACEHOLDER])
         return tags
+
+    def _extract_online_status(self, sensor_readings: Dict) -> str:
+        """Extract online status from sensor readings and translate to readable format"""
+        columns = sensor_readings.get('columns', [])
+        for column in columns:
+            if column.get('name') == 'Online':
+                values = column.get('values', [])
+                if values and values[0]:
+                    status = str(values[0]).lower()
+                    # Translate boolean/string values to readable format
+                    if status in ('true', '1', 'yes'):
+                        return 'Online'
+                    elif status in ('false', '0', 'no'):
+                        return 'Offline'
+                    else:
+                        return values[0]  # Return original if unexpected format
+        return "Unknown"
 
     def validate_token(self) -> bool:
         """Validate the API token"""
@@ -335,15 +357,25 @@ class TaniumInstance:
         logger.debug(f"No computer found with name '{computer_name}' in {self.name}")
         return None
 
-    def add_tag_by_name(self, computer_name: str, tag: str) -> dict:
-        """Add a custom tag to a computer by name."""
+    def add_tag_by_name(self, computer_name: str, tag: str, package_id: str = None) -> dict:
+        """Add a custom tag to a computer by name.
+
+        Args:
+            computer_name: Name of the computer
+            tag: Tag to add
+            package_id: Optional Tanium package ID. If not provided, will be derived from OS platform.
+        """
         computer = self.find_computer_by_name(computer_name)
         if not computer:
             raise TaniumAPIError(f"Computer '{computer_name}' not found")
 
         updated_tags = computer.custom_tags + [tag]
-        device_type = computer.os_platform or "windows"
-        package_id = self.get_package_id_for_device_type(device_type)
+
+        # Use provided package_id or derive it from OS platform
+        if package_id is None:
+            device_type = computer.os_platform or "windows"
+            package_id = self.get_package_id_for_device_type(device_type)
+
         variables = self.build_tag_update_variables(computer.id, updated_tags, package_id, action="Add")
         result = self.query(UPDATE_TAGS_MUTATION, variables)
 
@@ -411,15 +443,16 @@ class TaniumClient:
             )
             self.instances.append(cloud_instance)
 
-        # On-prem instance (disable SSL verification for on-prem)
-        if (instance is None or instance.lower() == "onprem") and hasattr(self.config, 'tanium_onprem_api_url') and self.config.tanium_onprem_api_url and self.config.tanium_onprem_api_token:
-            onprem_instance = TaniumInstance(
-                "On-Prem",
-                self.config.tanium_onprem_api_url,
-                self.config.tanium_onprem_api_token,
-                verify_ssl=False
-            )
-            self.instances.append(onprem_instance)
+        # TODO activate on-prem instance once the package IDs are provided
+        # # On-prem instance (disable SSL verification for on-prem)
+        # if (instance is None or instance.lower() == "onprem") and hasattr(self.config, 'tanium_onprem_api_url') and self.config.tanium_onprem_api_url and self.config.tanium_onprem_api_token:
+        #     onprem_instance = TaniumInstance(
+        #         "On-Prem",
+        #         self.config.tanium_onprem_api_url,
+        #         self.config.tanium_onprem_api_token,
+        #         verify_ssl=False
+        #     )
+        #     self.instances.append(onprem_instance)
 
     def validate_all_tokens(self) -> Dict[str, bool]:
         """Validate tokens for all instances"""
@@ -455,6 +488,7 @@ class TaniumClient:
                 'ID': computer.id,
                 'IP Address': computer.ip,
                 'OS Platform': computer.os_platform,
+                'Status': computer.eid_status,
                 'Last Seen': computer.eidLastSeen,
                 'Source': computer.source,
                 'Current Tags': '\n'.join(computer.custom_tags),

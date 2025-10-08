@@ -227,7 +227,7 @@ def seek_approval_to_ring_tag_tanium(room_id):
                     Column(
                         width="stretch",
                         items=[
-                            TextBlock(text="I can only the 10 Cloud endpoints in the report. Do you want them to be Ring tagged?", wrap=True)
+                            TextBlock(text="For now, I can tag only the Cloud endpoints in the report. Do you want them to be Ring tagged?", wrap=True)
                         ],
                         verticalContentAlignment=VerticalContentAlignment.CENTER
                     )
@@ -647,8 +647,10 @@ class RingTagTaniumHosts(Command):
             apply_start = time.time()
             for idx, row in tqdm(hosts_to_tag.iterrows(), total=len(hosts_to_tag), desc="Tagging hosts"):
                 computer_name = str(row['Computer Name'])
+                tanium_id = str(row['Tanium ID'])
                 source = str(row['Source'])
                 ring_tag = str(row['Generated Tag'])
+                package_id = str(row['Package ID'])
                 current_tags = str(row.get('Current Tags', ''))
                 comments = str(row.get('Comments', ''))
 
@@ -658,6 +660,7 @@ class RingTagTaniumHosts(Command):
                     if not instance:
                         failed_tags.append({
                             'name': computer_name,
+                            'tanium_id': tanium_id,
                             'tag': ring_tag,
                             'source': source,
                             'current_tags': current_tags,
@@ -666,17 +669,19 @@ class RingTagTaniumHosts(Command):
                         })
                         continue
 
-                    # Add the tag
-                    logger.info(f"Tagging {computer_name} with {ring_tag} in {source}")
-                    result = instance.add_tag_by_name(computer_name, ring_tag)
+                    # Add the tag using the package ID from the report
+                    logger.info(f"Tagging {computer_name} with {ring_tag} in {source} using package {package_id}")
+                    result = instance.add_tag_by_name(computer_name, ring_tag, package_id=package_id)
 
                     # Extract action ID from result
                     action_id = result.get('action', {}).get('scheduledAction', {}).get('id', 'N/A')
 
                     successful_tags.append({
                         'name': computer_name,
+                        'tanium_id': tanium_id,
                         'tag': ring_tag,
                         'source': source,
+                        'package_id': package_id,
                         'current_tags': current_tags,
                         'comments': comments,
                         'action_id': action_id
@@ -686,8 +691,10 @@ class RingTagTaniumHosts(Command):
                     logger.error(f"Failed to tag {computer_name}: {e}")
                     failed_tags.append({
                         'name': computer_name,
+                        'tanium_id': tanium_id,
                         'tag': ring_tag,
                         'source': source,
+                        'package_id': package_id,
                         'current_tags': current_tags,
                         'comments': comments,
                         'error': str(e)
@@ -699,8 +706,10 @@ class RingTagTaniumHosts(Command):
             for host in successful_tags:
                 results_data.append({
                     'Computer Name': host['name'],
+                    'Tanium ID': host['tanium_id'],
                     'Source': host['source'],
                     'Ring Tag': host['tag'],
+                    'Package ID': host['package_id'],
                     'Action ID': host['action_id'],
                     'Current Tags': host['current_tags'],
                     'Comments': host['comments'],
@@ -709,8 +718,10 @@ class RingTagTaniumHosts(Command):
             for host in failed_tags:
                 results_data.append({
                     'Computer Name': host['name'],
+                    'Tanium ID': host['tanium_id'],
                     'Source': host['source'],
                     'Ring Tag': host['tag'],
+                    'Package ID': host['package_id'],
                     'Action ID': 'N/A',
                     'Current Tags': host['current_tags'],
                     'Comments': host['comments'],
@@ -729,8 +740,10 @@ class RingTagTaniumHosts(Command):
             # Apply professional formatting to the Excel file
             column_widths = {
                 'computer name': 35,
+                'tanium id': 25,
                 'source': 15,
                 'ring tag': 35,
+                'package id': 12,
                 'action id': 15,
                 'current tags': 50,
                 'comments': 60,
