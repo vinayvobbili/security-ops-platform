@@ -81,6 +81,17 @@ logging.getLogger().setLevel(logging.DEBUG)
 EASTERN_TZ = ZoneInfo("America/New_York")
 
 
+def get_package_id_for_os(os_platform: str) -> str:
+    """Get the appropriate Tanium package ID for the given OS platform."""
+    os_lower = os_platform.lower() if os_platform else ""
+    # Check for non-Windows platforms using substring matching
+    if any(platform in os_lower for platform in ["linux", "unix", "mac", "darwin", "aix", "solaris", "freebsd"]):
+        return "38356"  # Custom Tagging - Add Tags (Non-Windows)
+    return "38355"  # Windows (default)
+
+
+
+
 # ============================================================================
 # Domain Models (Clean, focused data structures)
 # ============================================================================
@@ -115,6 +126,9 @@ class EnrichedComputer:
     was_country_guessed: bool = False
     status: str = ""
     ring_tag: Optional[str] = None
+    os_platform: str = ""
+    package_id: str = ""
+    online_status: str = ""  # Online or Offline
 
     @property
     def is_workstation(self) -> bool:
@@ -235,7 +249,7 @@ class TaniumDataLoader:
             ws = wb.active
 
             for row_num, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
-                if not row or len(row) < 7:
+                if not row or len(row) < 8:
                     continue
 
                 if not row[0]:  # name is required
@@ -247,9 +261,11 @@ class TaniumDataLoader:
                             name=str(row[0]).strip(),
                             id=str(row[1]).strip() if row[1] else "",
                             ip=str(row[2]).strip() if row[2] else "",
-                            eidLastSeen=row[4],  # Column 5: Last Seen (was row[3])
-                            source=str(row[5]).strip() if row[5] else "",  # Column 6: Source (was row[4])
-                            custom_tags=[tag.strip() for tag in str(row[6]).split('\n') if tag.strip()] if row[6] else []  # Column 7: Current Tags - split by newline to match export format
+                            os_platform=str(row[3]).strip() if row[3] else "",  # Column 4: OS Platform
+                            eid_status=str(row[4]).strip() if row[4] else "",  # Column 5: Status
+                            eidLastSeen=row[5],  # Column 6: Last Seen
+                            source=str(row[6]).strip() if row[6] else "",  # Column 7: Source
+                            custom_tags=[tag.strip() for tag in str(row[7]).split('\n') if tag.strip()] if row[7] else []  # Column 8: Current Tags - split by newline to match export format
                         )
                     )
                 except Exception as e:
@@ -348,6 +364,7 @@ class ServiceNowComputerEnricher:
                     if country_data:
                         self.logger.debug(f"Country-related columns for {original_computer.name}: {country_data}")
 
+                os_platform = original_computer.os_platform or ""
                 enriched_computers.append(
                     EnrichedComputer(
                         computer=original_computer,
@@ -357,7 +374,10 @@ class ServiceNowComputerEnricher:
                         category=self._clean_value(row.get('SNOW_category', '')),
                         was_country_guessed=False,
                         status=self._clean_value(row.get('SNOW_comments', '')),
-                        ring_tag=''
+                        ring_tag='',
+                        os_platform=os_platform,
+                        package_id=get_package_id_for_os(os_platform),
+                        online_status=original_computer.eid_status
                     )
                 )
 
@@ -555,7 +575,10 @@ class SmartRingTagGenerator:
                             category=computer.category,
                             was_country_guessed=computer.was_country_guessed,
                             status=computer.status,
-                            ring_tag=f"EPP_ECMTag_{region}_Wks_Ring{ring}"
+                            ring_tag=f"EPP_ECMTag_{region}_Wks_Ring{ring}",
+                            os_platform=computer.os_platform,
+                            package_id=computer.package_id,
+                            online_status=computer.online_status
                         ).add_status("Ring tag generated successfully")
 
                         if computer.was_country_guessed:
@@ -599,7 +622,10 @@ class SmartRingTagGenerator:
                 category=server.category,
                 was_country_guessed=server.was_country_guessed,
                 status=server.status,
-                ring_tag=f"EPP_ECMTag_{server.region}_SRV_Ring{ring}"
+                ring_tag=f"EPP_ECMTag_{server.region}_SRV_Ring{ring}",
+                os_platform=server.os_platform,
+                package_id=server.package_id,
+                online_status=server.online_status
             ).add_status("Ring tag generated successfully")
 
             if server.was_country_guessed:
@@ -654,6 +680,9 @@ class ExcelReportExporter:
             "Environment",
             "Country",
             "Region",
+            "OS Platform",
+            "Package ID",
+            "Status",
             "Was Country Guessed",
             "Current Tags",
             "Generated Tag",
@@ -680,6 +709,9 @@ class ExcelReportExporter:
                 computer.environment,
                 computer.country,
                 computer.region,
+                computer.os_platform,
+                computer.package_id,
+                computer.online_status,
                 "Yes" if computer.was_country_guessed else "No",
                 current_tags,
                 computer.ring_tag or "",
@@ -699,6 +731,9 @@ class ExcelReportExporter:
             'environment': 22,
             'country': 22,
             'region': 18,
+            'os platform': 20,
+            'package id': 12,
+            'status': 10,
             'was country guessed': 20,
             'current tags': 50,
             'generated tag': 35,
@@ -766,7 +801,10 @@ class TaniumRingTagProcessor:
                     category=comp.category,
                     was_country_guessed=was_country_guessed,
                     status=comp.status,
-                    ring_tag=''
+                    ring_tag='',
+                    os_platform=comp.os_platform,
+                    package_id=comp.package_id,
+                    online_status=comp.online_status
                 )
                 final_computers.append(final_comp)
 
