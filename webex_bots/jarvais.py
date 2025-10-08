@@ -225,7 +225,7 @@ def seek_approval_to_ring_tag_tanium(room_id):
                     Column(
                         width="stretch",
                         items=[
-                            TextBlock(text="Since we are still in Testing phase, do you want 10 random Tanium hosts to be Ring tagged?", wrap=True)
+                            TextBlock(text="I can only the 10 Cloud endpoints in the report. Do you want them to be Ring tagged?", wrap=True)
                         ],
                         verticalContentAlignment=VerticalContentAlignment.CENTER
                     )
@@ -562,13 +562,13 @@ class RingTagTaniumHosts(Command):
         loading_msg = get_random_loading_message()
         webex_api.messages.create(
             roomId=room_id,
-            markdown=f"Hello {activity['actor']['displayName']}! {loading_msg}\n\n🏷️**Starting ring tagging for 10 random Tanium hosts...**\nEstimated completion: ~5 minutes ⏰"
+            markdown=f"Hello {activity['actor']['displayName']}! {loading_msg}\n\n🏷️**Starting ring tagging for all CLOUD Tanium hosts...**\nEstimated completion: ~5 minutes ⏰"
         )
 
         lock_path = ROOT_DIRECTORY / "src" / "epp" / "ring_tag_tanium_hosts.lock"
         try:
             with fasteners.InterProcessLock(lock_path):
-                self._apply_tags_to_random_hosts(room_id)
+                self._apply_tags_to_hosts(room_id)
         except Exception as e:
             logger.error(f"Error in RingTagTaniumHosts execute: {e}")
             webex_api.messages.create(
@@ -583,8 +583,8 @@ class RingTagTaniumHosts(Command):
                     logger.error(f"Failed to remove lock file {lock_path}: {e}")
 
     @staticmethod
-    def _apply_tags_to_random_hosts(room_id):
-        """Apply ring tags to 10 random Tanium hosts"""
+    def _apply_tags_to_hosts(room_id):
+        """Apply ring tags to all CLOUD Tanium hosts"""
         import time
         from services.tanium import TaniumClient
 
@@ -617,18 +617,22 @@ class RingTagTaniumHosts(Command):
                 (df['Generated Tag'] != '') &
                 (~df['Comments'].str.contains('missing|couldn\'t be generated|error', case=False, na=False))
                 ]
+
+            # Filter for only CLOUD hosts
+            hosts_to_tag = hosts_to_tag[
+                hosts_to_tag['computer.instance'].str.contains('CLOUD', case=False, na=False)
+            ]
             filter_duration = time.time() - filter_start
 
             if len(hosts_to_tag) == 0:
                 webex_api.messages.create(
                     roomId=room_id,
-                    markdown=f"❌ **No hosts available for tagging**. All hosts in the report have issues that prevent tagging."
+                    markdown=f"❌ **No CLOUD hosts available for tagging**. All CLOUD hosts in the report have issues that prevent tagging."
                 )
                 return
 
-            # Select 10 random hosts (or fewer if less than 10 available)
-            num_to_tag = min(10, len(hosts_to_tag))
-            random_hosts = hosts_to_tag.sample(n=num_to_tag, random_state=random.randint(0, 10000))
+            # Tag all CLOUD hosts
+            num_to_tag = len(hosts_to_tag)
 
             # Initialize Tanium client
             tanium_client = TaniumClient()
@@ -639,7 +643,7 @@ class RingTagTaniumHosts(Command):
 
             # Apply tags to each host
             apply_start = time.time()
-            for idx, row in random_hosts.iterrows():
+            for idx, row in hosts_to_tag.iterrows():
                 computer_name = str(row['Computer Name'])
                 source = str(row['Source'])
                 ring_tag = str(row['Generated Tag'])
@@ -743,8 +747,8 @@ class RingTagTaniumHosts(Command):
             summary_md = f"## 🎉 Tanium Ring Tagging Complete!\n\n"
             summary_md += f"**Summary:**\n"
             summary_md += f"- Total hosts in report: {total_hosts_in_report:,}\n"
-            summary_md += f"- Hosts eligible for tagging: {len(hosts_to_tag):,}\n"
-            summary_md += f"- Hosts processed (random sample): {num_to_tag}\n"
+            summary_md += f"- CLOUD hosts eligible for tagging: {len(hosts_to_tag):,}\n"
+            summary_md += f"- CLOUD hosts processed: {num_to_tag}\n"
             summary_md += f"- Hosts tagged successfully: {len(successful_tags)}\n"
             summary_md += f"- Hosts failed to tag: {len(failed_tags)}\n\n"
             summary_md += f"**Timing:**\n"
