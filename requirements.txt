@@ -83,3 +83,5 @@ types-pytz
 jsonschema
 pydantic-settings
 typing_extensions
+
+texttable
