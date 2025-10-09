@@ -45,6 +45,7 @@ DATA_DIR = ROOT_DIRECTORY / "data" / "transient" / "epp_device_tagging"
 (ROOT_DIRECTORY / "logs").mkdir(exist_ok=True)
 
 # Setup logging with rotation and better formatting
+# Use force=True to reconfigure if already initialized
 logging.basicConfig(
     level=logging.WARNING,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -55,9 +56,15 @@ logging.basicConfig(
             backupCount=5
         ),
         logging.StreamHandler()
-    ]
+    ],
+    force=True  # Force reconfiguration even if logging was already initialized
 )
+
+# Get the root logger to ensure all logs are captured
 logger = logging.getLogger(__name__)
+# Also configure the root logger explicitly
+root_logger = logging.getLogger()
+root_logger.setLevel(logging.WARNING)
 
 webex_api = WebexTeamsAPI(access_token=CONFIG.webex_bot_access_token_jarvais)
 
