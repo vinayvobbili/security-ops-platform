@@ -24,8 +24,9 @@ This script automates the assignment of "ring tags" to hosts in Tanium for phase
 - **Safely handles missing data**: Gracefully processes hosts even when ServiceNow data is incomplete
 
 ### 3. Geographic Classification
-- ** `METLAP/PMDESK` prefix → India PMLI
-- ** IAZ` prefix → US
+- **Priority 1**: Special hostname prefix overrides:
+  - `METLAP/PMDESK` prefix → India PMLI
+  - `IAZ` prefix → US
 - **Primary source**: Uses country data from ServiceNow when available
 - **Intelligent fallback**: When ServiceNow country is missing, uses hostname pattern matching:
   - `VMVDI` prefix → United States
@@ -88,8 +89,6 @@ def get_package_id_for_os(os_platform: str) -> str:
     if any(platform in os_lower for platform in ["linux", "unix", "mac", "darwin", "aix", "solaris", "freebsd"]):
         return "38356"  # Custom Tagging - Add Tags (Non-Windows)
     return "38355"  # Windows (default)
-
-
 
 
 # ============================================================================
