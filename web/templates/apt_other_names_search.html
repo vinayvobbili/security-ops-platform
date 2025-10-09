@@ -62,7 +62,7 @@
             raw = dataEl.textContent.trim();
         }
         // Handle unrendered template (still contains Jinja braces) or null
-        if (!raw || raw === 'null' || raw.indexOf('{{') === 0) {
+        if (!raw || raw === 'null' || raw.indexOf('{{ "{{" }}') === 0) {
             raw = '[]';
         }
         // If the first char isn't likely JSON, bail out
