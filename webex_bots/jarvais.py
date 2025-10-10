@@ -574,7 +574,7 @@ class GetTaniumHostsWithoutRingTag(Command):
             (df['Generated Tag'].notna()) &
             (df['Generated Tag'] != '') &
             (~df['Comments'].str.contains('missing|couldn\'t be generated|error', case=False, na=False))
-        ]
+            ]
         eligible_hosts_count = len(eligible_hosts)
 
         # Count by source for informational purposes
@@ -699,7 +699,7 @@ class RingTagTaniumHosts(Command):
                 (df['Generated Tag'].notna()) &
                 (df['Generated Tag'] != '') &
                 (~df['Comments'].str.contains('missing|couldn\'t be generated|error', case=False, na=False))
-            ]
+                ]
             filter_duration = time.time() - filter_start
 
             if len(hosts_to_tag) == 0:
