@@ -443,16 +443,15 @@ class TaniumClient:
             )
             self.instances.append(cloud_instance)
 
-        # TODO activate on-prem instance once the package IDs are provided
-        # # On-prem instance (disable SSL verification for on-prem)
-        # if (instance is None or instance.lower() == "onprem") and hasattr(self.config, 'tanium_onprem_api_url') and self.config.tanium_onprem_api_url and self.config.tanium_onprem_api_token:
-        #     onprem_instance = TaniumInstance(
-        #         "On-Prem",
-        #         self.config.tanium_onprem_api_url,
-        #         self.config.tanium_onprem_api_token,
-        #         verify_ssl=False
-        #     )
-        #     self.instances.append(onprem_instance)
+        # On-prem instance (disable SSL verification for on-prem)
+        if (instance is None or instance.lower() == "onprem") and hasattr(self.config, 'tanium_onprem_api_url') and self.config.tanium_onprem_api_url and self.config.tanium_onprem_api_token:
+            onprem_instance = TaniumInstance(
+                "On-Prem",
+                self.config.tanium_onprem_api_url,
+                self.config.tanium_onprem_api_token,
+                verify_ssl=False
+            )
+            self.instances.append(onprem_instance)
 
     def validate_all_tokens(self) -> Dict[str, bool]:
         """Validate tokens for all instances"""
