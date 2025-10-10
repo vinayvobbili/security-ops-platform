@@ -106,6 +106,100 @@ Same process as editing:
 ✅ **Memory-only decryption**: Plaintext secrets never touch disk during runtime
 ✅ **Automatic fallback**: Works with plaintext .env during transition
 ✅ **No code changes**: Existing code continues to use `os.environ` normally
+✅ **Audit logging**: Track all access attempts to the encryption key
+
+## Audit Logging (Recommended)
+
+While encryption protects your secrets, you should also monitor access to the encryption key itself. This helps detect if someone with sudo privileges is trying to access your key.
+
+### Setup Audit Logging
+
+```bash
+# One-time setup
+bash scripts/setup_key_audit.sh
+```
+
+This installs and configures `auditd` to log all access to `~/.config/age/key.txt`, tracking:
+- **Read** attempts
+- **Write** attempts
+- **Attribute changes**
+- Who accessed it (user, command, timestamp)
+
+### Check Audit Logs
+
+View all key access events:
+```bash
+python scripts/check_key_access.py
+```
+
+View only today's events:
+```bash
+python scripts/check_key_access.py --today
+```
+
+View suspicious activity only:
+```bash
+python scripts/check_key_access.py --suspicious
+```
+
+View summary statistics:
+```bash
+python scripts/check_key_access.py --summary
+```
+
+### What's Considered Suspicious?
+
+The audit script flags these patterns as suspicious:
+- ✋ **Root access** to the key file
+- ✋ **Direct cat/cp/scp** of the key
+- ✋ **Network tools** (curl, wget, nc) accessing the key
+- ✋ **Unexpected commands** touching the key file
+
+**Note**: Your legitimate application access (via Python/age) is not flagged as suspicious.
+
+### Automated Monitoring
+
+Set up automated monitoring with alerts to Webex:
+
+```bash
+# Run manually to test
+python scripts/monitor_key_access.py --alert-webex --dry-run
+
+# Set up cron job (check every hour)
+crontab -e
+
+# Add this line:
+0 * * * * cd /home/vinay/pub/IR && .venv/bin/python scripts/monitor_key_access.py --alert-webex
+```
+
+You'll receive a Webex message if suspicious activity is detected.
+
+### Example Audit Output
+
+```
+✓ Event #1
+  Time:     2025-01-10 14:32:15
+  User:     vinay
+  Command:  python
+  Exe:      /home/vinay/pub/IR/.venv/bin/python
+
+🚨 SUSPICIOUS Event #2
+  Time:     2025-01-10 15:45:22
+  User:     root
+  Command:  cat
+  Exe:      /usr/bin/cat
+  Flags:    root_access, direct_cat_of_key
+```
+
+### Understanding the Limitations
+
+**Important**: Audit logging is a **detective control**, not a **preventive control**.
+
+- ✅ You'll know if someone accessed the key
+- ✅ You can investigate and respond
+- ❌ It doesn't prevent the access from happening
+
+For true prevention against sudo users, you need hardware-based encryption (TPM) or external secret management (HashiCorp Vault).
 
 ## Files Created
 
@@ -113,6 +207,9 @@ Same process as editing:
 scripts/
   setup_age_encryption.sh       # One-time setup script
   encrypt_env.py                 # Encryption utility
+  setup_key_audit.sh             # Setup audit logging
+  check_key_access.py            # Check audit logs
+  monitor_key_access.py          # Automated monitoring with alerts
 
 src/utils/
   env_encryption.py              # Core encryption/decryption module
@@ -120,9 +217,13 @@ src/utils/
 data/transient/
   .env.age                       # Encrypted environment file (keep this)
   .env                           # Plaintext (delete after encrypting)
+  key_access_state.json          # Monitoring state (auto-generated)
 
 ~/.config/age/
   key.txt                        # Your private key (backup securely!)
+
+/etc/audit/rules.d/
+  age-key.rules                  # Persistent audit rules (auto-generated)
 ```
 
 ## Troubleshooting
@@ -152,6 +253,27 @@ python scripts/encrypt_env.py
 1. Check that `.env.age` exists: `ls -l data/transient/.env.age`
 2. Check that key exists: `ls -l ~/.config/age/key.txt`
 3. Test decryption manually: `python src/utils/env_encryption.py`
+
+### Audit logging not working
+```bash
+# Check if auditd is running
+sudo systemctl status auditd
+
+# Check if rule is active
+sudo auditctl -l | grep age_key_access
+
+# Re-run setup if needed
+bash scripts/setup_key_audit.sh
+```
+
+### No audit events showing up
+```bash
+# Test by accessing the key
+cat ~/.config/age/key.txt
+
+# Then check logs
+python scripts/check_key_access.py --last 5m
+```
 
 ## Key Management
 
