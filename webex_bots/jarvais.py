@@ -238,7 +238,7 @@ def seek_approval_to_ring_tag_tanium(room_id, total_hosts=None):
                     Column(
                         width="stretch",
                         items=[
-                            TextBlock(text=f"For now, I can tag only the Cloud endpoints in the report{hosts_info}. Do you want them to be Ring tagged?", wrap=True)
+                            TextBlock(text=f"I can tag hosts from both Cloud and On-Prem Tanium instances{hosts_info}. Do you want them to be Ring tagged?", wrap=True)
                         ],
                         verticalContentAlignment=VerticalContentAlignment.CENTER
                     )
@@ -567,28 +567,33 @@ class GetTaniumHostsWithoutRingTag(Command):
             )
             return
 
-        # Count total hosts and cloud hosts eligible for tagging
+        # Count total hosts and eligible hosts for tagging (both Cloud and On-Prem)
         df = pd.read_excel(filepath)
         total_hosts = len(df)
-        cloud_hosts = df[
+        eligible_hosts = df[
             (df['Generated Tag'].notna()) &
             (df['Generated Tag'] != '') &
-            (~df['Comments'].str.contains('missing|couldn\'t be generated|error', case=False, na=False)) &
-            (df['Source'].str.contains('Cloud', case=False, na=False))
+            (~df['Comments'].str.contains('missing|couldn\'t be generated|error', case=False, na=False))
         ]
-        cloud_hosts_count = len(cloud_hosts)
+        eligible_hosts_count = len(eligible_hosts)
+
+        # Count by source for informational purposes
+        cloud_count = len(eligible_hosts[eligible_hosts['Source'].str.contains('Cloud', case=False, na=False)])
+        onprem_count = len(eligible_hosts[eligible_hosts['Source'].str.contains('On-Prem', case=False, na=False)])
 
         message = f"Hello {activity['actor']['displayName']}! Here's the list of Tanium hosts without a Ring Tag. Ring tags have also been generated for your review.\n\n"
         message += f"**Summary:**\n"
         message += f"- Total hosts: {total_hosts:,}\n"
-        message += f"- Cloud hosts eligible for tagging: {cloud_hosts_count:,}"
+        message += f"- Hosts eligible for tagging: {eligible_hosts_count:,}\n"
+        message += f"  - Cloud: {cloud_count:,}\n"
+        message += f"  - On-Prem: {onprem_count:,}"
 
         webex_api.messages.create(
             roomId=room_id,
             markdown=message,
             files=[str(filepath)]
         )
-        seek_approval_to_ring_tag_tanium(room_id, total_hosts=cloud_hosts_count)
+        seek_approval_to_ring_tag_tanium(room_id, total_hosts=eligible_hosts_count)
 
 
 class RingTagTaniumHosts(Command):
@@ -634,7 +639,7 @@ class RingTagTaniumHosts(Command):
             batch_info = f" (batch of {batch_size:,} hosts)"
         webex_api.messages.create(
             roomId=room_id,
-            markdown=f"Hello {activity['actor']['displayName']}! {loading_msg}\n\n🏷️**Starting ring tagging for CLOUD Tanium hosts{batch_info}...**\nEstimated completion: ~5 minutes ⏰"
+            markdown=f"Hello {activity['actor']['displayName']}! {loading_msg}\n\n🏷️**Starting ring tagging for Tanium hosts from both Cloud and On-Prem instances{batch_info}...**\nEstimated completion: ~5 minutes ⏰"
         )
 
         lock_path = ROOT_DIRECTORY / "src" / "epp" / "ring_tag_tanium_hosts.lock"
@@ -656,7 +661,7 @@ class RingTagTaniumHosts(Command):
 
     @staticmethod
     def _apply_tags_to_hosts(room_id, batch_size=None):
-        """Apply ring tags to CLOUD Tanium hosts with optional batch sampling
+        """Apply ring tags to Tanium hosts (both Cloud and On-Prem) with optional batch sampling
 
         Args:
             room_id: Webex room ID for sending messages
@@ -688,24 +693,19 @@ class RingTagTaniumHosts(Command):
 
             total_hosts_in_report = len(df)
 
-            # Filter hosts that have generated tags and no errors
+            # Filter hosts that have generated tags and no errors (both Cloud and On-Prem)
             filter_start = time.time()
             hosts_to_tag = df[
                 (df['Generated Tag'].notna()) &
                 (df['Generated Tag'] != '') &
                 (~df['Comments'].str.contains('missing|couldn\'t be generated|error', case=False, na=False))
-                ]
-
-            # Filter for only CLOUD hosts
-            hosts_to_tag = hosts_to_tag[
-                hosts_to_tag['Source'].str.contains('Cloud', case=False, na=False)
             ]
             filter_duration = time.time() - filter_start
 
             if len(hosts_to_tag) == 0:
                 webex_api.messages.create(
                     roomId=room_id,
-                    markdown=f"❌ **No CLOUD hosts available for tagging**. All CLOUD hosts in the report have issues that prevent tagging."
+                    markdown=f"❌ **No hosts available for tagging**. All hosts in the report have issues that prevent tagging."
                 )
                 return
 
@@ -730,7 +730,7 @@ class RingTagTaniumHosts(Command):
                 # batch_size is None, meaning user entered 'all'
                 webex_api.messages.create(
                     roomId=room_id,
-                    markdown=f"📋 **Full deployment mode**: Tagging ALL {total_eligible_hosts:,} eligible CLOUD hosts."
+                    markdown=f"📋 **Full deployment mode**: Tagging ALL {total_eligible_hosts:,} eligible hosts from both Cloud and On-Prem instances."
                 )
 
             num_to_tag = len(hosts_to_tag)
@@ -874,11 +874,11 @@ class RingTagTaniumHosts(Command):
             summary_md = f"## 🎉 Tanium Ring Tagging Complete!\n\n"
             summary_md += f"**Summary:**\n"
             summary_md += f"- Total hosts in report: {total_hosts_in_report:,}\n"
-            summary_md += f"- CLOUD hosts eligible for tagging: {total_eligible_hosts:,}\n"
+            summary_md += f"- Hosts eligible for tagging: {total_eligible_hosts:,}\n"
             if batch_size is not None and batch_size < total_eligible_hosts:
                 summary_md += f"- 🧪 **Batch mode**: Randomly sampled {num_to_tag:,} hosts (requested: {batch_size:,})\n"
             else:
-                summary_md += f"- CLOUD hosts processed: {num_to_tag:,}\n"
+                summary_md += f"- Hosts processed: {num_to_tag:,}\n"
             summary_md += f"- Hosts tagged successfully: {len(successful_tags):,}\n"
             summary_md += f"- Hosts failed to tag: {len(failed_tags):,}\n\n"
             summary_md += f"**Timing:**\n"
