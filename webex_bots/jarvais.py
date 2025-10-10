@@ -183,6 +183,8 @@ def send_report_with_progress(room_id, filename, message, progress_info=None) ->
 
 
 def seek_approval_to_ring_tag(room_id):
+    import time
+
     card = AdaptiveCard(
         body=[
             TextBlock(
@@ -211,18 +213,57 @@ def seek_approval_to_ring_tag(room_id):
         ]
     )
 
-    try:
-        webex_api.messages.create(
-            roomId=room_id,
-            text="Please approve the tagging action.",
-            attachments=[{"contentType": "application/vnd.microsoft.card.adaptive", "content": card.to_dict()}]
-        )
-    except Exception as e:
-        logger.error(f"Failed to send approval card: {e}")
+    # Retry logic for transient API failures
+    max_retries = 3
+    retry_delay = 2
+
+    for attempt in range(max_retries):
+        try:
+            webex_api.messages.create(
+                roomId=room_id,
+                text="Please approve the tagging action.",
+                attachments=[{"contentType": "application/vnd.microsoft.card.adaptive", "content": card.to_dict()}]
+            )
+            return
+        except Exception as e:
+            error_msg = str(e)
+            is_retryable = any(code in error_msg for code in ['503', '429', '502', '504'])
+
+            if is_retryable and attempt < max_retries - 1:
+                wait_time = retry_delay * (2 ** attempt)
+                logger.warning(f"Transient error sending CS approval card (attempt {attempt + 1}/{max_retries}): {e}. Retrying in {wait_time}s...")
+                time.sleep(wait_time)
+                continue
+            else:
+                logger.error(f"Failed to send CS approval card after {attempt + 1} attempts: {e}")
+                # Try to send error notification with its own retry logic
+                for notify_attempt in range(2):  # Try twice to send error notification
+                    try:
+                        if is_retryable:
+                            webex_api.messages.create(
+                                roomId=room_id,
+                                markdown=f"❌ **Error**: Webex API is temporarily unavailable (tried {max_retries} times). Please try your command again in a few minutes.\n\nError: {error_msg}"
+                            )
+                        else:
+                            webex_api.messages.create(
+                                roomId=room_id,
+                                markdown=f"❌ **Error**: Failed to send approval card. Please check the logs or contact support.\n\nError details: {error_msg}"
+                            )
+                        break  # Success, exit retry loop
+                    except Exception as notify_error:
+                        if notify_attempt < 1:  # One more try
+                            logger.warning(f"Failed to send error notification (attempt {notify_attempt + 1}/2): {notify_error}. Retrying...")
+                            time.sleep(3)
+                        else:
+                            logger.error(f"Failed to send error notification after 2 attempts: {notify_error}")
+                            logger.error(f"⚠️ IMPORTANT: User was NOT notified about approval card failure. Check Webex room manually.")
+                return
 
 
 def seek_approval_to_ring_tag_tanium(room_id, total_hosts=None):
     """Send approval card for Tanium ring tagging with batch size option"""
+    import time
+
     hosts_info = f" ({total_hosts:,} hosts available)" if total_hosts else ""
 
     card = AdaptiveCard(
@@ -268,17 +309,59 @@ def seek_approval_to_ring_tag_tanium(room_id, total_hosts=None):
         ]
     )
 
-    try:
-        webex_api.messages.create(
-            roomId=room_id,
-            text="Please approve the Tanium tagging action.",
-            attachments=[{"contentType": "application/vnd.microsoft.card.adaptive", "content": card.to_dict()}]
-        )
-    except Exception as e:
-        logger.error(f"Failed to send Tanium approval card: {e}")
+    # Retry logic for transient API failures (503, 429, network issues)
+    max_retries = 3
+    retry_delay = 2  # seconds
+
+    for attempt in range(max_retries):
+        try:
+            webex_api.messages.create(
+                roomId=room_id,
+                text="Please approve the Tanium tagging action.",
+                attachments=[{"contentType": "application/vnd.microsoft.card.adaptive", "content": card.to_dict()}]
+            )
+            # Success - exit the retry loop
+            return
+        except Exception as e:
+            error_msg = str(e)
+            is_retryable = any(code in error_msg for code in ['503', '429', '502', '504'])
+
+            if is_retryable and attempt < max_retries - 1:
+                # Transient error - retry with exponential backoff
+                wait_time = retry_delay * (2 ** attempt)
+                logger.warning(f"Transient error sending Tanium approval card (attempt {attempt + 1}/{max_retries}): {e}. Retrying in {wait_time}s...")
+                time.sleep(wait_time)
+                continue
+            else:
+                # Non-retryable error or max retries reached
+                logger.error(f"Failed to send Tanium approval card after {attempt + 1} attempts: {e}")
+                # Try to send error notification with its own retry logic
+                for notify_attempt in range(2):  # Try twice to send error notification
+                    try:
+                        if is_retryable:
+                            webex_api.messages.create(
+                                roomId=room_id,
+                                markdown=f"❌ **Error**: Webex API is temporarily unavailable (tried {max_retries} times). Please try your command again in a few minutes.\n\nError: {error_msg}"
+                            )
+                        else:
+                            webex_api.messages.create(
+                                roomId=room_id,
+                                markdown=f"❌ **Error**: Failed to send approval card. Please check the logs or contact support.\n\nError details: {error_msg}"
+                            )
+                        break  # Success, exit retry loop
+                    except Exception as notify_error:
+                        if notify_attempt < 1:  # One more try
+                            logger.warning(f"Failed to send error notification (attempt {notify_attempt + 1}/2): {notify_error}. Retrying...")
+                            time.sleep(3)
+                        else:
+                            logger.error(f"Failed to send error notification after 2 attempts: {notify_error}")
+                            logger.error(f"⚠️ IMPORTANT: User was NOT notified about approval card failure. Check Webex room manually.")
+                return
 
 
 def seek_approval_to_delete_invalid_ring_tags(room_id):
+    import time
+
     card = AdaptiveCard(
         body=[
             TextBlock(
@@ -307,14 +390,51 @@ def seek_approval_to_delete_invalid_ring_tags(room_id):
         ]
     )
 
-    try:
-        webex_api.messages.create(
-            roomId=room_id,
-            text="Please approve the tagging action.",
-            attachments=[{"contentType": "application/vnd.microsoft.card.adaptive", "content": card.to_dict()}]
-        )
-    except Exception as e:
-        logger.error(f"Failed to send approval card: {e}")
+    # Retry logic for transient API failures
+    max_retries = 3
+    retry_delay = 2
+
+    for attempt in range(max_retries):
+        try:
+            webex_api.messages.create(
+                roomId=room_id,
+                text="Please approve the tagging action.",
+                attachments=[{"contentType": "application/vnd.microsoft.card.adaptive", "content": card.to_dict()}]
+            )
+            return
+        except Exception as e:
+            error_msg = str(e)
+            is_retryable = any(code in error_msg for code in ['503', '429', '502', '504'])
+
+            if is_retryable and attempt < max_retries - 1:
+                wait_time = retry_delay * (2 ** attempt)
+                logger.warning(f"Transient error sending invalid ring tags approval card (attempt {attempt + 1}/{max_retries}): {e}. Retrying in {wait_time}s...")
+                time.sleep(wait_time)
+                continue
+            else:
+                logger.error(f"Failed to send invalid ring tags approval card after {attempt + 1} attempts: {e}")
+                # Try to send error notification with its own retry logic
+                for notify_attempt in range(2):  # Try twice to send error notification
+                    try:
+                        if is_retryable:
+                            webex_api.messages.create(
+                                roomId=room_id,
+                                markdown=f"❌ **Error**: Webex API is temporarily unavailable (tried {max_retries} times). Please try your command again in a few minutes.\n\nError: {error_msg}"
+                            )
+                        else:
+                            webex_api.messages.create(
+                                roomId=room_id,
+                                markdown=f"❌ **Error**: Failed to send approval card. Please check the logs or contact support.\n\nError details: {error_msg}"
+                            )
+                        break  # Success, exit retry loop
+                    except Exception as notify_error:
+                        if notify_attempt < 1:  # One more try
+                            logger.warning(f"Failed to send error notification (attempt {notify_attempt + 1}/2): {notify_error}. Retrying...")
+                            time.sleep(3)
+                        else:
+                            logger.error(f"Failed to send error notification after 2 attempts: {notify_error}")
+                            logger.error(f"⚠️ IMPORTANT: User was NOT notified about approval card failure. Check Webex room manually.")
+                return
 
 
 class GetCSHostsWithoutRingTag(Command):
