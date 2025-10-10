@@ -376,12 +376,14 @@ class ListHandler:
 
 def main():
     """Main function that demonstrates core functionality of this module"""
-    from src.components.ticket_cache import TicketCache
+    # from src.components.ticket_cache import TicketCache
+    #
+    # log.info("Starting XSOAR ticket caching process")
+    # ticket_cache = TicketCache()
+    # ticket_cache.generate()
+    # log.info("XSOAR ticket caching process completed")
 
-    log.info("Starting XSOAR ticket caching process")
-    ticket_cache = TicketCache()
-    ticket_cache.generate()
-    log.info("XSOAR ticket caching process completed")
+    print(json.dumps(get_incident('850153'), indent=4))
 
 
 if __name__ == "__main__":
