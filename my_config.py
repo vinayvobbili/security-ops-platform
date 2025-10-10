@@ -1,11 +1,13 @@
 import os
 from dataclasses import dataclass
 
-from dotenv import load_dotenv
+# Import encrypted environment loader
+from src.utils.env_encryption import load_encrypted_env
 
-# Load environment variables from .env file
+# Load environment variables from encrypted .env.age file
+# Falls back to plaintext .env if .env.age doesn't exist yet
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
-load_dotenv(ROOT_DIR + "/data/transient/.env")
+load_encrypted_env()
 
 
 def get_config():
