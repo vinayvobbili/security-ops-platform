@@ -581,7 +581,16 @@ class GetTaniumHostsWithoutRingTag(Command):
         cloud_count = len(eligible_hosts[eligible_hosts['Source'].str.contains('Cloud', case=False, na=False)])
         onprem_count = len(eligible_hosts[eligible_hosts['Source'].str.contains('On-Prem', case=False, na=False)])
 
+        # Check which instances were actually used in the report
+        from services.tanium import TaniumClient
+        client = TaniumClient()
+        available_instances = client.list_available_instances()
+        instances_msg = f"📡 **Active instances:** {', '.join(available_instances)}"
+        if len(available_instances) < 2:
+            instances_msg += f"\n⚠️ **Note:** Only {len(available_instances)} of 2 configured instances is accessible from this server"
+
         message = f"Hello {activity['actor']['displayName']}! Here's the list of Tanium hosts without a Ring Tag. Ring tags have also been generated for your review.\n\n"
+        message += f"{instances_msg}\n\n"
         message += f"**Summary:**\n"
         message += f"- Total hosts: {total_hosts:,}\n"
         message += f"- Hosts eligible for tagging: {eligible_hosts_count:,}\n"
