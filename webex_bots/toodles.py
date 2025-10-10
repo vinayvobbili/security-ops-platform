@@ -1370,7 +1370,7 @@ class CreateAZDOWorkItem(Command):
             project = inputs['project']
 
             if project == 'platforms':
-                assignee = CONFIG.my_email_address
+                assignee = CONFIG.resp_eng_auto_lead
                 parent_url = CONFIG.azdo_platforms_parent_url
             elif project == 'rea':
                 assignee = CONFIG.resp_eng_auto_lead
