@@ -37,7 +37,7 @@
 <img src="{{ url_for('static', filename='icons/circle-right-solid.svg') }}" alt="Right Arrow" class="arrow right" onclick="moveSlide(1)"/>
 <div class="nav-buttons">
     {% for image_file in image_files %}
-        <button data-slide-index="{{ loop.index0 }}" class="nav-dot"></button>
+        <button data-slide-index="{{ loop.index0 }}" class="nav-dot">{{ loop.index }}</button>
     {% endfor %}
 </div>
 <img id="reloadButton" src="{{ url_for('static', filename='icons/reload.svg') }}" alt="Reload" class="reload-icon" onclick="restartSlideshow()"/>
