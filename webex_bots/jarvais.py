@@ -29,6 +29,7 @@ from webexpythonsdk.models.cards import (
     TextBlock, options, HorizontalAlignment, VerticalContentAlignment
 )
 from webexpythonsdk.models.cards.actions import Submit
+from webexpythonsdk.models.cards.inputs import Text as TextInput
 from webexteamssdk import WebexTeamsAPI
 
 from my_config import get_config
@@ -220,7 +221,10 @@ def seek_approval_to_ring_tag(room_id):
         logger.error(f"Failed to send approval card: {e}")
 
 
-def seek_approval_to_ring_tag_tanium(room_id):
+def seek_approval_to_ring_tag_tanium(room_id, total_hosts=None):
+    """Send approval card for Tanium ring tagging with batch size option"""
+    hosts_info = f" ({total_hosts:,} hosts available)" if total_hosts else ""
+
     card = AdaptiveCard(
         body=[
             TextBlock(
@@ -234,11 +238,26 @@ def seek_approval_to_ring_tag_tanium(room_id):
                     Column(
                         width="stretch",
                         items=[
-                            TextBlock(text="For now, I can tag only the Cloud endpoints in the report. Do you want them to be Ring tagged?", wrap=True)
+                            TextBlock(text=f"For now, I can tag only the Cloud endpoints in the report{hosts_info}. Do you want them to be Ring tagged?", wrap=True)
                         ],
                         verticalContentAlignment=VerticalContentAlignment.CENTER
                     )
                 ]
+            ),
+            TextBlock(
+                text="🧪 Batch Size (Required for Safety)",
+                weight=options.FontWeight.BOLDER,
+                separator=True
+            ),
+            TextBlock(
+                text="Enter number of hosts to randomly tag. Default is 10 for safety. Use higher numbers (100, 1000, etc.) after successful testing, or enter 'all' to tag all hosts.",
+                wrap=True,
+                isSubtle=True
+            ),
+            TextInput(
+                id="batch_size",
+                placeholder="Default: 10 (or enter 100, 1000, 'all')",
+                isRequired=False
             )
         ],
         actions=[
@@ -548,14 +567,28 @@ class GetTaniumHostsWithoutRingTag(Command):
             )
             return
 
-        message = f"Hello {activity['actor']['displayName']}! Here's the list of Tanium hosts without a Ring Tag. Ring tags have also been generated for your review. Count = {len(pd.read_excel(filepath))}"
+        # Count total hosts and cloud hosts eligible for tagging
+        df = pd.read_excel(filepath)
+        total_hosts = len(df)
+        cloud_hosts = df[
+            (df['Generated Tag'].notna()) &
+            (df['Generated Tag'] != '') &
+            (~df['Comments'].str.contains('missing|couldn\'t be generated|error', case=False, na=False)) &
+            (df['Source'].str.contains('Cloud', case=False, na=False))
+        ]
+        cloud_hosts_count = len(cloud_hosts)
+
+        message = f"Hello {activity['actor']['displayName']}! Here's the list of Tanium hosts without a Ring Tag. Ring tags have also been generated for your review.\n\n"
+        message += f"**Summary:**\n"
+        message += f"- Total hosts: {total_hosts:,}\n"
+        message += f"- Cloud hosts eligible for tagging: {cloud_hosts_count:,}"
 
         webex_api.messages.create(
             roomId=room_id,
             markdown=message,
             files=[str(filepath)]
         )
-        seek_approval_to_ring_tag_tanium(room_id)
+        seek_approval_to_ring_tag_tanium(room_id, total_hosts=cloud_hosts_count)
 
 
 class RingTagTaniumHosts(Command):
@@ -568,16 +601,46 @@ class RingTagTaniumHosts(Command):
     @log_activity(bot_access_token=CONFIG.webex_bot_access_token_jarvais, log_file_name="jarvais_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
         room_id = attachment_actions.roomId
+
+        # Extract batch size from the form submission
+        # Default to 10 for safety if user leaves field blank
+        batch_size = 10
+        if hasattr(attachment_actions, 'inputs') and attachment_actions.inputs:
+            batch_size_str = attachment_actions.inputs.get('batch_size', '').strip()
+            if batch_size_str:
+                # Allow 'all' to tag all hosts
+                if batch_size_str.lower() == 'all':
+                    batch_size = None
+                else:
+                    try:
+                        batch_size = int(batch_size_str)
+                        if batch_size <= 0:
+                            webex_api.messages.create(
+                                roomId=room_id,
+                                markdown=f"❌ Invalid batch size: {batch_size}. Please enter a positive number or 'all'."
+                            )
+                            return
+                    except ValueError:
+                        webex_api.messages.create(
+                            roomId=room_id,
+                            markdown=f"❌ Invalid batch size: '{batch_size_str}'. Please enter a valid number or 'all'."
+                        )
+                        return
+
         loading_msg = get_random_loading_message()
+        if batch_size is None:
+            batch_info = " (tagging ALL hosts)"
+        else:
+            batch_info = f" (batch of {batch_size:,} hosts)"
         webex_api.messages.create(
             roomId=room_id,
-            markdown=f"Hello {activity['actor']['displayName']}! {loading_msg}\n\n🏷️**Starting ring tagging for all CLOUD Tanium hosts...**\nEstimated completion: ~5 minutes ⏰"
+            markdown=f"Hello {activity['actor']['displayName']}! {loading_msg}\n\n🏷️**Starting ring tagging for CLOUD Tanium hosts{batch_info}...**\nEstimated completion: ~5 minutes ⏰"
         )
 
         lock_path = ROOT_DIRECTORY / "src" / "epp" / "ring_tag_tanium_hosts.lock"
         try:
             with fasteners.InterProcessLock(lock_path):
-                self._apply_tags_to_hosts(room_id)
+                self._apply_tags_to_hosts(room_id, batch_size=batch_size)
         except Exception as e:
             logger.error(f"Error in RingTagTaniumHosts execute: {e}")
             webex_api.messages.create(
@@ -592,8 +655,14 @@ class RingTagTaniumHosts(Command):
                     logger.error(f"Failed to remove lock file {lock_path}: {e}")
 
     @staticmethod
-    def _apply_tags_to_hosts(room_id):
-        """Apply ring tags to all CLOUD Tanium hosts"""
+    def _apply_tags_to_hosts(room_id, batch_size=None):
+        """Apply ring tags to CLOUD Tanium hosts with optional batch sampling
+
+        Args:
+            room_id: Webex room ID for sending messages
+            batch_size: Optional number of hosts to randomly sample for tagging.
+                       If None, all eligible hosts will be tagged.
+        """
         import time
         from services.tanium import TaniumClient
 
@@ -640,7 +709,30 @@ class RingTagTaniumHosts(Command):
                 )
                 return
 
-            # Tag all CLOUD hosts
+            total_eligible_hosts = len(hosts_to_tag)
+
+            # Apply random sampling if batch size is specified
+            if batch_size is not None:
+                if batch_size >= total_eligible_hosts:
+                    webex_api.messages.create(
+                        roomId=room_id,
+                        markdown=f"ℹ️ **Note**: Batch size ({batch_size:,}) equals or exceeds available hosts ({total_eligible_hosts:,}). Tagging all {total_eligible_hosts:,} hosts."
+                    )
+                else:
+                    # Randomly sample N hosts from the eligible pool
+                    hosts_to_tag = hosts_to_tag.sample(n=batch_size, random_state=None)
+                    logger.info(f"Randomly sampled {batch_size} hosts from {total_eligible_hosts} eligible hosts")
+                    webex_api.messages.create(
+                        roomId=room_id,
+                        markdown=f"🎲 **Batch mode active**: Randomly selected {batch_size:,} hosts from {total_eligible_hosts:,} eligible hosts for tagging."
+                    )
+            else:
+                # batch_size is None, meaning user entered 'all'
+                webex_api.messages.create(
+                    roomId=room_id,
+                    markdown=f"📋 **Full deployment mode**: Tagging ALL {total_eligible_hosts:,} eligible CLOUD hosts."
+                )
+
             num_to_tag = len(hosts_to_tag)
 
             # Initialize Tanium client
@@ -782,10 +874,13 @@ class RingTagTaniumHosts(Command):
             summary_md = f"## 🎉 Tanium Ring Tagging Complete!\n\n"
             summary_md += f"**Summary:**\n"
             summary_md += f"- Total hosts in report: {total_hosts_in_report:,}\n"
-            summary_md += f"- CLOUD hosts eligible for tagging: {len(hosts_to_tag):,}\n"
-            summary_md += f"- CLOUD hosts processed: {num_to_tag}\n"
-            summary_md += f"- Hosts tagged successfully: {len(successful_tags)}\n"
-            summary_md += f"- Hosts failed to tag: {len(failed_tags)}\n\n"
+            summary_md += f"- CLOUD hosts eligible for tagging: {total_eligible_hosts:,}\n"
+            if batch_size is not None and batch_size < total_eligible_hosts:
+                summary_md += f"- 🧪 **Batch mode**: Randomly sampled {num_to_tag:,} hosts (requested: {batch_size:,})\n"
+            else:
+                summary_md += f"- CLOUD hosts processed: {num_to_tag:,}\n"
+            summary_md += f"- Hosts tagged successfully: {len(successful_tags):,}\n"
+            summary_md += f"- Hosts failed to tag: {len(failed_tags):,}\n\n"
             summary_md += f"**Timing:**\n"
             summary_md += f"- Reading report: {format_duration(read_duration)}\n"
             summary_md += f"- Filtering hosts: {format_duration(filter_duration)}\n"
