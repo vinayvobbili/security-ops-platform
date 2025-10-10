@@ -567,19 +567,19 @@ class GetTaniumHostsWithoutRingTag(Command):
             )
             return
 
-        # Count total hosts and eligible hosts for tagging (both Cloud and On-Prem)
+        # Count total hosts in report and hosts with successfully generated tags (both Cloud and On-Prem)
         df = pd.read_excel(filepath)
-        total_hosts = len(df)
-        eligible_hosts = df[
+        total_hosts_in_report = len(df)
+        hosts_with_generated_tags = df[
             (df['Generated Tag'].notna()) &
             (df['Generated Tag'] != '') &
             (~df['Comments'].str.contains('missing|couldn\'t be generated|error', case=False, na=False))
             ]
-        eligible_hosts_count = len(eligible_hosts)
+        hosts_with_generated_tags_count = len(hosts_with_generated_tags)
 
         # Count by source for informational purposes
-        cloud_count = len(eligible_hosts[eligible_hosts['Source'].str.contains('Cloud', case=False, na=False)])
-        onprem_count = len(eligible_hosts[eligible_hosts['Source'].str.contains('On-Prem', case=False, na=False)])
+        cloud_count = len(hosts_with_generated_tags[hosts_with_generated_tags['Source'].str.contains('Cloud', case=False, na=False)])
+        onprem_count = len(hosts_with_generated_tags[hosts_with_generated_tags['Source'].str.contains('On-Prem', case=False, na=False)])
 
         # Check which instances were actually used in the report
         from services.tanium import TaniumClient
@@ -589,20 +589,24 @@ class GetTaniumHostsWithoutRingTag(Command):
         if len(available_instances) < 2:
             instances_msg += f"\n⚠️ **Note:** Only {len(available_instances)} of 2 configured instances is accessible from this server"
 
+        # Calculate hosts with issues
+        hosts_with_issues = total_hosts_in_report - hosts_with_generated_tags_count
+
         message = f"Hello {activity['actor']['displayName']}! Here's the list of Tanium hosts without a Ring Tag. Ring tags have also been generated for your review.\n\n"
         message += f"{instances_msg}\n\n"
         message += f"**Summary:**\n"
-        message += f"- Total hosts: {total_hosts:,}\n"
-        message += f"- Hosts eligible for tagging: {eligible_hosts_count:,}\n"
+        message += f"- Total hosts without ring tags: {total_hosts_in_report:,}\n"
+        message += f"- Hosts with ring tags generated: {hosts_with_generated_tags_count:,}\n"
         message += f"  - Cloud: {cloud_count:,}\n"
-        message += f"  - On-Prem: {onprem_count:,}"
+        message += f"  - On-Prem: {onprem_count:,}\n"
+        message += f"- Hosts with errors/missing data: {hosts_with_issues:,}"
 
         webex_api.messages.create(
             roomId=room_id,
             markdown=message,
             files=[str(filepath)]
         )
-        seek_approval_to_ring_tag_tanium(room_id, total_hosts=eligible_hosts_count)
+        seek_approval_to_ring_tag_tanium(room_id, total_hosts=hosts_with_generated_tags_count)
 
 
 class RingTagTaniumHosts(Command):
