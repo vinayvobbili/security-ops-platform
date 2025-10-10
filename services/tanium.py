@@ -467,6 +467,9 @@ class TaniumClient:
             if instance.validate_token():
                 computers = instance.get_computers(limit)
                 all_computers.extend(computers)
+            else:
+                logger.warning(f"⚠️  Skipping {instance.name} - token validation failed or instance unreachable")
+                print(f"⚠️  WARNING: Skipping {instance.name} instance due to connection or authentication issues")
         return all_computers
 
     def _get_output_path(self, filename: Optional[str] = None) -> Path:
