@@ -441,7 +441,11 @@ class TaniumClient:
                 self.config.tanium_cloud_api_token,
                 verify_ssl=True
             )
-            self.instances.append(cloud_instance)
+            # Validate token before adding to ensure instance is accessible
+            if cloud_instance.validate_token():
+                self.instances.append(cloud_instance)
+            else:
+                logger.warning(f"⚠️  Cloud instance configured but unreachable - skipping")
 
         # On-prem instance (disable SSL verification for on-prem)
         if (instance is None or instance.lower() == "onprem") and hasattr(self.config, 'tanium_onprem_api_url') and self.config.tanium_onprem_api_url and self.config.tanium_onprem_api_token:
@@ -451,7 +455,11 @@ class TaniumClient:
                 self.config.tanium_onprem_api_token,
                 verify_ssl=False
             )
-            self.instances.append(onprem_instance)
+            # Validate token before adding to ensure instance is accessible
+            if onprem_instance.validate_token():
+                self.instances.append(onprem_instance)
+            else:
+                logger.warning(f"⚠️  On-Prem instance configured but unreachable - skipping")
 
     def validate_all_tokens(self) -> Dict[str, bool]:
         """Validate tokens for all instances"""
