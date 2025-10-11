@@ -270,7 +270,7 @@ body.dark-mode .export-btn:hover {
 body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     margin: 0;
-    padding: 0 0 0;
+    padding: var(--nav-height) 0 0; /* offset content below fixed nav */
     background: var(--bg-gradient);
     min-height: 100vh;
     backdrop-filter: blur(10px);
@@ -285,7 +285,7 @@ body {
     background: rgba(255, 255, 255, 0.95);
     border-radius: 16px;
     box-shadow: 0 15px 40px rgba(0, 70, 173, 0.3), 0 5px 15px rgba(0, 166, 81, 0.2);
-    margin: 20px auto 0;
+    margin: 4px auto 0; /* reduced from 20px to tighten space below nav */
     backdrop-filter: blur(20px);
     border: 2px solid rgba(255, 255, 255, 0.3);
     overflow-x: auto;
@@ -294,7 +294,7 @@ body {
 .dashboard-header {
     text-align: center;
     margin-bottom: 0;
-    padding: 15px 0 20px;
+    padding: 10px 0 16px; /* reduced top and bottom padding (was 15px 0 20px) */
     border-bottom: 3px solid transparent;
     background: linear-gradient(90deg, transparent, rgba(0, 70, 173, 0.2), transparent);
     border-radius: 0 0 20px 20px;
