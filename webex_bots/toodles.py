@@ -1,18 +1,22 @@
 #!/usr/bin/python3
 
-# Configure SSL for corporate proxy environments (Zscaler, etc.) - MUST BE FIRST
+# Set to False when running on stable environments (e.g., Ubuntu server without ZScaler)
+# Set to True when running on environments with connection issues (e.g., Mac with ZScaler)
+SHOULD_USE_RESILIENCY = False
+
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from src.utils.ssl_config import configure_ssl_if_needed
 
-configure_ssl_if_needed(verbose=True)  # Re-enabled due to ZScaler connectivity issues
+# Configure SSL for corporate proxy environments (Zscaler, etc.) - Only if needed
+if SHOULD_USE_RESILIENCY:
+    from src.utils.ssl_config import configure_ssl_if_needed
+    configure_ssl_if_needed(verbose=True)
 
-# Apply enhanced WebSocket client patch for better connection resilience
-from src.utils.enhanced_websocket_client import patch_websocket_client
-
-patch_websocket_client()
+    # Apply enhanced WebSocket client patch for better connection resilience
+    from src.utils.enhanced_websocket_client import patch_websocket_client
+    patch_websocket_client()
 
 import ipaddress
 import logging.handlers
@@ -2156,11 +2160,13 @@ class ProcessUrlBlockVerdict(Command):
 
 def toodles_bot_factory():
     """Create Toodles bot instance"""
-    # Clean up stale device registrations before creating bot
-    cleanup_devices_on_startup(
-        CONFIG.webex_bot_access_token_toodles,
-        bot_name="Toodles"
-    )
+    # Clean up stale device registrations only when using resilience framework
+    # (to prevent device buildup from frequent restarts)
+    if SHOULD_USE_RESILIENCY:
+        cleanup_devices_on_startup(
+            CONFIG.webex_bot_access_token_toodles,
+            bot_name="Toodles"
+        )
 
     return WebexBot(
         CONFIG.webex_bot_access_token_toodles,
@@ -2207,18 +2213,25 @@ def toodles_initialization(bot_instance=None):
 
 
 def main():
-    """Toodles main with resilience framework"""
-    from src.utils.bot_resilience import ResilientBot
+    """Toodles main - toggle resilience framework based on SHOULD_USE_RESILIENCY flag"""
+    if SHOULD_USE_RESILIENCY:
+        logger.info("Starting Toodles with resilience framework (SSL config, device cleanup, auto-restart)")
+        from src.utils.bot_resilience import ResilientBot
 
-    resilient_runner = ResilientBot(
-        bot_name="Toodles",
-        bot_factory=toodles_bot_factory,
-        initialization_func=toodles_initialization,
-        max_retries=5,
-        initial_retry_delay=30,
-        max_retry_delay=300
-    )
-    resilient_runner.run()
+        resilient_runner = ResilientBot(
+            bot_name="Toodles",
+            bot_factory=toodles_bot_factory,
+            initialization_func=toodles_initialization,
+            max_retries=5,
+            initial_retry_delay=30,
+            max_retry_delay=300
+        )
+        resilient_runner.run()
+    else:
+        logger.info("Starting Toodles with standard WebexBot (no extra resilience features)")
+        bot = toodles_bot_factory()
+        toodles_initialization(bot)
+        bot.run()
 
 
 if __name__ in ('__main__', '__builtin__', 'builtins'):
