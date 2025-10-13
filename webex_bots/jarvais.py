@@ -37,6 +37,7 @@ from src.epp import ring_tag_cs_hosts, cs_hosts_without_ring_tag, cs_servers_wit
 from src.epp.tanium_hosts_without_ring_tag import create_processor
 from src.utils.excel_formatting import apply_professional_formatting
 from src.utils.logging_utils import log_activity
+from src.utils.webex_device_manager import cleanup_devices_on_startup
 
 CONFIG = get_config()
 ROOT_DIRECTORY = Path(__file__).parent.parent
@@ -1139,6 +1140,12 @@ class Hi(Command):
 
 def jarvais_bot_factory():
     """Create Jarvais bot instance"""
+    # Clean up stale device registrations before creating bot
+    cleanup_devices_on_startup(
+        CONFIG.webex_bot_access_token_jarvais,
+        bot_name="Jarvais"
+    )
+
     return WebexBot(
         CONFIG.webex_bot_access_token_jarvais,
         approved_rooms=[CONFIG.webex_room_id_epp_tagging, CONFIG.webex_room_id_vinay_test_space],
