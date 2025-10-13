@@ -1,19 +1,23 @@
 #!/usr/bin/python3
 
-# Configure SSL for corporate proxy environments (Zscaler, etc.) - MUST BE FIRST
+# Set to False when running on stable environments (e.g., Ubuntu server without ZScaler)
+# Set to True when running on environments with connection issues (e.g., Mac with ZScaler)
+SHOULD_USE_RESILIENCY = False
+
 import sys
 from pathlib import Path
 
 ROOT_DIRECTORY = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT_DIRECTORY))
-from src.utils.ssl_config import configure_ssl_if_needed
 
-configure_ssl_if_needed(verbose=True)  # Re-enabled due to ZScaler connectivity issues
+# Configure SSL for corporate proxy environments (Zscaler, etc.) - Only if needed
+if SHOULD_USE_RESILIENCY:
+    from src.utils.ssl_config import configure_ssl_if_needed
+    configure_ssl_if_needed(verbose=True)
 
-# Apply enhanced WebSocket client patch for better connection resilience
-from src.utils.enhanced_websocket_client import patch_websocket_client
-
-patch_websocket_client()
+    # Apply enhanced WebSocket client patch for better connection resilience
+    from src.utils.enhanced_websocket_client import patch_websocket_client
+    patch_websocket_client()
 
 import json
 import logging.handlers
@@ -581,11 +585,13 @@ def get_threatcon_message(level):
 
 def barnacles_bot_factory():
     """Create Barnacles bot instance"""
-    # Clean up stale device registrations before creating bot
-    cleanup_devices_on_startup(
-        bot_token,
-        bot_name="Barnacles"
-    )
+    # Clean up stale device registrations only when using resilience framework
+    # (to prevent device buildup from frequent restarts)
+    if SHOULD_USE_RESILIENCY:
+        cleanup_devices_on_startup(
+            bot_token,
+            bot_name="Barnacles"
+        )
 
     return WebexBot(
         bot_token,
@@ -614,18 +620,25 @@ def barnacles_initialization(bot_instance=None):
 
 
 def main():
-    """Barnacles main with resilience framework"""
-    from src.utils.bot_resilience import ResilientBot
+    """Barnacles main - toggle resilience framework based on SHOULD_USE_RESILIENCY flag"""
+    if SHOULD_USE_RESILIENCY:
+        logger.info("Starting Barnacles with resilience framework (SSL config, device cleanup, auto-restart)")
+        from src.utils.bot_resilience import ResilientBot
 
-    resilient_runner = ResilientBot(
-        bot_name="Barnacles",
-        bot_factory=barnacles_bot_factory,
-        initialization_func=barnacles_initialization,
-        max_retries=5,
-        initial_retry_delay=30,
-        max_retry_delay=300
-    )
-    resilient_runner.run()
+        resilient_runner = ResilientBot(
+            bot_name="Barnacles",
+            bot_factory=barnacles_bot_factory,
+            initialization_func=barnacles_initialization,
+            max_retries=5,
+            initial_retry_delay=30,
+            max_retry_delay=300
+        )
+        resilient_runner.run()
+    else:
+        logger.info("Starting Barnacles with standard WebexBot (no extra resilience features)")
+        bot = barnacles_bot_factory()
+        barnacles_initialization(bot)
+        bot.run()
 
 
 if __name__ == "__main__":
