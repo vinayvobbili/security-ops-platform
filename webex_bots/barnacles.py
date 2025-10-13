@@ -36,6 +36,7 @@ from webexteamssdk import WebexTeamsAPI
 from my_config import get_config
 from src.charts import threatcon_level
 from src.utils.logging_utils import log_activity
+from src.utils.webex_device_manager import cleanup_devices_on_startup
 
 # Ensure logs directory exists
 (ROOT_DIRECTORY / "logs").mkdir(exist_ok=True)
@@ -580,6 +581,12 @@ def get_threatcon_message(level):
 
 def barnacles_bot_factory():
     """Create Barnacles bot instance"""
+    # Clean up stale device registrations before creating bot
+    cleanup_devices_on_startup(
+        bot_token,
+        bot_name="Barnacles"
+    )
+
     return WebexBot(
         bot_token,
         approved_rooms=[],

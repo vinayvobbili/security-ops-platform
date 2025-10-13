@@ -46,6 +46,7 @@ from services.xsoar import ListHandler, TicketHandler
 from src.components.url_lookup_traffic import URLChecker
 from src.utils.http_utils import get_session
 from src.utils.logging_utils import log_activity
+from src.utils.webex_device_manager import cleanup_devices_on_startup
 
 CONFIG = get_config()
 ROOT_DIRECTORY = Path(__file__).parent.parent
@@ -2155,6 +2156,12 @@ class ProcessUrlBlockVerdict(Command):
 
 def toodles_bot_factory():
     """Create Toodles bot instance"""
+    # Clean up stale device registrations before creating bot
+    cleanup_devices_on_startup(
+        CONFIG.webex_bot_access_token_toodles,
+        bot_name="Toodles"
+    )
+
     return WebexBot(
         CONFIG.webex_bot_access_token_toodles,
         bot_name="Toodles Bot",

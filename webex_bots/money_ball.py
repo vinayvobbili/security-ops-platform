@@ -34,6 +34,7 @@ from my_config import get_config
 from src.charts import aging_tickets
 from src.components import reimaged_hosts
 from src.utils.logging_utils import log_activity
+from src.utils.webex_device_manager import cleanup_devices_on_startup
 
 # Load configuration
 config = get_config()
@@ -361,6 +362,13 @@ def get_random_chart_message():
 
 def moneyball_bot_factory():
     """Create MoneyBall bot instance"""
+    # Clean up stale device registrations before creating bot
+    # This prevents HTTP 404 WebSocket connection errors
+    cleanup_devices_on_startup(
+        config.webex_bot_access_token_moneyball,
+        bot_name="MoneyBall"
+    )
+
     bot = WebexBot(
         config.webex_bot_access_token_moneyball,
         approved_rooms=[config.webex_room_id_vinay_test_space, config.webex_room_id_metrics],
