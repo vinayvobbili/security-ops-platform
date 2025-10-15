@@ -280,7 +280,7 @@ def seek_approval_to_ring_tag_tanium(room_id, total_hosts=None):
                     Column(
                         width="stretch",
                         items=[
-                            TextBlock(text=f"I can tag hosts from both Cloud and On-Prem Tanium instances{hosts_info}. Do you want them to be Ring tagged?", wrap=True)
+                            TextBlock(text=f"I can tag servers from On-Prem Tanium instance {hosts_info}. Do you want to proceed?", wrap=True)
                         ],
                         verticalContentAlignment=VerticalContentAlignment.CENTER
                     )
@@ -292,7 +292,7 @@ def seek_approval_to_ring_tag_tanium(room_id, total_hosts=None):
                 separator=True
             ),
             TextBlock(
-                text="Enter number of hosts to randomly tag. Default is 10 for safety. Use higher numbers (100, 1000, etc.) after successful testing, or enter 'all' to tag all hosts.",
+                text="Enter number of servers to randomly tag. Default is 10 for safety. Use higher numbers (100, 1000, etc.) after successful testing, or enter 'all' to tag all hosts.",
                 wrap=True,
                 isSubtle=True
             ),
@@ -749,7 +749,7 @@ class RingTagTaniumHosts(Command):
             if batch_size_str:
                 # Allow 'all' to tag all hosts
                 if batch_size_str.lower() == 'all':
-                    batch_size = None
+                    batch_size = 10
                 else:
                     try:
                         batch_size = int(batch_size_str)
@@ -828,18 +828,20 @@ class RingTagTaniumHosts(Command):
             total_hosts_in_report = len(df)
 
             # Filter hosts that have generated tags and no errors (both Cloud and On-Prem)
+            # Only process servers - workstations are typically offline and won't receive tags
             filter_start = time.time()
             hosts_to_tag = df[
                 (df['Generated Tag'].notna()) &
                 (df['Generated Tag'] != '') &
-                (~df['Comments'].str.contains('missing|couldn\'t be generated|error', case=False, na=False))
+                (~df['Comments'].str.contains('missing|couldn\'t be generated|error', case=False, na=False)) &
+                (df['Category'].str.contains('Server', case=False, na=False))
                 ]
             filter_duration = time.time() - filter_start
 
             if len(hosts_to_tag) == 0:
                 webex_api.messages.create(
                     roomId=room_id,
-                    markdown=f"❌ **No hosts available for tagging**. All hosts in the report have issues that prevent tagging."
+                    markdown=f"❌ **No servers available for tagging**. All servers in the report either have issues that prevent tagging or are workstations (which are filtered out)."
                 )
                 return
 
@@ -850,21 +852,21 @@ class RingTagTaniumHosts(Command):
                 if batch_size >= total_eligible_hosts:
                     webex_api.messages.create(
                         roomId=room_id,
-                        markdown=f"ℹ️ **Note**: Batch size ({batch_size:,}) equals or exceeds available hosts ({total_eligible_hosts:,}). Tagging all {total_eligible_hosts:,} hosts."
+                        markdown=f"ℹ️ **Note**: Batch size ({batch_size:,}) equals or exceeds available servers ({total_eligible_hosts:,}). Tagging all {total_eligible_hosts:,} servers."
                     )
                 else:
                     # Randomly sample N hosts from the eligible pool
                     hosts_to_tag = hosts_to_tag.sample(n=batch_size, random_state=None)
-                    logger.info(f"Randomly sampled {batch_size} hosts from {total_eligible_hosts} eligible hosts")
+                    logger.info(f"Randomly sampled {batch_size} servers from {total_eligible_hosts} eligible servers")
                     webex_api.messages.create(
                         roomId=room_id,
-                        markdown=f"🎲 **Batch mode active**: Randomly selected {batch_size:,} hosts from {total_eligible_hosts:,} eligible hosts for tagging."
+                        markdown=f"🎲 **Batch mode active**: Randomly selected {batch_size:,} servers from {total_eligible_hosts:,} eligible servers for tagging (workstations excluded)."
                     )
             else:
                 # batch_size is None, meaning user entered 'all'
                 webex_api.messages.create(
                     roomId=room_id,
-                    markdown=f"📋 **Full deployment mode**: Tagging ALL {total_eligible_hosts:,} eligible hosts from both Cloud and On-Prem instances."
+                    markdown=f"📋 **Full deployment mode**: Tagging ALL {total_eligible_hosts:,} eligible servers from both Cloud and On-Prem instances (workstations excluded)."
                 )
 
             num_to_tag = len(hosts_to_tag)
@@ -921,7 +923,9 @@ class RingTagTaniumHosts(Command):
                     })
 
                 except Exception as e:
-                    logger.error(f"Failed to tag {computer_name}: {e}")
+                    # Preserve full error message from Tanium API
+                    error_msg = str(e)
+                    logger.error(f"Failed to tag {computer_name}: {error_msg}")
                     failed_tags.append({
                         'name': computer_name,
                         'tanium_id': tanium_id,
@@ -930,7 +934,7 @@ class RingTagTaniumHosts(Command):
                         'package_id': package_id,
                         'current_tags': current_tags,
                         'comments': comments,
-                        'error': str(e)
+                        'error': error_msg
                     })
             apply_duration = time.time() - apply_start
 
@@ -1008,16 +1012,16 @@ class RingTagTaniumHosts(Command):
             summary_md = f"## 🎉 Tanium Ring Tagging Complete!\n\n"
             summary_md += f"**Summary:**\n"
             summary_md += f"- Total hosts in report: {total_hosts_in_report:,}\n"
-            summary_md += f"- Hosts eligible for tagging: {total_eligible_hosts:,}\n"
+            summary_md += f"- Servers eligible for tagging: {total_eligible_hosts:,} (workstations excluded)\n"
             if batch_size is not None and batch_size < total_eligible_hosts:
-                summary_md += f"- 🧪 **Batch mode**: Randomly sampled {num_to_tag:,} hosts (requested: {batch_size:,})\n"
+                summary_md += f"- 🧪 **Batch mode**: Randomly sampled {num_to_tag:,} servers (requested: {batch_size:,})\n"
             else:
-                summary_md += f"- Hosts processed: {num_to_tag:,}\n"
-            summary_md += f"- Hosts tagged successfully: {len(successful_tags):,}\n"
-            summary_md += f"- Hosts failed to tag: {len(failed_tags):,}\n\n"
+                summary_md += f"- Servers processed: {num_to_tag:,}\n"
+            summary_md += f"- Servers tagged successfully: {len(successful_tags):,}\n"
+            summary_md += f"- Servers failed to tag: {len(failed_tags):,}\n\n"
             summary_md += f"**Timing:**\n"
             summary_md += f"- Reading report: {format_duration(read_duration)}\n"
-            summary_md += f"- Filtering hosts: {format_duration(filter_duration)}\n"
+            summary_md += f"- Filtering servers: {format_duration(filter_duration)}\n"
             summary_md += f"- Applying tags: {format_duration(apply_duration)}\n"
             summary_md += f"- Total execution time: {format_duration(total_duration)}\n\n"
             summary_md += f"📊 **Detailed results are attached in the Excel report.**\n"
