@@ -188,24 +188,38 @@ function initBurgerMenu() {
                     e.preventDefault();
                     toggleMenu();
                 }
-                if (e.key === 'Escape') {
-                    if (burgerMenu && burgerMenu.style.display === 'block') {
-                        toggleMenu();
-                    }
-                }
             });
             trigger.__kbBound = true;
         }
-        document.addEventListener('click', function (e) {
-            var navBurger = document.querySelector('.nav-burger');
-            if (burgerMenu && !burgerMenu.contains(e.target) && navBurger && !navBurger.contains(e.target)) {
-                if (burgerMenu.style.display === 'block') {
-                    burgerMenu.style.display = 'none';
-                    burgerMenu.setAttribute('aria-hidden', 'true');
-                    if (trigger) trigger.setAttribute('aria-expanded', 'false');
+
+        // Global ESC key handler to close menu
+        if (!document.__burgerEscBound) {
+            document.addEventListener('keydown', function (e) {
+                if (e.key === 'Escape') {
+                    if (burgerMenu && burgerMenu.style.display === 'block') {
+                        burgerMenu.style.display = 'none';
+                        burgerMenu.setAttribute('aria-hidden', 'true');
+                        if (trigger) trigger.setAttribute('aria-expanded', 'false');
+                    }
                 }
-            }
-        });
+            });
+            document.__burgerEscBound = true;
+        }
+
+        // Click away to close menu
+        if (!document.__burgerClickBound) {
+            document.addEventListener('click', function (e) {
+                var navBurger = document.querySelector('.nav-burger');
+                if (burgerMenu && !burgerMenu.contains(e.target) && navBurger && !navBurger.contains(e.target)) {
+                    if (burgerMenu.style.display === 'block') {
+                        burgerMenu.style.display = 'none';
+                        burgerMenu.setAttribute('aria-hidden', 'true');
+                        if (trigger) trigger.setAttribute('aria-expanded', 'false');
+                    }
+                }
+            });
+            document.__burgerClickBound = true;
+        }
     });
 }
 

@@ -1301,7 +1301,15 @@ def main():
             print("🤖 Initializing Pokedex chat components...")
             from my_bot.core.my_model import initialize_model_and_agent
             if initialize_model_and_agent():
-                print("✅ Pokedex chat ready!")
+                print("✅ Pokedex chat components initialized!")
+
+                # Warm up the model to preload it into memory
+                print("🔥 Warming up LLM (this will load the model into memory)...")
+                state_manager = get_state_manager()
+                if state_manager.fast_warmup():
+                    print("✅ LLM warmed up and ready! Model is now loaded in memory.")
+                else:
+                    print("⚠️ LLM warmup failed - model will load on first request")
             else:
                 print("⚠️ Pokedex chat initialization failed - chat endpoint will return errors")
         except Exception as e:
