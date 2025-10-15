@@ -219,7 +219,18 @@ class ServiceNowClient:
             logger.debug(f"ServiceNow API response for {hostname}: {response.status_code} in {elapsed_ms:.0f}ms")
             response.raise_for_status()
 
-            data = response.json()
+            # Check if response has content before trying to parse JSON
+            if not response.text or response.text.strip() == '':
+                logger.debug(f"Empty response body for {hostname}, treating as 'not found'")
+                return None
+
+            # Try to parse JSON with better error handling
+            try:
+                data = response.json()
+            except ValueError as json_error:
+                logger.debug(f"Invalid JSON in response for {hostname}: {json_error}. Response body: {response.text[:200]}")
+                return None
+
             items = data.get('items', data) if isinstance(data, dict) else data
 
             if not items:
@@ -444,7 +455,7 @@ def enrich_host_report(input_file):
 if __name__ == "__main__":
     client = ServiceNowClient()
 
-    hostname = "USTRY1METU02B6"
+    hostname = "CLF6R2VC4"
     logger.info(f"Looking up in SNOW: {hostname}...")
 
     details = client.get_host_details(hostname)
