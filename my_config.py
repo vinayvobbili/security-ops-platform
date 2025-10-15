@@ -1,13 +1,24 @@
 import os
 from dataclasses import dataclass
+from pathlib import Path
 
 # Import encrypted environment loader
-from src.utils.env_encryption import load_encrypted_env
+from src.utils.env_encryption import load_encrypted_env, load_plaintext_env
 
-# Load environment variables from encrypted .env.age file
-# Falls back to plaintext .env if .env.age doesn't exist yet
-ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
-load_encrypted_env()
+# Load environment variables from two sources:
+# 1. .env (project root) - non-sensitive config like model names
+# 2. .secrets.age (data/transient/) - encrypted secrets (API keys, passwords)
+ROOT_DIR = Path(__file__).parent
+
+# Load plaintext .env first (low confidentiality config)
+env_file = ROOT_DIR / '.env'
+if env_file.exists():
+    load_plaintext_env(env_file)
+    print(f"✓ Loaded config from .env")
+
+# Load encrypted secrets from data/transient/.secrets.age
+secrets_file = ROOT_DIR / 'data' / 'transient' / '.secrets.age'
+load_encrypted_env(encrypted_path=str(secrets_file))
 
 
 def get_config():
