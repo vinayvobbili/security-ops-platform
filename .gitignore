@@ -5,6 +5,7 @@
 .secrets
 .secrets.age
 .env.age
+.env
 *.secrets.tmp
 *.env.tmp
 

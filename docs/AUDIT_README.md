@@ -207,6 +207,6 @@ sudo ausearch -k age_key_access | grep -c "type=SYSCALL"
 
 ## See Also
 
-- [Main Documentation](../docs/ENV_ENCRYPTION.md)
+- [Main Documentation](ENV_ENCRYPTION.md)
 - [auditd documentation](https://linux.die.net/man/8/auditd)
 - [ausearch documentation](https://linux.die.net/man/8/ausearch)
