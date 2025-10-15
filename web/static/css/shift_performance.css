@@ -7,11 +7,11 @@ body {
 
 .container {
     max-width: 100%;
-    padding: 15px;
+    padding: 5px 15px 15px;
     overflow-x: auto;
     background: rgba(255, 255, 255, 0.95);
     border-radius: 15px;
-    margin: 70px auto 0;
+    margin: 0 auto 0; /* rely on body padding-top for nav offset */
     box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
     backdrop-filter: blur(10px);
 }
@@ -113,16 +113,16 @@ body {
 }
 
 /* Make numeric columns stand out more */
-.performance-table tbody td:nth-child(4),  /* Scheduled Staff */
-.performance-table tbody td:nth-child(5),  /* Actual Staff */
-.performance-table tbody td:nth-child(6),  /* Tickets Acknowledged */
-.performance-table tbody td:nth-child(7),  /* Tickets Closed */
-.performance-table tbody td:nth-child(8),  /* MTPs */
-.performance-table tbody td:nth-child(9),  /* MTTR */
+.performance-table tbody td:nth-child(4), /* Scheduled Staff */
+.performance-table tbody td:nth-child(5), /* Actual Staff */
+.performance-table tbody td:nth-child(6), /* Tickets Acknowledged */
+.performance-table tbody td:nth-child(7), /* Tickets Closed */
+.performance-table tbody td:nth-child(8), /* MTPs */
+.performance-table tbody td:nth-child(9), /* MTTR */
 .performance-table tbody td:nth-child(10), /* MTTC */
 .performance-table tbody td:nth-child(11), /* Response SLA */
 .performance-table tbody td:nth-child(12), /* Contain SLA */
-.performance-table tbody td:nth-child(13)  /* Score */
+.performance-table tbody td:nth-child(13) /* Score */
 {
     font-weight: 600;
     font-size: 15px;
@@ -285,11 +285,11 @@ body {
 .shift-status-error {
     border: 2px solid #fdcb6e !important;
     background: repeating-linear-gradient(
-        45deg,
-        transparent,
-        transparent 5px,
-        rgba(253, 203, 110, 0.1) 5px,
-        rgba(253, 203, 110, 0.1) 10px
+            45deg,
+            transparent,
+            transparent 5px,
+            rgba(253, 203, 110, 0.1) 5px,
+            rgba(253, 203, 110, 0.1) 10px
     );
 }
 
@@ -334,7 +334,7 @@ body {
     border-radius: 15px;
     padding: 20px;
     min-width: 200px;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
     transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
     position: relative;
     overflow: hidden;
@@ -347,7 +347,7 @@ body {
     left: -50%;
     width: 200%;
     height: 200%;
-    background: linear-gradient(45deg, transparent, rgba(255,255,255,0.1), transparent);
+    background: linear-gradient(45deg, transparent, rgba(255, 255, 255, 0.1), transparent);
     transform: rotate(45deg);
     transition: all 0.5s;
     opacity: 0;
@@ -359,7 +359,7 @@ body {
 
 .summary-card:hover {
     transform: translateY(-8px) scale(1.02);
-    box-shadow: 0 20px 40px rgba(0,0,0,0.15);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
 }
 
 .summary-card h3 {
@@ -761,8 +761,12 @@ h1 {
 }
 
 @keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
+    0% {
+        transform: rotate(0deg);
+    }
+    100% {
+        transform: rotate(360deg);
+    }
 }
 
 /* Skeleton Loading */
@@ -1051,6 +1055,7 @@ h1 {
 .mtp-cell {
     font-weight: 600;
 }
+
 /* Color coding removed - analysts have no control over MTPs */
 
 /* MTP popover */
@@ -1063,7 +1068,7 @@ h1 {
     color: #fff;
     padding: 8px 12px;
     border-radius: 10px;
-    box-shadow: 0 8px 18px rgba(0,0,0,0.3);
+    box-shadow: 0 8px 18px rgba(0, 0, 0, 0.3);
     z-index: 1500;
     font-size: 11px;
     min-width: 180px;
@@ -1072,28 +1077,86 @@ h1 {
     opacity: 0;
     transition: opacity .18s ease, transform .18s ease;
 }
-.mtp-popover.visible { display: block; opacity: 1; transform: translate(-50%, 4px); }
-.mtp-popover h5 { margin: 0 0 4px 0; font-size: 11px; letter-spacing:.5px; text-transform: uppercase; color:#a29bfe; }
-.mtp-popover ul { list-style: none; margin:0; padding:0; max-height:140px; overflow:auto; }
-.mtp-popover li { margin:2px 0; }
-.mtp-popover a { color:#74b9ff; text-decoration:none; }
-.mtp-popover a:hover { text-decoration:underline; }
+
+.mtp-popover.visible {
+    display: block;
+    opacity: 1;
+    transform: translate(-50%, 4px);
+}
+
+.mtp-popover h5 {
+    margin: 0 0 4px 0;
+    font-size: 11px;
+    letter-spacing: .5px;
+    text-transform: uppercase;
+    color: #a29bfe;
+}
+
+.mtp-popover ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    max-height: 140px;
+    overflow: auto;
+}
+
+.mtp-popover li {
+    margin: 2px 0;
+}
+
+.mtp-popover a {
+    color: #74b9ff;
+    text-decoration: none;
+}
+
+.mtp-popover a:hover {
+    text-decoration: underline;
+}
 
 /* Scrollbar tweaks */
-.mtp-popover ul::-webkit-scrollbar { width:6px; }
-.mtp-popover ul::-webkit-scrollbar-track { background:rgba(255,255,255,0.05); border-radius:3px; }
-.mtp-popover ul::-webkit-scrollbar-thumb { background:rgba(255,255,255,0.3); border-radius:3px; }
+.mtp-popover ul::-webkit-scrollbar {
+    width: 6px;
+}
+
+.mtp-popover ul::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 3px;
+}
+
+.mtp-popover ul::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.3);
+    border-radius: 3px;
+}
 
 /* Modal MTP link styling */
-.mtp-list { list-style:none; padding-left:0; margin:8px 0 0 0; }
-.mtp-list li { margin:4px 0; }
-.mtp-link { color:#2980b9; font-weight:600; text-decoration:none; }
-.mtp-link:hover { text-decoration:underline; }
+.mtp-list {
+    list-style: none;
+    padding-left: 0;
+    margin: 8px 0 0 0;
+}
+
+.mtp-list li {
+    margin: 4px 0;
+}
+
+.mtp-link {
+    color: #2980b9;
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.mtp-link:hover {
+    text-decoration: underline;
+}
 
 /* Animations */
 @keyframes fadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
 }
 
 @keyframes slideIn {
@@ -1246,20 +1309,54 @@ h1 {
 }
 
 /* Staggered animation delays */
-.performance-table tr:nth-child(1) { animation-delay: 0.1s; }
-.performance-table tr:nth-child(2) { animation-delay: 0.2s; }
-.performance-table tr:nth-child(3) { animation-delay: 0.3s; }
-.performance-table tr:nth-child(4) { animation-delay: 0.4s; }
-.performance-table tr:nth-child(5) { animation-delay: 0.5s; }
-.performance-table tr:nth-child(6) { animation-delay: 0.6s; }
-.performance-table tr:nth-child(7) { animation-delay: 0.7s; }
-.performance-table tr:nth-child(8) { animation-delay: 0.8s; }
+.performance-table tr:nth-child(1) {
+    animation-delay: 0.1s;
+}
+
+.performance-table tr:nth-child(2) {
+    animation-delay: 0.2s;
+}
+
+.performance-table tr:nth-child(3) {
+    animation-delay: 0.3s;
+}
+
+.performance-table tr:nth-child(4) {
+    animation-delay: 0.4s;
+}
+
+.performance-table tr:nth-child(5) {
+    animation-delay: 0.5s;
+}
+
+.performance-table tr:nth-child(6) {
+    animation-delay: 0.6s;
+}
+
+.performance-table tr:nth-child(7) {
+    animation-delay: 0.7s;
+}
+
+.performance-table tr:nth-child(8) {
+    animation-delay: 0.8s;
+}
 
 /* Summary card delays */
-.summary-card:nth-child(1) { animation-delay: 0.2s; }
-.summary-card:nth-child(2) { animation-delay: 0.4s; }
-.summary-card:nth-child(3) { animation-delay: 0.6s; }
-.summary-card:nth-child(4) { animation-delay: 0.8s; }
+.summary-card:nth-child(1) {
+    animation-delay: 0.2s;
+}
+
+.summary-card:nth-child(2) {
+    animation-delay: 0.4s;
+}
+
+.summary-card:nth-child(3) {
+    animation-delay: 0.6s;
+}
+
+.summary-card:nth-child(4) {
+    animation-delay: 0.8s;
+}
 
 /* Desktop-optimized design - no mobile styles needed */
 
@@ -1355,10 +1452,10 @@ h1 {
     width: 100%;
     height: 100%;
     background: linear-gradient(
-        90deg,
-        transparent,
-        rgba(255, 255, 255, 0.3),
-        transparent
+            90deg,
+            transparent,
+            rgba(255, 255, 255, 0.3),
+            transparent
     );
     animation: shimmerProgress 2s infinite;
 }
