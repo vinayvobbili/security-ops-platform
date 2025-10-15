@@ -1,11 +1,24 @@
-data/transient/.env
+# Environment files
+# /.env (project root) - committed (plaintext config like model names)
+# /data/transient/.secrets - blocked (plaintext secrets, temp file on Mac)
+# /data/transient/.secrets.age - blocked (encrypted, transferred via SCP)
+.secrets
+.secrets.age
+.env.age
+*.secrets.tmp
+*.env.tmp
+
+# Transient data - block all except templates/docs
+data/transient/*
+!data/transient/.env.template
+!data/transient/README_ENV.md
+
 .idea
 .ipynb_checkpoints
 __pycache__/
 .venv/
 web/static/charts/*
 web/static/logos/*.png
-data/transient/*
 scheduler.pid
 web/static/audio
 local_pdfs_docs

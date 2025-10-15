@@ -35,12 +35,23 @@ def load_encrypted_env(
     fallback_to_plaintext: bool = True
 ) -> None:
     """
-    Load environment variables from an age-encrypted .env file.
+    Load environment variables from .env (plaintext config) and .secrets.age (encrypted secrets).
+
+    File structure:
+    - .env: Non-sensitive config (model names, URLs, etc.) - committed to git
+    - .secrets: Plaintext secrets (API keys, passwords) - gitignored, not committed
+    - .secrets.age: Encrypted secrets - committed to git
+
+    Workflow:
+    1. Edit .secrets with your API keys
+    2. Run: age -e -r $(age-keygen -y ~/.config/age/key.txt) .secrets > .secrets.age
+    3. Delete .secrets (it's in .gitignore)
+    4. Commit .secrets.age
 
     Args:
-        encrypted_path: Path to .env.age file. Defaults to data/transient/.env.age
+        encrypted_path: Path to .secrets.age file. Defaults to data/transient/.secrets.age
         key_path: Path to age private key. Defaults to ~/.config/age/key.txt
-        fallback_to_plaintext: If True and .env.age not found, try loading .env
+        fallback_to_plaintext: If True and .secrets.age not found, try loading .secrets
 
     Raises:
         EncryptionError: If decryption fails or required files are missing
@@ -48,7 +59,7 @@ def load_encrypted_env(
     # Set default paths
     if encrypted_path is None:
         project_root = Path(__file__).parent.parent.parent
-        encrypted_path = project_root / 'data' / 'transient' / '.env.age'
+        encrypted_path = project_root / 'data' / 'transient' / '.secrets.age'
     else:
         encrypted_path = Path(encrypted_path)
 
@@ -57,18 +68,22 @@ def load_encrypted_env(
     else:
         key_path = Path(key_path).expanduser()
 
-    # Check if encrypted file exists
+    # Note: This function now only loads encrypted secrets
+    # Caller should load plaintext .env separately if needed
+
+    # Check if encrypted secrets file exists
     if not encrypted_path.exists():
-        if fallback_to_plaintext:
-            plaintext_path = encrypted_path.parent / '.env'
-            if plaintext_path.exists():
-                print(f"⚠️  Warning: Using plaintext .env file. Run encryption setup!")
-                _load_plaintext_env(plaintext_path)
-                return
-        raise EncryptionError(
-            f"Encrypted env file not found: {encrypted_path}\n"
-            f"Run: python scripts/encrypt_env.py"
-        )
+        # Try plaintext .secrets as fallback
+        plaintext_secrets = encrypted_path.parent / '.secrets'
+        if fallback_to_plaintext and plaintext_secrets.exists():
+            print(f"⚠️  Using plaintext .secrets file. Encrypt it with:")
+            print(f"     age -e -r $(age-keygen -y {key_path}) {plaintext_secrets} > {encrypted_path}")
+            load_plaintext_env(plaintext_secrets)
+            return
+
+        print(f"⚠️  No encrypted secrets file found: {encrypted_path.name}")
+        print(f"     This is OK if you only use .env for non-sensitive config")
+        return
 
     # Check if key exists
     if not key_path.exists():
@@ -89,10 +104,10 @@ def load_encrypted_env(
         if result.returncode != 0:
             raise EncryptionError(f"Decryption failed: {result.stderr}")
 
-        # Parse and load environment variables
+        # Parse and load environment variables (overrides any duplicates from .env)
         _parse_env_content(result.stdout)
 
-        print(f"✓ Loaded encrypted environment from {encrypted_path.name}")
+        print(f"✓ Loaded encrypted secrets from {encrypted_path.name}")
 
     except FileNotFoundError:
         raise EncryptionError(
@@ -128,8 +143,8 @@ def _parse_env_content(content: str) -> None:
             os.environ[key] = value
 
 
-def _load_plaintext_env(env_path: Path) -> None:
-    """Fallback: Load plaintext .env file."""
+def load_plaintext_env(env_path: Path) -> None:
+    """Load plaintext .env file."""
     try:
         from dotenv import load_dotenv
         load_dotenv(env_path)
@@ -137,6 +152,10 @@ def _load_plaintext_env(env_path: Path) -> None:
         # Manual parsing if python-dotenv not available
         with open(env_path) as f:
             _parse_env_content(f.read())
+
+
+# Alias for backwards compatibility
+_load_plaintext_env = load_plaintext_env
 
 
 def encrypt_env_file(
