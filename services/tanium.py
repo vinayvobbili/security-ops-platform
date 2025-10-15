@@ -156,6 +156,40 @@ class TaniumAPIError(Exception):
     pass
 
 
+def get_package_id_for_instance(source: str, os_platform: str) -> str:
+    """Get the appropriate Tanium package ID based on instance (source) and OS platform.
+
+    Args:
+        source: Instance name (e.g., "Cloud", "On-Prem")
+        os_platform: Operating system platform (e.g., "Windows", "Linux")
+
+    Returns:
+        Package ID string
+
+    Cloud package IDs:
+        - 38355: Windows
+        - 38356: Non-Windows (Linux, Unix, Mac)
+
+    On-Prem package IDs:
+        - 1235: Both Windows and Non-Windows
+    """
+    os_lower = os_platform.lower() if os_platform else ""
+    is_cloud = "cloud" in source.lower() if source else False
+
+    # Check for non-Windows platforms
+    is_non_windows = any(platform in os_lower for platform in
+                        ["linux", "unix", "mac", "darwin", "aix", "solaris", "freebsd"])
+
+    if is_cloud:
+        # Cloud instance package IDs
+        if is_non_windows:
+            return "38356"  # Custom Tagging - Add Tags (Non-Windows) - Cloud
+        return "38355"  # Custom Tagging - Add Tags (Windows) - Cloud
+    else:
+        # On-Prem instance package ID (same for all platforms)
+        return "1235"  # Custom Tagging - Add Tags - On-Prem
+
+
 class TaniumInstance:
     """Represents a single Tanium instance (cloud or on-prem)"""
     DEFAULT_PAGE_SIZE = 5000
@@ -171,19 +205,17 @@ class TaniumInstance:
         self.verify_ssl = verify_ssl
         logger.info(f"Initialized Tanium instance: {self.name}")
 
-    @staticmethod
-    def get_package_id_for_device_type(device_type: str) -> str:
-        """Get the appropriate Tanium package ID for the given device type."""
-        device_type_lower = device_type.lower()
-        if device_type_lower in ["linux", "unix", "macos", "mac"]:
-            return "38356"  # Custom Tagging - Add Tags (Non-Windows)
-        return "38355"  # Windows
+    def get_package_id_for_device_type(self, device_type: str) -> str:
+        """Get the appropriate Tanium package ID for the given device type and instance.
+
+        Uses the shared utility function to determine package ID.
+        """
+        return get_package_id_for_instance(self.name, device_type)
 
     @staticmethod
     def build_tag_update_variables(tanium_id: str, tags: List[str], package_id: str, action: str) -> dict:
         """Build GraphQL variables for tag update mutation."""
         endpoint_id = int(tanium_id) if tanium_id.isdigit() else tanium_id
-        logger.info(f"Building GraphQL variables - tanium_id: {tanium_id}, tags: {tags}, package_id: {package_id}")
         return {
             "name": f"{action} Custom Tags to {tanium_id}",
             "tag": " ".join(tags),
@@ -381,9 +413,11 @@ class TaniumInstance:
 
         action_create_result = result.get('data', {}).get('actionCreate', {})
         if error := action_create_result.get('error'):
-            raise TaniumAPIError(f"GraphQL error: {error.get('message', 'Unknown error')}")
+            # Log the full error object for debugging
+            logger.error(f"Full Tanium error response: {error}")
+            raise TaniumAPIError(f"GraphQL error: {error.get('message', 'Unknown error')}. Full error: {error}")
         if not action_create_result.get('action'):
-            raise TaniumAPIError("No action data returned from GraphQL response")
+            raise TaniumAPIError(f"No action data returned from GraphQL response. Full response: {action_create_result}")
 
         return action_create_result
 
@@ -401,9 +435,11 @@ class TaniumInstance:
 
         action_create_result = result.get('data', {}).get('actionCreate', {})
         if error := action_create_result.get('error'):
-            raise TaniumAPIError(f"GraphQL error: {error.get('message', 'Unknown error')}")
+            # Log the full error object for debugging
+            logger.error(f"Full Tanium error response: {error}")
+            raise TaniumAPIError(f"GraphQL error: {error.get('message', 'Unknown error')}. Full error: {error}")
         if not action_create_result.get('action'):
-            raise TaniumAPIError("No action data returned from GraphQL response")
+            raise TaniumAPIError(f"No action data returned from GraphQL response. Full response: {action_create_result}")
 
         return action_create_result
 
@@ -577,7 +613,7 @@ def main():
         #     logger.warning("No data to export")
 
         # Test: Add and Remove tags
-        test_hostname = "VV10-MLKH3-042.acme.co.kr"
+        test_hostname = "TEST-HOST-002.INTERNAL"
         test_tag = "TestTag123"
         instance_name = "On-Prem"  # or "On-Prem"
         tag_action = 'add'  # Change to 'remove' to test removal

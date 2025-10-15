@@ -72,7 +72,7 @@ import pandas as pd
 
 from my_config import get_config
 from services.service_now import enrich_host_report
-from services.tanium import Computer, TaniumClient
+from services.tanium import Computer, TaniumClient, get_package_id_for_instance
 
 # Force the root logger to DEBUG level to ensure all debug logs are shown,
 # regardless of how the module is imported or called.
@@ -80,25 +80,6 @@ logging.getLogger().setLevel(logging.DEBUG)
 
 # Timezone constant for consistent usage
 EASTERN_TZ = ZoneInfo("America/New_York")
-
-
-def get_cloud_package_id_for_os(os_platform: str) -> str:
-    """Get the appropriate Tanium package ID for the given OS platform."""
-    os_lower = os_platform.lower() if os_platform else ""
-    # Check for non-Windows platforms using substring matching
-    if any(platform in os_lower for platform in ["linux", "unix", "mac", "darwin", "aix", "solaris", "freebsd"]):
-        return "38356"  # Custom Tagging - Add Tags (Non-Windows)
-    return "38355"  # Windows (default)
-
-
-def get_on_prem_package_id_for_os(os_platform: str) -> str:
-    """Get the appropriate Tanium package ID for the given OS platform."""
-    os_lower = os_platform.lower() if os_platform else ""
-    # Check for non-Windows platforms using substring matching
-    if any(platform in os_lower for platform in ["linux", "unix", "mac", "darwin", "aix", "solaris", "freebsd"]):
-        return "1235"  # Custom Tagging - Add Tags (Non-Windows)
-    return "1235"  # Windows (default)
-
 
 # ============================================================================
 # Domain Models (Clean, focused data structures)
@@ -375,11 +356,8 @@ class ServiceNowComputerEnricher:
                 os_platform = original_computer.os_platform or ""
                 source = original_computer.source or ""
 
-                # Select package ID based on source (cloud vs on-prem) and OS
-                if "cloud" in source.lower():
-                    package_id = get_cloud_package_id_for_os(os_platform)
-                else:
-                    package_id = get_on_prem_package_id_for_os(os_platform)
+                # Select package ID based on source (cloud vs on-prem) and OS using shared utility
+                package_id = get_package_id_for_instance(source, os_platform)
 
                 enriched_computers.append(
                     EnrichedComputer(
