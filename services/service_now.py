@@ -309,10 +309,6 @@ def enrich_host_report(input_file):
     input_name = Path(input_file).name
     output_file = DATA_DIR / today / f"Enriched {input_name}"
 
-    if output_file.exists():
-        logger.info(f"✓ Using cached enriched file: {output_file}")
-        return output_file
-
     logger.info(f"Starting new enrichment process for {input_file}")
     logger.debug(f"Output will be saved to: {output_file}")
 
