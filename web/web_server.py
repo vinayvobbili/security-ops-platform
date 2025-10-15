@@ -810,20 +810,33 @@ def api_pokedex_status():
 
         # Perform health check
         health = state_manager.health_check()
+        components = health.get('components', {})
+
+        # Check if core LLM components are working (LLM and embeddings)
+        # RAG is optional - chat works fine without it
+        core_ready = components.get('llm', False) and components.get('embeddings', False)
 
         if health.get('status') == 'initialized':
             return jsonify({
                 'ready': True,
                 'status': 'healthy',
                 'message': 'Pokedex chat is ready',
-                'components': health.get('components', {})
+                'components': components
+            })
+        elif core_ready:
+            # LLM works, but RAG might be missing - still usable!
+            return jsonify({
+                'ready': True,
+                'status': 'partial',
+                'message': 'Pokedex chat is ready (without document search)',
+                'components': components
             })
         else:
             return jsonify({
                 'ready': False,
                 'status': 'partial',
-                'message': 'Pokedex chat is partially initialized',
-                'components': health.get('components', {})
+                'message': 'Pokedex chat core components not ready',
+                'components': components
             })
 
     except Exception as e:
