@@ -31,9 +31,10 @@ from src import secops
 from src.components import apt_names_fetcher, secops_shift_metrics
 from src.utils.logging_utils import log_web_activity, is_scanner_request
 
+CONFIG = get_config()
+
 SHOULD_START_PROXY = False
-USE_DEBUG_MODE = True  # Set to False to use Waitress production server
-ENABLE_POKEDEX_CHAT = True  # Set to True to enable Pokédex chat functionality
+USE_DEBUG_MODE = CONFIG.web_server_debug_mode_on
 # Define the proxy port
 PROXY_PORT = 8080
 # Optimize buffer size for better performance (increase from default 4096)
@@ -1304,32 +1305,29 @@ def main():
     """
     parser = argparse.ArgumentParser(description="IR Web Server")
     parser.add_argument("--host", default=os.environ.get("WEB_HOST", "0.0.0.0"), help="Host/IP to bind (default 0.0.0.0 for network access)")
-    parser.add_argument("--port", type=int, default=int(os.environ.get("WEB_PORT", "8080")), help="Port to bind (default 8080)")
+    parser.add_argument("--port", type=int, default=int(os.environ.get("WEB_PORT", "80")), help="Port to bind (default 8080)")
     parser.add_argument("--proxy", action="store_true", help="Enable internal proxy component")
     args = parser.parse_args()
 
-    # Initialize Pokédex bot components if enabled via flag
-    if ENABLE_POKEDEX_CHAT:
-        try:
-            print("🤖 Initializing Pokedex chat components...")
-            from my_bot.core.my_model import initialize_model_and_agent
-            if initialize_model_and_agent():
-                print("✅ Pokedex chat components initialized!")
+    # Initialize Pokédex bot components
+    try:
+        print("🤖 Initializing Pokedex chat components...")
+        from my_bot.core.my_model import initialize_model_and_agent
+        if initialize_model_and_agent():
+            print("✅ Pokedex chat components initialized!")
 
-                # Warm up the model to preload it into memory
-                print("🔥 Warming up LLM (this will load the model into memory)...")
-                state_manager = get_state_manager()
-                if state_manager.fast_warmup():
-                    print("✅ LLM warmed up and ready! Model is now loaded in memory.")
-                else:
-                    print("⚠️ LLM warmup failed - model will load on first request")
+            # Warm up the model to preload it into memory
+            print("🔥 Warming up LLM (this will load the model into memory)...")
+            state_manager = get_state_manager()
+            if state_manager.fast_warmup():
+                print("✅ LLM warmed up and ready! Model is now loaded in memory.")
             else:
-                print("⚠️ Pokedex chat initialization failed - chat endpoint will return errors")
-        except Exception as e:
-            print(f"⚠️ Failed to initialize Pokedex chat: {e}")
-            print("   Chat endpoint will be available but may return errors")
-    else:
-        print("ℹ️ Pokedex chat disabled (set ENABLE_POKEDEX_CHAT = True to enable)")
+                print("⚠️ LLM warmup failed - model will load on first request")
+        else:
+            print("⚠️ Pokedex chat initialization failed - chat endpoint will return errors")
+    except Exception as e:
+        print(f"⚠️ Failed to initialize Pokedex chat: {e}")
+        print("   Chat endpoint will be available but may return errors")
 
     charts_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), 'static/charts'))
     app.config['CHARTS_DIR'] = charts_dir

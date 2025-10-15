@@ -115,6 +115,7 @@ def get_config():
         palo_alto_host=os.environ["PALO_ALTO_HOST"],
         palo_alto_api_key=os.environ["PALO_ALTO_API_KEY"],
         open_weather_map_api_key=os.environ["OPEN_WEATHER_MAP_API_KEY"],
+        web_server_debug_mode_on=os.environ.get("WEB_SERVER_DEBUG_MODE_ON", False).lower() == "True",
     )
 
 
@@ -213,3 +214,4 @@ class Config:
     palo_alto_host: str
     palo_alto_api_key: str
     open_weather_map_api_key: str
+    web_server_debug_mode_on: bool = False
