@@ -31,3 +31,5 @@ performance_data.json
 
 *.lock
 tests
+
+.env
