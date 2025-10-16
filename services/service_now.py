@@ -158,7 +158,7 @@ def _parse_discovery_date(item):
 
 
 class ServiceNowClient:
-    def __init__(self):
+    def __init__(self, requests_per_second=10):
         logger.debug("Initializing ServiceNowClient")
         self.token_manager = ServiceNowTokenManager(
             instance_url=config.snow_base_url,
@@ -171,17 +171,34 @@ class ServiceNowClient:
         self.workstation_url = f"{base_url}/itsm-compute/compute/computers"
 
         # Create persistent session with connection pooling
-        logger.info("Creating HTTP session with connection pooling (pool_size=100, max_retries=3)")
+        logger.info("Creating HTTP session with connection pooling (pool_size=60, max_retries=3)")
         self.session = requests.Session()
         adapter = requests.adapters.HTTPAdapter(
-            pool_connections=100,
-            pool_maxsize=100,
+            pool_connections=60,
+            pool_maxsize=60,
             max_retries=3,
             pool_block=False
         )
         self.session.mount('http://', adapter)
         self.session.mount('https://', adapter)
+
+        # Rate limiting
+        self.requests_per_second = requests_per_second
+        self.min_request_interval = 1.0 / requests_per_second
+        self.last_request_time = 0
+        self.rate_limit_lock = threading.Lock()
+        logger.info(f"Rate limiting enabled: {requests_per_second} requests/second (min {self.min_request_interval*1000:.0f}ms between requests)")
         logger.debug("ServiceNowClient initialized successfully")
+
+    def _wait_for_rate_limit(self):
+        """Enforce rate limiting by waiting if necessary."""
+        with self.rate_limit_lock:
+            current_time = time.time()
+            time_since_last_request = current_time - self.last_request_time
+            if time_since_last_request < self.min_request_interval:
+                sleep_time = self.min_request_interval - time_since_last_request
+                time.sleep(sleep_time)
+            self.last_request_time = time.time()
 
     def get_host_details(self, hostname):
         """Get host details by hostname, checking servers first then workstations."""
@@ -206,47 +223,75 @@ class ServiceNowClient:
 
         return {"name": hostname, "status": "Not Found"}
 
-    def _search_endpoint(self, endpoint, hostname):
-        """Search a specific endpoint for hostname."""
-        headers = self.token_manager.get_auth_headers()
+    def _search_endpoint(self, endpoint, hostname, max_retries=3):
+        """Search a specific endpoint for hostname with retry logic for rate limiting."""
         params = {'name': hostname}
 
-        try:
-            logger.debug(f"Querying {endpoint} for hostname: {hostname}")
-            start_time = time.time()
-            response = self.session.get(endpoint, headers=headers, params=params, timeout=10, verify=False)
-            elapsed_ms = (time.time() - start_time) * 1000
-            logger.debug(f"ServiceNow API response for {hostname}: {response.status_code} in {elapsed_ms:.0f}ms")
-            response.raise_for_status()
-
-            # Check if response has content before trying to parse JSON
-            if not response.text or response.text.strip() == '':
-                logger.debug(f"Empty response body for {hostname}, treating as 'not found'")
-                return None
-
-            # Try to parse JSON with better error handling
+        for attempt in range(max_retries):
             try:
-                data = response.json()
-            except ValueError as json_error:
-                logger.debug(f"Invalid JSON in response for {hostname}: {json_error}. Response body: {response.text[:200]}")
-                return None
+                # Enforce rate limiting before making request
+                self._wait_for_rate_limit()
 
-            items = data.get('items', data) if isinstance(data, dict) else data
+                headers = self.token_manager.get_auth_headers()
+                logger.debug(f"Querying {endpoint} for hostname: {hostname} (attempt {attempt + 1}/{max_retries})")
+                start_time = time.time()
+                response = self.session.get(endpoint, headers=headers, params=params, timeout=10, verify=False)
+                elapsed_ms = (time.time() - start_time) * 1000
+                logger.debug(f"ServiceNow API response for {hostname}: {response.status_code} in {elapsed_ms:.0f}ms")
 
-            if not items:
-                logger.debug(f"No items found for {hostname}")
-                return None
+                # Handle rate limiting with exponential backoff
+                if response.status_code == 429:
+                    if attempt < max_retries - 1:
+                        # Exponential backoff: 2s, 4s, 8s
+                        wait_time = 2 ** (attempt + 1)
+                        logger.warning(f"Rate limited (429) for {hostname}, retrying in {wait_time}s (attempt {attempt + 1}/{max_retries})")
+                        time.sleep(wait_time)
+                        continue
+                    else:
+                        logger.error(f"Rate limited (429) for {hostname} after {max_retries} attempts")
+                        return {"name": hostname, "error": "HTTP 429 Too Many Requests", "status": "ServiceNow API Error", "category": ""}
 
-            # Return most recently discovered item
-            if len(items) > 1:
-                logger.debug(f"Multiple items found for {hostname}, selecting most recent")
-                items = sorted(items, key=_parse_discovery_date, reverse=True)
+                response.raise_for_status()
 
-            logger.debug(f"Successfully retrieved details for {hostname}")
-            return items[0]
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Error fetching details for {hostname}: {str(e)}")
-            return {"name": hostname, "error": str(e), "status": "ServiceNow API Error", "category": ""}
+                # Check if response has content before trying to parse JSON
+                if not response.text or response.text.strip() == '':
+                    logger.debug(f"Empty response body for {hostname}, treating as 'not found'")
+                    return None
+
+                # Try to parse JSON with better error handling
+                try:
+                    data = response.json()
+                except ValueError as json_error:
+                    logger.debug(f"Invalid JSON in response for {hostname}: {json_error}. Response body: {response.text[:200]}")
+                    return None
+
+                items = data.get('items', data) if isinstance(data, dict) else data
+
+                if not items:
+                    logger.debug(f"No items found for {hostname}")
+                    return None
+
+                # Return most recently discovered item
+                if len(items) > 1:
+                    logger.debug(f"Multiple items found for {hostname}, selecting most recent")
+                    items = sorted(items, key=_parse_discovery_date, reverse=True)
+
+                logger.debug(f"Successfully retrieved details for {hostname}")
+                return items[0]
+
+            except requests.exceptions.RequestException as e:
+                # For network errors, retry with exponential backoff
+                if attempt < max_retries - 1 and any(err in str(e).lower() for err in ['timeout', 'connection', 'network']):
+                    wait_time = 2 ** (attempt + 1)
+                    logger.warning(f"Network error for {hostname}: {e}, retrying in {wait_time}s (attempt {attempt + 1}/{max_retries})")
+                    time.sleep(wait_time)
+                    continue
+                else:
+                    logger.error(f"Error fetching details for {hostname}: {str(e)}")
+                    return {"name": hostname, "error": str(e), "status": "ServiceNow API Error", "category": ""}
+
+        # Should not reach here, but handle gracefully
+        return {"name": hostname, "error": "Max retries exceeded", "status": "ServiceNow API Error", "category": ""}
 
     def get_process_changes(self, params=None):
         """Get process changes from ServiceNow custom endpoint."""
@@ -352,7 +397,8 @@ def enrich_host_report(input_file):
     hostnames = [h for h in df[hostname_col].tolist() if h and isinstance(h, str)]
     logger.info(f"Processing {len(hostnames)} valid hostnames from {input_file}")
 
-    client = ServiceNowClient()
+    # Create client with rate limiting (10 requests/second to avoid HTTP 429)
+    client = ServiceNowClient(requests_per_second=10)
     snow_data = {}
     errors_occurred = False
     error_count = 0
@@ -363,7 +409,7 @@ def enrich_host_report(input_file):
         short_hostname = str(hostname).split('.')[0].lower() if hostname and isinstance(hostname, str) else ""
         return short_hostname, details
 
-    max_workers = 75  # Increased from 30 for better throughput with connection pooling
+    max_workers = 50  # Balanced parallelism with rate limiting to avoid ServiceNow API rate limiting (HTTP 429)
     logger.info(f"Starting parallel enrichment with {max_workers} workers for {len(hostnames)} hosts")
 
     start_time = time.time()
