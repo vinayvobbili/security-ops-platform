@@ -35,13 +35,10 @@ CONFIG = get_config()
 
 SHOULD_START_PROXY = False
 USE_DEBUG_MODE = CONFIG.web_server_debug_mode_on
-# Define the proxy port
-PROXY_PORT = 8080
-# Optimize buffer size for better performance (increase from default 4096)
+PROXY_PORT = 9000
+WEB_SERVER_PORT = 80
 BUFFER_SIZE = 16384
-# Number of worker threads for processing connections
 NUM_WORKERS = 10
-# Connection pool size
 MAX_CONNECTIONS = 100
 
 app = Flask(__name__, static_folder='static', static_url_path='/static', template_folder='templates')
@@ -1303,11 +1300,6 @@ def main():
       --port / WEB_PORT (default 8080)
       --proxy flag enables internal proxy (default disabled)
     """
-    parser = argparse.ArgumentParser(description="IR Web Server")
-    parser.add_argument("--host", default=os.environ.get("WEB_HOST", "0.0.0.0"), help="Host/IP to bind (default 0.0.0.0 for network access)")
-    parser.add_argument("--port", type=int, default=int(os.environ.get("WEB_PORT", "80")), help="Port to bind (default 8080)")
-    parser.add_argument("--proxy", action="store_true", help="Enable internal proxy component")
-    args = parser.parse_args()
 
     # Initialize Pokédex bot components
     try:
@@ -1332,30 +1324,27 @@ def main():
     charts_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), 'static/charts'))
     app.config['CHARTS_DIR'] = charts_dir
 
-    # Decide if proxy should start
-    start_proxy = args.proxy or (os.environ.get("START_PROXY", "false").lower() == "true")
+    host = '0.0.0.0'
+    port = WEB_SERVER_PORT
 
     # Only start proxy server in main process (not in reloader child process) and if enabled
-    if start_proxy and os.environ.get('WERKZEUG_RUN_MAIN') != 'true':
+    if SHOULD_START_PROXY and os.environ.get('WERKZEUG_RUN_MAIN') != 'true':
         proxy_thread = threading.Thread(target=start_proxy_server, daemon=True)
         proxy_thread.start()
         print(f"High-performance proxy server thread started on port {PROXY_PORT}")
-    elif not start_proxy:
+    elif not SHOULD_START_PROXY:
         print(f"Proxy server disabled (pass --proxy to enable)")
 
-    port = args.port
-    host = args.host
-
-    print(f"Attempting to start web server on http://{host}:{port}")
+    print(f"Attempting to start web server on http://{host}:{WEB_SERVER_PORT}")
 
     if USE_DEBUG_MODE:
         print("Using Flask dev server with auto-reload (debug mode)")
         try:
-            app.run(debug=True, host=host, port=port, threaded=True, use_reloader=True)
+            app.run(debug=True, host=host, port=WEB_SERVER_PORT, threaded=True, use_reloader=True)
         except OSError as e:
-            if port < 1024 and e.errno == 13:
+            if WEB_SERVER_PORT < 1024 and e.errno == 13:
                 fallback_port = 8080
-                print(f"Permission denied binding to port {port}. Falling back to {fallback_port}. (Run with sudo or grant capability to use {port}).")
+                print(f"Permission denied binding to port {WEB_SERVER_PORT}. Falling back to {fallback_port}. (Run with sudo or grant capability to use {WEB_SERVER_PORT}).")
                 app.run(debug=True, host=host, port=fallback_port, threaded=True, use_reloader=True)
             else:
                 raise
