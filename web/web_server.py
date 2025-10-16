@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-import argparse
+# Standard library imports
 import asyncio
 import http.client
 import http.server
@@ -13,15 +13,16 @@ import select
 import socket
 import socketserver
 import threading
-from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta, timezone
-from typing import List, Dict
+from typing import Dict, List
 from urllib.parse import urlsplit
 
+# Third-party imports
 import pytz
 import requests
-from flask import Flask, request, abort, jsonify, render_template
+from flask import Flask, abort, jsonify, render_template, request
 
+# Local imports
 from my_bot.core.my_model import ask, ask_stream
 from my_bot.core.state_manager import get_state_manager
 from my_config import get_config
@@ -29,10 +30,11 @@ from services import xsoar
 from services.approved_testing_utils import add_approved_testing_entry
 from src import secops
 from src.components import apt_names_fetcher, secops_shift_metrics
-from src.utils.logging_utils import log_web_activity, is_scanner_request
+from src.utils.logging_utils import is_scanner_request, log_web_activity
 
 CONFIG = get_config()
 
+# Server configuration constants
 SHOULD_START_PROXY = False
 USE_DEBUG_MODE = CONFIG.web_server_debug_mode_on
 PROXY_PORT = 9000
@@ -40,20 +42,15 @@ WEB_SERVER_PORT = 80
 BUFFER_SIZE = 16384
 NUM_WORKERS = 10
 MAX_CONNECTIONS = 100
+COMPANY_EMAIL_DOMAIN = '@' + CONFIG.my_web_domain
 
 app = Flask(__name__, static_folder='static', static_url_path='/static', template_folder='templates')
 eastern = pytz.timezone('US/Eastern')
-CONFIG = get_config()
 
 # Configure logging to suppress werkzeug INFO logs for PAC files and other noise
 logging.getLogger('werkzeug').setLevel(logging.WARNING)
 logging.getLogger('waitress').setLevel(logging.WARNING)
 
-# Connection pool for HTTP requests
-http_pool = ThreadPoolExecutor(max_workers=NUM_WORKERS)
-
-# Supported image extensions
-IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".gif", ".svg")
 blocked_ip_ranges = []  # ["10.49.70.0/24", "10.50.70.0/24"]
 
 list_handler = xsoar.ListHandler()
@@ -65,7 +62,11 @@ logger = logging.getLogger(__name__)
 
 @app.before_request
 def block_ip():
-    if any(ipaddress.ip_network(request.remote_addr).subnet_of(ipaddress.ip_network(blocked_ip_range)) for blocked_ip_range in blocked_ip_ranges):
+    """Block requests from configured IP ranges and scanner probes."""
+    if blocked_ip_ranges and any(
+            ipaddress.ip_network(request.remote_addr).subnet_of(ipaddress.ip_network(blocked_ip_range))
+            for blocked_ip_range in blocked_ip_ranges
+    ):
         abort(403)  # Forbidden
 
     # Check for scanner patterns to quickly return 404 for scanner probes
@@ -117,7 +118,7 @@ def get_image_files() -> List[str]:
         if os.path.exists(full_path):
             image_files.append(image_path)
         else:
-            print(f"File not found: {full_path}")
+            logger.warning(f"File not found: {full_path}")
 
     return image_files
 
@@ -169,8 +170,8 @@ def display_speak_up_form():
     return render_template("speak_up_form.html")
 
 
-@log_web_activity
 @app.route("/submit-speak-up-form", methods=['POST'])
+@log_web_activity
 def handle_speak_up_form_submission():
     """Handles the Speak Up form submissions and processes the data."""
     form = request.form.to_dict()
@@ -247,7 +248,7 @@ def get_approved_testing_entries():
     )
 
 
-def parse_date(date_str):
+def parse_date(date_str: str) -> datetime:
     """Parses a date string in multiple formats and returns a datetime object."""
     for fmt in ('%Y-%m-%d', '%m/%d/%Y'):
         try:
@@ -326,7 +327,7 @@ def handle_red_team_testing_form_submission():
     notes_scope = form.get('notes_scope', '').strip()
     keep_until = form.get('keep_until', '')
     submitter_ip_address = request.remote_addr
-    submitter_email_address = form.get('email_local', '') + '@company.com'
+    submitter_email_address = form.get('email_local', '') + COMPANY_EMAIL_DOMAIN
     submit_date = datetime.now(eastern).strftime("%m/%d/%Y")
 
     approved_testing_list_name = f"{CONFIG.team_name}_Approved_Testing"
@@ -359,6 +360,7 @@ def handle_red_team_testing_form_submission():
 
 @app.route('/favicon.ico')
 def favicon():
+    """Serve the favicon icon."""
     return app.send_static_file('icons/favicon.ico')
 
 
@@ -516,7 +518,7 @@ def relay_data_async(client_sock, target_sock):
                     break
                 client_sock.sendall(view[:bytes_read])
     except Exception as e:
-        print(f"Error during relay: {e}")
+        logger.error(f"Error during relay: {e}")
     finally:
         try:
             loop.close()
@@ -558,7 +560,7 @@ class OptimizedProxy(http.server.SimpleHTTPRequestHandler):
 
             timestamp = datetime.now(eastern).strftime('%Y-%m-%d %H:%M:%S %Z')
             client_ip = self.client_address[0] if hasattr(self, 'client_address') else 'Unknown'
-            print(f"[{timestamp}] CONNECT request from {client_ip} to {target_host}:{target_port}")
+            logger.info(f"[{timestamp}] CONNECT request from {client_ip} to {target_host}:{target_port}")
 
             # Connect to target server
             target_sock = socket.create_connection((target_host, target_port), timeout=30)
@@ -608,7 +610,7 @@ class OptimizedProxy(http.server.SimpleHTTPRequestHandler):
         except Exception as e:
             # Catch any other unexpected errors
             try:
-                print(f"CONNECT error: {e}")
+                logger.error(f"CONNECT error: {e}")
                 self.send_error(502, f"Cannot connect to {target_host}:{target_port}")
             except (BrokenPipeError, ConnectionResetError, OSError):
                 pass
@@ -618,7 +620,7 @@ class OptimizedProxy(http.server.SimpleHTTPRequestHandler):
         url = self.path
 
         if url.startswith('https://'):
-            print(f"Warning: Client tried to send HTTPS directly. Use CONNECT for HTTPS tunneling")
+            logger.warning(f"Client tried to send HTTPS directly. Use CONNECT for HTTPS tunneling")
             self.send_error(501, "HTTPS GET/POST proxy not implemented (use CONNECT)")
             return
 
@@ -686,13 +688,13 @@ class OptimizedProxy(http.server.SimpleHTTPRequestHandler):
         except (BrokenPipeError, ConnectionResetError, OSError) as e:
             if hasattr(e, 'errno') and e.errno == 9:  # Bad file descriptor
                 return  # Client already disconnected, no need to respond
-            print(f"Connection error during HTTP proxy request: {e}")
+            logger.error(f"Connection error during HTTP proxy request: {e}")
             try:
                 self.send_error(502, "Bad Gateway")
             except (BrokenPipeError, ConnectionResetError, OSError):
                 pass
         except Exception as e:
-            print(f"Error during HTTP proxy request: {e}")
+            logger.error(f"Error during HTTP proxy request: {e}")
             try:
                 self.send_error(502, "Bad Gateway")
             except (BrokenPipeError, ConnectionResetError, OSError):
@@ -1046,8 +1048,8 @@ def shift_performance_dashboard():
     return render_template('shift_performance.html', xsoar_prod_ui_base=getattr(CONFIG, 'xsoar_prod_ui_base_url', 'https://msoar.crtx.us.paloaltonetworks.com'))
 
 
-def _shift_has_passed(shift_name, current_shift):
-    """Check if a shift has already passed based on current shift"""
+def _shift_has_passed(shift_name: str, current_shift: str) -> bool:
+    """Check if a shift has already passed based on current shift."""
     shift_order = ['morning', 'afternoon', 'night']
     try:
         shift_index = shift_order.index(shift_name)
@@ -1164,7 +1166,7 @@ def get_shift_list():
                             'score': metrics['score']
                         })
                 except Exception as e:
-                    print(f"Error getting staffing or metrics for {day_name} {shift_name}: {e}")
+                    logger.error(f"Error getting staffing or metrics for {day_name} {shift_name}: {e}")
                     current_shift = secops.get_current_shift()
                     if days_back > 0:
                         show_shift = True
@@ -1219,13 +1221,6 @@ def clear_shift_cache():
     return jsonify({'success': True, 'message': 'No backend cache (frontend-only caching)'})
 
 
-# Helper to robustly extract SLA metrics from inflow tickets
-# Adaptive: totalDuration could be minutes, seconds, or milliseconds.
-# Heuristic conversion order:
-#   >= 3,600,000 -> treat as milliseconds (divide by 60,000)
-#   >= 600       -> treat as seconds (divide by 60)
-#   else         -> treat as minutes already
-# Breach detection only checks breachTriggered.
 @app.route('/meaningful-metrics')
 @log_web_activity
 def meaningful_metrics():
