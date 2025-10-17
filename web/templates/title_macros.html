@@ -1,0 +1,9 @@
+{# Shared title macros for consistent gradient top bar titles; used by base_layout.html #}
+{% macro build_title(text, left_icon='', right_icon='') %}
+    {# Returns HTML fragment for page_title variable. Icons optional. #}
+    {% set left = left_icon|trim %}
+    {% set right = right_icon|trim %}
+    {% if left or right %}
+        <span class='title-icon left' aria-hidden='true'>{{ left }}</span><span>{{ text }}</span><span class='title-icon right' aria-hidden='true'>{{ right }}</span>
+    {% else %}<span>{{ text }}</span>{% endif %}
+{% endmacro %}

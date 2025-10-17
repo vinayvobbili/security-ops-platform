@@ -585,11 +585,9 @@ button[type="submit"]:hover::before {
     }
 }
 
-/* Add top padding to body to account for fixed navigation */
-body {
+/* Page-specific styling using class to avoid overriding common.css */
+.apt-search-page {
     background: linear-gradient(135deg, var(--metlife-blue) 0%, var(--metlife-light-blue) 50%, var(--metlife-green) 100%);
-    margin: 0;
-    padding: 90px 0 0 0; /* Add top padding for fixed nav */
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     min-height: 100vh;
 }

@@ -1,103 +1,99 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MSOC</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/common.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/msoc.css') }}">
-</head>
-<body>
-{% set page_title = "MSOC Form" %}
-{% set audio_controls_classes = 'audio-controls--enhanced' %}
-{% include 'top_bar.html' %}
+{% extends 'base_layout.html' %}
 
-<div class="form-container">
-    <h1>MSOC Intake Form</h1>
-    <form id="msocForm">
-        <div class="form-group">
-            <label for="name">Name</label>
-            <input type="text" id="name" name="name" required>
-        </div>
+{% block page_title_plain %}MSOC{% endblock %}
 
-        <div class="form-group">
-            <label for="details">Details</label>
-            <textarea id="details" name="details" rows="5" style="resize: vertical;" required></textarea>
-        </div>
+{% block extra_css %}<link rel="stylesheet" href="{{ url_for('static', filename='css/msoc.css') }}">{% endblock %}
 
-        <div class="form-group">
-            <label for="severity">Severity</label>
-            <select id="severity" name="severity" required>
-                <option value="">Select Severity</option>
-                <option value="1">Low</option>
-                <option value="2">Medium</option>
-                <option value="3">High</option>
-                <option value="4">Critical</option>
-            </select>
-        </div>
+{% set page_title_text = 'MSOC Form' %}
+{% set page_title_left_icon = '🛠️' %}
+{% set page_title_right_icon = '📋' %}
 
-        <div class="form-group">
-            <label for="site">Site</label>
-            <input type="text" id="site" name="site">
-        </div>
+{% block content %}
+    <div class="form-container">
+        <!-- Changed internal <h1> to <h2> to avoid duplicate main title -->
+        <h2>MSOC Intake Form</h2>
+        <form id="msocForm">
+            <div class="form-group">
+                <label for="name">Name</label>
+                <input type="text" id="name" name="name" required>
+            </div>
 
-        <div class="form-group">
-            <label for="comm_server">Comm Server</label>
-            <input type="text" id="comm_server" name="comm_server">
-        </div>
+            <div class="form-group">
+                <label for="details">Details</label>
+                <textarea id="details" name="details" rows="5" style="resize: vertical;" required></textarea>
+            </div>
 
-        <div class="form-group">
-            <label for="tech_onsite">Tech Onsite</label>
-            <input type="text" id="tech_onsite" name="tech_onsite">
-        </div>
-
-        <div class="category-container">
-            <div class="category-group">
-                <label for="category">Category</label>
-                <select id="category" name="category">
-                    <option value="">Select Category</option>
-                    <option value="network">Network</option>
-                    <option value="server">Server</option>
-                    <option value="application">Application</option>
+            <div class="form-group">
+                <label for="severity">Severity</label>
+                <select id="severity" name="severity" required>
+                    <option value="">Select Severity</option>
+                    <option value="1">Low</option>
+                    <option value="2">Medium</option>
+                    <option value="3">High</option>
+                    <option value="4">Critical</option>
                 </select>
             </div>
 
-            <div class="category-group">
-                <label for="subcategory">Subcategory</label>
-                <select id="subcategory" name="subcategory">
-                    <option value="">Select Subcategory</option>
-                    <!-- Options will be populated dynamically -->
-                </select>
+            <div class="form-group">
+                <label for="site">Site</label>
+                <input type="text" id="site" name="site">
             </div>
-        </div>
 
-        <div class="submit-container">
-            <button type="button" id="clearButton">Clear</button>
-            <button type="submit">Submit</button>
-        </div>
-    </form>
-    <!-- The Modal -->
-    <div id="responseModal" class="modal">
-        <!-- Modal content -->
-        <div class="modal-content">
-            <span class="close">&times;</span>
-            <div id="response">
-                <!-- Response will be loaded here -->
+            <div class="form-group">
+                <label for="comm_server">Comm Server</label>
+                <input type="text" id="comm_server" name="comm_server">
+            </div>
+
+            <div class="form-group">
+                <label for="tech_onsite">Tech Onsite</label>
+                <input type="text" id="tech_onsite" name="tech_onsite">
+            </div>
+
+            <div class="category-container">
+                <div class="category-group">
+                    <label for="category">Category</label>
+                    <select id="category" name="category">
+                        <option value="">Select Category</option>
+                        <option value="network">Network</option>
+                        <option value="server">Server</option>
+                        <option value="application">Application</option>
+                    </select>
+                </div>
+
+                <div class="category-group">
+                    <label for="subcategory">Subcategory</label>
+                    <select id="subcategory" name="subcategory">
+                        <option value="">Select Subcategory</option>
+                        <!-- Options will be populated dynamically -->
+                    </select>
+                </div>
+            </div>
+
+            <div class="submit-container">
+                <button type="button" id="clearButton">Clear</button>
+                <button type="submit">Submit</button>
+            </div>
+        </form>
+        <!-- The Modal -->
+        <div id="responseModal" class="modal">
+            <!-- Modal content -->
+            <div class="modal-content">
+                <span class="close">&times;</span>
+                <div id="response">
+                    <!-- Response will be loaded here -->
+                </div>
             </div>
         </div>
     </div>
-</div>
+{% endblock %}
 
-<!-- Load common functionality (burger menu, audio, theme) before page-specific scripts -->
-<script src="{{ url_for('static', filename='js/common.js') }}"></script>
-<script src="{{ url_for('static', filename='js/msoc.js') }}"></script>
-<script src="{{ url_for('static', filename='js/red_team_testing_form.js') }}"></script>
-<script>
-    initRandomMusic();
-    window.addEventListener('load', () => {
-        const cat = document.getElementById('category');
-        if (cat) cat.dispatchEvent(new Event('change'));
-    });
-</script>
-</body>
-</html>
+{% block extra_js %}
+    <script src="{{ url_for('static', filename='js/msoc.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/red_team_testing_form.js') }}"></script>
+    <script>
+        window.addEventListener('load', () => {
+            const cat = document.getElementById('category');
+            if (cat) cat.dispatchEvent(new Event('change'));
+        });
+    </script>
+{% endblock %}

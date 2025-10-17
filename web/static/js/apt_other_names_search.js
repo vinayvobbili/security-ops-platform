@@ -128,46 +128,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
-    // Audio functionality
-    function toggleAptAudio() {
-        var audio = document.getElementById('apt-music');
-        var icon = document.getElementById('apt-music-icon');
-        if (audio.paused) {
-            audio.play();
-            icon.src = '/static/icons/volume-high-solid.svg';
-            localStorage.setItem('apt-music-playing', 'true');
-        } else {
-            audio.pause();
-            icon.src = '/static/icons/volume-xmark-solid.svg';
-            localStorage.setItem('apt-music-playing', 'false');
-        }
-    }
-
-    // Make toggleAptAudio globally available
-    window.toggleAptAudio = toggleAptAudio;
-
-    // Audio initialization - DON'T auto-start music
-    var audio = document.getElementById('apt-music');
-    var icon = document.getElementById('apt-music-icon');
-
-    // Always start with muted icon - don't auto-play music
-    icon.src = '/static/icons/volume-xmark-solid.svg';
-    audio.pause(); // Ensure audio is paused
-
-    // Remove auto-start behavior - music should only play when manually clicked
-    // var wasPlaying = localStorage.getItem('apt-music-playing') === 'true';
-    // if (wasPlaying) { ... } // REMOVED AUTO-START LOGIC
-
-    // Restore current time if available (but don't play)
-    var savedTime = parseFloat(localStorage.getItem('apt-music-current-time'));
-    if (!isNaN(savedTime)) {
-        audio.currentTime = savedTime;
-    }
-
-    window.addEventListener('beforeunload', function () {
-        localStorage.setItem('apt-music-current-time', audio.currentTime.toString());
-    });
-
     // Response format slider functionality
     const responseFormatSlider = document.getElementById('responseFormatSlider');
     const sliderOptions = document.querySelectorAll('.slider-option');

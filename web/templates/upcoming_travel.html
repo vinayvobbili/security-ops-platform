@@ -4,13 +4,17 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Upcoming Travel Records</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/upcoming_travel.css') }}">
+    {% block extra_css %}
+        <link rel="stylesheet" href="{{ url_for('static', filename='css/upcoming_travel.css') }}">
+    {% endblock %}
     <link rel="stylesheet" href="{{ url_for('static', filename='css/common.css') }}">
 </head>
 <body>
+{% extends 'base_layout.html' %}
+{% import 'title_macros.html' as titles %}
+{% set page_title = titles.build_title('Upcoming Travel Records','✈️','🗓️') %}
 {% include 'top_bar.html' %}
 <div class="container">
-    <h1>Upcoming-Travel Records</h1>
 
     <section>
         <table>
@@ -47,7 +51,7 @@
 
 </div>
 <script src="/static/js/common.js"></script>
-<script src="/static/js/upcoming_travel.js"></script>
+<script src="{{ url_for('static', filename='js/upcoming_travel.js') }}"></script>
 <script>
     initRandomMusic();
 

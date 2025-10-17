@@ -17,14 +17,36 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Dict, List
 from urllib.parse import urlsplit
 
+# NEW: ensure project root on sys.path before local imports
+import sys
+_CURRENT_DIR = os.path.dirname(__file__)
+_PROJECT_ROOT = os.path.abspath(os.path.join(_CURRENT_DIR, '..'))
+if _PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, _PROJECT_ROOT)
+
 # Third-party imports
 import pytz
 import requests
 from flask import Flask, abort, jsonify, render_template, request
 
-# Local imports
-from my_bot.core.my_model import ask, ask_stream
-from my_bot.core.state_manager import get_state_manager
+# Local imports with graceful degradation
+try:
+    from my_bot.core.my_model import ask, ask_stream  # type: ignore
+    from my_bot.core.state_manager import get_state_manager  # type: ignore
+    POKEDEX_AVAILABLE = True
+except Exception as e:  # Broad except to handle partial dependency failures
+    print(f"⚠️ Pokedex components unavailable: {e}. Continuing with limited functionality.")
+    POKEDEX_AVAILABLE = False
+
+    def ask(*args, **kwargs):  # type: ignore
+        return "Model not available in this environment"
+
+    def ask_stream(*args, **kwargs):  # type: ignore
+        yield "Model not available in this environment"
+
+    def get_state_manager():  # type: ignore
+        return None
+
 from my_config import get_config
 from services import xsoar
 from services.approved_testing_utils import add_approved_testing_entry
@@ -38,7 +60,8 @@ CONFIG = get_config()
 SHOULD_START_PROXY = False
 USE_DEBUG_MODE = CONFIG.web_server_debug_mode_on
 PROXY_PORT = 9000
-WEB_SERVER_PORT = 80
+# Allow environment override; default to 8080 for non-root dev usage
+WEB_SERVER_PORT = int(os.environ.get('WEB_SERVER_PORT', '8080'))
 BUFFER_SIZE = 16384
 NUM_WORKERS = 10
 MAX_CONNECTIONS = 100
@@ -58,6 +81,69 @@ incident_handler = xsoar.TicketHandler()
 
 # Add module logger (was missing previously)
 logger = logging.getLogger(__name__)
+
+# --- Server detection utilities (added) ---
+from functools import lru_cache
+
+# One-time guard for first-request logic (Flask 3 removed before_first_request)
+_server_detection_ran = False
+
+@lru_cache(maxsize=1)
+def _runtime_server_info_sample() -> dict:
+    """Cached placeholder before first request. Updated on first request."""
+    return {
+        'server_type': 'unknown_startup',
+        'server_software': 'unknown',
+        'debug_mode': app.debug,
+        'pid': os.getpid()
+    }
+
+
+def detect_server_type(server_software: str) -> str:
+    server_software_lower = (server_software or '').lower()
+    if 'waitress' in server_software_lower:
+        return 'waitress'
+    if 'gunicorn' in server_software_lower:
+        return 'gunicorn'
+    if 'uwsgi' in server_software_lower:
+        return 'uwsgi'
+    if 'werkzeug' in server_software_lower:
+        return 'flask-dev'
+    return 'unknown'
+
+
+# NOTE: Flask 3 removed app.before_first_request; emulate with a guarded before_request.
+
+def _log_real_server():  # noqa: D401
+    """Log WSGI server details (invoked once on first real request)."""
+    try:
+        env = request.environ  # type: ignore[attr-defined]
+        server_software = env.get('SERVER_SOFTWARE', 'unknown')
+        server_type = detect_server_type(server_software)
+        # Update cached info
+        _runtime_server_info_sample.cache_clear()  # type: ignore[attr-defined]
+
+        @lru_cache(maxsize=1)
+        def _runtime_server_info_sample_override():  # type: ignore
+            return {
+                'server_type': server_type,
+                'server_software': server_software,
+                'debug_mode': app.debug,
+                'pid': os.getpid()
+            }
+
+        globals()['_runtime_server_info_sample'] = _runtime_server_info_sample_override  # swap reference for later calls
+        print(f"[ServerDetect] Running under {server_type} ({server_software}) debug={app.debug} pid={os.getpid()}")
+    except Exception as e:
+        print(f"[ServerDetect] Failed to detect server: {e}")
+
+
+@app.before_request
+def _maybe_server_detect():  # type: ignore[override]
+    global _server_detection_ran
+    if not _server_detection_ran:
+        _log_real_server()
+        _server_detection_ran = True
 
 
 @app.before_request
@@ -1250,25 +1336,82 @@ def meaningful_metrics():
 @app.route('/api/meaningful-metrics/data')
 @log_web_activity
 def api_meaningful_metrics_data():
-    """API to get cached security incident data for dashboard"""
+    """API to get cached security incident data for dashboard.
+    If METRICS_DEV_SEED=true and cache missing, generate synthetic sample for local dev.
+    """
     import json
     from pathlib import Path
-
     try:
-        # Load cached data
         today_date = datetime.now(eastern).strftime('%m-%d-%Y')
         root_directory = Path(__file__).parent.parent
-        cache_file = root_directory / "web" / "static" / "charts" / today_date / "past_90_days_tickets.json"
-
+        cache_file = root_directory / 'web' / 'static' / 'charts' / today_date / 'past_90_days_tickets.json'
         if not cache_file.exists():
-            return jsonify({'success': False, 'error': 'Cache file not found'}), 404
-
+            if os.environ.get('METRICS_DEV_SEED', '').lower() == 'true':
+                cache_file.parent.mkdir(parents=True, exist_ok=True)
+                # Generate synthetic tickets
+                import random as _r
+                base_now = datetime.now(eastern)
+                severities = [1, 2, 3, 4]
+                impacts = ['Malware', 'Credential Theft', 'Phishing', 'Recon', 'Lateral Movement', 'Unknown']
+                regions = ['North America', 'Europe', 'APAC', 'LATAM']
+                countries = ['US', 'GB', 'IN', 'BR', 'DE', 'CA']
+                sources = ['CrowdStrike', 'EDR', 'Vectra', 'QRadar', 'Zscaler']
+                automation_levels = ['Manual', 'Semi-Automated', 'Automated', 'Unknown']
+                synthetic = []
+                for i in range(50):
+                    created_dt = base_now - timedelta(days=_r.randint(0, 45))
+                    is_closed = _r.random() < 0.6
+                    closed_dt = created_dt + timedelta(hours=_r.randint(1, 72)) if is_closed else None
+                    resp_secs = _r.randint(30, 900)
+                    contain_secs = _r.randint(120, 3600)
+                    age_days = (base_now - created_dt).days if not is_closed else (closed_dt - created_dt).days
+                    synthetic.append({
+                        'id': 5000 + i,
+                        'name': f'Synthetic Alert #{5000 + i}',
+                        'severity': _r.choice(severities),
+                        'severity_display': 'Critical' if synthetic and synthetic[-1].get('severity', 1) == 4 else 'High',
+                        'status': 2 if is_closed else _r.choice([0, 1]),
+                        'status_display': 'Closed' if is_closed else _r.choice(['Pending', 'Active']),
+                        'type': _r.choice(sources),
+                        'impact': _r.choice(impacts),
+                        'automation_level': _r.choice(automation_levels),
+                        'affected_country': _r.choice(countries),
+                        'affected_region': _r.choice(regions),
+                        'owner': f'analyst{_r.randint(1, 8)}',
+                        'created': created_dt.strftime('%Y-%m-%dT%H:%M:%S'),
+                        'created_display': created_dt.strftime('%m/%d'),
+                        'closed': closed_dt.strftime('%Y-%m-%dT%H:%M:%S') if closed_dt else None,
+                        'closed_display': closed_dt.strftime('%m/%d') if closed_dt else '',
+                        'is_open': not is_closed,
+                        'currently_aging_days': age_days if not is_closed else 0,
+                        'days_since_creation': (base_now - created_dt).days,
+                        'resolution_time_days': (closed_dt - created_dt).days if closed_dt else None,
+                        'has_resolution_time': bool(closed_dt),
+                        'resolution_bucket': '0-1d' if closed_dt and (closed_dt - created_dt).days <= 1 else ('1-3d' if closed_dt and (closed_dt - created_dt).days <= 3 else ('>3d' if closed_dt else 'Unresolved')),
+                        'age_category': '0-7' if age_days <= 7 else ('8-30' if age_days <= 30 else '>30'),
+                        'time_to_respond_secs': resp_secs,
+                        'time_to_contain_secs': contain_secs
+                    })
+                obj = {
+                    'success': True,
+                    'data_generated_at': base_now.strftime('%Y-%m-%dT%H:%M:%S%z'),
+                    'total_count': len(synthetic),
+                    'data': synthetic
+                }
+                with open(cache_file, 'w') as f:
+                    json.dump(obj, f)
+                return jsonify({
+                    'success': True,
+                    'data': obj['data'],
+                    'total_count': obj['total_count'],
+                    'data_generated_at': obj['data_generated_at'],
+                    'dev_seeded': True
+                })
+            else:
+                return jsonify({'success': False, 'error': 'Cache file not found'}), 404
         with open(cache_file, 'r') as f:
             cached_data = json.load(f)
-
-        # Check if data is in new format (with metadata) or old format (just array)
         if isinstance(cached_data, dict) and 'data' in cached_data:
-            # New format: already has metadata including data_generated_at
             return jsonify({
                 'success': True,
                 'data': cached_data['data'],
@@ -1276,12 +1419,11 @@ def api_meaningful_metrics_data():
                 'data_generated_at': cached_data.get('data_generated_at')
             })
         else:
-            # Old format: just the array of tickets (fallback)
             return jsonify({
                 'success': True,
                 'data': cached_data,
                 'total_count': len(cached_data),
-                'data_generated_at': None  # Will use fallback in frontend
+                'data_generated_at': None
             })
 
     except Exception as e:
@@ -1290,17 +1432,30 @@ def api_meaningful_metrics_data():
 
 @app.route("/healthz")
 def healthz():
-    """Lightweight health probe endpoint for load balancers / monitoring."""
+    """Lightweight health probe endpoint for load balancers / monitoring.
+    Augmented with server details to verify runtime (waitress vs flask-dev).
+    """
     try:
         # Use timezone-aware UTC datetime (portable across Python versions)
         ts = datetime.now(timezone.utc)
-        # Represent in RFC3339 style with trailing Z
         timestamp = ts.isoformat().replace('+00:00', 'Z')
+
+        try:
+            # Try to get live request environ server software if available
+            server_software = request.environ.get('SERVER_SOFTWARE', 'unknown')  # type: ignore[attr-defined]
+            server_info = {
+                'server_type': detect_server_type(server_software),
+                'server_software': server_software,
+            }
+        except Exception:
+            # Fallback to cached sample established at first request
+            server_info = _runtime_server_info_sample()
         return jsonify({
             "status": "ok",
             "timestamp": timestamp,
             "team": getattr(CONFIG, 'team_name', 'unknown'),
-            "service": "ir_web_server"
+            "service": "ir_web_server",
+            "server": server_info
         }), 200
     except Exception as e:
         return jsonify({"status": "error", "error": str(e)}), 500
@@ -1521,20 +1676,23 @@ def main():
 
     # Initialize Pokédex bot components
     try:
-        print("🤖 Initializing Pokedex chat components...")
-        from my_bot.core.my_model import initialize_model_and_agent
-        if initialize_model_and_agent():
-            print("✅ Pokedex chat components initialized!")
-
-            # Warm up the model to preload it into memory
-            print("🔥 Warming up LLM (this will load the model into memory)...")
-            state_manager = get_state_manager()
-            if state_manager.fast_warmup():
-                print("✅ LLM warmed up and ready! Model is now loaded in memory.")
-            else:
-                print("⚠️ LLM warmup failed - model will load on first request")
+        if os.environ.get('SKIP_POKEDEX_WARMUP', '').lower() == 'true':
+            print("⏭️ Skipping Pokedex initialization (SKIP_POKEDEX_WARMUP=true)")
         else:
-            print("⚠️ Pokedex chat initialization failed - chat endpoint will return errors")
+            print("🤖 Initializing Pokedex chat components...")
+            from my_bot.core.my_model import initialize_model_and_agent
+            if initialize_model_and_agent():
+                print("✅ Pokedex chat components initialized!")
+
+                # Warm up the model to preload it into memory
+                print("🔥 Warming up LLM (this will load the model into memory)...")
+                state_manager = get_state_manager()
+                if state_manager and hasattr(state_manager, 'fast_warmup') and state_manager.fast_warmup():
+                    print("✅ LLM warmed up and ready! Model is now loaded in memory.")
+                else:
+                    print("⚠️ LLM warmup skipped or failed - model will load on first request")
+            else:
+                print("⚠️ Pokedex chat initialization failed - chat endpoint will return errors")
     except Exception as e:
         print(f"⚠️ Failed to initialize Pokedex chat: {e}")
         print("   Chat endpoint will be available but may return errors")

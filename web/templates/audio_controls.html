@@ -1,6 +1,5 @@
+<!-- audio_controls.html used by base_layout; enhanced variant default applied -->
 <audio id="music" src="" loop muted></audio>
-<div class="audio-controls {{ audio_controls_classes|default('') }}">
-    <button id="audioToggleBtn">
-        <img src="{{ url_for('static', filename='icons/volume-xmark-solid.svg') }}" alt="Unmute Icon" class="music-icon" id="music-icon">
-    </button>
+<div class="audio-controls {{ audio_controls_classes|default('audio-controls--enhanced') }}">
+    <button id="audioToggleBtn"><img src="{{ url_for('static', filename='icons/volume-xmark-solid.svg') }}" alt="Unmute Icon" class="music-icon" id="music-icon"></button>
 </div>

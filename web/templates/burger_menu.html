@@ -1,13 +1,13 @@
+<!-- burger_menu.html integrated via base_layout top bar; defaults to dashboard-title class -->
 <div class="top-nav">
     <div class="nav-burger" onclick="toggleMenu()" role="button" tabindex="0" aria-label="Toggle navigation">
         <img src="{{ url_for('static', filename='icons/burger.svg') }}" alt="Menu" class="nav-icon">
     </div>
     {% if page_title %}
-        <h1 class="page-title">{{ page_title }}</h1>
+        <h1 class="{{ page_title_class if page_title_class else 'dashboard-title' }}" aria-label="{{ page_title_aria if page_title_aria else (page_title|striptags) }}">{{ page_title|safe }}</h1>
     {% endif %}
     <div id="burgerMenu" class="burger-menu-content" style="display:none;" aria-hidden="true">
         <a href="/">🏠 Home</a>
-        {# <a href="/pokedex-chat">🤖 Pokédex</a>#}
         <a href="/meaningful-metrics">💹 Analytics</a>
         <a href="/shift-performance">⚖️ Shift Performance</a>
         <a href="/msoc-form">📋️ MSOC Form</a>

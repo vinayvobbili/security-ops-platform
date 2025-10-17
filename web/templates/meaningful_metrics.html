@@ -1,45 +1,26 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>METCIRT Metrics📈</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/common.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/meaningful_metrics.css') }}">
-    <link rel="icon" href="{{ url_for('static', filename='icons/metrics-dashboard-icon.ico') }}" type="image/x-icon">
-    <script src="https://cdn.plot.ly/plotly-2.26.0.min.js"></script>
-</head>
-<body class="super-compact-page">
-{% set audio_controls_classes = 'audio-controls--enhanced' %}
-{% include 'top_bar.html' %}
+{% extends 'base_layout.html' %}
+{% set page_title_text = 'Amazing Actionable Analytics' %}
+{% set page_title_left_icon = '📊' %}
+{% set page_title_right_icon = '💰' %}
+{% block head_scripts %}<link rel="icon" href="{{ url_for('static', filename='icons/metrics-dashboard-icon.ico') }}" type="image/x-icon">{% endblock %}
+{% block body_classes %}{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{{ url_for('static', filename='css/meaningful_metrics.css') }}">{% endblock %}
+{% block content %}
 <!-- Dark Mode Toggle -->
 <div class="theme-toggle" id="themeToggleWrapper">
     <button id="themeToggleBtn" aria-label="Toggle dark mode" title="Toggle dark mode">🌙</button>
 </div>
 
 <div class="dashboard-container">
-    <div class="dashboard-header">
-        <h1 class="dashboard-title">
-            <span class="title-icon left">📊</span>
-            Amazing Actionable Analytics
-            <span class="title-icon right">💰</span>
-        </h1>
-    </div>
-
     <!-- Filters Section -->
     <div class="filters-section">
         <div class="filters-header">
-            <div class="header-left">
-                🎛️ Filter Controls
-            </div>
+            <div class="header-left">🎛️ Filter Controls</div>
             <div class="header-right">
                 <div class="slider-field">
                     <label class="date-range-label">📅<br>Created in past (days):</label>
                     <div class="date-range-slider-container" style="position: relative;">
-                        <div id="dateRangeTooltip" class="slider-tooltip"
-                             style="position: absolute; top: -35px; left: 50%; transform: translateX(-50%); background: #333; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; white-space: nowrap; pointer-events: none; z-index: 10; display: none;">
-                            30
-                        </div>
+                        <div id="dateRangeTooltip" class="slider-tooltip" style="position: absolute; top: -35px; left: 50%; transform: translateX(-50%); background: #333; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; white-space: nowrap; pointer-events: none; z-index: 10; display: none;">30</div>
                         <label for="dateRangeSlider"></label><input type="range" id="dateRangeSlider" class="date-range-slider" min="1" max="90" value="30" step="1">
                         <div class="slider-labels">
                             <span class="range-preset" data-value="1" style="cursor: pointer;">1</span>
@@ -51,10 +32,7 @@
                 <div class="slider-field">
                     <label class="date-range-label">⏱️<br>TTR<br>(mins):</label>
                     <div class="date-range-slider-container" style="position: relative;">
-                        <div id="mttrRangeTooltip" class="slider-tooltip"
-                             style="position: absolute; top: -35px; left: 50%; transform: translateX(-50%); background: #333; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; white-space: nowrap; pointer-events: none; z-index: 10; display: none;">
-                            All
-                        </div>
+                        <div id="mttrRangeTooltip" class="slider-tooltip" style="position: absolute; top: -35px; left: 50%; transform: translateX(-50%); background: #333; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; white-space: nowrap; pointer-events: none; z-index: 10; display: none;">All</div>
                         <label for="mttrRangeSlider"></label><input type="range" id="mttrRangeSlider" class="date-range-slider" min="0" max="3" value="0" step="1">
                         <div class="slider-labels">
                             <span data-value="0" class="active">All</span>
@@ -67,10 +45,7 @@
                 <div class="slider-field">
                     <label class="date-range-label">🔒<br>TTC<br>(mins):</label>
                     <div class="date-range-slider-container" style="position: relative;">
-                        <div id="mttcRangeTooltip" class="slider-tooltip"
-                             style="position: absolute; top: -35px; left: 50%; transform: translateX(-50%); background: #333; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; white-space: nowrap; pointer-events: none; z-index: 10; display: none;">
-                            All
-                        </div>
+                        <div id="mttcRangeTooltip" class="slider-tooltip" style="position: absolute; top: -35px; left: 50%; transform: translateX(-50%); background: #333; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; white-space: nowrap; pointer-events: none; z-index: 10; display: none;">All</div>
                         <label for="mttcRangeSlider"></label><input type="range" id="mttcRangeSlider" class="date-range-slider" min="0" max="3" value="0" step="1">
                         <div class="slider-labels">
                             <span data-value="0" class="active">All</span>
@@ -83,10 +58,7 @@
                 <div class="slider-field">
                     <label class="date-range-label">📆<br>Aging<br>(days): <span title="Age filter applies only to currently open tickets (closed tickets stop aging)" style="cursor: help;">ℹ️</span></label>
                     <div class="date-range-slider-container" style="position: relative;">
-                        <div id="ageRangeTooltip" class="slider-tooltip"
-                             style="position: absolute; top: -35px; left: 50%; transform: translateX(-50%); background: #333; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; white-space: nowrap; pointer-events: none; z-index: 10; display: none;">
-                            All
-                        </div>
+                        <div id="ageRangeTooltip" class="slider-tooltip" style="position: absolute; top: -35px; left: 50%; transform: translateX(-50%); background: #333; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; white-space: nowrap; pointer-events: none; z-index: 10; display: none;">All</div>
                         <label for="ageRangeSlider"></label><input type="range" id="ageRangeSlider" class="date-range-slider" min="0" max="60" value="0" step="1">
                         <div class="slider-labels">
                             <span class="range-preset" data-value="0" style="cursor: pointer;">All</span>
@@ -105,21 +77,14 @@
                         <button class="tab-button active" data-tab="region">🌍 Region</button>
                     </div>
                     <div class="tab-content">
-                        <div id="countryTab" class="tab-pane">
-                            <div id="countryFilter" class="checkbox-filter">
-                            </div>
-                        </div>
-                        <div id="regionTab" class="tab-pane active">
-                            <div id="regionFilter" class="checkbox-filter">
-                            </div>
-                        </div>
+                        <div id="countryTab" class="tab-pane"><div id="countryFilter" class="checkbox-filter"></div></div>
+                        <div id="regionTab" class="tab-pane active"><div id="regionFilter" class="checkbox-filter"></div></div>
                     </div>
                 </div>
             </div>
             <div class="filter-group">
                 <label class="filter-label">💥 Impact Level</label>
-                <div id="impactFilter" class="checkbox-filter">
-                </div>
+                <div id="impactFilter" class="checkbox-filter"></div>
             </div>
             <div class="filter-group">
                 <label class="filter-label">🚨 Severity</label>
@@ -132,8 +97,7 @@
             </div>
             <div class="filter-group ticket-type-filter">
                 <label class="filter-label">🎫 Ticket Type</label>
-                <div id="ticketTypeFilter" class="checkbox-filter">
-                </div>
+                <div id="ticketTypeFilter" class="checkbox-filter"></div>
             </div>
             <div class="filter-group">
                 <label class="filter-label">📊 Status</label>
@@ -153,11 +117,8 @@
                 </div>
             </div>
         </div>
-
-        <!-- Filter Summary -->
         <div class="filter-summary" id="filterSummary">
-            <div class="filter-summary-content">
-                <strong>Active Filters:</strong>
+            <div class="filter-summary-content"><strong>Active Filters:</strong>
                 <span class="active-filters-container" id="activeFiltersContainer">
                     <span class="filter-tag non-removable" title="Unique: Excludes duplicate tickets received for the same host within the past hour">Unique ℹ️</span>
                     <span class="filter-tag">Last 30 days</span>
@@ -166,63 +127,22 @@
             <button class="clear-all-btn" id="resetFiltersBtn">Reset</button>
         </div>
     </div>
-
-    <!-- Loading/Error Display -->
-    <div id="loading" class="loading">
-        🔄 Loading security alerts data...
-    </div>
+    <div id="loading" class="loading">🔄 Loading security alerts data...</div>
     <div id="error" class="error" style="display: none;"></div>
-
-    <!-- Metrics Cards -->
-    <div id="metricsGrid" class="metrics-grid" style="display: none;">
-        <!-- Metrics will be populated by JavaScript -->
-    </div>
-
-    <!-- Charts Grid -->
+    <div id="metricsGrid" class="metrics-grid" style="display: none;"></div>
     <div id="chartsGrid" class="charts-grid" style="display: none;">
-        <div class="chart-container">
-            <div class="chart-title">🌍 Geographic Distribution (Top 10)</div>
-            <div id="geoChart" class="chart-canvas"></div>
-        </div>
-        <div class="chart-container">
-            <div class="chart-title">🎫 Ticket Type Distribution</div>
-            <div id="severityChart" class="chart-canvas"></div>
-        </div>
-        <div class="chart-container">
-            <div class="chart-title">📈 Daily Alerts Timeline</div>
-            <div id="timelineChart" class="chart-canvas"></div>
-        </div>
-        <div class="chart-container">
-            <div class="chart-title">💥 Impact Distribution</div>
-            <div id="ticketTypeChart" class="chart-canvas"></div>
-        </div>
-        <div class="chart-container">
-            <div class="chart-title">👤 Owner Distribution (Top 10)</div>
-            <div id="heatmapChart" class="chart-canvas"></div>
-        </div>
-        <div class="chart-container">
-            <div class="chart-title">🔍 Case Analysis Funnel</div>
-            <div id="funnelChart" class="chart-canvas"></div>
-        </div>
-        <div class="chart-container">
-            <div class="chart-title">🖥️ Top 10 Hosts by Ticket Count</div>
-            <div id="topHostsChart" class="chart-canvas"></div>
-        </div>
-        <div class="chart-container">
-            <div class="chart-title">👥 Top 10 Users by Ticket Count</div>
-            <div id="topUsersChart" class="chart-canvas"></div>
-        </div>
-        <div class="chart-container">
-            <div class="chart-title">⏱️ Average Resolution Time by Ticket Type</div>
-            <div id="resolutionTimeChart" class="chart-canvas"></div>
-        </div>
+        <div class="chart-container"><div class="chart-title">🌍 Geographic Distribution (Top 10)</div><div id="geoChart" class="chart-canvas"></div></div>
+        <div class="chart-container"><div class="chart-title">🎫 Ticket Type Distribution</div><div id="severityChart" class="chart-canvas"></div></div>
+        <div class="chart-container"><div class="chart-title">📈 Daily Alerts Timeline</div><div id="timelineChart" class="chart-canvas"></div></div>
+        <div class="chart-container"><div class="chart-title">💥 Impact Distribution</div><div id="ticketTypeChart" class="chart-canvas"></div></div>
+        <div class="chart-container"><div class="chart-title">👤 Owner Distribution (Top 10)</div><div id="heatmapChart" class="chart-canvas"></div></div>
+        <div class="chart-container"><div class="chart-title">🔍 Case Analysis Funnel</div><div id="funnelChart" class="chart-canvas"></div></div>
+        <div class="chart-container"><div class="chart-title">🖥️ Top 10 Hosts by Ticket Count</div><div id="topHostsChart" class="chart-canvas"></div></div>
+        <div class="chart-container"><div class="chart-title">👥 Top 10 Users by Ticket Count</div><div id="topUsersChart" class="chart-canvas"></div></div>
+        <div class="chart-container"><div class="chart-title">⏱️ Average Resolution Time by Ticket Type</div><div id="resolutionTimeChart" class="chart-canvas"></div></div>
     </div>
-
-    <!-- Data Table -->
     <div id="dataTableSection" class="data-table-section" style="display: none; position: relative;">
-        <!-- Empty state hint (shown only when .empty class present) -->
         <div id="dataTableEmptyHint" class="empty-hint" aria-hidden="true">No data. Adjust filters to see results.</div>
-        <!-- Live region for table status updates -->
         <div id="tableStatusLive" class="sr-only" aria-live="polite" aria-atomic="true"></div>
         <div class="table-controls">
             <div class="table-header">📋 Case Details (showing first 100 results)</div>
@@ -237,17 +157,10 @@
                                 <button id="deselectAllColumnsBtn" class="deselect-all-btn">Deselect All</button>
                             </div>
                         </div>
-                        <div id="columnCheckboxes" class="column-checkboxes">
-                            <!-- Checkboxes will be populated by JavaScript -->
-                        </div>
+                        <div id="columnCheckboxes" class="column-checkboxes"></div>
                         <div class="column-order-section">
-                            <div class="column-order-header">
-                                <strong>Column Order</strong>
-                                <span class="order-help">(Drag to reorder)</span>
-                            </div>
-                            <div id="columnOrderList" class="column-order-list">
-                                <!-- Order list will be populated by JavaScript -->
-                            </div>
+                            <div class="column-order-header"><strong>Column Order</strong><span class="order-help">(Drag to reorder)</span></div>
+                            <div id="columnOrderList" class="column-order-list"></div>
                         </div>
                     </div>
                 </div>
@@ -267,38 +180,25 @@
                     <th class="sortable" data-column="created">Created <span class="sort-indicator"></span></th>
                 </tr>
                 </thead>
-                <tbody>
-                <!-- Table rows will be populated by JavaScript -->
-                </tbody>
+                <tbody></tbody>
             </table>
         </div>
-        <!-- Table info / pagination bar -->
         <div id="tableInfoBar" class="table-info-bar" aria-live="polite"></div>
         <div class="export-section">
             <button class="export-btn" id="exportCsvBtn">📥 Export to CSV</button>
             <button class="export-btn" id="exportSummaryBtn">📊 Export Summary</button>
         </div>
     </div>
-
-    <!-- Data freshness info -->
     <div class="data-freshness">
         <span class="freshness-label">Data generated:</span>
         <span id="dataTimestamp" class="freshness-timestamp">Loading...</span>
         <span class="freshness-note">(Updated at the top of every ET hour)</span>
     </div>
 </div>
-
-<!-- Toast / Live region for accessibility -->
 <div id="toast" class="toast" role="status" aria-live="polite" aria-atomic="true"></div>
-
-<script src="/static/js/common.js"></script>
+{% endblock %}
+{% block extra_js %}
+<script src="https://cdn.plot.ly/plotly-2.26.0.min.js"></script>
 <script src="{{ url_for('static', filename='js/meaningful_metrics.js') }}"></script>
-<script>
-    initRandomMusic();
-    initBurgerMenu();
-    if (typeof initTheme === 'function') {
-        initTheme();
-    }
-</script>
-</body>
-</html>
+<script>if (typeof initTheme==='function') initTheme(); if (typeof initBurgerMenu==='function') initBurgerMenu(); if (typeof initRandomMusic==='function') initRandomMusic();</script>
+{% endblock %}
