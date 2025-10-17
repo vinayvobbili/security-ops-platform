@@ -8,8 +8,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/shift_performance.css') }}">
 </head>
 <body>
-<!-- Top Navigation Bar -->
-{% include 'burger_menu.html' %}
+{% include 'top_bar.html' %}
 
 <div class="container">
     <!-- Title and Filter Header Row -->
@@ -462,13 +461,6 @@
     <button onclick="clearCacheAndReload()" title="Clear cached data and reload fresh from server">
         <span class="cache-icon">🗑️</span>
         <span class="cache-text">Clear Cache</span>
-    </button>
-</div>
-
-<audio id="music" src="" loop muted></audio>
-<div class="audio-controls">
-    <button onclick="toggleAudio()">
-        <img src="/static/icons/volume-xmark-solid.svg" alt="Unmute Icon" class="music-icon" id="music-icon">
     </button>
 </div>
 

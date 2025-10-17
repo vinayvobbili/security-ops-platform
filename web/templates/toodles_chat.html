@@ -8,16 +8,8 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/toodles_chat.css') }}">
 </head>
 <body>
-    <!-- Top Navigation Bar -->
-    {% include 'burger_menu.html' %}
-
-    <!-- Audio Player -->
-    <audio id="music" src="" loop muted></audio>
-    <div class="audio-controls">
-        <button id="audioToggleBtn">
-            <img src="/static/icons/volume-xmark-solid.svg" alt="Unmute Icon" class="music-icon" id="music-icon">
-        </button>
-    </div>
+    {% set page_title = "Toodles" %}
+    {% include 'top_bar.html' %}
 
     <button class="clear-chat-button" id="clearChatButton">
         <span class="button-icon">🗑️</span>
