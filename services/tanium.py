@@ -48,7 +48,7 @@ query getEndpoints($first: Int, $after: Cursor) {
         os {
           platform
         }
-        sensorReadings(sensors: [{name: "Custom Tags"}, {name: "Online"}]) {
+        sensorReadings(sensors: [{name: "Custom Tags"}]) {
           columns {
             name
             values
@@ -72,7 +72,7 @@ query getEndpointByName($name: String!) {
         os {
           platform
         }
-        sensorReadings(sensors: [{name: "Custom Tags"}, {name: "Online"}]) {
+        sensorReadings(sensors: [{name: "Custom Tags"}]) {
           columns {
             name
             values
@@ -96,7 +96,7 @@ query searchEndpointsByName($searchTerm: String!, $limit: Int!) {
         os {
           platform
         }
-        sensorReadings(sensors: [{name: "Custom Tags"}, {name: "Online"}]) {
+        sensorReadings(sensors: [{name: "Custom Tags"}]) {
           columns {
             name
             values
@@ -321,7 +321,8 @@ class TaniumInstance:
         """Extract computer data from GraphQL node"""
         sensor_readings = node.get('sensorReadings', {})
         custom_tags = self._extract_custom_tags(sensor_readings)
-        online_status = self._extract_online_status(sensor_readings)
+        eid_last_seen = node.get('eidLastSeen')
+
         os_data = node.get('os', {})
         os_platform = os_data.get('platform', '') if os_data else ''
 
@@ -329,10 +330,10 @@ class TaniumInstance:
             name=node.get('name', ''),
             id=node.get('id', ''),
             ip=node.get('ipAddress'),
-            eidLastSeen=node.get('eidLastSeen'),
+            eidLastSeen=eid_last_seen,
             source=self.name,
             os_platform=os_platform,
-            eid_status=online_status,
+            eid_status='',  # Not derived - use eidLastSeen to determine status
             custom_tags=custom_tags
         )
 
@@ -345,23 +346,6 @@ class TaniumInstance:
                 values = column.get('values', [])
                 tags.extend([tag for tag in values if tag != self.NO_TAGS_PLACEHOLDER])
         return tags
-
-    def _extract_online_status(self, sensor_readings: Dict) -> str:
-        """Extract online status from sensor readings and translate to readable format"""
-        columns = sensor_readings.get('columns', [])
-        for column in columns:
-            if column.get('name') == 'Online':
-                values = column.get('values', [])
-                if values and values[0]:
-                    status = str(values[0]).lower()
-                    # Translate boolean/string values to readable format
-                    if status in ('true', '1', 'yes'):
-                        return 'Online'
-                    elif status in ('false', '0', 'no'):
-                        return 'Offline'
-                    else:
-                        return values[0]  # Return original if unexpected format
-        return "Unknown"
 
     def validate_token(self) -> bool:
         """Validate the API token"""
@@ -534,7 +518,6 @@ class TaniumClient:
                 'ID': computer.id,
                 'IP Address': computer.ip,
                 'OS Platform': computer.os_platform,
-                'Status': computer.eid_status,
                 'Last Seen': computer.eidLastSeen,
                 'Source': computer.source,
                 'Current Tags': '\n'.join(computer.custom_tags),
@@ -612,41 +595,49 @@ def main():
         # else:
         #     logger.warning("No data to export")
 
-        # Test: Add and Remove tags
-        test_hostname = "TEST-HOST-002.INTERNAL"
-        test_tag = "TestTag123"
-        instance_name = "On-Prem"  # or "On-Prem"
-        tag_action = 'add'  # Change to 'remove' to test removal
+        # # Test: Add and Remove tags
+        # test_hostname = "TEST-HOST-002.INTERNAL"
+        # test_tag = "TestTag123"
+        # instance_name = "On-Prem"  # or "On-Prem"
+        # tag_action = 'add'  # Change to 'remove' to test removal
+        #
+        # instance = client.get_instance_by_name(instance_name)
+        # if not instance:
+        #     logger.error(f"Instance {instance_name} not found")
+        #     return 1
+        #
+        # # Get computer info first
+        # computer = instance.find_computer_by_name(test_hostname)
+        # if not computer:
+        #     logger.error(f"Computer {test_hostname} not found")
+        #     return 1
+        #
+        # logger.info(f"\n=== Testing tag operations on {test_hostname} in {instance_name} ===")
+        # logger.info(f"Computer ID: {computer.id}")
+        # logger.info(f"OS Platform: {computer.os_platform}")
+        # logger.info(f"Current tags: {computer.custom_tags}")
+        #
+        # if tag_action == 'add':
+        #     logger.info(f"\nTesting ADD tag '{test_tag}'...")
+        #     result = instance.add_tag_by_name(test_hostname, test_tag)
+        #     action_id = result.get('action', {}).get('scheduledAction', {}).get('id')
+        #     logger.info(f"✓ Tag add action created successfully")
+        #     logger.info(f"  Action ID: {action_id}")
+        #
+        # elif tag_action == 'remove':
+        #     logger.info(f"\nTesting REMOVE tag '{test_tag}'...")
+        #     result = instance.remove_tag_by_name(test_hostname, test_tag)
+        #     action_id = result.get('action', {}).get('scheduledAction', {}).get('id')
+        #     logger.info(f"✓ Tag remove action created successfully")
+        #     logger.info(f"  Action ID: {action_id}")
 
-        instance = client.get_instance_by_name(instance_name)
-        if not instance:
-            logger.error(f"Instance {instance_name} not found")
-            return 1
-
-        # Get computer info first
-        computer = instance.find_computer_by_name(test_hostname)
-        if not computer:
-            logger.error(f"Computer {test_hostname} not found")
-            return 1
-
-        logger.info(f"\n=== Testing tag operations on {test_hostname} in {instance_name} ===")
-        logger.info(f"Computer ID: {computer.id}")
-        logger.info(f"OS Platform: {computer.os_platform}")
-        logger.info(f"Current tags: {computer.custom_tags}")
-
-        if tag_action == 'add':
-            logger.info(f"\nTesting ADD tag '{test_tag}'...")
-            result = instance.add_tag_by_name(test_hostname, test_tag)
-            action_id = result.get('action', {}).get('scheduledAction', {}).get('id')
-            logger.info(f"✓ Tag add action created successfully")
-            logger.info(f"  Action ID: {action_id}")
-
-        elif tag_action == 'remove':
-            logger.info(f"\nTesting REMOVE tag '{test_tag}'...")
-            result = instance.remove_tag_by_name(test_hostname, test_tag)
-            action_id = result.get('action', {}).get('scheduledAction', {}).get('id')
-            logger.info(f"✓ Tag remove action created successfully")
-            logger.info(f"  Action ID: {action_id}")
+        # Test searching for computers
+        search_term = "VMVDI26940.METNET.NET"
+        instance_name = "Cloud"
+        logger.info(f"\nSearching for computers containing '{search_term}' in {instance_name}...")
+        matches = client.search_computers(search_term, instance_name, limit=5)
+        for comp in matches:
+            logger.info(f" - {comp.name} (ID: {comp.id}, Last Seen: {comp.eidLastSeen}, Tags: {comp.custom_tags})")
 
     except Exception as e:
         logger.error(f"Error during execution: {e}")
