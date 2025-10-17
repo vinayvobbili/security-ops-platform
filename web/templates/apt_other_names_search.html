@@ -7,13 +7,7 @@
     <link rel="stylesheet" href="/static/css/apt_other_names_search.css">
 </head>
 <body>
-{% include 'burger_menu.html' %}
-<audio id="music" src="" loop muted></audio>
-<div class="audio-controls">
-    <button onclick="toggleAudio()">
-        <img src="/static/icons/volume-xmark-solid.svg" alt="Unmute Icon" class="music-icon" id="music-icon">
-    </button>
-</div>
+{% include 'top_bar.html' %}
 <div class="container">
     <h1>APT Other Names Search</h1>
     <form id="searchForm" action="/api/apt-other-names" method="get">

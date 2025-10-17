@@ -11,7 +11,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
 </head>
 <body>
-{% include 'burger_menu.html' %}
+{% include 'top_bar.html' %}
 <div class="toast" id="toast" style="display:none;"></div>
 <div class="form-container">
     <h1>Upcoming Travel Notification</h1>
@@ -69,12 +69,6 @@
         </div>
     </form>
 
-</div>
-<audio id="music" src="" loop muted></audio>
-<div class="audio-controls">
-    <button onclick="toggleAudio()">
-        <img src="/static/icons/volume-xmark-solid.svg" alt="Unmute Icon" class="music-icon" id="music-icon">
-    </button>
 </div>
 <script src="{{ url_for('static', filename='js/common.js') }}"></script>
 <script src="{{ url_for('static', filename='js/upcoming_travel_notification_form.js') }}"></script>

@@ -8,7 +8,7 @@
     <link rel="stylesheet" href="/static/css/ticket_import.css">
 </head>
 <body>
-{% include 'burger_menu.html' %}
+{% include 'top_bar.html' %}
 <div class="container">
     <div class="card">
         <div class="glossy-effect"></div>
@@ -37,12 +37,6 @@
     <div id="response"></div>
 </div>
 
-<audio id="music" src="" loop muted></audio>
-<div class="audio-controls">
-    <button onclick="toggleAudio()">
-        <img src="/static/icons/volume-xmark-solid.svg" alt="Unmute Icon" class="music-icon" id="music-icon">
-    </button>
-</div>
 <script src="/static/js/common.js"></script>
 <script src="/static/js/xsoar-ticket-import-form.js"></script>
 <script src="/static/js/ticket_import.js"></script>

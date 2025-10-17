@@ -7,11 +7,8 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/approved_testing.css') }}">
 </head>
 <body>
-<div class="top-nav">
-    <a href="/" class="nav-home">
-        <img src="{{ url_for('static', filename='icons/home.svg') }}" alt="Home" class="nav-icon" style="width:32px;height:32px;">
-    </a>
-</div>
+{% set page_title = "Approved Security Testing Records" %}
+{% include 'top_bar.html' %}
 <div class="container">
     <h1>Approved Security Testing Records</h1>
 
@@ -119,8 +116,11 @@
         {% endif %}
     </section>
 </div>
-<audio id="music" src="" loop muted></audio>
-<img src="/static/icons/volume-xmark-solid.svg" alt="Unmute Icon" class="music-icon" id="music-icon" onclick="toggleAudio()">
+<script src="/static/js/common.js"></script>
 <script src="/static/js/red_team_testing_form.js"></script>
+<script>
+    initRandomMusic();
+    initBurgerMenu();
+</script>
 </body>
 </html>

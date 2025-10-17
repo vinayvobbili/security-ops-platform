@@ -8,7 +8,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/common.css') }}">
 </head>
 <body>
-{% include 'burger_menu.html' %}
+{% include 'top_bar.html' %}
 <div class="container">
     <h1>Upcoming-Travel Records</h1>
 
@@ -45,12 +45,6 @@
         </table>
     </section>
 
-</div>
-<audio id="music" src="" loop muted></audio>
-<div class="audio-controls">
-    <button onclick="toggleAudio()">
-        <img src="/static/icons/volume-xmark-solid.svg" alt="Unmute Icon" class="music-icon" id="music-icon">
-    </button>
 </div>
 <script src="/static/js/common.js"></script>
 <script src="/static/js/upcoming_travel.js"></script>

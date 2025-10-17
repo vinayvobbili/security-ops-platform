@@ -7,7 +7,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/common.css') }}">
 </head>
 <body>
-{% include 'burger_menu.html' %}
+{% include 'top_bar.html' %}
 <div class="form-container">
     <h2>Red Team Testing Notification Form</h2>
     <form id="red-team-testing-form" method="post" action="/submit-red-team-testing-form">
@@ -59,12 +59,6 @@
             <button id="okBtn" type="submit">OK</button>
         </form>
     </dialog>
-    <audio id="music" src="/static/audio/inspirational-uplifting-calm-piano-254764.mp3" loop muted></audio>
-    <div class="audio-controls">
-        <button onclick="toggleAudio()">
-            <img src="/static/icons/volume-xmark-solid.svg" alt="Unmute Icon" class="music-icon" id="music-icon">
-        </button>
-    </div>
 </div>
 <script src="{{ url_for('static', filename='js/common.js') }}"></script>
 <script src="/static/js/red_team_testing_form.js"></script>

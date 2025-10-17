@@ -4,15 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>XSOAR Incident {{ incident.id }}</title>
+    <link rel="stylesheet" href="/static/css/common.css">
     <link rel="stylesheet" href="/static/css/xsoar_incident_detail.css">
 </head>
 <body>
-<div class="top-nav">
-    <a href="/xsoar" class="nav-home">
-        <img src="{{ url_for('static', filename='icons/home.svg') }}" alt="Back to Dashboard" class="nav-icon">
-    </a>
-    <h1 class="page-title">Incident {{ incident.id }}</h1>
-</div>
+{% set page_title = "Incident " ~ incident.id %}
+{% include 'top_bar.html' %}
 
 <div class="container">
     <!-- Incident Overview -->
@@ -210,8 +207,6 @@
     <p>Processing...</p>
 </div>
 
-<audio id="music" src="" loop muted></audio>
-<img src="/static/icons/volume-xmark-solid.svg" alt="Unmute Icon" class="music-icon" id="music-icon" onclick="toggleAudio()">
 <script src="/static/js/common.js"></script>
 <script src="/static/js/xsoar_incident_detail.js"></script>
 <script>

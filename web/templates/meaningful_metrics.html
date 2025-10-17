@@ -12,15 +12,7 @@
     <script src="https://cdn.plot.ly/plotly-2.26.0.min.js"></script>
 </head>
 <body class="super-compact-page">
-<!-- Top Navigation Bar -->
-{% include 'burger_menu.html' %}
-
-<audio id="music" src="" loop muted></audio>
-<div class="audio-controls">
-    <button id="audioToggleBtn">
-        <img src="/static/icons/volume-xmark-solid.svg" alt="Unmute Icon" class="music-icon" id="music-icon">
-    </button>
-</div>
+{% include 'top_bar.html' %}
 <!-- Dark Mode Toggle -->
 <div class="theme-toggle" id="themeToggleWrapper">
     <button id="themeToggleBtn" aria-label="Toggle dark mode" title="Toggle dark mode">🌙</button>
