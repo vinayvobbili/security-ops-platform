@@ -4,63 +4,65 @@
     <meta charset="UTF-8">
     <title>APT Other Names Results</title>
     <link rel="stylesheet" href="/static/css/common.css">
-    <link rel="stylesheet" href="/static/css/apt_other_names_results.css">
+    {% block extra_css %}
+        <link rel="stylesheet" href="{{ url_for('static', filename='css/apt_other_names_results.css') }}">{% endblock %}
 </head>
 <body>
+{% extends 'base_layout.html' %}
+{% set page_title_text = 'APT Other Names Results' %}
+{% set page_title_left_icon = '🔍' %}
+{% set page_title_right_icon = '📄' %}
 <canvas id="falling-notes-canvas"></canvas>
-{% include 'top_bar.html' %}
-<div class="container">
-    <h1>APT Other Names Search Results</h1>
-    <div id="results">
-        {% if results and results|length > 0 %}
-        <h2>Other Names for '{{ common_name }}'</h2>
-        {% for item in results %}
-        <div class="apt-result-card">
-            <div class="apt-header">
-                <span class="apt-group">{{ item.common_name }}</span>
-                <span class="apt-region">Region: {{ item.region }}</span>
-                <span class="apt-sheet">Sheet: {{ item.sheet_name }}</span>
-            </div>
-            <table>
-                <thead>
-                <tr>
-                    <th>Source</th>
-                    <th>Alternative Name</th>
-                </tr>
-                </thead>
-                <tbody>
-                {% for source, alt_name in item.alternative_names.items() %}
-                <tr>
-                    <td>{{ source }}</td>
-                    <td>{{ alt_name }}</td>
-                </tr>
+{% block content %}
+    <div class="container">
+        <div id="results">
+            {% if results and results|length > 0 %}
+                <h2>Other Names for '{{ common_name }}'</h2>
+                {% for item in results %}
+                    <div class="apt-result-card">
+                        <div class="apt-header">
+                            <span class="apt-group">{{ item.common_name }}</span>
+                            <span class="apt-region">Region: {{ item.region }}</span>
+                            <span class="apt-sheet">Sheet: {{ item.sheet_name }}</span>
+                        </div>
+                        <table>
+                            <thead>
+                            <tr>
+                                <th>Source</th>
+                                <th>Alternative Name</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            {% for source, alt_name in item.alternative_names.items() %}
+                                <tr>
+                                    <td>{{ source }}</td>
+                                    <td>{{ alt_name }}</td>
+                                </tr>
+                            {% endfor %}
+                            </tbody>
+                        </table>
+                        {% if should_include_metadata %}
+                            <div class="apt-metadata">
+                                <strong>Total Alternatives:</strong> {{ item.total_alternatives }}<br>
+                                <strong>Row Index:</strong> {{ item.row_index }}<br>
+                                <strong>Companies in Sheet:</strong> {{ item.companies_in_sheet }}<br>
+                                <strong>All Company Columns:</strong> {{ item.all_company_columns }}<br>
+                                <strong>All Row Data:</strong> {{ item.all_row_data }}
+                            </div>
+                        {% endif %}
+                    </div>
                 {% endfor %}
-                </tbody>
-            </table>
-            {% if should_include_metadata %}
-            <div class="apt-metadata">
-                <strong>Total Alternatives:</strong> {{ item.total_alternatives }}<br>
-                <strong>Row Index:</strong> {{ item.row_index }}<br>
-                <strong>Companies in Sheet:</strong> {{ item.companies_in_sheet }}<br>
-                <strong>All Company Columns:</strong> {{ item.all_company_columns }}<br>
-                <strong>All Row Data:</strong> {{ item.all_row_data }}
-            </div>
+            {% else %}
+                <p>No other names found for '{{ common_name }}'.</p>
             {% endif %}
         </div>
-        {% endfor %}
-        {% else %}
-        <p>No other names found for '{{ common_name }}'.</p>
-        {% endif %}
+        <div style="text-align:center; margin-top: 36px;">
+            <a href="/apt-other-names-search" class="back-to-search-btn">Back to Search</a>
+        </div>
     </div>
-    <div style="text-align:center; margin-top: 36px;">
-        <a href="/apt-other-names-search" class="back-to-search-btn">Back to Search</a>
-    </div>
-</div>
-<script src="/static/js/common.js"></script>
-<script src="/static/js/apt_other_names_results.js"></script>
-<script src="/static/js/falling_notes.js"></script>
-<script>
-    initRandomMusic();
-</script>
+{% endblock %}
+{% block extra_js %}
+    <script src="{{ url_for('static', filename='js/apt_other_names_results.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/falling_notes.js') }}"></script>{% endblock %}
 </body>
 </html>

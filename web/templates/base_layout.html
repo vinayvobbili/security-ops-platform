@@ -1,0 +1,21 @@
+{% import 'title_macros.html' as titles %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block page_title_plain %}{{ page_title_text|default('') }}{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/common.css') }}">
+    {% block extra_css %}{% endblock %}
+    {% block head_scripts %}{% endblock %}
+</head>
+<body class="{% block body_classes %}{% endblock %}">
+{% set page_title = titles.build_title(page_title_text|default(''), page_title_left_icon|default(''), page_title_right_icon|default('')) %}
+{% include 'top_bar.html' %}
+{% block content %}{% endblock %}
+<script src="{{ url_for('static', filename='js/common.js') }}"></script>
+{% block extra_js %}{% endblock %}
+<script>if (typeof initRandomMusic === 'function') initRandomMusic();
+if (typeof initBurgerMenu === 'function') initBurgerMenu();</script>
+</body>
+</html>

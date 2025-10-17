@@ -1,5 +1,5 @@
-/* Common navigation + layout baseline (super-compact enforced) */
-:root { --nav-height: 48px; --nav-extra: 0px; }
+/* Common navigation + layout baseline */
+:root { --nav-height: 70px; --nav-extra: 0px; }
 html, body { margin: 0; padding: 0; }
 body { margin: 0; padding: calc(var(--nav-height) + var(--nav-extra)) 0 0; }
 /* Utility nav offset classes */
@@ -14,7 +14,7 @@ body { margin: 0; padding: calc(var(--nav-height) + var(--nav-extra)) 0 0; }
     background: rgba(0, 70, 173, 0.9);
     backdrop-filter: blur(15px);
     border-bottom: 2px solid #00A651;
-    padding: 3px 12px; /* tightened inner padding */
+    padding: 8px 16px;
     position: fixed;
     top: 0; left: 0; right: 0;
     height: var(--nav-height);
@@ -22,7 +22,61 @@ body { margin: 0; padding: calc(var(--nav-height) + var(--nav-extra)) 0 0; }
     transition: all 0.3s ease;
     display: flex;
     align-items: center;
+    gap: 16px;
 }
+
+/* --- Shared Gradient Title Styling (available globally) --- */
+.dashboard-title {
+    font-size: 3.2rem;
+    font-weight: 800;
+    background: linear-gradient(135deg,#667eea 0%,#764ba2 25%,#f093fb 50%,#f5576c 75%,#4facfe 100%);
+    background-size: 400% 400%;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin: 0;
+    letter-spacing: -0.02em;
+    line-height: 1.05;
+    position: relative;
+    animation: gradientShift 6s ease-in-out infinite;
+    filter: drop-shadow(0 4px 8px rgba(0,0,0,0.3));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+    padding: 4px 0;
+    text-align: center;
+}
+.title-icon {
+    font-size: 3rem;
+    filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.3));
+    animation: iconPulse 3s ease-in-out infinite;
+    display: inline-block;
+    background: none;
+    -webkit-background-clip: initial;
+    -webkit-text-fill-color: initial;
+    background-clip: initial;
+    color: #667eea;
+}
+
+.title-icon.left {
+    animation-delay: 0s;
+}
+
+.title-icon.right {
+    animation-delay: 1.5s;
+}
+@keyframes iconPulse { 0%,100% { transform:scale(1);} 50% { transform:scale(1.1);} }
+@keyframes gradientShift { 0%,100% { background-position:0 50%; } 50% { background-position:100% 50%; } }
+body.dark-mode .dashboard-title { filter: drop-shadow(0 6px 14px rgba(0,0,0,0.6)); }
+/* Integrate title when placed inside top nav */
+.top-nav .dashboard-title { flex:1; font-size:2.2rem; line-height:1; }
+.top-nav .dashboard-title .title-icon { font-size:2.4rem; }
+/* Responsive adjustments */
+@media (max-width:1200px){ .top-nav .dashboard-title { font-size:2rem; } .top-nav .dashboard-title .title-icon { font-size:2.2rem; } }
+@media (max-width:880px){ .top-nav .dashboard-title { font-size:1.8rem; } .top-nav .dashboard-title .title-icon { font-size:2rem; } }
+@media (max-width:620px){ .top-nav .dashboard-title { font-size:1.6rem; } .top-nav .dashboard-title .title-icon { font-size:1.8rem; } }
+/* --- End Shared Title Styling --- */
 
 .nav-home { /* unchanged except nav height context */
     cursor: pointer;
@@ -111,3 +165,5 @@ html { scroll-padding-top: var(--nav-height); }
 }
 
 /* (Compact / super-compact variants and layout-toggle removed) */
+
+.sr-only { position:absolute !important; width:1px !important; height:1px !important; padding:0 !important; margin:-1px !important; overflow:hidden !important; clip:rect(0,0,0,0) !important; white-space:nowrap !important; border:0 !important; }

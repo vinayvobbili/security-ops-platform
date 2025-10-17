@@ -5,15 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Shift Performance⚖️</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/common.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/shift_performance.css') }}">
+    {% block extra_css %}
+        <link rel="stylesheet" href="{{ url_for('static', filename='css/shift_performance.css') }}">{% endblock %}
 </head>
 <body>
+{% import 'title_macros.html' as titles %}
+{% set page_title = titles.build_title('SecOps Shift Performance','⚖️','📊') %}
 {% include 'top_bar.html' %}
 
 <div class="container">
     <!-- Title and Filter Header Row -->
     <div class="header-row">
-        <h1>SecOps Shift Performance</h1>
         <div class="filter-section">
             <div class="filter-dropdown">
                 <button class="filter-toggle" onclick="toggleFilters()">
@@ -351,50 +353,6 @@
                     <div class="skeleton-button"></div>
                 </td>
             </tr>
-            <tr class="skeleton-row">
-                <td>
-                    <div class="skeleton-text"></div>
-                </td>
-                <td>
-                    <div class="skeleton-text"></div>
-                </td>
-                <td>
-                    <div class="skeleton-text"></div>
-                </td>
-                <td>
-                    <div class="skeleton-text short"></div>
-                </td>
-                <td>
-                    <div class="skeleton-text short"></div>
-                </td>
-                <td>
-                    <div class="skeleton-text short"></div>
-                </td>
-                <td>
-                    <div class="skeleton-text short"></div>
-                </td>
-                <td>
-                    <div class="skeleton-text short"></div>
-                </td>
-                <td>
-                    <div class="skeleton-text short"></div>
-                </td>
-                <td>
-                    <div class="skeleton-text short"></div>
-                </td>
-                <td>
-                    <div class="skeleton-text short"></div>
-                </td>
-                <td>
-                    <div class="skeleton-text short"></div>
-                </td>
-                <td>
-                    <div class="skeleton-text short"></div>
-                </td>
-                <td>
-                    <div class="skeleton-button"></div>
-                </td>
-            </tr>
             </tbody>
         </table>
     </div>
@@ -465,7 +423,7 @@
 </div>
 
 <script src="/static/js/common.js"></script>
-<script src="/static/js/shift_performance.js"></script>
+<script src="{{ url_for('static', filename='js/shift_performance.js') }}"></script>
 <script>
     window.XSOAR_BASE = '{{ xsoar_prod_ui_base }}';
     initRandomMusic();

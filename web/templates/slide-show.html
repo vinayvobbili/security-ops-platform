@@ -1,93 +1,62 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8"/>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-    <title>DnR Dashboard</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/common.css') }}"/>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/slide-show.css') }}"/>
-    <link rel="icon" href="{{ url_for('static', filename='icons/metrics-dashboard-icon.ico') }}" type="image/x-icon"/>
-</head>
-<body>
-{% set audio_controls_classes = 'audio-controls--enhanced' %}
-<!-- Loading overlay -->
-<div class="loading-overlay" id="loadingOverlay">
-    <div class="loading-spinner"></div>
-</div>
+{% extends 'base_layout.html' %}
 
-<!-- Floating particles background -->
-<div class="particles" id="particles"></div>
-
-{% include 'top_bar.html' %}
-
-<div class="slider-container">
-    <!-- Timing progress bar inside slider container -->
-    <div class="timing-progress-container" id="timingProgressContainer2">
-        <div class="timing-progress-bar" id="timingProgressBar2"></div>
+{% block extra_css %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/slide-show.css') }}">{% endblock %}
+{% block content %}
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-spinner"></div>
     </div>
-    <div class="slides">
-        {% for filename in image_files %}
-            <figure>
-                <img src="{{ url_for('static', filename=filename) }}" alt="{{ filename }}"/>
-            </figure>
-        {% endfor %}
+    <div class="particles" id="particles"></div>
+    <div class="slider-container">
+        <div class="timing-progress-container" id="timingProgressContainer2">
+            <div class="timing-progress-bar" id="timingProgressBar2"></div>
+        </div>
+        <div class="slides">
+            {% for filename in image_files %}
+                <figure><img src="{{ url_for('static', filename=filename) }}" alt="{{ filename }}"></figure>{% endfor %}
+        </div>
     </div>
-</div>
-<img src="{{ url_for('static', filename='icons/circle-left-solid.svg') }}" alt="Left Arrow" class="arrow left" onclick="moveSlide(-1)"/>
-<img src="{{ url_for('static', filename='icons/circle-right-solid.svg') }}" alt="Right Arrow" class="arrow right" onclick="moveSlide(1)"/>
-<div class="nav-buttons">
-    {% for image_file in image_files %}
-        <button data-slide-index="{{ loop.index0 }}" class="nav-dot">{{ loop.index }}</button>
-    {% endfor %}
-</div>
-<img id="reloadButton" src="{{ url_for('static', filename='icons/reload.svg') }}" alt="Reload" class="reload-icon" onclick="restartSlideshow()"/>
-<img id="pausePlayButton" onclick="toggleSlideshow()" src="{{ url_for('static', filename='icons/pause-solid.svg') }}" alt="Pause"/>
-
-<!-- Speed Control -->
-<div class="speed-control" id="speedControl">
-    <div class="speed-icon" id="speedIcon" onclick="toggleSpeedMenu()">
-        <svg class="speed-gauge" viewBox="0 0 100 50">
-            <!-- Main gauge body (filled semicircle) with high contrast gradient -->
-            <defs>
-                <linearGradient id="gaugeGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                    <stop offset="0%" style="stop-color:#ff6b35;stop-opacity:0.9"></stop>
-                    <stop offset="50%" style="stop-color:#f7931e;stop-opacity:0.9"></stop>
-                    <stop offset="100%" style="stop-color:#ffcc02;stop-opacity:0.9"></stop>
-                </linearGradient>
-            </defs>
-
-            <!-- Full semicircle that fills the container -->
-            <path d="M 0 50 A 50 50 0 0 1 100 50 L 85 50 A 35 35 0 0 0 15 50 Z" fill="url(#gaugeGradient)"></path>
-
-            <!-- Inner arc for depth -->
-            <path d="M 15 50 A 35 35 0 0 1 85 50" fill="none" stroke="#ffffff" stroke-width="1" opacity="0.6"></path>
-
-            <!-- Speed indicator marks -->
-            <circle cx="15" cy="50" r="2.5" fill="#ffffff"></circle>
-            <circle cx="30" cy="25" r="2" fill="#ffffff"></circle>
-            <circle cx="50" cy="8" r="2.5" fill="#ffffff"></circle>
-            <circle cx="70" cy="25" r="2" fill="#ffffff"></circle>
-            <circle cx="85" cy="50" r="2.5" fill="#ffffff"></circle>
-
-            <!-- Center hub -->
-            <circle cx="50" cy="50" r="8" fill="#2c3e50"></circle>
-            <circle cx="50" cy="50" r="6" fill="#ffffff"></circle>
-
-            <!-- Needle -->
-            <line x1="50" y1="50" x2="50" y2="15" stroke="#e74c3c" stroke-width="5" stroke-linecap="round" class="needle"></line>
-        </svg>
+    <img src="{{ url_for('static', filename='icons/circle-left-solid.svg') }}" alt="Previous" class="arrow left" onclick="moveSlide(-1)">
+    <img src="{{ url_for('static', filename='icons/circle-right-solid.svg') }}" alt="Next" class="arrow right" onclick="moveSlide(1)">
+    <div class="nav-buttons">
+        {% for image_file in image_files %}
+            <button data-slide-index="{{ loop.index0 }}" class="nav-dot" aria-label="Go to slide {{ loop.index }}">{{ loop.index }}</button>{% endfor %}
     </div>
-    <div class="speed-menu" id="speedMenu" style="display: none;">
-        <div class="speed-option" data-speed="2000">Fast (2s)</div>
-        <div class="speed-option" data-speed="3000">Quick (3s)</div>
-        <div class="speed-option active" data-speed="5000">Normal (5s)</div>
-        <div class="speed-option" data-speed="8000">Slow (8s)</div>
-        <div class="speed-option" data-speed="12000">Very Slow (12s)</div>
+    <img id="reloadButton" src="{{ url_for('static', filename='icons/reload.svg') }}" alt="Restart" class="reload-icon" onclick="restartSlideshow()">
+    <img id="pausePlayButton" onclick="toggleSlideshow()" src="{{ url_for('static', filename='icons/pause-solid.svg') }}" alt="Pause">
+    <div class="speed-control" id="speedControl">
+        <div class="speed-icon" id="speedIcon" onclick="toggleSpeedMenu()">
+            <!-- gauge svg unchanged -->
+            <svg class="speed-gauge" viewBox="0 0 100 50">
+                <defs>
+                    <linearGradient id="gaugeGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                        <stop offset="0%" style="stop-color:#ff6b35"/>
+                        <stop offset="50%" style="stop-color:#f7931e"/>
+                        <stop offset="100%" style="stop-color:#ffcc02"/>
+                    </linearGradient>
+                </defs>
+                <path d="M0 50A50 50 0 0 1 100 50L85 50A35 35 0 0 0 15 50Z" fill="url(#gaugeGradient)"/>
+                <path d="M15 50A35 35 0 0 1 85 50" fill="none" stroke="#fff" stroke-width="1" opacity=".6"/>
+                <circle cx="15" cy="50" r="2.5" fill="#fff"/>
+                <circle cx="30" cy="25" r="2" fill="#fff"/>
+                <circle cx="50" cy="8" r="2.5" fill="#fff"/>
+                <circle cx="70" cy="25" r="2" fill="#fff"/>
+                <circle cx="85" cy="50" r="2.5" fill="#fff"/>
+                <circle cx="50" cy="50" r="8" fill="#2c3e50"/>
+                <circle cx="50" cy="50" r="6" fill="#fff"/>
+                <line x1="50" y1="50" x2="50" y2="15" stroke="#e74c3c" stroke-width="5" stroke-linecap="round" class="needle"/>
+            </svg>
+        </div>
+        <div class="speed-menu" id="speedMenu" style="display:none;">
+            <div class="speed-option" data-speed="2000">Fast (2s)</div>
+            <div class="speed-option" data-speed="3000">Quick (3s)</div>
+            <div class="speed-option active" data-speed="5000">Normal (5s)</div>
+            <div class="speed-option" data-speed="8000">Slow (8s)</div>
+            <div class="speed-option" data-speed="12000">Very Slow (12s)</div>
+        </div>
     </div>
-</div>
-
-<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
-<script src="/static/js/common.js"></script>
-<script src="/static/js/slide-show.js"></script>
-</body>
-</html>
+{% endblock %}
+{% block extra_js %}
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <script src="{{ url_for('static', filename='js/slide-show.js') }}"></script>
+{% endblock %}

@@ -5,76 +5,80 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Speak Up</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/common.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/speak_up.css') }}">
+    {% block extra_css %}
+        <link rel="stylesheet" href="{{ url_for('static', filename='css/speak_up.css') }}">{% endblock %}
 </head>
-<body class="speak-up-page">
+<body class="{% block body_classes %}speak-up-page{% endblock %}">
+{% import 'title_macros.html' as titles %}
+{% set page_title = titles.build_title('Speak Up Form','🗣️','🛡️') %}
 {% include 'top_bar.html' %}
-<div class="form-container">
-    <h1>Report a CyberSecurity Incident</h1>
+{% block content %}
+    <div class="form-container">
+        <form id="speakUpForm" method="post" action="/submit-speak-up-form">
+            <div class="form-group">
+                <div class="date-label-container">
+                    <label>1. Date Occurred<span class="required">*</span></label>
+                    <label>
+                        <input type="date" id="dateOccurred" name="dateOccurred" max="" required>
+                    </label>
+                </div>
+                <div class="helper-text">Estimated date for when incident occurred</div>
+            </div>
 
-    <form id="speakUpForm" method="post" action="/submit-speak-up-form">
-        <div class="form-group">
-            <div class="date-label-container">
-                <label>1. Date Occurred<span class="required">*</span></label>
+            <div class="form-group">
+                <label>2. Issue Type<span class="required">*</span></label>
+                <div class="radio-group">
+                    <div class="radio-option">
+                        <input type="radio" id="communication" name="issueType" value="Suspicious Communication: Email, Text Message, Phone Call, etc." required>
+                        <label for="communication">Suspicious Communication: Email, Text Message, Phone Call, etc.</label>
+                    </div>
+                    <div class="radio-option">
+                        <input type="radio" id="activity" name="issueType" value="Suspicious Activity on Computer">
+                        <label for="activity">Suspicious Activity on Computer</label>
+                    </div>
+                    <div class="radio-option">
+                        <input type="radio" id="social" name="issueType" value="Suspicious Social Media Profile">
+                        <label for="social">Suspicious Social Media Profile</label>
+                    </div>
+                    <div class="radio-option">
+                        <input type="radio" id="website" name="issueType" value="Suspicious Website">
+                        <label for="website">Suspicious Website</label>
+                    </div>
+                    <div class="radio-option">
+                        <input type="radio" id="stolen" name="issueType" value="Lost/Stolen Computer">
+                        <label for="stolen">Lost/Stolen Computer</label>
+                    </div>
+                    <div class="radio-option">
+                        <input type="radio" id="other" name="issueType" value="Other">
+                        <label for="other">Other</label>
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>3. Description<span class="required">*</span></label>
+                <div class="helper-text">Please provide all relevant details of the report incident</div>
                 <label>
-                    <input type="date" id="dateOccurred" name="dateOccurred" max="" required>
+                    <textarea id="description" name="description" required></textarea>
                 </label>
             </div>
-            <div class="helper-text">Estimated date for when incident occurred</div>
-        </div>
 
-        <div class="form-group">
-            <label>2. Issue Type<span class="required">*</span></label>
-            <div class="radio-group">
-                <div class="radio-option">
-                    <input type="radio" id="communication" name="issueType" value="Suspicious Communication: Email, Text Message, Phone Call, etc." required>
-                    <label for="communication">Suspicious Communication: Email, Text Message, Phone Call, etc.</label>
-                </div>
-                <div class="radio-option">
-                    <input type="radio" id="activity" name="issueType" value="Suspicious Activity on Computer">
-                    <label for="activity">Suspicious Activity on Computer</label>
-                </div>
-                <div class="radio-option">
-                    <input type="radio" id="social" name="issueType" value="Suspicious Social Media Profile">
-                    <label for="social">Suspicious Social Media Profile</label>
-                </div>
-                <div class="radio-option">
-                    <input type="radio" id="website" name="issueType" value="Suspicious Website">
-                    <label for="website">Suspicious Website</label>
-                </div>
-                <div class="radio-option">
-                    <input type="radio" id="stolen" name="issueType" value="Lost/Stolen Computer">
-                    <label for="stolen">Lost/Stolen Computer</label>
-                </div>
-                <div class="radio-option">
-                    <input type="radio" id="other" name="issueType" value="Other">
-                    <label for="other">Other</label>
-                </div>
+            <button type="submit">Submit Report</button>
+        </form>
+        <div id="responseModal" class="modal">
+            <div class="modal-content">
+                <span class="close">&times;</span>
+                <div id="response"></div>
             </div>
         </div>
-
-        <div class="form-group">
-            <label>3. Description<span class="required">*</span></label>
-            <div class="helper-text">Please provide all relevant details of the report incident</div>
-            <label>
-                <textarea id="description" name="description" required></textarea>
-            </label>
-        </div>
-
-        <button type="submit">Submit Report</button>
-    </form>
-    <div id="responseModal" class="modal">
-        <div class="modal-content">
-            <span class="close">&times;</span>
-            <div id="response"></div>
-        </div>
+        {% block extra_js %}
+            <script src="{{ url_for('static', filename='js/speak_up.js') }}"></script>
+            <script src="{{ url_for('static', filename='js/speak_up_form.js') }}"></script>{% endblock %}
+        <script src="/static/js/common.js"></script>
+        <script>
+            initRandomMusic();
+        </script>
     </div>
-    <script src="/static/js/common.js"></script>
-    <script src="{{ url_for('static', filename='js/speak_up.js') }}"></script>
-    <script src="/static/js/speak_up_form.js"></script>
-    <script>
-        initRandomMusic();
-    </script>
-</div>
+{% endblock %}
 </body>
 </html>

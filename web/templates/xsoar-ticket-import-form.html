@@ -1,47 +1,40 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>XSOAR Ticket Import</title>
-    <link rel="stylesheet" href="/static/css/common.css">
-    <link rel="stylesheet" href="/static/css/ticket_import.css">
-</head>
-<body>
-{% include 'top_bar.html' %}
-<div class="container">
-    <div class="card">
-        <div class="glossy-effect"></div>
-        <div class="card-header">
-            <h2 class="card-title">
-                <span class="icon">📥</span>
-                XSOAR Ticket Import
-            </h2>
-        </div>
-        <div class="card-body">
-            <form id="xsoarTicketImportForm" method="POST" action="/import-xsoar-ticket">
-                <div class="form-group">
-                    <label for="source_ticket_number">Source Ticket Number</label>
-                    <input type="text" class="form-control" id="source_ticket_number" name="source_ticket_number" placeholder="Enter ticket number">
-                </div>
-                <button type="submit" class="btn btn-primary btn-block">Import Ticket</button>
-            </form>
+{% extends 'base_layout.html' %}
+{% set page_title_text = 'XSOAR Ticket Import' %}
+{% set page_title_left_icon = '📥' %}
+{% set page_title_right_icon = '' %}
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/ticket_import.css') }}">
+{% endblock %}
+{% block content %}
+    <div class="container">
+        <div class="card">
+            <div class="glossy-effect"></div>
+            <div class="card-header">
+                <h2 class="card-title">
+                    <span class="icon">📥</span>
+                    XSOAR Ticket Import
+                </h2>
+            </div>
+            <div class="card-body">
+                <form id="xsoarTicketImportForm" method="POST" action="/import-xsoar-ticket">
+                    <div class="form-group">
+                        <label for="source_ticket_number">Source Ticket Number</label>
+                        <input type="text" class="form-control" id="source_ticket_number" name="source_ticket_number" placeholder="Enter ticket number">
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-block">Import Ticket</button>
+                </form>
 
-            <div class="loading" id="loading">
-                <div class="loading-spinner"></div>
-                <p>Processing your request...</p>
+                <div class="loading" id="loading">
+                    <div class="loading-spinner"></div>
+                    <p>Processing your request...</p>
+                </div>
             </div>
         </div>
+
+        <div id="response"></div>
     </div>
-
-    <div id="response"></div>
-</div>
-
-<script src="/static/js/common.js"></script>
-<script src="/static/js/xsoar-ticket-import-form.js"></script>
-<script src="/static/js/ticket_import.js"></script>
-<script>
-    initRandomMusic();
-</script>
-</body>
-</html>
+{% endblock %}
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/xsoar-ticket-import-form.js') }}"></script>
+<script src="{{ url_for('static', filename='js/ticket_import.js') }}"></script>
+{% endblock %}

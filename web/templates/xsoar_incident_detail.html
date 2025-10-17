@@ -5,10 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>XSOAR Incident {{ incident.id }}</title>
     <link rel="stylesheet" href="/static/css/common.css">
-    <link rel="stylesheet" href="/static/css/xsoar_incident_detail.css">
+    {% block extra_css %}
+        <link rel="stylesheet" href="{{ url_for('static', filename='css/xsoar_incident_detail.css') }}">
+    {% endblock %}
 </head>
 <body>
-{% set page_title = "Incident " ~ incident.id %}
+{% import 'title_macros.html' as titles %}
+{% set page_title = titles.build_title('Incident ' ~ incident.id,'📄','') %}
 {% include 'top_bar.html' %}
 
 <div class="container">
@@ -59,10 +62,10 @@
                     <span class="value">{{ incident.modified }}</span>
                 </div>
                 {% if incident.closed %}
-                <div class="info-item">
-                    <label>Closed:</label>
-                    <span class="value">{{ incident.closed }}</span>
-                </div>
+                    <div class="info-item">
+                        <label>Closed:</label>
+                        <span class="value">{{ incident.closed }}</span>
+                    </div>
                 {% endif %}
             </div>
         </div>
@@ -70,41 +73,41 @@
 
     <!-- Incident Details -->
     {% if incident.details %}
-    <div class="card">
-        <div class="card-header">
-            <h2 class="card-title">
-                <span class="icon">📝</span>
-                Details
-            </h2>
-        </div>
-        <div class="card-body">
-            <div class="details-content">
-                {{ incident.details }}
+        <div class="card">
+            <div class="card-header">
+                <h2 class="card-title">
+                    <span class="icon">📝</span>
+                    Details
+                </h2>
+            </div>
+            <div class="card-body">
+                <div class="details-content">
+                    {{ incident.details }}
+                </div>
             </div>
         </div>
-    </div>
     {% endif %}
 
     <!-- Custom Fields -->
     {% if incident.CustomFields %}
-    <div class="card">
-        <div class="card-header">
-            <h2 class="card-title">
-                <span class="icon">⚙️</span>
-                Custom Fields
-            </h2>
-        </div>
-        <div class="card-body">
-            <div class="custom-fields-grid">
-                {% for key, value in incident.CustomFields.items() %}
-                <div class="info-item">
-                    <label>{{ key }}:</label>
-                    <span class="value">{{ value }}</span>
+        <div class="card">
+            <div class="card-header">
+                <h2 class="card-title">
+                    <span class="icon">⚙️</span>
+                    Custom Fields
+                </h2>
+            </div>
+            <div class="card-body">
+                <div class="custom-fields-grid">
+                    {% for key, value in incident.CustomFields.items() %}
+                        <div class="info-item">
+                            <label>{{ key }}:</label>
+                            <span class="value">{{ value }}</span>
+                        </div>
+                    {% endfor %}
                 </div>
-                {% endfor %}
             </div>
         </div>
-    </div>
     {% endif %}
 
     <!-- Actions -->
@@ -142,18 +145,18 @@
             <div id="entriesContainer" class="entries-container">
                 {% if entries %}
                     {% for entry in entries %}
-                    <div class="entry-item">
-                        <div class="entry-header">
-                            <div class="entry-user">{{ entry.user or 'System' }}</div>
-                            <div class="entry-date">{{ entry.created }}</div>
+                        <div class="entry-item">
+                            <div class="entry-header">
+                                <div class="entry-user">{{ entry.user or 'System' }}</div>
+                                <div class="entry-date">{{ entry.created }}</div>
+                            </div>
+                            <div class="entry-content">
+                                {{ entry.contents }}
+                            </div>
+                            {% if entry.type %}
+                                <div class="entry-type">Type: {{ entry.type }}</div>
+                            {% endif %}
                         </div>
-                        <div class="entry-content">
-                            {{ entry.contents }}
-                        </div>
-                        {% if entry.type %}
-                        <div class="entry-type">Type: {{ entry.type }}</div>
-                        {% endif %}
-                    </div>
                     {% endfor %}
                 {% else %}
                     <div class="no-entries">No entries found for this incident.</div>
@@ -208,12 +211,14 @@
 </div>
 
 <script src="/static/js/common.js"></script>
-<script src="/static/js/xsoar_incident_detail.js"></script>
 <script>
     initRandomMusic();
-    
+
     // Pass incident ID to JavaScript
     window.incidentId = '{{ incident.id }}';
 </script>
+{% block extra_js %}
+    <script src="{{ url_for('static', filename='js/xsoar_incident_detail.js') }}"></script>
+{% endblock %}
 </body>
 </html>

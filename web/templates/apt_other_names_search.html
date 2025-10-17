@@ -1,82 +1,79 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>APT Other Names Search</title>
-    <link rel="stylesheet" href="/static/css/common.css">
-    <link rel="stylesheet" href="/static/css/apt_other_names_search.css">
-</head>
-<body>
-{% include 'top_bar.html' %}
-<div class="container">
-    <h1>APT Other Names Search</h1>
-    <form id="searchForm" action="/api/apt-other-names" method="get">
-        <label for="common_name">APT Common Name:</label>
-        <div class="autocomplete-container">
-            <input type="text" id="common_name" name="common_name" value="{{ common_name }}" required autocomplete="off" placeholder="Start typing to see suggestions...">
-            <span class="dropdown-indicator">▼</span>
-            <div id="autocomplete-dropdown" class="autocomplete-dropdown"></div>
-        </div>
-        <div class="help-text">💡 Start typing any APT name to see autocomplete suggestions (e.g., "APT", "Lazarus", "28")</div>
-        <div class="controls-row">
-            <div class="metadata-slider-container">
-                <span class="metadata-slider-label">Include Metadata?</span>
-                <div class="slider-container">
-                    <div class="metadata-slider-option active" data-value="no">No</div>
-                    <div class="metadata-slider no" id="metadataSlider"></div>
-                    <div class="metadata-slider-option" data-value="yes">Yes</div>
-                </div>
-                <input type="hidden" id="should_include_metadata" name="should_include_metadata" value="false">
-            </div>
-            <div class="response-format-container">
-                <span class="response-format-label">Response Format:</span>
-                <div class="slider-container">
-                    <div class="slider-option active" data-value="html">HTML</div>
-                    <div class="response-format-slider html" id="responseFormatSlider"></div>
-                    <div class="slider-option" data-value="json">JSON</div>
-                </div>
-                <input type="hidden" id="response_format" name="response_format" value="html">
-            </div>
-            <div class="button-container">
-                <button type="submit">Search</button>
-                <div id="spinner" class="spinner" style="display:none;"></div>
-            </div>
-        </div>
-    </form>
-</div>
+{% extends 'base_layout.html' %}
 
-<!-- Raw JSON data (server-rendered). If template vars fail, this might render literally and we guard below. -->
-<script id="apt-names-data" type="application/json">{{ apt_names | tojson }}</script>
-<script>
-    // Initialize global aptNames safely without relying on modern syntax features
-    (function () {
-        var dataEl = document.getElementById('apt-names-data');
-        var raw = '[]';
-        if (dataEl && dataEl.textContent) {
-            raw = dataEl.textContent.trim();
-        }
-        // Handle unrendered template (still contains Jinja braces) or null
-        if (!raw || raw === 'null' || raw.indexOf('{{ "{{" }}') === 0) {
-            raw = '[]';
-        }
-        // If the first char isn't likely JSON, bail out
-        var first = raw.charAt(0);
-        if (first !== '[' && first !== '{') {
-            raw = '[]';
-        }
-        try {
-            window.aptNames = JSON.parse(raw);
-        } catch (e) {
-            console.error('APT names JSON parse failed, falling back to empty list:', e, raw);
-            window.aptNames = [];
-        }
-    })();
-</script>
+{% block page_title_plain %}APT Other Names Search{% endblock %}
 
-<script src="/static/js/common.js"></script>
-<script src="/static/js/apt_other_names_search.js"></script>
-<script>
-    initRandomMusic();
-</script>
-</body>
-</html>
+{% block extra_css %}<link rel="stylesheet" href="{{ url_for('static', filename='css/apt_other_names_search.css') }}">{% endblock %}
+
+{% block body_classes %}apt-search-page{% endblock %}
+
+{% set page_title_text = 'APT Other Names Search' %}
+{% set page_title_left_icon = '🔍' %}
+{% set page_title_right_icon = '🌍' %}
+
+{% block content %}
+    <div class="container">
+        <form id="searchForm" action="/api/apt-other-names" method="get">
+            <label for="common_name">APT Common Name:</label>
+            <div class="autocomplete-container">
+                <input type="text" id="common_name" name="common_name" value="{{ common_name }}" required autocomplete="off" placeholder="Start typing to see suggestions...">
+                <span class="dropdown-indicator">▼</span>
+                <div id="autocomplete-dropdown" class="autocomplete-dropdown"></div>
+            </div>
+            <div class="help-text">💡 Start typing any APT name to see autocomplete suggestions (e.g., "APT", "Lazarus", "28")</div>
+            <div class="controls-row">
+                <div class="metadata-slider-container">
+                    <span class="metadata-slider-label">Include Metadata?</span>
+                    <div class="slider-container">
+                        <div class="metadata-slider-option active" data-value="no">No</div>
+                        <div class="metadata-slider no" id="metadataSlider"></div>
+                        <div class="metadata-slider-option" data-value="yes">Yes</div>
+                    </div>
+                    <input type="hidden" id="should_include_metadata" name="should_include_metadata" value="false">
+                </div>
+                <div class="response-format-container">
+                    <span class="response-format-label">Response Format:</span>
+                    <div class="slider-container">
+                        <div class="slider-option active" data-value="html">HTML</div>
+                        <div class="response-format-slider html" id="responseFormatSlider"></div>
+                        <div class="slider-option" data-value="json">JSON</div>
+                    </div>
+                    <input type="hidden" id="response_format" name="response_format" value="html">
+                </div>
+                <div class="button-container">
+                    <button type="submit">Search</button>
+                    <div id="spinner" class="spinner" style="display:none;"></div>
+                </div>
+            </div>
+        </form>
+    </div>
+{% endblock %}
+{% block extra_js %}
+    <!-- Raw JSON data (server-rendered). If template vars fail, this might render literally and we guard below. -->
+    <script id="apt-names-data" type="application/json">{{ apt_names | tojson }}</script>
+    <script>
+        // Initialize global aptNames safely without relying on modern syntax features
+        (function () {
+            var dataEl = document.getElementById('apt-names-data');
+            var raw = '[]';
+            if (dataEl && dataEl.textContent) {
+                raw = dataEl.textContent.trim();
+            }
+            // Handle unrendered template (still contains Jinja braces) or null
+            if (!raw || raw === 'null' || raw.indexOf('{{ "{{" }}') === 0) {
+                raw = '[]';
+            }
+            // If the first char isn't likely JSON, bail out
+            var first = raw.charAt(0);
+            if (first !== '[' && first !== '{') {
+                raw = '[]';
+            }
+            try {
+                window.aptNames = JSON.parse(raw);
+            } catch (e) {
+                console.error('APT names JSON parse failed, falling back to empty list:', e, raw);
+                window.aptNames = [];
+            }
+        })();
+    </script>
+    <script src="{{ url_for('static', filename='js/apt_other_names_search.js') }}"></script>
+{% endblock %}
