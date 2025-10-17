@@ -2231,6 +2231,7 @@ def main():
         logger.info("Starting Toodles with standard WebexBot (no extra resilience features)")
         bot = toodles_bot_factory()
         toodles_initialization(bot)
+        logger.info("✅ Toodles bot initialized and ready! Listening for messages...")
         bot.run()
 
 
