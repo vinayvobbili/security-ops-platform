@@ -12,13 +12,13 @@ import random
 import select
 import socket
 import socketserver
+# NEW: ensure project root on sys.path before local imports
+import sys
 import threading
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timedelta
 from typing import Dict, List
 from urllib.parse import urlsplit
 
-# NEW: ensure project root on sys.path before local imports
-import sys
 _CURRENT_DIR = os.path.dirname(__file__)
 _PROJECT_ROOT = os.path.abspath(os.path.join(_CURRENT_DIR, '..'))
 if _PROJECT_ROOT not in sys.path:
@@ -33,16 +33,20 @@ from flask import Flask, abort, jsonify, render_template, request
 try:
     from my_bot.core.my_model import ask, ask_stream  # type: ignore
     from my_bot.core.state_manager import get_state_manager  # type: ignore
+
     POKEDEX_AVAILABLE = True
 except Exception as e:  # Broad except to handle partial dependency failures
     print(f"⚠️ Pokedex components unavailable: {e}. Continuing with limited functionality.")
     POKEDEX_AVAILABLE = False
 
-    def ask(*args, **kwargs):  # type: ignore
+
+    def ask(*_args, **_kwargs):  # type: ignore
         return "Model not available in this environment"
 
-    def ask_stream(*args, **kwargs):  # type: ignore
+
+    def ask_stream(*_args, **_kwargs):  # type: ignore
         yield "Model not available in this environment"
+
 
     def get_state_manager():  # type: ignore
         return None
@@ -61,7 +65,7 @@ SHOULD_START_PROXY = False
 USE_DEBUG_MODE = CONFIG.web_server_debug_mode_on
 PROXY_PORT = 9000
 # Allow environment override; default to 8080 for non-root dev usage
-WEB_SERVER_PORT = int(os.environ.get('WEB_SERVER_PORT', '8080'))
+WEB_SERVER_PORT = CONFIG.web_server_port
 BUFFER_SIZE = 16384
 NUM_WORKERS = 10
 MAX_CONNECTIONS = 100
@@ -69,6 +73,9 @@ COMPANY_EMAIL_DOMAIN = '@' + CONFIG.my_web_domain
 
 app = Flask(__name__, static_folder='static', static_url_path='/static', template_folder='templates')
 eastern = pytz.timezone('US/Eastern')
+
+# Store server start time
+SERVER_START_TIME = datetime.now(eastern)
 
 # Configure logging to suppress werkzeug INFO logs for PAC files and other noise
 logging.getLogger('werkzeug').setLevel(logging.WARNING)
@@ -87,6 +94,7 @@ from functools import lru_cache
 
 # One-time guard for first-request logic (Flask 3 removed before_first_request)
 _server_detection_ran = False
+
 
 @lru_cache(maxsize=1)
 def _runtime_server_info_sample() -> dict:
@@ -1436,20 +1444,39 @@ def healthz():
     Augmented with server details to verify runtime (waitress vs flask-dev).
     """
     try:
-        # Use timezone-aware UTC datetime (portable across Python versions)
-        ts = datetime.now(timezone.utc)
-        timestamp = ts.isoformat().replace('+00:00', 'Z')
+        # Use Eastern Time for all timestamps
+        current_time = datetime.now(eastern)
+        timestamp = current_time.strftime('%Y-%m-%d %H:%M:%S %Z')
+
+        # Calculate uptime
+        uptime_delta = current_time - SERVER_START_TIME
+        uptime_seconds = int(uptime_delta.total_seconds())
+        uptime_hours = uptime_seconds // 3600
+        uptime_minutes = (uptime_seconds % 3600) // 60
+        uptime_str = f"{uptime_hours}h {uptime_minutes}m"
 
         try:
             # Try to get live request environ server software if available
             server_software = request.environ.get('SERVER_SOFTWARE', 'unknown')  # type: ignore[attr-defined]
+            server_name = request.environ.get('SERVER_NAME', 'unknown')  # type: ignore[attr-defined]
+            server_port = request.environ.get('SERVER_PORT', WEB_SERVER_PORT)  # type: ignore[attr-defined]
             server_info = {
                 'server_type': detect_server_type(server_software),
                 'server_software': server_software,
+                'host': server_name,
+                'port': int(server_port) if server_port else WEB_SERVER_PORT,
+                'start_time': SERVER_START_TIME.strftime('%Y-%m-%d %H:%M:%S %Z'),
+                'uptime': uptime_str,
+                'uptime_seconds': uptime_seconds
             }
         except Exception:
             # Fallback to cached sample established at first request
             server_info = _runtime_server_info_sample()
+            server_info['host'] = 'unknown'
+            server_info['port'] = WEB_SERVER_PORT
+            server_info['start_time'] = SERVER_START_TIME.strftime('%Y-%m-%d %H:%M:%S %Z')
+            server_info['uptime'] = uptime_str
+            server_info['uptime_seconds'] = uptime_seconds
         return jsonify({
             "status": "ok",
             "timestamp": timestamp,

@@ -126,6 +126,7 @@ def get_config():
         # Bot resilience configuration
         should_use_proxy_resilience=str(os.environ.get("SHOULD_USE_PROXY_RESILIENCE", "False")).lower() == "true",
         should_auto_reconnect=str(os.environ.get("SHOULD_AUTO_RECONNECT", "True")).lower() == "true",
+        web_server_port=int(os.environ.get("WEB_SERVER_PORT", "8080")),
     )
 
 
@@ -228,3 +229,4 @@ class Config:
     # Bot resilience configuration
     should_use_proxy_resilience: bool = False
     should_auto_reconnect: bool = True
+    web_server_port: Optional[int] = None
