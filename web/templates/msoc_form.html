@@ -4,10 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MSOC</title>
-    <link rel="stylesheet" href="/static/css/common.css">
-    <link rel="stylesheet" href="/static/css/msoc.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/common.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/msoc.css') }}">
 </head>
 <body>
+{% set page_title = "MSOC Form" %}
+{% set audio_controls_classes = 'audio-controls--enhanced' %}
 {% include 'top_bar.html' %}
 
 <div class="form-container">
@@ -85,15 +87,16 @@
         </div>
     </div>
 </div>
-<script src="/static/js/msoc.js"></script>
-<script src="/static/js/red_team_testing_form.js"></script>
+
+<!-- Load common functionality (burger menu, audio, theme) before page-specific scripts -->
+<script src="{{ url_for('static', filename='js/common.js') }}"></script>
+<script src="{{ url_for('static', filename='js/msoc.js') }}"></script>
+<script src="{{ url_for('static', filename='js/red_team_testing_form.js') }}"></script>
 <script>
     initRandomMusic();
-
-    initBurgerMenu();
-
-    window.addEventListener('load', (event) => {
-        document.getElementById('category').dispatchEvent(new Event('change'));
+    window.addEventListener('load', () => {
+        const cat = document.getElementById('category');
+        if (cat) cat.dispatchEvent(new Event('change'));
     });
 </script>
 </body>

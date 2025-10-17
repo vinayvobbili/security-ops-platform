@@ -1,7 +1,11 @@
 /* Common navigation + layout baseline (super-compact enforced) */
-:root { --nav-height: 48px; }
+:root { --nav-height: 48px; --nav-extra: 0px; }
 html, body { margin: 0; padding: 0; }
-body { margin: 0; padding: var(--nav-height) 0 0; }
+body { margin: 0; padding: calc(var(--nav-height) + var(--nav-extra)) 0 0; }
+/* Utility nav offset classes */
+.nav-extra-sm { --nav-extra: 16px; }
+.nav-extra-md { --nav-extra: 32px; }
+.nav-extra-lg { --nav-extra: 48px; }
 
 /* Utility (may be used elsewhere) */
 .below-nav { margin-top: var(--nav-height); }
@@ -57,17 +61,53 @@ body { margin: 0; padding: var(--nav-height) 0 0; }
 .burger-menu-content a { display:block; padding:12px 22px; text-decoration:none; color:#1a2332 !important; font-weight:600; font-size:.95rem; transition:all .3s ease; position:relative; border-left:4px solid transparent; }
 .burger-menu-content a:hover { background: rgba(255,255,255,0.25); color:#1a2332 !important; border-left:4px solid #1a2332; transform: translateX(4px); box-shadow: inset 0 0 12px rgba(255,255,255,0.1); }
 
-/* Audio controls (unchanged) */
+/* Dark mode variants */
+body.dark-mode .top-nav {
+    background: rgba(20,25,32,0.88);
+    border-bottom-color: #00A651;
+}
+body.dark-mode .burger-menu-content {
+    background: linear-gradient(135deg, rgba(32,40,52,0.95) 0%, rgba(20,25,32,0.95) 60%, rgba(0,166,81,0.85) 100%);
+    border-color: rgba(255,255,255,0.25);
+}
+body.dark-mode .burger-menu-content a { color: #f0f4f8 !important; }
+body.dark-mode .burger-menu-content a:hover { color: #ffffff !important; border-left-color: #00A651; }
+body.dark-mode .audio-controls button { background: rgba(32,40,52,0.85); border-color: #00A651; }
+body.dark-mode .audio-controls button:hover { background: #00A651; }
+
+/* Consolidated audio control styles */
 .audio-controls { position: fixed !important; top: 6px !important; right: 15px !important; z-index: 2000 !important; }
 .audio-controls button { background: rgba(0,70,173,0.8); border: 3px solid #00A651; border-radius: 50%; padding: 8px; cursor:pointer; backdrop-filter: blur(10px); transition: all 0.3s ease; width:40px; height:40px; display:flex; align-items:center; justify-content:center; box-shadow:0 4px 15px rgba(0,166,81,0.4); }
 .audio-controls button:hover { background: rgba(0,166,81,0.9); transform: scale(1.18) rotate(12deg); box-shadow:0 8px 25px rgba(0,166,81,0.8); border-color:white; }
-.audio-controls .music-icon { width:24px; height:24px; filter: drop-shadow(0 0 4px rgba(255,255,255,0.6)); transition: all .3s ease; }
+.music-icon { width:24px; height:24px; filter: drop-shadow(0 0 4px rgba(255,255,255,0.6)); transition: all .3s ease; }
 .audio-controls button:hover .music-icon { transform: scale(1.15) rotate(-15deg); filter: hue-rotate(120deg) saturate(2) brightness(1.25) drop-shadow(0 0 10px rgba(0,255,127,1)); }
+/* Enhanced variant (opt-in) */
+.audio-controls--enhanced button:hover { transform: scale(1.25) rotate(18deg); }
+.audio-controls--enhanced button:hover .music-icon { transform: scale(1.25) rotate(-20deg); }
+
+/* Audio control placement & size variants */
+.audio-top-left { top:6px !important; left:15px !important; right:auto !important; }
+.audio-bottom-right { bottom:20px !important; top:auto !important; right:20px !important; }
+.audio-bottom-left { bottom:20px !important; top:auto !important; left:20px !important; right:auto !important; }
+.audio-large button { width:56px; height:56px; }
+.audio-large .music-icon { width:30px; height:30px; }
+/* Ensure fixed positioning inherits */
+.audio-controls.audio-top-left,
+.audio-controls.audio-bottom-right,
+.audio-controls.audio-bottom-left { position:fixed !important; }
 
 /* Remove layout mode classes & toggle fluff */
 html, body { margin:0 !important; }
 .top-nav { top:0 !important; margin:0 !important; }
 body { padding-top: var(--nav-height) !important; }
 html { scroll-padding-top: var(--nav-height); }
+
+/* Prefers-reduced-motion support */
+@media (prefers-reduced-motion: reduce) {
+    * { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; }
+    .nav-burger:hover .nav-icon { transform: none !important; }
+    .audio-controls button:hover { transform: none !important; }
+    .audio-controls button:hover .music-icon { transform: none !important; }
+}
 
 /* (Compact / super-compact variants and layout-toggle removed) */
