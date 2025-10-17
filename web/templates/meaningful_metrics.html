@@ -7,11 +7,10 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/common.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/meaningful_metrics.css') }}">
     <link rel="icon" href="{{ url_for('static', filename='icons/metrics-dashboard-icon.ico') }}" type="image/x-icon">
-
-    <!-- Plotly.js -->
     <script src="https://cdn.plot.ly/plotly-2.26.0.min.js"></script>
 </head>
 <body class="super-compact-page">
+{% set audio_controls_classes = 'audio-controls--enhanced' %}
 {% include 'top_bar.html' %}
 <!-- Dark Mode Toggle -->
 <div class="theme-toggle" id="themeToggleWrapper">

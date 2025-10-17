@@ -11,21 +11,23 @@
     {% set page_title = "Toodles" %}
     {% include 'top_bar.html' %}
 
+    <!-- Added wrapper to ensure content sits below nav and is centered without altering global body/layout -->
+    <div class="chat-page">
+        <div class="chat-container">
+            <div class="chat-header">
+                <div class="bot-avatar">🤖</div>
+                <h1>Toodles</h1>
+            </div>
+            <div class="chat-messages" id="chatMessages">
+                <!-- Messages will be added here dynamically -->
+            </div>
+        </div>
+    </div>
+
     <button class="clear-chat-button" id="clearChatButton">
         <span class="button-icon">🗑️</span>
         <span class="button-text">Clear Chat</span>
     </button>
-
-    <div class="chat-container">
-        <div class="chat-header">
-            <div class="bot-avatar">🤖</div>
-            <h1>Toodles</h1>
-        </div>
-
-        <div class="chat-messages" id="chatMessages">
-            <!-- Messages will be added here dynamically -->
-        </div>
-    </div>
 
     <!-- Authentication Modal -->
     <div id="authModal" class="modal" style="display: block;">

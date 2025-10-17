@@ -7,20 +7,24 @@
     --acme-gray: #F5F5F5;
 }
 
-body {
+/* Page-specific layout (scoped to avoid overriding common nav) */
+.red-team-testing-page {
     font-family: Arial, sans-serif;
-    max-width: 800px;
-    margin: 0 auto;
-    padding: 0 1rem 2rem 1rem;
-    padding-top: 76px;
-    min-height: auto;
+    width: 100%;
+    margin: 0;
+    padding: calc(var(--nav-height) + var(--nav-extra)) 1rem 2rem 1rem; /* respect common nav variables */
+    min-height: 100vh;
     background: linear-gradient(135deg, rgb(147, 197, 193) 0%, rgb(128, 182, 178) 100%);
     position: relative;
     overflow-x: hidden;
+    display: flex;
+    flex-direction: column;
+    align-items: center; /* centers the form container horizontally */
+    box-sizing: border-box;
 }
 
-body::before,
-body::after {
+.red-team-testing-page::before,
+.red-team-testing-page::after {
     content: '';
     position: fixed;
     width: 100vw;
@@ -32,16 +36,8 @@ body::after {
     pointer-events: none;
 }
 
-body::before {
-    top: -50vh;
-    left: -50vw;
-}
-
-body::after {
-    bottom: -50vh;
-    right: -50vw;
-    transform: rotate(7deg);
-}
+.red-team-testing-page::before { top: -50vh; left: -50vw; }
+.red-team-testing-page::after { bottom: -50vh; right: -50vw; transform: rotate(7deg); }
 
 h2, .fancy-title {
     color: #333;
@@ -59,31 +55,7 @@ h2, .fancy-title {
     text-shadow: none;
 }
 
-.top-nav {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 48px;
-    display: flex;
-    align-items: flex-start;
-    z-index: 1000;
-}
-
-.nav-home {
-    position: relative;
-    margin-left: 8px;
-    margin-top: 8px;
-    z-index: 2;
-}
-
-.nav-icon {
-    width: 28px;
-    height: 28px;
-    cursor: pointer;
-}
-
-/* Remove conflicting music icon styles - using common.css audio-controls instead */
+/* Removed custom nav overrides to use common.css */
 
 .form-container {
     background: linear-gradient(to bottom, #f5f9fa, #edf3f4);
@@ -91,7 +63,9 @@ h2, .fancy-title {
     border-radius: 8px;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     max-width: 800px;
-    margin: 1rem auto 0 auto;
+    width: 100%;
+    margin: 1.5rem auto 0 auto; /* ensure horizontal centering */
+    box-sizing: border-box;
 }
 
 .form-group {
@@ -322,24 +296,4 @@ button[type="submit"]:hover {
 
 #okBtn:hover {
     background: #3b5cde;
-}
-
-.audio-controls.audio-controls-top-left {
-    position: absolute;
-    top: 18px;
-    left: 18px;
-    z-index: 10;
-    background: none;
-    box-shadow: none;
-    display: flex;
-    align-items: center;
-    justify-content: flex-start;
-}
-
-.audio-controls.audio-controls-top-left button {
-    background: none;
-    border: none;
-    padding: 0;
-    cursor: pointer;
-    outline: none;
 }

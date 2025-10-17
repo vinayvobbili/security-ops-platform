@@ -399,19 +399,9 @@ body {
     opacity: 0.8;
 }
 
-.audio-controls {
-    position: fixed;
-    top: 20px;
-    right: 20px;
-    z-index: 1000;
-}
-
-.music-icon {
-    width: 24px;
-    height: 24px;
-    cursor: pointer;
-    filter: invert(1);
-}
+/* Removed local audio-controls positioning & icon overrides to rely on common.css */
+/* .audio-controls { ... } (removed) */
+/* .music-icon { ... } (removed) */
 
 .filters-section {
     background: var(--filter-bg);
