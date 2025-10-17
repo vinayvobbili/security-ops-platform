@@ -6,6 +6,9 @@
     {% if page_title %}
         <h1 class="{{ page_title_class if page_title_class else 'dashboard-title' }}" aria-label="{{ page_title_aria if page_title_aria else (page_title|striptags) }}">{{ page_title|safe }}</h1>
     {% endif %}
+    {# Audio controls moved inside nav for alignment #}
+    {% set audio_controls_classes = 'audio-controls--enhanced audio-controls--in-nav' %}
+    {% include 'audio_controls.html' %}
     <div id="burgerMenu" class="burger-menu-content" style="display:none;" aria-hidden="true">
         <a href="/">🏠 Home</a>
         <a href="/meaningful-metrics">💹 Analytics</a>
