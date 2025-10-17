@@ -167,3 +167,9 @@ html { scroll-padding-top: var(--nav-height); }
 /* (Compact / super-compact variants and layout-toggle removed) */
 
 .sr-only { position:absolute !important; width:1px !important; height:1px !important; padding:0 !important; margin:-1px !important; overflow:hidden !important; clip:rect(0,0,0,0) !important; white-space:nowrap !important; border:0 !important; }
+
+/* Add variant class to allow audio controls to sit inside the top navigation bar aligned with burger icon */
+.audio-controls--in-nav { position: static !important; top:auto !important; right:auto !important; margin-left: auto; display:flex; align-items:center; justify-content:center; }
+/* Ensure button sizing harmonizes with burger icon when inside nav */
+.audio-controls--in-nav button { width:38px; height:38px; padding:6px; }
+.audio-controls--in-nav .music-icon { width:24px; height:24px; }
