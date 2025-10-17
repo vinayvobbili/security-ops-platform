@@ -33,3 +33,4 @@ performance_data.json
 tests
 
 .env
+certs/*
