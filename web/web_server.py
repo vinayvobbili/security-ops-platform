@@ -1087,10 +1087,23 @@ def get_shift_list():
             day_name = target_date.strftime('%A')
             date_str = target_date.strftime('%Y-%m-%d')
             for shift_name in shifts:
+                # Special handling for night shift date
+                # Night shift runs from 20:30 to 04:30 next day
+                # If we're between 00:00 and 04:30, the night shift started yesterday
+                shift_date = target_date
+                shift_day_name = day_name
+                shift_date_str = date_str
+                if shift_name == 'night' and days_back == 0:
+                    now = datetime.now(eastern)
+                    if now.hour < 4 or (now.hour == 4 and now.minute < 30):
+                        # We're in the night shift that started yesterday
+                        shift_date = target_date - timedelta(days=1)
+                        shift_day_name = shift_date.strftime('%A')
+                        shift_date_str = shift_date.strftime('%Y-%m-%d')
                 try:
-                    staffing = secops.get_staffing_data(day_name, shift_name)
+                    staffing = secops.get_staffing_data(shift_day_name, shift_name)
                     total_staff = sum(len(staff) for team, staff in staffing.items() if team != 'On-Call' and staff != ['N/A (Excel file missing)'])
-                    shift_id = f"{date_str}_{shift_name}"
+                    shift_id = f"{shift_date_str}_{shift_name}"
                     current_shift = secops.get_current_shift()
                     if days_back > 0:
                         status = 'completed'
@@ -1110,10 +1123,16 @@ def get_shift_list():
                         # Get staffing and security actions
                         shift_hour_map = {'morning': 4.5, 'afternoon': 12.5, 'night': 20.5}
                         shift_start_hour = shift_hour_map.get(shift_name.lower(), 4.5)
-                        security_actions = secops.get_shift_security_actions(days_back, shift_start_hour)
+                        # Adjust days_back for night shift metrics when we're after midnight
+                        adjusted_days_back = days_back
+                        if shift_name == 'night' and days_back == 0:
+                            now = datetime.now(eastern)
+                            if now.hour < 4 or (now.hour == 4 and now.minute < 30):
+                                adjusted_days_back = 1
+                        security_actions = secops.get_shift_security_actions(adjusted_days_back, shift_start_hour)
 
-                        detailed_staffing = secops.get_staffing_data(day_name, shift_name)
-                        basic_staffing = secops.get_basic_shift_staffing(day_name, shift_name.lower())
+                        detailed_staffing = secops.get_staffing_data(shift_day_name, shift_name)
+                        basic_staffing = secops.get_basic_shift_staffing(shift_day_name, shift_name.lower())
 
                         # Determine shift lead (prefer first SA)
                         sa_list = detailed_staffing.get('SA') or detailed_staffing.get('senior_analysts') or []
@@ -1123,17 +1142,17 @@ def get_shift_list():
                             if first_sa and 'N/A' not in str(first_sa):
                                 shift_lead = str(first_sa)
                         if not shift_lead:
-                            shift_lead = secops.get_shift_lead(day_name, shift_name)
+                            shift_lead = secops.get_shift_lead(shift_day_name, shift_name)
                         if not shift_lead or 'N/A' in str(shift_lead):
                             shift_lead = 'N/A'
 
                         # Calculate all shift metrics using the component
-                        base_date = datetime(target_date.year, target_date.month, target_date.day)
+                        base_date = datetime(shift_date.year, shift_date.month, shift_date.day)
                         metrics = secops_shift_metrics.get_shift_metrics(
                             date_obj=base_date,
                             shift_name=shift_name,
                             ticket_handler=incident_handler,
-                            day_name=day_name,
+                            day_name=shift_day_name,
                             total_staff=total_staff,
                             security_actions=security_actions,
                             shift_lead=shift_lead,
@@ -1144,7 +1163,7 @@ def get_shift_list():
                         # Build shift data entry
                         shift_data.append({
                             'id': shift_id,
-                            'date': date_str,
+                            'date': shift_date_str,
                             'day': metrics['day'],
                             'shift': shift_name.title(),
                             'total_staff': metrics['total_staff'],
@@ -1166,7 +1185,7 @@ def get_shift_list():
                             'score': metrics['score']
                         })
                 except Exception as e:
-                    logger.error(f"Error getting staffing or metrics for {day_name} {shift_name}: {e}")
+                    logger.error(f"Error getting staffing or metrics for {shift_day_name} {shift_name}: {e}")
                     current_shift = secops.get_current_shift()
                     if days_back > 0:
                         show_shift = True
@@ -1183,11 +1202,11 @@ def get_shift_list():
                     else:
                         show_shift = False
                     if show_shift:
-                        shift_id = f"{date_str}_{shift_name}"
+                        shift_id = f"{shift_date_str}_{shift_name}"
                         shift_data.append({
                             'id': shift_id,
-                            'date': date_str,
-                            'day': day_name,
+                            'date': shift_date_str,
+                            'day': shift_day_name,
                             'shift': shift_name.title(),
                             'total_staff': 0,
                             'actual_staff': 0,
