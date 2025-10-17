@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Optional
 
 # Import encrypted environment loader
-from src.utils.env_encryption import load_encrypted_env, load_plaintext_env
+from src.utils.env_encryption import load_encrypted_env, load_plaintext_env, EncryptionError
 
 # Load environment variables from two sources:
 # 1. .env (project root) - non-sensitive config like model names
@@ -17,9 +17,15 @@ if env_file.exists():
     load_plaintext_env(env_file)
     print(f"✓ Loaded config from .env")
 
-# Load encrypted secrets from data/transient/.secrets.age
-secrets_file = ROOT_DIR / 'data' / 'transient' / '.secrets.age'
-load_encrypted_env(encrypted_path=str(secrets_file))
+# Load encrypted secrets from data/transient/.secrets.age with optional dev bypass
+DEV_ALLOW_MISSING_SECRETS = os.environ.get('DEV_ALLOW_MISSING_SECRETS', '').lower() == 'true'
+try:
+    load_encrypted_env(encrypted_path=str(ROOT_DIR / 'data' / 'transient' / '.secrets.age'))
+except EncryptionError as e:
+    if DEV_ALLOW_MISSING_SECRETS:
+        print(f"⚠️ Proceeding without encrypted secrets (DEV_ALLOW_MISSING_SECRETS=true): {e}")
+    else:
+        raise
 
 
 def get_config():

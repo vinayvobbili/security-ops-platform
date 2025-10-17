@@ -1,107 +1,89 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>XSOAR Dashboard</title>
-    <link rel="stylesheet" href="/static/css/xsoar_dashboard.css">
-</head>
-<body>
-{% set page_title = "XSOAR Dashboard" %}
-{% include 'top_bar.html' %}
-
-<div class="container">
-    <div class="search-section">
-        <div class="card">
-            <div class="card-header">
-                <h2 class="card-title">
-                    <span class="icon">🔍</span>
-                    Search Incidents
-                </h2>
-            </div>
-            <div class="card-body">
-                <form id="searchForm">
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="query">Search Query</label>
-                            <input type="text" id="query" name="query" placeholder="Enter search query..." class="form-control">
+{% extends 'base_layout.html' %}
+{% set page_title_text = 'XSOAR Dashboard' %}
+{% set page_title_left_icon = '📊' %}
+{% set page_title_right_icon = '🛠️' %}
+{% block extra_css %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/xsoar_dashboard.css') }}">{% endblock %}
+{% block content %}
+    <div class="container">
+        <div class="search-section">
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title"><span class="icon">🔍</span> Search Incidents</h2>
+                </div>
+                <div class="card-body">
+                    <form id="searchForm">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="query">Search Query</label>
+                                <input type="text" id="query" name="query" placeholder="Enter search query..." class="form-control">
+                            </div>
+                            <div class="form-group">
+                                <label for="period">Period</label>
+                                <select id="period" name="period" class="form-control">
+                                    <option value="">All Time</option>
+                                    <option value="1">Last 24 Hours</option>
+                                    <option value="7">Last 7 Days</option>
+                                    <option value="30">Last 30 Days</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="size">Results</label>
+                                <select id="size" name="size" class="form-control">
+                                    <option value="25">25</option>
+                                    <option value="50" selected>50</option>
+                                    <option value="100">100</option>
+                                    <option value="500">500</option>
+                                </select>
+                            </div>
                         </div>
-                        <div class="form-group">
-                            <label for="period">Period</label>
-                            <select id="period" name="period" class="form-control">
-                                <option value="">All Time</option>
-                                <option value="1">Last 24 Hours</option>
-                                <option value="7">Last 7 Days</option>
-                                <option value="30">Last 30 Days</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label for="size">Results</label>
-                            <select id="size" name="size" class="form-control">
-                                <option value="25">25</option>
-                                <option value="50" selected>50</option>
-                                <option value="100">100</option>
-                                <option value="500">500</option>
-                            </select>
-                        </div>
-                    </div>
-                    <button type="submit" class="btn btn-primary">Search Incidents</button>
-                </form>
+                        <button type="submit" class="btn btn-primary">Search Incidents</button>
+                    </form>
+                </div>
             </div>
         </div>
-    </div>
 
-    <div class="loading" id="loading" style="display: none;">
-        <div class="loading-spinner"></div>
-        <p>Loading incidents...</p>
-    </div>
+        <div class="loading" id="loading" style="display: none;">
+            <div class="loading-spinner"></div>
+            <p>Loading incidents...</p>
+        </div>
 
-    <div class="incidents-section" id="incidentsSection" style="display: none;">
-        <div class="card">
-            <div class="card-header">
-                <h2 class="card-title">
-                    <span class="icon">📊</span>
-                    Incidents <span id="incidentCount" class="count-badge">0</span>
-                </h2>
+        <div class="incidents-section" id="incidentsSection" style="display: none;">
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title"><span class="icon">📊</span> Incidents <span id="incidentCount" class="count-badge">0</span></h2>
+                </div>
+                <div class="card-body">
+                    <div class="table-container">
+                        <table id="incidentsTable" class="incidents-table">
+                            <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Name</th>
+                                <th>Type</th>
+                                <th>Status</th>
+                                <th>Severity</th>
+                                <th>Owner</th>
+                                <th>Created</th>
+                                <th>Actions</th>
+                            </tr>
+                            </thead>
+                            <tbody id="incidentsTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
-            <div class="card-body">
-                <div class="table-container">
-                    <table id="incidentsTable" class="incidents-table">
-                        <thead>
-                        <tr>
-                            <th>ID</th>
-                            <th>Name</th>
-                            <th>Type</th>
-                            <th>Status</th>
-                            <th>Severity</th>
-                            <th>Owner</th>
-                            <th>Created</th>
-                            <th>Actions</th>
-                        </tr>
-                        </thead>
-                        <tbody id="incidentsTableBody">
-                        </tbody>
-                    </table>
+        </div>
+
+        <div id="errorSection" class="error-section" style="display: none;">
+            <div class="card error-card">
+                <div class="card-body">
+                    <h3>⚠️ Error Loading Incidents</h3>
+                    <p id="errorMessage">An error occurred while loading incidents.</p>
                 </div>
             </div>
         </div>
     </div>
-
-    <div id="errorSection" class="error-section" style="display: none;">
-        <div class="card error-card">
-            <div class="card-body">
-                <h3>⚠️ Error Loading Incidents</h3>
-                <p id="errorMessage">An error occurred while loading incidents.</p>
-            </div>
-        </div>
-    </div>
-</div>
-
-<script src="/static/js/common.js"></script>
-<script src="/static/js/xsoar_dashboard.js"></script>
-<script>
-    initRandomMusic();
-    initBurgerMenu();
-</script>
-</body>
-</html>
+{% endblock %}
+{% block extra_js %}
+    <script src="{{ url_for('static', filename='js/xsoar_dashboard.js') }}"></script>{% endblock %}

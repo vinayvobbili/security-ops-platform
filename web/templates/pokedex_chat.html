@@ -5,55 +5,62 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Pokedex AI Assistant</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/common.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/pokedex_chat.css') }}">
+    {% block extra_css %}
+        <link rel="stylesheet" href="{{ url_for('static', filename='css/pokedex_chat.css') }}">{% endblock %}
 </head>
 <body>
+{% import 'title_macros.html' as titles %}
+{% set page_title = titles.build_title('Pokedex AI Assistant','🧠','⚡') %}
 {% include 'top_bar.html' %}
 
-<button class="clear-chat-button" id="clearChatButton">
-    <span class="button-icon">🗑️</span>
-    <span class="button-text">Clear Chat</span>
-</button>
+{% block content %}
+    <button class="clear-chat-button" id="clearChatButton">
+        <span class="button-icon">🗑️</span>
+        <span class="button-text">Clear Chat</span>
+    </button>
 
-<div class="chat-container">
-    <div class="chat-header">
-        <div class="pokeball-icon"></div>
-        <h1>Pokedex AI Assistant </h1>
-        <p class="subtitle">Your intelligent SOC companion 🤖</p>
-    </div>
+    <div class="chat-container">
+        <div class="chat-header">
+            <div class="pokeball-icon"></div>
+            <h1>Pokedex AI Assistant </h1>
+            <p class="subtitle">Your intelligent SOC companion 🤖</p>
+        </div>
 
-    <!-- Status Banner -->
-    <div id="statusBanner" class="status-banner">
-        <div id="statusMessage">Checking connection...</div>
-        <div id="statusDetails" class="status-banner-details"></div>
-    </div>
+        <!-- Status Banner -->
+        <div id="statusBanner" class="status-banner">
+            <div id="statusMessage">Checking connection...</div>
+            <div id="statusDetails" class="status-banner-details"></div>
+        </div>
 
-    <div class="chat-messages" id="chatMessages">
-        <div class="message assistant">
-            <div class="message-content">
-                <strong>Welcome to Pokedex!</strong> 🎉<br><br>
-                I'm your intelligent assistant, ready to help with security operations, threat hunting, and general questions.
-                <br><br>How can I assist you today?
+        <div class="chat-messages" id="chatMessages">
+            <div class="message assistant">
+                <div class="message-content">
+                    <strong>Welcome to Pokedex!</strong> 🎉<br><br>
+                    I'm your intelligent assistant, ready to help with security operations, threat hunting, and general questions.
+                    <br><br>How can I assist you today?
+                </div>
+            </div>
+        </div>
+
+        <div class="chat-input-container">
+            <div class="chat-input-wrapper">
+                <label for="messageInput" class="sr-only">Chat message</label>
+                <input
+                        type="text"
+                        id="messageInput"
+                        placeholder="Ask me anything..."
+                        autocomplete="off"
+                        aria-label="Chat message input"
+                >
+                <button id="sendButton">Send 🚀</button>
             </div>
         </div>
     </div>
-
-    <div class="chat-input-container">
-        <div class="chat-input-wrapper">
-            <input
-                    type="text"
-                    id="messageInput"
-                    placeholder="Ask me anything..."
-                    autocomplete="off"
-            >
-            <button id="sendButton">Send 🚀</button>
-        </div>
-    </div>
-</div>
+{% endblock %}
 
 <!-- Common JavaScript for burger menu and audio -->
 <script src="{{ url_for('static', filename='js/common.js') }}"></script>
-<!-- Pokedex chat functionality -->
-<script src="{{ url_for('static', filename='js/pokedex_chat.js') }}"></script>
+{% block extra_js %}
+    <script src="{{ url_for('static', filename='js/pokedex_chat.js') }}"></script>{% endblock %}
 </body>
 </html>

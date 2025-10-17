@@ -78,10 +78,6 @@ body.dark-mode .dashboard-header {
     background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.06), transparent);
 }
 
-body.dark-mode .dashboard-title {
-    filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.6));
-}
-
 body.dark-mode .dashboard-subtitle {
     color: #94a3b8;
     opacity: .9;
@@ -323,68 +319,6 @@ body {
     z-index: -1;
 }
 
-.dashboard-title {
-    font-size: 3.5rem;
-    font-weight: 800;
-    background: linear-gradient(135deg,
-    #667eea 0%,
-    #764ba2 25%,
-    #f093fb 50%,
-    #f5576c 75%,
-    #4facfe 100%);
-    background-size: 400% 400%;
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-    margin-bottom: 5px;
-    letter-spacing: -0.02em;
-    line-height: 1.1;
-    position: relative;
-    animation: gradientShift 6s ease-in-out infinite;
-    filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.3));
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 20px;
-}
-
-.title-icon {
-    font-size: 3rem;
-    filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.3));
-    animation: iconPulse 3s ease-in-out infinite;
-    display: inline-block;
-    background: none;
-    -webkit-background-clip: initial;
-    -webkit-text-fill-color: initial;
-    background-clip: initial;
-    color: #667eea;
-}
-
-.title-icon.left {
-    animation-delay: 0s;
-}
-
-.title-icon.right {
-    animation-delay: 1.5s;
-}
-
-@keyframes iconPulse {
-    0%, 100% {
-        transform: scale(1);
-    }
-    50% {
-        transform: scale(1.1);
-    }
-}
-
-@keyframes gradientShift {
-    0%, 100% {
-        background-position: 0 50%;
-    }
-    50% {
-        background-position: 100% 50%;
-    }
-}
 
 .dashboard-subtitle {
     color: #64748b;
@@ -399,9 +333,18 @@ body {
     opacity: 0.8;
 }
 
-/* Removed local audio-controls positioning & icon overrides to rely on common.css */
-/* .audio-controls { ... } (removed) */
-/* .music-icon { ... } (removed) */
+/* --- Integrated Title in Top Nav (Metrics Page) --- */
+/* Removed: body.metrics-page overrides now replaced by global nav-title-large in common.css */
+/* --- End Integrated Title Overrides --- */
+
+/* Responsive adjustments for smaller widths */
+@media (max-width: 1200px) {
+}
+@media (max-width: 880px) {
+}
+@media (max-width: 620px) {
+}
+/* --- End Integrated Title Overrides --- */
 
 .filters-section {
     background: var(--filter-bg);
@@ -1562,33 +1505,9 @@ body.dark-mode .toast {
 
 /* Responsive Design for Header */
 @media (max-width: 768px) {
-    .dashboard-title {
-        font-size: 2.2rem;
-        line-height: 1.3;
-        margin-bottom: 12px;
-    }
-
-    .dashboard-subtitle {
-        font-size: 1rem;
-        padding: 0 15px;
-    }
-
-    .dashboard-header {
-        padding: 20px 0 30px;
-        margin-bottom: 20px;
-    }
 }
 
 @media (max-width: 480px) {
-    .dashboard-title {
-        font-size: 1.8rem;
-        letter-spacing: -0.01em;
-    }
-
-    .dashboard-subtitle {
-        font-size: 0.95rem;
-        line-height: 1.4;
-    }
 }
 
 /* Location Filter Tabs */
@@ -1686,18 +1605,6 @@ body.dark-mode .empty-hint {
         opacity: 1;
         transform: translate(-50%, -50%);
     }
-}
-
-.sr-only {
-    position: absolute !important;
-    width: 1px !important;
-    height: 1px !important;
-    padding: 0 !important;
-    margin: -1px !important;
-    overflow: hidden !important;
-    clip: rect(0, 0, 0, 0) !important;
-    white-space: nowrap !important;
-    border: 0 !important;
 }
 
 .table-info-bar {
