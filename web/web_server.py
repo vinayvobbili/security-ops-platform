@@ -78,7 +78,7 @@ def block_ip():
 
 def get_image_files() -> List[str]:
     """Retrieves a list of image files from the static and charts directories."""
-    today_date = datetime.now().strftime('%m-%d-%Y')
+    today_date = datetime.now(eastern).strftime('%m-%d-%Y')
     image_order = [
         "images/Company Logo.png",
         "images/DnR Welcome.png",
@@ -1237,7 +1237,7 @@ def api_meaningful_metrics_data():
 
     try:
         # Load cached data
-        today_date = datetime.now().strftime('%m-%d-%Y')
+        today_date = datetime.now(eastern).strftime('%m-%d-%Y')
         root_directory = Path(__file__).parent.parent
         cache_file = root_directory / "web" / "static" / "charts" / today_date / "past_90_days_tickets.json"
 
