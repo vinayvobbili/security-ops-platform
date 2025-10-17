@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Kill existing server process if running
-pkill -f "web/web_server.py"
+pkill -f "web_server.py"
 sleep 1
 
 # Start new server instance
