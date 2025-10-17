@@ -1306,6 +1306,210 @@ def healthz():
         return jsonify({"status": "error", "error": str(e)}), 500
 
 
+@app.route('/toodles')
+@log_web_activity
+def toodles_chat():
+    """Toodles chat interface"""
+    return render_template('toodles_chat.html')
+
+
+@app.route('/api/toodles/create-x-ticket', methods=['POST'])
+@log_web_activity
+def api_create_x_ticket():
+    """API endpoint to create X ticket"""
+    try:
+        data = request.get_json()
+        title = data.get('title', '').strip()
+        details = data.get('details', '').strip()
+        detection_source = data.get('detection_source', '').strip()
+        user_email = data.get('user_email', '').strip()
+
+        if not title or not details or not detection_source:
+            return jsonify({'success': False, 'error': 'All fields are required'}), 400
+
+        # Add submitter info to details
+        submitter_ip = request.remote_addr
+        details += f"\n\nSubmitted by: {user_email}"
+        details += f"\nSubmitted from: {submitter_ip}"
+
+        incident = {
+            'name': title,
+            'details': details,
+            'CustomFields': {
+                'detectionsource': detection_source,
+                'isusercontacted': False,
+                'securitycategory': 'CAT-5: Scans/Probes/Attempted Access'
+            }
+        }
+
+        result = incident_handler.create(incident)
+        new_incident_id = result.get('id')
+        incident_url = CONFIG.xsoar_prod_ui_base_url + '/Custom/caseinfoid/' + new_incident_id
+
+        return jsonify({
+            'success': True,
+            'message': f'Ticket [#{new_incident_id}]({incident_url}) has been created in XSOAR Prod.'
+        })
+
+    except Exception as e:
+        logger.error(f"Error creating X ticket: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/toodles/approved-testing', methods=['POST'])
+@log_web_activity
+def api_approved_testing():
+    """API endpoint to add approved testing entry"""
+    try:
+        data = request.get_json()
+        usernames = data.get('usernames', '').strip()
+        tester_hosts = data.get('tester_hosts', '').strip()
+        targets = data.get('targets', '').strip()
+        description = data.get('description', '').strip()
+        notes_scope = data.get('notes_scope', '').strip()
+        keep_until = data.get('keep_until', '')
+        user_email = data.get('user_email', '').strip()
+
+        submitter_ip = request.remote_addr
+        # Default to tomorrow if no date provided
+        if not keep_until:
+            keep_until = (datetime.now(eastern) + timedelta(days=1)).strftime("%Y-%m-%d")
+        submit_date = datetime.now(eastern).strftime("%m/%d/%Y")
+
+        # Use user email if provided, otherwise use IP-based identifier
+        submitter_email = user_email if user_email else f"web_user@{submitter_ip}"
+
+        approved_testing_list_name = f"{CONFIG.team_name}_Approved_Testing"
+        approved_testing_master_list_name = f"{CONFIG.team_name}_Approved_Testing_MASTER"
+
+        try:
+            add_approved_testing_entry(
+                list_handler,
+                approved_testing_list_name,
+                approved_testing_master_list_name,
+                usernames,
+                tester_hosts,
+                targets,
+                description,
+                notes_scope,
+                submitter_email,
+                keep_until,
+                submit_date,
+                submitter_ip
+            )
+
+            return jsonify({
+                'success': True,
+                'message': f'Your approved testing entry has been added. Expires at 5 PM ET on {keep_until}.'
+            })
+
+        except ValueError as e:
+            return jsonify({'success': False, 'error': str(e)}), 400
+
+    except Exception as e:
+        logger.error(f"Error adding approved testing: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/toodles/ioc-hunt', methods=['POST'])
+@log_web_activity
+def api_ioc_hunt():
+    """API endpoint to create IOC hunt"""
+    try:
+        data = request.get_json()
+        ioc_title = data.get('ioc_title', '').strip()
+        iocs = data.get('iocs', '').strip()
+        user_email = data.get('user_email', '').strip()
+
+        if not ioc_title or not iocs:
+            return jsonify({'success': False, 'error': 'All fields are required'}), 400
+
+        submitter_ip = request.remote_addr
+        details = iocs
+        if user_email:
+            details += f"\n\nSubmitted by: {user_email}"
+        details += f"\nSubmitted from: {submitter_ip}"
+
+        incident = {
+            'name': ioc_title,
+            'details': details,
+            'type': "METCIRT IOC Hunt",
+            'CustomFields': {
+                'huntsource': 'Other'
+            }
+        }
+
+        result = incident_handler.create(incident)
+        ticket_no = result.get('id')
+        incident_url = CONFIG.xsoar_prod_ui_base_url + '/Custom/caseinfoid/' + ticket_no
+
+        return jsonify({
+            'success': True,
+            'message': f'A New IOC Hunt has been created in XSOAR. Ticket: [#{ticket_no}]({incident_url})'
+        })
+
+    except Exception as e:
+        logger.error(f"Error creating IOC hunt: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/toodles/threat-hunt', methods=['POST'])
+@log_web_activity
+def api_threat_hunt():
+    """API endpoint to create threat hunt"""
+    try:
+        data = request.get_json()
+        threat_title = data.get('threat_title', '').strip()
+        threat_description = data.get('threat_description', '').strip()
+        user_email = data.get('user_email', '').strip()
+
+        if not threat_title or not threat_description:
+            return jsonify({'success': False, 'error': 'All fields are required'}), 400
+
+        submitter_ip = request.remote_addr
+        details = threat_description
+        if user_email:
+            details += f"\n\nSubmitted by: {user_email}"
+        details += f"\nSubmitted from: {submitter_ip}"
+
+        incident = {
+            'name': threat_title,
+            'details': details,
+            'type': "Threat Hunt"
+        }
+
+        result = incident_handler.create(incident)
+        ticket_no = result.get('id')
+        incident_url = CONFIG.xsoar_prod_ui_base_url + '/Custom/caseinfoid/' + ticket_no
+
+        return jsonify({
+            'success': True,
+            'message': f'A new Threat Hunt has been created in XSOAR. Ticket: [#{ticket_no}]({incident_url})'
+        })
+
+    except Exception as e:
+        logger.error(f"Error creating threat hunt: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/toodles/oncall', methods=['GET'])
+@log_web_activity
+def api_oncall():
+    """API endpoint to get on-call information"""
+    try:
+        import src.components.oncall as oncall
+        on_call_person = oncall.get_on_call_person()
+
+        return jsonify({
+            'success': True,
+            'data': on_call_person
+        })
+
+    except Exception as e:
+        logger.error(f"Error getting on-call info: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 def main():
     """Entry point for launching the web server.
 

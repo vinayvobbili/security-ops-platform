@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Toodles Chat</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/common.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/toodles_chat.css') }}">
+</head>
+<body>
+    <!-- Top Navigation Bar -->
+    {% include 'burger_menu.html' %}
+
+    <!-- Audio Player -->
+    <audio id="music" src="" loop muted></audio>
+    <div class="audio-controls">
+        <button id="audioToggleBtn">
+            <img src="/static/icons/volume-xmark-solid.svg" alt="Unmute Icon" class="music-icon" id="music-icon">
+        </button>
+    </div>
+
+    <button class="clear-chat-button" id="clearChatButton">
+        <span class="button-icon">🗑️</span>
+        <span class="button-text">Clear Chat</span>
+    </button>
+
+    <div class="chat-container">
+        <div class="chat-header">
+            <div class="bot-avatar">🤖</div>
+            <h1>Toodles</h1>
+        </div>
+
+        <div class="chat-messages" id="chatMessages">
+            <!-- Messages will be added here dynamically -->
+        </div>
+    </div>
+
+    <!-- Authentication Modal -->
+    <div id="authModal" class="modal" style="display: block;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Welcome to Toodles</h2>
+            </div>
+            <div class="modal-body">
+                <form id="authForm" onsubmit="submitAuth(event)">
+                    <div class="form-group">
+                        <label for="emailLocal">Enter your email address</label>
+                        <div style="display: flex; align-items: center; gap: 5px;">
+                            <input type="text"
+                                   id="emailLocal"
+                                   name="emailLocal"
+                                   required
+                                   placeholder="firstname.lastname"
+                                   style="flex: 1;"
+                                   autocomplete="off">
+                            <span style="color: #666; font-weight: 500;">@company.com</span>
+                        </div>
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary">Continue</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for forms -->
+    <div id="formModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modalTitle">Form</h2>
+                <button class="close-button" onclick="closeModal()">&times;</button>
+            </div>
+            <div class="modal-body" id="modalBody">
+                <!-- Form content will be injected here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Common JavaScript for burger menu and audio -->
+    <script src="{{ url_for('static', filename='js/common.js') }}"></script>
+    <!-- Toodles chat functionality -->
+    <script src="{{ url_for('static', filename='js/toodles_chat.js') }}"></script>
+</body>
+</html>
