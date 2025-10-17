@@ -638,6 +638,7 @@ def main():
         logger.info("Starting Barnacles with standard WebexBot (no extra resilience features)")
         bot = barnacles_bot_factory()
         barnacles_initialization(bot)
+        logger.info("✅ Barnacles bot initialized and ready! Listening for messages...")
         bot.run()
 
 

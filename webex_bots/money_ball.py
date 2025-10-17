@@ -435,6 +435,7 @@ def main():
         logger.info("Starting MoneyBall with standard WebexBot (no extra resilience features)")
         bot = moneyball_bot_factory()
         moneyball_initialization(bot)
+        logger.info("✅ MoneyBall bot initialized and ready! Listening for messages...")
         bot.run()
 
 
