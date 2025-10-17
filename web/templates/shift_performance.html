@@ -14,35 +14,6 @@
 {% include 'top_bar.html' %}
 
 <div class="container">
-    <!-- Title and Filter Header Row -->
-    <div class="header-row">
-        <div class="filter-section">
-            <div class="filter-dropdown">
-                <button class="filter-toggle" onclick="toggleFilters()">
-                    🔽 Filters
-                </button>
-                <div class="filter-menu" id="filterMenu" style="display: none;">
-                    <div class="filter-group">
-                        <h4>Shift Type</h4>
-                        <label><input type="checkbox" value="morning" checked> 🌅 Morning</label>
-                        <label><input type="checkbox" value="afternoon" checked> ☀️ Afternoon</label>
-                        <label><input type="checkbox" value="night" checked> 🌙 Night</label>
-                    </div>
-                    <div class="filter-group">
-                        <h4>Time Range</h4>
-                        <label><input type="radio" name="timeRange" value="today"> Today</label>
-                        <label><input type="radio" name="timeRange" value="yesterday"> Yesterday</label>
-                        <label><input type="radio" name="timeRange" value="3"> Last 3 Days</label>
-                        <label><input type="radio" name="timeRange" value="7" checked> Last 7 Days</label>
-                    </div>
-                    <div class="filter-actions">
-                        <button class="clear-btn" onclick="clearFilters()">Clear</button>
-                        <button class="apply-btn" onclick="applyFilters()">Apply</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
 
 
     <!-- Performance Table - Lightweight -->
@@ -412,6 +383,35 @@
     </div>
 
     <!-- Data will be loaded via AJAX -->
+</div>
+
+<!-- Filter Controls - Bottom Left -->
+<div class="filter-controls">
+    <div class="filter-dropdown">
+        <button class="filter-toggle" onclick="toggleFilters()" title="Show filters">
+            <span class="filter-icon">🔽</span>
+            <span class="filter-text">Filters</span>
+        </button>
+        <div class="filter-menu" id="filterMenu" style="display: none;">
+            <div class="filter-group">
+                <h4>Shift Type</h4>
+                <label><input type="checkbox" value="morning" checked> 🌅 Morning</label>
+                <label><input type="checkbox" value="afternoon" checked> ☀️ Afternoon</label>
+                <label><input type="checkbox" value="night" checked> 🌙 Night</label>
+            </div>
+            <div class="filter-group">
+                <h4>Time Range</h4>
+                <label><input type="radio" name="timeRange" value="today"> Today</label>
+                <label><input type="radio" name="timeRange" value="yesterday"> Yesterday</label>
+                <label><input type="radio" name="timeRange" value="3"> Last 3 Days</label>
+                <label><input type="radio" name="timeRange" value="7" checked> Last 7 Days</label>
+            </div>
+            <div class="filter-actions">
+                <button class="clear-btn" onclick="clearFilters()">Clear</button>
+                <button class="apply-btn" onclick="applyFilters()">Apply</button>
+            </div>
+        </div>
+    </div>
 </div>
 
 <!-- Cache Clear Button -->
