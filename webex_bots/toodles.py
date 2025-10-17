@@ -1,21 +1,48 @@
 #!/usr/bin/python3
 
-# Set to False when running on stable environments (e.g., Ubuntu server without ZScaler)
-# Set to True when running on environments with connection issues (e.g., Mac with ZScaler)
-SHOULD_USE_RESILIENCY = False
+"""
+Toodles Bot - Configuration Guide
+==================================
+
+This bot supports three operating modes:
+
+1. FULL RESILIENCE MODE (for ZScaler/corporate proxy environments)
+   SHOULD_USE_RESILIENCY = True
+   USE_AUTO_RECONNECT = ignored
+   Features: SSL patching, WebSocket patching, device cleanup, auto-reconnect
+
+2. LITE RESILIENCE MODE (recommended for production without ZScaler)
+   SHOULD_USE_RESILIENCY = False
+   USE_AUTO_RECONNECT = True
+   Features: Device cleanup, auto-reconnect (handles WebSocket timeouts)
+
+3. STANDARD MODE (no resilience, manual restart required on disconnection)
+   SHOULD_USE_RESILIENCY = False
+   USE_AUTO_RECONNECT = False
+   Features: None (standard WebexBot)
+
+Recommended configuration: LITE RESILIENCE MODE
+"""
 
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+# Load configuration early (before SSL config)
+from my_config import get_config
+
+CONFIG = get_config()
+
 # Configure SSL for corporate proxy environments (Zscaler, etc.) - Only if needed
-if SHOULD_USE_RESILIENCY:
+if CONFIG.should_use_proxy_resilience:
     from src.utils.ssl_config import configure_ssl_if_needed
+
     configure_ssl_if_needed(verbose=True)
 
     # Apply enhanced WebSocket client patch for better connection resilience
     from src.utils.enhanced_websocket_client import patch_websocket_client
+
     patch_websocket_client()
 
 import ipaddress
@@ -41,7 +68,6 @@ from webexpythonsdk.models.cards.actions import Submit
 
 import src.components.oncall as oncall
 from data.data_maps import azdo_projects, azdo_orgs, azdo_area_paths
-from my_config import get_config
 
 from services import xsoar, azdo
 from services.approved_testing_utils import add_approved_testing_entry
@@ -52,7 +78,6 @@ from src.utils.http_utils import get_session
 from src.utils.logging_utils import log_activity
 from src.utils.webex_device_manager import cleanup_devices_on_startup
 
-CONFIG = get_config()
 ROOT_DIRECTORY = Path(__file__).parent.parent
 
 # Get robust HTTP session instance
@@ -1998,9 +2023,21 @@ class GetBotHealth(Command):
         room_id = attachment_actions.roomId
         current_time = datetime.now(EASTERN_TZ)
 
-        # Simple status using the resilience framework
+        # Determine current mode
+        if CONFIG.should_use_proxy_resilience:
+            mode = "Full Resilience"
+            health_detail = "ZScaler features + Auto-reconnect"
+            features = "SSL config, WebSocket patching, device cleanup, auto-restart"
+        elif CONFIG.should_auto_reconnect:
+            mode = "Lite Resilience"
+            health_detail = "Auto-reconnect + Device cleanup"
+            features = "Device cleanup, auto-reconnect on WebSocket timeout"
+        else:
+            mode = "Standard"
+            health_detail = "No resilience features"
+            features = "Standard WebexBot"
+
         health_status = "🟢 Healthy"
-        health_detail = "Running with resilience framework"
 
         # Format current time with timezone
         tz_name = "EST" if current_time.dst().total_seconds() == 0 else "EDT"
@@ -2022,8 +2059,9 @@ class GetBotHealth(Command):
                             items=[
                                 TextBlock(text="📊 **Status Information**", weight=options.FontWeight.BOLDER),
                                 TextBlock(text=f"Status: {health_status}"),
+                                TextBlock(text=f"Mode: {mode}"),
                                 TextBlock(text=f"Details: {health_detail}"),
-                                TextBlock(text=f"Framework: BotResilient (auto-reconnect, health monitoring)"),
+                                TextBlock(text=f"Features: {features}"),
                                 TextBlock(text=f"Current Time: {current_time.strftime(f'%Y-%m-%d %H:%M:%S {tz_name}')}")
                             ]
                         )
@@ -2160,9 +2198,9 @@ class ProcessUrlBlockVerdict(Command):
 
 def toodles_bot_factory():
     """Create Toodles bot instance"""
-    # Clean up stale device registrations only when using resilience framework
-    # (to prevent device buildup from frequent restarts)
-    if SHOULD_USE_RESILIENCY:
+    # Clean up stale device registrations when using any auto-reconnect mode
+    # (to prevent device buildup from automatic restarts)
+    if CONFIG.should_use_proxy_resilience or CONFIG.should_auto_reconnect:
         cleanup_devices_on_startup(
             CONFIG.webex_bot_access_token_toodles,
             bot_name="Toodles"
@@ -2213,9 +2251,24 @@ def toodles_initialization(bot_instance=None):
 
 
 def main():
-    """Toodles main - toggle resilience framework based on SHOULD_USE_RESILIENCY flag"""
-    if SHOULD_USE_RESILIENCY:
-        logger.info("Starting Toodles with resilience framework (SSL config, device cleanup, auto-restart)")
+    """Toodles main - supports three modes of operation"""
+    if CONFIG.should_use_proxy_resilience:
+        # Full resilience: ZScaler features + auto-reconnect
+        logger.info("Starting Toodles with FULL resilience (SSL config, WebSocket patching, device cleanup, auto-restart)")
+        from src.utils.bot_resilience import ResilientBot
+
+        resilient_runner = ResilientBot(
+            bot_name="Toodles",
+            bot_factory=toodles_bot_factory,
+            initialization_func=toodles_initialization,
+            max_retries=5,
+            initial_retry_delay=30,
+            max_retry_delay=300
+        )
+        resilient_runner.run()
+    elif CONFIG.should_auto_reconnect:
+        # Lite resilience: Only auto-reconnect (no ZScaler-specific features)
+        logger.info("Starting Toodles with LITE resilience (auto-reconnect only, no ZScaler features)")
         from src.utils.bot_resilience import ResilientBot
 
         resilient_runner = ResilientBot(
@@ -2228,7 +2281,8 @@ def main():
         )
         resilient_runner.run()
     else:
-        logger.info("Starting Toodles with standard WebexBot (no extra resilience features)")
+        # Standard mode: No resilience features at all
+        logger.info("Starting Toodles with STANDARD mode (no auto-reconnect, no resilience features)")
         bot = toodles_bot_factory()
         toodles_initialization(bot)
         logger.info("✅ Toodles bot initialized and ready! Listening for messages...")

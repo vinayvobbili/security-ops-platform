@@ -123,6 +123,9 @@ def get_config():
         palo_alto_api_key=os.environ.get("PALO_ALTO_API_KEY"),
         open_weather_map_api_key=os.environ.get("OPEN_WEATHER_MAP_API_KEY"),
         web_server_debug_mode_on=str(os.environ.get("WEB_SERVER_DEBUG_MODE_ON", "False")).lower() == "true",
+        # Bot resilience configuration
+        should_use_proxy_resilience=str(os.environ.get("SHOULD_USE_PROXY_RESILIENCE", "False")).lower() == "true",
+        should_auto_reconnect=str(os.environ.get("SHOULD_AUTO_RECONNECT", "True")).lower() == "true",
     )
 
 
@@ -222,3 +225,6 @@ class Config:
     palo_alto_api_key: Optional[str] = None
     open_weather_map_api_key: Optional[str] = None
     web_server_debug_mode_on: bool = False
+    # Bot resilience configuration
+    should_use_proxy_resilience: bool = False
+    should_auto_reconnect: bool = True
