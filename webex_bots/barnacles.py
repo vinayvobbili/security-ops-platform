@@ -638,6 +638,7 @@ def main():
         logger.info("Starting the alert triage service with standard WebexBot (no extra resilience features)")
         bot = barnacles_bot_factory()
         barnacles_initialization(bot)
+        logger.info("✅ the alert triage service bot initialized and ready! Listening for messages...")
         bot.run()
 
 

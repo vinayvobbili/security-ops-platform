@@ -2231,6 +2231,7 @@ def main():
         logger.info("Starting the notification service with standard WebexBot (no extra resilience features)")
         bot = toodles_bot_factory()
         toodles_initialization(bot)
+        logger.info("✅ the notification service bot initialized and ready! Listening for messages...")
         bot.run()
 
 
