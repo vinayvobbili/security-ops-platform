@@ -878,9 +878,14 @@ class RingTagTaniumHosts(Command):
             successful_tags = []
             failed_tags = []
 
-            # Apply tags to each host
+            # Group hosts by (instance, tag, package_id) for bulk tagging
             apply_start = time.time()
-            for idx, row in tqdm(hosts_to_tag.iterrows(), total=len(hosts_to_tag), desc="Tagging hosts"):
+
+            # Create a grouping key and organize hosts
+            from collections import defaultdict
+            host_groups = defaultdict(list)
+
+            for idx, row in hosts_to_tag.iterrows():
                 computer_name = str(row['Computer Name'])
                 tanium_id = str(row['Tanium ID'])
                 source = str(row['Source'])
@@ -889,53 +894,85 @@ class RingTagTaniumHosts(Command):
                 current_tags = str(row.get('Current Tags', ''))
                 comments = str(row.get('Comments', ''))
 
-                try:
-                    # Get the appropriate instance
-                    instance = tanium_client.get_instance_by_name(source)
-                    if not instance:
-                        failed_tags.append({
-                            'name': computer_name,
-                            'tanium_id': tanium_id,
-                            'tag': ring_tag,
-                            'source': source,
-                            'current_tags': current_tags,
-                            'comments': comments,
-                            'error': f"Instance '{source}' not found"
-                        })
-                        continue
+                # Group by (source/instance, tag, package_id)
+                group_key = (source, ring_tag, package_id)
+                host_groups[group_key].append({
+                    'name': computer_name,
+                    'tanium_id': tanium_id,
+                    'tag': ring_tag,
+                    'source': source,
+                    'package_id': package_id,
+                    'current_tags': current_tags,
+                    'comments': comments
+                })
 
-                    # Add the tag using the package ID from the report
-                    logger.info(f"Tagging {computer_name} with {ring_tag} in {source} using package {package_id}")
-                    result = instance.add_tag_by_name(computer_name, ring_tag, package_id=package_id)
+            # Process each group with bulk tagging
+            total_groups = len(host_groups)
+            logger.info(f"Grouped {num_to_tag} hosts into {total_groups} bulk tagging operations")
 
-                    # Extract action ID from result
-                    action_id = result.get('action', {}).get('scheduledAction', {}).get('id', 'N/A')
+            with tqdm(total=total_groups, desc="Bulk tagging host groups", unit="group") as pbar:
+                for (source, ring_tag, package_id), hosts in host_groups.items():
+                    pbar.set_description(f"Tagging {len(hosts)} hosts in {source} with {ring_tag}")
 
-                    successful_tags.append({
-                        'name': computer_name,
-                        'tanium_id': tanium_id,
-                        'tag': ring_tag,
-                        'source': source,
-                        'package_id': package_id,
-                        'current_tags': current_tags,
-                        'comments': comments,
-                        'action_id': action_id
-                    })
+                    try:
+                        # Get the appropriate instance
+                        instance = tanium_client.get_instance_by_name(source)
+                        if not instance:
+                            # All hosts in this group fail
+                            for host in hosts:
+                                failed_tags.append({
+                                    'name': host['name'],
+                                    'tanium_id': host['tanium_id'],
+                                    'tag': host['tag'],
+                                    'source': host['source'],
+                                    'package_id': host['package_id'],
+                                    'current_tags': host['current_tags'],
+                                    'comments': host['comments'],
+                                    'error': f"Instance '{source}' not found"
+                                })
+                            pbar.update(1)
+                            continue
 
-                except Exception as e:
-                    # Preserve full error message from Tanium API
-                    error_msg = str(e)
-                    logger.error(f"Failed to tag {computer_name}: {error_msg}")
-                    failed_tags.append({
-                        'name': computer_name,
-                        'tanium_id': tanium_id,
-                        'tag': ring_tag,
-                        'source': source,
-                        'package_id': package_id,
-                        'current_tags': current_tags,
-                        'comments': comments,
-                        'error': error_msg
-                    })
+                        # Bulk add tags to all hosts in this group
+                        logger.info(f"Bulk tagging {len(hosts)} hosts in {source} with {ring_tag} using package {package_id}")
+                        result = instance.bulk_add_tags(hosts, ring_tag, package_id)
+
+                        # Extract action ID from result
+                        action_id = result.get('action', {}).get('scheduledAction', {}).get('id', 'N/A')
+
+                        # All hosts in this group get the same action ID
+                        for host in hosts:
+                            successful_tags.append({
+                                'name': host['name'],
+                                'tanium_id': host['tanium_id'],
+                                'tag': host['tag'],
+                                'source': host['source'],
+                                'package_id': host['package_id'],
+                                'current_tags': host['current_tags'],
+                                'comments': host['comments'],
+                                'action_id': action_id
+                            })
+
+                    except Exception as e:
+                        # Preserve full error message from Tanium API
+                        error_msg = str(e)
+                        logger.error(f"Failed to bulk tag {len(hosts)} hosts in {source}: {error_msg}")
+
+                        # All hosts in this group fail with the same error
+                        for host in hosts:
+                            failed_tags.append({
+                                'name': host['name'],
+                                'tanium_id': host['tanium_id'],
+                                'tag': host['tag'],
+                                'source': host['source'],
+                                'package_id': host['package_id'],
+                                'current_tags': host['current_tags'],
+                                'comments': host['comments'],
+                                'error': error_msg
+                            })
+
+                    pbar.update(1)
+
             apply_duration = time.time() - apply_start
 
             # Create Excel report with results
@@ -1008,7 +1045,7 @@ class RingTagTaniumHosts(Command):
                     parts.append(f"{int(secs)} second{'s' if secs != 1 else ''}")
                 return " ".join(parts)
 
-            # Generate summary with timing
+            # Generate summary with timing and bulk operation stats
             summary_md = f"## 🎉 Tanium Ring Tagging Complete!\n\n"
             summary_md += f"**Summary:**\n"
             summary_md += f"- Total hosts in report: {total_hosts_in_report:,}\n"
@@ -1017,14 +1054,16 @@ class RingTagTaniumHosts(Command):
                 summary_md += f"- 🧪 **Batch mode**: Randomly sampled {num_to_tag:,} servers (requested: {batch_size:,})\n"
             else:
                 summary_md += f"- Servers processed: {num_to_tag:,}\n"
+            summary_md += f"- **Bulk operations executed**: {total_groups:,} (grouped by instance and tag)\n"
             summary_md += f"- Servers tagged successfully: {len(successful_tags):,}\n"
             summary_md += f"- Servers failed to tag: {len(failed_tags):,}\n\n"
             summary_md += f"**Timing:**\n"
             summary_md += f"- Reading report: {format_duration(read_duration)}\n"
             summary_md += f"- Filtering servers: {format_duration(filter_duration)}\n"
-            summary_md += f"- Applying tags: {format_duration(apply_duration)}\n"
+            summary_md += f"- Applying tags (bulk): {format_duration(apply_duration)}\n"
             summary_md += f"- Total execution time: {format_duration(total_duration)}\n\n"
-            summary_md += f"📊 **Detailed results are attached in the Excel report.**\n"
+            summary_md += f"📊 **Detailed results with Action IDs are attached in the Excel report.**\n"
+            summary_md += f"💡 **Note**: Hosts in the same bulk operation share the same Action ID.\n"
 
             webex_api.messages.create(
                 roomId=room_id,
