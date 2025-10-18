@@ -283,14 +283,14 @@ function showToast(message, timeout = 3500) {
     }, timeout);
 }
 
-// Enhance applyTheme to show toast
-const _origApplyTheme = typeof applyTheme === 'function' ? applyTheme : null;
-if (_origApplyTheme) {
-    applyTheme = function (mode) { // override keeping previous behavior
-        _origApplyTheme(mode);
-        showToast(mode === 'dark' ? 'Dark mode enabled' : 'Light mode enabled');
-    };
-}
+// Theme toast notifications disabled - user preference
+// const _origApplyTheme = typeof applyTheme === 'function' ? applyTheme : null;
+// if (_origApplyTheme) {
+//     applyTheme = function (mode) { // override keeping previous behavior
+//         _origApplyTheme(mode);
+//         showToast(mode === 'dark' ? 'Dark mode enabled' : 'Light mode enabled');
+//     };
+// }
 
 // Bind audio toggle button (CSP friendly) once DOM is ready
 (function bindAudioToggle() {
