@@ -109,18 +109,18 @@ class TicketHandler:
                 all_tickets.extend(data)
                 # Show progress every 5 pages to reduce verbosity
                 if page % 5 == 0 or len(data) < page_size:
-                    print(f"  Fetched {len(all_tickets)} tickets so far...")
+                    log.debug(f"  Fetched {len(all_tickets)} tickets so far...")
                 log.info(f"Fetched page {page}: {len(data)} tickets (total so far: {len(all_tickets)})")
 
                 # If we got fewer results than page_size, we've reached the end
                 if len(data) < page_size:
-                    print(f"Completed: {len(all_tickets)} total tickets fetched")
+                    log.debug(f"Completed: {len(all_tickets)} total tickets fetched")
                     break
 
                 page += 1
 
             if page >= max_pages:
-                print(f"Warning: Reached max_pages limit ({max_pages}). Total: {len(all_tickets)} tickets")
+                log.debug(f"Warning: Reached max_pages limit ({max_pages}). Total: {len(all_tickets)} tickets")
 
             log.info(f"Total tickets fetched: {len(all_tickets)}")
             return all_tickets
