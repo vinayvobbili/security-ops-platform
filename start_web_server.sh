@@ -30,7 +30,9 @@ if pgrep -f "web_server.py" > /dev/null; then
 fi
 
 echo "Starting new server instance..."
-# Start new server instance
-nohup env PYTHONPATH=/home/vinay/pub/IR .venv/bin/python web/web_server.py >> web_server.log 2>&1 &
+# Start new server instance with sudo to bind to port 80
+# Note: Redirect happens in user shell (not sudo) - this is intentional to keep log user-owned
+# shellcheck disable=SC2024
+sudo nohup env PYTHONPATH=/home/vinay/pub/IR .venv/bin/python web/web_server.py >> web_server.log 2>&1 &
 
 echo "Server started with PID $!"
