@@ -1,5 +1,8 @@
 import csv
+import logging
+import os
 import re
+import tempfile
 from datetime import datetime
 from functools import wraps
 from pathlib import Path
@@ -13,32 +16,99 @@ from services.webex import get_room_name
 eastern = timezone('US/Eastern')
 config = get_config()
 
+# Setup logger for this module
+logger = logging.getLogger(__name__)
+
 # Directory for logs (should be set by the main app)
 LOG_FILE_DIR = Path(__file__).parent.parent.parent / 'data' / 'transient' / 'logs'
 
+# Fallback directory if primary fails (user's temp directory)
+FALLBACK_LOG_DIR = Path(tempfile.gettempdir()) / 'ir_bot_logs'
+
 
 # Ensure log directory exists (lazy creation helper)
-def _ensure_log_dir():
+def _ensure_log_dir(log_dir: Path = LOG_FILE_DIR) -> tuple[Path, bool]:
+    """
+    Ensure log directory exists and is writable.
+
+    Returns:
+        tuple[Path, bool]: (directory_path, is_writable)
+    """
     try:
-        LOG_FILE_DIR.mkdir(parents=True, exist_ok=True)
+        log_dir.mkdir(parents=True, exist_ok=True)
+
+        # Test if we can write to the directory
+        test_file = log_dir / '.write_test'
+        try:
+            test_file.touch()
+            test_file.unlink()
+            return log_dir, True
+        except PermissionError:
+            logger.warning(f"⚠️ No write permission for log directory {log_dir}")
+            return log_dir, False
+
+    except PermissionError as e:
+        logger.warning(f"⚠️ Permission denied creating log directory {log_dir}: {e}")
+        return log_dir, False
     except Exception as e:
-        # Last resort: print but don't break core functionality
-        print(f"Warning: could not create log directory {LOG_FILE_DIR}: {e}")
+        logger.warning(f"⚠️ Could not create log directory {log_dir}: {e}")
+        return log_dir, False
 
 
-def _append_csv_with_header(file_path: Path, headers: list[str], row: list[str]):
-    """Append a row to a CSV file, writing headers first if the file is new/empty."""
+def _append_csv_with_header(file_path: Path, headers: list[str], row: list[str], retry_with_fallback: bool = True):
+    """
+    Append a row to a CSV file, writing headers first if the file is new/empty.
+
+    Args:
+        file_path: Path to the CSV file
+        headers: List of header column names
+        row: List of values to append
+        retry_with_fallback: If True, will retry with fallback directory on permission errors
+
+    Returns:
+        bool: True if write succeeded, False otherwise
+    """
     try:
-        # Open in append+read mode so we can detect emptiness portably
-        file_path.parent.mkdir(parents=True, exist_ok=True)
+        # Ensure parent directory exists and is writable
+        parent_dir, is_writable = _ensure_log_dir(file_path.parent)
+
+        if not is_writable and retry_with_fallback:
+            # Try fallback directory
+            fallback_path = FALLBACK_LOG_DIR / file_path.name
+            logger.warning(f"⚠️ Retrying log write to fallback location: {fallback_path}")
+            return _append_csv_with_header(fallback_path, headers, row, retry_with_fallback=False)
+
+        # Check if file exists and get its size
         is_new = not file_path.exists() or file_path.stat().st_size == 0
+
+        # Attempt to write
         with open(file_path, 'a', newline='') as f:
             writer = csv.writer(f, quoting=csv.QUOTE_MINIMAL)
             if is_new:
                 writer.writerow(headers)
             writer.writerow(row)
+
+        return True
+
+    except PermissionError as e:
+        logger.error(f"❌ Permission denied writing to {file_path}: {e}")
+        logger.error(f"💡 Fix with: sudo chown -R $USER:$USER {file_path.parent}")
+
+        # Try fallback if not already tried
+        if retry_with_fallback:
+            fallback_path = FALLBACK_LOG_DIR / file_path.name
+            logger.warning(f"⚠️ Retrying log write to fallback location: {fallback_path}")
+            return _append_csv_with_header(fallback_path, headers, row, retry_with_fallback=False)
+
+        return False
+
+    except OSError as e:
+        logger.error(f"❌ OS error writing CSV log {file_path.name}: {e}")
+        return False
+
     except Exception as e:
-        print(f"Error writing CSV log {file_path.name}: {e}")
+        logger.error(f"❌ Unexpected error writing CSV log {file_path.name}: {e}", exc_info=True)
+        return False
 
 
 # Define patterns for known security scanners to filter from logs
@@ -68,6 +138,11 @@ SCANNER_IPS = [
 def log_activity(bot_access_token, log_file_name):
     """
     Decorator for logging bot activity to a CSV file.
+
+    Includes robust error handling:
+    - Catches permission errors and logs helpful fix suggestions
+    - Falls back to temp directory if primary location fails
+    - Never crashes the bot due to logging failures
     """
 
     def decorator(func):
@@ -77,10 +152,9 @@ def log_activity(bot_access_token, log_file_name):
             activity = args[3]
             now_eastern = datetime.now(eastern).strftime('%m/%d/%Y %I:%M:%S %p %Z')
             try:
-                _ensure_log_dir()
                 actor = activity["actor"]["displayName"]
                 if actor != config.my_name:
-                    _append_csv_with_header(
+                    success = _append_csv_with_header(
                         LOG_FILE_DIR / log_file_name,
                         headers=["actor", "command_keyword", "room_name", "timestamp_eastern"],
                         row=[
@@ -90,8 +164,15 @@ def log_activity(bot_access_token, log_file_name):
                             now_eastern
                         ]
                     )
+                    if not success:
+                        logger.warning(f"⚠️ Failed to log activity for {log_file_name}, but continuing...")
+
+            except KeyError as e:
+                logger.warning(f"⚠️ Missing expected data in activity log: {e}")
             except Exception as e:
-                print(f"Error logging activity for {log_file_name}: {e}")
+                logger.error(f"❌ Unexpected error logging activity for {log_file_name}: {e}", exc_info=True)
+
+            # Always execute the wrapped function, even if logging fails
             return func(*args, **kwargs)
 
         return wrapper
@@ -121,6 +202,11 @@ def log_web_activity(func):
     Decorator for logging web activity to a CSV file.
     Simplified version that doesn't require bot access token.
     Now filters out known scanner requests to prevent log pollution.
+
+    Includes robust error handling:
+    - Catches permission errors and logs helpful fix suggestions
+    - Falls back to temp directory if primary location fails
+    - Never crashes the web server due to logging failures
     """
 
     @wraps(func)
@@ -132,8 +218,7 @@ def log_web_activity(func):
         now_eastern = datetime.now(eastern).strftime('%m/%d/%Y %I:%M:%S %p %Z')
         log_file_name = "web_server_activity_log.csv"
         try:
-            _ensure_log_dir()
-            _append_csv_with_header(
+            success = _append_csv_with_header(
                 LOG_FILE_DIR / log_file_name,
                 headers=["remote_addr", "method", "path", "timestamp_eastern"],
                 row=[
@@ -143,8 +228,13 @@ def log_web_activity(func):
                     now_eastern
                 ]
             )
+            if not success:
+                logger.warning(f"⚠️ Failed to log web activity for {log_file_name}, but continuing...")
+
         except Exception as e:
-            print(f"Error logging web activity: {e}")
+            logger.error(f"❌ Unexpected error logging web activity: {e}", exc_info=True)
+
+        # Always execute the wrapped function, even if logging fails
         return func(*args, **kwargs)
 
     return wrapper
