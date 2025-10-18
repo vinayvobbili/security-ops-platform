@@ -702,7 +702,8 @@ class ShiftChangeFormatter:
     @staticmethod
     def prepare_shift_data(shift_name):
         """Prepare all data needed for shift change announcement."""
-        day_name = datetime.now().strftime("%A")
+        eastern = pytz.timezone(ShiftConstants.EASTERN_TZ)
+        day_name = datetime.now(eastern).strftime("%A")
 
         # Get and format staffing data
         staffing_data = get_staffing_data(day_name, shift_name)
