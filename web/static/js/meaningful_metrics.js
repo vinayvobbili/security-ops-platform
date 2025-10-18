@@ -269,10 +269,20 @@ function getChartColors() {
                     ageSlider.value = value;
                     showSliderTooltip('ageRangeTooltip');
                     updateSliderTooltip('ageRangeSlider', 'ageRangeTooltip', value, formatAgeValue);
+                    updateAgeSliderLabels(value);
                     applyFilters();
                     setTimeout(() => hideSliderTooltip('ageRangeTooltip'), 1000);
                 });
             });
+        }
+
+        // Update age slider labels when dragging the slider
+        if (ageSlider) {
+            ageSlider.addEventListener('input', function () {
+                updateAgeSliderLabels(this.value);
+            });
+            // Initialize on page load
+            updateAgeSliderLabels(ageSlider.value);
         }
 
         // Add listeners for sortable table headers
@@ -446,8 +456,28 @@ function getChartColors() {
     }
 
     function updateAgeSliderLabels(value) {
-        // This function is now handled by the generic tooltip system
-        // Keep for compatibility but no longer needed for discrete label updates
+        const ageContainer = document.getElementById('ageRangeSlider').parentElement;
+        if (!ageContainer) return;
+
+        // Remove active class from all labels
+        ageContainer.querySelectorAll('.slider-labels .range-preset').forEach(span => {
+            span.classList.remove('active');
+        });
+
+        // Find the matching preset or closest one
+        let matchingPreset = null;
+        if (value == 0) {
+            matchingPreset = ageContainer.querySelector('.slider-labels .range-preset[data-value="0"]');
+        } else if (value >= 7 && value < 30) {
+            matchingPreset = ageContainer.querySelector('.slider-labels .range-preset[data-value="7"]');
+        } else if (value >= 30) {
+            matchingPreset = ageContainer.querySelector('.slider-labels .range-preset[data-value="30"]');
+        }
+
+        // Add active class to matching preset
+        if (matchingPreset) {
+            matchingPreset.classList.add('active');
+        }
     }
 
     async function loadData() {
