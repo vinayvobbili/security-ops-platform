@@ -1747,9 +1747,9 @@ def main():
         except OSError as e:
             if WEB_SERVER_PORT < 1024 and e.errno == 13:
                 fallback_port = 8080
-                print(f"\n{'='*70}")
+                print(f"\n{'=' * 70}")
                 print(f"❌ ERROR: Port {WEB_SERVER_PORT} is LOCKED/UNAVAILABLE")
-                print(f"{'='*70}")
+                print(f"{'=' * 70}")
                 print(f"Port {WEB_SERVER_PORT} requires elevated privileges (sudo/root).")
                 print(f"This is typically because ports below 1024 are privileged ports.")
                 print(f"\nTo fix this:")
@@ -1757,18 +1757,18 @@ def main():
                 print(f"  2. Grant capability: sudo setcap 'cap_net_bind_service=+ep' $(which python3)")
                 print(f"  3. Use a different port in .env: WEB_SERVER_PORT=8080")
                 print(f"\nFalling back to port {fallback_port}...")
-                print(f"{'='*70}\n")
+                print(f"{'=' * 70}\n")
                 app.run(debug=True, host=host, port=fallback_port, threaded=True, use_reloader=True)
             elif e.errno == 48 or e.errno == 98:  # Address already in use
-                print(f"\n{'='*70}")
+                print(f"\n{'=' * 70}")
                 print(f"❌ ERROR: Port {WEB_SERVER_PORT} is LOCKED/IN USE")
-                print(f"{'='*70}")
+                print(f"{'=' * 70}")
                 print(f"Port {WEB_SERVER_PORT} is already being used by another process.")
                 print(f"\nTo fix this:")
                 print(f"  1. Find the process: sudo lsof -i :{WEB_SERVER_PORT}")
                 print(f"  2. Stop the process using the port")
                 print(f"  3. Or use a different port in .env: WEB_SERVER_PORT=8080")
-                print(f"{'='*70}\n")
+                print(f"{'=' * 70}\n")
                 raise
             else:
                 raise
@@ -1782,9 +1782,9 @@ def main():
                 # Permission denied for privileged port without sudo/capability
                 if port < 1024 and e.errno == 13:  # Permission denied
                     fallback_port = 8080
-                    print(f"\n{'='*70}")
+                    print(f"\n{'=' * 70}")
                     print(f"❌ ERROR: Port {port} is LOCKED/UNAVAILABLE")
-                    print(f"{'='*70}")
+                    print(f"{'=' * 70}")
                     print(f"Port {port} requires elevated privileges (sudo/root).")
                     print(f"This is typically because ports below 1024 are privileged ports.")
                     print(f"\nTo fix this:")
@@ -1792,18 +1792,18 @@ def main():
                     print(f"  2. Grant capability: sudo setcap 'cap_net_bind_service=+ep' $(which python3)")
                     print(f"  3. Use a different port in .env: WEB_SERVER_PORT=8080")
                     print(f"\nFalling back to port {fallback_port}...")
-                    print(f"{'='*70}\n")
+                    print(f"{'=' * 70}\n")
                     serve(app, host=host, port=fallback_port, threads=20, channel_timeout=120)
                 elif e.errno == 48 or e.errno == 98:  # Address already in use
-                    print(f"\n{'='*70}")
+                    print(f"\n{'=' * 70}")
                     print(f"❌ ERROR: Port {port} is LOCKED/IN USE")
-                    print(f"{'='*70}")
+                    print(f"{'=' * 70}")
                     print(f"Port {port} is already being used by another process.")
                     print(f"\nTo fix this:")
                     print(f"  1. Find the process: sudo lsof -i :{port}")
                     print(f"  2. Stop the process using the port")
                     print(f"  3. Or use a different port in .env: WEB_SERVER_PORT=8080")
-                    print(f"{'='*70}\n")
+                    print(f"{'=' * 70}\n")
                     raise
                 else:
                     raise
@@ -1814,9 +1814,9 @@ def main():
             except OSError as e:
                 if port < 1024 and e.errno == 13:
                     fallback_port = 8080
-                    print(f"\n{'='*70}")
+                    print(f"\n{'=' * 70}")
                     print(f"❌ ERROR: Port {port} is LOCKED/UNAVAILABLE")
-                    print(f"{'='*70}")
+                    print(f"{'=' * 70}")
                     print(f"Port {port} requires elevated privileges (sudo/root).")
                     print(f"This is typically because ports below 1024 are privileged ports.")
                     print(f"\nTo fix this:")
@@ -1824,18 +1824,18 @@ def main():
                     print(f"  2. Grant capability: sudo setcap 'cap_net_bind_service=+ep' $(which python3)")
                     print(f"  3. Use a different port in .env: WEB_SERVER_PORT=8080")
                     print(f"\nFalling back to port {fallback_port}...")
-                    print(f"{'='*70}\n")
+                    print(f"{'=' * 70}\n")
                     app.run(debug=True, host=host, port=fallback_port, threaded=True, use_reloader=True)
                 elif e.errno == 48 or e.errno == 98:  # Address already in use
-                    print(f"\n{'='*70}")
+                    print(f"\n{'=' * 70}")
                     print(f"❌ ERROR: Port {port} is LOCKED/IN USE")
-                    print(f"{'='*70}")
+                    print(f"{'=' * 70}")
                     print(f"Port {port} is already being used by another process.")
                     print(f"\nTo fix this:")
                     print(f"  1. Find the process: sudo lsof -i :{port}")
                     print(f"  2. Stop the process using the port")
                     print(f"  3. Or use a different port in .env: WEB_SERVER_PORT=8080")
-                    print(f"{'='*70}\n")
+                    print(f"{'=' * 70}\n")
                     raise
                 else:
                     raise
