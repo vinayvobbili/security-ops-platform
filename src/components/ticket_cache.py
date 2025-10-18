@@ -210,7 +210,7 @@ class TicketCache:
         )
 
         print(f"🔍 Fetching tickets from XSOAR for past {lookback_days} days...")
-        raw_tickets: Union[List[Ticket], Iterable[Ticket], None] = self.ticket_handler.get_tickets(query)
+        raw_tickets: Union[List[Ticket], Iterable[Ticket], None] = self.ticket_handler.get_tickets(query, paginate=True)
         tickets: List[Ticket] = [] if raw_tickets is None else [t for t in raw_tickets if isinstance(t, dict)]
         log.info(f"Fetched {len(tickets)} tickets (lookback={lookback_days}d) from XSOAR")
         return tickets
