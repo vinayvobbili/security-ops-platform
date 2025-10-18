@@ -235,15 +235,12 @@ function applyTheme(mode) {
         btn.setAttribute('title', isDark ? 'Switch to light mode' : 'Switch to dark mode');
         btn.setAttribute('aria-pressed', isDark ? 'true' : 'false');
     }
-    localStorage.setItem('preferred-theme', mode);
     // Notify any page-specific scripts (e.g., charts) of theme change
     window.dispatchEvent(new CustomEvent('themechange', {detail: {mode}}));
 }
 
-function detectPreferredTheme() {
-    const stored = localStorage.getItem('preferred-theme');
-    if (stored === 'dark' || stored === 'light') return stored;
-    // Fallback to system preference
+function detectOSTheme() {
+    // Always use OS/system preference
     return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 }
 
@@ -258,7 +255,8 @@ function initTheme() {
         btn.addEventListener('click', toggleTheme);
         btn.dataset.themeInitialized = 'true';
     }
-    applyTheme(detectPreferredTheme());
+    // Always apply OS theme on page load
+    applyTheme(detectOSTheme());
 }
 
 // Initialize theme after DOM ready if not already invoked explicitly
