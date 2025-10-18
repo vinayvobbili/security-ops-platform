@@ -7,7 +7,7 @@ if pgrep -f "web_server.py" > /dev/null; then
     pkill -f "web_server.py"
 
     # Wait up to 10 seconds for graceful shutdown
-    for i in {1..10}; do
+    for _ in {1..10}; do
         if ! pgrep -f "web_server.py" > /dev/null; then
             echo "Process stopped gracefully."
             break
