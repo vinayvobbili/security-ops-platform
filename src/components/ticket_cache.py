@@ -303,7 +303,7 @@ class TicketCache:
 
     def _save_tickets(self, raw_tickets: List[Ticket], ui_tickets: List[Ticket]) -> None:
         """Step 3: Save both raw and UI ticket data."""
-        today_date = datetime.now().strftime('%m-%d-%Y')
+        today_date = datetime.now(ZoneInfo("America/New_York")).strftime('%m-%d-%Y')
         charts_dir = self.root_directory / 'web' / 'static' / 'charts' / today_date
         charts_dir.mkdir(parents=True, exist_ok=True)
 
@@ -335,7 +335,7 @@ def main():
     cache.generate(lookback_days=90)
 
     # Pretty print first 3 tickets for visual inspection
-    ui_path = cache.root_directory / 'web' / 'static' / 'charts' / datetime.now().strftime('%m-%d-%Y') / 'past_90_days_tickets.json'
+    ui_path = cache.root_directory / 'web' / 'static' / 'charts' / datetime.now(ZoneInfo("America/New_York")).strftime('%m-%d-%Y') / 'past_90_days_tickets.json'
     if ui_path.exists():
         with open(ui_path, 'r') as f:
             cached_data = json.load(f)
