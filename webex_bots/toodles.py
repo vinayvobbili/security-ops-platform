@@ -1193,39 +1193,73 @@ all_options_card = {
 
 
 def get_url_card():
-    metcirt_urls = list_handler.get_list_data_by_name('METCIRT URLs')
-    actions = []
+    """
+    Get URL card with METCIRT URLs from XSOAR.
+    Returns a card with error message if XSOAR is not configured or list is unavailable.
+    """
+    try:
+        metcirt_urls = list_handler.get_list_data_by_name('METCIRT URLs')
+        actions = []
 
-    # Iterate through the list of URLs and create button actions
-    for item in metcirt_urls:
-        if "url" in item:  # Handle URL buttons with Action.OpenUrl
-            actions.append({
-                "type": "Action.OpenUrl",
-                "title": item['name'],
-                "url": item['url'],
-                "style": "positive"
-            })
-        elif "phone_number" in item:  # Handle data buttons by just displaying it
-            actions.append({
+        # Handle case where list is not found or XSOAR is not configured
+        if metcirt_urls is None:
+            logger.warning("⚠️ METCIRT URLs list not available from XSOAR")
+            actions = [{
                 "type": "Action.Submit",
-                "title": f"{item['name']} ({item['phone_number']})",
-                "data": {}  # No actual data submission, just for display
-            })
+                "title": "URLs unavailable (XSOAR not configured)",
+                "data": {}
+            }]
+        else:
+            # Iterate through the list of URLs and create button actions
+            for item in metcirt_urls:
+                if "url" in item:  # Handle URL buttons with Action.OpenUrl
+                    actions.append({
+                        "type": "Action.OpenUrl",
+                        "title": item['name'],
+                        "url": item['url'],
+                        "style": "positive"
+                    })
+                elif "phone_number" in item:  # Handle data buttons by just displaying it
+                    actions.append({
+                        "type": "Action.Submit",
+                        "title": f"{item['name']} ({item['phone_number']})",
+                        "data": {}  # No actual data submission, just for display
+                    })
 
-    # Create the adaptive card
-    card = {
-        "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
-        "type": "AdaptiveCard",
-        "version": "1.3",
-        "body": [
-            {
-                "type": "ActionSet",
-                "actions": actions
-            }
-        ]
-    }
+        # Create the adaptive card
+        card = {
+            "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+            "type": "AdaptiveCard",
+            "version": "1.3",
+            "body": [
+                {
+                    "type": "ActionSet",
+                    "actions": actions if actions else [{
+                        "type": "Action.Submit",
+                        "title": "No URLs configured",
+                        "data": {}
+                    }]
+                }
+            ]
+        }
 
-    return card
+        return card
+
+    except Exception as e:
+        logger.error(f"❌ Error creating URL card: {e}", exc_info=True)
+        # Return a minimal error card
+        return {
+            "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+            "type": "AdaptiveCard",
+            "version": "1.3",
+            "body": [
+                {
+                    "type": "TextBlock",
+                    "text": "Error loading URLs",
+                    "color": "Attention"
+                }
+            ]
+        }
 
 
 URL_CARD = get_url_card()
