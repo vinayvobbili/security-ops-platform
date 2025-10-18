@@ -60,7 +60,7 @@ class TicketHandler:
         self.prod_base = CONFIG.xsoar_prod_api_base_url
         self.dev_base = CONFIG.xsoar_dev_api_base_url
 
-    def get_tickets(self, query, period=None, size=20000, paginate=False):
+    def get_tickets(self, query, period=None, size=20000, paginate=True):
         """Fetch security incidents from XSOAR"""
         full_query = query + f' -category:job -type:"{CONFIG.team_name} Ticket QA" -type:"{CONFIG.team_name} SNOW Whitelist Request"'
 
