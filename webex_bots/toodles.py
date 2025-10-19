@@ -2286,23 +2286,12 @@ def toodles_initialization(bot_instance=None):
 
 def main():
     """Toodles main - supports three modes of operation"""
-    if CONFIG.should_use_proxy_resilience:
-        # Full resilience: ZScaler features + auto-reconnect
-        logger.info("Starting Toodles with FULL resilience (SSL config, WebSocket patching, device cleanup, auto-restart)")
-        from src.utils.bot_resilience import ResilientBot
+    if CONFIG.should_use_proxy_resilience or CONFIG.should_auto_reconnect:
+        # Resilient mode: Full (ZScaler + auto-reconnect) or Lite (auto-reconnect only)
+        mode = "FULL" if CONFIG.should_use_proxy_resilience else "LITE"
+        features = "SSL config, WebSocket patching, device cleanup, auto-restart" if CONFIG.should_use_proxy_resilience else "device cleanup, auto-reconnect"
+        logger.info(f"Starting Toodles with {mode} resilience ({features})")
 
-        resilient_runner = ResilientBot(
-            bot_name="Toodles",
-            bot_factory=toodles_bot_factory,
-            initialization_func=toodles_initialization,
-            max_retries=5,
-            initial_retry_delay=30,
-            max_retry_delay=300
-        )
-        resilient_runner.run()
-    elif CONFIG.should_auto_reconnect:
-        # Lite resilience: Only auto-reconnect (no ZScaler-specific features)
-        logger.info("Starting Toodles with LITE resilience (auto-reconnect only, no ZScaler features)")
         from src.utils.bot_resilience import ResilientBot
 
         resilient_runner = ResilientBot(
