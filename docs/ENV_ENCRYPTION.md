@@ -28,7 +28,7 @@ This script will:
 ### 2. Encrypt Your .env File
 
 ```bash
-python scripts/encrypt_env.py
+python scripts/encrypt_secrets.py
 ```
 
 This will:
@@ -38,7 +38,7 @@ This will:
 
 **Recommended**: Delete the plaintext .env file after verifying encryption works:
 ```bash
-python scripts/encrypt_env.py --delete-plaintext
+python scripts/encrypt_secrets.py --delete-plaintext
 ```
 
 ### 3. Verify It Works
@@ -85,7 +85,7 @@ age -d -i ~/.config/age/key.txt data/transient/.env.age > data/transient/.env
 nano data/transient/.env
 
 # 3. Re-encrypt
-python scripts/encrypt_env.py --delete-plaintext
+python scripts/encrypt_secrets.py --delete-plaintext
 
 # 4. Restart your application
 pkill -f toodles.py
@@ -246,7 +246,7 @@ bash scripts/setup_age_encryption.sh
 ### Error: "Encrypted env file not found"
 You haven't encrypted your .env yet:
 ```bash
-python scripts/encrypt_env.py
+python scripts/encrypt_secrets.py
 ```
 
 ### Application can't load secrets
@@ -308,7 +308,7 @@ age -d -i ~/.config/age/key.txt data/transient/.env.age > data/transient/.env
 age-keygen -o ~/.config/age/key-new.txt
 
 # 3. Encrypt with new key
-python scripts/encrypt_env.py --key ~/.config/age/key-new.txt
+python scripts/encrypt_secrets.py --key ~/.config/age/key-new.txt
 
 # 4. Replace old key
 mv ~/.config/age/key-new.txt ~/.config/age/key.txt
