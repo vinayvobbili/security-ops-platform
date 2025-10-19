@@ -1,16 +1,44 @@
 #!/usr/bin/env python3
 """
-Teams Bot Framework Bot for Toodles
-Provides same functionality as Webex Toodles bot via Teams Bot Framework with websockets
-Real-time socket connection similar to Webex bot architecture
+Teams Bot Framework Bot for Toodles with WebSocket Streaming
+Provides same functionality as Webex Toodles bot via Bot Framework Streaming
+Uses persistent WebSocket connection similar to Webex bot architecture
+
+ARCHITECTURE COMPARISON:
+======================
+Webex Bot (toodles.py):
+  - Bot opens WebSocket TO Webex service
+  - Persistent bidirectional connection
+  - No public endpoint needed
+  - Works behind firewalls/NAT
+
+Teams Bot (THIS FILE - toodles_teams.py):
+  - Bot opens WebSocket TO Bot Framework service
+  - Persistent bidirectional connection
+  - No public endpoint needed (same as Webex!)
+  - Works behind firewalls/NAT
+
+Teams Webhook Bot (toodles_teams_webhooks.py):
+  - Teams sends HTTP POSTs TO your bot
+  - Request/response model
+  - Requires public endpoint
+  - Traditional webhook architecture
+
+AZURE BOT SERVICE CONFIGURATION:
+================================
+To use streaming mode, you need to:
+1. Register bot in Azure Bot Service
+2. Enable "Streaming Endpoint" in Azure portal
+3. Set TEAMS_TOODLES_APP_ID and TEAMS_TOODLES_APP_PASSWORD in .secrets
+4. Run this script - it will connect OUT to Microsoft's service
+
+Bot connects OUT to Microsoft service (not inbound webhooks)
 """
+import asyncio
 import logging
 import sys
 from datetime import datetime
 from pathlib import Path
-
-from aiohttp import web
-from aiohttp.web import Request, Response, json_response
 
 # Add project root to Python path
 PROJECT_ROOT = Path(__file__).parent.parent if '__file__' in globals() else Path.cwd().parent
@@ -23,10 +51,14 @@ from botbuilder.core import (
     MessageFactory,
     ConversationState,
     MemoryStorage,
-    UserState
+    UserState,
+    BotFrameworkAdapter,
+    BotFrameworkAdapterSettings
 )
 from botbuilder.schema import Activity
-from botbuilder.core.bot_framework_adapter import BotFrameworkAdapter, BotFrameworkAdapterSettings
+from botbuilder.integration.aiohttp import CloudAdapter, ConfigurationBotFrameworkAuthentication
+from botframework.connector.auth import MicrosoftAppCredentials
+from aiohttp import web, ClientSession, WSMsgType
 
 try:
     from my_config import get_config
@@ -59,19 +91,23 @@ TEAMS_TOODLES_APP_ID = CONFIG.teams_toodles_app_id or ''  # Application (client)
 TEAMS_TOODLES_APP_PASSWORD = CONFIG.teams_toodles_app_password or ''  # Client secret Value from Azure
 TEAMS_TOODLES_TENANT_ID = CONFIG.teams_toodles_tenant_id or ''  # Directory (tenant) ID from Azure (optional)
 
-# Bot Framework Settings
+# Bot Framework Streaming Settings
 SETTINGS = BotFrameworkAdapterSettings(
     app_id=TEAMS_TOODLES_APP_ID,
     app_password=TEAMS_TOODLES_APP_PASSWORD
 )
 
-# Create adapter - this handles the websocket connections like Webex
+# Create adapter for streaming
 ADAPTER = BotFrameworkAdapter(SETTINGS)
 
 # Create conversation state
 MEMORY = MemoryStorage()
 CONVERSATION_STATE = ConversationState(MEMORY)
 USER_STATE = UserState(MEMORY)
+
+# Bot Framework Streaming WebSocket URL
+# This is where we connect TO (similar to Webex WebSocket)
+BOT_FRAMEWORK_STREAMING_URL = "wss://streaming.botframework.com/.bot/"
 
 # Teams command mapping - same commands as Webex Toodles
 TEAMS_COMMANDS = {
@@ -260,73 +296,182 @@ class TeamsBot(ActivityHandler):
 BOT = TeamsBot(CONVERSATION_STATE, USER_STATE)
 
 
-async def messages(req: Request) -> Response:
+class StreamingConnectionManager:
     """
-    Main message handler - equivalent to Webex bot message processing
-    Handles real-time bot framework messages via persistent connections
+    Manages persistent WebSocket connection to Bot Framework service
+    Similar to how Webex bot maintains WebSocket connection
     """
-    # Process the Bot Framework activity
-    if "application/json" in req.headers["Content-Type"]:
-        body = await req.json()
-    else:
-        return Response(status=415)
 
-    activity = Activity().deserialize(body)
-    auth_header = req.headers["Authorization"] if "Authorization" in req.headers else ""
+    def __init__(self, app_id: str, app_password: str, bot_instance: TeamsBot):
+        self.app_id = app_id
+        self.app_password = app_password
+        self.bot_instance = bot_instance
+        self.ws = None
+        self.session = None
+        self.running = False
+        self.reconnect_delay = 5
+        self.max_reconnect_delay = 300
 
-    try:
-        # Use Bot Framework adapter to process the activity
-        # This maintains persistent connections like Webex bots
-        response = await ADAPTER.process_activity(activity, auth_header, on_turn_error)
-        if response:
-            return json_response(data=response.body, status=response.status)
-        return Response(status=201)
-    except Exception as e:
-        logger.error(f"Error processing activity: {e}")
-        return Response(status=500)
+    async def get_streaming_token(self) -> str:
+        """Get authentication token for streaming connection"""
+        credentials = MicrosoftAppCredentials(self.app_id, self.app_password)
+        token = await credentials.get_token()
+        return token
+
+    async def connect(self):
+        """
+        Open WebSocket connection to Bot Framework service
+        Similar to Webex bot opening WebSocket to Webex service
+        """
+        logger.info("🔌 Opening WebSocket connection to Bot Framework streaming service...")
+
+        try:
+            # Get auth token
+            token = await self.get_streaming_token()
+
+            # Create WebSocket session
+            self.session = ClientSession()
+            headers = {
+                'Authorization': f'Bearer {token}',
+                'User-Agent': 'Toodles-Teams-Bot/1.0'
+            }
+
+            # Connect to Bot Framework streaming endpoint
+            streaming_url = f"{BOT_FRAMEWORK_STREAMING_URL}{self.app_id}"
+            logger.info(f"Connecting to: {streaming_url}")
+
+            self.ws = await self.session.ws_connect(
+                streaming_url,
+                headers=headers,
+                heartbeat=30  # Send ping every 30s to keep connection alive
+            )
+
+            logger.info("✅ WebSocket connection established! (Like Webex bot)")
+            self.running = True
+            self.reconnect_delay = 5  # Reset delay on successful connect
+
+            # Start listening for messages
+            await self.listen()
+
+        except Exception as e:
+            logger.error(f"❌ WebSocket connection failed: {e}")
+            await self.cleanup()
+            raise
+
+    async def listen(self):
+        """
+        Listen for messages on WebSocket connection
+        Similar to Webex bot's message listening loop
+        """
+        logger.info("👂 Listening for Teams messages via WebSocket...")
+
+        try:
+            async for msg in self.ws:
+                if msg.type == WSMsgType.TEXT:
+                    # Received activity from Bot Framework
+                    await self.process_activity(msg.json())
+
+                elif msg.type == WSMsgType.BINARY:
+                    logger.debug("Received binary message")
+
+                elif msg.type == WSMsgType.PING:
+                    logger.debug("Received ping")
+                    await self.ws.pong()
+
+                elif msg.type == WSMsgType.PONG:
+                    logger.debug("Received pong")
+
+                elif msg.type in (WSMsgType.CLOSE, WSMsgType.CLOSING, WSMsgType.CLOSED):
+                    logger.warning("WebSocket closed by server")
+                    break
+
+                elif msg.type == WSMsgType.ERROR:
+                    logger.error(f"WebSocket error: {self.ws.exception()}")
+                    break
+
+        except Exception as e:
+            logger.error(f"Error in WebSocket listen loop: {e}")
+        finally:
+            self.running = False
+            await self.cleanup()
+
+    async def process_activity(self, activity_data: dict):
+        """Process incoming activity from WebSocket"""
+        try:
+            activity = Activity().deserialize(activity_data)
+
+            # Create turn context and process with bot
+            async def bot_callback(turn_context: TurnContext):
+                await self.bot_instance.on_turn(turn_context)
+
+            # Process the activity
+            await ADAPTER.process_activity(activity, "", bot_callback)
+
+        except Exception as e:
+            logger.error(f"Error processing activity: {e}")
+
+    async def cleanup(self):
+        """Clean up WebSocket and session"""
+        if self.ws and not self.ws.closed:
+            await self.ws.close()
+        if self.session and not self.session.closed:
+            await self.session.close()
+
+    async def run_with_reconnect(self):
+        """
+        Run bot with automatic reconnection
+        Similar to resilient Webex bot that reconnects on disconnect
+        """
+        logger.info("🚀 Starting Teams bot with WebSocket streaming (like Webex bot)")
+
+        while True:
+            try:
+                await self.connect()
+
+                # If we get here, connection was closed normally
+                if not self.running:
+                    logger.info("Bot stopped normally")
+                    break
+
+            except Exception as e:
+                logger.error(f"Connection error: {e}")
+
+            # Reconnect with exponential backoff
+            logger.info(f"⏳ Reconnecting in {self.reconnect_delay} seconds...")
+            await asyncio.sleep(self.reconnect_delay)
+
+            # Exponential backoff up to max
+            self.reconnect_delay = min(self.reconnect_delay * 2, self.max_reconnect_delay)
 
 
-async def health_check(_request: Request) -> Response:
+async def health_check(_request) -> web.Response:
     """Health check endpoint"""
-    return json_response({
+    return web.json_response({
         'status': 'healthy',
-        'bot': 'toodles-teams-websocket',
+        'bot': 'toodles-teams-streaming',
         'timestamp': str(datetime.now()),
-        'connection_type': 'Bot Framework (websocket-like)'
+        'connection_type': 'Bot Framework WebSocket Streaming (like Webex)'
     })
-
-
-def create_app() -> web.Application:
-    """Create aiohttp app with Bot Framework integration"""
-    app = web.Application()
-
-    # Add routes
-    app.router.add_post("/api/messages", messages)  # Bot Framework standard endpoint
-    app.router.add_get("/health", health_check)
-
-    return app
-
-
-async def init_func():
-    """Initialize the bot - similar to Webex bot initialization"""
-    logger.info("Initializing Teams Bot with Bot Framework (websocket connections)...")
-
-    app = create_app()
-    return app
 
 
 def main():
     """
     Main function - similar to Webex bot main() with resilient framework
-    Starts persistent Bot Framework connections
+    Opens persistent WebSocket connection to Bot Framework service
+    Bot connects OUT (like Webex), not waiting for inbound webhooks
     """
-    logger.info("Starting Toodles Teams Bot with Bot Framework...")
-    logger.info("This provides websocket-like persistent connections similar to Webex bots")
+    logger.info("=" * 80)
+    logger.info("🚀 Starting Toodles Teams Bot with WebSocket Streaming")
+    logger.info("=" * 80)
+    logger.info("📡 Connection Type: Outbound WebSocket (LIKE WEBEX BOT)")
+    logger.info("🔌 Bot connects TO Microsoft Bot Framework service")
+    logger.info("🔄 Automatic reconnection on disconnect")
+    logger.info("=" * 80)
 
     # Validate required configuration
     if not TEAMS_TOODLES_APP_ID or not TEAMS_TOODLES_APP_PASSWORD:
         logger.error("=" * 80)
-        logger.error("ERROR: Microsoft Teams Toodles Bot credentials not configured!")
+        logger.error("❌ ERROR: Microsoft Teams Toodles Bot credentials not configured!")
         logger.error("=" * 80)
         logger.error("Please set the following environment variables in your .secrets file:")
         logger.error("  TEAMS_TOODLES_APP_ID         - Application (client) ID from Azure")
@@ -337,8 +482,21 @@ def main():
         logger.error("=" * 80)
         sys.exit(1)
 
-    # Start the web server for Bot Framework
-    web.run_app(init_func(), host="0.0.0.0", port=3978)
+    # Create streaming connection manager (like Webex bot WebSocket)
+    streaming_manager = StreamingConnectionManager(
+        app_id=TEAMS_TOODLES_APP_ID,
+        app_password=TEAMS_TOODLES_APP_PASSWORD,
+        bot_instance=BOT
+    )
+
+    # Run the bot with WebSocket streaming (like Webex)
+    try:
+        asyncio.run(streaming_manager.run_with_reconnect())
+    except KeyboardInterrupt:
+        logger.info("🛑 Bot stopped by user")
+    except Exception as e:
+        logger.error(f"❌ Bot crashed: {e}", exc_info=True)
+        sys.exit(1)
 
 
 if __name__ == '__main__':
