@@ -39,6 +39,7 @@ import logging
 import sys
 from datetime import datetime
 from pathlib import Path
+from typing import Dict, Any, Tuple
 
 # Add project root to Python path
 PROJECT_ROOT = Path(__file__).parent.parent if '__file__' in globals() else Path.cwd().parent
@@ -56,8 +57,6 @@ from botbuilder.core import (
     BotFrameworkAdapterSettings
 )
 from botbuilder.schema import Activity
-from botbuilder.integration.aiohttp import CloudAdapter, ConfigurationBotFrameworkAuthentication
-from botframework.connector.auth import MicrosoftAppCredentials
 from aiohttp import web, ClientSession, WSMsgType
 
 try:
@@ -139,7 +138,7 @@ TEAMS_COMMANDS = {
 }
 
 
-def parse_command(message_text):
+def parse_command(message_text: str) -> Tuple[str, str]:
     """Parse Teams message to extract command and arguments"""
     text = message_text.strip()
 
@@ -156,7 +155,7 @@ def parse_command(message_text):
     return command, args
 
 
-def create_webex_activity_adapter(turn_context: TurnContext):
+def create_webex_activity_adapter(turn_context: TurnContext) -> Dict[str, Any]:
     """Create Webex-compatible activity object from Teams TurnContext"""
     return {
         'verb': 'post',
@@ -167,7 +166,7 @@ def create_webex_activity_adapter(turn_context: TurnContext):
     }
 
 
-def get_help_message():
+def get_help_message() -> str:
     """Generate help message listing all available commands"""
     return """**Available Toodles Commands:**
 
@@ -204,9 +203,15 @@ Use commands like: `@toodles ioc 1.2.3.4` or `threat-hunt malware`
 """
 
 
-async def on_turn_error(context: TurnContext, error: Exception):
-    """Handle turn errors"""
-    logger.error(f"Turn error: {error}")
+async def on_turn_error(context: TurnContext, error: Exception) -> None:
+    """
+    Handle turn errors.
+
+    Args:
+        context: Turn context for the current conversation
+        error: Exception that occurred during turn processing
+    """
+    logger.error(f"Turn error: {error}", exc_info=True)
     await context.send_activity(MessageFactory.text("Sorry, I encountered an error."))
 
 
@@ -220,69 +225,95 @@ class TeamsBot(ActivityHandler):
         self.conversation_state = conversation_state
         self.user_state = user_state
 
-    async def on_message_activity(self, turn_context: TurnContext):
+    async def on_message_activity(self, turn_context: TurnContext) -> None:
         """
-        Handle incoming messages - equivalent to Webex process_incoming_message
-        Real-time processing similar to Webex socket handling
+        Handle incoming messages - equivalent to Webex process_incoming_message.
+        Real-time processing similar to Webex socket handling.
+
+        Args:
+            turn_context: Context for the current conversation turn
         """
         try:
             message_text = turn_context.activity.text.strip()
-            logger.info(f"Processing Teams message: {message_text[:50]}...")
+            user_name = turn_context.activity.from_property.name or 'Unknown'
+            logger.info(f"Received message from {user_name}: {message_text[:50]}...")
+            logger.debug(f"Full message: {message_text}")
 
             # Parse command like Webex bot
             command, args = parse_command(message_text)
+            logger.debug(f"Parsed command: '{command}', args: '{args}'")
 
             if command == 'help' or command == '?':
+                logger.info(f"Sending help message to {user_name}")
                 response_text = get_help_message()
                 await turn_context.send_activity(MessageFactory.text(response_text))
                 return
 
             # Execute Toodles command using same business logic
             if command in TEAMS_COMMANDS:
+                logger.debug(f"Found command '{command}' in TEAMS_COMMANDS")
                 cmd_instance = TEAMS_COMMANDS[command]
                 if cmd_instance:
+                    logger.info(f"Executing command '{command}' for {user_name}")
                     # Create Webex-compatible adapters
                     webex_message = self.create_webex_message_adapter(turn_context)
                     webex_activity = create_webex_activity_adapter(turn_context)
 
                     try:
                         # Execute the same command as Webex bot
+                        logger.debug(f"Calling execute() on {cmd_instance.__class__.__name__}")
                         result = cmd_instance.execute(webex_message, None, webex_activity)
 
                         if isinstance(result, str):
                             response_text = result
+                            logger.debug(f"Command returned string result: {len(result)} chars")
                         else:
                             response_text = f"Command '{command}' executed successfully"
+                            logger.warning(f"Command returned non-string result: {type(result)}")
 
                         await turn_context.send_activity(MessageFactory.text(response_text))
+                        logger.info(f"Command '{command}' completed successfully")
 
                     except Exception as cmd_error:
-                        logger.error(f"Command execution failed: {cmd_error}")
+                        logger.error(f"Command '{command}' execution failed: {cmd_error}", exc_info=True)
                         error_msg = f"Error executing command '{command}': {str(cmd_error)}"
                         await turn_context.send_activity(MessageFactory.text(error_msg))
                 else:
+                    logger.warning(f"Command '{command}' found but has no implementation")
                     await turn_context.send_activity(
                         MessageFactory.text(f"Command '{command}' is not implemented yet")
                     )
             else:
+                logger.warning(f"Unknown command '{command}' from {user_name}")
                 await turn_context.send_activity(
                     MessageFactory.text(f"Unknown command '{command}'. Type 'help' for available commands.")
                 )
 
         except Exception as e:
-            logger.error(f"Message processing failed: {e}")
+            logger.error(f"Message processing failed: {e}", exc_info=True)
             await turn_context.send_activity(
                 MessageFactory.text("Sorry, I encountered an error processing your request.")
             )
         finally:
             # Save state changes
+            logger.debug("Saving conversation and user state")
             await self.conversation_state.save_changes(turn_context)
             await self.user_state.save_changes(turn_context)
 
-    def create_webex_message_adapter(self, turn_context: TurnContext):
-        """Create Webex-compatible message object from Teams TurnContext"""
+    def create_webex_message_adapter(self, turn_context: TurnContext) -> Any:
+        """
+        Create Webex-compatible message object from Teams TurnContext.
+
+        Args:
+            turn_context: Teams turn context to convert
+
+        Returns:
+            Adapter object compatible with Webex bot command interface
+        """
 
         class WebexMessageAdapter:
+            """Adapter to make Teams messages compatible with Webex command interface."""
+
             def __init__(self, activity: Activity):
                 self.text = activity.text
                 self.personEmail = activity.from_property.id
@@ -313,23 +344,61 @@ class StreamingConnectionManager:
         self.max_reconnect_delay = 300
 
     async def get_streaming_token(self) -> str:
-        """Get authentication token for streaming connection"""
-        credentials = MicrosoftAppCredentials(self.app_id, self.app_password)
-        token = await credentials.get_token()
-        return token
-
-    async def connect(self):
         """
-        Open WebSocket connection to Bot Framework service
-        Similar to Webex bot opening WebSocket to Webex service
+        Get authentication token for streaming connection using OAuth2.
+
+        Returns:
+            Access token string for Bot Framework authentication
+        """
+        logger.debug(f"Requesting OAuth2 token for app_id: {self.app_id[:8]}...")
+
+        # Microsoft identity platform OAuth2 endpoint
+        token_url = f"https://login.microsoftonline.com/botframework.com/oauth2/v2.0/token"
+
+        # Request body for client credentials flow
+        data = {
+            'grant_type': 'client_credentials',
+            'client_id': self.app_id,
+            'client_secret': self.app_password,
+            'scope': 'https://api.botframework.com/.default'
+        }
+
+        try:
+            async with ClientSession() as session:
+                async with session.post(token_url, data=data) as response:
+                    if response.status != 200:
+                        error_text = await response.text()
+                        logger.error(f"Token request failed: {response.status} - {error_text}")
+                        raise Exception(f"Failed to get token: {response.status}")
+
+                    result = await response.json()
+                    token = result.get('access_token')
+
+                    if not token:
+                        raise Exception("No access_token in response")
+
+                    logger.debug("Successfully obtained OAuth2 token")
+                    return token
+
+        except Exception as e:
+            logger.error(f"Error getting streaming token: {e}")
+            raise
+
+    async def connect(self) -> None:
+        """
+        Open WebSocket connection to Bot Framework service.
+        Similar to Webex bot opening WebSocket to Webex service.
         """
         logger.info("🔌 Opening WebSocket connection to Bot Framework streaming service...")
 
         try:
             # Get auth token
+            logger.debug("Requesting OAuth2 token...")
             token = await self.get_streaming_token()
+            logger.debug(f"Got token: {token[:20]}...")
 
             # Create WebSocket session
+            logger.debug("Creating WebSocket client session")
             self.session = ClientSession()
             headers = {
                 'Authorization': f'Bearer {token}',
@@ -339,6 +408,7 @@ class StreamingConnectionManager:
             # Connect to Bot Framework streaming endpoint
             streaming_url = f"{BOT_FRAMEWORK_STREAMING_URL}{self.app_id}"
             logger.info(f"Connecting to: {streaming_url}")
+            logger.debug(f"Headers: User-Agent={headers['User-Agent']}, Auth token length={len(token)}")
 
             self.ws = await self.session.ws_connect(
                 streaming_url,
@@ -347,6 +417,7 @@ class StreamingConnectionManager:
             )
 
             logger.info("✅ WebSocket connection established! (Like Webex bot)")
+            logger.debug(f"WebSocket state: {self.ws.closed}")
             self.running = True
             self.reconnect_delay = 5  # Reset delay on successful connect
 
@@ -354,98 +425,131 @@ class StreamingConnectionManager:
             await self.listen()
 
         except Exception as e:
-            logger.error(f"❌ WebSocket connection failed: {e}")
+            logger.error(f"❌ WebSocket connection failed: {e}", exc_info=True)
             await self.cleanup()
             raise
 
-    async def listen(self):
+    async def listen(self) -> None:
         """
-        Listen for messages on WebSocket connection
-        Similar to Webex bot's message listening loop
+        Listen for messages on WebSocket connection.
+        Similar to Webex bot's message listening loop.
         """
         logger.info("👂 Listening for Teams messages via WebSocket...")
 
         try:
             async for msg in self.ws:
+                logger.debug(f"Received WebSocket message type: {msg.type}")
+
                 if msg.type == WSMsgType.TEXT:
                     # Received activity from Bot Framework
+                    logger.debug("Processing TEXT message from Bot Framework")
                     await self.process_activity(msg.json())
 
                 elif msg.type == WSMsgType.BINARY:
-                    logger.debug("Received binary message")
+                    logger.debug("Received BINARY message (ignored)")
 
                 elif msg.type == WSMsgType.PING:
-                    logger.debug("Received ping")
+                    logger.debug("Received PING, sending PONG")
                     await self.ws.pong()
 
                 elif msg.type == WSMsgType.PONG:
-                    logger.debug("Received pong")
+                    logger.debug("Received PONG (heartbeat alive)")
 
                 elif msg.type in (WSMsgType.CLOSE, WSMsgType.CLOSING, WSMsgType.CLOSED):
-                    logger.warning("WebSocket closed by server")
+                    logger.warning(f"WebSocket closed by server: {msg.type}")
                     break
 
                 elif msg.type == WSMsgType.ERROR:
-                    logger.error(f"WebSocket error: {self.ws.exception()}")
+                    error = self.ws.exception()
+                    logger.error(f"WebSocket error: {error}")
                     break
 
         except Exception as e:
-            logger.error(f"Error in WebSocket listen loop: {e}")
+            logger.error(f"Error in WebSocket listen loop: {e}", exc_info=True)
         finally:
+            logger.info("WebSocket listen loop ended")
             self.running = False
             await self.cleanup()
 
-    async def process_activity(self, activity_data: dict):
-        """Process incoming activity from WebSocket"""
+    async def process_activity(self, activity_data: dict) -> None:
+        """
+        Process incoming activity from WebSocket.
+
+        Args:
+            activity_data: Dictionary containing activity data from Bot Framework
+        """
         try:
-            activity = Activity().deserialize(activity_data)
+            logger.debug(f"Processing activity type: {activity_data.get('type', 'unknown')}")
+
+            # Create Activity object from dict - Activity has from_dict or can be initialized with kwargs
+            # Bot Framework SDK expects an Activity object, create it from the dict data
+            activity = Activity(**activity_data) if isinstance(activity_data, dict) else activity_data
 
             # Create turn context and process with bot
-            async def bot_callback(turn_context: TurnContext):
+            async def bot_callback(turn_context: TurnContext) -> None:
                 await self.bot_instance.on_turn(turn_context)
 
-            # Process the activity
-            await ADAPTER.process_activity(activity, "", bot_callback)
+            # Process the activity - empty string for auth header in streaming mode
+            # The connection is already authenticated via OAuth2 token in WebSocket headers
+            auth_header = ""  # type: str
+            await ADAPTER.process_activity(activity, auth_header, bot_callback)
 
         except Exception as e:
-            logger.error(f"Error processing activity: {e}")
+            logger.error(f"Error processing activity: {e}", exc_info=True)
 
-    async def cleanup(self):
-        """Clean up WebSocket and session"""
+    async def cleanup(self) -> None:
+        """Clean up WebSocket and session."""
+        logger.debug("Cleaning up WebSocket connection and session")
         if self.ws and not self.ws.closed:
             await self.ws.close()
         if self.session and not self.session.closed:
             await self.session.close()
 
-    async def run_with_reconnect(self):
+    async def run_with_reconnect(self) -> None:
         """
-        Run bot with automatic reconnection
-        Similar to resilient Webex bot that reconnects on disconnect
+        Run bot with automatic reconnection.
+        Similar to resilient Webex bot that reconnects on disconnect.
         """
         logger.info("🚀 Starting Teams bot with WebSocket streaming (like Webex bot)")
+        logger.debug(f"Initial reconnect delay: {self.reconnect_delay}s, max: {self.max_reconnect_delay}s")
 
         while True:
             try:
+                logger.debug("Attempting to connect...")
                 await self.connect()
 
                 # If we get here, connection was closed normally
                 if not self.running:
-                    logger.info("Bot stopped normally")
+                    logger.info("Bot stopped normally (running=False)")
                     break
+                else:
+                    logger.warning("Connection ended but running=True, will reconnect")
 
             except Exception as e:
                 logger.error(f"Connection error: {e}")
 
             # Reconnect with exponential backoff
             logger.info(f"⏳ Reconnecting in {self.reconnect_delay} seconds...")
+            logger.debug(f"Sleeping {self.reconnect_delay}s before next connection attempt")
             await asyncio.sleep(self.reconnect_delay)
 
             # Exponential backoff up to max
+            old_delay = self.reconnect_delay
             self.reconnect_delay = min(self.reconnect_delay * 2, self.max_reconnect_delay)
+            logger.debug(f"Reconnect delay increased: {old_delay}s -> {self.reconnect_delay}s")
 
 
-async def health_check(_request) -> web.Response:
-    """Health check endpoint"""
+async def health_check(_request: web.Request) -> web.Response:
+    """
+    Health check endpoint for monitoring.
+
+    Args:
+        _request: HTTP request (unused)
+
+    Returns:
+        JSON response with bot health status
+    """
+    logger.debug("Health check endpoint called")
     return web.json_response({
         'status': 'healthy',
         'bot': 'toodles-teams-streaming',
@@ -454,11 +558,11 @@ async def health_check(_request) -> web.Response:
     })
 
 
-def main():
+def main() -> None:
     """
-    Main function - similar to Webex bot main() with resilient framework
-    Opens persistent WebSocket connection to Bot Framework service
-    Bot connects OUT (like Webex), not waiting for inbound webhooks
+    Main function - similar to Webex bot main() with resilient framework.
+    Opens persistent WebSocket connection to Bot Framework service.
+    Bot connects OUT (like Webex), not waiting for inbound webhooks.
     """
     logger.info("=" * 80)
     logger.info("🚀 Starting Toodles Teams Bot with WebSocket Streaming")
@@ -482,7 +586,12 @@ def main():
         logger.error("=" * 80)
         sys.exit(1)
 
+    logger.debug(f"App ID configured: {TEAMS_TOODLES_APP_ID[:8]}... (length: {len(TEAMS_TOODLES_APP_ID)})")
+    logger.debug(f"App Password configured: {'*' * 8}... (length: {len(TEAMS_TOODLES_APP_PASSWORD)})")
+    logger.debug(f"Registered {len(TEAMS_COMMANDS)} commands")
+
     # Create streaming connection manager (like Webex bot WebSocket)
+    logger.debug("Creating StreamingConnectionManager")
     streaming_manager = StreamingConnectionManager(
         app_id=TEAMS_TOODLES_APP_ID,
         app_password=TEAMS_TOODLES_APP_PASSWORD,
@@ -491,9 +600,10 @@ def main():
 
     # Run the bot with WebSocket streaming (like Webex)
     try:
+        logger.debug("Starting asyncio event loop")
         asyncio.run(streaming_manager.run_with_reconnect())
     except KeyboardInterrupt:
-        logger.info("🛑 Bot stopped by user")
+        logger.info("🛑 Bot stopped by user (KeyboardInterrupt)")
     except Exception as e:
         logger.error(f"❌ Bot crashed: {e}", exc_info=True)
         sys.exit(1)
