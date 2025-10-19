@@ -47,7 +47,7 @@ When the Azure engineer provides credentials, map them as follows:
 After adding credentials to `data/transient/.secrets`:
 
 ```bash
-python scripts/encrypt_env.py --plaintext data/transient/.secrets --output data/transient/.secrets.age --force
+python scripts/encrypt_secrets.py --plaintext data/transient/.secrets --output data/transient/.secrets.age --force
 ```
 
 ### 2. Start the Bot Server
