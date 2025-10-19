@@ -4,7 +4,7 @@ import os
 import re
 import tempfile
 from datetime import datetime
-from functools import wraps
+from functools import wraps, lru_cache
 from pathlib import Path
 
 from flask import request
@@ -18,6 +18,30 @@ config = get_config()
 
 # Setup logger for this module
 logger = logging.getLogger(__name__)
+
+# Room name cache to avoid repeated API calls
+# Cache up to 100 room names with TTL (no expiry, rooms rarely change names)
+@lru_cache(maxsize=100)
+def get_room_name_cached(room_id: str, bot_access_token: str) -> str:
+    """
+    Cached wrapper for get_room_name to avoid repeated API calls.
+
+    Room names rarely change, so we cache them indefinitely (until bot restart).
+    This eliminates the 500-800ms API latency on every command execution.
+
+    Args:
+        room_id: Webex room ID
+        bot_access_token: Bot access token
+
+    Returns:
+        Room name or 'Unknown' on error
+    """
+    try:
+        room_name = get_room_name(room_id, bot_access_token)
+        return room_name if room_name else 'Unknown'
+    except Exception as e:
+        logger.warning(f"Failed to fetch room name for {room_id}: {e}")
+        return 'Unknown'
 
 # Directory for logs (should be set by the main app)
 LOG_FILE_DIR = Path(__file__).parent.parent.parent / 'data' / 'transient' / 'logs'
@@ -160,7 +184,7 @@ def log_activity(bot_access_token, log_file_name):
                         row=[
                             actor,
                             attachment_actions.json_data.get('inputs', {}).get('command_keyword'),
-                            get_room_name(attachment_actions.json_data['roomId'], bot_access_token),
+                            get_room_name_cached(attachment_actions.json_data['roomId'], bot_access_token),
                             now_eastern
                         ]
                     )
