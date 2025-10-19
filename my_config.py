@@ -127,6 +127,10 @@ def get_config():
         should_use_proxy_resilience=str(os.environ.get("SHOULD_USE_PROXY_RESILIENCE", "False")).lower() == "true",
         should_auto_reconnect=str(os.environ.get("SHOULD_AUTO_RECONNECT", "True")).lower() == "true",
         web_server_port=int(os.environ.get("WEB_SERVER_PORT", "8080")),
+        # Microsoft Teams Toodles Bot configuration (from Azure Bot Service)
+        teams_toodles_app_id=os.environ.get("TEAMS_TOODLES_APP_ID"),
+        teams_toodles_app_password=os.environ.get("TEAMS_TOODLES_APP_PASSWORD"),
+        teams_toodles_tenant_id=os.environ.get("TEAMS_TOODLES_TENANT_ID"),
     )
 
 
@@ -230,3 +234,7 @@ class Config:
     should_use_proxy_resilience: bool = False
     should_auto_reconnect: bool = True
     web_server_port: Optional[int] = None
+    # Microsoft Teams Toodles Bot configuration (from Azure Bot Service)
+    teams_toodles_app_id: Optional[str] = None
+    teams_toodles_app_password: Optional[str] = None
+    teams_toodles_tenant_id: Optional[str] = None

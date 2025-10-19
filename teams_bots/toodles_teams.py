@@ -52,10 +52,17 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Bot Framework Settings - you'll need to get these from Azure Bot Service
+# Microsoft Teams Toodles Bot Configuration from Azure Bot Service
+# Get these values from your Azure engineer and set them in .secrets.age file
+# These are loaded through my_config.py from encrypted secrets
+TEAMS_TOODLES_APP_ID = CONFIG.teams_toodles_app_id or ''  # Application (client) ID from Azure
+TEAMS_TOODLES_APP_PASSWORD = CONFIG.teams_toodles_app_password or ''  # Client secret Value from Azure
+TEAMS_TOODLES_TENANT_ID = CONFIG.teams_toodles_tenant_id or ''  # Directory (tenant) ID from Azure (optional)
+
+# Bot Framework Settings
 SETTINGS = BotFrameworkAdapterSettings(
-    app_id="",  # Your Microsoft App ID
-    app_password=""  # Your Microsoft App Password
+    app_id=TEAMS_TOODLES_APP_ID,
+    app_password=TEAMS_TOODLES_APP_PASSWORD
 )
 
 # Create adapter - this handles the websocket connections like Webex
@@ -231,6 +238,10 @@ class TeamsBot(ActivityHandler):
             await turn_context.send_activity(
                 MessageFactory.text("Sorry, I encountered an error processing your request.")
             )
+        finally:
+            # Save state changes
+            await self.conversation_state.save_changes(turn_context)
+            await self.user_state.save_changes(turn_context)
 
     def create_webex_message_adapter(self, turn_context: TurnContext):
         """Create Webex-compatible message object from Teams TurnContext"""
@@ -300,10 +311,6 @@ async def init_func():
     """Initialize the bot - similar to Webex bot initialization"""
     logger.info("Initializing Teams Bot with Bot Framework (websocket connections)...")
 
-    # Add conversation state middleware
-    ADAPTER.use(CONVERSATION_STATE)
-    ADAPTER.use(USER_STATE)
-
     app = create_app()
     return app
 
@@ -316,14 +323,19 @@ def main():
     logger.info("Starting Toodles Teams Bot with Bot Framework...")
     logger.info("This provides websocket-like persistent connections similar to Webex bots")
 
-    # Note: You need to set these environment variables or update config:
-    # MICROSOFT_APP_ID=your_app_id
-    # MICROSOFT_APP_PASSWORD=your_app_password
-
-    if not SETTINGS.app_id or not SETTINGS.app_password:
-        logger.warning("WARNING: Microsoft App ID and Password not set!")
-        logger.warning("Set them in config or environment variables")
-        logger.warning("Get these from Azure Bot Service registration")
+    # Validate required configuration
+    if not TEAMS_TOODLES_APP_ID or not TEAMS_TOODLES_APP_PASSWORD:
+        logger.error("=" * 80)
+        logger.error("ERROR: Microsoft Teams Toodles Bot credentials not configured!")
+        logger.error("=" * 80)
+        logger.error("Please set the following environment variables in your .secrets file:")
+        logger.error("  TEAMS_TOODLES_APP_ID         - Application (client) ID from Azure")
+        logger.error("  TEAMS_TOODLES_APP_PASSWORD   - Client secret Value from Azure")
+        logger.error("  TEAMS_TOODLES_TENANT_ID      - Directory (tenant) ID from Azure (optional)")
+        logger.error("=" * 80)
+        logger.error("Contact your Azure engineer for these values if you don't have them.")
+        logger.error("=" * 80)
+        sys.exit(1)
 
     # Start the web server for Bot Framework
     web.run_app(init_func(), host="0.0.0.0", port=3978)
