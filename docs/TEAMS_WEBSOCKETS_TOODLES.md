@@ -5,6 +5,7 @@
 ## Prerequisites
 
 You need three values from Azure Bot Service (get from your Azure admin):
+
 - `TEAMS_TOODLES_APP_ID` - Application (client) ID
 - `TEAMS_TOODLES_APP_PASSWORD` - Client secret **Value** (not Secret ID)
 - `TEAMS_TOODLES_TENANT_ID` - Directory (tenant) ID (optional)
@@ -52,6 +53,7 @@ python scripts/encrypt_secrets.py --plaintext data/transient/.secrets --output d
 ```
 
 **Wait for this message:**
+
 ```
 ✅ WebSocket connection established! (Like Webex bot)
 👂 Listening for Teams messages via WebSocket...
@@ -66,6 +68,7 @@ python scripts/encrypt_secrets.py --plaintext data/transient/.secrets --output d
 ## Available Commands
 
 Same commands as Webex Toodles bot. Key commands:
+
 - `help` - Show all commands
 - `who` - On-call person
 - `rotation` - Current rotation
@@ -79,6 +82,7 @@ Full command list: Run `@toodles help` in Teams
 ## How It Works
 
 Bot connects OUT to Microsoft via WebSocket (like Webex):
+
 ```
 Your Bot → WebSocket OUT → Microsoft Service ← Teams
 ```
@@ -95,6 +99,7 @@ Your Bot → WebSocket OUT → Microsoft Service ← Teams
 **Error:** `❌ WebSocket connection failed`
 
 **Check:**
+
 1. Credentials correct in `.secrets.age`?
 2. "Use Streaming Endpoint" enabled in Azure Portal?
 3. Firewall allows outbound to `streaming.botframework.com:443`?
@@ -103,6 +108,7 @@ Your Bot → WebSocket OUT → Microsoft Service ← Teams
 ### Messages Not Reaching Bot
 
 **Check:**
+
 1. Teams channel added in Azure Portal?
 2. Bot invited to the Teams chat?
 3. Try `@toodles help` to test
@@ -110,6 +116,7 @@ Your Bot → WebSocket OUT → Microsoft Service ← Teams
 ### Commands Not Working
 
 Ensure required service credentials are set in `.secrets`:
+
 - XSOAR credentials for ticket commands
 - CrowdStrike for containment status
 - Azure DevOps for work items
@@ -117,12 +124,14 @@ Ensure required service credentials are set in `.secrets`:
 ## Production Deployment
 
 **Key Benefits:**
+
 - ✅ No public endpoint needed
 - ✅ No SSL cert needed
 - ✅ Works behind corporate firewalls
 - ✅ Only needs outbound HTTPS (port 443)
 
 **Firewall Requirements:**
+
 - Allow outbound to `streaming.botframework.com:443`
 - Allow outbound to `login.microsoftonline.com:443`
 
@@ -130,21 +139,22 @@ Ensure required service credentials are set in `.secrets`:
 
 ```ini
 [Unit]
-Description=Teams Toodles Bot
-After=network.target
+Description = Teams Toodles Bot
+After = network.target
 
 [Service]
-Type=simple
-WorkingDirectory=/path/to/IR
-ExecStart=/path/to/IR/.venv/bin/python teams_bots/toodles_teams.py
-Restart=always
-RestartSec=10
+Type = simple
+WorkingDirectory = /path/to/IR
+ExecStart = /path/to/IR/.venv/bin/python teams_bots/toodles_teams.py
+Restart = always
+RestartSec = 10
 
 [Install]
-WantedBy=multi-user.target
+WantedBy = multi-user.target
 ```
 
 **Start service:**
+
 ```bash
 sudo systemctl enable toodles-teams
 sudo systemctl start toodles-teams
