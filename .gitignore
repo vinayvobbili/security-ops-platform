@@ -34,3 +34,5 @@ tests
 
 .env
 certs/*
+
+node_modules

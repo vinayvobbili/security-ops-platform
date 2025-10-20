@@ -228,44 +228,41 @@ class TaniumDataLoader:
         return filtered_computers
 
     def _parse_excel_file(self, filename: str) -> List[Computer]:
-        """Parse Excel file into Computer objects"""
+        """Parse Excel file into Computer objects using pandas for robustness"""
         self._validate_input_file(filename)
-        computers = []
-        wb = None
 
         try:
-            wb = openpyxl.load_workbook(filename, read_only=True, data_only=True)
-            ws = wb.active
+            # Use pandas to read the Excel file - this is more robust than manual parsing
+            df = pd.read_excel(filename, dtype=str, engine='openpyxl', keep_default_na=False, na_values=[''])
 
-            for row_num, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
-                if not row or len(row) < 8:
-                    continue
-
-                if not row[0]:  # name is required
-                    continue
-
+            computers = []
+            for idx, row in df.iterrows():
                 try:
+                    # Parse tags from the "Current Tags" column (may contain newline-separated tags)
+                    tags_str = str(row.get('Current Tags', '')).strip()
+                    custom_tags = []
+                    if tags_str and tags_str != '[No Tags]':
+                        custom_tags = [tag.strip() for tag in tags_str.split('\n') if tag.strip()]
+
                     computers.append(
                         Computer(
-                            name=str(row[0]).strip(),
-                            id=str(row[1]).strip() if row[1] else "",
-                            ip=str(row[2]).strip() if row[2] else "",
-                            os_platform=str(row[3]).strip() if row[3] else "",  # Column 4: OS Platform
-                            eid_status=str(row[4]).strip() if row[4] else "",  # Column 5: Status
-                            eidLastSeen=row[5],  # Column 6: Last Seen
-                            source=str(row[6]).strip() if row[6] else "",  # Column 7: Source
-                            custom_tags=[tag.strip() for tag in str(row[7]).split('\n') if tag.strip()] if row[7] else []  # Column 8: Current Tags - split by newline to match export format
+                            name=str(row['Hostname']).strip(),
+                            id=str(row['ID']).strip(),
+                            ip=str(row.get('IP Address', '')).strip(),
+                            os_platform=str(row.get('OS Platform', '')).strip(),
+                            eidLastSeen=row.get('Last Seen', ''),
+                            source=str(row.get('Source', '')).strip(),
+                            custom_tags=custom_tags
                         )
                     )
                 except Exception as e:
-                    self.logger.warning(f"Error processing row {row_num}: {e}")
+                    self.logger.warning(f"Error processing row {idx + 2}: {e}")
+
+            return computers
+
         except Exception as e:
             self.logger.error(f"Error loading Excel file: {e}")
-        finally:
-            if wb is not None:
-                wb.close()
-
-        return computers
+            return []
 
     @staticmethod
     def _validate_input_file(filepath: str):
