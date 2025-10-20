@@ -878,7 +878,7 @@ def random_audio():
     return jsonify({'filename': random.choice(files)})
 
 
-@app.route('/pokedex-chat')
+@app.route('/pokedex')
 @log_web_activity
 def pokedex_chat():
     """Pokedex AI chat interface"""
