@@ -49,3 +49,6 @@ if [ -n "$PYTHON_PID" ]; then
 else
     echo "Warning: Could not determine server PID - check web_server.log for errors"
 fi
+
+# Print final newline to ensure prompt appears on new line
+echo ""
