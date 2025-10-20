@@ -114,9 +114,10 @@ class SecurityBotStateManager:
             logging.info(f"Initializing Langchain model: {self.model_config.llm_model_name}...")
             self.llm = ChatOllama(
                 model=self.model_config.llm_model_name,
-                temperature=self.model_config.temperature
+                temperature=self.model_config.temperature,
+                keep_alive=-1  # Keep model loaded indefinitely in Ollama memory
             )
-            logging.info(f"Langchain model {self.model_config.llm_model_name} initialized.")
+            logging.info(f"Langchain model {self.model_config.llm_model_name} initialized with persistent loading.")
 
             logging.info(f"Initializing Ollama embeddings with model: {self.model_config.embedding_model_name}...")
             self.embeddings = OllamaEmbeddings(
@@ -357,15 +358,24 @@ class SecurityBotStateManager:
             return False
 
     def fast_warmup(self) -> bool:
-        """Fast warmup using direct LLM call instead of full agent"""
+        """Fast warmup using direct LLM call that keeps model loaded in memory
+
+        Sets keep_alive to a very long duration to ensure the model stays in Ollama's memory
+        and doesn't get unloaded after the default 5-minute timeout.
+        """
         if not self.llm:
             return False
 
         try:
-            logging.info("Performing fast warmup...")
+            logging.info("Performing fast warmup with persistent model loading...")
+
+            # Use keep_alive=-1 to keep model loaded indefinitely
+            # This ensures the model stays in Ollama memory and doesn't get unloaded
+            self.llm.keep_alive = -1  # -1 means keep alive indefinitely
+
             response = self.llm.invoke("Hello")
             if response:
-                logging.info("Fast warmup completed successfully")
+                logging.info("Fast warmup completed successfully - model will stay loaded in memory")
                 return True
             else:
                 logging.warning("Fast warmup returned empty response")
