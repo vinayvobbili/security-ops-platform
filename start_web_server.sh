@@ -29,6 +29,23 @@ if pgrep -f "web_server.py" > /dev/null; then
     exit 1
 fi
 
+# Check for any stale processes holding proxy port 8080
+echo "Checking for processes on proxy port 8080..."
+PROXY_PORT_PIDS=$(lsof -ti:8080 2>/dev/null)
+if [ -n "$PROXY_PORT_PIDS" ]; then
+    echo "Found process(es) on port 8080: $PROXY_PORT_PIDS"
+    echo "Killing stale proxy port processes..."
+    echo "$PROXY_PORT_PIDS" | xargs sudo kill -9 2>/dev/null
+    sleep 1
+
+    # Verify port is clear
+    if lsof -ti:8080 > /dev/null 2>&1; then
+        echo "WARNING: Port 8080 may still be in use - continuing anyway"
+    else
+        echo "Port 8080 cleared successfully."
+    fi
+fi
+
 echo "Starting new server instance..."
 
 # Start new server instance
