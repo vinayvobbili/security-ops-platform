@@ -4,7 +4,7 @@
 echo "Checking for existing web_server.py processes..."
 if pgrep -f "web_server.py" > /dev/null; then
     echo "Found existing process(es). Sending SIGTERM..."
-    pkill -f "web_server.py"
+    sudo pkill -f "web_server.py"
 
     # Wait up to 10 seconds for graceful shutdown
     for _ in {1..10}; do
@@ -18,7 +18,7 @@ if pgrep -f "web_server.py" > /dev/null; then
     # Force kill if still running
     if pgrep -f "web_server.py" > /dev/null; then
         echo "Process still running. Sending SIGKILL..."
-        pkill -9 -f "web_server.py"
+        sudo pkill -9 -f "web_server.py"
         sleep 1
     fi
 fi
@@ -35,7 +35,7 @@ PROXY_PORT_PIDS=$(lsof -ti:8080 2>/dev/null)
 if [ -n "$PROXY_PORT_PIDS" ]; then
     echo "Found process(es) on port 8080: $PROXY_PORT_PIDS"
     echo "Killing stale proxy port processes..."
-    echo "$PROXY_PORT_PIDS" | xargs kill -9 2>/dev/null
+    echo "$PROXY_PORT_PIDS" | xargs sudo kill -9 2>/dev/null
     sleep 1
 
     # Verify port is clear
@@ -48,9 +48,9 @@ fi
 
 echo "Starting new server instance..."
 
-# Start new server instance without sudo (port 8080 doesn't require elevated privileges)
-# Using nohup to keep process running after shell exits
-nohup /home/vinay/pub/IR/.venv/bin/python /home/vinay/pub/IR/web/web_server.py >> /home/vinay/pub/IR/web_server.log 2>&1 &
+# Start new server instance using sudo with NOPASSWD rule (required for port 80)
+# This matches the sudoers whitelist exactly
+sudo /usr/bin/nohup /usr/bin/env PYTHONPATH=/home/vinay/pub/IR /home/vinay/pub/IR/.venv/bin/python /home/vinay/pub/IR/web/web_server.py >> /home/vinay/pub/IR/web_server.log 2>&1 &
 
 # Give the background process a moment to start
 sleep 2
