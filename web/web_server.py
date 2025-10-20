@@ -1029,13 +1029,14 @@ def api_pokedex_chat_stream():
                 yield f"data: {json.dumps({'error': 'Streaming error occurred'})}\n\n"
 
         # Return SSE response
+        # Note: 'Connection' header is removed as it's a hop-by-hop header
+        # not allowed in WSGI applications (PEP 3333)
         return app.response_class(
             generate(),
             mimetype='text/event-stream',
             headers={
                 'Cache-Control': 'no-cache',
-                'X-Accel-Buffering': 'no',  # Disable buffering in nginx
-                'Connection': 'keep-alive'
+                'X-Accel-Buffering': 'no'  # Disable buffering in nginx
             }
         )
 
