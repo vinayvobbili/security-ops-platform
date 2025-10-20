@@ -10,7 +10,7 @@
 </head>
 <body>
 {% import 'title_macros.html' as titles %}
-{% set page_title = titles.build_title('the security assistant bot, an AI powered SOC assistant','<div class="pokeball-title-icon"></div>','<img src="' + url_for('static', filename='images/pokedex.png') + '" alt="the security assistant bot" class="pokedex-title-icon">') %}
+{% set page_title = titles.build_title('the security assistant bot - AI powered SOC assistant','<div class="pokeball-title-icon"></div>','<img src="' + url_for('static', filename='images/pokedex.png') + '" alt="the security assistant bot" class="pokedex-title-icon">') %}
 {% include 'top_bar.html' %}
 
 {% block content %}
