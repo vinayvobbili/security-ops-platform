@@ -61,9 +61,9 @@ from src.utils.logging_utils import is_scanner_request, log_web_activity
 CONFIG = get_config()
 
 # Server configuration constants
-SHOULD_START_PROXY = True
+SHOULD_START_PROXY = False  # Disable proxy to avoid port conflict
 USE_DEBUG_MODE = CONFIG.web_server_debug_mode_on
-PROXY_PORT = 8080
+PROXY_PORT = 8081  # Moved to 8081 to avoid conflict with web server
 # Allow environment override; default to 8080 for non-root dev usage
 WEB_SERVER_PORT = CONFIG.web_server_port
 BUFFER_SIZE = 16384
