@@ -2286,12 +2286,7 @@ def toodles_initialization(bot_instance=None):
         bot_instance.add_command(CreateXSOARTicket())
         bot_instance.add_command(IOC())
         bot_instance.add_command(IOCHunt())
-        try:
-            logger.info("📝 Attempting to add URLs command...")
-            bot_instance.add_command(URLs())
-            logger.info("✅ URLs command added successfully")
-        except Exception as e:
-            logger.error(f"❌ Failed to add URLs command: {e}", exc_info=True)
+        bot_instance.add_command(URLs())
         bot_instance.add_command(ThreatHunt())
         bot_instance.add_command(CreateThreatHunt())
         bot_instance.add_command(CreateAZDOWorkItem())
