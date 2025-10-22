@@ -1262,14 +1262,11 @@ def get_url_card():
         }
 
 
-URL_CARD = get_url_card()
-
-
 class URLs(Command):
     def __init__(self):
         super().__init__(
             command_keyword="urls",
-            card=URL_CARD,
+            card=get_url_card(),  # Generate card dynamically
             delete_previous_message=True
         )
 
