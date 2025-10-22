@@ -34,16 +34,14 @@ from my_config import get_config
 
 CONFIG = get_config()
 
-# Configure SSL for corporate proxy environments (Zscaler, etc.) - Only if needed
-if CONFIG.should_use_proxy_resilience:
-    from src.utils.ssl_config import configure_ssl_if_needed
+# ALWAYS configure SSL for proxy environments (auto-detects ZScaler/proxies)
+from src.utils.ssl_config import configure_ssl_if_needed
+configure_ssl_if_needed(verbose=True)
 
-    configure_ssl_if_needed(verbose=True)
-
-    # Apply enhanced WebSocket client patch for better connection resilience
-    from src.utils.enhanced_websocket_client import patch_websocket_client
-
-    patch_websocket_client()
+# ALWAYS apply enhanced WebSocket patches for connection resilience
+# This is critical to prevent the bot from going to sleep
+from src.utils.enhanced_websocket_client import patch_websocket_client
+patch_websocket_client()
 
 import ipaddress
 import logging.handlers
@@ -2252,13 +2250,12 @@ class ProcessUrlBlockVerdict(Command):
 
 def toodles_bot_factory():
     """Create Toodles bot instance"""
-    # Clean up stale device registrations when using any auto-reconnect mode
+    # Clean up stale device registrations before starting
     # (to prevent device buildup from automatic restarts)
-    if CONFIG.should_use_proxy_resilience or CONFIG.should_auto_reconnect:
-        cleanup_devices_on_startup(
-            CONFIG.webex_bot_access_token_toodles,
-            bot_name="Toodles"
-        )
+    cleanup_devices_on_startup(
+        CONFIG.webex_bot_access_token_toodles,
+        bot_name="Toodles"
+    )
 
     return WebexBot(
         CONFIG.webex_bot_access_token_toodles,
@@ -2305,34 +2302,23 @@ def toodles_initialization(bot_instance=None):
 
 
 def main():
-    """Toodles main - supports three modes of operation"""
-    if CONFIG.should_use_proxy_resilience or CONFIG.should_auto_reconnect:
-        # Resilient mode: Full (ZScaler + auto-reconnect) or Lite (auto-reconnect only)
-        mode = "FULL" if CONFIG.should_use_proxy_resilience else "LITE"
-        features = "SSL config, WebSocket patching, device cleanup, auto-restart" if CONFIG.should_use_proxy_resilience else "device cleanup, auto-reconnect"
-        logger.info(f"Starting Toodles with {mode} resilience ({features})")
+    """Toodles main - always uses resilience framework"""
+    from src.utils.bot_resilience import ResilientBot
 
-        from src.utils.bot_resilience import ResilientBot
+    logger.info("Starting Toodles with standard resilience framework")
 
-        resilient_runner = ResilientBot(
-            bot_name="Toodles",
-            bot_factory=toodles_bot_factory,
-            initialization_func=toodles_initialization,
-            max_retries=5,
-            initial_retry_delay=30,
-            max_retry_delay=300,
-            keepalive_interval=60,  # More aggressive keepalive (was 120s default)
-            websocket_ping_interval=20,  # More aggressive WebSocket ping (was 30s default)
-            proactive_reconnection_interval=600  # Force reconnect every 10 min to prevent sleep
-        )
-        resilient_runner.run()
-    else:
-        # Standard mode: No resilience features at all
-        logger.info("Starting Toodles with STANDARD mode (no auto-reconnect, no resilience features)")
-        bot = toodles_bot_factory()
-        toodles_initialization(bot)
-        logger.info("✅ Toodles bot initialized and ready! Listening for messages...")
-        bot.run()
+    resilient_runner = ResilientBot(
+        bot_name="Toodles",
+        bot_factory=toodles_bot_factory,
+        initialization_func=toodles_initialization,
+        max_retries=5,
+        initial_retry_delay=30,
+        max_retry_delay=300,
+        keepalive_interval=60,  # More aggressive keepalive (was 120s default)
+        websocket_ping_interval=20,  # More aggressive WebSocket ping (was 30s default)
+        proactive_reconnection_interval=600  # Force reconnect every 10 min to prevent sleep
+    )
+    resilient_runner.run()
 
 
 if __name__ in ('__main__', '__builtin__', 'builtins'):
