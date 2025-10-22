@@ -35,6 +35,7 @@ from src.charts import aging_tickets
 from src.components import reimaged_hosts
 from src.utils.logging_utils import log_activity
 from src.utils.webex_device_manager import cleanup_devices_on_startup
+from src.utils.webex_messaging import send_message_with_files, safe_send_message
 
 # Load configuration
 config = get_config()
@@ -293,11 +294,24 @@ class GetBotHealth(Command):
             ]
         )
 
-        webex_api.messages.create(
-            roomId=room_id,
-            text="Bot Status Information",
-            attachments=[{"contentType": "application/vnd.microsoft.card.adaptive", "content": status_card.to_dict()}]
-        )
+        # Send status card with retry logic
+        try:
+            from src.utils.webex_messaging import send_card
+            send_card(
+                webex_api,
+                room_id,
+                attachments=[{"contentType": "application/vnd.microsoft.card.adaptive", "content": status_card.to_dict()}],
+                text="Bot Status Information"
+            )
+        except Exception as e:
+            logger.error(f"Failed to send bot status card: {e}")
+            # Fallback to simple message with retry
+            safe_send_message(
+                webex_api,
+                room_id,
+                markdown=f"📊 **MoneyBall Bot Status**\n\n{health_status}\n{health_detail}",
+                fallback_text=f"MoneyBall Bot Status: {health_status}"
+            )
 
 
 class Hi(Command):
@@ -316,7 +330,7 @@ class Hi(Command):
 
 
 def send_chart(room_id, display_name, chart_name, chart_filename):
-    """Sends a chart image to a Webex room with enhanced error handling."""
+    """Sends a chart image to a Webex room with enhanced error handling and automatic retry logic."""
     try:
         today_date = datetime.now().strftime('%m-%d-%Y')
         chart_path = os.path.join(os.path.dirname(__file__), f'../web/static/charts/{today_date}', chart_filename)
@@ -324,10 +338,7 @@ def send_chart(room_id, display_name, chart_name, chart_filename):
         if not os.path.exists(chart_path):
             error_msg = f"❌ Sorry {display_name}, the {chart_name} chart is not available."
             logger.warning(f"Chart not found: {chart_path}")
-            webex_api.messages.create(
-                roomId=room_id,
-                markdown=error_msg
-            )
+            safe_send_message(webex_api, room_id, markdown=error_msg)
             return
 
         # Add fun loading message
@@ -336,23 +347,25 @@ def send_chart(room_id, display_name, chart_name, chart_filename):
         # Build the success message
         success_msg = f"{loading_message}\n\n📊 **{display_name}, here's the latest {chart_name} chart!**"
 
-        webex_api.messages.create(
-            roomId=room_id,
-            markdown=success_msg,
-            files=[chart_path]
+        # Send message with chart file (includes automatic retry)
+        send_message_with_files(
+            webex_api,
+            room_id,
+            files=[chart_path],
+            markdown=success_msg
         )
         logger.info(f"Successfully sent chart {chart_name} to room {room_id}")
 
     except Exception as e:
         error_msg = f"❌ Failed to send {chart_name} chart: {str(e)}"
         logger.error(error_msg)
-        try:
-            webex_api.messages.create(
-                roomId=room_id,
-                markdown=error_msg
-            )
-        except Exception as msg_error:
-            logger.error(f"Failed to send error message: {msg_error}")
+        # Use safe_send_message for error notification (won't throw exception)
+        safe_send_message(
+            webex_api,
+            room_id,
+            markdown=error_msg,
+            fallback_text=f"Failed to send {chart_name} chart"
+        )
 
 
 def get_random_chart_message():
