@@ -1,6 +1,6 @@
 #!/bin/bash
 
-cd /home/vinay/pub/IR
+cd /home/vinay/pub/IR || exit 1
 
 # Kill existing toodles process if running
 echo "Stopping existing Toodles instances..."
@@ -8,7 +8,7 @@ pkill -f "webex_bots/toodles.py"
 sleep 1
 
 # Clear the log file to ensure we see fresh output
-> toodles.log
+: > toodles.log
 
 # Start new toodles instance in background
 nohup env PYTHONPATH=/home/vinay/pub/IR .venv/bin/python webex_bots/toodles.py >> toodles.log 2>&1 &
