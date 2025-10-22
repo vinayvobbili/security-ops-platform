@@ -22,7 +22,7 @@ from src.components.ticket_cache import TicketCache
 from src import helper_methods, verify_host_online_status
 from src.charts import mttr_mttc, outflow, lifespan, heatmap, sla_breaches, aging_tickets, inflow, qradar_rule_efficacy, de_stories, days_since_incident, re_stories, threatcon_level, vectra_volume, \
     crowdstrike_volume, threat_tippers, crowdstrike_efficacy
-from src.components import oncall, approved_security_testing, thithi, qa_tickets, response_sla_risk_tickets, containment_sla_risk_tickets, incident_declaration_sla_risk
+from src.components import oncall, approved_security_testing, thithi, response_sla_risk_tickets, containment_sla_risk_tickets, incident_declaration_sla_risk
 from src.utils.fs_utils import make_dir_for_todays_charts
 
 logging.basicConfig(level=logging.ERROR)
@@ -104,7 +104,7 @@ def main():
     schedule.every().monday.at("08:00", eastern).do(lambda: (
         # phish_fort.fetch_and_report_incidents(),
         oncall.announce_change(),
-        qa_tickets.generate(config.webex_room_id_qa_tickets)
+        # qa_tickets.generate(config.webex_room_id_qa_tickets)
     ))
     schedule.every().day.at("17:00", eastern).do(approved_security_testing.removed_expired_entries)
     schedule.every().day.at("07:00", eastern).do(thithi.main)
