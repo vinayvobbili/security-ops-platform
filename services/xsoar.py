@@ -29,7 +29,17 @@ dev_headers = {
 }
 
 
-def get_incident(incident_id):
+def get_case_data_with_notes(incident_id):
+    """Fetch incident details along with notes from prod environment"""
+    investigation_url = f"{CONFIG.xsoar_prod_api_base_url}/investigation/{incident_id}"
+    response = http_session.post(investigation_url, headers=prod_headers, json={}, verify=False, timeout=30)
+    if response is None:
+        raise requests.exceptions.ConnectionError("Failed to connect after multiple retries")
+    response.raise_for_status()
+    return response.json()
+
+
+def get_case_data(incident_id):
     """Fetch incident details from prod environment"""
     incident_url = f"{CONFIG.xsoar_prod_api_base_url}/incident/load/{incident_id}"
     response = http_session.get(incident_url, headers=prod_headers, verify=False, timeout=30)
@@ -43,7 +53,7 @@ def import_ticket(source_ticket_number, requestor_email_address=None):
     """Import ticket from prod to dev"""
     ticket_handler = TicketHandler()
 
-    incident_data = get_incident(source_ticket_number)
+    incident_data = get_case_data(source_ticket_number)
     if requestor_email_address:
         incident_data['owner'] = requestor_email_address
 
@@ -383,7 +393,7 @@ def main():
     # ticket_cache.generate()
     # log.info("XSOAR ticket caching process completed")
 
-    print(json.dumps(get_incident('850153'), indent=4))
+    print(json.dumps(get_case_data_with_notes('873933'), indent=4))
 
 
 if __name__ == "__main__":
