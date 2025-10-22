@@ -1,7 +1,9 @@
 #!/bin/bash
 
+cd /home/vinay/pub/IR || exit 1
+
 # Kill existing server process if running
-echo "Checking for existing web_server.py processes..."
+echo "Stopping existing web server instances..."
 if pgrep -f "web_server.py" > /dev/null; then
     echo "Found existing process(es). Sending SIGTERM..."
     sudo pkill -f "web_server.py"
@@ -25,7 +27,7 @@ fi
 
 # Verify no processes are running
 if pgrep -f "web_server.py" > /dev/null; then
-    echo "ERROR: Failed to stop existing web_server.py processes"
+    echo "❌ ERROR: Failed to stop existing web_server.py processes"
     exit 1
 fi
 
@@ -40,13 +42,18 @@ if [ -n "$PROXY_PORT_PIDS" ]; then
 
     # Verify port is clear
     if lsof -ti:8080 > /dev/null 2>&1; then
-        echo "WARNING: Port 8080 may still be in use - continuing anyway"
+        echo "⚠️  WARNING: Port 8080 may still be in use - continuing anyway"
     else
         echo "Port 8080 cleared successfully."
     fi
 fi
 
-echo "Starting new server instance..."
+# Clear the log file to ensure we see fresh output
+: > web_server.log
+
+echo ""
+echo "Starting Web Server..."
+echo ""
 
 # Start new server instance using sudo with NOPASSWD rule (required for port 80)
 # This matches the sudoers whitelist exactly
@@ -56,14 +63,21 @@ sudo /usr/bin/nohup /usr/bin/env PYTHONPATH=/home/vinay/pub/IR /home/vinay/pub/I
 # Give the background process a moment to start
 sleep 2
 
+# Show initial log output
+echo "Initial startup messages:"
+timeout 5 tail -10 web_server.log 2>/dev/null || true
+echo ""
+
 # Get the actual Python process PID (not the sudo PID)
 PYTHON_PID=$(pgrep -f "python.*web_server.py" | tail -1)
 
 if [ -n "$PYTHON_PID" ]; then
-    echo "Server started with PID $PYTHON_PID"
+    echo "✅ Web Server is running (PID: $PYTHON_PID)"
+    echo ""
+    echo "To view logs: tail -f /home/vinay/pub/IR/web_server.log"
 else
-    echo "Warning: Could not determine server PID - check web_server.log for errors"
+    echo "❌ Warning: Could not determine server PID"
+    echo "Check logs: tail -20 /home/vinay/pub/IR/web_server.log"
 fi
 
-# Print final newline to ensure prompt appears on new line
 echo ""
