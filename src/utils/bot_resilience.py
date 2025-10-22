@@ -72,7 +72,8 @@ class ResilientBot:
                  max_keepalive_interval: int = 600,
                  websocket_ping_interval: int = 30,  # WebSocket ping frequency
                  proxy_detection: bool = True,  # Enable ZScaler proxy detection
-                 proactive_reconnection_interval: Optional[int] = None):  # Proactive reconnect (seconds)
+                 proactive_reconnection_interval: Optional[int] = None,  # Proactive reconnect (seconds)
+                 disable_proxy_interval_adjustment: bool = False):  # Don't adjust intervals for proxy
         """
         Initialize resilient bot runner
 
@@ -88,6 +89,7 @@ class ResilientBot:
             websocket_ping_interval: WebSocket ping frequency (seconds)
             proxy_detection: Enable ZScaler proxy detection
             proactive_reconnection_interval: Force clean reconnect at this interval (seconds, None to disable)
+            disable_proxy_interval_adjustment: Don't automatically adjust intervals when proxy detected
         """
         self.bot_name = bot_name  # Will be set after bot creation if not provided
         self.bot_factory = bot_factory
@@ -100,6 +102,7 @@ class ResilientBot:
         self.websocket_ping_interval = websocket_ping_interval
         self.proxy_detection = proxy_detection
         self.proactive_reconnection_interval = proactive_reconnection_interval
+        self.disable_proxy_interval_adjustment = disable_proxy_interval_adjustment
 
         # Runtime state
         self.bot_instance = None
@@ -182,9 +185,16 @@ class ResilientBot:
             result = subprocess.run(["ps", "aux"], capture_output=True, text=True)
             if "zscaler" in result.stdout.lower():
                 logger.info(f"🛡️ ZScaler proxy detected for {self.bot_name} - enabling enhanced monitoring")
-                # Reduce ping intervals for proxy environments
-                self.keepalive_interval = min(60, self.keepalive_interval)
-                self.websocket_ping_interval = min(20, self.websocket_ping_interval)
+
+                # Only adjust intervals if not disabled
+                if not self.disable_proxy_interval_adjustment:
+                    # Reduce ping intervals for proxy environments
+                    self.keepalive_interval = min(60, self.keepalive_interval)
+                    self.websocket_ping_interval = min(20, self.websocket_ping_interval)
+                    logger.info(f"📉 Adjusted intervals for ZScaler: keepalive={self.keepalive_interval}s, websocket={self.websocket_ping_interval}s")
+                else:
+                    logger.info(f"✓ Keeping configured intervals: keepalive={self.keepalive_interval}s, websocket={self.websocket_ping_interval}s")
+
                 # Enable proactive reconnection every 10 minutes if not already set
                 if self.proactive_reconnection_interval is None:
                     self.proactive_reconnection_interval = 600  # 10 minutes
