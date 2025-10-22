@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 """
-Encrypt the .env file using age encryption.
+Encrypt the .secrets file using age encryption.
 
 This script:
-1. Reads the plaintext .env file
-2. Encrypts it to .env.age
+1. Reads the plaintext .secrets file
+2. Encrypts it to .secrets.age
 3. Optionally deletes the plaintext version for security
 
 Usage:
     python scripts/encrypt_secrets.py
     python scripts/encrypt_secrets.py --delete-plaintext
-    python scripts/encrypt_secrets.py --force  # Overwrite existing .env.age
+    python scripts/encrypt_secrets.py --force  # Overwrite existing .secrets.age
 """
 
 import argparse
@@ -26,17 +26,17 @@ from src.utils.env_encryption import encrypt_env_file, EncryptionError
 
 def main():
     parser = argparse.ArgumentParser(
-        description='Encrypt .env file using age encryption'
+        description='Encrypt secrets file using age encryption'
     )
     parser.add_argument(
         '--plaintext',
-        default='data/transient/.env',
-        help='Path to plaintext .env file (default: data/transient/.env)'
+        default='data/transient/.secrets',
+        help='Path to plaintext secrets file (default: data/transient/.secrets)'
     )
     parser.add_argument(
         '--output',
-        default='data/transient/.env.age',
-        help='Path to encrypted output file (default: data/transient/.env.age)'
+        default='data/transient/.secrets.age',
+        help='Path to encrypted output file (default: data/transient/.secrets.age)'
     )
     parser.add_argument(
         '--key',
@@ -46,12 +46,12 @@ def main():
     parser.add_argument(
         '--delete-plaintext',
         action='store_true',
-        help='Delete plaintext .env file after encryption'
+        help='Delete plaintext secrets file after encryption'
     )
     parser.add_argument(
         '--force',
         action='store_true',
-        help='Overwrite existing .env.age file'
+        help='Overwrite existing .secrets.age file'
     )
 
     args = parser.parse_args()
@@ -61,7 +61,7 @@ def main():
     output_path = project_root / args.output
 
     print("========================================")
-    print("Encrypting .env file")
+    print("Encrypting secrets file")
     print("========================================")
     print()
 
@@ -95,13 +95,13 @@ def main():
         # Handle plaintext deletion
         if args.delete_plaintext:
             response = input(
-                "⚠️  Delete plaintext .env file? This cannot be undone! (yes/no): "
+                "⚠️  Delete plaintext secrets file? This cannot be undone! (yes/no): "
             ).strip().lower()
             if response == 'yes':
                 plaintext_path.unlink()
                 print(f"✓ Deleted {plaintext_path}")
                 print()
-                print("⚠️  IMPORTANT: Your plaintext .env has been deleted.")
+                print("⚠️  IMPORTANT: Your plaintext secrets file has been deleted.")
                 print("   To edit secrets, you must decrypt, edit, and re-encrypt:")
                 print()
                 print("   # Decrypt temporarily")
@@ -125,7 +125,7 @@ def main():
             print()
             print("2. Update your application to use encrypted secrets")
             print()
-            print("3. Delete the plaintext .env for security:")
+            print("3. Delete the plaintext secrets file for security:")
             print(f"   rm {plaintext_path}")
             print()
             print("   Or re-run with --delete-plaintext flag:")

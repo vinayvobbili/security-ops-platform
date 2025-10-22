@@ -203,7 +203,7 @@ class TaniumInstance:
         self.headers = {'session': self.token}
         self.graphql_url = f"{self.server_url}/plugin/products/gateway/graphql"
         self.verify_ssl = verify_ssl
-        logger.info(f"Initialized Tanium instance: {self.name}")
+        logger.info(f"Initialized Tanium instance: {self.name} (URL: {self.server_url})")
 
     def get_package_id_for_device_type(self, device_type: str) -> str:
         """Get the appropriate Tanium package ID for the given device type and instance.
@@ -350,6 +350,22 @@ class TaniumInstance:
     def validate_token(self) -> bool:
         """Validate the API token"""
         try:
+            # Log token being used (masked for security)
+            masked_token = f"{self.token[:8]}...{self.token[-4:]}" if len(self.token) > 12 else "***"
+            logger.info(f"Validating token for {self.name} (URL: {self.server_url}): {masked_token}")
+            logger.debug(f"Full token for {self.name}: {self.token}")
+
+            # Get and log our public IP address
+            try:
+                ip_response = requests.get("https://api.ipify.org?format=json", timeout=5)
+                if ip_response.status_code == 200:
+                    public_ip = ip_response.json().get('ip', 'Unknown')
+                    logger.info(f"Your public IP address: {public_ip}")
+                else:
+                    logger.warning(f"Could not determine public IP: HTTP {ip_response.status_code}")
+            except Exception as ip_error:
+                logger.warning(f"Could not determine public IP: {ip_error}")
+
             # Note: verify parameter intentionally omitted to use SSL config defaults
             response = requests.post(
                 f"{self.server_url}/api/v2/session/validate",
@@ -357,9 +373,14 @@ class TaniumInstance:
                 headers=self.headers,
                 timeout=10
             )
-            return response.status_code == 200
+            if response.status_code == 200:
+                logger.info(f"Token validation successful for {self.name} (URL: {self.server_url})")
+                return True
+            else:
+                logger.warning(f"Token validation failed for {self.name} (URL: {self.server_url}): HTTP {response.status_code} - {response.text}")
+                return False
         except Exception as e:
-            logger.warning(f"Token validation failed for {self.name}: {e}")
+            logger.warning(f"Token validation failed for {self.name} (URL: {self.server_url}): {e}")
             return False
 
     def find_computer_by_name(self, computer_name: str) -> Optional[Computer]:
@@ -691,7 +712,9 @@ def main():
         # Test searching for computers
         search_term = "VMVDI26940.METNET.NET"
         instance_name = "Cloud"
-        logger.info(f"\nSearching for computers containing '{search_term}' in {instance_name}...")
+        instance = client.get_instance_by_name(instance_name)
+        url_info = f" (URL: {instance.server_url})" if instance else ""
+        logger.info(f"\nSearching for computers containing '{search_term}' in {instance_name}{url_info}...")
         matches = client.search_computers(search_term, instance_name, limit=5)
         for comp in matches:
             logger.info(f" - {comp.name} (ID: {comp.id}, Last Seen: {comp.eidLastSeen}, Tags: {comp.custom_tags})")
