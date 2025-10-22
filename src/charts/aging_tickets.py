@@ -366,8 +366,10 @@ def send_report(room_id):
         query = f'-status:closed type:{config.team_name} -type:"{config.team_name} Third Party Compromise" created:<{thirty_days_ago_utc}'
         tickets = TicketHandler().get_tickets(query=query)
 
-        webex_api.messages.create(
-            roomId=room_id,
+        from src.utils.webex_messaging import send_message
+        send_message(
+            webex_api,
+            room_id,
             text=f"Aging Tickets Summary!",
             markdown=f'Summary (Type={config.team_name}* - TP, Created=1+ months ago)\n ``` \n {generate_daily_summary(tickets)}'
         )
@@ -380,8 +382,9 @@ def send_report(room_id):
         tickets = TicketHandler().get_tickets(query=query)
 
         if tickets:
-            webex_api.messages.create(
-                roomId=room_id,
+            send_message(
+                webex_api,
+                room_id,
                 text=f"Aging Tickets Summary!",
                 markdown=f'Summary (Type=Third Party Compromise, Created=3+ months ago)\n ``` \n {generate_daily_summary(tickets)}'
             )
