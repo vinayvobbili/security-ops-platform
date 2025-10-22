@@ -1213,10 +1213,15 @@ def get_url_card():
             # Iterate through the list of URLs and create button actions
             for item in metcirt_urls:
                 if "url" in item:  # Handle URL buttons with Action.OpenUrl
+                    url = item['url']
+                    # Ensure URL has a protocol (add https:// if missing)
+                    if not url.startswith(('http://', 'https://')):
+                        url = f"https://{url}"
+
                     actions.append({
                         "type": "Action.OpenUrl",
                         "title": item['name'],
-                        "url": item['url'],
+                        "url": url,
                         "style": "positive"
                     })
                 elif "phone_number" in item:  # Handle data buttons by just displaying it
@@ -2281,7 +2286,12 @@ def toodles_initialization(bot_instance=None):
         bot_instance.add_command(CreateXSOARTicket())
         bot_instance.add_command(IOC())
         bot_instance.add_command(IOCHunt())
-        bot_instance.add_command(URLs())
+        try:
+            logger.info("📝 Attempting to add URLs command...")
+            bot_instance.add_command(URLs())
+            logger.info("✅ URLs command added successfully")
+        except Exception as e:
+            logger.error(f"❌ Failed to add URLs command: {e}", exc_info=True)
         bot_instance.add_command(ThreatHunt())
         bot_instance.add_command(CreateThreatHunt())
         bot_instance.add_command(CreateAZDOWorkItem())
