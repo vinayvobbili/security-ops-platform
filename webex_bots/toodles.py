@@ -1264,9 +1264,27 @@ def get_url_card():
 
 class URLs(Command):
     def __init__(self):
+        try:
+            url_card = get_url_card()
+            logger.info(f"✅ URL card generated successfully with {len(url_card.get('body', []))} body elements")
+        except Exception as e:
+            logger.error(f"❌ Error generating URL card: {e}", exc_info=True)
+            # Fallback to a simple error card
+            url_card = {
+                "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+                "type": "AdaptiveCard",
+                "version": "1.3",
+                "body": [{
+                    "type": "TextBlock",
+                    "text": f"Error loading URLs: {str(e)}",
+                    "color": "Attention"
+                }]
+            }
+
         super().__init__(
             command_keyword="urls",
-            card=get_url_card(),  # Generate card dynamically
+            help_message="Favorite URLs 🔗",
+            card=url_card,
             delete_previous_message=True
         )
 
