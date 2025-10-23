@@ -63,6 +63,8 @@ echo ""
 # Start new server instance using sudo with NOPASSWD rule (required for port 80)
 # This matches the sudoers whitelist exactly
 # Redirect stderr/stdout to log file, suppressing nohup messages
+# Note: Redirect happens as user (not root) which is intentional - log file is user-owned
+# shellcheck disable=SC2024
 sudo /usr/bin/nohup /usr/bin/env PYTHONPATH=/home/vinay/pub/IR /home/vinay/pub/IR/.venv/bin/python /home/vinay/pub/IR/web/web_server.py >> /home/vinay/pub/IR/web_server.log 2>&1 &
 
 # Give the background process a moment to start
