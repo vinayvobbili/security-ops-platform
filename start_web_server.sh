@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Disable job control messages to prevent "Killed" messages from interfering with output
+set +m
+
 cd /home/vinay/pub/IR || exit 1
 
 # Kill existing server process if running
@@ -20,10 +23,12 @@ if pgrep -f "web_server.py" > /dev/null; then
     # Force kill if still running
     if pgrep -f "web_server.py" > /dev/null; then
         echo "Process still running. Sending SIGKILL..."
-        sudo pkill -9 -f "web_server.py"
-        sleep 1
+        sudo pkill -9 -f "web_server.py" 2>/dev/null
+        sleep 2
     fi
 fi
+
+echo ""
 
 # Verify no processes are running
 if pgrep -f "web_server.py" > /dev/null; then
@@ -31,7 +36,7 @@ if pgrep -f "web_server.py" > /dev/null; then
     exit 1
 fi
 
-# Check for any stale processes holding proxy port 8080
+echo ""
 echo "Checking for processes on proxy port 8080..."
 PROXY_PORT_PIDS=$(lsof -ti:8080 2>/dev/null)
 if [ -n "$PROXY_PORT_PIDS" ]; then
