@@ -132,7 +132,7 @@ class TicketHandler:
             if page >= max_pages:
                 log.debug(f"Warning: Reached max_pages limit ({max_pages}). Total: {len(all_tickets)} tickets")
 
-            log.info(f"Total tickets fetched: {len(all_tickets)}")
+            log.debug(f"Total tickets fetched: {len(all_tickets)}")
             return all_tickets
 
         except Exception as e:
@@ -209,7 +209,7 @@ class TicketHandler:
         if not link_ticket_id or not parent_ticket_id:
             log.error("Ticket ID or QA Ticket ID is empty. Cannot link tickets.")
             return None
-        log.info(f"Linking ticket {link_ticket_id} to QA ticket {parent_ticket_id}")
+        log.debug(f"Linking ticket {link_ticket_id} to QA ticket {parent_ticket_id}")
         payload = {
             "id": "",
             "version": 0,
@@ -232,7 +232,7 @@ class TicketHandler:
         if not ticket_id or not participant_email_address:
             log.error("Ticket ID or participant email is empty. Cannot add participant.")
             return None
-        log.info(f"Adding participant {participant_email_address} to ticket {ticket_id}")
+        log.debug(f"Adding participant {participant_email_address} to ticket {ticket_id}")
         payload = {
             "id": "",
             "version": 0,
@@ -252,7 +252,7 @@ class TicketHandler:
             log.error("Incident ID is empty. Cannot get participants.")
             return []
 
-        log.info(f"Getting participants for incident {incident_id}")
+        log.debug(f"Getting participants for incident {incident_id}")
         investigation_url = f"{self.prod_base}/investigation/{incident_id}"
 
         # Based on the JSON structure from the user's example, send empty payload
