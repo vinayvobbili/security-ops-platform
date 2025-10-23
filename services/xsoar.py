@@ -120,7 +120,7 @@ class TicketHandler:
                 # Show progress every 5 pages to reduce verbosity
                 if page % 5 == 0 or len(data) < page_size:
                     log.debug(f"  Fetched {len(all_tickets)} tickets so far...")
-                log.info(f"Fetched page {page}: {len(data)} tickets (total so far: {len(all_tickets)})")
+                log.debug(f"Fetched page {page}: {len(data)} tickets (total so far: {len(all_tickets)})")
 
                 # If we got fewer results than page_size, we've reached the end
                 if len(data) < page_size:
