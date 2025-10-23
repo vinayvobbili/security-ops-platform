@@ -72,6 +72,7 @@ def main():
 
     schedule.every().day.at("00:01", eastern).do(lambda: (
         make_dir_for_todays_charts(helper_methods.CHARTS_DIR_PATH),
+        TicketCache.generate(),
         aging_tickets.make_chart(),
         crowdstrike_efficacy.make_chart(),
         crowdstrike_volume.make_chart(),
@@ -112,7 +113,6 @@ def main():
     schedule.every(3).minutes.do(lambda: containment_sla_risk_tickets.start(config.webex_room_id_containment_sla_risk))
     schedule.every().hour.at(":00").do(lambda: (
         incident_declaration_sla_risk.start(config.webex_room_id_response_sla_risk),
-        TicketCache.generate(),
     ))
 
     while True:
