@@ -9,7 +9,7 @@ cd /home/vinay/pub/IR || exit 1
 echo "Stopping existing web server instances..."
 if pgrep -f "web_server.py" > /dev/null; then
     echo "Found existing process(es). Sending SIGTERM..."
-    sudo pkill -f "web_server.py"
+    sudo pkill -f "web_server.py" >/dev/null 2>&1 || true
 
     # Wait up to 10 seconds for graceful shutdown
     for _ in {1..10}; do
@@ -20,13 +20,22 @@ if pgrep -f "web_server.py" > /dev/null; then
         sleep 1
     done
 
-    # Force kill if still running
+    # Force kill if still running using per-PID kill to avoid bash 'Killed' status output
     if pgrep -f "web_server.py" > /dev/null; then
         echo "Process still running. Sending SIGKILL..."
-        # Suppress all output including job control messages by running in subshell
-        (sudo pkill -9 -f "web_server.py") >/dev/null 2>&1
+        PIDS=$(pgrep -f "web_server.py")
+        for PID in $PIDS; do
+            # Double-check PID is numeric
+            if [[ $PID =~ ^[0-9]+$ ]]; then
+                sudo kill -9 "$PID" 2>/dev/null || true
+            fi
+        done
         sleep 2
-        echo "Process terminated"
+        if pgrep -f "web_server.py" >/dev/null; then
+            echo "⚠️  Warning: Some processes may still be present"
+        else
+            echo "Process terminated"
+        fi
     fi
 fi
 
@@ -74,7 +83,7 @@ sudo /usr/bin/nohup /usr/bin/env PYTHONPATH=/home/vinay/pub/IR /home/vinay/pub/I
 # Give the background process a moment to start
 sleep 3
 
-# Show initial log output
+# Show initial startup log output (quick peek)
 echo "Initial startup messages:"
 echo "------------------------"
 timeout 5 tail -10 web_server.log 2>/dev/null || echo "(no log output yet)"
@@ -94,4 +103,3 @@ else
 fi
 
 echo ""
-
