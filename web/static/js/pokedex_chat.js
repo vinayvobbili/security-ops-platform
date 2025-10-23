@@ -20,6 +20,7 @@ const statusDetails = document.getElementById('statusDetails');
 // Bot readiness state
 let isBotReady = false;
 let previousBotReady = null; // Track previous state to detect changes
+let isProcessing = false; // Track if a message is currently being processed
 
 // Check bot status
 async function checkBotStatus() {
@@ -44,9 +45,11 @@ async function checkBotStatus() {
                 }, 3000);
             }
 
-            // Enable input
-            messageInput.disabled = false;
-            sendButton.disabled = false;
+            // Enable input (unless currently processing a message)
+            if (!isProcessing) {
+                messageInput.disabled = false;
+                sendButton.disabled = false;
+            }
             messageInput.placeholder = 'Ask me anything...';
 
             previousBotReady = true;
@@ -199,7 +202,13 @@ async function sendMessage() {
         return;
     }
 
-    // Disable input while processing
+    // Check if already processing a message
+    if (isProcessing) {
+        return;
+    }
+
+    // Set processing state and disable input
+    isProcessing = true;
     messageInput.disabled = true;
     sendButton.disabled = true;
 
@@ -305,7 +314,8 @@ async function sendMessage() {
         contentDiv.innerHTML = '❌ Failed to get response. Please try again.';
         showError('Streaming error occurred');
     } finally {
-        // Re-enable input
+        // Clear processing state and re-enable input
+        isProcessing = false;
         messageInput.disabled = false;
         sendButton.disabled = false;
         messageInput.focus();
