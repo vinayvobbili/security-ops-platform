@@ -28,8 +28,8 @@ logger = logging.getLogger(__name__)
 
 # Enhanced configuration
 MAX_BACKOFF_TIME = 600  # Increased from 240s to 600s (10 minutes)
-WEBSOCKET_PING_INTERVAL = 30  # Send ping every 30 seconds
-WEBSOCKET_PING_TIMEOUT = 10  # Timeout if no pong after 10 seconds
+WEBSOCKET_PING_INTERVAL = 60  # Send ping every 60 seconds (reduced frequency)
+WEBSOCKET_PING_TIMEOUT = 30  # Timeout if no pong after 30 seconds (very lenient)
 WEBSOCKET_CLOSE_TIMEOUT = 10  # Wait up to 10 seconds for clean close
 
 
@@ -83,11 +83,11 @@ def patch_websocket_client():
             )
             async def _connect_and_listen():
                 # Refresh device info on each connection attempt to avoid stale URLs
-                logger.info("Refreshing device info before connection attempt...")
+                logger.debug("Refreshing device info before connection attempt...")
                 self._get_device_info(check_existing=True)
                 ws_url = self.device_info['webSocketUrl']
 
-                logger.info(f"Opening websocket connection to {ws_url}")
+                logger.debug(f"Opening websocket connection to {ws_url}")
 
                 # Create SSL context - unverified for corporate proxy (ZScaler) compatibility
                 ssl_context = ssl._create_unverified_context()
@@ -105,7 +105,7 @@ def patch_websocket_client():
                 }
 
                 if self.proxies and "wss" in self.proxies:
-                    logger.info(f"Using proxy for websocket connection: {self.proxies['wss']}")
+                    logger.debug(f"Using proxy for websocket connection: {self.proxies['wss']}")
                     try:
                         from websockets_proxy import Proxy, proxy_connect
                         proxy = Proxy.from_url(self.proxies["wss"])
@@ -114,7 +114,7 @@ def patch_websocket_client():
                         logger.error("websockets_proxy not available, falling back to direct connection")
                         connect = websockets.connect(ws_url, **connect_kwargs)
                 elif self.proxies and "https" in self.proxies:
-                    logger.info(f"Using proxy for websocket connection: {self.proxies['https']}")
+                    logger.debug(f"Using proxy for websocket connection: {self.proxies['https']}")
                     try:
                         from websockets_proxy import Proxy, proxy_connect
                         proxy = Proxy.from_url(self.proxies["https"])
@@ -128,7 +128,7 @@ def patch_websocket_client():
 
                 async with connect as _websocket:
                     self.websocket = _websocket
-                    logger.info("WebSocket Opened with keepalive enabled.")
+                    logger.debug("WebSocket Opened with keepalive enabled.")
 
                     # Send authorization
                     msg = {'id': str(uuid.uuid4()),
@@ -170,7 +170,7 @@ def patch_websocket_client():
                             logger.error(f"Reached maximum retries ({max_404_retries}) for 404 errors. Giving up.")
                             raise Exception(f"Unable to connect to WebSocket after {max_404_retries} attempts. Device registration may be invalid.")
 
-                        logger.info(f"Refreshing WDM device info and retrying... (Attempt {current_404_retries} of {max_404_retries})")
+                        logger.debug(f"Refreshing WDM device info and retrying... (Attempt {current_404_retries} of {max_404_retries})")
                         # Force a new device registration
                         self._get_device_info(check_existing=False)
                         # Update ws_url with the new device info
@@ -178,7 +178,7 @@ def patch_websocket_client():
 
                         # Add a delay before retrying to avoid hammering the server
                         delay = min(5 * current_404_retries, 30)  # Progressive delay up to 30s
-                        logger.info(f"Waiting {delay} seconds before retry attempt {current_404_retries}...")
+                        logger.debug(f"Waiting {delay} seconds before retry attempt {current_404_retries}...")
                         asyncio.get_event_loop().run_until_complete(asyncio.sleep(delay))
                     else:
                         # For non-404 errors, just raise the exception
@@ -193,7 +193,7 @@ def patch_websocket_client():
                         raise Exception(f"Unable to maintain WebSocket connection after {max_consecutive_failures} attempts.")
 
                     # Refresh device info on connection errors
-                    logger.info("Refreshing device info due to connection error...")
+                    logger.debug("Refreshing device info due to connection error...")
                     if self._get_device_info(check_existing=False) is None:
                         logger.error('could not create device info')
                         raise Exception("No WDM device info")
@@ -203,7 +203,7 @@ def patch_websocket_client():
 
                     # Progressive delay based on failure count
                     delay = min(5 * consecutive_failures, 60)
-                    logger.info(f"Waiting {delay} seconds before attempting to reconnect...")
+                    logger.debug(f"Waiting {delay} seconds before attempting to reconnect...")
                     asyncio.get_event_loop().run_until_complete(asyncio.sleep(delay))
 
                 except Exception as runException:
@@ -224,14 +224,14 @@ def patch_websocket_client():
 
                     # Wait a bit before reconnecting with progressive backoff
                     delay = min(5 * consecutive_failures, 60)
-                    logger.info(f"Waiting {delay} seconds before attempting to reconnect...")
+                    logger.debug(f"Waiting {delay} seconds before attempting to reconnect...")
                     asyncio.get_event_loop().run_until_complete(asyncio.sleep(delay))
 
         # Apply the patch
         WebexWebsocketClient.run = enhanced_run
-        logger.info("✅ Enhanced WebSocket client patched successfully")
-        logger.info(f"📡 WebSocket keepalive: ping every {WEBSOCKET_PING_INTERVAL}s, timeout {WEBSOCKET_PING_TIMEOUT}s")
-        logger.info(f"🔄 Backoff retry window increased to {MAX_BACKOFF_TIME}s")
+        logger.debug("✅ Enhanced WebSocket client patched successfully")
+        logger.debug(f"📡 WebSocket keepalive: ping every {WEBSOCKET_PING_INTERVAL}s, timeout {WEBSOCKET_PING_TIMEOUT}s")
+        logger.debug(f"🔄 Backoff retry window increased to {MAX_BACKOFF_TIME}s")
         return True
 
     except ImportError as e:
