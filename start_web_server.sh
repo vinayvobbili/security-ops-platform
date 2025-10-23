@@ -23,15 +23,15 @@ if pgrep -f "web_server.py" > /dev/null; then
     # Force kill if still running
     if pgrep -f "web_server.py" > /dev/null; then
         echo "Process still running. Sending SIGKILL..."
-        sudo pkill -9 -f "web_server.py" 2>/dev/null
+        # Suppress all output including job control messages
+        sudo pkill -9 -f "web_server.py" >/dev/null 2>&1
         sleep 2
     fi
 fi
 
-echo ""
-
 # Verify no processes are running
 if pgrep -f "web_server.py" > /dev/null; then
+    echo ""
     echo "❌ ERROR: Failed to stop existing web_server.py processes"
     exit 1
 fi
@@ -49,14 +49,17 @@ if [ -n "$PROXY_PORT_PIDS" ]; then
     if lsof -ti:8080 > /dev/null 2>&1; then
         echo "⚠️  WARNING: Port 8080 may still be in use - continuing anyway"
     else
-        echo "Port 8080 cleared successfully."
+        echo "✅ Port 8080 cleared successfully"
     fi
+else
+    echo "✅ Port 8080 is clear"
 fi
+
+echo ""
 
 # Clear the log file to ensure we see fresh output
 : > web_server.log
 
-echo ""
 echo "Starting Web Server..."
 echo ""
 
@@ -70,24 +73,29 @@ sudo /usr/bin/nohup /usr/bin/env PYTHONPATH=/home/vinay/pub/IR /home/vinay/pub/I
 # Give the background process a moment to start
 sleep 2
 
+# Wait for background jobs to settle
+wait 2>/dev/null || true
+
 # Show initial log output
-echo ""
 echo "Initial startup messages:"
 echo "------------------------"
-timeout 5 tail -10 web_server.log 2>/dev/null || true
+timeout 5 tail -10 web_server.log 2>/dev/null || echo "(no log output yet)"
+echo "------------------------"
 echo ""
 
 # Get the actual Python process PID (not the sudo PID)
 PYTHON_PID=$(pgrep -f "python.*web_server.py" | tail -1)
 
-echo ""
 if [ -n "$PYTHON_PID" ]; then
     echo "✅ Web Server is running (PID: $PYTHON_PID)"
     echo ""
-    echo "To view logs: tail -f /home/vinay/pub/IR/web_server.log"
-    echo ""
+    echo "📋 To view logs: tail -f /home/vinay/pub/IR/web_server.log"
 else
     echo "❌ Warning: Could not determine server PID"
-    echo "Check logs: tail -20 /home/vinay/pub/IR/web_server.log"
-    echo ""
+    echo "📋 Check logs: tail -20 /home/vinay/pub/IR/web_server.log"
 fi
+
+echo ""
+
+# Ensure terminal is responsive by resetting job control
+set -m 2>/dev/null || true
