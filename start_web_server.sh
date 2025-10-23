@@ -23,9 +23,10 @@ if pgrep -f "web_server.py" > /dev/null; then
     # Force kill if still running
     if pgrep -f "web_server.py" > /dev/null; then
         echo "Process still running. Sending SIGKILL..."
-        # Suppress all output including job control messages
-        sudo pkill -9 -f "web_server.py" >/dev/null 2>&1
+        # Suppress all output including job control messages by running in subshell
+        (sudo pkill -9 -f "web_server.py") >/dev/null 2>&1
         sleep 2
+        echo "Process terminated"
     fi
 fi
 
@@ -71,10 +72,7 @@ echo ""
 sudo /usr/bin/nohup /usr/bin/env PYTHONPATH=/home/vinay/pub/IR /home/vinay/pub/IR/.venv/bin/python /home/vinay/pub/IR/web/web_server.py >> /home/vinay/pub/IR/web_server.log 2>&1 &
 
 # Give the background process a moment to start
-sleep 2
-
-# Wait for background jobs to settle
-wait 2>/dev/null || true
+sleep 3
 
 # Show initial log output
 echo "Initial startup messages:"
@@ -97,5 +95,3 @@ fi
 
 echo ""
 
-# Ensure terminal is responsive by resetting job control
-set -m 2>/dev/null || true
