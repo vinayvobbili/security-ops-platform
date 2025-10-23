@@ -1345,9 +1345,7 @@ def meaningful_metrics():
 @app.route('/api/meaningful-metrics/data')
 @log_web_activity
 def api_meaningful_metrics_data():
-    """API to get cached security incident data for dashboard.
-    If METRICS_DEV_SEED=true and cache missing, generate synthetic sample for local dev.
-    """
+    """API to get cached security incident data for dashboard."""
     import json
     from pathlib import Path
     try:
@@ -1355,69 +1353,7 @@ def api_meaningful_metrics_data():
         root_directory = Path(__file__).parent.parent
         cache_file = root_directory / 'web' / 'static' / 'charts' / today_date / 'past_90_days_tickets.json'
         if not cache_file.exists():
-            if os.environ.get('METRICS_DEV_SEED', '').lower() == 'true':
-                cache_file.parent.mkdir(parents=True, exist_ok=True)
-                # Generate synthetic tickets
-                import random as _r
-                base_now = datetime.now(eastern)
-                severities = [1, 2, 3, 4]
-                impacts = ['Malware', 'Credential Theft', 'Phishing', 'Recon', 'Lateral Movement', 'Unknown']
-                regions = ['North America', 'Europe', 'APAC', 'LATAM']
-                countries = ['US', 'GB', 'IN', 'BR', 'DE', 'CA']
-                sources = ['CrowdStrike', 'EDR', 'Vectra', 'QRadar', 'Zscaler']
-                automation_levels = ['Manual', 'Semi-Automated', 'Automated', 'Unknown']
-                synthetic = []
-                for i in range(50):
-                    created_dt = base_now - timedelta(days=_r.randint(0, 45))
-                    is_closed = _r.random() < 0.6
-                    closed_dt = created_dt + timedelta(hours=_r.randint(1, 72)) if is_closed else None
-                    resp_secs = _r.randint(30, 900)
-                    contain_secs = _r.randint(120, 3600)
-                    age_days = (base_now - created_dt).days if not is_closed else (closed_dt - created_dt).days
-                    synthetic.append({
-                        'id': 5000 + i,
-                        'name': f'Synthetic Alert #{5000 + i}',
-                        'severity': _r.choice(severities),
-                        'severity_display': 'Critical' if synthetic and synthetic[-1].get('severity', 1) == 4 else 'High',
-                        'status': 2 if is_closed else _r.choice([0, 1]),
-                        'status_display': 'Closed' if is_closed else _r.choice(['Pending', 'Active']),
-                        'type': _r.choice(sources),
-                        'impact': _r.choice(impacts),
-                        'automation_level': _r.choice(automation_levels),
-                        'affected_country': _r.choice(countries),
-                        'affected_region': _r.choice(regions),
-                        'owner': f'analyst{_r.randint(1, 8)}',
-                        'created': created_dt.strftime('%Y-%m-%dT%H:%M:%S'),
-                        'created_display': created_dt.strftime('%m/%d'),
-                        'closed': closed_dt.strftime('%Y-%m-%dT%H:%M:%S') if closed_dt else None,
-                        'closed_display': closed_dt.strftime('%m/%d') if closed_dt else '',
-                        'is_open': not is_closed,
-                        'currently_aging_days': age_days if not is_closed else 0,
-                        'days_since_creation': (base_now - created_dt).days,
-                        'resolution_time_days': (closed_dt - created_dt).days if closed_dt else None,
-                        'has_resolution_time': bool(closed_dt),
-                        'resolution_bucket': '0-1d' if closed_dt and (closed_dt - created_dt).days <= 1 else ('1-3d' if closed_dt and (closed_dt - created_dt).days <= 3 else ('>3d' if closed_dt else 'Unresolved')),
-                        'age_category': '0-7' if age_days <= 7 else ('8-30' if age_days <= 30 else '>30'),
-                        'time_to_respond_secs': resp_secs,
-                        'time_to_contain_secs': contain_secs
-                    })
-                obj = {
-                    'success': True,
-                    'data_generated_at': base_now.strftime('%Y-%m-%dT%H:%M:%S%z'),
-                    'total_count': len(synthetic),
-                    'data': synthetic
-                }
-                with open(cache_file, 'w') as f:
-                    json.dump(obj, f)
-                return jsonify({
-                    'success': True,
-                    'data': obj['data'],
-                    'total_count': obj['total_count'],
-                    'data_generated_at': obj['data_generated_at'],
-                    'dev_seeded': True
-                })
-            else:
-                return jsonify({'success': False, 'error': 'Cache file not found'}), 404
+            return jsonify({'success': False, 'error': 'Cache file not found'}), 404
         with open(cache_file, 'r') as f:
             cached_data = json.load(f)
         if isinstance(cached_data, dict) and 'data' in cached_data:
