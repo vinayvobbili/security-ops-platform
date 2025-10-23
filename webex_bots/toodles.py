@@ -2315,7 +2315,6 @@ def main():
         initial_retry_delay=30,
         max_retry_delay=300,
         keepalive_interval=60,  # More aggressive keepalive (was 120s default)
-        websocket_ping_interval=20,  # More aggressive WebSocket ping (was 30s default)
         proactive_reconnection_interval=600  # Force reconnect every 10 min to prevent sleep
     )
     resilient_runner.run()
