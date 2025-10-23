@@ -64,20 +64,23 @@ sudo /usr/bin/nohup /usr/bin/env PYTHONPATH=/home/vinay/pub/IR /home/vinay/pub/I
 sleep 2
 
 # Show initial log output
+echo ""
 echo "Initial startup messages:"
+echo "------------------------"
 timeout 5 tail -10 web_server.log 2>/dev/null || true
 echo ""
 
 # Get the actual Python process PID (not the sudo PID)
 PYTHON_PID=$(pgrep -f "python.*web_server.py" | tail -1)
 
+echo ""
 if [ -n "$PYTHON_PID" ]; then
     echo "✅ Web Server is running (PID: $PYTHON_PID)"
     echo ""
     echo "To view logs: tail -f /home/vinay/pub/IR/web_server.log"
+    echo ""
 else
     echo "❌ Warning: Could not determine server PID"
     echo "Check logs: tail -20 /home/vinay/pub/IR/web_server.log"
+    echo ""
 fi
-
-echo ""
