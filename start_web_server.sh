@@ -57,8 +57,8 @@ echo ""
 
 # Start new server instance using sudo with NOPASSWD rule (required for port 80)
 # This matches the sudoers whitelist exactly
-# Redirect through tee to handle sudo output properly
-sudo /usr/bin/nohup /usr/bin/env PYTHONPATH=/home/vinay/pub/IR /home/vinay/pub/IR/.venv/bin/python /home/vinay/pub/IR/web/web_server.py 2>&1 | tee -a /home/vinay/pub/IR/web_server.log > /dev/null &
+# Redirect stderr/stdout to log file, suppressing nohup messages
+sudo /usr/bin/nohup /usr/bin/env PYTHONPATH=/home/vinay/pub/IR /home/vinay/pub/IR/.venv/bin/python /home/vinay/pub/IR/web/web_server.py >> /home/vinay/pub/IR/web_server.log 2>&1 &
 
 # Give the background process a moment to start
 sleep 2
