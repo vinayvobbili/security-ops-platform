@@ -7,11 +7,14 @@ echo "Stopping existing Money Ball instances..."
 pkill -f "webex_bots/money_ball.py"
 sleep 1
 
+# Ensure logs directory exists
+mkdir -p logs
+
 # Clear the log file to ensure we see fresh output
-: > money_ball.log
+: > logs/money_ball.log
 
 # Start new money_ball instance in background
-nohup env PYTHONPATH=/home/vinay/pub/IR .venv/bin/python webex_bots/money_ball.py >> money_ball.log 2>&1 &
+nohup env PYTHONPATH=/home/vinay/pub/IR .venv/bin/python webex_bots/money_ball.py >> logs/money_ball.log 2>&1 &
 
 echo "Starting Money Ball bot..."
 echo ""
@@ -20,12 +23,12 @@ echo ""
 sleep 2
 
 # Tail the log file until we see device cleanup complete or timeout after 30 seconds
-timeout 30 tail -f money_ball.log 2>/dev/null | while read -r line; do
+timeout 30 tail -f logs/money_ball.log 2>/dev/null | while read -r line; do
     echo "$line"
     if echo "$line" | grep -q "Device cleanup complete"; then
         # Give it a few more seconds to finish initialization
         sleep 3
-        pkill -P $$ tail  # Kill the tail process
+        pkill -P $$ tail  # Kill the tail process.
         break
     fi
 done
@@ -37,8 +40,8 @@ if pgrep -f "webex_bots/money_ball.py" > /dev/null; then
     PID=$(pgrep -f 'webex_bots/money_ball.py')
     echo "✅ Money Ball is running (PID: $PID)"
     echo ""
-    echo "To view logs: tail -f /home/vinay/pub/IR/money_ball.log"
+    echo "To view logs: tail -f /home/vinay/pub/IR/logs/money_ball.log"
 else
     echo "❌ Warning: Money Ball process not found"
-    echo "Check logs: tail -20 /home/vinay/pub/IR/money_ball.log"
+    echo "Check logs: tail -20 /home/vinay/pub/IR/logs/money_ball.log"
 fi

@@ -382,14 +382,16 @@ def moneyball_bot_factory():
         bot_name="MoneyBall"
     )
 
+    logger.info("🌐 Creating WebexBot instance...")
     bot = WebexBot(
         config.webex_bot_access_token_moneyball,
         approved_rooms=[config.webex_room_id_vinay_test_space, config.webex_room_id_metrics],
         bot_name="MoneyBall - The Metrics & Analytics Bot",
         threads=True,
-        log_level="ERROR",
+        log_level="WARNING",  # Changed from ERROR to see more details
         bot_help_subtitle="Your friendly neighborhood metrics bot! Click a button to get charts and reports!"
     )
+    logger.info("✅ WebexBot instance created successfully")
 
     return bot
 

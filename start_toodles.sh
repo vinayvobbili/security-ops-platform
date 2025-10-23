@@ -7,11 +7,14 @@ echo "Stopping existing Toodles instances..."
 pkill -f "webex_bots/toodles.py"
 sleep 1
 
+# Ensure logs directory exists
+mkdir -p logs
+
 # Clear the log file to ensure we see fresh output
-: > toodles.log
+: > logs/toodles.log
 
 # Start new toodles instance in background
-nohup env PYTHONPATH=/home/vinay/pub/IR .venv/bin/python webex_bots/toodles.py >> toodles.log 2>&1 &
+nohup env PYTHONPATH=/home/vinay/pub/IR .venv/bin/python webex_bots/toodles.py >> logs/toodles.log 2>&1 &
 
 echo "Starting Toodles bot..."
 echo ""
@@ -20,7 +23,7 @@ echo ""
 sleep 2
 
 # Tail the log file until we see device cleanup complete or timeout after 30 seconds
-timeout 30 tail -f toodles.log 2>/dev/null | while read -r line; do
+timeout 30 tail -f logs/toodles.log 2>/dev/null | while read -r line; do
     echo "$line"
     if echo "$line" | grep -q "Device cleanup complete"; then
         # Give it a few more seconds to finish initialization
@@ -37,8 +40,8 @@ if pgrep -f "webex_bots/toodles.py" > /dev/null; then
     PID=$(pgrep -f 'webex_bots/toodles.py')
     echo "✅ Toodles is running (PID: $PID)"
     echo ""
-    echo "To view logs: tail -f /home/vinay/pub/IR/toodles.log"
+    echo "To view logs: tail -f /home/vinay/pub/IR/logs/toodles.log"
 else
     echo "❌ Warning: Toodles process not found"
-    echo "Check logs: tail -20 /home/vinay/pub/IR/toodles.log"
+    echo "Check logs: tail -20 /home/vinay/pub/IR/logs/toodles.log"
 fi

@@ -7,11 +7,14 @@ echo "Stopping existing Barnacles instances..."
 pkill -f "webex_bots/barnacles.py"
 sleep 1
 
+# Ensure logs directory exists
+mkdir -p logs
+
 # Clear the log file to ensure we see fresh output
-: > barnacles.log
+: > logs/barnacles.log
 
 # Start new barnacles instance in background
-nohup env PYTHONPATH=/Users/user/PycharmProjects/IR .venv/bin/python webex_bots/barnacles.py >> barnacles.log 2>&1 &
+nohup env PYTHONPATH=/Users/user/PycharmProjects/IR .venv/bin/python webex_bots/barnacles.py >> logs/barnacles.log 2>&1 &
 
 echo "Starting Barnacles bot..."
 echo ""
@@ -20,7 +23,7 @@ echo ""
 sleep 2
 
 # Tail the log file until we see device cleanup complete or timeout after 30 seconds
-timeout 30 tail -f barnacles.log 2>/dev/null | while read -r line; do
+timeout 30 tail -f logs/barnacles.log 2>/dev/null | while read -r line; do
     echo "$line"
     if echo "$line" | grep -q "Device cleanup complete"; then
         # Give it a few more seconds to finish initialization
@@ -37,8 +40,8 @@ if pgrep -f "webex_bots/barnacles.py" > /dev/null; then
     PID=$(pgrep -f 'webex_bots/barnacles.py')
     echo "✅ Barnacles is running (PID: $PID)"
     echo ""
-    echo "To view logs: tail -f /Users/user/PycharmProjects/IR/barnacles.log"
+    echo "To view logs: tail -f /Users/user/PycharmProjects/IR/logs/barnacles.log"
 else
     echo "❌ Warning: Barnacles process not found"
-    echo "Check logs: tail -20 /Users/user/PycharmProjects/IR/barnacles.log"
+    echo "Check logs: tail -20 /Users/user/PycharmProjects/IR/logs/barnacles.log"
 fi

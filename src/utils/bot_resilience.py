@@ -507,7 +507,7 @@ class ResilientBot:
                 start_time = datetime.now()
 
                 # Create bot instance
-                logger.debug(f"🌐 Creating bot connection...")
+                logger.info(f"🌐 Creating bot connection...")
                 self.bot_instance = self.bot_factory()
 
                 # Extract bot name from instance if not provided
@@ -519,7 +519,7 @@ class ResilientBot:
                     else:
                         self.bot_name = "UnknownBot"
 
-                logger.debug(f"✅ {self.bot_name} created successfully")
+                logger.info(f"✅ {self.bot_name} created successfully")
 
                 # Run custom initialization if provided
                 if self.initialization_func:

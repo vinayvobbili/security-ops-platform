@@ -7,11 +7,14 @@ echo "Stopping existing Jarvais instances..."
 pkill -f "webex_bots/jarvais.py"
 sleep 1
 
+# Ensure logs directory exists
+mkdir -p logs
+
 # Clear the log file to ensure we see fresh output
-: > jarvais.log
+: > logs/jarvais.log
 
 # Start new jarvais instance in background
-nohup env PYTHONPATH=/Users/user/PycharmProjects/IR .venv/bin/python webex_bots/jarvais.py >> jarvais.log 2>&1 &
+nohup env PYTHONPATH=/Users/user/PycharmProjects/IR .venv/bin/python webex_bots/jarvais.py >> logs/jarvais.log 2>&1 &
 
 echo "Starting Jarvais bot..."
 echo ""
@@ -20,7 +23,7 @@ echo ""
 sleep 2
 
 # Tail the log file until we see device cleanup complete or timeout after 30 seconds
-timeout 30 tail -f jarvais.log 2>/dev/null | while read -r line; do
+timeout 30 tail -f logs/jarvais.log 2>/dev/null | while read -r line; do
     echo "$line"
     if echo "$line" | grep -q "Device cleanup complete"; then
         # Give it a few more seconds to finish initialization
@@ -37,8 +40,8 @@ if pgrep -f "webex_bots/jarvais.py" > /dev/null; then
     PID=$(pgrep -f 'webex_bots/jarvais.py')
     echo "✅ Jarvais is running (PID: $PID)"
     echo ""
-    echo "To view logs: tail -f /Users/user/PycharmProjects/IR/jarvais.log"
+    echo "To view logs: tail -f /Users/user/PycharmProjects/IR/logs/jarvais.log"
 else
     echo "❌ Warning: Jarvais process not found"
-    echo "Check logs: tail -20 /Users/user/PycharmProjects/IR/jarvais.log"
+    echo "Check logs: tail -20 /Users/user/PycharmProjects/IR/logs/jarvais.log"
 fi
