@@ -2,203 +2,250 @@
 {% set page_title_text = 'Amazing Actionable Analytics' %}
 {% set page_title_left_icon = '📊' %}
 {% set page_title_right_icon = '💰' %}
-{% block head_scripts %}<link rel="icon" href="{{ url_for('static', filename='icons/metrics-dashboard-icon.ico') }}" type="image/x-icon">{% endblock %}
+{% block head_scripts %}
+    <link rel="icon" href="{{ url_for('static', filename='icons/metrics-dashboard-icon.ico') }}" type="image/x-icon">{% endblock %}
 {% block body_classes %}{% endblock %}
-{% block extra_css %}<link rel="stylesheet" href="{{ url_for('static', filename='css/meaningful_metrics.css') }}">{% endblock %}
+{% block extra_css %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/meaningful_metrics.css') }}">{% endblock %}
 {% block content %}
-<!-- Dark Mode Toggle -->
-<div class="theme-toggle" id="themeToggleWrapper">
-    <button id="themeToggleBtn" aria-label="Toggle dark mode" title="Toggle dark mode">🌙</button>
-</div>
+    <!-- Dark Mode Toggle -->
+    <div class="theme-toggle" id="themeToggleWrapper">
+        <button id="themeToggleBtn" aria-label="Toggle dark mode" title="Toggle dark mode">🌙</button>
+    </div>
 
-<div class="dashboard-container">
-    <!-- Filters Section -->
-    <div class="filters-section">
-        <div class="filters-header">
-            <div class="header-left">🎛️ Filter Controls</div>
-            <div class="header-right">
-                <div class="slider-field">
-                    <label class="date-range-label">📅<br>Created in past (days):</label>
-                    <div class="date-range-slider-container" style="position: relative;">
-                        <div id="dateRangeTooltip" class="slider-tooltip" style="position: absolute; top: -35px; left: 50%; transform: translateX(-50%); background: #333; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; white-space: nowrap; pointer-events: none; z-index: 10; display: none;">30</div>
-                        <label for="dateRangeSlider"></label><input type="range" id="dateRangeSlider" class="date-range-slider" min="1" max="90" value="30" step="1">
-                        <div class="slider-labels">
-                            <span class="range-preset" data-value="1" style="cursor: pointer;">1</span>
-                            <span class="range-preset" data-value="30" style="cursor: pointer;">30</span>
-                            <span class="range-preset" data-value="90" style="cursor: pointer;">90</span>
+    <div class="dashboard-container">
+        <!-- Filters Section -->
+        <div class="filters-section">
+            <div class="filters-header">
+                <div class="header-left">🎛️ Filter Controls</div>
+                <div class="header-right">
+                    <div class="slider-field">
+                        <label class="date-range-label">📅<br>Created in past (days):</label>
+                        <div class="date-range-slider-container" style="position: relative;">
+                            <div id="dateRangeTooltip" class="slider-tooltip"
+                                 style="position: absolute; top: -35px; left: 50%; transform: translateX(-50%); background: #333; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; white-space: nowrap; pointer-events: none; z-index: 10; display: none;">
+                                30
+                            </div>
+                            <label for="dateRangeSlider"></label><input type="range" id="dateRangeSlider" class="date-range-slider" min="1" max="90" value="30" step="1">
+                            <div class="slider-labels">
+                                <span class="range-preset" data-value="1" style="cursor: pointer;">1</span>
+                                <span class="range-preset" data-value="30" style="cursor: pointer;">30</span>
+                                <span class="range-preset" data-value="90" style="cursor: pointer;">90</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="slider-field">
+                        <label class="date-range-label">⏱️<br>TTR<br>(mins):</label>
+                        <div class="date-range-slider-container" style="position: relative;">
+                            <div id="mttrRangeTooltip" class="slider-tooltip"
+                                 style="position: absolute; top: -35px; left: 50%; transform: translateX(-50%); background: #333; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; white-space: nowrap; pointer-events: none; z-index: 10; display: none;">
+                                All
+                            </div>
+                            <label for="mttrRangeSlider"></label><input type="range" id="mttrRangeSlider" class="date-range-slider" min="0" max="3" value="0" step="1">
+                            <div class="slider-labels">
+                                <span data-value="0" class="active">All</span>
+                                <span data-value="1">≤3</span>
+                                <span data-value="2">>3</span>
+                                <span data-value="3">>5</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="slider-field">
+                        <label class="date-range-label">🔒<br>TTC<br>(mins):</label>
+                        <div class="date-range-slider-container" style="position: relative;">
+                            <div id="mttcRangeTooltip" class="slider-tooltip"
+                                 style="position: absolute; top: -35px; left: 50%; transform: translateX(-50%); background: #333; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; white-space: nowrap; pointer-events: none; z-index: 10; display: none;">
+                                All
+                            </div>
+                            <label for="mttcRangeSlider"></label><input type="range" id="mttcRangeSlider" class="date-range-slider" min="0" max="3" value="0" step="1">
+                            <div class="slider-labels">
+                                <span data-value="0" class="active">All</span>
+                                <span data-value="1">≤5</span>
+                                <span data-value="2">≤15</span>
+                                <span data-value="3">>15</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="slider-field">
+                        <label class="date-range-label">📆<br>Aging<br>(days): <span title="Age filter applies only to currently open tickets (closed tickets stop aging)" style="cursor: help;">ℹ️</span></label>
+                        <div class="date-range-slider-container" style="position: relative;">
+                            <div id="ageRangeTooltip" class="slider-tooltip"
+                                 style="position: absolute; top: -35px; left: 50%; transform: translateX(-50%); background: #333; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; white-space: nowrap; pointer-events: none; z-index: 10; display: none;">
+                                All
+                            </div>
+                            <label for="ageRangeSlider"></label><input type="range" id="ageRangeSlider" class="date-range-slider" min="0" max="60" value="0" step="1">
+                            <div class="slider-labels">
+                                <span class="range-preset active" data-value="0" style="cursor: pointer;">All</span>
+                                <span class="range-preset" data-value="7" style="cursor: pointer;">>7</span>
+                                <span class="range-preset" data-value="30" style="cursor: pointer;">>30</span>
+                            </div>
                         </div>
                     </div>
                 </div>
-                <div class="slider-field">
-                    <label class="date-range-label">⏱️<br>TTR<br>(mins):</label>
-                    <div class="date-range-slider-container" style="position: relative;">
-                        <div id="mttrRangeTooltip" class="slider-tooltip" style="position: absolute; top: -35px; left: 50%; transform: translateX(-50%); background: #333; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; white-space: nowrap; pointer-events: none; z-index: 10; display: none;">All</div>
-                        <label for="mttrRangeSlider"></label><input type="range" id="mttrRangeSlider" class="date-range-slider" min="0" max="3" value="0" step="1">
-                        <div class="slider-labels">
-                            <span data-value="0" class="active">All</span>
-                            <span data-value="1">≤3</span>
-                            <span data-value="2">>3</span>
-                            <span data-value="3">>5</span>
+            </div>
+            <div class="filters-grid">
+                <div class="filter-group">
+                    <div class="location-filter-tabs">
+                        <div class="tab-buttons">
+                            <button class="tab-button" data-tab="country">🇺🇸 Country</button>
+                            <button class="tab-button active" data-tab="region">🌍 Region</button>
+                        </div>
+                        <div class="tab-content">
+                            <div id="countryTab" class="tab-pane">
+                                <div id="countryFilter" class="checkbox-filter"></div>
+                            </div>
+                            <div id="regionTab" class="tab-pane active">
+                                <div id="regionFilter" class="checkbox-filter"></div>
+                            </div>
                         </div>
                     </div>
                 </div>
-                <div class="slider-field">
-                    <label class="date-range-label">🔒<br>TTC<br>(mins):</label>
-                    <div class="date-range-slider-container" style="position: relative;">
-                        <div id="mttcRangeTooltip" class="slider-tooltip" style="position: absolute; top: -35px; left: 50%; transform: translateX(-50%); background: #333; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; white-space: nowrap; pointer-events: none; z-index: 10; display: none;">All</div>
-                        <label for="mttcRangeSlider"></label><input type="range" id="mttcRangeSlider" class="date-range-slider" min="0" max="3" value="0" step="1">
-                        <div class="slider-labels">
-                            <span data-value="0" class="active">All</span>
-                            <span data-value="1">≤5</span>
-                            <span data-value="2">≤15</span>
-                            <span data-value="3">>15</span>
-                        </div>
+                <div class="filter-group">
+                    <label class="filter-label">💥 Impact Level</label>
+                    <div id="impactFilter" class="checkbox-filter"></div>
+                </div>
+                <div class="filter-group">
+                    <label class="filter-label">🚨 Severity</label>
+                    <div id="severityFilter" class="checkbox-filter">
+                        <label><input type="checkbox" value="4"> Critical</label>
+                        <label><input type="checkbox" value="3"> High</label>
+                        <label><input type="checkbox" value="2"> Medium</label>
+                        <label><input type="checkbox" value="1"> Low</label>
                     </div>
                 </div>
-                <div class="slider-field">
-                    <label class="date-range-label">📆<br>Aging<br>(days): <span title="Age filter applies only to currently open tickets (closed tickets stop aging)" style="cursor: help;">ℹ️</span></label>
-                    <div class="date-range-slider-container" style="position: relative;">
-                        <div id="ageRangeTooltip" class="slider-tooltip" style="position: absolute; top: -35px; left: 50%; transform: translateX(-50%); background: #333; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; white-space: nowrap; pointer-events: none; z-index: 10; display: none;">All</div>
-                        <label for="ageRangeSlider"></label><input type="range" id="ageRangeSlider" class="date-range-slider" min="0" max="60" value="0" step="1">
-                        <div class="slider-labels">
-                            <span class="range-preset active" data-value="0" style="cursor: pointer;">All</span>
-                            <span class="range-preset" data-value="7" style="cursor: pointer;">>7</span>
-                            <span class="range-preset" data-value="30" style="cursor: pointer;">>30</span>
-                        </div>
+                <div class="filter-group ticket-type-filter">
+                    <label class="filter-label">🎫 Ticket Type</label>
+                    <div id="ticketTypeFilter" class="checkbox-filter"></div>
+                </div>
+                <div class="filter-group">
+                    <label class="filter-label">📊 Status</label>
+                    <div id="statusFilter" class="checkbox-filter">
+                        <label><input type="checkbox" value="0"> Pending</label>
+                        <label><input type="checkbox" value="1"> Active</label>
+                        <label><input type="checkbox" value="2"> Closed</label>
                     </div>
                 </div>
-            </div>
-        </div>
-        <div class="filters-grid">
-            <div class="filter-group">
-                <div class="location-filter-tabs">
-                    <div class="tab-buttons">
-                        <button class="tab-button" data-tab="country">🇺🇸 Country</button>
-                        <button class="tab-button active" data-tab="region">🌍 Region</button>
-                    </div>
-                    <div class="tab-content">
-                        <div id="countryTab" class="tab-pane"><div id="countryFilter" class="checkbox-filter"></div></div>
-                        <div id="regionTab" class="tab-pane active"><div id="regionFilter" class="checkbox-filter"></div></div>
+                <div class="filter-group">
+                    <label class="filter-label">🤖 Automation Level</label>
+                    <div id="automationFilter" class="checkbox-filter">
+                        <label><input type="checkbox" value="Manual"> Manual</label>
+                        <label><input type="checkbox" value="Semi-Automated"> Semi-Auto</label>
+                        <label><input type="checkbox" value="Automated"> Automated</label>
+                        <label><input type="checkbox" value="Unknown"> Unknown</label>
                     </div>
                 </div>
             </div>
-            <div class="filter-group">
-                <label class="filter-label">💥 Impact Level</label>
-                <div id="impactFilter" class="checkbox-filter"></div>
-            </div>
-            <div class="filter-group">
-                <label class="filter-label">🚨 Severity</label>
-                <div id="severityFilter" class="checkbox-filter">
-                    <label><input type="checkbox" value="4"> Critical</label>
-                    <label><input type="checkbox" value="3"> High</label>
-                    <label><input type="checkbox" value="2"> Medium</label>
-                    <label><input type="checkbox" value="1"> Low</label>
-                </div>
-            </div>
-            <div class="filter-group ticket-type-filter">
-                <label class="filter-label">🎫 Ticket Type</label>
-                <div id="ticketTypeFilter" class="checkbox-filter"></div>
-            </div>
-            <div class="filter-group">
-                <label class="filter-label">📊 Status</label>
-                <div id="statusFilter" class="checkbox-filter">
-                    <label><input type="checkbox" value="0"> Pending</label>
-                    <label><input type="checkbox" value="1"> Active</label>
-                    <label><input type="checkbox" value="2"> Closed</label>
-                </div>
-            </div>
-            <div class="filter-group">
-                <label class="filter-label">🤖 Automation Level</label>
-                <div id="automationFilter" class="checkbox-filter">
-                    <label><input type="checkbox" value="Manual"> Manual</label>
-                    <label><input type="checkbox" value="Semi-Automated"> Semi-Auto</label>
-                    <label><input type="checkbox" value="Automated"> Automated</label>
-                    <label><input type="checkbox" value="Unknown"> Unknown</label>
-                </div>
-            </div>
-        </div>
-        <div class="filter-summary" id="filterSummary">
-            <div class="filter-summary-content"><strong>Active Filters:</strong>
-                <span class="active-filters-container" id="activeFiltersContainer">
+            <div class="filter-summary" id="filterSummary">
+                <div class="filter-summary-content"><strong>Active Filters:</strong>
+                    <span class="active-filters-container" id="activeFiltersContainer">
                     <span class="filter-tag non-removable" title="Unique: Excludes duplicate tickets received for the same host within the past hour">Unique ℹ️</span>
                     <span class="filter-tag">Last 30 days</span>
                 </span>
+                </div>
+                <button class="clear-all-btn" id="resetFiltersBtn">Reset</button>
             </div>
-            <button class="clear-all-btn" id="resetFiltersBtn">Reset</button>
         </div>
-    </div>
-    <div id="loading" class="loading">🔄 Loading security alerts data...</div>
-    <div id="error" class="error" style="display: none;"></div>
-    <div id="metricsGrid" class="metrics-grid" style="display: none;"></div>
-    <div id="chartsGrid" class="charts-grid" style="display: none;">
-        <div class="chart-container"><div class="chart-title">🌍 Geographic Distribution (Top 10)</div><div id="geoChart" class="chart-canvas"></div></div>
-        <div class="chart-container"><div class="chart-title">🎫 Ticket Type Distribution</div><div id="severityChart" class="chart-canvas"></div></div>
-        <div class="chart-container"><div class="chart-title">📈 Daily Alerts Timeline</div><div id="timelineChart" class="chart-canvas"></div></div>
-        <div class="chart-container"><div class="chart-title">💥 Impact Distribution</div><div id="ticketTypeChart" class="chart-canvas"></div></div>
-        <div class="chart-container"><div class="chart-title">👤 Owner Distribution (Top 10)</div><div id="heatmapChart" class="chart-canvas"></div></div>
-        <div class="chart-container"><div class="chart-title">🔍 Case Analysis Funnel</div><div id="funnelChart" class="chart-canvas"></div></div>
-        <div class="chart-container"><div class="chart-title">🖥️ Top 10 Hosts by Ticket Count</div><div id="topHostsChart" class="chart-canvas"></div></div>
-        <div class="chart-container"><div class="chart-title">👥 Top 10 Users by Ticket Count</div><div id="topUsersChart" class="chart-canvas"></div></div>
-        <div class="chart-container"><div class="chart-title">⏱️ Average Resolution Time by Ticket Type</div><div id="resolutionTimeChart" class="chart-canvas"></div></div>
-    </div>
-    <div id="dataTableSection" class="data-table-section" style="display: none; position: relative;">
-        <div id="dataTableEmptyHint" class="empty-hint" aria-hidden="true">No data. Adjust filters to see results.</div>
-        <div id="tableStatusLive" class="sr-only" aria-live="polite" aria-atomic="true"></div>
-        <div class="table-controls">
-            <div id="tableHeader" class="table-header">📋 Case Details</div>
-            <div class="column-selector">
-                <button id="columnSelectorBtn" class="column-selector-btn">⚙️ Columns</button>
-                <div id="columnSelectorDropdown" class="column-selector-dropdown" style="display: none;">
-                    <div class="column-selector-content">
-                        <div class="column-selector-header">
-                            <span>Select Columns to Display</span>
-                            <div class="column-selector-buttons">
-                                <button id="selectAllColumnsBtn" class="select-all-btn">Select All</button>
-                                <button id="deselectAllColumnsBtn" class="deselect-all-btn">Deselect All</button>
+        <div id="loading" class="loading">🔄 Loading security alerts data...</div>
+        <div id="error" class="error" style="display: none;"></div>
+        <div id="metricsGrid" class="metrics-grid" style="display: none;"></div>
+        <div id="chartsGrid" class="charts-grid" style="display: none;">
+            <div class="chart-container">
+                <div class="chart-title">🌍 Geographic Distribution (Top 10)</div>
+                <div id="geoChart" class="chart-canvas"></div>
+            </div>
+            <div class="chart-container">
+                <div class="chart-title">🎫 Ticket Type Distribution</div>
+                <div id="severityChart" class="chart-canvas"></div>
+            </div>
+            <div class="chart-container">
+                <div class="chart-title">📈 Daily Alerts Timeline</div>
+                <div id="timelineChart" class="chart-canvas"></div>
+            </div>
+            <div class="chart-container">
+                <div class="chart-title">💥 Impact Distribution</div>
+                <div id="ticketTypeChart" class="chart-canvas"></div>
+            </div>
+            <div class="chart-container">
+                <div class="chart-title">👤 Owner Distribution (Top 10)</div>
+                <div id="heatmapChart" class="chart-canvas"></div>
+            </div>
+            <div class="chart-container">
+                <div class="chart-title">🔍 Case Analysis Funnel</div>
+                <div id="funnelChart" class="chart-canvas"></div>
+            </div>
+            <div class="chart-container">
+                <div class="chart-title">🖥️ Top 10 Hosts by Ticket Count</div>
+                <div id="topHostsChart" class="chart-canvas"></div>
+            </div>
+            <div class="chart-container">
+                <div class="chart-title">👥 Top 10 Users by Ticket Count</div>
+                <div id="topUsersChart" class="chart-canvas"></div>
+            </div>
+            <div class="chart-container">
+                <div class="chart-title">⏱️ Average Resolution Time by Ticket Type</div>
+                <div id="resolutionTimeChart" class="chart-canvas"></div>
+            </div>
+        </div>
+        <div id="dataTableSection" class="data-table-section" style="display: none; position: relative;">
+            <div id="dataTableEmptyHint" class="empty-hint" aria-hidden="true">No data. Adjust filters to see results.</div>
+            <div id="tableStatusLive" class="sr-only" aria-live="polite" aria-atomic="true"></div>
+            <div class="table-controls">
+                <div id="tableHeader" class="table-header">📋 Case Details</div>
+                <div class="column-selector">
+                    <button id="columnSelectorBtn" class="column-selector-btn">⚙️ Columns</button>
+                    <div id="columnSelectorDropdown" class="column-selector-dropdown" style="display: none;">
+                        <div class="column-selector-content">
+                            <div class="column-selector-header">
+                                <span>Select Columns to Display</span>
+                                <div class="column-selector-buttons">
+                                    <button id="selectAllColumnsBtn" class="select-all-btn">Select All</button>
+                                    <button id="deselectAllColumnsBtn" class="deselect-all-btn">Deselect All</button>
+                                </div>
                             </div>
-                        </div>
-                        <div id="columnCheckboxes" class="column-checkboxes"></div>
-                        <div class="column-order-section">
-                            <div class="column-order-header"><strong>Column Order</strong><span class="order-help">(Drag to reorder)</span></div>
-                            <div id="columnOrderList" class="column-order-list"></div>
+                            <div id="columnCheckboxes" class="column-checkboxes"></div>
+                            <div class="column-order-section">
+                                <div class="column-order-header"><strong>Column Order</strong><span class="order-help">(Drag to reorder)</span></div>
+                                <div id="columnOrderList" class="column-order-list"></div>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
+            <div style="overflow-x: auto;">
+                <table id="dataTable" class="data-table">
+                    <thead>
+                    <tr>
+                        <th class="sortable" data-column="id">ID <span class="sort-indicator"></span></th>
+                        <th class="sortable" data-column="name">Name <span class="sort-indicator"></span></th>
+                        <th class="sortable" data-column="severity">Severity <span class="sort-indicator"></span></th>
+                        <th class="sortable" data-column="status">Status <span class="sort-indicator"></span></th>
+                        <th class="sortable" data-column="affected_country">Country <span class="sort-indicator"></span></th>
+                        <th class="sortable" data-column="impact">Impact <span class="sort-indicator"></span></th>
+                        <th class="sortable" data-column="type">Source <span class="sort-indicator"></span></th>
+                        <th class="sortable" data-column="created">Created <span class="sort-indicator"></span></th>
+                    </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+            <div id="tableInfoBar" class="table-info-bar" aria-live="polite"></div>
+            <div class="export-section">
+                <button class="export-btn" id="exportCsvBtn">📥 Export to Excel</button>
+                <button class="export-btn" id="exportSummaryBtn">📊 Export Summary</button>
+            </div>
         </div>
-        <div style="overflow-x: auto;">
-            <table id="dataTable" class="data-table">
-                <thead>
-                <tr>
-                    <th class="sortable" data-column="id">ID <span class="sort-indicator"></span></th>
-                    <th class="sortable" data-column="name">Name <span class="sort-indicator"></span></th>
-                    <th class="sortable" data-column="severity">Severity <span class="sort-indicator"></span></th>
-                    <th class="sortable" data-column="status">Status <span class="sort-indicator"></span></th>
-                    <th class="sortable" data-column="affected_country">Country <span class="sort-indicator"></span></th>
-                    <th class="sortable" data-column="impact">Impact <span class="sort-indicator"></span></th>
-                    <th class="sortable" data-column="type">Source <span class="sort-indicator"></span></th>
-                    <th class="sortable" data-column="created">Created <span class="sort-indicator"></span></th>
-                </tr>
-                </thead>
-                <tbody></tbody>
-            </table>
-        </div>
-        <div id="tableInfoBar" class="table-info-bar" aria-live="polite"></div>
-        <div class="export-section">
-            <button class="export-btn" id="exportCsvBtn">📥 Export to Excel</button>
-            <button class="export-btn" id="exportSummaryBtn">📊 Export Summary</button>
+        <div class="data-freshness">
+            <span class="freshness-label">Data generated:</span>
+            <span id="dataTimestamp" class="freshness-timestamp">Loading...</span>
+            <span class="freshness-note">(Updated daily at midnight ET)</span>
         </div>
     </div>
-    <div class="data-freshness">
-        <span class="freshness-label">Data generated:</span>
-        <span id="dataTimestamp" class="freshness-timestamp">Loading...</span>
-        <span class="freshness-note">(Updated at the top of every ET hour)</span>
-    </div>
-</div>
-<div id="toast" class="toast" role="status" aria-live="polite" aria-atomic="true"></div>
+    <div id="toast" class="toast" role="status" aria-live="polite" aria-atomic="true"></div>
 {% endblock %}
 {% block extra_js %}
-<script src="https://cdn.plot.ly/plotly-2.26.0.min.js"></script>
-<script src="{{ url_for('static', filename='js/meaningful_metrics.js') }}"></script>
-<script>if (typeof initTheme==='function') initTheme(); if (typeof initBurgerMenu==='function') initBurgerMenu(); if (typeof initRandomMusic==='function') initRandomMusic();</script>
+    <script src="https://cdn.plot.ly/plotly-2.26.0.min.js"></script>
+    <script src="{{ url_for('static', filename='js/meaningful_metrics.js') }}"></script>
+    <script>if (typeof initTheme === 'function') initTheme();
+    if (typeof initBurgerMenu === 'function') initBurgerMenu();
+    if (typeof initRandomMusic === 'function') initRandomMusic();</script>
 {% endblock %}
