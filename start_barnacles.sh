@@ -1,6 +1,6 @@
 #!/bin/bash
 
-cd /Users/user/PycharmProjects/IR || exit 1
+cd /home/vinay/pub/IR || exit 1
 
 # Kill existing barnacles process if running
 echo "Stopping existing Barnacles instances..."
