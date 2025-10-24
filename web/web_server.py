@@ -1351,7 +1351,7 @@ def api_meaningful_metrics_data():
     try:
         today_date = datetime.now(eastern).strftime('%m-%d-%Y')
         root_directory = Path(__file__).parent.parent
-        cache_file = root_directory / 'web' / 'static' / 'charts' / today_date / 'past_90_days_tickets.json'
+        cache_file = root_directory / 'data' / 'transient' / 'secOps' / today_date / 'past_90_days_tickets.json'
         if not cache_file.exists():
             return jsonify({'success': False, 'error': 'Cache file not found'}), 404
         with open(cache_file, 'r') as f:
