@@ -1262,6 +1262,18 @@ function getChartColors() {
         const limit = showAllRows ? total : 100;
         const displayData = sortedData.slice(0, limit); // Limit to 100 rows for performance
 
+        // Update table header with accurate counts
+        const tableHeader = document.getElementById('tableHeader');
+        if (tableHeader) {
+            if (total === 0) {
+                tableHeader.textContent = '📋 Case Details';
+            } else if (displayData.length === total) {
+                tableHeader.textContent = `📋 Case Details (showing all ${total} results)`;
+            } else {
+                tableHeader.textContent = `📋 Case Details (showing first ${displayData.length} of ${total} results)`;
+            }
+        }
+
         displayData.forEach(item => {
             const row = document.createElement('tr');
 
@@ -1300,23 +1312,22 @@ function getChartColors() {
                             case 'array':
                                 // Format array values (e.g., notes)
                                 if (columnId === 'notes' && Array.isArray(value) && value.length > 0) {
-                                    // Format notes with numbering
-                                    const notesHtml = value.map((note, index) => {
-                                        const noteText = note.contents || '';
-                                        const author = note.user || 'Unknown';
-                                        const timestamp = note.created ? new Date(note.created).toLocaleString() : '';
-                                        return `<div style="margin-bottom: 8px; padding: 6px; background: #f8f9fa; border-left: 3px solid #0046ad;">
-                                                    <strong>${index + 1}. Note:</strong> ${noteText.substring(0, 100)}${noteText.length > 100 ? '...' : ''}<br>
-                                                    <small style="color: #6c757d;">Author: ${author} | ${timestamp}</small>
-                                                </div>`;
-                                    }).join('');
-                                    td.innerHTML = notesHtml;
-                                    td.style.maxWidth = '400px';
-                                    td.style.whiteSpace = 'normal';
-                                } else if (Array.isArray(value)) {
-                                    td.textContent = value.length ? `${value.length} items` : '--';
+                                    // Store notes data for modal
+                                    const notesData = JSON.stringify(value.map(note => ({
+                                        text: note.note_text || note.contents || '',
+                                        author: note.author || note.user || 'Unknown',
+                                        timestamp: note.created_at || (note.created ? new Date(note.created).toLocaleString() : '')
+                                    })));
+
+                                    // Show compact icon with count
+                                    td.innerHTML = `<span class="notes-icon" data-notes='${notesData.replace(/'/g, '&#39;')}'>
+                                                        📝 ${value.length}
+                                                    </span>`;
+                                    td.style.textAlign = 'center';
+                                } else if (Array.isArray(value) && value.length > 0) {
+                                    td.textContent = `${value.length} items`;
                                 } else {
-                                    td.textContent = '--';
+                                    td.textContent = '';
                                 }
                                 break;
                             case 'number':
@@ -1368,118 +1379,185 @@ function getChartColors() {
             announceTableStatus(msg);
             lastTableRowCount = filteredData.length;
         }
+
+        // Attach event listeners to notes icons
+        attachNotesModalListeners();
     }
 
-    function exportToCSV() {
-        // Use visible columns for export
-        const headers = visibleColumns.map(colId => availableColumns[colId]?.label || colId);
-        const severityMap = {0: 'Unknown', 1: 'Low', 2: 'Medium', 3: 'High', 4: 'Critical'};
-        const statusMap = {0: 'Pending', 1: 'Active', 2: 'Closed'};
+    // Custom notes modal functionality
+    let notesModal = null;
 
-        const rows = filteredData.map(item => {
-            const row = {};
-            visibleColumns.forEach(colId => {
-                const column = availableColumns[colId];
-                const header = column?.label || colId;
-                let value = getNestedValue(item, column.path);
+    function createNotesModal() {
+        if (!notesModal) {
+            notesModal = document.createElement('div');
+            notesModal.className = 'notes-modal-overlay';
+            notesModal.innerHTML = `
+                <div class="notes-modal">
+                    <div class="notes-modal-header">
+                        <div class="notes-modal-title">📝 User Notes</div>
+                        <button class="notes-modal-close" aria-label="Close">×</button>
+                    </div>
+                    <div class="notes-modal-body">
+                        <table class="notes-table">
+                            <thead>
+                                <tr>
+                                    <th>#</th>
+                                    <th>Note</th>
+                                    <th>Author</th>
+                                    <th>Timestamp</th>
+                                </tr>
+                            </thead>
+                            <tbody id="notesTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(notesModal);
 
-                // Format based on column type
-                if (column.type === 'array' && colId === 'notes') {
-                    // Format notes for Excel
-                    if (Array.isArray(value) && value.length > 0) {
-                        const notesText = value.map((note, index) => {
-                            const noteText = note.contents || '';
-                            const author = note.user || 'Unknown';
-                            const timestamp = note.created ? new Date(note.created).toLocaleString() : '';
-                            return `${index + 1}. Note: ${noteText}\nAuthor: ${author}\nTimestamp: ${timestamp}`;
-                        }).join('\n\n');
-                        row[header] = notesText;
-                    } else {
-                        row[header] = '';
-                    }
-                } else if (column.type === 'date' && value) {
-                    row[header] = new Date(value).toLocaleString();
-                } else if (colId === 'severity') {
-                    row[header] = severityMap[value] || 'Unknown';
-                } else if (colId === 'status') {
-                    row[header] = statusMap[value] || 'Unknown';
-                } else {
-                    row[header] = value || '';
+            // Close button handler
+            const closeBtn = notesModal.querySelector('.notes-modal-close');
+            closeBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                hideNotesModal();
+            });
+
+            // Close on overlay click
+            notesModal.addEventListener('click', function(e) {
+                if (e.target === notesModal) {
+                    hideNotesModal();
                 }
             });
-            return row;
-        });
 
-        // Create Excel workbook
-        const ws = XLSX.utils.json_to_sheet(rows, {header: headers});
-
-        // Set column widths based on content type
-        const colWidths = headers.map(header => {
-            const headerLower = header.toLowerCase();
-            if (header === 'User Notes' || headerLower.includes('notes')) return {wch: 60};
-            if (headerLower.includes('description') || headerLower.includes('details')) return {wch: 40};
-            if (headerLower.includes('name') || headerLower.includes('owner')) return {wch: 25};
-            if (headerLower.includes('date') || headerLower.includes('time')) return {wch: 20};
-            return {wch: 15};
-        });
-        ws['!cols'] = colWidths;
-
-        // Apply professional formatting
-        const range = XLSX.utils.decode_range(ws['!ref']);
-
-        // Style header row - Bold white text on blue background
-        for (let col = range.s.c; col <= range.e.c; col++) {
-            const cellAddress = XLSX.utils.encode_cell({r: 0, c: col});
-            if (!ws[cellAddress]) continue;
-            ws[cellAddress].s = {
-                font: {bold: true, color: {rgb: "FFFFFF"}},
-                fill: {fgColor: {rgb: "4472C4"}},
-                alignment: {horizontal: "center", vertical: "center"},
-                border: {
-                    top: {style: "thin", color: {rgb: "000000"}},
-                    bottom: {style: "thin", color: {rgb: "000000"}},
-                    left: {style: "thin", color: {rgb: "000000"}},
-                    right: {style: "thin", color: {rgb: "000000"}}
+            // Close on Escape key
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape' && notesModal.classList.contains('show')) {
+                    hideNotesModal();
                 }
-            };
+            });
         }
+        return notesModal;
+    }
 
-        // Style data rows - Zebra striping with borders
-        for (let row = range.s.r + 1; row <= range.e.r; row++) {
-            const isAlternateRow = (row % 2 === 0);
-            for (let col = range.s.c; col <= range.e.c; col++) {
-                const cellAddress = XLSX.utils.encode_cell({r: row, c: col});
-                if (!ws[cellAddress]) ws[cellAddress] = {t: 's', v: ''};
+    function showNotesModal(notesData) {
+        const modal = createNotesModal();
+        const notes = JSON.parse(notesData);
+        const tbody = modal.querySelector('#notesTableBody');
 
-                const header = headers[col];
-                const isWrapColumn = header === 'User Notes' || header.toLowerCase().includes('notes') ||
-                                    header.toLowerCase().includes('description');
+        // Build table rows
+        tbody.innerHTML = notes.map((note, index) => `
+            <tr>
+                <td class="notes-table-number">${index + 1}</td>
+                <td class="notes-table-text">${note.text}</td>
+                <td class="notes-table-author">${note.author}</td>
+                <td class="notes-table-timestamp">${note.timestamp}</td>
+            </tr>
+        `).join('');
 
-                ws[cellAddress].s = {
-                    fill: isAlternateRow ? {fgColor: {rgb: "F2F2F2"}} : {},
-                    alignment: {
-                        vertical: "top",
-                        wrapText: isWrapColumn
-                    },
-                    border: {
-                        top: {style: "thin", color: {rgb: "000000"}},
-                        bottom: {style: "thin", color: {rgb: "000000"}},
-                        left: {style: "thin", color: {rgb: "000000"}},
-                        right: {style: "thin", color: {rgb: "000000"}}
-                    }
-                };
+        // Force positioning via inline styles
+        modal.style.cssText = `
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            right: 0 !important;
+            bottom: 0 !important;
+            width: 100vw !important;
+            height: 100vh !important;
+            z-index: 10000 !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            margin: 0 !important;
+            padding: 20px !important;
+            transform: none !important;
+        `;
+
+        // Show modal
+        modal.classList.add('show');
+
+        // Scroll to top of page so modal is visible
+        window.scrollTo({
+            top: 0,
+            left: 0,
+            behavior: 'smooth'
+        });
+
+        // Prevent body scroll when modal is open
+        document.body.style.overflow = 'hidden';
+    }
+
+    function hideNotesModal() {
+        if (notesModal) {
+            notesModal.classList.remove('show');
+            notesModal.style.display = 'none';
+            document.body.style.overflow = '';
+        }
+    }
+
+    function attachNotesModalListeners() {
+        document.querySelectorAll('.notes-icon').forEach(icon => {
+            icon.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                const notesData = this.getAttribute('data-notes');
+                if (notesData) {
+                    showNotesModal(notesData);
+                }
+            });
+        });
+    }
+
+    async function exportToCSV() {
+        // Use server-side export for professional formatting
+        try {
+            const exportBtn = document.getElementById('exportCsvBtn');
+            const originalText = exportBtn.textContent;
+            exportBtn.textContent = '⏳ Exporting...';
+            exportBtn.disabled = true;
+
+            // Build column labels mapping
+            const columnLabels = {};
+            visibleColumns.forEach(colId => {
+                columnLabels[colId] = availableColumns[colId]?.label || colId;
+            });
+
+            const response = await fetch('/api/meaningful-metrics/export', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    incidents: filteredData,
+                    visible_columns: visibleColumns,
+                    column_labels: columnLabels
+                })
+            });
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.error || 'Export failed');
             }
+
+            // Download the file
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'security_incidents.xlsx';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+
+            exportBtn.textContent = originalText;
+            exportBtn.disabled = false;
+        } catch (error) {
+            console.error('Export error:', error);
+            alert('Failed to export: ' + error.message);
+            const exportBtn = document.getElementById('exportCsvBtn');
+            exportBtn.textContent = '📥 Export to Excel';
+            exportBtn.disabled = false;
         }
-
-        // Add auto-filter and freeze panes
-        ws['!autofilter'] = {ref: XLSX.utils.encode_range(range)};
-        ws['!freeze'] = {xSplit: 0, ySplit: 1};
-
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, 'Security Incidents');
-
-        // Generate Excel file with cell styles enabled
-        XLSX.writeFile(wb, 'security_incidents.xlsx', {cellStyles: true});
     }
 
     function exportSummary() {

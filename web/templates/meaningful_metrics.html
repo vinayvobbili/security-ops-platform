@@ -145,7 +145,7 @@
         <div id="dataTableEmptyHint" class="empty-hint" aria-hidden="true">No data. Adjust filters to see results.</div>
         <div id="tableStatusLive" class="sr-only" aria-live="polite" aria-atomic="true"></div>
         <div class="table-controls">
-            <div class="table-header">📋 Case Details (showing first 100 results)</div>
+            <div id="tableHeader" class="table-header">📋 Case Details</div>
             <div class="column-selector">
                 <button id="columnSelectorBtn" class="column-selector-btn">⚙️ Columns</button>
                 <div id="columnSelectorDropdown" class="column-selector-dropdown" style="display: none;">
@@ -199,7 +199,6 @@
 {% endblock %}
 {% block extra_js %}
 <script src="https://cdn.plot.ly/plotly-2.26.0.min.js"></script>
-<script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <script src="{{ url_for('static', filename='js/meaningful_metrics.js') }}"></script>
 <script>if (typeof initTheme==='function') initTheme(); if (typeof initBurgerMenu==='function') initBurgerMenu(); if (typeof initRandomMusic==='function') initRandomMusic();</script>
 {% endblock %}

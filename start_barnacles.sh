@@ -14,7 +14,7 @@ mkdir -p logs
 : > logs/barnacles.log
 
 # Start new barnacles instance in background
-nohup env PYTHONPATH=/Users/user/PycharmProjects/IR .venv/bin/python webex_bots/barnacles.py >> logs/barnacles.log 2>&1 &
+nohup env PYTHONPATH=/home/vinay/pub/IR .venv/bin/python webex_bots/barnacles.py >> logs/barnacles.log 2>&1 &
 
 echo "Starting Barnacles bot..."
 echo ""
@@ -40,8 +40,8 @@ if pgrep -f "webex_bots/barnacles.py" > /dev/null; then
     PID=$(pgrep -f 'webex_bots/barnacles.py')
     echo "✅ Barnacles is running (PID: $PID)"
     echo ""
-    echo "To view logs: tail -f /Users/user/PycharmProjects/IR/logs/barnacles.log"
+    echo "To view logs: tail -f /home/vinay/pub/IR/logs/barnacles.log"
 else
     echo "❌ Warning: Barnacles process not found"
-    echo "Check logs: tail -20 /Users/user/PycharmProjects/IR/logs/barnacles.log"
+    echo "Check logs: tail -20 /home/vinay/pub/IR/logs/barnacles.log"
 fi
