@@ -1375,6 +1375,192 @@ def api_meaningful_metrics_data():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@app.route('/api/meaningful-metrics/export', methods=['POST'])
+@log_web_activity
+def api_meaningful_metrics_export():
+    """Server-side Excel export with professional formatting."""
+    import json
+    import pandas as pd
+    from pathlib import Path
+    from io import BytesIO
+    from flask import send_file
+    from src.utils.excel_formatting import apply_professional_formatting
+    import tempfile
+
+    try:
+        # Get the filtered data from the request
+        data = request.get_json()
+        if not data or 'incidents' not in data:
+            return jsonify({'success': False, 'error': 'No data provided'}), 400
+
+        incidents = data['incidents']
+        visible_columns = data.get('visible_columns', [])
+        column_labels = data.get('column_labels', {})
+
+        if not incidents:
+            return jsonify({'success': False, 'error': 'No incidents to export'}), 400
+
+        # Process the data similar to frontend
+        severity_map = {0: 'Unknown', 1: 'Low', 2: 'Medium', 3: 'High', 4: 'Critical'}
+        status_map = {0: 'Pending', 1: 'Active', 2: 'Closed'}
+
+        # Prepare rows for export
+        MAX_CELL_LENGTH = 32767
+        rows = []
+
+        for incident in incidents:
+            row = {}
+            for col_id in visible_columns:
+                # Get the value based on column path
+                value = incident.get(col_id)
+                # Use label if provided, otherwise use col_id
+                col_label = column_labels.get(col_id, col_id)
+
+                # Handle special formatting
+                if col_id == 'notes':
+                    # Format notes with truncation (notes are already pre-formatted from xsoar.get_user_notes)
+                    if isinstance(value, list) and value:
+                        TRUNCATION_MESSAGE = '\n\n[... Content truncated due to Excel cell size limit. Please view full notes in the web interface ...]'
+                        RESERVED_LENGTH = len(TRUNCATION_MESSAGE) + 100
+
+                        notes_text = ''
+                        total_length = 0
+                        truncated = False
+
+                        for idx, note in enumerate(value):
+                            # Notes are pre-formatted with note_text, author, created_at from xsoar.get_user_notes()
+                            note_text = note.get('note_text', '')
+                            author = note.get('author', '')
+                            timestamp = note.get('created_at', '')
+                            formatted_note = f"{idx + 1}. Note: {note_text}\nAuthor: {author}\nTimestamp: {timestamp}"
+                            separator = '\n\n' if idx > 0 else ''
+                            next_chunk = separator + formatted_note
+
+                            if total_length + len(next_chunk) + RESERVED_LENGTH > MAX_CELL_LENGTH:
+                                truncated = True
+                                break
+
+                            notes_text += next_chunk
+                            total_length += len(next_chunk)
+
+                        if truncated:
+                            notes_text += TRUNCATION_MESSAGE
+
+                        value = notes_text
+                    else:
+                        value = ''
+                elif col_id == 'severity':
+                    value = severity_map.get(value, 'Unknown')
+                elif col_id == 'status':
+                    value = status_map.get(value, 'Unknown')
+                elif col_id in ['created', 'modified', 'closed', 'updated'] and value:
+                    # Format date as MM/DD/YYYY HH:MM AM ET
+                    try:
+                        from datetime import datetime
+                        import pytz
+                        # Parse the date (handle various formats)
+                        if isinstance(value, str):
+                            # Try to parse ISO format or other common formats
+                            try:
+                                dt = datetime.fromisoformat(value.replace('Z', '+00:00'))
+                            except:
+                                dt = datetime.strptime(value, '%Y-%m-%dT%H:%M:%S.%fZ')
+                        else:
+                            dt = value
+
+                        # Convert to Eastern Time
+                        if dt.tzinfo is None:
+                            dt = pytz.utc.localize(dt)
+                        et_tz = pytz.timezone('US/Eastern')
+                        dt_et = dt.astimezone(et_tz)
+
+                        # Format as MM/DD/YYYY HH:MM AM ET
+                        value = dt_et.strftime('%m/%d/%Y %I:%M %p ET')
+                    except Exception as e:
+                        logger.warning(f"Could not format date {value}: {e}")
+                        # Keep original value if formatting fails
+                        pass
+                elif isinstance(value, list):
+                    value = ', '.join(str(v) for v in value)
+
+                # Truncate any overly long text
+                if isinstance(value, str) and len(value) > MAX_CELL_LENGTH:
+                    truncation_msg = '\n\n[... Content truncated due to Excel cell size limit ...]'
+                    value = value[:MAX_CELL_LENGTH - len(truncation_msg)] + truncation_msg
+
+                row[col_label] = value if value is not None else ''
+
+            rows.append(row)
+
+        # Create DataFrame and export to Excel
+        df = pd.DataFrame(rows)
+
+        # Create temporary file
+        with tempfile.NamedTemporaryFile(mode='wb', suffix='.xlsx', delete=False) as tmp:
+            temp_path = tmp.name
+            df.to_excel(temp_path, index=False, engine='openpyxl')
+
+        # Add hyperlinks to ID column
+        from openpyxl import load_workbook
+        from openpyxl.styles import Font
+        wb = load_workbook(temp_path)
+        ws = wb.active
+
+        # Find the ID column index
+        header_row = list(ws.iter_rows(min_row=1, max_row=1, values_only=True))[0]
+        id_col_idx = None
+        for idx, header in enumerate(header_row, 1):
+            if header and header.lower() == 'id':
+                id_col_idx = idx
+                break
+
+        # Add hyperlinks to ID cells
+        if id_col_idx:
+            blue_font = Font(color="0046AD", underline="single")
+            for row_idx in range(2, ws.max_row + 1):
+                cell = ws.cell(row=row_idx, column=id_col_idx)
+                if cell.value:
+                    ticket_id = cell.value
+                    ticket_url = f"https://msoar.crtx.us.paloaltonetworks.com/Custom/caseinfoid/{ticket_id}"
+                    cell.hyperlink = ticket_url
+                    cell.font = blue_font
+                    cell.value = ticket_id  # Keep the ID as the display value
+
+        wb.save(temp_path)
+
+        # Apply professional formatting
+        column_widths = {
+            'id': 15,
+            'name': 30,
+            'severity': 15,
+            'status': 15,
+            'country': 20,
+            'impact': 25,
+            'type': 25,
+            'owner': 25,
+            'created': 25,
+            'user notes': 80,
+            'notes': 80
+        }
+
+        wrap_columns = {'notes', 'impact', 'name', 'user notes'}
+        # Note: dates are pre-formatted as strings, so no date_columns needed
+
+        apply_professional_formatting(temp_path, column_widths, wrap_columns, date_columns=set())
+
+        # Send file
+        return send_file(
+            temp_path,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            as_attachment=True,
+            download_name='security_incidents.xlsx'
+        )
+
+    except Exception as e:
+        logger.error(f"Error exporting meaningful metrics: {e}", exc_info=True)
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.route("/healthz")
 def healthz():
     """Lightweight health probe endpoint for load balancers / monitoring.

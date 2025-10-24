@@ -47,7 +47,6 @@ def get_user_notes(incident_id):
     entries = case_data_with_notes.get('entries', [])
     # user_notes = [entry for entry in entries if entry.get('type') == 1 and entry.get("contents") and (entry.get('user') not in ['', 'DBot'])]  # Type 1 indicates user notes
     user_notes = [entry for entry in entries if entry.get('note')]
-    print(len(user_notes))
 
     # Format notes with required fields
     et_tz = pytz.timezone('America/New_York')

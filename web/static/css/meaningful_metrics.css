@@ -1677,3 +1677,312 @@ body.dark-mode .show-all-btn[aria-pressed="true"] {
     background: linear-gradient(135deg, #475569 0%, #334155 100%);
     border-color: #475569;
 }
+
+/* Notes Modal */
+.notes-modal-overlay {
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(4px);
+    animation: fadeIn 0.2s ease;
+}
+
+.notes-modal-overlay.show {
+    display: flex;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+.notes-modal {
+    background: white;
+    border-radius: 16px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    max-width: 900px;
+    width: 90%;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+    animation: modalSlideIn 0.3s ease;
+    position: relative;
+    margin: auto;
+}
+
+@keyframes modalSlideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-30px) scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.notes-modal-header {
+    padding: 24px 28px;
+    border-bottom: 2px solid #e2e8f0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: linear-gradient(135deg, #0046ad 0%, #0369a1 100%);
+    color: white;
+    border-radius: 16px 16px 0 0;
+}
+
+.notes-modal-title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.notes-modal-close {
+    background: rgba(255, 255, 255, 0.2);
+    border: none;
+    color: white;
+    font-size: 2rem;
+    line-height: 1;
+    width: 40px;
+    height: 40px;
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    font-weight: 300;
+}
+
+.notes-modal-close:hover {
+    background: rgba(255, 255, 255, 0.3);
+    transform: scale(1.1);
+}
+
+.notes-modal-close:active {
+    transform: scale(0.95);
+}
+
+.notes-modal-body {
+    padding: 0;
+    overflow-y: auto;
+    flex: 1;
+    position: relative;
+}
+
+.notes-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.95rem;
+}
+
+.notes-table thead {
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.notes-table th {
+    padding: 14px 16px;
+    text-align: left;
+    font-weight: 700;
+    color: #0046ad;
+    border-bottom: 3px solid #0046ad;
+    white-space: nowrap;
+}
+
+.notes-table tbody {
+    display: table-row-group;
+}
+
+.notes-table tbody tr:first-child td {
+    padding-top: 28px;
+}
+
+.notes-table tbody tr:last-child td {
+    padding-bottom: 28px;
+}
+
+.notes-table td {
+    padding: 16px;
+    border-bottom: 1px solid #e2e8f0;
+    vertical-align: top;
+}
+
+.notes-table td:first-child {
+    padding-left: 28px;
+}
+
+.notes-table td:last-child {
+    padding-right: 28px;
+}
+
+.notes-table th:first-child {
+    padding-left: 28px;
+}
+
+.notes-table th:last-child {
+    padding-right: 28px;
+}
+
+.notes-table tbody tr {
+    transition: all 0.2s ease;
+}
+
+.notes-table tbody tr:hover {
+    background: #f8f9fa;
+    transform: scale(1.01);
+    box-shadow: 0 2px 8px rgba(0, 70, 173, 0.1);
+}
+
+.notes-table-number {
+    font-weight: 700;
+    color: #0046ad;
+    font-size: 1.1rem;
+    text-align: center;
+    width: 60px;
+}
+
+.notes-table-text {
+    color: #2c3e50;
+    line-height: 1.6;
+    min-width: 300px;
+    max-width: 500px;
+}
+
+.notes-table-author {
+    color: #495057;
+    font-weight: 600;
+    white-space: nowrap;
+    min-width: 150px;
+}
+
+.notes-table-timestamp {
+    color: #6c757d;
+    font-size: 0.9rem;
+    white-space: nowrap;
+    min-width: 180px;
+}
+
+.notes-modal-body::-webkit-scrollbar {
+    width: 10px;
+}
+
+.notes-modal-body::-webkit-scrollbar-track {
+    background: #f1f5f9;
+    border-radius: 10px;
+}
+
+.notes-modal-body::-webkit-scrollbar-thumb {
+    background: #0046ad;
+    border-radius: 10px;
+}
+
+.notes-modal-body::-webkit-scrollbar-thumb:hover {
+    background: #003a8c;
+}
+
+/* Dark mode modal */
+body.dark-mode .notes-modal {
+    background: #1e293b;
+}
+
+body.dark-mode .notes-modal-header {
+    background: linear-gradient(135deg, #1e3a8a 0%, #0369a1 100%);
+    border-bottom-color: #334155;
+}
+
+body.dark-mode .notes-modal-close {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+body.dark-mode .notes-modal-close:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+body.dark-mode .notes-table thead {
+    background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+}
+
+body.dark-mode .notes-table th {
+    color: #4dabf7;
+    border-bottom-color: #4dabf7;
+}
+
+body.dark-mode .notes-table td {
+    border-bottom-color: #334155;
+}
+
+body.dark-mode .notes-table tbody tr:hover {
+    background: #0f172a;
+}
+
+body.dark-mode .notes-table-number {
+    color: #4dabf7;
+}
+
+body.dark-mode .notes-table-text {
+    color: #cbd5e1;
+}
+
+body.dark-mode .notes-table-author {
+    color: #94a3b8;
+}
+
+body.dark-mode .notes-table-timestamp {
+    color: #64748b;
+}
+
+body.dark-mode .notes-modal-body::-webkit-scrollbar-track {
+    background: #0f172a;
+}
+
+body.dark-mode .notes-modal-body::-webkit-scrollbar-thumb {
+    background: #4dabf7;
+}
+
+body.dark-mode .notes-modal-body::-webkit-scrollbar-thumb:hover {
+    background: #7dd3fc;
+}
+
+.notes-icon {
+    cursor: pointer;
+    color: #0046ad;
+    font-weight: 600;
+    font-size: 0.9rem;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: 6px;
+    background: rgba(0, 70, 173, 0.08);
+    border: 1px solid rgba(0, 70, 173, 0.2);
+    white-space: nowrap;
+}
+
+.notes-icon:hover {
+    background: rgba(0, 70, 173, 0.15);
+    border-color: rgba(0, 70, 173, 0.4);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 6px rgba(0, 70, 173, 0.2);
+}
+
+body.dark-mode .notes-icon {
+    color: #4dabf7;
+    background: rgba(77, 171, 247, 0.1);
+    border-color: rgba(77, 171, 247, 0.2);
+}
+
+body.dark-mode .notes-icon:hover {
+    background: rgba(77, 171, 247, 0.2);
+    border-color: rgba(77, 171, 247, 0.4);
+    box-shadow: 0 2px 6px rgba(77, 171, 247, 0.2);
+}
