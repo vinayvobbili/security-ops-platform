@@ -41,8 +41,13 @@ class RobustHTTPSession:
             raise_on_status=False
         )
 
-        # Mount adapter with retry strategy
-        adapter = HTTPAdapter(max_retries=retry_strategy)
+        # Mount adapter with retry strategy and larger connection pool
+        # pool_maxsize should match or exceed max_workers in concurrent operations
+        adapter = HTTPAdapter(
+            max_retries=retry_strategy,
+            pool_connections=10,  # Number of connection pools to cache
+            pool_maxsize=60  # Maximum connections in each pool (supports 50+ workers)
+        )
         self.session.mount("http://", adapter)
         self.session.mount("https://", adapter)
 

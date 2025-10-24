@@ -185,7 +185,7 @@
         </div>
         <div id="tableInfoBar" class="table-info-bar" aria-live="polite"></div>
         <div class="export-section">
-            <button class="export-btn" id="exportCsvBtn">📥 Export to CSV</button>
+            <button class="export-btn" id="exportCsvBtn">📥 Export to Excel</button>
             <button class="export-btn" id="exportSummaryBtn">📊 Export Summary</button>
         </div>
     </div>
@@ -199,6 +199,7 @@
 {% endblock %}
 {% block extra_js %}
 <script src="https://cdn.plot.ly/plotly-2.26.0.min.js"></script>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <script src="{{ url_for('static', filename='js/meaningful_metrics.js') }}"></script>
 <script>if (typeof initTheme==='function') initTheme(); if (typeof initBurgerMenu==='function') initBurgerMenu(); if (typeof initRandomMusic==='function') initRandomMusic();</script>
 {% endblock %}

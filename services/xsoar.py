@@ -1,6 +1,8 @@
 import json
 import logging
+from datetime import datetime
 
+import pytz
 import requests
 import urllib3
 from urllib3.exceptions import InsecureRequestWarning
@@ -32,17 +34,49 @@ dev_headers = {
 def get_case_data_with_notes(incident_id):
     """Fetch incident details along with notes from prod environment"""
     investigation_url = f"{CONFIG.xsoar_prod_api_base_url}/investigation/{incident_id}"
-    response = http_session.post(investigation_url, headers=prod_headers, json={}, verify=False, timeout=30)
+    response = http_session.post(investigation_url, headers=prod_headers, json={}, verify=False, timeout=60)
     if response is None:
         raise requests.exceptions.ConnectionError("Failed to connect after multiple retries")
     response.raise_for_status()
     return response.json()
 
 
+def get_user_notes(incident_id):
+    """Fetch user notes for a given incident from prod environment"""
+    case_data_with_notes = get_case_data_with_notes(incident_id)
+    entries = case_data_with_notes.get('entries', [])
+    # user_notes = [entry for entry in entries if entry.get('type') == 1 and entry.get("contents") and (entry.get('user') not in ['', 'DBot'])]  # Type 1 indicates user notes
+    user_notes = [entry for entry in entries if entry.get('note')]
+    print(len(user_notes))
+
+    # Format notes with required fields
+    et_tz = pytz.timezone('America/New_York')
+    formatted_notes = []
+    for note in user_notes:
+        # Parse ISO format timestamp
+        created_str = note.get('created', '')
+        if created_str:
+            # Parse ISO 8601 format: "2025-10-23T22:24:17.48233Z"
+            dt_utc = datetime.fromisoformat(created_str.replace('Z', '+00:00'))
+            dt_et = dt_utc.astimezone(et_tz)
+            created_at = dt_et.strftime('%m/%d/%Y %I:%M %p ET')
+        else:
+            created_at = ''
+
+        formatted_notes.append({
+            'note_text': note.get('contents', ''),
+            'author': note.get('user', 'DBot'),
+            'created_at': created_at
+        })
+
+    # Return with latest note first
+    return list(reversed(formatted_notes))
+
+
 def get_case_data(incident_id):
     """Fetch incident details from prod environment"""
     incident_url = f"{CONFIG.xsoar_prod_api_base_url}/incident/load/{incident_id}"
-    response = http_session.get(incident_url, headers=prod_headers, verify=False, timeout=30)
+    response = http_session.get(incident_url, headers=prod_headers, verify=False, timeout=60)
     if response is None:
         raise requests.exceptions.ConnectionError("Failed to connect after multiple retries")
     response.raise_for_status()
@@ -258,7 +292,7 @@ class TicketHandler:
         # Based on the JSON structure from the user's example, send empty payload
         payload = {}
 
-        response = http_session.post(investigation_url, headers=prod_headers, json=payload, verify=False, timeout=30)
+        response = http_session.post(investigation_url, headers=prod_headers, json=payload, verify=False, timeout=60)
         if response is None:
             raise requests.exceptions.ConnectionError("Failed to connect after multiple retries")
 
@@ -393,7 +427,7 @@ def main():
     # ticket_cache.generate()
     # log.info("XSOAR ticket caching process completed")
 
-    print(json.dumps(get_case_data_with_notes('873933'), indent=4))
+    print(json.dumps(get_user_notes('878736'), indent=4))
 
 
 if __name__ == "__main__":

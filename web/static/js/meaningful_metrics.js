@@ -46,7 +46,8 @@ const availableColumns = {
     'sourceInstance': {label: 'Source Instance', category: 'Technical', path: 'sourceInstance', type: 'string'},
     'openDuration': {label: 'Open Duration', category: 'Metrics', path: 'openDuration', type: 'number'},
     'timetorespond': {label: 'TTR', category: 'Metrics', path: 'time_to_respond_secs', type: 'duration'},
-    'timetocontain': {label: 'TTC', category: 'Metrics', path: 'time_to_contain_secs', type: 'duration'}
+    'timetocontain': {label: 'TTC', category: 'Metrics', path: 'time_to_contain_secs', type: 'duration'},
+    'notes': {label: 'User Notes', category: 'Investigation', path: 'notes', type: 'array'}
 };
 
 // Default visible columns and their order
@@ -1296,6 +1297,28 @@ function getChartColors() {
                                     td.textContent = '--';
                                 }
                                 break;
+                            case 'array':
+                                // Format array values (e.g., notes)
+                                if (columnId === 'notes' && Array.isArray(value) && value.length > 0) {
+                                    // Format notes with numbering
+                                    const notesHtml = value.map((note, index) => {
+                                        const noteText = note.contents || '';
+                                        const author = note.user || 'Unknown';
+                                        const timestamp = note.created ? new Date(note.created).toLocaleString() : '';
+                                        return `<div style="margin-bottom: 8px; padding: 6px; background: #f8f9fa; border-left: 3px solid #0046ad;">
+                                                    <strong>${index + 1}. Note:</strong> ${noteText.substring(0, 100)}${noteText.length > 100 ? '...' : ''}<br>
+                                                    <small style="color: #6c757d;">Author: ${author} | ${timestamp}</small>
+                                                </div>`;
+                                    }).join('');
+                                    td.innerHTML = notesHtml;
+                                    td.style.maxWidth = '400px';
+                                    td.style.whiteSpace = 'normal';
+                                } else if (Array.isArray(value)) {
+                                    td.textContent = value.length ? `${value.length} items` : '--';
+                                } else {
+                                    td.textContent = '--';
+                                }
+                                break;
                             case 'number':
                                 if (columnId === 'id') {
                                     td.innerHTML = `<a href="https://msoar.crtx.us.paloaltonetworks.com/Custom/caseinfoid/${value}" target="_blank" style="color: #0046ad; text-decoration: underline;">${value}</a>`;
@@ -1348,13 +1371,115 @@ function getChartColors() {
     }
 
     function exportToCSV() {
-        const headers = ['ID', 'Name', 'Severity', 'Status', 'Country', 'Impact', 'Type', 'Created'];
+        // Use visible columns for export
+        const headers = visibleColumns.map(colId => availableColumns[colId]?.label || colId);
         const severityMap = {0: 'Unknown', 1: 'Low', 2: 'Medium', 3: 'High', 4: 'Critical'};
         const statusMap = {0: 'Pending', 1: 'Active', 2: 'Closed'};
 
-        const csvContent = [headers.join(','), ...filteredData.map(item => [item.id, `"${item.name.replace(/"/g, '""')}"`, severityMap[item.severity] || 'Unknown', statusMap[item.status] || 'Unknown', item.affected_country, item.impact, item.type, new Date(item.created).toISOString()].join(','))].join('\n');
+        const rows = filteredData.map(item => {
+            const row = {};
+            visibleColumns.forEach(colId => {
+                const column = availableColumns[colId];
+                const header = column?.label || colId;
+                let value = getNestedValue(item, column.path);
 
-        downloadCSV(csvContent, 'security_incidents.csv');
+                // Format based on column type
+                if (column.type === 'array' && colId === 'notes') {
+                    // Format notes for Excel
+                    if (Array.isArray(value) && value.length > 0) {
+                        const notesText = value.map((note, index) => {
+                            const noteText = note.contents || '';
+                            const author = note.user || 'Unknown';
+                            const timestamp = note.created ? new Date(note.created).toLocaleString() : '';
+                            return `${index + 1}. Note: ${noteText}\nAuthor: ${author}\nTimestamp: ${timestamp}`;
+                        }).join('\n\n');
+                        row[header] = notesText;
+                    } else {
+                        row[header] = '';
+                    }
+                } else if (column.type === 'date' && value) {
+                    row[header] = new Date(value).toLocaleString();
+                } else if (colId === 'severity') {
+                    row[header] = severityMap[value] || 'Unknown';
+                } else if (colId === 'status') {
+                    row[header] = statusMap[value] || 'Unknown';
+                } else {
+                    row[header] = value || '';
+                }
+            });
+            return row;
+        });
+
+        // Create Excel workbook
+        const ws = XLSX.utils.json_to_sheet(rows, {header: headers});
+
+        // Set column widths based on content type
+        const colWidths = headers.map(header => {
+            const headerLower = header.toLowerCase();
+            if (header === 'User Notes' || headerLower.includes('notes')) return {wch: 60};
+            if (headerLower.includes('description') || headerLower.includes('details')) return {wch: 40};
+            if (headerLower.includes('name') || headerLower.includes('owner')) return {wch: 25};
+            if (headerLower.includes('date') || headerLower.includes('time')) return {wch: 20};
+            return {wch: 15};
+        });
+        ws['!cols'] = colWidths;
+
+        // Apply professional formatting
+        const range = XLSX.utils.decode_range(ws['!ref']);
+
+        // Style header row - Bold white text on blue background
+        for (let col = range.s.c; col <= range.e.c; col++) {
+            const cellAddress = XLSX.utils.encode_cell({r: 0, c: col});
+            if (!ws[cellAddress]) continue;
+            ws[cellAddress].s = {
+                font: {bold: true, color: {rgb: "FFFFFF"}},
+                fill: {fgColor: {rgb: "4472C4"}},
+                alignment: {horizontal: "center", vertical: "center"},
+                border: {
+                    top: {style: "thin", color: {rgb: "000000"}},
+                    bottom: {style: "thin", color: {rgb: "000000"}},
+                    left: {style: "thin", color: {rgb: "000000"}},
+                    right: {style: "thin", color: {rgb: "000000"}}
+                }
+            };
+        }
+
+        // Style data rows - Zebra striping with borders
+        for (let row = range.s.r + 1; row <= range.e.r; row++) {
+            const isAlternateRow = (row % 2 === 0);
+            for (let col = range.s.c; col <= range.e.c; col++) {
+                const cellAddress = XLSX.utils.encode_cell({r: row, c: col});
+                if (!ws[cellAddress]) ws[cellAddress] = {t: 's', v: ''};
+
+                const header = headers[col];
+                const isWrapColumn = header === 'User Notes' || header.toLowerCase().includes('notes') ||
+                                    header.toLowerCase().includes('description');
+
+                ws[cellAddress].s = {
+                    fill: isAlternateRow ? {fgColor: {rgb: "F2F2F2"}} : {},
+                    alignment: {
+                        vertical: "top",
+                        wrapText: isWrapColumn
+                    },
+                    border: {
+                        top: {style: "thin", color: {rgb: "000000"}},
+                        bottom: {style: "thin", color: {rgb: "000000"}},
+                        left: {style: "thin", color: {rgb: "000000"}},
+                        right: {style: "thin", color: {rgb: "000000"}}
+                    }
+                };
+            }
+        }
+
+        // Add auto-filter and freeze panes
+        ws['!autofilter'] = {ref: XLSX.utils.encode_range(range)};
+        ws['!freeze'] = {xSplit: 0, ySplit: 1};
+
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Security Incidents');
+
+        // Generate Excel file with cell styles enabled
+        XLSX.writeFile(wb, 'security_incidents.xlsx', {cellStyles: true});
     }
 
     function exportSummary() {

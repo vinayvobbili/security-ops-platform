@@ -1,6 +1,8 @@
 import json
 import logging
 import pprint
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Iterable, Union
@@ -9,6 +11,7 @@ from zoneinfo import ZoneInfo
 from tqdm import tqdm
 
 from my_config import get_config
+from services import xsoar
 from services.xsoar import TicketHandler
 
 CONFIG = get_config()
@@ -181,6 +184,43 @@ class TicketCache:
         return 'gt30'
 
     # ---------------------------- Core Pipeline ----------------------------
+    @staticmethod
+    def _fetch_notes_for_ticket(ticket: Ticket, max_retries: int = 3) -> Ticket:
+        """Fetch notes for a single ticket using get_case_data_with_notes with rate limiting.
+        Only includes actual user notes (entries with a 'user' attribute), filtering out system entries.
+        """
+        ticket_id = ticket.get('id')
+        if not ticket_id:
+            ticket['notes'] = []
+            return ticket
+
+        for attempt in range(max_retries):
+            try:
+                ticket['notes'] = xsoar.get_user_notes(ticket_id)
+                return ticket
+            except Exception as e:
+                error_msg = str(e)
+                # Check if it's a 429 rate limit error
+                if '429' in error_msg or 'Too Many Requests' in error_msg:
+                    if attempt < max_retries - 1:
+                        # Exponential backoff for rate limits
+                        wait_time = (2 ** attempt) * 2  # 2s, 4s, 8s
+                        log.debug(f"Rate limited for ticket {ticket_id}, waiting {wait_time}s (attempt {attempt + 1}/{max_retries})")
+                        time.sleep(wait_time)
+                        continue
+                    else:
+                        log.warning(f"Failed to fetch notes for ticket {ticket_id} after {max_retries} attempts (rate limited)")
+                        ticket['notes'] = []
+                        return ticket
+                else:
+                    # For other errors, log and skip
+                    log.warning(f"Failed to fetch notes for ticket {ticket_id}: {e}")
+                    ticket['notes'] = []
+                    return ticket
+
+        ticket['notes'] = []
+        return ticket
+
     @classmethod
     def generate(cls, lookback_days=90) -> None:
         """Simple 3-step process: fetch, process, save."""
@@ -200,7 +240,7 @@ class TicketCache:
         #
 
     def _fetch_raw_tickets(self, lookback_days: int) -> List[Ticket]:
-        """Step 1: Fetch raw tickets from XSOAR."""
+        """Step 1: Fetch raw tickets from XSOAR and enrich with notes in parallel."""
         end_date = datetime.now(timezone.utc)
         start_date = end_date - timedelta(days=lookback_days)
         query = (
@@ -213,6 +253,33 @@ class TicketCache:
         raw_tickets: Union[List[Ticket], Iterable[Ticket], None] = self.ticket_handler.get_tickets(query, paginate=True)
         tickets: List[Ticket] = [] if raw_tickets is None else [t for t in raw_tickets if isinstance(t, dict)]
         log.info(f"Fetched {len(tickets)} tickets (lookback={lookback_days}d) from XSOAR")
+
+        # Enrich tickets with notes in parallel
+        if tickets:
+            max_workers = 50  # Balanced: not too high to overwhelm API, not too low to be slow
+            print(f"📝 Enriching {len(tickets)} tickets with notes (parallel)...max workers={max_workers}")
+            with ThreadPoolExecutor(max_workers) as executor:
+                future_to_ticket = {executor.submit(self._fetch_notes_for_ticket, ticket): ticket for ticket in tickets}
+                enriched_tickets = []
+                failed_count = 0
+                for future in tqdm(as_completed(future_to_ticket), total=len(tickets), desc="Fetching notes", unit="ticket"):
+                    try:
+                        result = future.result()
+                        enriched_tickets.append(result)
+                    except Exception as e:
+                        failed_count += 1
+                        original_ticket = future_to_ticket[future]
+                        ticket_id = original_ticket.get('id', 'unknown')
+                        log.error(f"Failed to process ticket enrichment for {ticket_id}: {e}")
+                        # Add ticket without notes instead of skipping it entirely
+                        original_ticket['notes'] = []
+                        enriched_tickets.append(original_ticket)
+
+            log.info(f"Enriched {len(enriched_tickets)} tickets with notes ({failed_count} failed)")
+            if failed_count > 0:
+                log.warning(f"{failed_count} tickets were enriched without notes due to API errors")
+            return enriched_tickets
+
         return tickets
 
     def _process_for_ui(self, raw_tickets: List[Ticket]) -> List[Ticket]:
@@ -254,6 +321,10 @@ class TicketCache:
 
         # Add computed fields
         self._add_computed_fields(ui_ticket, current_time)
+
+        # Add user notes (filtered to only include entries with 'user' attribute)
+        # This keeps file size manageable while still providing access to actual user comments
+        ui_ticket['notes'] = ticket.get('notes', [])
 
         # Remove temporary SLA objects (they're only needed for computation)
         ui_ticket.pop('_timetorespond', None)
@@ -302,26 +373,29 @@ class TicketCache:
         })
 
     def _save_tickets(self, raw_tickets: List[Ticket], ui_tickets: List[Ticket]) -> None:
-        """Step 3: Save both raw and UI ticket data."""
+        """Step 3: Save both raw and UI ticket data to data/transient location."""
         today_date = datetime.now(ZoneInfo("America/New_York")).strftime('%m-%d-%Y')
-        charts_dir = self.root_directory / 'web' / 'static' / 'charts' / today_date
-        charts_dir.mkdir(parents=True, exist_ok=True)
+
+        # Primary location (data/transient/secOps)
+        output_dir = self.root_directory / 'data' / 'transient' / 'secOps' / today_date
+        output_dir.mkdir(parents=True, exist_ok=True)
 
         # Save raw tickets
         print("💾 Saving raw ticket data...")
-        raw_path = charts_dir / 'past_90_days_tickets_raw.json'
+        raw_path = output_dir / 'past_90_days_tickets_raw.json'
         with open(raw_path, 'w') as f:
             json.dump(raw_tickets, f, indent=4)
         log.info(f"Saved {len(raw_tickets)} raw tickets to {raw_path}")
 
         # Save UI tickets with metadata
         print("📊 Saving UI ticket data...")
-        ui_path = charts_dir / 'past_90_days_tickets.json'
         ui_data_with_metadata = {
             'data': ui_tickets,
             'data_generated_at': datetime.now(ZoneInfo("America/New_York")).isoformat(),
             'total_count': len(ui_tickets)
         }
+
+        ui_path = output_dir / 'past_90_days_tickets.json'
         with open(ui_path, 'w') as f:
             json.dump(ui_data_with_metadata, f, indent=2)
         log.info(f"Saved {len(ui_tickets)} UI tickets to {ui_path}")
@@ -332,10 +406,10 @@ class TicketCache:
 def main():
     log.info("Starting ticket caching process")
     cache = TicketCache()
-    cache.generate(lookback_days=90)
+    cache.generate(lookback_days=9)
 
     # Pretty print first 3 tickets for visual inspection
-    ui_path = cache.root_directory / 'web' / 'static' / 'charts' / datetime.now(ZoneInfo("America/New_York")).strftime('%m-%d-%Y') / 'past_90_days_tickets.json'
+    ui_path = cache.root_directory / 'data' / 'transient' / 'secOps' / datetime.now(ZoneInfo("America/New_York")).strftime('%m-%d-%Y') / 'past_90_days_tickets.json'
     if ui_path.exists():
         with open(ui_path, 'r') as f:
             cached_data = json.load(f)
