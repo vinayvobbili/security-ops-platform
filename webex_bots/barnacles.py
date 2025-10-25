@@ -6,6 +6,35 @@ from pathlib import Path
 ROOT_DIRECTORY = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT_DIRECTORY))
 
+# Setup logging FIRST before any imports that might use it
+import logging.handlers
+
+# Ensure logs directory exists
+(ROOT_DIRECTORY / "logs").mkdir(exist_ok=True)
+
+# Setup logging with rotation and better formatting
+# Set root logger to WARNING to avoid flooding
+logging.basicConfig(
+    level=logging.WARNING,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.handlers.RotatingFileHandler(
+            ROOT_DIRECTORY / "logs" / "barnacles.log",
+            maxBytes=10 * 1024 * 1024,  # 10MB
+            backupCount=5
+        ),
+        logging.StreamHandler()
+    ],
+    force=True  # Force reconfiguration even if logging was already initialized
+)
+
+# Enable INFO level only for startup-related loggers
+logging.getLogger('__main__').setLevel(logging.INFO)
+logging.getLogger('src.utils.bot_resilience').setLevel(logging.INFO)
+logging.getLogger('src.utils.webex_device_manager').setLevel(logging.INFO)
+
+logger = logging.getLogger(__name__)
+
 # ALWAYS configure SSL for proxy environments (auto-detects ZScaler/proxies)
 from src.utils.ssl_config import configure_ssl_if_needed
 configure_ssl_if_needed(verbose=True)
@@ -16,7 +45,6 @@ from src.utils.enhanced_websocket_client import patch_websocket_client
 patch_websocket_client()
 
 import json
-import logging.handlers
 import random
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
@@ -37,31 +65,6 @@ from my_config import get_config
 from src.charts import threatcon_level
 from src.utils.logging_utils import log_activity
 from src.utils.webex_device_manager import cleanup_devices_on_startup
-
-# Ensure logs directory exists
-(ROOT_DIRECTORY / "logs").mkdir(exist_ok=True)
-
-# Setup logging with rotation and better formatting
-# Set root logger to WARNING to avoid flooding
-logging.basicConfig(
-    level=logging.WARNING,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.handlers.RotatingFileHandler(
-            ROOT_DIRECTORY / "logs" / "barnacles.log",
-            maxBytes=10 * 1024 * 1024,  # 10MB
-            backupCount=5
-        ),
-        logging.StreamHandler()
-    ]
-)
-
-# Enable INFO level only for startup-related loggers
-logging.getLogger('__main__').setLevel(logging.INFO)
-logging.getLogger('src.utils.bot_resilience').setLevel(logging.INFO)
-logging.getLogger('src.utils.webex_device_manager').setLevel(logging.INFO)
-
-logger = logging.getLogger(__name__)
 
 config = get_config()
 bot_token = config.webex_bot_access_token_barnacles

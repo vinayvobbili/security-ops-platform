@@ -3,7 +3,37 @@
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
+ROOT_DIRECTORY = Path(__file__).parent.parent
+sys.path.insert(0, str(ROOT_DIRECTORY))
+
+# Setup logging FIRST before any imports that might use it
+import logging.handlers
+
+# Ensure logs directory exists
+(ROOT_DIRECTORY / "logs").mkdir(exist_ok=True)
+
+# Setup logging with rotation and better formatting
+# Set root logger to WARNING to avoid flooding
+logging.basicConfig(
+    level=logging.WARNING,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.handlers.RotatingFileHandler(
+            ROOT_DIRECTORY / "logs" / "money_ball.log",
+            maxBytes=10 * 1024 * 1024,  # 10MB
+            backupCount=5
+        ),
+        logging.StreamHandler()
+    ],
+    force=True  # Force reconfiguration even if logging was already initialized
+)
+
+# Enable INFO level only for startup-related loggers
+logging.getLogger('__main__').setLevel(logging.INFO)
+logging.getLogger('src.utils.bot_resilience').setLevel(logging.INFO)
+logging.getLogger('src.utils.webex_device_manager').setLevel(logging.INFO)
+
+logger = logging.getLogger(__name__)
 
 # ALWAYS configure SSL for proxy environments (auto-detects ZScaler/proxies)
 from src.utils.ssl_config import configure_ssl_if_needed
@@ -13,8 +43,6 @@ configure_ssl_if_needed(verbose=True)
 # This is critical to prevent the bot from going to sleep
 from src.utils.enhanced_websocket_client import patch_websocket_client
 patch_websocket_client()
-
-import logging.handlers
 import os
 import random
 import unittest
@@ -39,32 +67,6 @@ from src.utils.webex_messaging import send_message_with_files, safe_send_message
 
 # Load configuration
 config = get_config()
-ROOT_DIRECTORY = Path(__file__).parent.parent
-
-# Ensure logs directory exists
-(ROOT_DIRECTORY / "logs").mkdir(exist_ok=True)
-
-# Setup logging with rotation and better formatting
-# Set root logger to WARNING to avoid flooding
-logging.basicConfig(
-    level=logging.WARNING,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.handlers.RotatingFileHandler(
-            ROOT_DIRECTORY / "logs" / "money_ball.log",
-            maxBytes=10 * 1024 * 1024,  # 10MB
-            backupCount=5
-        ),
-        logging.StreamHandler()
-    ]
-)
-
-# Enable INFO level only for startup-related loggers
-logging.getLogger('__main__').setLevel(logging.INFO)
-logging.getLogger('src.utils.bot_resilience').setLevel(logging.INFO)
-logging.getLogger('src.utils.webex_device_manager').setLevel(logging.INFO)
-
-logger = logging.getLogger(__name__)
 
 # Initialize Webex API client
 webex_api = WebexTeamsAPI(access_token=config.webex_bot_access_token_moneyball)
