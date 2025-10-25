@@ -7,6 +7,10 @@ cleanup of stale registrations that can cause connection issues.
 
 import logging
 import requests
+import urllib3
+
+# Suppress SSL warnings when using verify=False for corporate proxies
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 logger = logging.getLogger(__name__)
 

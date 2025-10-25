@@ -167,6 +167,15 @@ def initialize_bot():
     start_time = datetime.now()
 
     try:
+        # Clean up stale device registrations to avoid 404 WebSocket errors
+        from src.utils.webex_device_manager import cleanup_devices_on_startup
+        import time
+        cleanup_devices_on_startup(WEBEX_ACCESS_TOKEN, "Pokedex")
+
+        # Give Webex API time to process the device deletions
+        time.sleep(2)
+        logger.debug("Waiting for device cleanup to propagate...")
+
         logger.info("Initializing streamlined SOC Q&A components...")
 
         if not initialize_model_and_agent():
