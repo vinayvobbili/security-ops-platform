@@ -1379,10 +1379,7 @@ def api_meaningful_metrics_data():
 @log_web_activity
 def api_meaningful_metrics_export():
     """Server-side Excel export with professional formatting."""
-    import json
     import pandas as pd
-    from pathlib import Path
-    from io import BytesIO
     from flask import send_file
     from src.utils.excel_formatting import apply_professional_formatting
     import tempfile
@@ -1405,7 +1402,7 @@ def api_meaningful_metrics_export():
         status_map = {0: 'Pending', 1: 'Active', 2: 'Closed'}
 
         # Prepare rows for export
-        MAX_CELL_LENGTH = 32767
+        max_cell_length = 32767
         rows = []
 
         for incident in incidents:
@@ -1420,8 +1417,8 @@ def api_meaningful_metrics_export():
                 if col_id == 'notes':
                     # Format notes with truncation (notes are already pre-formatted from xsoar.get_user_notes)
                     if isinstance(value, list) and value:
-                        TRUNCATION_MESSAGE = '\n\n[... Content truncated due to Excel cell size limit. Please view full notes in the web interface ...]'
-                        RESERVED_LENGTH = len(TRUNCATION_MESSAGE) + 100
+                        truncation_message = '\n\n[... Content truncated due to Excel cell size limit. Please view full notes in the web interface ...]'
+                        reserved_length = len(truncation_message) + 100
 
                         notes_text = ''
                         total_length = 0
@@ -1436,7 +1433,7 @@ def api_meaningful_metrics_export():
                             separator = '\n\n' if idx > 0 else ''
                             next_chunk = separator + formatted_note
 
-                            if total_length + len(next_chunk) + RESERVED_LENGTH > MAX_CELL_LENGTH:
+                            if total_length + len(next_chunk) + reserved_length > max_cell_length:
                                 truncated = True
                                 break
 
@@ -1444,7 +1441,7 @@ def api_meaningful_metrics_export():
                             total_length += len(next_chunk)
 
                         if truncated:
-                            notes_text += TRUNCATION_MESSAGE
+                            notes_text += truncation_message
 
                         value = notes_text
                     else:
@@ -1484,9 +1481,9 @@ def api_meaningful_metrics_export():
                     value = ', '.join(str(v) for v in value)
 
                 # Truncate any overly long text
-                if isinstance(value, str) and len(value) > MAX_CELL_LENGTH:
+                if isinstance(value, str) and len(value) > max_cell_length:
                     truncation_msg = '\n\n[... Content truncated due to Excel cell size limit ...]'
-                    value = value[:MAX_CELL_LENGTH - len(truncation_msg)] + truncation_msg
+                    value = value[:max_cell_length - len(truncation_msg)] + truncation_msg
 
                 row[col_label] = value if value is not None else ''
 
