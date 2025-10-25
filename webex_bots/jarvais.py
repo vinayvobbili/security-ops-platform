@@ -4,44 +4,11 @@
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
-from src.utils.ssl_config import configure_ssl_if_needed
-
-configure_ssl_if_needed(verbose=True)  # Re-enabled due to ZScaler connectivity issues
-
-# Apply enhanced WebSocket client patch for better connection resilience
-from src.utils.enhanced_websocket_client import patch_websocket_client
-
-patch_websocket_client()
-
-import logging.handlers
-import random
-from datetime import datetime
-from zoneinfo import ZoneInfo
-
-import fasteners
-import pandas as pd
-from tqdm import tqdm
-from webex_bot.models.command import Command
-from webex_bot.webex_bot import WebexBot
-from webexpythonsdk.models.cards import (
-    AdaptiveCard, Column, ColumnSet,
-    TextBlock, options, HorizontalAlignment, VerticalContentAlignment
-)
-from webexpythonsdk.models.cards.actions import Submit
-from webexpythonsdk.models.cards.inputs import Text as TextInput
-from webexteamssdk import WebexTeamsAPI
-
-from my_config import get_config
-from src.epp import ring_tag_cs_hosts, cs_hosts_without_ring_tag, cs_servers_with_invalid_ring_tags
-from src.epp.tanium_hosts_without_ring_tag import create_processor
-from src.utils.excel_formatting import apply_professional_formatting
-from src.utils.logging_utils import log_activity
-from src.utils.webex_device_manager import cleanup_devices_on_startup
-
-CONFIG = get_config()
 ROOT_DIRECTORY = Path(__file__).parent.parent
-DATA_DIR = ROOT_DIRECTORY / "data" / "transient" / "epp_device_tagging"
+sys.path.insert(0, str(ROOT_DIRECTORY))
+
+# Setup logging FIRST before any imports that might use it
+import logging.handlers
 
 # Ensure logs directory exists
 (ROOT_DIRECTORY / "logs").mkdir(exist_ok=True)
@@ -67,8 +34,42 @@ logging.getLogger('__main__').setLevel(logging.INFO)
 logging.getLogger('src.utils.bot_resilience').setLevel(logging.INFO)
 logging.getLogger('src.utils.webex_device_manager').setLevel(logging.INFO)
 
-# Get the root logger to ensure all logs are captured
 logger = logging.getLogger(__name__)
+
+from src.utils.ssl_config import configure_ssl_if_needed
+
+configure_ssl_if_needed(verbose=True)  # Re-enabled due to ZScaler connectivity issues
+
+# Apply enhanced WebSocket client patch for better connection resilience
+from src.utils.enhanced_websocket_client import patch_websocket_client
+
+patch_websocket_client()
+import random
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
+import fasteners
+import pandas as pd
+from tqdm import tqdm
+from webex_bot.models.command import Command
+from webex_bot.webex_bot import WebexBot
+from webexpythonsdk.models.cards import (
+    AdaptiveCard, Column, ColumnSet,
+    TextBlock, options, HorizontalAlignment, VerticalContentAlignment
+)
+from webexpythonsdk.models.cards.actions import Submit
+from webexpythonsdk.models.cards.inputs import Text as TextInput
+from webexteamssdk import WebexTeamsAPI
+
+from my_config import get_config
+from src.epp import ring_tag_cs_hosts, cs_hosts_without_ring_tag, cs_servers_with_invalid_ring_tags
+from src.epp.tanium_hosts_without_ring_tag import create_processor
+from src.utils.excel_formatting import apply_professional_formatting
+from src.utils.logging_utils import log_activity
+from src.utils.webex_device_manager import cleanup_devices_on_startup
+
+CONFIG = get_config()
+DATA_DIR = ROOT_DIRECTORY / "data" / "transient" / "epp_device_tagging"
 # Also configure the root logger explicitly
 root_logger = logging.getLogger()
 root_logger.setLevel(logging.WARNING)
