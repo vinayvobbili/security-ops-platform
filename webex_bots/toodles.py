@@ -29,6 +29,37 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+# Setup logging FIRST before any imports that might use it
+import logging.handlers
+
+ROOT_DIRECTORY = Path(__file__).parent.parent
+
+# Ensure logs directory exists
+(ROOT_DIRECTORY / "logs").mkdir(exist_ok=True)
+
+# Setup logging with rotation and better formatting
+# Set root logger to WARNING to avoid flooding
+logging.basicConfig(
+    level=logging.WARNING,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.handlers.RotatingFileHandler(
+            ROOT_DIRECTORY / "logs" / "toodles.log",
+            maxBytes=10 * 1024 * 1024,  # 10MB
+            backupCount=5
+        ),
+        logging.StreamHandler()
+    ],
+    force=True  # Force reconfiguration even if logging was already initialized
+)
+
+# Enable INFO level only for startup-related loggers
+logging.getLogger('__main__').setLevel(logging.INFO)
+logging.getLogger('src.utils.bot_resilience').setLevel(logging.INFO)
+logging.getLogger('src.utils.webex_device_manager').setLevel(logging.INFO)
+
+logger = logging.getLogger(__name__)
+
 # Load configuration early (before SSL config)
 from my_config import get_config
 
@@ -44,7 +75,6 @@ from src.utils.enhanced_websocket_client import patch_websocket_client
 patch_websocket_client()
 
 import ipaddress
-import logging.handlers
 import re
 from datetime import datetime, timedelta
 from urllib.parse import quote
@@ -76,35 +106,8 @@ from src.utils.http_utils import get_session
 from src.utils.logging_utils import log_activity
 from src.utils.webex_device_manager import cleanup_devices_on_startup
 
-ROOT_DIRECTORY = Path(__file__).parent.parent
-
 # Get robust HTTP session instance
 http_session = get_session()
-
-# Ensure logs directory exists
-(ROOT_DIRECTORY / "logs").mkdir(exist_ok=True)
-
-# Setup logging with rotation and better formatting
-# Set root logger to WARNING to avoid flooding
-logging.basicConfig(
-    level=logging.WARNING,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.handlers.RotatingFileHandler(
-            ROOT_DIRECTORY / "logs" / "toodles.log",
-            maxBytes=10 * 1024 * 1024,  # 10MB
-            backupCount=5
-        ),
-        logging.StreamHandler()
-    ]
-)
-
-# Enable INFO level only for startup-related loggers
-logging.getLogger('__main__').setLevel(logging.INFO)
-logging.getLogger('src.utils.bot_resilience').setLevel(logging.INFO)
-logging.getLogger('src.utils.webex_device_manager').setLevel(logging.INFO)
-
-logger = logging.getLogger(__name__)
 
 webex_api = WebexAPI(CONFIG.webex_bot_access_token_toodles)
 
