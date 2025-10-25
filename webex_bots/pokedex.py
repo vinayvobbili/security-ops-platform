@@ -27,35 +27,9 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
-from src.utils.ssl_config import configure_ssl_if_needed
 
-configure_ssl_if_needed(verbose=True)  # Re-enabled due to ZScaler connectivity issues
-
-# Apply enhanced WebSocket client patch for better connection resilience
-# MUST be imported after SSL config but before any WebexBot creation
-from src.utils.enhanced_websocket_client import patch_websocket_client
-
-patch_websocket_client()
-
-import csv
+# Setup logging FIRST before any imports that might use it
 import logging.handlers
-import os
-import random
-from datetime import datetime
-
-from pytz import timezone
-from webex_bot.webex_bot import WebexBot
-
-from my_config import get_config
-from my_bot.core.my_model import ask, initialize_model_and_agent
-from my_bot.core.session_manager import get_session_manager
-from services.webex import get_room_name
-from src.utils.bot_messages import THINKING_MESSAGES, DONE_MESSAGES
-
-CONFIG = get_config()
-
-# Configure logging with colors
-ROOT_DIRECTORY = Path(__file__).parent.parent
 
 
 class ColoredFormatter(logging.Formatter):
@@ -77,9 +51,12 @@ class ColoredFormatter(logging.Formatter):
             return log_message
 
 
+# Ensure logs directory exists
+(PROJECT_ROOT / "logs").mkdir(exist_ok=True)
+
 # Create file handler (no colors for file)
 file_handler = logging.handlers.RotatingFileHandler(
-    ROOT_DIRECTORY / "logs" / "pokedex.log",
+    PROJECT_ROOT / "logs" / "pokedex.log",
     maxBytes=10 * 1024 * 1024,  # 10MB
     backupCount=5
 )
@@ -101,12 +78,42 @@ logging.basicConfig(
     force=True  # Override any existing logging config
 )
 
+# Enable INFO level only for startup-related loggers
+logging.getLogger('__main__').setLevel(logging.INFO)
+logging.getLogger('src.utils.bot_resilience').setLevel(logging.INFO)
+logging.getLogger('src.utils.webex_device_manager').setLevel(logging.INFO)
+
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARNING)  # Ensure bot logger also uses WARNING level
 
 # Suppress noisy third-party loggers
 logging.getLogger('webex_websocket_client').setLevel(logging.WARNING)
 logging.getLogger('webex_bot').setLevel(logging.WARNING)
+
+# Now safe to import modules that use logging
+import csv
+import os
+import random
+from datetime import datetime
+
+from pytz import timezone
+from webex_bot.webex_bot import WebexBot
+
+from my_config import get_config
+from my_bot.core.my_model import ask, initialize_model_and_agent
+from my_bot.core.session_manager import get_session_manager
+from services.webex import get_room_name
+from src.utils.bot_messages import THINKING_MESSAGES, DONE_MESSAGES
+
+from src.utils.ssl_config import configure_ssl_if_needed
+configure_ssl_if_needed(verbose=True)  # Re-enabled due to ZScaler connectivity issues
+
+# Apply enhanced WebSocket client patch for better connection resilience
+# MUST be imported after SSL config but before any WebexBot creation
+from src.utils.enhanced_websocket_client import patch_websocket_client
+patch_websocket_client()
+
+CONFIG = get_config()
 
 # Configuration
 WEBEX_ACCESS_TOKEN = CONFIG.webex_bot_access_token_pokedex
