@@ -14,7 +14,8 @@ mkdir -p logs
 : > logs/money_ball.log
 
 # Start new money_ball instance in background
-nohup env PYTHONPATH=/home/vinay/pub/IR .venv/bin/python webex_bots/money_ball.py >> logs/money_ball.log 2>&1 &
+# Python logging handles all output - no need to redirect here
+nohup env PYTHONPATH=/home/vinay/pub/IR .venv/bin/python webex_bots/money_ball.py &
 
 echo "Starting Money Ball bot..."
 echo ""

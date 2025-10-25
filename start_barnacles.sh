@@ -14,7 +14,8 @@ mkdir -p logs
 : > logs/barnacles.log
 
 # Start new barnacles instance in background
-nohup env PYTHONPATH=/home/vinay/pub/IR .venv/bin/python webex_bots/barnacles.py >> logs/barnacles.log 2>&1 &
+# Python logging handles all output - no need to redirect here
+nohup env PYTHONPATH=/home/vinay/pub/IR .venv/bin/python webex_bots/barnacles.py &
 
 echo "Starting Barnacles bot..."
 echo ""

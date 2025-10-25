@@ -14,7 +14,8 @@ mkdir -p logs
 : > logs/toodles.log
 
 # Start new toodles instance in background
-nohup env PYTHONPATH=/home/vinay/pub/IR .venv/bin/python webex_bots/toodles.py >> logs/toodles.log 2>&1 &
+# Python logging handles all output - no need to redirect here
+nohup env PYTHONPATH=/home/vinay/pub/IR .venv/bin/python webex_bots/toodles.py &
 
 echo "Starting Toodles bot..."
 echo ""

@@ -11,7 +11,8 @@ sleep 1
 : > pokedex.log
 
 # Start new pokedex instance in background
-nohup env PYTHONPATH=/Users/user/PycharmProjects/IR .venv/bin/python webex_bots/pokedex.py >> pokedex.log 2>&1 &
+# Python logging handles all output - no need to redirect here
+nohup env PYTHONPATH=/Users/user/PycharmProjects/IR .venv/bin/python webex_bots/pokedex.py &
 
 echo "Starting Pokedex bot..."
 echo ""
