@@ -47,7 +47,7 @@ DATA_DIR = ROOT_DIRECTORY / "data" / "transient" / "epp_device_tagging"
 (ROOT_DIRECTORY / "logs").mkdir(exist_ok=True)
 
 # Setup logging with rotation and better formatting
-# Use force=True to reconfigure if already initialized
+# Set root logger to WARNING to avoid flooding
 logging.basicConfig(
     level=logging.WARNING,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -61,6 +61,11 @@ logging.basicConfig(
     ],
     force=True  # Force reconfiguration even if logging was already initialized
 )
+
+# Enable INFO level only for startup-related loggers
+logging.getLogger('__main__').setLevel(logging.INFO)
+logging.getLogger('src.utils.bot_resilience').setLevel(logging.INFO)
+logging.getLogger('src.utils.webex_device_manager').setLevel(logging.INFO)
 
 # Get the root logger to ensure all logs are captured
 logger = logging.getLogger(__name__)
