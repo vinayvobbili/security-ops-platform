@@ -85,6 +85,7 @@ http_session = get_session()
 (ROOT_DIRECTORY / "logs").mkdir(exist_ok=True)
 
 # Setup logging with rotation and better formatting
+# Set root logger to WARNING to avoid flooding
 logging.basicConfig(
     level=logging.WARNING,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -97,6 +98,12 @@ logging.basicConfig(
         logging.StreamHandler()
     ]
 )
+
+# Enable INFO level only for startup-related loggers
+logging.getLogger('__main__').setLevel(logging.INFO)
+logging.getLogger('src.utils.bot_resilience').setLevel(logging.INFO)
+logging.getLogger('src.utils.webex_device_manager').setLevel(logging.INFO)
+
 logger = logging.getLogger(__name__)
 
 webex_api = WebexAPI(CONFIG.webex_bot_access_token_toodles)
