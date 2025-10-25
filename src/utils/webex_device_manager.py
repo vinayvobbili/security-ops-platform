@@ -54,9 +54,12 @@ def cleanup_stale_devices(access_token: str, verbose: bool = True) -> bool:
 
         if response.status_code != 200:
             logger.warning(f"Failed to retrieve device registrations: {response.status_code}")
+            logger.debug(f"Response body: {response.text[:500]}")
             return False
 
-        devices = response.json().get('devices', [])
+        response_data = response.json()
+        logger.debug(f"Device API response keys: {list(response_data.keys())}")
+        devices = response_data.get('devices', [])
 
         if not devices:
             if verbose:

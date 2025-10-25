@@ -254,7 +254,11 @@ class ResilientBot:
         
     def _trigger_reconnection(self, reason):
         """Trigger a bot reconnection due to connection issues"""
-        logger.warning(f"🔄 Triggering {self.bot_name} reconnection: {reason}")
+        # Use DEBUG for proactive reconnections, WARNING for error-driven reconnections
+        if "proactive" in reason.lower():
+            logger.debug(f"🔄 Triggering {self.bot_name} reconnection: {reason}")
+        else:
+            logger.warning(f"🔄 Triggering {self.bot_name} reconnection: {reason}")
 
         # Check if we've had too many recent reconnections to avoid thrashing
         current_time = datetime.now()
@@ -313,7 +317,7 @@ class ResilientBot:
 
                 # If we're approaching the reconnection interval, trigger clean reconnect
                 if uptime >= self.proactive_reconnection_interval:
-                    logger.debug(f"⏰ Proactive reconnection triggered for {self.bot_name} after {uptime:.0f}s uptime")
+                    logger.info(f"⏰ Proactive reconnection triggered for {self.bot_name} after {uptime:.0f}s uptime")
                     self._trigger_reconnection("Proactive reconnection to avoid proxy timeout")
                     break
 
