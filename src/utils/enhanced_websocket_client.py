@@ -48,7 +48,7 @@ def patch_websocket_client():
         def enhanced_run(self):
             """Enhanced run method with better connection resilience"""
             if self.device_info is None:
-                if self._get_device_info() is None:
+                if self._get_device_info(check_existing=False) is None:
                     logger.error('could not get/create device info')
                     raise Exception("No WDM device info")
 
@@ -84,7 +84,8 @@ def patch_websocket_client():
             async def _connect_and_listen():
                 # Refresh device info on each connection attempt to avoid stale URLs
                 logger.debug("Refreshing device info before connection attempt...")
-                self._get_device_info(check_existing=True)
+                # Force new device registration (don't check existing) to avoid stale URLs
+                self._get_device_info(check_existing=False)
                 ws_url = self.device_info['webSocketUrl']
 
                 logger.debug(f"Opening websocket connection to {ws_url}")
