@@ -758,7 +758,7 @@ def announce_shift_change(shift_name, room_id, sleep_time=30):
         time.sleep(sleep_time)
         announce_previous_shift_performance(shift_name=shift_name, room_id=room_id)
 
-    except (requests_exceptions.ConnectionError, urllib3_exceptions.ProtocolError) as net_err:
+    except (requests_exceptions.ConnectionError, urllib3_exceptions.ProtocolError, requests_exceptions.ReadTimeout) as net_err:
         logger.error(f"Network error in announce_shift_change: {net_err}")
         raise  # Reraise to trigger retry
     except Exception as e:
