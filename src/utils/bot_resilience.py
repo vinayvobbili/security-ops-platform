@@ -550,7 +550,7 @@ class ResilientBot:
                 # Calculate initialization time
                 init_duration = (datetime.now() - start_time).total_seconds()
                 logger.info(f"🚀 {self.bot_name} is up and running (startup in {init_duration:.1f}s)...")
-                print(f"🚀 {self.bot_name} is up and running (startup in {init_duration:.1f}s)...")
+                print(f"🚀 {self.bot_name} is up and running (startup in {init_duration:.1f}s)...", flush=True)
 
                 # Record bot start time for proactive reconnection
                 self._bot_start_time = datetime.now()
