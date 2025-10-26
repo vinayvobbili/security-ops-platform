@@ -161,8 +161,9 @@ class ResilientBot:
                         self._is_proxy_related_error(exception)):
                         logger.warning(f"Connection-related asyncio exception detected for {self.bot_name}")
                         if not self.shutdown_requested:
-                            # Don't trigger immediate reconnection from asyncio handler, just log
-                            self.consecutive_failures += 1
+                            # Trigger reconnection for connection errors
+                            logger.warning(f"Triggering reconnection for {self.bot_name} due to asyncio connection error")
+                            self._reconnection_needed = True
                 else:
                     logger.warning(f"Asyncio context error for {self.bot_name}: {context}")
 
