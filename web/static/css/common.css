@@ -18,7 +18,7 @@ body { margin: 0; padding: calc(var(--nav-height) + var(--nav-extra)) 0 0; }
     position: fixed;
     top: 0; left: 0; right: 0;
     height: var(--nav-height);
-    z-index: 1000;
+    z-index: 1100;
     transition: all 0.3s ease;
     display: flex;
     align-items: center;

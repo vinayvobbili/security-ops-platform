@@ -2,57 +2,96 @@ import base64
 import datetime
 import json
 import time
+import logging
 from datetime import datetime, timedelta
 
 import pytz
 import requests
-from azure.devops.connection import Connection
-from azure.devops.exceptions import AzureDevOpsClientRequestError
-from azure.devops.v7_0.work_item_tracking.models import Wiql
-from msrest.authentication import BasicAuthentication
 
 from my_config import get_config
 from data.data_maps import azdo_projects, azdo_orgs
 from services.xsoar import ListHandler, CONFIG
+from src.utils.http_utils import RobustHTTPSession
+
+logger = logging.getLogger(__name__)
 
 config = get_config()
 personal_access_token = config.azdo_pat
 organization_url = f'https://dev.azure.com/{config.azdo_org}'
 
-# Create a connection to the org
-credentials = BasicAuthentication('', personal_access_token)
-connection = Connection(base_url=organization_url, creds=credentials)
+# Prepare authentication for REST API
+credentials = base64.b64encode(f":{personal_access_token}".encode('ascii')).decode('ascii')
+headers = {
+    'Authorization': f'Basic {credentials}',
+    'Content-Type': 'application/json'
+}
+
+# Create a robust HTTP session with longer timeout for Azure DevOps
+azdo_session = RobustHTTPSession(max_retries=3, timeout=120, backoff_factor=0.5)
 
 list_handler = ListHandler()
 
 
 def fetch_work_items(query: str):
     """
-    Fetch work items based on a WIQL query.
+    Fetch work items based on a WIQL query using REST API.
 
     Args:
         query (str): The WIQL query string.
 
     Returns:
-        List of work items or a message if no work items are found.
+        List of work items with fields or empty list if no work items are found.
     """
-    work_item_tracking_client = connection.clients.get_work_item_tracking_client()
-    query_result = work_item_tracking_client.query_by_wiql(Wiql(query=query)).work_items
+    # Execute WIQL query to get work item IDs
+    wiql_endpoint = f'{organization_url}/_apis/wit/wiql?api-version=7.0'
+    query_body = {'query': query}
 
-    if query_result:
-        work_item_ids = [item.id for item in query_result]
-        batch_size = 50  # Process IDs in batches of 50
+    try:
+        logger.debug(f"Executing WIQL query: {query[:100]}...")
+        response = azdo_session.post(wiql_endpoint, headers=headers, json=query_body)
+        if response is None:
+            logger.error("Failed to query work items after all retries")
+            return []
+
+        response.raise_for_status()
+        work_item_ids = [item['id'] for item in response.json().get('workItems', [])]
+
+        if not work_item_ids:
+            logger.info("No work items found for query")
+            return []
+
+        logger.debug(f"Found {len(work_item_ids)} work items, fetching details in batches of 50")
+
+        # Fetch work item details in batches of 50
+        batch_size = 50
         all_work_items = []
+
         for i in range(0, len(work_item_ids), batch_size):
             batch_ids = work_item_ids[i:i + batch_size]
+            ids_param = ",".join(map(str, batch_ids))
+
+            # Get work item details for this batch
+            work_items_endpoint = f'{organization_url}/_apis/wit/workitems?ids={ids_param}&$expand=fields&api-version=7.0'
+
             try:
-                work_items = work_item_tracking_client.get_work_items(ids=batch_ids)
-                all_work_items.extend(work_items)
-            except AzureDevOpsClientRequestError as e:
-                print(f"Error fetching work items for batch {batch_ids}: {e}")
-                time.sleep(5)  # Wait before retrying
+                batch_response = azdo_session.get(work_items_endpoint, headers=headers)
+                if batch_response is None:
+                    logger.error(f"Failed to fetch work items for batch {batch_ids} after all retries")
+                    continue
+
+                batch_response.raise_for_status()
+                batch_items = batch_response.json().get('value', [])
+                all_work_items.extend(batch_items)
+
+            except requests.exceptions.RequestException as e:
+                logger.error(f"Error fetching work items for batch {batch_ids}: {e}")
+                time.sleep(2)  # Brief pause before continuing with next batch
+                continue
+
         return all_work_items
-    else:
+
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Error executing WIQL query: {e}")
         return []
 
 
@@ -78,41 +117,56 @@ def get_stories_from_area_path(area_path):
 
 def get_tuning_requests_submitted_by_last_shift():
     """
-    Get tuning requests submitted by the last shift.
+    Get tuning requests submitted by the last shift (last 8 hours).
 
     Returns:
-        List of work item strings (formatted as "ID: Title") or a message if no work items are found.
+        List of work item strings (formatted as "ID: Title") or empty list if no work items are found.
     """
-    # Get items from today and yesterday
+    # Optimized query: Use a more precise time window to reduce result set
+    # Using @Today-0.33 (~8 hours) instead of @Today-1 (24 hours) to reduce query load
     query = """
             SELECT [System.Id], [System.Title], [System.State], [System.CreatedDate]
             FROM WorkItems
             WHERE [System.AreaPath] = "Detection-Engineering\\Detection Engineering\\Tuning"
               AND [System.WorkItemType] = 'User Story'
-              AND [System.CreatedDate] >= @Today-1 \
+              AND [System.CreatedDate] >= @Today-0.35
             """
 
     all_items = fetch_work_items(query)
 
-    if isinstance(all_items, str):  # "No work items found" message
-        return []  # Return empty list instead of the message
+    if not all_items:
+        return []
 
-    # Filter in Python for the last 8 hours
-    eight_hours_ago = datetime.now()  # This is a naive datetime
+    # Filter for the last 8 hours with timezone awareness
+    eastern = pytz.timezone("US/Eastern")
+    now_eastern = datetime.now(eastern)
+    eight_hours_ago = now_eastern - timedelta(hours=8)
 
     # Filter the items and convert to strings
     recent_item_strings = []
     for item in all_items:
-        # Parse the ISO format string to datetime, then make it naive by removing the timezone
-        created_date_str = item.fields["System.CreatedDate"]
-        created_date = datetime.fromisoformat(created_date_str.replace("Z", "+00:00")).astimezone(pytz.timezone("US/Eastern"))
-        created_date_naive = created_date.replace(tzinfo=None)
+        try:
+            # REST API returns items with 'fields' dictionary
+            fields = item.get('fields', {})
+            created_date_str = fields.get("System.CreatedDate")
 
-        # Now compare naive to naive
-        if created_date_naive >= eight_hours_ago - timedelta(hours=8):
-            # Convert WorkItem to string format
-            item_str = f"{item.id}: {item.fields.get('System.Title', 'No Title')}"
-            recent_item_strings.append(item_str)
+            if not created_date_str:
+                continue
+
+            # Parse the ISO format string to datetime
+            created_date = datetime.fromisoformat(created_date_str.replace("Z", "+00:00")).astimezone(eastern)
+
+            # Compare timezone-aware datetimes
+            if created_date >= eight_hours_ago:
+                # Convert to string format
+                item_id = item.get('id', 'Unknown')
+                item_title = fields.get('System.Title', 'No Title')
+                item_str = f"{item_id}: {item_title}"
+                recent_item_strings.append(item_str)
+
+        except (ValueError, AttributeError) as e:
+            logger.warning(f"Error parsing work item: {e}")
+            continue
 
     return recent_item_strings
 
