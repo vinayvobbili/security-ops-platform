@@ -28,8 +28,8 @@ logger = logging.getLogger(__name__)
 
 # Enhanced configuration
 MAX_BACKOFF_TIME = 600  # Increased from 240s to 600s (10 minutes)
-WEBSOCKET_PING_INTERVAL = 60  # Send ping every 60 seconds (reduced frequency)
-WEBSOCKET_PING_TIMEOUT = 30  # Timeout if no pong after 30 seconds (very lenient)
+WEBSOCKET_PING_INTERVAL = 30  # Send ping every 30 seconds (more aggressive)
+WEBSOCKET_PING_TIMEOUT = 15  # Timeout if no pong after 15 seconds
 WEBSOCKET_CLOSE_TIMEOUT = 10  # Wait up to 10 seconds for clean close
 
 
@@ -100,7 +100,7 @@ def patch_websocket_client():
                     'ssl': ssl_context,
                     'extra_headers': self._get_headers(),
                     'ping_interval': WEBSOCKET_PING_INTERVAL,  # Send ping every 30s
-                    'ping_timeout': WEBSOCKET_PING_TIMEOUT,    # Timeout after 10s
+                    'ping_timeout': WEBSOCKET_PING_TIMEOUT,    # Timeout after 15s
                     'close_timeout': WEBSOCKET_CLOSE_TIMEOUT,  # Clean close timeout
                     'max_size': 2**23,  # 8MB max message size
                 }

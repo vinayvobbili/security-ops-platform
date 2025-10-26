@@ -320,7 +320,14 @@ class ResilientBot:
                 if uptime >= self.proactive_reconnection_interval:
                     logger.info(f"⏰ Proactive reconnection triggered for {self.bot_name} after {uptime:.0f}s uptime")
                     self._trigger_reconnection("Proactive reconnection to avoid proxy timeout")
-                    break
+
+                    # Reset bot start time to restart the interval (don't break!)
+                    # The reconnection will set _bot_start_time to None, and we'll wait for restart
+                    while self._bot_start_time is None and not self.shutdown_requested:
+                        time.sleep(5)  # Wait for bot to restart
+
+                    # Continue monitoring after reconnection
+                    continue
 
                 # Sleep and check again
                 time.sleep(30)  # Check every 30 seconds
@@ -347,12 +354,18 @@ class ResilientBot:
                         except (ConnectionResetError, ConnectionAbortedError, OSError, RequestsConnectionError, ProtocolError) as conn_error:
                             logger.warning(f"WebSocket ping failed with connection error for {self.bot_name}: {conn_error}")
                             self._trigger_reconnection(f"WebSocket connection error: {type(conn_error).__name__}")
-                            break
+                            # Wait for bot to restart instead of breaking
+                            while self.bot_instance is None and not self.shutdown_requested:
+                                time.sleep(5)
+                            continue
                         except Exception as ping_error:
                             if self._is_proxy_related_error(ping_error):
                                 logger.warning(f"WebSocket ping failed due to proxy issue: {ping_error}")
                                 self._trigger_reconnection("WebSocket ping failure")
-                                break
+                                # Wait for bot to restart instead of breaking
+                                while self.bot_instance is None and not self.shutdown_requested:
+                                    time.sleep(5)
+                                continue
                             else:
                                 logger.debug(f"WebSocket ping failed: {ping_error}")
 
@@ -362,14 +375,20 @@ class ResilientBot:
                         logger.warning(f"No successful ping for {self.bot_name} in {time_since_last_ping:.0f}s")
                         if self.consecutive_failures > 3:
                             self._trigger_reconnection("Extended connection silence")
-                            break
+                            # Wait for bot to restart instead of breaking
+                            while self.bot_instance is None and not self.shutdown_requested:
+                                time.sleep(5)
+                            continue
 
                 time.sleep(WEBSOCKET_PING_INTERVAL)
             except (ConnectionResetError, ConnectionAbortedError, OSError, RequestsConnectionError, ProtocolError) as conn_error:
                 if not self.shutdown_requested:
                     logger.warning(f"WebSocket monitor connection error for {self.bot_name}: {conn_error}")
                     self._trigger_reconnection(f"WebSocket monitor connection error: {type(conn_error).__name__}")
-                    break
+                    # Wait for bot to restart instead of breaking
+                    while self.bot_instance is None and not self.shutdown_requested:
+                        time.sleep(5)
+                    continue
             except Exception as e:
                 if not self.shutdown_requested:
                     logger.warning(f"WebSocket monitor error for {self.bot_name}: {e}")
@@ -395,7 +414,13 @@ class ResilientBot:
                     logger.warning(f"Keepalive ping failed for {self.bot_name} with connection error (failure #{self.consecutive_failures}): {conn_error}")
                     logger.warning(f"Connection error detected for {self.bot_name}. Triggering immediate reconnection...")
                     self._trigger_reconnection(f"Connection error: {type(conn_error).__name__}")
-                    break
+                    # Wait for bot to restart instead of breaking
+                    while self.bot_instance is None and not self.shutdown_requested:
+                        time.sleep(5)
+                    # Reset failure counter after successful reconnection
+                    self.consecutive_failures = 0
+                    wait = self.keepalive_interval  # Reset to normal interval
+                    continue
             except Exception as e:
                 if not self.shutdown_requested:
                     self.consecutive_failures += 1
@@ -405,7 +430,13 @@ class ResilientBot:
                     if self._is_proxy_related_error(e):
                         logger.warning(f"Detected proxy-related error for {self.bot_name}. Triggering reconnection...")
                         self._trigger_reconnection("Proxy connection issue detected")
-                        break
+                        # Wait for bot to restart instead of breaking
+                        while self.bot_instance is None and not self.shutdown_requested:
+                            time.sleep(5)
+                        # Reset failure counter after successful reconnection
+                        self.consecutive_failures = 0
+                        wait = self.keepalive_interval  # Reset to normal interval
+                        continue
 
                     wait = min(wait * 2, self.max_keepalive_interval)  # Exponential backoff
                     time.sleep(wait)
