@@ -29,13 +29,13 @@ class PersistentSessionManager:
             db_dir = project_root / "data" / "transient" / "sessions"
             db_dir.mkdir(parents=True, exist_ok=True)
             db_path = str(db_dir / "conversations.db")
-        
+
         self.db_path = db_path
         self.max_messages_per_session = 30
-        self.session_timeout_hours = 24
+        self.session_timeout_hours = 2  # Changed from 24 to 2 hours
         self.max_context_chars = 4000
         self.max_context_messages = 20
-        
+
         self._init_database()
         logger.info(f"Persistent session manager initialized with database: {db_path}")
     
@@ -114,47 +114,51 @@ class PersistentSessionManager:
             return False
     
     def get_conversation_context(self, session_key: str) -> str:
-        """Get recent conversation history for context"""
+        """Get recent conversation history for context (only messages within timeout window)"""
         try:
+            # Calculate cutoff time (messages older than this will be excluded)
+            cutoff_time = (datetime.now() - timedelta(hours=self.session_timeout_hours)).isoformat()
+
             with self._get_db_connection() as conn:
-                # Get recent messages for this session
+                # Get recent messages for this session within the timeout window
                 cursor = conn.execute("""
-                    SELECT role, content, timestamp 
-                    FROM conversations 
-                    WHERE session_key = ? 
-                    ORDER BY timestamp DESC 
+                    SELECT role, content, timestamp
+                    FROM conversations
+                    WHERE session_key = ?
+                    AND timestamp >= ?
+                    ORDER BY timestamp DESC
                     LIMIT ?
-                """, (session_key, self.max_context_messages))
-                
+                """, (session_key, cutoff_time, self.max_context_messages))
+
                 messages = cursor.fetchall()
-                
+
                 if not messages:
                     return ""
-                
+
                 # Build context working backwards, respecting character limits
                 context_parts = []
                 total_chars = 0
-                
+
                 for msg in messages:  # Already ordered DESC, so newest first
                     role_display = "User" if msg['role'] == "user" else "Assistant"
                     msg_text = f"{role_display}: {msg['content']}"
-                    
+
                     # Check if adding this message would exceed character limit
                     if total_chars + len(msg_text) + 100 > self.max_context_chars:
                         break
-                    
+
                     context_parts.append(msg_text)
                     total_chars += len(msg_text) + 1
-                
+
                 if context_parts:
                     # Reverse to get chronological order (oldest first)
                     context_parts.reverse()
                     context = "\n\nPrevious conversation:\n" + "\n".join(context_parts) + "\n\nCurrent question:"
                     logger.debug(f"Context for {session_key}: {len(context_parts)} messages, {len(context)} chars")
                     return context
-                
+
                 return ""
-                
+
         except Exception as e:
             logger.error(f"Failed to get context for session {session_key}: {e}")
             return ""
