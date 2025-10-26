@@ -16,37 +16,93 @@ const commands = [
 ];
 
 // Handle authentication
-function submitAuth(event) {
+async function submitAuth(event) {
     event.preventDefault();
     const emailLocal = document.getElementById('emailLocal').value.trim();
+    const password = document.getElementById('password').value;
+    const authError = document.getElementById('authError');
 
     if (!emailLocal) {
-        alert('Please enter your email address');
+        authError.textContent = 'Please enter your email address';
+        authError.style.display = 'block';
         return;
     }
 
-    // Store user info
-    userEmailLocal = emailLocal;
-    userFullEmail = emailLocal + '@company.com';
+    if (!password) {
+        authError.textContent = 'Please enter the password';
+        authError.style.display = 'block';
+        return;
+    }
 
-    // Extract first name for personalization (e.g., "john.doe" -> "John")
-    const nameParts = emailLocal.split('.');
-    userName = nameParts[0].charAt(0).toUpperCase() + nameParts[0].slice(1);
+    // Hide previous errors
+    authError.style.display = 'none';
 
-    // Close auth modal
-    document.getElementById('authModal').style.display = 'none';
+    try {
+        // Send authentication request to backend
+        const response = await fetch('/api/toodles/login', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                email: emailLocal + '@company.com',
+                password: password
+            })
+        });
 
-    // Show welcome message
-    showWelcomeMessage();
+        const data = await response.json();
+
+        if (response.ok && data.success) {
+            // Store user info
+            userEmailLocal = emailLocal;
+            userFullEmail = emailLocal + '@company.com';
+
+            // Store email in localStorage for future sessions
+            localStorage.setItem('toodlesUserEmail', userFullEmail);
+
+            // Extract first name for personalization (e.g., "john.doe" -> "John")
+            const nameParts = emailLocal.split('.');
+            userName = nameParts[0].charAt(0).toUpperCase() + nameParts[0].slice(1);
+
+            // Close auth modal
+            document.getElementById('authModal').style.display = 'none';
+
+            // Show welcome message
+            showWelcomeMessage();
+        } else {
+            // Show error message
+            authError.textContent = data.error || 'Authentication failed';
+            authError.style.display = 'block';
+        }
+    } catch (error) {
+        authError.textContent = 'Network error. Please try again.';
+        authError.style.display = 'block';
+        console.error('Auth error:', error);
+    }
 }
 
 // Initialize chat - don't show welcome until authenticated
 window.addEventListener('DOMContentLoaded', () => {
-    // Auth modal is already visible, waiting for user input
-    // Auto-focus the email input field
-    const emailInput = document.getElementById('emailLocal');
-    if (emailInput) {
-        emailInput.focus();
+    // Check if auth modal is visible (user not authenticated)
+    const authModal = document.getElementById('authModal');
+    if (authModal && authModal.style.display !== 'none') {
+        // Auth modal is visible, waiting for user input
+        // Auto-focus the email input field
+        const emailInput = document.getElementById('emailLocal');
+        if (emailInput) {
+            emailInput.focus();
+        }
+    } else {
+        // User is already authenticated, show welcome
+        // Try to get email from session or localStorage
+        const storedEmail = localStorage.getItem('toodlesUserEmail');
+        if (storedEmail) {
+            userEmailLocal = storedEmail.split('@')[0];
+            userFullEmail = storedEmail;
+            const nameParts = userEmailLocal.split('.');
+            userName = nameParts[0].charAt(0).toUpperCase() + nameParts[0].slice(1);
+            showWelcomeMessage();
+        }
     }
 });
 
