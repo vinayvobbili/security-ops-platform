@@ -156,9 +156,30 @@ class ResilientBot:
                 if exception:
                     logger.warning(f"Asyncio exception caught for {self.bot_name}: {exception}")
 
+                    # Handle tuple-format exceptions (e.g., ('Connection aborted.', RemoteDisconnected(...)))
+                    actual_exception = exception
+                    if isinstance(exception, tuple) and len(exception) > 0:
+                        # Extract the actual exception from the tuple
+                        for item in exception:
+                            if isinstance(item, Exception):
+                                actual_exception = item
+                                logger.debug(f"Extracted exception from tuple: {type(actual_exception).__name__}")
+                                break
+
                     # Check if this is a connection-related error
-                    if (isinstance(exception, (ConnectionResetError, ConnectionAbortedError, OSError, RequestsConnectionError, ProtocolError)) or
-                        self._is_proxy_related_error(exception)):
+                    is_connection_error = (
+                        isinstance(actual_exception, (ConnectionResetError, ConnectionAbortedError, OSError, RequestsConnectionError, ProtocolError)) or
+                        self._is_proxy_related_error(actual_exception)
+                    )
+
+                    # Also check the original exception in case it's a tuple with connection info
+                    if not is_connection_error and isinstance(exception, tuple):
+                        exception_str = str(exception).lower()
+                        if any(indicator in exception_str for indicator in ['connection aborted', 'connection reset', 'remote end closed', 'remotedisconnected']):
+                            is_connection_error = True
+                            logger.debug(f"Detected connection error from tuple string: {exception}")
+
+                    if is_connection_error:
                         logger.warning(f"Connection-related asyncio exception detected for {self.bot_name}")
                         if not self.shutdown_requested:
                             # Trigger reconnection for connection errors
