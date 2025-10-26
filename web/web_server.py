@@ -27,7 +27,7 @@ if _PROJECT_ROOT not in sys.path:
 # Third-party imports
 import pytz
 import requests
-from flask import Flask, abort, jsonify, render_template, request
+from flask import Flask, abort, jsonify, render_template, request, session
 
 # Local imports with graceful degradation
 try:
@@ -72,6 +72,7 @@ MAX_CONNECTIONS = 100
 COMPANY_EMAIL_DOMAIN = '@' + CONFIG.my_web_domain
 
 app = Flask(__name__, static_folder='static', static_url_path='/static', template_folder='templates')
+app.secret_key = CONFIG.flask_secret_key if hasattr(CONFIG, 'flask_secret_key') else 'your-secret-key-change-this'
 eastern = pytz.timezone('US/Eastern')
 
 # Store server start time
@@ -1616,8 +1617,44 @@ def healthz():
 @app.route('/toodles')
 @log_web_activity
 def toodles_chat():
-    """Toodles chat interface"""
+    """Toodles chat interface - password protected"""
+    # The template handles authentication via modal, so just render it
+    # Session check happens on the frontend via API calls
     return render_template('toodles_chat.html')
+
+
+@app.route('/api/toodles/login', methods=['POST'])
+def api_toodles_login():
+    """API endpoint for Toodles authentication"""
+    try:
+        data = request.get_json()
+        password = data.get('password', '').strip()
+        email = data.get('email', '').strip()
+
+        # Check password against config
+        configured_password = CONFIG.toodles_password
+        if not configured_password:
+            logger.error("TOODLES_PASSWORD not configured in .env file")
+            return jsonify({'success': False, 'error': 'Authentication system not configured'}), 500
+
+        if password == configured_password:
+            session['toodles_authenticated'] = True
+            session['toodles_user_email'] = email
+            session.permanent = True  # Make session persist
+            return jsonify({'success': True, 'message': 'Authentication successful'})
+        else:
+            return jsonify({'success': False, 'error': 'Invalid password'}), 401
+
+    except Exception as e:
+        logger.error(f"Error in Toodles login: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/toodles/logout', methods=['POST'])
+def api_toodles_logout():
+    """API endpoint to logout from Toodles"""
+    session.pop('toodles_authenticated', None)
+    return jsonify({'success': True, 'message': 'Logged out successfully'})
 
 
 @app.route('/api/toodles/create-x-ticket', methods=['POST'])
