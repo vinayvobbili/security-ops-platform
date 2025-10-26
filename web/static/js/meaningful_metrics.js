@@ -307,17 +307,11 @@ function getChartColors() {
             resetBtn.addEventListener('click', resetFilters);
             resetBtn.dataset.bound = 'true';
         }
-        // Export CSV
-        const exportCsvBtn = document.getElementById('exportCsvBtn');
-        if (exportCsvBtn && !exportCsvBtn.dataset.bound) {
-            exportCsvBtn.addEventListener('click', exportToCSV);
-            exportCsvBtn.dataset.bound = 'true';
-        }
-        // Export Summary
-        const exportSummaryBtn = document.getElementById('exportSummaryBtn');
-        if (exportSummaryBtn && !exportSummaryBtn.dataset.bound) {
-            exportSummaryBtn.addEventListener('click', exportSummary);
-            exportSummaryBtn.dataset.bound = 'true';
+        // Export to Excel
+        const exportExcelBtn = document.getElementById('exportExcelBtn');
+        if (exportExcelBtn && !exportExcelBtn.dataset.bound) {
+            exportExcelBtn.addEventListener('click', exportToExcel);
+            exportExcelBtn.dataset.bound = 'true';
         }
         // Column selector open state persistence (applied after original setup)
         const dropdown = document.getElementById('columnSelectorDropdown');
@@ -1507,10 +1501,10 @@ function getChartColors() {
         });
     }
 
-    async function exportToCSV() {
+    async function exportToExcel() {
         // Use server-side export for professional formatting
         try {
-            const exportBtn = document.getElementById('exportCsvBtn');
+            const exportBtn = document.getElementById('exportExcelBtn');
             const originalText = exportBtn.textContent;
             exportBtn.textContent = '⏳ Exporting...';
             exportBtn.disabled = true;
@@ -1554,41 +1548,10 @@ function getChartColors() {
         } catch (error) {
             console.error('Export error:', error);
             alert('Failed to export: ' + error.message);
-            const exportBtn = document.getElementById('exportCsvBtn');
+            const exportBtn = document.getElementById('exportExcelBtn');
             exportBtn.textContent = '📥 Export to Excel';
             exportBtn.disabled = false;
         }
-    }
-
-    function exportSummary() {
-        const totalIncidents = filteredData.length;
-        const criticalIncidents = filteredData.filter(item => item.severity === 4).length;
-        const openIncidents = filteredData.filter(item => item.is_open).length;
-
-        const summaryData = [['Metric', 'Value'], ['Total Incidents', totalIncidents], ['Critical Incidents', criticalIncidents], ['Open Incidents', openIncidents], ['Countries Affected', new Set(filteredData.map(item => item.affected_country)).size], ['Top Country', getMostCommon('affected_country')], ['Top Ticket Type', getMostCommon('type')]];
-
-        const csvContent = summaryData.map(row => row.join(',')).join('\n');
-        downloadCSV(csvContent, 'incident_summary.csv');
-    }
-
-    function getMostCommon(field) {
-        const counts = {};
-        filteredData.forEach(item => {
-            const value = item[field] || 'Unknown';
-            counts[value] = (counts[value] || 0) + 1;
-        });
-
-        return Object.keys(counts).reduce((a, b) => counts[a] > counts[b] ? a : b, 'N/A');
-    }
-
-    function downloadCSV(content, filename) {
-        const blob = new Blob([content], {type: 'text/csv'});
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename;
-        a.click();
-        window.URL.revokeObjectURL(url);
     }
 
     function hideLoading() {
