@@ -20,8 +20,8 @@
     <span class="button-text">Clear Chat</span>
 </button>
 
-<!-- Authentication Modal -->
-<div id="authModal" class="modal" style="display: block;">
+<!-- Authentication Modal (shown by default, hidden if already authenticated) -->
+<div id="authModal" class="modal" style="display: {{ 'none' if session.get('toodles_authenticated') else 'block' }}">
     <div class="modal-content">
         <div class="modal-header">
             <h2>Welcome to Toodles</h2>
@@ -41,6 +41,16 @@
                         <span style="color: #666; font-weight: 500;">@company.com</span>
                     </div>
                 </div>
+                <div class="form-group">
+                    <label for="password">Enter password</label>
+                    <input type="password"
+                           id="password"
+                           name="password"
+                           required
+                           placeholder="Password"
+                           autocomplete="off">
+                </div>
+                <div id="authError" style="color: red; display: none; margin-top: 10px;"></div>
                 <div class="form-actions">
                     <button type="submit" class="btn btn-primary">Continue</button>
                 </div>

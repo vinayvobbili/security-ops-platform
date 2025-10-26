@@ -128,6 +128,8 @@ def get_config():
         teams_toodles_app_id=os.environ.get("TEAMS_TOODLES_APP_ID"),
         teams_toodles_app_password=os.environ.get("TEAMS_TOODLES_APP_PASSWORD"),
         teams_toodles_tenant_id=os.environ.get("TEAMS_TOODLES_TENANT_ID"),
+        toodles_password=os.environ.get("TOODLES_PASSWORD"),
+        flask_secret_key=os.environ.get("FLASK_SECRET_KEY"),
     )
 
 
@@ -232,3 +234,5 @@ class Config:
     teams_toodles_app_id: Optional[str] = None
     teams_toodles_app_password: Optional[str] = None
     teams_toodles_tenant_id: Optional[str] = None
+    toodles_password: Optional[str] = None
+    flask_secret_key: Optional[str] = None
