@@ -1006,6 +1006,11 @@ def api_pokedex_chat_stream():
         if not session_id:
             return jsonify({'success': False, 'error': 'Session ID is required'}), 400
 
+        # Clean up old sessions before processing (removes messages older than 2 hours)
+        state_manager = get_state_manager()
+        if state_manager and hasattr(state_manager, 'session_manager'):
+            state_manager.session_manager.cleanup_old_sessions()
+
         # Use IP address + session ID as identifier
         user_ip = request.remote_addr
         user_identifier = f"web_{user_ip}_{session_id}"
