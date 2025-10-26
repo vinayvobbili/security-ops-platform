@@ -43,6 +43,11 @@ function submitAuth(event) {
 // Initialize chat - don't show welcome until authenticated
 window.addEventListener('DOMContentLoaded', () => {
     // Auth modal is already visible, waiting for user input
+    // Auto-focus the email input field
+    const emailInput = document.getElementById('emailLocal');
+    if (emailInput) {
+        emailInput.focus();
+    }
 });
 
 function showWelcomeMessage() {
