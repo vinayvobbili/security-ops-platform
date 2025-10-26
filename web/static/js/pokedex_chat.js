@@ -96,12 +96,45 @@ function loadChatHistory() {
     if (history) {
         try {
             const messages = JSON.parse(history);
+
+            // Filter messages older than 2 hours
+            const twoHoursAgo = Date.now() - (2 * 60 * 60 * 1000);
+            const recentMessages = messages.filter(msg => {
+                const msgTime = new Date(msg.timestamp).getTime();
+                return msgTime >= twoHoursAgo;
+            });
+
+            // Update localStorage with filtered messages
+            if (recentMessages.length !== messages.length) {
+                localStorage.setItem('pokedex_chat_history', JSON.stringify(recentMessages));
+            }
+
             // Clear welcome message if history exists
-            if (messages.length > 0) {
+            if (recentMessages.length > 0) {
                 messagesContainer.innerHTML = '';
             }
-            messages.forEach(msg => {
-                appendMessage(msg.role, msg.content, false);
+
+            // Group messages by date and display with date headers
+            let currentDate = null;
+            recentMessages.forEach(msg => {
+                const msgDate = new Date(msg.timestamp);
+                const dateStr = msgDate.toLocaleDateString('en-US', {
+                    weekday: 'long',
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric'
+                });
+
+                // Add date header if date changed
+                if (dateStr !== currentDate) {
+                    currentDate = dateStr;
+                    const dateHeader = document.createElement('div');
+                    dateHeader.className = 'date-separator';
+                    dateHeader.textContent = dateStr;
+                    messagesContainer.appendChild(dateHeader);
+                }
+
+                appendMessage(msg.role, msg.content, false, msg.timestamp);
             });
             scrollToBottom();
         } catch (e) {
@@ -129,7 +162,7 @@ function saveChatHistory(role, content) {
     localStorage.setItem('pokedex_chat_history', JSON.stringify(history));
 }
 
-function appendMessage(role, content, save = true) {
+function appendMessage(role, content, save = true, timestamp = null) {
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${role}`;
 
@@ -147,7 +180,9 @@ function appendMessage(role, content, save = true) {
 
     const timeDiv = document.createElement('div');
     timeDiv.className = 'message-time';
-    timeDiv.textContent = new Date().toLocaleTimeString();
+    // Use provided timestamp or current time
+    const messageTime = timestamp ? new Date(timestamp) : new Date();
+    timeDiv.textContent = messageTime.toLocaleTimeString();
 
     contentDiv.appendChild(timeDiv);
     messageDiv.appendChild(contentDiv);
