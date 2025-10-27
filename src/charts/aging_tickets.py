@@ -1,26 +1,33 @@
+"""Generate aging tickets visualization and reports for security operations.
+
+This module creates bar charts showing ticket aging metrics and generates
+summary reports for Webex notifications.
+"""
+
 import logging
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 import matplotlib.pyplot as plt
-import matplotlib.transforms as transforms
+import matplotlib.patches as mpatches
 import numpy as np
 import pandas as pd
 import pytz
 from matplotlib.patches import FancyBboxPatch
-# Replace relative style import with absolute
+from webexpythonsdk import WebexAPI
+
 from src.charts.chart_style import apply_chart_style
+from src.utils.webex_messaging import send_message
+
 apply_chart_style()
 
-# Add the project root to Python path
+# Add project root to path for config imports
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-# Import project modules after path setup - necessary due to custom path setup
 import my_config as config
-from services.xsoar import TicketHandler
 
 config = config.get_config()
 
@@ -28,397 +35,465 @@ config = config.get_config()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Define timezone for timestamp calculations
-eastern = pytz.timezone('US/Eastern')
+# Constants
+EASTERN = pytz.timezone('US/Eastern')
+ROOT_DIR = Path(__file__).parent.parent.parent
+AGING_THRESHOLD_DAYS = 30
+THIRD_PARTY_AGING_DAYS = 90
 
-webex_headers = {
-    'Content-Type': 'application/json',
-    'Authorization': f"Bearer {config.webex_bot_access_token_moneyball}"
+# Phase colors for visualization
+PHASE_COLORS = {
+    # Incident Response Phases
+    '1. Investigation': '#E91E63',
+    '2. Containment': '#2196F3',
+    '3. Investigation': '#9C27B0',
+    '4. Eradication': '#FF5722',
+    '5. Eradication': '#795548',
+    '6. Recovery': '#4CAF50',
+    '7. Lessons Learned': '#FFC107',
+    '8. Closure': '#F44336',
+    # Generic phases
+    'Investigation': '#9C27B0',
+    'Containment': '#2196F3',
+    'Eradication': '#FF5722',
+    'Recovery': '#4CAF50',
+    'Lessons Learned': '#FFC107',
+    'Closure': '#F44336',
+    'Closure Phase': '#F44336',
+    # Status phases
+    'New': '#FF9800',
+    'In Progress': '#3F51B5',
+    'Pending': '#FF6F00',
+    'Resolved': '#8BC34A',
+    'Unknown': '#607D8B',
+    'Unassigned': '#9E9E9E',
+    # Default
+    'Undefined Phase': '#FFEB3B',
 }
-eastern = pytz.timezone('US/Eastern')
 
-root_directory = Path(__file__).parent.parent.parent
+PHASE_ORDER = [
+    '1. Investigation', '2. Containment', '3. Investigation',
+    '4. Eradication', '5. Eradication', '6. Recovery',
+    '7. Lessons Learned', '8. Closure', 'Closure Phase',
+    'Investigation', 'Containment', 'Eradication', 'Recovery',
+    'Lessons Learned', 'Closure', 'New', 'In Progress', 'Pending',
+    'Resolved', 'Unknown', 'Unassigned', 'Undefined Phase'
+]
 
 
-def get_df(tickets: List[Dict[Any, Any]]) -> pd.DataFrame:
+def prepare_dataframe(tickets: List[Dict[Any, Any]]) -> pd.DataFrame:
+    """Convert ticket list to DataFrame with cleaned and formatted data.
+
+    Args:
+        tickets: List of ticket dictionaries
+
+    Returns:
+        DataFrame with created dates, cleaned types, and filled phases
+    """
     if not tickets:
         return pd.DataFrame(columns=['created', 'type', 'phase'])
 
     df = pd.DataFrame(tickets)
-    df['created'] = pd.to_datetime(df['created'], format='ISO8601')  # Use ISO8601 format
-    # Clean up type names by removing repeating prefix
+    df['created'] = pd.to_datetime(df['created'], format='ISO8601')
     df['type'] = df['type'].str.replace(config.team_name, '', regex=False, case=False)
-    # Set 'phase' to 'Unknown' if it's missing
     df['phase'] = df['phase'].fillna('Unknown')
     return df
 
 
-def generate_plot(tickets):
-    """Generate a visually enhanced bar plot of open ticket types older than 30 days."""
-    df = get_df(tickets)
+def create_empty_plot() -> plt.Figure:
+    """Create a 'no data' visualization when no aging tickets exist.
 
-    # Set up the plot style
-    plt.style.use('seaborn-v0_8-whitegrid')
+    Returns:
+        Matplotlib figure with no data message
+    """
+    fig, ax = plt.subplots(figsize=(10, 7), facecolor='#f8f9fa')
 
-    # Removed per-file font family override to rely on centralized style
-    # import matplotlib
-    # matplotlib.rcParams['font.family'] = ['DejaVu Sans', 'Arial Unicode MS', 'Arial']
+    # Gradient background
+    gradient = np.linspace(0, 1, 256).reshape(256, -1)
+    gradient = np.vstack((gradient, gradient))
+    ax.imshow(gradient, extent=(0, 1, 0, 1), aspect='auto', cmap='coolwarm', alpha=0.3)
 
-    if df.empty:
-        # Create an enhanced "no data" visualization
-        fig, ax = plt.subplots(figsize=(10, 7), facecolor='#f8f9fa')
+    ax.text(0.5, 0.5, 'No Aging Tickets Found!',
+            horizontalalignment='center', verticalalignment='center',
+            transform=ax.transAxes, fontsize=24, fontweight='bold',
+            color='#2E8B57',
+            bbox=dict(boxstyle="round,pad=0.5", facecolor='white',
+                     alpha=0.8, edgecolor='#2E8B57', linewidth=2))
+    ax.axis('off')
+    return fig
 
-        # Create a gradient background
-        gradient = np.linspace(0, 1, 256).reshape(256, -1)
-        gradient = np.vstack((gradient, gradient))
-        ax.imshow(gradient, extent=(0, 1, 0, 1), aspect='auto', cmap='coolwarm', alpha=0.3)
 
-        ax.text(0.5, 0.5, 'No Aging Tickets Found!',
-                horizontalalignment='center', verticalalignment='center',
-                transform=ax.transAxes, fontsize=24, fontweight='bold',
-                color='#2E8B57',
-                bbox=dict(boxstyle="round,pad=0.5", facecolor='white', alpha=0.8, edgecolor='#2E8B57', linewidth=2))
-        ax.axis('off')
-    else:
-        # Distinct, high-contrast color palette with unique colors for each phase
-        phase_colors = {
-            # Incident Response Phases - Sequential color scheme
-            '1. Investigation': '#E91E63',  # Pink - initial phase
-            '2. Containment': '#2196F3',  # Blue - containment
-            '3. Investigation': '#9C27B0',  # Purple - investigation
-            '4. Eradication': '#FF5722',  # Deep Orange - eradication
-            '5. Eradication': '#795548',  # Brown - eradication variant
-            '6. Recovery': '#4CAF50',  # Green - recovery
-            '7. Lessons Learned': '#FFC107',  # Amber - learning
-            '8. Closure': '#F44336',  # Red - closure
+def prepare_grouped_data(df: pd.DataFrame) -> pd.DataFrame:
+    """Group tickets by type and phase, sort by count, and order phases.
 
-            # Generic phases
-            'Investigation': '#9C27B0',  # Purple - investigation
-            'Containment': '#2196F3',  # Blue - containment
-            'Eradication': '#FF5722',  # Deep Orange - eradication
-            'Recovery': '#4CAF50',  # Green - recovery
-            'Lessons Learned': '#FFC107',  # Amber - learning
-            'Closure': '#F44336',  # Red - closure
-            'Closure Phase': '#F44336',  # Red - closure phase
+    Args:
+        df: DataFrame with ticket data
 
-            # Status phases
-            'New': '#FF9800',  # Orange - new items
-            'In Progress': '#3F51B5',  # Indigo - in progress
-            'Pending': '#FF6F00',  # Dark Orange - pending action
-            'Resolved': '#8BC34A',  # Light Green - resolved
-            'Unknown': '#607D8B',  # Blue Grey - unknown state
-            'Unassigned': '#9E9E9E',  # Grey - unassigned
+    Returns:
+        Grouped DataFrame with phases as columns
+    """
+    # Group and count tickets
+    grouped = df.groupby(['type', 'phase']).size().unstack(fill_value=0)
 
-            # Special cases
-            '': '#FFEB3B',  # Yellow - undefined
-            None: '#FFEB3B',  # Yellow - null
-            'Undefined Phase': '#FFEB3B'  # Yellow - undefined phase
-        }
+    # Sort by total count
+    grouped['total'] = grouped.sum(axis=1)
+    grouped = grouped.sort_values(by='total', ascending=False).drop(columns='total')
 
-        # Group and count tickets by 'type' and 'phase'
-        grouped_data = df.groupby(['type', 'phase']).size().unstack(fill_value=0)
+    # Clean up phase names
+    grouped = grouped.rename(columns={'': 'Undefined Phase', '8. Closure': 'Closure Phase'})
 
-        # Sort types by total count in descending order
-        grouped_data['total'] = grouped_data.sum(axis=1)
-        grouped_data = grouped_data.sort_values(by='total', ascending=False).drop(columns='total')
+    # Order phases logically
+    existing_phases = grouped.columns.tolist()
+    ordered_phases = [p for p in PHASE_ORDER if p in existing_phases]
+    remaining_phases = [p for p in existing_phases if p not in ordered_phases]
+    grouped = grouped[ordered_phases + remaining_phases]
 
-        # Clean up column names for better legend display
-        column_mapping = {
-            '': 'Undefined Phase',
-            '8. Closure': 'Closure Phase'
-        }
-        grouped_data = grouped_data.rename(columns=column_mapping)
+    return grouped
 
-        # 4. Sort phases in logical IR workflow order
-        phase_order = [
-            '1. Investigation', '2. Containment', '3. Investigation',
-            '4. Eradication', '5. Eradication', '6. Recovery',
-            '7. Lessons Learned', '8. Closure', 'Closure Phase',
-            'Investigation', 'Containment', 'Eradication', 'Recovery',
-            'Lessons Learned', 'Closure', 'New', 'In Progress', 'Pending',
-            'Resolved', 'Unknown', 'Unassigned', 'Undefined Phase'
-        ]
-        # Reorder columns based on phase order (keep only existing phases)
-        existing_phases = grouped_data.columns.tolist()
-        ordered_phases = [phase for phase in phase_order if phase in existing_phases]
-        # Add any remaining phases not in our order
-        remaining_phases = [phase for phase in existing_phases if phase not in ordered_phases]
-        final_order = ordered_phases + remaining_phases
-        grouped_data = grouped_data[final_order]
 
-        # Create figure with even better proportions to completely fix title overlap
-        fig, ax = plt.subplots(figsize=(14, 10), facecolor='#f8f9fa')
-        fig.patch.set_facecolor('#f8f9fa')
+def add_bar_styling(ax: plt.Axes) -> None:
+    """Add subtle inner glow effect to bar segments.
 
-        # Get distinct colors for the phases present in data with gradients
-        colors_for_plot = []
-        for phase in grouped_data.columns:
-            base_color = phase_colors.get(phase, '#9E9E9E')
-            colors_for_plot.append(base_color)
+    Args:
+        ax: Matplotlib axes object
+    """
+    for container in ax.containers:
+        for bar in container:
+            if bar.get_height() > 0:
+                x, y = bar.get_xy()
+                width = bar.get_width()
+                height = bar.get_height()
+                color = bar.get_facecolor()
 
-        # Enhanced plotting with MUCH NARROWER bars and gradient backgrounds
-        bars = grouped_data.plot(
-            kind='bar',
-            stacked=True,
-            color=colors_for_plot,
-            edgecolor='white',
-            linewidth=1.5,  # Clean white borders
-            ax=ax,
-            width=0.25,  # MUCH narrower bars (was 0.4, now 0.25)
-            alpha=0.95  # High alpha for vibrant colors
-        )
+                # Add inner glow
+                inner_rect = mpatches.Rectangle(
+                    (x + width * 0.05, y + height * 0.05),
+                    width * 0.9, height * 0.9,
+                    facecolor=color, alpha=0.3, edgecolor='none'
+                )
+                ax.add_patch(inner_rect)
 
-        # 6. Add subtle gradient backgrounds to bars
-        import matplotlib.patches as mpatches
 
-        # Apply gradient effect to each bar segment
-        for container in ax.containers:
-            for bar in container:
-                if bar.get_height() > 0:
-                    # Create a subtle gradient effect
-                    x, y = bar.get_xy()
-                    width = bar.get_width()
-                    height = bar.get_height()
+def add_value_labels(ax: plt.Axes) -> None:
+    """Add count labels to bar segments.
 
-                    # Get the original color
-                    original_color = bar.get_facecolor()
+    Args:
+        ax: Matplotlib axes object
+    """
+    for container in ax.containers:
+        for bar in container:
+            height = bar.get_height()
+            if height > 0:
+                ax.annotate(
+                    f'{int(height)}',
+                    xy=(bar.get_x() + bar.get_width() / 2, bar.get_y() + height / 2),
+                    xytext=(0, 0),
+                    textcoords="offset points",
+                    ha='center', va='center',
+                    fontsize=13, color='white', fontweight='bold',
+                    bbox=dict(boxstyle="circle,pad=0.2", facecolor='black',
+                             alpha=0.8, edgecolor='white', linewidth=1)
+                )
 
-                    # Create a gradient from the original color to a slightly lighter version
-                    gradient = mpatches.Rectangle((x, y), width, height,
-                                                  facecolor=original_color,
-                                                  edgecolor='white',
-                                                  linewidth=1.5,
-                                                  alpha=0.95)
 
-                    # Add a subtle inner glow effect
-                    inner_rect = mpatches.Rectangle((x + width * 0.05, y + height * 0.05),
-                                                    width * 0.9, height * 0.9,
-                                                    facecolor=original_color,
-                                                    alpha=0.3,
-                                                    edgecolor='none')
-                    ax.add_patch(inner_rect)
+def style_axes(ax: plt.Axes, max_count: int, labels: List[str]) -> None:
+    """Apply styling to axes including ticks, labels, and spines.
 
-        # Enhance the axes with better spacing
-        ax.set_facecolor('#ffffff')
-        ax.grid(False)  # Remove grid lines
-        ax.set_axisbelow(True)
+    Args:
+        ax: Matplotlib axes object
+        max_count: Maximum count for y-axis scaling
+        labels: X-axis tick labels
+    """
+    ax.set_facecolor('#ffffff')
+    ax.grid(False)
+    ax.set_axisbelow(True)
 
-        # Set y-axis with better spacing
-        max_count = int(grouped_data.sum(axis=1).max())
-        y_ticks = list(range(0, max_count + 2, max(1, max_count // 8)))
-        ax.set_yticks(y_ticks)
-        ax.set_ylim(0, max_count * 1.2)  # More headroom
+    # Y-axis
+    y_ticks = list(range(0, max_count + 2, max(1, max_count // 8)))
+    ax.set_yticks(y_ticks)
+    ax.set_ylim(0, max_count * 1.2)
+    ax.tick_params(axis='y', colors='#1A237E', labelsize=11, width=1.5)
 
-        # Style the spines with more contrast
-        for spine in ax.spines.values():
-            spine.set_color('#CCCCCC')
-            spine.set_linewidth(1.5)
+    # X-axis
+    truncated_labels = [label[:12] + '...' if len(label) > 15 else label for label in labels]
+    ax.set_xticklabels(truncated_labels, rotation=45, ha='right',
+                       fontsize=11, color='#1A237E', fontweight='bold')
 
-        # REMOVED: All shadow effects to eliminate distractions
-        # Clean, minimal styling without any shadows
+    # Spines
+    for spine in ax.spines.values():
+        spine.set_color('#CCCCCC')
+        spine.set_linewidth(1.5)
 
-    # Add enhanced border with more prominent styling
-    border_width = 4
 
-    # Create a rounded rectangular border that extends to the very edge
-    # Remove the standard border to avoid conflicts
-    fig.patch.set_edgecolor('none')  # Remove default border
+def add_legend_with_counts(grouped_data: pd.DataFrame) -> None:
+    """Add legend with phase counts.
+
+    Args:
+        grouped_data: DataFrame with grouped ticket data
+    """
+    phase_totals = grouped_data.sum(axis=0)
+    legend = plt.legend(
+        title='Phase', bbox_to_anchor=(1, 1), loc='upper left',
+        frameon=True, fancybox=True, shadow=True,
+        title_fontsize=14, fontsize=12
+    )
+
+    # Update labels with counts
+    for phase, text in zip(grouped_data.columns, legend.get_texts()):
+        count = int(phase_totals[phase])
+        text.set_text(f"{phase} ({count})")
+
+    # Style legend
+    legend.get_frame().set_facecolor('white')
+    legend.get_frame().set_alpha(0.95)
+    legend.get_frame().set_edgecolor('#1A237E')
+    legend.get_frame().set_linewidth(2)
+    legend.get_title().set_fontweight('bold')
+    legend.get_title().set_color('#1A237E')
+
+
+def add_figure_border(fig: plt.Figure) -> None:
+    """Add rounded border to figure.
+
+    Args:
+        fig: Matplotlib figure object
+    """
+    fig.patch.set_edgecolor('none')
     fig.patch.set_linewidth(0)
 
-    # Calculate the exact position to ensure the border appears correctly at the corners
     fig_width, fig_height = fig.get_size_inches()
-    corner_radius = 15  # Adjust this value to control the roundness of corners
+    corner_radius = 15
 
-    # Add a custom FancyBboxPatch that extends to the full figure bounds
-    fancy_box = FancyBboxPatch(
-        (0, 0),
-        width=1.0, height=1.0,  # Full figure dimensions
+    border = FancyBboxPatch(
+        (0, 0), width=1.0, height=1.0,
         boxstyle=f"round,pad=0,rounding_size={corner_radius / max(fig_width * fig.dpi, fig_height * fig.dpi)}",
-        edgecolor='#1A237E',  # Deep blue border
-        facecolor='none',
-        linewidth=border_width,
-        transform=fig.transFigure,
-        zorder=1000,  # Ensure it's on top of other elements
-        clip_on=False  # Don't clip the border
+        edgecolor='#1A237E', facecolor='none', linewidth=4,
+        transform=fig.transFigure, zorder=1000, clip_on=False
     )
-    fig.patches.append(fancy_box)
+    fig.patches.append(border)
 
-    # Enhanced timestamp with better positioning
-    trans = transforms.blended_transform_factory(fig.transFigure, fig.transFigure)
-    now_eastern = datetime.now(eastern).strftime('%m/%d/%Y %I:%M %p %Z')
 
-    # Add background box for timestamp
-    plt.text(0.02, 0.02, f"Generated@ {now_eastern}",
-             transform=trans, ha='left', va='bottom',
-             fontsize=10, color='#1A237E', fontweight='bold',
-             bbox=dict(boxstyle="round,pad=0.4", facecolor='white', alpha=0.9, edgecolor='#1A237E', linewidth=1.5))
+def add_timestamp(fig: plt.Figure) -> None:
+    """Add generation timestamp to figure.
 
-    if not df.empty:
-        # Enhanced annotations with better styling - bringing back the black circles
-        for container in ax.containers:
-            for bar in container:
-                height = bar.get_height()
-                if height > 0:
-                    # Add count labels with black circular backgrounds for better readability
-                    ax.annotate(f'{int(height)}',
-                                xy=(bar.get_x() + bar.get_width() / 2, bar.get_y() + height / 2),
-                                xytext=(0, 0),
-                                textcoords="offset points",
-                                ha='center', va='center',
-                                fontsize=13, color='white',
-                                fontweight='bold',
-                                bbox=dict(boxstyle="circle,pad=0.2", facecolor='black', alpha=0.8, edgecolor='white', linewidth=1))
+    Args:
+        fig: Matplotlib figure object
+    """
+    timestamp = datetime.now(EASTERN).strftime('%m/%d/%Y %I:%M %p %Z')
+    plt.text(
+        0.02, 0.02, f"Generated@ {timestamp}",
+        transform=fig.transFigure, ha='left', va='bottom',
+        fontsize=10, color='#1A237E', fontweight='bold',
+        bbox=dict(boxstyle="round,pad=0.4", facecolor='white',
+                 alpha=0.9, edgecolor='#1A237E', linewidth=1.5)
+    )
 
-        # 9. Calculate total aging tickets for subtitle
-        total_aging_tickets = int(grouped_data.sum().sum())
 
-        # Fix title overlap with much better spacing and move total to subtitle
-        plt.suptitle('Aging Tickets',
-                     fontsize=24, fontweight='bold', color='#1A237E', y=0.98)  # Even higher
-        plt.title(f'Tickets created 1+ months ago (Total: {total_aging_tickets})',
-                  fontsize=16, fontweight='bold', color='#3F51B5', pad=40)  # Much more padding
+def create_data_plot(df: pd.DataFrame) -> plt.Figure:
+    """Create bar chart visualization of aging tickets.
 
-        # Enhanced axis labels with better colors
-        plt.xlabel('Ticket Type', fontsize=14, fontweight='bold', color='#1A237E')
-        plt.ylabel('Count', fontsize=14, fontweight='bold', color='#1A237E')
+    Args:
+        df: DataFrame with ticket data
 
-        # Better x-axis tick formatting with improved label handling
-        labels = [label.get_text() for label in ax.get_xticklabels()]
-        truncated_labels = []
-        for label in labels:
-            if len(label) > 15:  # Truncate long labels
-                truncated_labels.append(label[:12] + '...')
-            else:
-                truncated_labels.append(label)
+    Returns:
+        Matplotlib figure with visualization
+    """
+    grouped_data = prepare_grouped_data(df)
 
-        ax.set_xticklabels(truncated_labels, rotation=45, ha='right', fontsize=11, color='#1A237E', fontweight='bold')
-        ax.tick_params(axis='y', colors='#1A237E', labelsize=11, width=1.5)
+    # Create figure
+    fig, ax = plt.subplots(figsize=(14, 10), facecolor='#f8f9fa')
+    fig.patch.set_facecolor('#f8f9fa')
 
-        # Enhanced legend with counts for each phase and correct colors
-        # Calculate total count for each phase across all ticket types
-        phase_totals = grouped_data.sum(axis=0)
+    # Get colors for phases
+    colors = [PHASE_COLORS.get(phase, '#9E9E9E') for phase in grouped_data.columns]
 
-        # Get the legend from the plot (which has correct colors) and move it outside
-        legend = plt.legend(title='Phase', bbox_to_anchor=(1, 1), loc='upper left',
-                            frameon=True, fancybox=True, shadow=True,
-                            title_fontsize=14, fontsize=12)
+    # Plot stacked bars
+    grouped_data.plot(
+        kind='bar', stacked=True, color=colors,
+        edgecolor='white', linewidth=1.5,
+        ax=ax, width=0.25, alpha=0.95
+    )
 
-        # Update legend labels with counts while preserving colors
-        for i, (phase, text) in enumerate(zip(grouped_data.columns, legend.get_texts())):
-            count = int(phase_totals[phase])
-            text.set_text(f"{phase} ({count})")
-        legend.get_frame().set_facecolor('white')
-        legend.get_frame().set_alpha(0.95)
-        legend.get_frame().set_edgecolor('#1A237E')
-        legend.get_frame().set_linewidth(2)
-        legend.get_title().set_fontweight('bold')
-        legend.get_title().set_color('#1A237E')
+    # Add styling and annotations
+    add_bar_styling(ax)
+    add_value_labels(ax)
 
-        # Add a more prominent watermark with GS-DnR branding
-        fig.text(0.99, 0.01, 'GS-DnR',
-                 ha='right', va='bottom', fontsize=10,
-                 alpha=0.7, color='#3F51B5', style='italic', fontweight='bold')
+    # Style axes
+    max_count = int(grouped_data.sum(axis=1).max())
+    labels = [label.get_text() for label in ax.get_xticklabels()]
+    style_axes(ax, max_count, labels)
 
+    # Add titles
+    total_tickets = int(grouped_data.sum().sum())
+    plt.suptitle('Aging Tickets', fontsize=24, fontweight='bold', color='#1A237E', y=0.98)
+    plt.title(f'Tickets created 1+ months ago (Total: {total_tickets})',
+              fontsize=16, fontweight='bold', color='#3F51B5', pad=40)
+
+    # Add axis labels
+    plt.xlabel('Ticket Type', fontsize=14, fontweight='bold', color='#1A237E')
+    plt.ylabel('Count', fontsize=14, fontweight='bold', color='#1A237E')
+
+    # Add legend and watermark
+    add_legend_with_counts(grouped_data)
+    fig.text(0.99, 0.01, 'GS-DnR', ha='right', va='bottom',
+             fontsize=10, alpha=0.7, color='#3F51B5',
+             style='italic', fontweight='bold')
+
+    return fig
+
+
+def generate_plot(tickets: List[Dict[Any, Any]]) -> None:
+    """Generate and save aging tickets visualization.
+
+    Args:
+        tickets: List of ticket dictionaries
+    """
+    df = prepare_dataframe(tickets)
+    plt.style.use('seaborn-v0_8-whitegrid')
+
+    # Create appropriate plot
+    if df.empty:
+        fig = create_empty_plot()
+    else:
+        fig = create_data_plot(df)
+
+    # Add common elements
+    add_figure_border(fig)
+    add_timestamp(fig)
+
+    # Save plot
     plt.tight_layout()
-    plt.subplots_adjust(top=0.85, bottom=0.15, left=0.08, right=0.80)  # More right space for external legend
+    plt.subplots_adjust(top=0.85, bottom=0.15, left=0.08, right=0.80)
 
-    today_date = datetime.now().strftime('%m-%d-%Y')
-    output_path = root_directory / "web" / "static" / "charts" / today_date / "Aging Tickets.png"
-    output_path.parent.mkdir(parents=True, exist_ok=True)  # Ensure the directory exists
+    today = datetime.now().strftime('%m-%d-%Y')
+    output_path = ROOT_DIR / "web" / "static" / "charts" / today / "Aging Tickets.png"
+    output_path.parent.mkdir(parents=True, exist_ok=True)
     plt.savefig(output_path)
     plt.close(fig)
 
 
-def generate_daily_summary(tickets) -> str | None:
+def generate_daily_summary(tickets: List[Dict[Any, Any]]) -> Optional[str]:
+    """Generate markdown table summary of aging tickets by owner.
+
+    Args:
+        tickets: List of ticket dictionaries
+
+    Returns:
+        Markdown-formatted table string or None on error
+    """
     try:
         if not tickets:
             return pd.DataFrame(columns=['Owner', 'Count', 'Average Age (days)']).to_markdown(index=False)
+
         df = pd.DataFrame(tickets)
         df['owner'] = df['owner'].astype(str).str.replace('@company.com', '', regex=False)
         df['created'] = pd.to_datetime(df['created'], errors='coerce')
-        # Drop rows where 'created' could not be parsed
         df = df.dropna(subset=['created'])
-        # Make both sides timezone-naive for subtraction
-        now = pd.Timestamp.now(tz=eastern).tz_localize(None)
-        df['created'] = pd.to_datetime(df['created']).dt.tz_localize(None)
-        # Calculate age in days - type: ignore to suppress PyCharm warning about Series/timedelta
-        df['age'] = (now - df['created']).apply(lambda x: x.days)  # type: ignore[operator]
+
+        # Calculate age in days
+        now_ts = pd.Timestamp.now(tz=EASTERN)  # noqa
+        current_time = now_ts.replace(tzinfo=None)  # type: ignore[union-attr]
+
+        if df['created'].dt.tz is not None:
+            df['created'] = df['created'].dt.tz_convert(None)
+        else:
+            df['created'] = df['created'].dt.tz_localize(None)  # type: ignore[arg-type]
+
+        df['age'] = (current_time - df['created']).apply(lambda x: x.days)  # type: ignore[operator]
+
+        # Create summary table
         table = df.groupby('owner').agg({'id': 'count', 'age': 'mean'}).reset_index()
         table = table.rename(columns={'owner': 'Owner', 'id': 'Count', 'age': 'Average Age (days)'})
         table['Average Age (days)'] = table['Average Age (days)'].round(1)
         table = table.sort_values(by='Average Age (days)', ascending=False)
+
         return table.to_markdown(index=False)
     except Exception as e:
         logger.error(f"Error generating daily summary: {e}")
         return "Error generating report. Please check the logs."
 
 
-def send_report(room_id):
+def get_aging_tickets(days_ago: int, ticket_type: str) -> List[Dict[Any, Any]]:
+    """Fetch aging tickets based on criteria.
+
+    Args:
+        days_ago: Number of days threshold for aging
+        ticket_type: Ticket type filter
+
+    Returns:
+        List of ticket dictionaries
+    """
+    from services.xsoar import TicketHandler
+
+    now = datetime.now(EASTERN)
+    threshold_date = (now - timedelta(days=days_ago)).replace(hour=0, minute=0, second=0, microsecond=0)
+    threshold_utc = threshold_date.astimezone(pytz.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+
+    query = f'-status:closed type:{ticket_type} created:<{threshold_utc}'
+    return TicketHandler().get_tickets(query=query)
+
+
+def send_report(room_id: str) -> None:
+    """Send aging tickets report to Webex room.
+
+    Args:
+        room_id: Webex room identifier
+    """
     try:
         webex_api = WebexAPI(access_token=config.webex_bot_access_token_soar)
 
-        # Calculate 30 days ago for regular tickets
-        from datetime import timedelta
-        now = datetime.now(eastern)
-        thirty_days_ago = (now - timedelta(days=30)).replace(hour=0, minute=0, second=0, microsecond=0)
-        thirty_days_ago_utc = thirty_days_ago.astimezone(pytz.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+        # Regular tickets (30+ days)
+        tickets = get_aging_tickets(
+            AGING_THRESHOLD_DAYS,
+            f'{config.team_name} -type:"{config.team_name} Third Party Compromise"'
+        )
 
-        query = f'-status:closed type:{config.team_name} -type:"{config.team_name} Third Party Compromise" created:<{thirty_days_ago_utc}'
-        tickets = TicketHandler().get_tickets(query=query)
-
-        from src.utils.webex_messaging import send_message
         send_message(
-            webex_api,
-            room_id,
-            text=f"Aging Tickets Summary!",
+            webex_api, room_id,
+            text="Aging Tickets Summary!",
             markdown=f'Summary (Type={config.team_name}* - TP, Created=1+ months ago)\n ``` \n {generate_daily_summary(tickets)}'
         )
 
-        # Calculate 90 days ago for Third Party Compromise
-        ninety_days_ago = (now - timedelta(days=90)).replace(hour=0, minute=0, second=0, microsecond=0)
-        ninety_days_ago_utc = ninety_days_ago.astimezone(pytz.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+        # Third Party Compromise tickets (90+ days)
+        tp_tickets = get_aging_tickets(
+            THIRD_PARTY_AGING_DAYS,
+            f'"{config.team_name} Third Party Compromise"'
+        )
 
-        query = f'-status:closed type:"{config.team_name} Third Party Compromise" created:<{ninety_days_ago_utc}'
-        tickets = TicketHandler().get_tickets(query=query)
-
-        if tickets:
+        if tp_tickets:
             send_message(
-                webex_api,
-                room_id,
-                text=f"Aging Tickets Summary!",
-                markdown=f'Summary (Type=Third Party Compromise, Created=3+ months ago)\n ``` \n {generate_daily_summary(tickets)}'
+                webex_api, room_id,
+                text="Aging Tickets Summary!",
+                markdown=f'Summary (Type=Third Party Compromise, Created=3+ months ago)\n ``` \n {generate_daily_summary(tp_tickets)}'
             )
     except Exception as e:
         logger.error(f"Error sending report: {e}")
 
 
-def make_chart():
+def make_chart() -> None:
+    """Generate aging tickets chart with all relevant data."""
     try:
-        from datetime import timedelta
-        now = datetime.now(eastern)
+        # Get regular tickets (30+ days)
+        tickets = get_aging_tickets(
+            AGING_THRESHOLD_DAYS,
+            f'{config.team_name} -type:"{config.team_name} Third Party Compromise"'
+        )
 
-        # METCIRT* tickets minus the Third Party are considered aging after 30 days
-        thirty_days_ago = (now - timedelta(days=30)).replace(hour=0, minute=0, second=0, microsecond=0)
-        thirty_days_ago_utc = thirty_days_ago.astimezone(pytz.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+        # Get Third Party Compromise tickets (90+ days)
+        tp_tickets = get_aging_tickets(
+            THIRD_PARTY_AGING_DAYS,
+            f'"{config.team_name} Third Party Compromise"'
+        )
 
-        query = f'-status:closed type:{config.team_name} -type:"{config.team_name} Third Party Compromise" created:<{thirty_days_ago_utc}'
-        tickets = TicketHandler().get_tickets(query=query)
-
-        # Third Party Compromise tickets are considered aging after 90 days
-        ninety_days_ago = (now - timedelta(days=90)).replace(hour=0, minute=0, second=0, microsecond=0)
-        ninety_days_ago_utc = ninety_days_ago.astimezone(pytz.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
-
-        query = f'-status:closed type:"{config.team_name} Third Party Compromise" created:<{ninety_days_ago_utc}'
-        tickets = tickets + TicketHandler().get_tickets(query=query)
-
-        generate_plot(tickets)
+        generate_plot(tickets + tp_tickets)
     except Exception as e:
         logger.error(f"Error generating chart: {e}")
 
 
-def main():
+def main() -> None:
+    """Main entry point for testing."""
     room_id = config.webex_room_id_vinay_test_space
-    send_report(room_id)
+    # send_report(room_id)
     make_chart()
 
 
