@@ -288,9 +288,9 @@ class ResilientBot:
         
     def _trigger_reconnection(self, reason):
         """Trigger a bot reconnection due to connection issues"""
-        # Use DEBUG for proactive reconnections, WARNING for error-driven reconnections
+        # Use INFO for proactive reconnections, WARNING for error-driven reconnections
         if "proactive" in reason.lower():
-            logger.debug(f"🔄 Triggering {self.bot_name} reconnection: {reason}")
+            logger.info(f"🔄 Triggering {self.bot_name} reconnection: {reason}")
         else:
             logger.warning(f"🔄 Triggering {self.bot_name} reconnection: {reason}")
 
@@ -299,25 +299,28 @@ class ResilientBot:
         if hasattr(self, '_last_reconnection_attempt'):
             time_since_last = (current_time - self._last_reconnection_attempt).total_seconds()
             if time_since_last < 60:  # Don't reconnect more than once per minute
-                logger.debug(f"Skipping reconnection for {self.bot_name} - too soon after last attempt ({time_since_last:.0f}s)")
+                logger.info(f"Skipping reconnection for {self.bot_name} - too soon after last attempt ({time_since_last:.0f}s)")
                 return
 
         self._last_reconnection_attempt = current_time
 
         try:
             if self.bot_instance:
-                logger.debug(f"Forcing shutdown of {self.bot_name} for reconnection...")
-                # Force close the current bot instance
-                self._graceful_shutdown()
+                logger.info(f"Forcing shutdown of {self.bot_name} for reconnection...")
+                # Force close the current bot instance WITHOUT setting shutdown_requested
+                # We only want to close the WebSocket, not stop the monitoring threads
+                self._close_bot_connection()
 
                 # Give extra time for WebSocket cleanup
                 cleanup_delay = 10 if self.proxy_detection else 5
-                logger.debug(f"Waiting {cleanup_delay}s for complete connection cleanup...")
+                logger.info(f"Waiting {cleanup_delay}s for complete connection cleanup...")
                 time.sleep(cleanup_delay)
 
                 # Clear the bot instance to force a fresh connection
                 self.bot_instance = None
-                logger.debug(f"Bot instance cleared for {self.bot_name}")
+                # Reset bot start time so monitoring threads know to wait for restart
+                self._bot_start_time = None
+                logger.info(f"Bot instance cleared for {self.bot_name}")
 
         except Exception as e:
             logger.error(f"Error during forced reconnection: {e}")
@@ -473,6 +476,74 @@ class ResilientBot:
 
                     wait = min(wait * 2, self.max_keepalive_interval)  # Exponential backoff
                     time.sleep(wait)
+
+    def _close_bot_connection(self):
+        """Close bot WebSocket connection without stopping monitoring threads"""
+        try:
+            logger.info(f"🔌 Closing {self.bot_name} WebSocket connection for reconnection...")
+
+            # Properly close bot instance and WebSocket connections
+            if self.bot_instance:
+                try:
+                    # Enhanced WebSocket cleanup with asyncio event loop handling
+                    if hasattr(self.bot_instance, 'websocket_client') and self.bot_instance.websocket_client:
+                        ws_client = self.bot_instance.websocket_client
+
+                        # Close the WebSocket connection
+                        if hasattr(ws_client, 'websocket') and ws_client.websocket:
+                            import asyncio
+                            try:
+                                # Get or create event loop for cleanup
+                                try:
+                                    loop = asyncio.get_event_loop()
+                                    if loop.is_closed():
+                                        raise RuntimeError("Event loop is closed")
+                                except RuntimeError:
+                                    # Create new event loop if needed
+                                    loop = asyncio.new_event_loop()
+                                    asyncio.set_event_loop(loop)
+                                    logger.debug("Created new event loop for WebSocket cleanup")
+
+                                # Close WebSocket with timeout
+                                if hasattr(ws_client.websocket, 'close'):
+                                    try:
+                                        close_task = ws_client.websocket.close()
+                                        loop.run_until_complete(asyncio.wait_for(close_task, timeout=5.0))
+                                        logger.info("WebSocket closed gracefully for reconnection")
+                                    except asyncio.TimeoutError:
+                                        logger.warning("WebSocket close timed out, forcing closure")
+                                    except Exception as ws_close_error:
+                                        logger.warning(f"WebSocket close error: {ws_close_error}")
+
+                                # Give time for cleanup
+                                import time
+                                time.sleep(0.5)
+
+                            except Exception as ws_error:
+                                logger.warning(f"WebSocket cleanup error: {ws_error}")
+
+                        # Try additional cleanup methods
+                        if hasattr(ws_client, 'close'):
+                            try:
+                                ws_client.close()
+                            except Exception as e:
+                                logger.debug(f"WebSocket client close method error: {e}")
+
+                    # Try bot-level stop method
+                    if hasattr(self.bot_instance, 'stop'):
+                        try:
+                            self.bot_instance.stop()
+                        except Exception as e:
+                            logger.debug(f"Bot stop method error: {e}")
+
+                    logger.info("WebSocket connection closed for reconnection")
+                except Exception as close_error:
+                    logger.warning(f"Error closing WebSocket: {close_error}")
+
+            logger.info(f"✅ {self.bot_name} connection close complete")
+
+        except Exception as e:
+            logger.error(f"Error during connection close for {self.bot_name}: {e}")
 
     def _graceful_shutdown(self):
         """Perform graceful shutdown cleanup with proper WebSocket handling"""
