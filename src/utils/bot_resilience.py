@@ -185,6 +185,18 @@ class ResilientBot:
                             # Trigger reconnection for connection errors
                             logger.warning(f"Triggering reconnection for {self.bot_name} due to asyncio connection error")
                             self._reconnection_needed = True
+                            # Force stop the bot to trigger reconnection
+                            try:
+                                if self.bot_instance:
+                                    logger.info(f"🔄 Force-stopping {self.bot_name} to reconnect...")
+                                    # Stop the WebSocket to break out of bot.run()
+                                    if hasattr(self.bot_instance, 'websocket_client'):
+                                        if hasattr(self.bot_instance.websocket_client, 'disconnect'):
+                                            self.bot_instance.websocket_client.disconnect()
+                                        elif hasattr(self.bot_instance.websocket_client, 'close'):
+                                            self.bot_instance.websocket_client.close()
+                            except Exception as stop_error:
+                                logger.warning(f"Error forcing bot stop: {stop_error}")
                 else:
                     logger.warning(f"Asyncio context error for {self.bot_name}: {context}")
 
