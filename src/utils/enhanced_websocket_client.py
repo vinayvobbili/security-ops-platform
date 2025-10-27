@@ -5,11 +5,13 @@ This module provides a monkey-patch for webex_bot's WebexWebsocketClient
 to add better connection handling, keepalive, and resilience features.
 
 Key improvements:
-1. WebSocket ping/pong keepalive (30s interval, 10s timeout)
-2. Longer backoff retry window (600s instead of 240s)
-3. Proper close handling with timeout
-4. Device registration refresh on connection errors
-5. Better logging and error handling
+1. WebSocket ping/pong keepalive (30s interval, 15s timeout)
+2. Improved backoff retry logic with up to 10 retries per connection attempt
+3. Exponential backoff capped at 30 seconds with jitter to avoid thundering herd
+4. Handles wrapped connection errors (e.g., requests.exceptions.ConnectionError)
+5. Device registration refresh on connection errors
+6. Proper close handling with timeout
+7. Better logging and error handling
 """
 
 import asyncio
@@ -23,6 +25,12 @@ import backoff
 import certifi
 import websockets
 from websockets.exceptions import InvalidStatusCode
+
+# Import requests exceptions for better error handling
+try:
+    from requests.exceptions import ConnectionError as RequestsConnectionError
+except ImportError:
+    RequestsConnectionError = ConnectionError
 
 logger = logging.getLogger(__name__)
 
@@ -77,9 +85,11 @@ def patch_websocket_client():
                     ConnectionResetError,
                     ConnectionAbortedError,
                     OSError,
+                    RequestsConnectionError,  # Added to handle wrapped connection errors
                 ),
-                max_time=MAX_BACKOFF_TIME,  # Extended retry window
-                max_tries=None,  # Allow unlimited retries within max_time
+                max_tries=10,  # Allow up to 10 retries per connection attempt
+                max_value=30,  # Cap exponential backoff at 30 seconds
+                jitter=backoff.full_jitter,  # Add jitter to avoid thundering herd
             )
             async def _connect_and_listen():
                 # Refresh device info on each connection attempt to avoid stale URLs

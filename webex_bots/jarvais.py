@@ -1235,7 +1235,8 @@ def main():
         initialization_func=jarvais_initialization,
         max_retries=5,
         initial_retry_delay=30,
-        max_retry_delay=300
+        max_retry_delay=300,
+        proactive_reconnection_interval=480  # 8 minutes - shorter than Webex idle timeout
     )
     resilient_runner.run()
 
