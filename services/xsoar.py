@@ -1,5 +1,6 @@
 import json
 import logging
+import time
 from datetime import datetime
 
 import pytz
@@ -118,6 +119,8 @@ class TicketHandler:
         all_tickets = []
         page = 0
         max_pages = 100  # Safety limit to prevent infinite loops
+        rate_limit_retry_count = 0
+        max_rate_limit_retries = 5
 
         try:
             while page < max_pages:
@@ -134,16 +137,48 @@ class TicketHandler:
 
                 log.debug(f"Fetching page {page} with size {page_size}")
 
-                response = http_session.post(
-                    f"{self.prod_base}/incidents/search",
-                    headers=prod_headers,
-                    json=payload,
-                    timeout=300,
-                    verify=False
-                )
-                if response is None:
-                    raise requests.exceptions.ConnectionError("Failed to connect after multiple retries")
-                response.raise_for_status()
+                try:
+                    response = http_session.post(
+                        f"{self.prod_base}/incidents/search",
+                        headers=prod_headers,
+                        json=payload,
+                        timeout=300,
+                        verify=False
+                    )
+                    if response is None:
+                        raise requests.exceptions.ConnectionError("Failed to connect after multiple retries")
+
+                    # Handle 429 rate limiting explicitly
+                    if response.status_code == 429:
+                        rate_limit_retry_count += 1
+                        if rate_limit_retry_count > max_rate_limit_retries:
+                            log.error(f"Exceeded max rate limit retries ({max_rate_limit_retries})")
+                            break
+
+                        # Exponential backoff for rate limiting: 2, 4, 8, 16, 32 seconds
+                        backoff_time = 2 ** rate_limit_retry_count
+                        log.warning(f"Rate limit hit (429). Retry {rate_limit_retry_count}/{max_rate_limit_retries}. "
+                                    f"Backing off for {backoff_time} seconds...")
+                        time.sleep(backoff_time)
+                        continue  # Retry same page
+
+                    response.raise_for_status()
+                    rate_limit_retry_count = 0  # Reset on successful request
+
+                except requests.exceptions.HTTPError as e:
+                    if hasattr(e, 'response') and e.response is not None and e.response.status_code == 429:
+                        rate_limit_retry_count += 1
+                        if rate_limit_retry_count > max_rate_limit_retries:
+                            log.error(f"Exceeded max rate limit retries ({max_rate_limit_retries})")
+                            break
+
+                        backoff_time = 2 ** rate_limit_retry_count
+                        log.warning(f"Rate limit hit (429). Retry {rate_limit_retry_count}/{max_rate_limit_retries}. "
+                                    f"Backing off for {backoff_time} seconds...")
+                        time.sleep(backoff_time)
+                        continue
+                    else:
+                        raise  # Re-raise other HTTP errors
 
                 data = response.json().get('data', [])
                 if not data:
@@ -159,6 +194,11 @@ class TicketHandler:
                 if len(data) < page_size:
                     log.debug(f"Completed: {len(all_tickets)} total tickets fetched")
                     break
+
+                # Add small delay between pages to avoid hitting rate limits
+                # This helps when multiple jobs are running concurrently
+                if page > 0:  # No delay before first page
+                    time.sleep(0.5)  # 500ms delay between pages
 
                 page += 1
 
@@ -186,23 +226,58 @@ class TicketHandler:
                 "sort": [{"field": "created", "asc": False}]
             }
         }
+        max_rate_limit_retries = 5
+        rate_limit_retry_count = 0
+
         try:
             if period:
                 payload["filter"]["period"] = period
 
             log.debug(f"API Request payload: {json.dumps(payload, indent=2)}")
 
-            response = http_session.post(
-                f"{self.prod_base}/incidents/search",
-                headers=prod_headers,
-                json=payload,
-                timeout=300,
-                verify=False
-            )
-            if response is None:
-                raise requests.exceptions.ConnectionError("Failed to connect after multiple retries")
-            response.raise_for_status()
-            return response.json().get('data', [])
+            while rate_limit_retry_count <= max_rate_limit_retries:
+                try:
+                    response = http_session.post(
+                        f"{self.prod_base}/incidents/search",
+                        headers=prod_headers,
+                        json=payload,
+                        timeout=300,
+                        verify=False
+                    )
+                    if response is None:
+                        raise requests.exceptions.ConnectionError("Failed to connect after multiple retries")
+
+                    # Handle 429 rate limiting
+                    if response.status_code == 429:
+                        rate_limit_retry_count += 1
+                        if rate_limit_retry_count > max_rate_limit_retries:
+                            log.error(f"Exceeded max rate limit retries ({max_rate_limit_retries})")
+                            return []
+
+                        backoff_time = 2 ** rate_limit_retry_count
+                        log.warning(f"Rate limit hit (429). Retry {rate_limit_retry_count}/{max_rate_limit_retries}. "
+                                    f"Backing off for {backoff_time} seconds...")
+                        time.sleep(backoff_time)
+                        continue
+
+                    response.raise_for_status()
+                    return response.json().get('data', [])
+
+                except requests.exceptions.HTTPError as e:
+                    if hasattr(e, 'response') and e.response is not None and e.response.status_code == 429:
+                        rate_limit_retry_count += 1
+                        if rate_limit_retry_count > max_rate_limit_retries:
+                            log.error(f"Exceeded max rate limit retries ({max_rate_limit_retries})")
+                            return []
+
+                        backoff_time = 2 ** rate_limit_retry_count
+                        log.warning(f"Rate limit hit (429). Retry {rate_limit_retry_count}/{max_rate_limit_retries}. "
+                                    f"Backing off for {backoff_time} seconds...")
+                        time.sleep(backoff_time)
+                        continue
+                    else:
+                        raise
+
         except Exception as e:
             log.error(f"Error in _fetch_from_api: {str(e)}")
             log.error(f"Query that failed: {query}")
@@ -309,6 +384,55 @@ class TicketHandler:
 
         investigation_data = response.json()
         return investigation_data.get('users', [])
+
+    def complete_task(self, incident_id, task_id, response_value):
+        """
+        Complete a conditional task in a playbook.
+
+        Args:
+            incident_id: The XSOAR incident/investigation ID
+            task_id: The task ID to complete
+            response_value: The response value (e.g., 'yes' or 'no')
+
+        Returns:
+            Response JSON from XSOAR API
+        """
+        if not incident_id or not task_id:
+            log.error("Incident ID or Task ID is empty. Cannot complete task.")
+            return None
+
+        log.info(f"Completing task {task_id} in incident {incident_id} with response: {response_value}")
+
+        # API endpoint for completing a task
+        # POST /inv-playbook/task/complete
+        payload = {
+            "investigationId": incident_id,
+            "id": task_id,
+            "data": response_value
+        }
+
+        try:
+            response = http_session.post(
+                f"{self.prod_base}/inv-playbook/task/complete",
+                headers=prod_headers,
+                json=payload,
+                verify=False,
+                timeout=60
+            )
+
+            if response is None:
+                raise requests.exceptions.ConnectionError("Failed to connect after multiple retries")
+
+            response.raise_for_status()
+            log.info(f"Successfully completed task {task_id} in incident {incident_id}")
+            return response.json()
+
+        except Exception as e:
+            log.error(f"Error completing task {task_id} in incident {incident_id}: {str(e)}")
+            if hasattr(e, 'response') and e.response is not None:
+                log.error(f"Response status: {e.response.status_code}")
+                log.error(f"Response body: {e.response.text}")
+            raise
 
     def create_in_dev(self, payload):
         """Create a new incident in dev XSOAR"""

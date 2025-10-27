@@ -1854,6 +1854,77 @@ def api_oncall():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@app.route('/verify-command')
+@log_web_activity
+def verify_command_form():
+    """Display command verification form"""
+    # Get command details from query parameters
+    command = request.args.get('command', 'N/A')
+    timestamp = request.args.get('timestamp', 'N/A')
+    system = request.args.get('system', 'N/A')
+    ticket_id = request.args.get('ticket_id', '')
+    task_id = request.args.get('task_id', '')
+
+    return render_template('command_verification_form.html',
+                         command=command,
+                         timestamp=timestamp,
+                         system=system,
+                         ticket_id=ticket_id,
+                         task_id=task_id)
+
+
+@app.route('/submit-command-verification', methods=['POST'])
+@log_web_activity
+def submit_command_verification():
+    """Handle command verification form submission"""
+    try:
+        data = request.form.to_dict()
+        recognized = data.get('recognized')  # 'yes' or 'no'
+        ticket_id = data.get('ticket_id', '')
+        task_id = data.get('task_id', '')
+        command = data.get('command', '')
+        timestamp = data.get('timestamp', '')
+        system = data.get('system', '')
+
+        # Log the response
+        logger.info(f"Command verification response: recognized={recognized}, ticket_id={ticket_id}, task_id={task_id}, command={command}")
+
+        # Complete the XSOAR task if ticket_id and task_id are provided
+        if ticket_id and task_id:
+            try:
+                result = incident_handler.complete_task(ticket_id, task_id, recognized)
+                logger.info(f"Successfully completed XSOAR task {task_id} in ticket {ticket_id} with response: {recognized}")
+
+                return jsonify({
+                    'status': 'success',
+                    'recognized': recognized,
+                    'ticket_id': ticket_id,
+                    'task_id': task_id,
+                    'message': f'Thank you for your response. The task has been completed in XSOAR ticket #{ticket_id}.'
+                })
+            except Exception as xsoar_error:
+                logger.error(f"Error completing XSOAR task: {xsoar_error}")
+                return jsonify({
+                    'status': 'error',
+                    'error': f'Failed to complete XSOAR task: {str(xsoar_error)}'
+                }), 500
+        else:
+            # If no ticket_id or task_id, just log the response
+            logger.warning(f"No ticket_id or task_id provided. Response logged but not sent to XSOAR.")
+            return jsonify({
+                'status': 'success',
+                'recognized': recognized,
+                'message': 'Thank you for your response. Your verification has been recorded.'
+            })
+
+    except Exception as e:
+        logger.error(f"Error submitting command verification: {e}")
+        return jsonify({
+            'status': 'error',
+            'error': str(e)
+        }), 500
+
+
 def main():
     """Entry point for launching the web server.
 
