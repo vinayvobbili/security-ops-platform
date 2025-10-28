@@ -68,8 +68,12 @@ from src.utils.webex_messaging import send_message_with_files, safe_send_message
 # Load configuration
 config = get_config()
 
-# Initialize Webex API client
-webex_api = WebexTeamsAPI(access_token=config.webex_bot_access_token_moneyball)
+# Initialize Webex API client with extended timeout for proxy environments
+webex_api = WebexTeamsAPI(
+    access_token=config.webex_bot_access_token_moneyball,
+    single_request_timeout=120,  # Increased from default 60s to 120s for proxy/network stability
+    wait_on_rate_limit=True
+)
 
 # Global variables
 bot_instance = None
