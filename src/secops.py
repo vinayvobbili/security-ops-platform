@@ -7,7 +7,6 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 import pytz
-from dateutil import parser
 from openpyxl import load_workbook
 from requests import exceptions as requests_exceptions
 from tabulate import tabulate
@@ -72,33 +71,42 @@ class ShiftConstants:
 
 def get_current_shift():
     """Determine current shift based on Eastern time."""
-    eastern = pytz.timezone(ShiftConstants.EASTERN_TZ)
-    now = datetime.now(eastern)
-    total_minutes = now.hour * 60 + now.minute
+    try:
+        eastern = pytz.timezone(ShiftConstants.EASTERN_TZ)
+        now = datetime.now(eastern)
+        total_minutes = now.hour * 60 + now.minute
 
-    if ShiftConstants.MORNING_START <= total_minutes < ShiftConstants.AFTERNOON_START:
+        if ShiftConstants.MORNING_START <= total_minutes < ShiftConstants.AFTERNOON_START:
+            return 'morning'
+        elif ShiftConstants.AFTERNOON_START <= total_minutes < ShiftConstants.NIGHT_START:
+            return 'afternoon'
+        else:
+            return 'night'
+    except Exception as e:
+        logger.error(f"Error in get_current_shift: {e}")
+        # Default to morning if there's an error
         return 'morning'
-    elif ShiftConstants.AFTERNOON_START <= total_minutes < ShiftConstants.NIGHT_START:
-        return 'afternoon'
-    else:
-        return 'night'
 
 
 def get_open_tickets():
     """Get formatted string of open tickets with links."""
-    all_tickets = TicketHandler().get_tickets(query=BASE_QUERY + ' -status:closed')
-    total_tickets = len(all_tickets)
-    ticket_show_count = min(total_tickets, ShiftConstants.TICKET_SHOW_COUNT)
+    try:
+        all_tickets = TicketHandler().get_tickets(query=BASE_QUERY + ' -status:closed')
+        total_tickets = len(all_tickets)
+        ticket_show_count = min(total_tickets, ShiftConstants.TICKET_SHOW_COUNT)
 
-    ticket_base_url = f"{config.xsoar_prod_ui_base_url}/Custom/caseinfoid/"
-    open_tickets = [
-        f"[{ticket['id']}]({ticket_base_url}{ticket['id']})"
-        for ticket in all_tickets[:ticket_show_count]
-    ]
+        ticket_base_url = f"{config.xsoar_prod_ui_base_url}/Custom/caseinfoid/"
+        open_tickets = [
+            f"[{ticket['id']}]({ticket_base_url}{ticket['id']})"
+            for ticket in all_tickets[:ticket_show_count]
+        ]
 
-    tickets_text = ', '.join(open_tickets)
-    remaining = total_tickets - ticket_show_count
-    return f"{tickets_text}{f' and {remaining} more' if remaining > 0 else ''}"
+        tickets_text = ', '.join(open_tickets)
+        remaining = total_tickets - ticket_show_count
+        return f"{tickets_text}{f' and {remaining} more' if remaining > 0 else ''}"
+    except Exception as e:
+        logger.error(f"Error in get_open_tickets: {e}")
+        return "Unable to fetch open tickets"
 
 
 class ExcelStaffingReader:
@@ -173,13 +181,20 @@ def get_staffing_data(day_name=None, shift_name=None):
 
 
 def safe_parse_datetime(dt_string):
-    """Parse datetime string safely, ensuring it's timezone naive."""
+    """Parse datetime string safely, ensuring its timezone naive.
+
+    Handles the format: "09/16/2024 06:34:17 PM EDT"
+    The timezone suffix (EDT, EST, etc.) is ignored since we return naive datetime.
+    """
     if not dt_string:
         return None
 
     try:
-        dt = parser.parse(dt_string)
-        return dt.replace(tzinfo=None)
+        # Remove timezone suffix (EDT, EST, etc.) and parse
+        # Format: "MM/DD/YYYY HH:MM:SS AM/PM TZ"
+        dt_without_tz = dt_string.rsplit(' ', 1)[0]  # Remove last space-separated token (timezone)
+        dt = datetime.strptime(dt_without_tz, '%m/%d/%Y %I:%M:%S %p')
+        return dt
     except Exception as e:
         logger.error(f"Error parsing datetime {dt_string}: {e}")
         return None
@@ -721,17 +736,21 @@ class ShiftChangeFormatter:
 
 def _create_shift_change_message(shift_name, shift_data):
     """Create the markdown message for shift change announcement."""
-    # hosts_text = '\n'.join(shift_data['hosts_in_containment']) if shift_data['hosts_in_containment'] else ''
+    try:
+        # hosts_text = '\n'.join(shift_data['hosts_in_containment']) if shift_data['hosts_in_containment'] else ''
 
-    return (
-        f"Good **{shift_name.upper()}**! A new shift's starting now!\n"
-        f"Timings: {shift_data['shift_timings']}\n"
-        f"Open {config.team_name}* tickets: {get_open_tickets()}\n"
-        # f"Hosts in Containment (TUC): \n{hosts_text}\n\n"
-        f"**Management Notes**: {shift_data['management_notes']}\n"
-        f"Scheduled Staffing:\n"
-        f"```\n{shift_data['staffing_table']}\n```"
-    )
+        return (
+            f"Good **{shift_name.upper()}**! A new shift's starting now!\n"
+            f"Timings: {shift_data['shift_timings']}\n"
+            f"Open {config.team_name}* tickets: {get_open_tickets()}\n"
+            # f"Hosts in Containment (TUC): \n{hosts_text}\n\n"
+            f"**Management Notes**: {shift_data['management_notes']}\n"
+            f"Scheduled Staffing:\n"
+            f"```\n{shift_data['staffing_table']}\n```"
+        )
+    except Exception as e:
+        logger.error(f"Error in _create_shift_change_message: {e}")
+        return f"Good **{shift_name.upper()}**! A new shift's starting now!\n\nUnable to fetch shift details due to an error."
 
 
 @retry(
