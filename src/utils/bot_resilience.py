@@ -122,6 +122,15 @@ class ResilientBot:
         self._last_reconnection_attempt = datetime.min
         self._bot_start_time = None
 
+        # Setup connection health monitoring
+        self._health_monitor = None
+        try:
+            from src.utils.connection_health import ConnectionHealthMonitor
+            self._health_monitor = ConnectionHealthMonitor(bot_name=bot_name or "Bot")
+            logger.debug(f"📊 Connection health monitoring enabled for {bot_name or 'Bot'}")
+        except ImportError:
+            logger.debug("Connection health monitoring not available")
+
         # Setup signal handlers
         self._setup_signal_handlers()
 
@@ -294,6 +303,10 @@ class ResilientBot:
         else:
             logger.warning(f"🔄 Triggering {self.bot_name} reconnection: {reason}")
 
+        # Record reconnection in health monitor if available
+        if hasattr(self, '_health_monitor') and self._health_monitor:
+            self._health_monitor.record_reconnection(reason)
+
         # Check if we've had too many recent reconnections to avoid thrashing
         current_time = datetime.now()
         if hasattr(self, '_last_reconnection_attempt'):
@@ -438,16 +451,31 @@ class ResilientBot:
             try:
                 if self.bot_instance and hasattr(self.bot_instance, 'teams'):
                     # Try a simple API call to test connection health
+                    ping_start = time.time()
                     self.bot_instance.teams.people.me()
+                    ping_duration = time.time() - ping_start
+
                     self.last_successful_ping = datetime.now()
                     self.consecutive_failures = 0
                     wait = self.keepalive_interval  # Reset to normal interval
-                    logger.debug(f"Keepalive ping successful for {self.bot_name}")
+                    logger.debug(f"Keepalive ping successful for {self.bot_name} ({ping_duration:.2f}s)")
+
+                    # Record in health monitor
+                    if self._health_monitor:
+                        self._health_monitor.record_request_success(ping_duration)
+                        # Log periodic summary (every 5 minutes by default)
+                        self._health_monitor.log_periodic_summary()
+
                 time.sleep(wait)
             except (ConnectionResetError, ConnectionAbortedError, OSError, RequestsConnectionError, ProtocolError) as conn_error:
                 if not self.shutdown_requested:
                     self.consecutive_failures += 1
                     logger.warning(f"Keepalive ping failed for {self.bot_name} with connection error (failure #{self.consecutive_failures}): {conn_error}")
+
+                    # Record in health monitor
+                    if self._health_monitor:
+                        self._health_monitor.record_connection_error(conn_error)
+
                     logger.warning(f"Connection error detected for {self.bot_name}. Triggering immediate reconnection...")
                     self._trigger_reconnection(f"Connection error: {type(conn_error).__name__}")
                     # Wait for bot to restart instead of breaking
@@ -461,6 +489,13 @@ class ResilientBot:
                 if not self.shutdown_requested:
                     self.consecutive_failures += 1
                     logger.warning(f"Keepalive ping failed for {self.bot_name} (failure #{self.consecutive_failures}): {e}")
+
+                    # Record in health monitor
+                    if self._health_monitor:
+                        if "timeout" in str(e).lower() or "timed out" in str(e).lower():
+                            self._health_monitor.record_request_timeout(time.time() - ping_start if 'ping_start' in locals() else 60.0)
+                        else:
+                            self._health_monitor.record_connection_error(e)
 
                     # Check if this looks like a proxy/network issue
                     if self._is_proxy_related_error(e):
@@ -686,6 +721,15 @@ class ResilientBot:
                 init_duration = (datetime.now() - start_time).total_seconds()
                 logger.info(f"🚀 {self.bot_name} is up and running (startup in {init_duration:.1f}s)...")
                 print(f"🚀 {self.bot_name} is up and running (startup in {init_duration:.1f}s)...", flush=True)
+
+                # Set the health monitor in webex_messaging if available
+                if self._health_monitor:
+                    try:
+                        from src.utils import webex_messaging
+                        webex_messaging.set_health_monitor(self._health_monitor)
+                        logger.debug(f"📊 Health monitor connected to webex_messaging for {self.bot_name}")
+                    except Exception as e:
+                        logger.debug(f"Could not set health monitor in webex_messaging: {e}")
 
                 # Record bot start time for proactive reconnection
                 self._bot_start_time = datetime.now()

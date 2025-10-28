@@ -18,11 +18,21 @@ Usage:
 """
 
 import logging
+import time
 from typing import Optional, List, Dict, Any
 
 from src.utils.retry_utils import with_webex_retry
 
 logger = logging.getLogger(__name__)
+
+# Connection health monitoring (optional - can be None if not initialized)
+_health_monitor = None
+
+
+def set_health_monitor(monitor):
+    """Set the global health monitor for tracking connection metrics"""
+    global _health_monitor
+    _health_monitor = monitor
 
 
 @with_webex_retry(max_attempts=3, initial_delay=2.0)
@@ -49,14 +59,33 @@ def send_message(
     Example:
         send_message(webex_api, room_id, markdown="**Hello** World!")
     """
-    params = {"roomId": room_id, **kwargs}
+    start_time = time.time()
+    try:
+        params = {"roomId": room_id, **kwargs}
 
-    if markdown:
-        params["markdown"] = markdown
-    if text:
-        params["text"] = text
+        if markdown:
+            params["markdown"] = markdown
+        if text:
+            params["text"] = text
 
-    return webex_api.messages.create(**params)
+        result = webex_api.messages.create(**params)
+
+        # Record success in health monitor
+        if _health_monitor:
+            duration = time.time() - start_time
+            _health_monitor.record_request_success(duration)
+            _health_monitor.log_periodic_summary()  # Log summary every 5 minutes
+
+        return result
+    except Exception as e:
+        # Record failure in health monitor
+        if _health_monitor:
+            duration = time.time() - start_time
+            if "timeout" in str(e).lower() or "timed out" in str(e).lower():
+                _health_monitor.record_request_timeout(duration)
+            else:
+                _health_monitor.record_connection_error(e)
+        raise
 
 
 @with_webex_retry(max_attempts=3, initial_delay=2.0)
@@ -90,14 +119,33 @@ def send_message_with_files(
             markdown="Here's your chart!"
         )
     """
-    params = {"roomId": room_id, "files": files, **kwargs}
+    start_time = time.time()
+    try:
+        params = {"roomId": room_id, "files": files, **kwargs}
 
-    if markdown:
-        params["markdown"] = markdown
-    if text:
-        params["text"] = text
+        if markdown:
+            params["markdown"] = markdown
+        if text:
+            params["text"] = text
 
-    return webex_api.messages.create(**params)
+        result = webex_api.messages.create(**params)
+
+        # Record success in health monitor
+        if _health_monitor:
+            duration = time.time() - start_time
+            _health_monitor.record_request_success(duration)
+            _health_monitor.log_periodic_summary()
+
+        return result
+    except Exception as e:
+        # Record failure in health monitor
+        if _health_monitor:
+            duration = time.time() - start_time
+            if "timeout" in str(e).lower() or "timed out" in str(e).lower():
+                _health_monitor.record_request_timeout(duration)
+            else:
+                _health_monitor.record_connection_error(e)
+        raise
 
 
 @with_webex_retry(max_attempts=3, initial_delay=2.0)
