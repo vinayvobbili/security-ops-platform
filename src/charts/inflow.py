@@ -246,6 +246,8 @@ class StackedBarChart:
         self.styler.apply_base_styling(fig, ax)
 
         df_pivot = df.pivot_table(index='ticket_type', columns='severity', values='count', fill_value=0)
+        # Convert column names to strings to avoid matplotlib categorical warning
+        df_pivot.columns = df_pivot.columns.astype(str)
         colors = [ColorSchemes.get_severity_color(sev) for sev in df_pivot.columns]
 
         df_pivot.plot(kind='bar', stacked=True, ax=ax, color=colors,
