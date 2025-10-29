@@ -1,67 +1,93 @@
 """
-XSOAR Script: Set User Verification Task ID
+XSOAR Script: Set User Reach Out Form Details
 
-This script finds the conditional task ID (by task name) and sets it in the context
-so it can be used in the email template.
+Generates a unique form ID and saves user reach out form details to the
+"METCIRT User Reach Out Forms" list for tracking user verification workflows.
+
+Workflow:
+- Generates unique form ID from UUID
+- Retrieves current incident ID
+- Finds in-progress task ID by name ("Does the user recognize the alert?")
+- Appends form details to "METCIRT User Reach Out Forms" list using setList command
 
 Arguments:
-- task_name: Name of the conditional task (e.g., "Does the user recognize the alert?")
-
-Returns:
-- Sets ${user_verification_task_id} in context
+- None
 
 Example usage in XSOAR playbook:
-  Before the email task, run this script:
-  !SetUserVerificationTaskId task_name="Does the user recognize the alert?"
-
-  Then in the email task, use: ${user_verification_task_id}
+  !SetUserReachOutFormDetails
 """
+import json
 import uuid
 
+USER_REACH_OUT_FORMS_LIST_NAME = "METCIRT User Reach Out Forms"
+USER_REACH_OUT_FORMS_HISTORY_LIST_NAME = "METCIRT User Reach Out Forms History"
+TASK_NAME = "Does the user recognize the alert?"
 
 
+def generate_unique_form_id() -> int:
+    """Generate unique form ID from UUID.
 
-def generate_unique_from_uuid():
-    """Generate unique number from UUID."""
+    Returns:
+        int: Unique form identifier
+    """
     return int(str(uuid.uuid4().int))
 
 
-def save_form_details(form_id, incident_id, task_name, user_verification_task_id):
-    response = demisto.internalHttpRequest('GET', '/lists', body=None)
-    all_lists = json.loads(response.get("body", "[]"))
-    matching_list = next((item for item in all_lists if item.get('id') == list_name), None)
+def save_form_details(form_id: int, incident_id: str, user_verification_task_id: str) -> None:
+    """Save form details to XSOAR list.
 
-    if not matching_list:
-        raise ValueError(f"No list found with the name '{list_name}'.")
+    Args:
+        form_id: Unique form identifier
+        incident_id: XSOAR incident ID
+        user_verification_task_id: Task ID for user verification
+    """
+    list_contents = demisto.executeCommand("getList", {
+        "listName": USER_REACH_OUT_FORMS_LIST_NAME
+    })[0].get('Contents', '[]')
+    user_reach_out_forms = json.loads(list_contents) if list_contents else []
 
-    api_url = xsoar_api_base_url + '/lists/save'
-    headers = {'Authorization': xsoar_api_key, 'x-xdr-auth-id': auth_id}
-    result = requests.post(api_url, headers=headers, json={
-        "data": json.dumps(data, indent=4),
-        "name": list_name,
-        "type": "json",
-        "id": list_name,
-        "version": matching_list.get('version')
+    user_reach_out_forms.append({
+        "form_id": form_id,
+        "incident_id": incident_id,
+        "user_verification_task_id": user_verification_task_id
     })
 
-    if result.status_code != 200:
-        raise RuntimeError(f"Failed to save list. Status code: {result.status_code}")
+    demisto.executeCommand("setList", {
+        "listName": USER_REACH_OUT_FORMS_LIST_NAME,
+        "listData": json.dumps(user_reach_out_forms, indent=4)
+    })
 
 
-def main():
-    """Find the conditional task ID and set it in context."""
-    task_name = 'Does the user recognize the alert?'
-    form_id = generate_unique_from_uuid()
-    incident_id = incident().get('id')
+def get_user_verification_task_id(incident_id: str, task_name: str) -> str:
+    """Find in-progress task ID by name.
 
-    # Get tasks that are in progress
+    Args:
+        incident_id: XSOAR incident ID
+        task_name: Name of task to find
+
+    Returns:
+        str: Task ID
+    """
     in_progress_tasks = demisto.executeCommand("GetIncidentTasksByState", {
         'inc_id': incident_id,
         'states': 'inProgress'
     })
-    user_verification_task_id = [task for task in in_progress_tasks if task.get('name') == task_name][0].get('id')
 
-    save_form_details(form_id, incident_id, task_name, user_verification_task_id)
+    matching_task = next(
+        (task for task in in_progress_tasks if task.get('name') == task_name),
+        None
+    )
+
+    return matching_task.get('id') if matching_task else None
+
+
+def main() -> None:
+    """Generate form ID and save user reach out form details to XSOAR list."""
+    form_id = generate_unique_form_id()
+    incident_id = demisto.incident().get('id')
+    user_verification_task_id = get_user_verification_task_id(incident_id, TASK_NAME)
+
+    save_form_details(form_id, incident_id, user_verification_task_id)
 
 
 if __name__ in ('__main__', '__builtin__', 'builtins'):
