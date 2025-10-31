@@ -28,7 +28,7 @@ logger = logging.getLogger("tenacity.retry")
 logging.basicConfig(level=logging.INFO)
 
 config = get_config()
-webex_api = WebexAPI(config.webex_bot_access_token_soar, disable_ssl_verify=True)
+webex_api = WebexAPI(config.webex_bot_access_token_soar, disable_ssl_verify=True, single_request_timeout=180)
 list_handler = ListHandler()
 BASE_QUERY = f'type:{config.team_name} -owner:""'
 root_directory = Path(__file__).parent.parent
@@ -754,7 +754,7 @@ def _create_shift_change_message(shift_name, shift_data):
 
 
 @retry(
-    reraise=True,
+    reraise=False,  # Don't crash the caller - log and continue
     stop=stop_after_attempt(3),  # Retry up to 3 times
     wait=wait_exponential(multiplier=2, min=2, max=10),  # Exponential backoff
     before_sleep=before_sleep_log(logger, logging.WARNING),
@@ -779,10 +779,11 @@ def announce_shift_change(shift_name, room_id, sleep_time=30):
 
     except (requests_exceptions.ConnectionError, urllib3_exceptions.ProtocolError, requests_exceptions.ReadTimeout) as net_err:
         logger.error(f"Network error in announce_shift_change: {net_err}")
-        raise  # Reraise to trigger retry
+        raise  # Reraise to trigger retry (tenacity will catch and handle)
     except Exception as e:
         logger.error(f"Error in announce_shift_change: {e}")
         traceback.print_exc()
+        raise  # Reraise to trigger retry for non-network errors too
 
 
 def main():

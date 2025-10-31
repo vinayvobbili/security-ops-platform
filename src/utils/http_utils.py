@@ -18,7 +18,7 @@ class RobustHTTPSession:
     def __init__(self,
                  max_retries: int = 3,
                  backoff_factor: float = 0.3,
-                 timeout: int = 30,
+                 timeout: int = 120,
                  verify_ssl: bool = True):
         """
         Initialize the robust HTTP session.
