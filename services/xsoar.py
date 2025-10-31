@@ -1,52 +1,93 @@
+"""
+XSOAR Service using official demisto-py SDK
+
+This module provides a wrapper around the official demisto-py SDK
+to maintain backward compatibility with existing code while leveraging
+the official Palo Alto Networks XSOAR Python client.
+
+Migration Date: 2024-10-31
+Original: services/xsoar.py.backup
+"""
+import ast
 import json
 import logging
 import time
 from datetime import datetime
 
+import demisto_client
 import pytz
-import requests
 import urllib3
+from demisto_client.demisto_api import rest
+from demisto_client.demisto_api.models import SearchIncidentsData
 from urllib3.exceptions import InsecureRequestWarning
 
 from my_config import get_config
-from src.utils.http_utils import get_session
+
+# For easier access to ApiException
+ApiException = rest.ApiException
+
+
+def _parse_generic_response(response):
+    """
+    Parse response from generic_request which returns (body, status, headers) tuple.
+    Body might be JSON string or Python repr string.
+    """
+    if not response or not isinstance(response, tuple) or len(response) < 1:
+        return {}
+
+    body = response[0]
+    if not body:
+        return {}
+
+    # Try JSON first, then Python repr
+    try:
+        return json.loads(body)
+    except json.JSONDecodeError:
+        try:
+            return ast.literal_eval(body)
+        except (ValueError, SyntaxError):
+            return {}
+
 
 urllib3.disable_warnings(InsecureRequestWarning)
 
 CONFIG = get_config()
 log = logging.getLogger(__name__)
 
-# Get robust HTTP session instance
-http_session = get_session()
+# Initialize demisto-py clients for prod and dev environments
+prod_client = demisto_client.configure(
+    base_url=CONFIG.xsoar_prod_api_base_url,
+    api_key=CONFIG.xsoar_prod_auth_key,
+    auth_id=CONFIG.xsoar_prod_auth_id,
+    verify_ssl=False
+)
 
-prod_headers = {
-    'Authorization': CONFIG.xsoar_prod_auth_key,
-    'x-xdr-auth-id': CONFIG.xsoar_prod_auth_id,
-    'Content-Type': 'application/json'
-}
-
-dev_headers = {
-    'Authorization': CONFIG.xsoar_dev_auth_key,
-    'x-xdr-auth-id': CONFIG.xsoar_dev_auth_id,
-    'Content-Type': 'application/json'
-}
+dev_client = demisto_client.configure(
+    base_url=CONFIG.xsoar_dev_api_base_url,
+    api_key=CONFIG.xsoar_dev_auth_key,
+    auth_id=CONFIG.xsoar_dev_auth_id,
+    verify_ssl=False
+)
 
 
 def get_case_data_with_notes(incident_id):
     """Fetch incident details along with notes from prod environment"""
-    investigation_url = f"{CONFIG.xsoar_prod_api_base_url}/investigation/{incident_id}"
-    response = http_session.post(investigation_url, headers=prod_headers, json={}, verify=False)
-    if response is None:
-        raise requests.exceptions.ConnectionError("Failed to connect after multiple retries")
-    response.raise_for_status()
-    return response.json()
+    try:
+        response = prod_client.generic_request(
+            path=f'/investigation/{incident_id}',
+            method='POST',
+            body={}
+        )
+        return _parse_generic_response(response)
+    except ApiException as e:
+        log.error(f"Error fetching investigation {incident_id}: {e}")
+        raise
 
 
 def get_user_notes(incident_id):
     """Fetch user notes for a given incident from prod environment"""
     case_data_with_notes = get_case_data_with_notes(incident_id)
     entries = case_data_with_notes.get('entries', [])
-    # user_notes = [entry for entry in entries if entry.get('type') == 1 and entry.get("contents") and (entry.get('user') not in ['', 'DBot'])]  # Type 1 indicates user notes
     user_notes = [entry for entry in entries if entry.get('note')]
 
     # Format notes with required fields
@@ -75,12 +116,16 @@ def get_user_notes(incident_id):
 
 def get_case_data(incident_id):
     """Fetch incident details from prod environment"""
-    incident_url = f"{CONFIG.xsoar_prod_api_base_url}/incident/load/{incident_id}"
-    response = http_session.get(incident_url, headers=prod_headers, verify=False)
-    if response is None:
-        raise requests.exceptions.ConnectionError("Failed to connect after multiple retries")
-    response.raise_for_status()
-    return response.json()
+    try:
+        # Use generic_request to load incident
+        response = prod_client.generic_request(
+            path=f'/incident/load/{incident_id}',
+            method='GET'
+        )
+        return _parse_generic_response(response)
+    except ApiException as e:
+        log.error(f"Error fetching incident {incident_id}: {e}")
+        raise
 
 
 def import_ticket(source_ticket_number, requestor_email_address=None):
@@ -103,9 +148,11 @@ class TicketHandler:
     def __init__(self):
         self.prod_base = CONFIG.xsoar_prod_api_base_url
         self.dev_base = CONFIG.xsoar_dev_api_base_url
+        self.client = prod_client
+        self.dev_client = dev_client
 
     def get_tickets(self, query, period=None, size=20000, paginate=True):
-        """Fetch security incidents from XSOAR"""
+        """Fetch security incidents from XSOAR using demisto-py SDK"""
         full_query = query + f' -category:job -type:"{CONFIG.team_name} Ticket QA" -type:"{CONFIG.team_name} SNOW Whitelist Request"'
 
         log.debug(f"Making API call for query: {query}")
@@ -115,128 +162,85 @@ class TicketHandler:
         return self._fetch_from_api(full_query, period, size)
 
     def _fetch_paginated(self, query, period, page_size=5000):
-        """Fetch tickets with pagination to avoid max response size limit"""
+        """Fetch tickets with pagination using demisto-py SDK"""
         all_tickets = []
         page = 0
-        max_pages = 100  # Safety limit to prevent infinite loops
-        rate_limit_retry_count = 0
-        max_rate_limit_retries = 5
+        max_pages = 100
         server_error_retry_count = 0
         max_server_error_retries = 3
 
         try:
             while page < max_pages:
-                payload = {
-                    "filter": {
-                        "query": query,
-                        "page": page,
-                        "size": page_size,
-                        "sort": [{"field": "created", "asc": False}]
-                    }
+                filter_data = {
+                    "query": query,
+                    "page": page,
+                    "size": page_size,
+                    "sort": [{"field": "created", "asc": False}]
                 }
                 if period:
-                    payload["filter"]["period"] = period
+                    filter_data["period"] = period
 
                 log.debug(f"Fetching page {page} with size {page_size}")
 
                 try:
-                    response = http_session.post(
-                        f"{self.prod_base}/incidents/search",
-                        headers=prod_headers,
-                        json=payload,
-                        timeout=600,  # Increased to 10 minutes for large queries
-                        verify=False
-                    )
-                    if response is None:
-                        raise requests.exceptions.ConnectionError("Failed to connect after multiple retries")
+                    # Use search_incidents method from demisto-py
+                    search_data = SearchIncidentsData(filter=filter_data)
+                    response = self.client.search_incidents(filter=search_data)
 
-                    # Handle 429 rate limiting explicitly
-                    if response.status_code == 429:
-                        rate_limit_retry_count += 1
-                        if rate_limit_retry_count > max_rate_limit_retries:
-                            log.error(f"Exceeded max rate limit retries ({max_rate_limit_retries})")
-                            break
+                    # Reset error counter on success
+                    server_error_retry_count = 0
 
-                        # Exponential backoff for rate limiting: 2, 4, 8, 16, 32 seconds
-                        backoff_time = 2 ** rate_limit_retry_count
-                        log.warning(f"Rate limit hit (429). Retry {rate_limit_retry_count}/{max_rate_limit_retries}. "
-                                    f"Backing off for {backoff_time} seconds...")
-                        time.sleep(backoff_time)
-                        continue  # Retry same page
+                    # Extract data from response and convert to dicts for backward compatibility
+                    raw_data = response.data if hasattr(response, 'data') else []
+                    if not raw_data:
+                        break
 
-                    # Handle 502/503/504 server errors with retry logic
-                    if response.status_code in [502, 503, 504]:
+                    # Convert model objects to dictionaries
+                    data = [item.to_dict() if hasattr(item, 'to_dict') else item for item in raw_data]
+                    all_tickets.extend(data)
+
+                    # Show progress
+                    if page % 5 == 0 or len(data) < page_size:
+                        log.debug(f"  Fetched {len(all_tickets)} tickets so far...")
+                    log.debug(f"Fetched page {page}: {len(data)} tickets (total so far: {len(all_tickets)})")
+
+                    # Check if we've reached the end
+                    if len(data) < page_size:
+                        log.debug(f"Completed: {len(all_tickets)} total tickets fetched")
+                        break
+
+                    # Delay between pages to avoid rate limiting
+                    if page > 0:
+                        time.sleep(1.0)
+
+                    page += 1
+
+                except ApiException as e:
+                    # Handle server errors (502, 503, 504) with retry
+                    if e.status in [502, 503, 504]:
                         server_error_retry_count += 1
                         if server_error_retry_count > max_server_error_retries:
-                            log.error(f"Exceeded max server error retries ({max_server_error_retries}) for status {response.status_code}")
-                            response.raise_for_status()  # Raise to trigger outer exception handler
+                            log.error(f"Exceeded max server error retries ({max_server_error_retries}) for status {e.status}")
+                            break
 
-                        # Exponential backoff for server errors: 5, 10, 20 seconds
                         backoff_time = 5 * (2 ** (server_error_retry_count - 1))
-                        log.warning(f"Server error {response.status_code} on page {page}. "
+                        log.warning(f"Server error {e.status} on page {page}. "
                                     f"Retry {server_error_retry_count}/{max_server_error_retries}. "
                                     f"Backing off for {backoff_time} seconds...")
                         time.sleep(backoff_time)
                         continue  # Retry same page
 
-                    response.raise_for_status()
-                    rate_limit_retry_count = 0  # Reset on successful request
-                    server_error_retry_count = 0  # Reset on successful request
+                    # Handle rate limiting
+                    elif e.status == 429:
+                        backoff_time = 10  # Wait 10 seconds for rate limiting
+                        log.warning(f"Rate limit hit (429) on page {page}. Backing off for {backoff_time} seconds...")
+                        time.sleep(backoff_time)
+                        continue  # Retry same page
 
-                except requests.exceptions.HTTPError as e:
-                    if hasattr(e, 'response') and e.response is not None:
-                        # Handle 429 rate limiting
-                        if e.response.status_code == 429:
-                            rate_limit_retry_count += 1
-                            if rate_limit_retry_count > max_rate_limit_retries:
-                                log.error(f"Exceeded max rate limit retries ({max_rate_limit_retries})")
-                                break
-
-                            backoff_time = 2 ** rate_limit_retry_count
-                            log.warning(f"Rate limit hit (429). Retry {rate_limit_retry_count}/{max_rate_limit_retries}. "
-                                        f"Backing off for {backoff_time} seconds...")
-                            time.sleep(backoff_time)
-                            continue
-
-                        # Handle 502/503/504 server errors
-                        if e.response.status_code in [502, 503, 504]:
-                            server_error_retry_count += 1
-                            if server_error_retry_count > max_server_error_retries:
-                                log.error(f"Exceeded max server error retries ({max_server_error_retries}) for status {e.response.status_code}")
-                                raise
-
-                            # Exponential backoff for server errors: 5, 10, 20 seconds
-                            backoff_time = 5 * (2 ** (server_error_retry_count - 1))
-                            log.warning(f"Server error {e.response.status_code} on page {page}. "
-                                        f"Retry {server_error_retry_count}/{max_server_error_retries}. "
-                                        f"Backing off for {backoff_time} seconds...")
-                            time.sleep(backoff_time)
-                            continue
-
-                    # Re-raise other HTTP errors
-                    raise
-
-                data = response.json().get('data', [])
-                if not data:
-                    break  # No more results
-
-                all_tickets.extend(data)
-                # Show progress every 5 pages to reduce verbosity
-                if page % 5 == 0 or len(data) < page_size:
-                    log.debug(f"  Fetched {len(all_tickets)} tickets so far...")
-                log.debug(f"Fetched page {page}: {len(data)} tickets (total so far: {len(all_tickets)})")
-
-                # If we got fewer results than page_size, we've reached the end
-                if len(data) < page_size:
-                    log.debug(f"Completed: {len(all_tickets)} total tickets fetched")
-                    break
-
-                # Add delay between pages to avoid hitting rate limits
-                # This helps when multiple jobs are running concurrently
-                if page > 0:  # No delay before first page
-                    time.sleep(1.0)  # Increased to 1 second delay between pages
-
-                page += 1
+                    else:
+                        # Other errors - log and break
+                        log.error(f"API error on page {page}: {e}")
+                        break
 
             if page >= max_pages:
                 log.debug(f"Warning: Reached max_pages limit ({max_pages}). Total: {len(all_tickets)} tickets")
@@ -247,148 +251,96 @@ class TicketHandler:
         except Exception as e:
             log.error(f"Error in _fetch_paginated: {str(e)}")
             log.error(f"Query that failed: {query}")
-            if hasattr(e, 'response') and e.response is not None:
-                log.error(f"Response status: {e.response.status_code}")
-                log.error(f"Response body: {e.response.text}")
             return all_tickets  # Return what we have so far
 
     def _fetch_from_api(self, query, period, size):
-        """Fetch tickets directly from XSOAR API"""
-        payload = {
-            "filter": {
-                "query": query,
-                "page": 0,
-                "size": size,
-                "sort": [{"field": "created", "asc": False}]
-            }
+        """Fetch tickets directly from XSOAR API using demisto-py SDK"""
+        filter_data = {
+            "query": query,
+            "page": 0,
+            "size": size,
+            "sort": [{"field": "created", "asc": False}]
         }
-        max_rate_limit_retries = 5
-        rate_limit_retry_count = 0
+        if period:
+            filter_data["period"] = period
+
+        max_retries = 3
         server_error_retry_count = 0
-        max_server_error_retries = 3
 
         try:
-            if period:
-                payload["filter"]["period"] = period
+            log.debug(f"API Request filter: {json.dumps(filter_data, indent=2)}")
 
-            log.debug(f"API Request payload: {json.dumps(payload, indent=2)}")
-
-            while rate_limit_retry_count <= max_rate_limit_retries:
+            while server_error_retry_count <= max_retries:
                 try:
-                    response = http_session.post(
-                        f"{self.prod_base}/incidents/search",
-                        headers=prod_headers,
-                        json=payload,
-                        timeout=600,  # Increased to 10 minutes for large queries
-                        verify=False
-                    )
-                    if response is None:
-                        raise requests.exceptions.ConnectionError("Failed to connect after multiple retries")
+                    search_data = SearchIncidentsData(filter=filter_data)
+                    response = self.client.search_incidents(filter=search_data)
+                    raw_data = response.data if hasattr(response, 'data') else []
+                    # Convert model objects to dictionaries for backward compatibility
+                    data = [item.to_dict() if hasattr(item, 'to_dict') else item for item in raw_data]
+                    return data
 
-                    # Handle 429 rate limiting
-                    if response.status_code == 429:
-                        rate_limit_retry_count += 1
-                        if rate_limit_retry_count > max_rate_limit_retries:
-                            log.error(f"Exceeded max rate limit retries ({max_rate_limit_retries})")
+                except ApiException as e:
+                    # Handle server errors with retry
+                    if e.status in [502, 503, 504]:
+                        server_error_retry_count += 1
+                        if server_error_retry_count > max_retries:
+                            log.error(f"Exceeded max retries ({max_retries}) for status {e.status}")
                             return []
 
-                        backoff_time = 2 ** rate_limit_retry_count
-                        log.warning(f"Rate limit hit (429). Retry {rate_limit_retry_count}/{max_rate_limit_retries}. "
-                                    f"Backing off for {backoff_time} seconds...")
-                        time.sleep(backoff_time)
-                        continue
-
-                    # Handle 502/503/504 server errors with retry logic
-                    if response.status_code in [502, 503, 504]:
-                        server_error_retry_count += 1
-                        if server_error_retry_count > max_server_error_retries:
-                            log.error(f"Exceeded max server error retries ({max_server_error_retries}) for status {response.status_code}")
-                            response.raise_for_status()
-
-                        # Exponential backoff for server errors: 5, 10, 20 seconds
                         backoff_time = 5 * (2 ** (server_error_retry_count - 1))
-                        log.warning(f"Server error {response.status_code}. "
-                                    f"Retry {server_error_retry_count}/{max_server_error_retries}. "
+                        log.warning(f"Server error {e.status}. "
+                                    f"Retry {server_error_retry_count}/{max_retries}. "
                                     f"Backing off for {backoff_time} seconds...")
                         time.sleep(backoff_time)
                         continue
 
-                    response.raise_for_status()
-                    return response.json().get('data', [])
+                    elif e.status == 429:
+                        backoff_time = 10
+                        log.warning(f"Rate limit hit (429). Backing off for {backoff_time} seconds...")
+                        time.sleep(backoff_time)
+                        continue
 
-                except requests.exceptions.HTTPError as e:
-                    if hasattr(e, 'response') and e.response is not None:
-                        # Handle 429 rate limiting
-                        if e.response.status_code == 429:
-                            rate_limit_retry_count += 1
-                            if rate_limit_retry_count > max_rate_limit_retries:
-                                log.error(f"Exceeded max rate limit retries ({max_rate_limit_retries})")
-                                return []
-
-                            backoff_time = 2 ** rate_limit_retry_count
-                            log.warning(f"Rate limit hit (429). Retry {rate_limit_retry_count}/{max_rate_limit_retries}. "
-                                        f"Backing off for {backoff_time} seconds...")
-                            time.sleep(backoff_time)
-                            continue
-
-                        # Handle 502/503/504 server errors
-                        if e.response.status_code in [502, 503, 504]:
-                            server_error_retry_count += 1
-                            if server_error_retry_count > max_server_error_retries:
-                                log.error(f"Exceeded max server error retries ({max_server_error_retries}) for status {e.response.status_code}")
-                                raise
-
-                            # Exponential backoff for server errors: 5, 10, 20 seconds
-                            backoff_time = 5 * (2 ** (server_error_retry_count - 1))
-                            log.warning(f"Server error {e.response.status_code}. "
-                                        f"Retry {server_error_retry_count}/{max_server_error_retries}. "
-                                        f"Backing off for {backoff_time} seconds...")
-                            time.sleep(backoff_time)
-                            continue
-
-                    # Re-raise other HTTP errors
-                    raise
+                    else:
+                        log.error(f"API error: {e}")
+                        return []
 
         except Exception as e:
             log.error(f"Error in _fetch_from_api: {str(e)}")
             log.error(f"Query that failed: {query}")
-            log.error(f"Payload that failed: {json.dumps(payload, indent=2)}")
-            if hasattr(e, 'response') and e.response is not None:
-                log.error(f"Response status: {e.response.status_code}")
-                log.error(f"Response body: {e.response.text}")
             return []
 
     def get_entries(self, incident_id):
         """Fetch entries (comments, notes) for a given incident"""
-        response = http_session.get(
-            f"{self.prod_base}/incidents/{incident_id}/entries",
-            headers=prod_headers,
-            verify=False
-        )
-        if response is None:
-            raise requests.exceptions.ConnectionError("Failed to connect after multiple retries")
-        response.raise_for_status()
-        return response.json().get('data', [])
+        try:
+            response = prod_client.generic_request(
+                path=f'/incidents/{incident_id}/entries',
+                method='GET'
+            )
+            data = json.loads(response[0]) if response else {}
+            return data.get('data', [])
+        except ApiException as e:
+            log.error(f"Error fetching entries for incident {incident_id}: {e}")
+            raise
 
     def create(self, payload):
         """Create a new incident in prod XSOAR"""
         payload.update({"all": True, "createInvestigation": True, "force": True})
-        response = http_session.post(f"{self.prod_base}/incident", headers=prod_headers, json=payload)
-        if response is None:
-            raise requests.exceptions.ConnectionError("Failed to connect after multiple retries")
-        response.raise_for_status()
-        return response.json()
+        try:
+            response = self.client.create_incident(create_incident_request=payload)
+            return response.to_dict() if hasattr(response, 'to_dict') else response
+        except ApiException as e:
+            log.error(f"Error creating incident: {e}")
+            raise
 
     def link_tickets(self, parent_ticket_id, link_ticket_id):
-
-        """
-        Links the source ticket to the newly created QA ticket in XSOAR.
-        """
+        """Links the source ticket to the newly created QA ticket in XSOAR."""
         if not link_ticket_id or not parent_ticket_id:
             log.error("Ticket ID or QA Ticket ID is empty. Cannot link tickets.")
             return None
+
         log.debug(f"Linking ticket {link_ticket_id} to QA ticket {parent_ticket_id}")
-        payload = {
+
+        entry_data = {
             "id": "",
             "version": 0,
             "investigationId": parent_ticket_id,
@@ -400,18 +352,27 @@ class TicketHandler:
             },
             "markdown": False,
         }
-        response = http_session.post(f"{self.prod_base}/xsoar/entry", headers=prod_headers, json=payload)
-        return response.json()
+
+        try:
+            response = prod_client.generic_request(
+                path='/xsoar/entry',
+                method='POST',
+                body=entry_data
+            )
+            return _parse_generic_response(response)
+        except ApiException as e:
+            log.error(f"Error linking tickets: {e}")
+            return None
 
     def add_participant(self, ticket_id, participant_email_address):
-        """
-        Adds a participant to the incident.
-        """
+        """Adds a participant to the incident."""
         if not ticket_id or not participant_email_address:
             log.error("Ticket ID or participant email is empty. Cannot add participant.")
             return None
+
         log.debug(f"Adding participant {participant_email_address} to ticket {ticket_id}")
-        payload = {
+
+        entry_data = {
             "id": "",
             "version": 0,
             "investigationId": ticket_id,
@@ -419,135 +380,114 @@ class TicketHandler:
             "args": None,
             "markdown": False,
         }
-        response = http_session.post(f"{self.prod_base}/xsoar/entry", headers=prod_headers, json=payload)
-        return response.json()
+
+        try:
+            response = prod_client.generic_request(
+                path='/xsoar/entry',
+                method='POST',
+                body=entry_data
+            )
+            return _parse_generic_response(response)
+        except ApiException as e:
+            log.error(f"Error adding participant: {e}")
+            return None
 
     def get_participants(self, incident_id):
-        """
-        Get participants (users) for a given incident.
-        """
+        """Get participants (users) for a given incident."""
         if not incident_id:
             log.error("Incident ID is empty. Cannot get participants.")
             return []
 
         log.debug(f"Getting participants for incident {incident_id}")
-        investigation_url = f"{self.prod_base}/investigation/{incident_id}"
 
-        # Based on the JSON structure from the user's example, send empty payload
-        payload = {}
+        try:
+            response = prod_client.generic_request(
+                path=f'/investigation/{incident_id}',
+                method='POST',
+                body={}
+            )
+            investigation_data = json.loads(response[0]) if response else {}
+            return investigation_data.get('users', [])
 
-        response = http_session.post(investigation_url, headers=prod_headers, json=payload, verify=False)
-        if response is None:
-            raise requests.exceptions.ConnectionError("Failed to connect after multiple retries")
-
-        # Handle API errors gracefully
-        if not response.ok:
-            error_data = response.json() if response.content else {}
-            error_msg = error_data.get('detail', 'Unknown error')
-
-            if response.status_code == 400 and 'Could not find investigation' in error_msg:
+        except ApiException as e:
+            if e.status == 400 and 'Could not find investigation' in str(e):
                 log.warning(f"Investigation {incident_id} not found")
                 raise ValueError(f"Investigation {incident_id} not found")
             else:
-                log.error(f"API error {response.status_code}: {error_msg}")
-                raise requests.exceptions.HTTPError(f"API error {response.status_code}: {error_msg}")
-
-        investigation_data = response.json()
-        return investigation_data.get('users', [])
+                log.error(f"API error {e.status}: {e}")
+                raise
 
     def complete_task(self, incident_id, task_id, response_value):
-        """
-        Complete a conditional task in a playbook.
-
-        Args:
-            incident_id: The XSOAR incident/investigation ID
-            task_id: The task ID to complete
-            response_value: The response value (e.g., 'yes' or 'no')
-
-        Returns:
-            Response JSON from XSOAR API
-        """
+        """Complete a conditional task in a playbook."""
         if not incident_id or not task_id:
             log.error("Incident ID or Task ID is empty. Cannot complete task.")
             return None
 
         log.info(f"Completing task {task_id} in incident {incident_id} with response: {response_value}")
 
-        # API endpoint for completing a task
-        # POST /inv-playbook/task/complete
-        payload = {
-            "investigationId": incident_id,
-            "id": task_id,
-            "data": response_value
-        }
-
         try:
-            response = http_session.post(
-                f"{self.prod_base}/inv-playbook/task/complete",
-                headers=prod_headers,
-                json=payload,
-                verify=False
-            )
-
-            if response is None:
-                raise requests.exceptions.ConnectionError("Failed to connect after multiple retries")
-
-            response.raise_for_status()
+            # Use the complete_task method from demisto-py
+            task_data = {
+                "investigationId": incident_id,
+                "id": task_id,
+                "data": response_value
+            }
+            response = self.client.complete_task(task_data=task_data)
             log.info(f"Successfully completed task {task_id} in incident {incident_id}")
-            return response.json()
+            return response.to_dict() if hasattr(response, 'to_dict') else response
 
-        except Exception as e:
-            log.error(f"Error completing task {task_id} in incident {incident_id}: {str(e)}")
-            if hasattr(e, 'response') and e.response is not None:
-                log.error(f"Response status: {e.response.status_code}")
-                log.error(f"Response body: {e.response.text}")
+        except ApiException as e:
+            log.error(f"Error completing task {task_id} in incident {incident_id}: {e}")
             raise
 
     def create_in_dev(self, payload):
         """Create a new incident in dev XSOAR"""
-
         # Clean payload for dev creation
         for key in ['id', 'phase', 'status', 'roles']:
             payload.pop(key, None)
 
         payload.update({"all": True, "createInvestigation": True, "force": True})
-        security_category = payload["CustomFields"].get("securitycategory")
+
+        # Set default values if not present
+        security_category = payload.get("CustomFields", {}).get("securitycategory")
         if not security_category:
+            if "CustomFields" not in payload:
+                payload["CustomFields"] = {}
             payload["CustomFields"]["securitycategory"] = "CAT-5: Scans/Probes/Attempted Access"
 
-        hunt_source = payload["CustomFields"].get("huntsource")
+        hunt_source = payload.get("CustomFields", {}).get("huntsource")
         if not hunt_source:
             payload["CustomFields"]["huntsource"] = "Other"
 
-        sla_breach_reason = payload["CustomFields"].get("slabreachreason")
+        sla_breach_reason = payload.get("CustomFields", {}).get("slabreachreason")
         if not sla_breach_reason:
             payload["CustomFields"]["slabreachreason"] = "Place Holder - To be updated by SOC"
 
-        response = http_session.post(f"{self.dev_base}/incident", headers=dev_headers, json=payload)
-
-        if response is None:
-            return {"error": "Failed to connect after multiple retries"}
-
-        if response.ok:
-            return response.json()
-        else:
-            return {"error": response.text}
+        try:
+            response = self.dev_client.create_incident(create_incident_request=payload)
+            return response.to_dict() if hasattr(response, 'to_dict') else response
+        except ApiException as e:
+            log.error(f"Error creating incident in dev: {e}")
+            return {"error": str(e)}
 
 
 class ListHandler:
     def __init__(self):
         self.base_url = CONFIG.xsoar_prod_api_base_url
+        self.client = prod_client
 
     def get_all_lists(self):
         """Get all lists from XSOAR"""
         try:
-            response = http_session.get(f"{self.base_url}/lists", headers=prod_headers, verify=False)
-            if response is None:
-                raise requests.exceptions.ConnectionError("Failed to connect after multiple retries")
-            response.raise_for_status()
-            return response.json()
-        except Exception as e:
-            log.error(f"Error in get_all_lists: {str(e)}")
+            response = prod_client.generic_request(
+                path='/lists',
+                method='GET'
+            )
+            result = _parse_generic_response(response)
+            # Result should be a list, but if it's a dict, return empty list
+            return result if isinstance(result, list) else []
+        except ApiException as e:
+            log.error(f"Error in get_all_lists: {e}")
             return []
 
     def get_list_data_by_name(self, list_name):
@@ -583,10 +523,16 @@ class ListHandler:
             "version": list_version
         }
 
-        response = http_session.post(f"{self.base_url}/lists/save", headers=prod_headers, json=payload)
-        if response is None:
-            raise requests.exceptions.ConnectionError("Failed to connect after multiple retries")
-        response.raise_for_status()
+        try:
+            response = prod_client.generic_request(
+                path='/lists/save',
+                method='POST',
+                body=payload
+            )
+            return _parse_generic_response(response)
+        except ApiException as e:
+            log.error(f"Error saving list: {e}")
+            raise
 
     def save_as_text(self, list_name, list_data):
         """Save list data as plain text (comma-separated string)."""
@@ -598,10 +544,17 @@ class ListHandler:
             "id": list_name,
             "version": list_version
         }
-        response = http_session.post(f"{self.base_url}/lists/save", headers=prod_headers, json=payload)
-        if response is None:
-            raise requests.exceptions.ConnectionError("Failed to connect after multiple retries")
-        response.raise_for_status()
+
+        try:
+            response = prod_client.generic_request(
+                path='/lists/save',
+                method='POST',
+                body=payload
+            )
+            return _parse_generic_response(response)
+        except ApiException as e:
+            log.error(f"Error saving list as text: {e}")
+            raise
 
     def add_item_to_list(self, list_name, new_entry):
         """Add item to existing list"""
@@ -612,13 +565,6 @@ class ListHandler:
 
 def main():
     """Main function that demonstrates core functionality of this module"""
-    # from src.components.ticket_cache import TicketCache
-    #
-    # log.info("Starting XSOAR ticket caching process")
-    # ticket_cache = TicketCache()
-    # ticket_cache.generate()
-    # log.info("XSOAR ticket caching process completed")
-
     print(json.dumps(get_user_notes('878736'), indent=4))
 
 
