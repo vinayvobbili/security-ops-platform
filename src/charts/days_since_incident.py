@@ -80,7 +80,8 @@ class CounterImageModifier:
 
             # Fix the None values in bottom text and avoid overlapping watermark
             incident_text = f'X#{last_incident_id or "N/A"} was declared as an incident on {last_incident_date or "N/A"}'
-            draw.text((20, img.height - 50), incident_text, fill='black', font_size=14)
+            incident_font = self._get_font(14)
+            draw.text((20, img.height - 50), incident_text, fill='black', font=incident_font)
 
             # Create slightly transparent background
             background = Image.new('RGBA', img.size, (0, 0, 0, 0))
@@ -117,7 +118,8 @@ class CounterImageModifier:
 
             # Add the current time to the chart
             now_eastern = datetime.now(eastern).strftime('%m/%d/%Y %I:%M %p %Z')
-            draw.text((600, img.height - 20), now_eastern, fill='black', font_size=12)
+            timestamp_font = self._get_font(12)
+            draw.text((600, img.height - 20), now_eastern, fill='black', font=timestamp_font)
 
             # Add a thin black border around the figure
             draw.rectangle([(0, 0), (img.width - 1, img.height - 1)], outline="black", width=1)
@@ -162,7 +164,13 @@ def get_last_incident_details():
 
     if ticket:  # Check if any tickets were returned
         latest_incident_create_date_str = ticket[0].get('created')
-        latest_incident_create_date = datetime.fromisoformat(latest_incident_create_date_str.replace('Z', '+00:00'))
+
+        # Handle if the date is already a datetime object
+        if isinstance(latest_incident_create_date_str, datetime):
+            latest_incident_create_date = latest_incident_create_date_str
+        else:
+            latest_incident_create_date = datetime.fromisoformat(latest_incident_create_date_str.replace('Z', '+00:00'))
+
         latest_incident_create_date_eastern = latest_incident_create_date.astimezone(eastern)
         today_eastern = datetime.now(eastern)
         return (today_eastern.date() - latest_incident_create_date_eastern.date()).days, latest_incident_create_date_eastern.strftime('%-m/%-d/%Y'), ticket[0].get('id')
@@ -188,7 +196,9 @@ def make_chart():
             background_color="#C3D3B8"  # Using hex code for lightgray
         )
     except Exception as e:
+        import traceback
         print(f"Error: {str(e)}")
+        traceback.print_exc()
 
 
 if __name__ == "__main__":
