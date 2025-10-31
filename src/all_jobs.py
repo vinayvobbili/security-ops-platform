@@ -42,8 +42,11 @@ from src.utils.fs_utils import make_dir_for_todays_charts
 
 # Configure logging
 logging.basicConfig(
-    level=logging.ERROR,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=logging.WARNING,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stdout)
+    ]
 )
 logging.getLogger("webexpythonsdk.restsession").setLevel(logging.ERROR)
 logging.getLogger("webexteamssdk.restsession").setLevel(logging.ERROR)
@@ -112,6 +115,9 @@ def main() -> None:
     # Configure scheduled jobs
     print("Starting crash-proof job scheduler...")
     logger.info("Initializing security operations scheduler")
+
+    # Track last heartbeat time
+    last_heartbeat = time.time()
 
     # Daily chart generation - runs at midnight to prepare metrics for the next day
     schedule.every().day.at("00:01", eastern).do(lambda: safe_run(
@@ -182,6 +188,17 @@ def main() -> None:
     while True:
         try:
             schedule.run_pending()
+
+            # Heartbeat logging every 5 minutes to prove process is alive
+            current_time = time.time()
+            if current_time - last_heartbeat >= 300:  # 5 minutes
+                from datetime import datetime
+                now = datetime.now(eastern)
+                logger.info(f"Heartbeat - Scheduler alive at {now.strftime('%Y-%m-%d %H:%M:%S %Z')} | "
+                           f"Jobs scheduled: {len(schedule.jobs)} | "
+                           f"Next run: {schedule.next_run()}")
+                last_heartbeat = current_time
+
             time.sleep(1)
         except KeyboardInterrupt:
             logger.info("Scheduler stopped by user")
