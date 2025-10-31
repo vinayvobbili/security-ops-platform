@@ -55,6 +55,7 @@ Cartopy
 
 # Security Tools
 crowdstrike-falconpy
+demisto-py>=3.2.21  # Official Palo Alto XSOAR Python SDK
 
 # Task Scheduling/Utilities
 schedule
