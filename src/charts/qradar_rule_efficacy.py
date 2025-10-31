@@ -11,7 +11,9 @@ import pandas as pd
 import pytz
 from matplotlib import transforms
 from webexpythonsdk import WebexAPI
+
 from src.charts.chart_style import apply_chart_style
+
 apply_chart_style()
 
 from data.data_maps import impact_colors
@@ -92,8 +94,9 @@ class QRadarEfficacyChart:
             confirmed = impacts.get('Confirmed', 0)
             testing = impacts.get('Testing', 0)
             prevented = impacts.get('Prevented', 0)
+            malicious = impacts.get('Malicious True Positive', 0)
 
-            noise = round((total - confirmed - testing - prevented) / total * 100) if total > 0 else 0
+            noise = round((total - malicious - confirmed - testing - prevented) / total * 100) if total > 0 else 0
             correlation_rule_counts[rule]['Noise'] = noise
 
         # Log unabbreviated rule names
