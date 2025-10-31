@@ -22,7 +22,7 @@ def complete_playbook_task(
     Returns:
         dict: API response JSON
     """
-    CONFIG = get_config()
+    config = get_config()
     url = 'https://api-msoardev.crtx.us.paloaltonetworks.com/xsoar/public/v1/inv-playbook/task/complete'
 
     # Using exact format from API documentation with manual multipart/form-data boundary
@@ -46,8 +46,8 @@ def complete_playbook_task(
     )
 
     headers = {
-        'Authorization': CONFIG.xsoar_dev_auth_key,
-        'x-xdr-auth-id': CONFIG.xsoar_dev_auth_id,
+        'Authorization': config.xsoar_dev_auth_key,
+        'x-xdr-auth-id': config.xsoar_dev_auth_id,
         'Content-Type': 'multipart/form-data; boundary=---011000010111000001101001',
         'Accept': 'application/json'
     }
