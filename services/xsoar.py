@@ -70,18 +70,55 @@ dev_client = demisto_client.configure(
 )
 
 
-def get_case_data_with_notes(incident_id):
+def get_case_data_with_notes(incident_id, max_retries=3):
     """Fetch incident details along with notes from prod environment"""
-    try:
-        response = prod_client.generic_request(
-            path=f'/investigation/{incident_id}',
-            method='POST',
-            body={}
-        )
-        return _parse_generic_response(response)
-    except ApiException as e:
-        log.error(f"Error fetching investigation {incident_id}: {e}")
-        raise
+    retry_count = 0
+
+    while retry_count <= max_retries:
+        try:
+            response = prod_client.generic_request(
+                path=f'/investigation/{incident_id}',
+                method='POST',
+                body={}
+            )
+            return _parse_generic_response(response)
+        except ApiException as e:
+            # Handle rate limiting (429)
+            if e.status == 429:
+                retry_count += 1
+                if retry_count > max_retries:
+                    log.error(f"Exceeded max retries ({max_retries}) for investigation {incident_id} due to rate limiting")
+                    raise
+
+                # Exponential backoff for rate limiting
+                backoff_time = 5 * (2 ** (retry_count - 1))
+                log.warning(f"Rate limit hit (429) for investigation {incident_id}. "
+                           f"Retry {retry_count}/{max_retries}. "
+                           f"Backing off for {backoff_time} seconds...")
+                time.sleep(backoff_time)
+                continue
+
+            # Handle server errors (502, 503, 504)
+            elif e.status in [502, 503, 504]:
+                retry_count += 1
+                if retry_count > max_retries:
+                    log.error(f"Exceeded max retries ({max_retries}) for investigation {incident_id} due to server error {e.status}")
+                    raise
+
+                backoff_time = 5 * (2 ** (retry_count - 1))
+                log.warning(f"Server error {e.status} for investigation {incident_id}. "
+                           f"Retry {retry_count}/{max_retries}. "
+                           f"Backing off for {backoff_time} seconds...")
+                time.sleep(backoff_time)
+                continue
+
+            # For other errors, log and raise immediately
+            else:
+                log.error(f"Error fetching investigation {incident_id}: {e}")
+                raise
+
+    # Should not reach here, but just in case
+    raise ApiException(f"Failed to fetch investigation {incident_id} after {max_retries} retries")
 
 
 def get_user_notes(incident_id):
@@ -114,18 +151,54 @@ def get_user_notes(incident_id):
     return list(reversed(formatted_notes))
 
 
-def get_case_data(incident_id):
+def get_case_data(incident_id, max_retries=3):
     """Fetch incident details from prod environment"""
-    try:
-        # Use generic_request to load incident
-        response = prod_client.generic_request(
-            path=f'/incident/load/{incident_id}',
-            method='GET'
-        )
-        return _parse_generic_response(response)
-    except ApiException as e:
-        log.error(f"Error fetching incident {incident_id}: {e}")
-        raise
+    retry_count = 0
+
+    while retry_count <= max_retries:
+        try:
+            # Use generic_request to load incident
+            response = prod_client.generic_request(
+                path=f'/incident/load/{incident_id}',
+                method='GET'
+            )
+            return _parse_generic_response(response)
+        except ApiException as e:
+            # Handle rate limiting (429)
+            if e.status == 429:
+                retry_count += 1
+                if retry_count > max_retries:
+                    log.error(f"Exceeded max retries ({max_retries}) for incident {incident_id} due to rate limiting")
+                    raise
+
+                backoff_time = 5 * (2 ** (retry_count - 1))
+                log.warning(f"Rate limit hit (429) for incident {incident_id}. "
+                           f"Retry {retry_count}/{max_retries}. "
+                           f"Backing off for {backoff_time} seconds...")
+                time.sleep(backoff_time)
+                continue
+
+            # Handle server errors (502, 503, 504)
+            elif e.status in [502, 503, 504]:
+                retry_count += 1
+                if retry_count > max_retries:
+                    log.error(f"Exceeded max retries ({max_retries}) for incident {incident_id} due to server error {e.status}")
+                    raise
+
+                backoff_time = 5 * (2 ** (retry_count - 1))
+                log.warning(f"Server error {e.status} for incident {incident_id}. "
+                           f"Retry {retry_count}/{max_retries}. "
+                           f"Backing off for {backoff_time} seconds...")
+                time.sleep(backoff_time)
+                continue
+
+            # For other errors, log and raise immediately
+            else:
+                log.error(f"Error fetching incident {incident_id}: {e}")
+                raise
+
+    # Should not reach here, but just in case
+    raise ApiException(f"Failed to fetch incident {incident_id} after {max_retries} retries")
 
 
 def import_ticket(source_ticket_number, requestor_email_address=None):

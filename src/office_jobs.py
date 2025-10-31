@@ -70,7 +70,7 @@ def run_all_charts():
     make_dir_for_todays_charts(helper_methods.CHARTS_DIR_PATH)
 
     # Treat cache generation as its own timed step (optional chart-like step)
-    cache_result = _time_task("Ticket Cache", TicketCache.generate)
+    # cache_result = _time_task("Ticket Cache", TicketCache.generate)
 
     tasks = [
         ("Aging Tickets", aging_tickets.make_chart),
@@ -118,7 +118,7 @@ def run_all_charts():
 
     # Return data structure if callers want to introspect
     return {
-        'cache': cache_result,
+        # 'cache': cache_result,
         'charts': results,
         'total_seconds': total_elapsed,
     }
