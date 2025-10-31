@@ -35,7 +35,7 @@ dev_headers = {
 def get_case_data_with_notes(incident_id):
     """Fetch incident details along with notes from prod environment"""
     investigation_url = f"{CONFIG.xsoar_prod_api_base_url}/investigation/{incident_id}"
-    response = http_session.post(investigation_url, headers=prod_headers, json={}, verify=False, timeout=60)
+    response = http_session.post(investigation_url, headers=prod_headers, json={}, verify=False)
     if response is None:
         raise requests.exceptions.ConnectionError("Failed to connect after multiple retries")
     response.raise_for_status()
@@ -76,7 +76,7 @@ def get_user_notes(incident_id):
 def get_case_data(incident_id):
     """Fetch incident details from prod environment"""
     incident_url = f"{CONFIG.xsoar_prod_api_base_url}/incident/load/{incident_id}"
-    response = http_session.get(incident_url, headers=prod_headers, verify=False, timeout=60)
+    response = http_session.get(incident_url, headers=prod_headers, verify=False)
     if response is None:
         raise requests.exceptions.ConnectionError("Failed to connect after multiple retries")
     response.raise_for_status()
@@ -292,7 +292,6 @@ class TicketHandler:
         response = http_session.get(
             f"{self.prod_base}/incidents/{incident_id}/entries",
             headers=prod_headers,
-            timeout=60,
             verify=False
         )
         if response is None:
@@ -366,7 +365,7 @@ class TicketHandler:
         # Based on the JSON structure from the user's example, send empty payload
         payload = {}
 
-        response = http_session.post(investigation_url, headers=prod_headers, json=payload, verify=False, timeout=60)
+        response = http_session.post(investigation_url, headers=prod_headers, json=payload, verify=False)
         if response is None:
             raise requests.exceptions.ConnectionError("Failed to connect after multiple retries")
 
@@ -416,8 +415,7 @@ class TicketHandler:
                 f"{self.prod_base}/inv-playbook/task/complete",
                 headers=prod_headers,
                 json=payload,
-                verify=False,
-                timeout=60
+                verify=False
             )
 
             if response is None:
@@ -472,7 +470,7 @@ class ListHandler:
     def get_all_lists(self):
         """Get all lists from XSOAR"""
         try:
-            response = http_session.get(f"{self.base_url}/lists", headers=prod_headers, timeout=30, verify=False)
+            response = http_session.get(f"{self.base_url}/lists", headers=prod_headers, verify=False)
             if response is None:
                 raise requests.exceptions.ConnectionError("Failed to connect after multiple retries")
             response.raise_for_status()
