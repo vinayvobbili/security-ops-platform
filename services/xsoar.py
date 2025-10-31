@@ -121,6 +121,8 @@ class TicketHandler:
         max_pages = 100  # Safety limit to prevent infinite loops
         rate_limit_retry_count = 0
         max_rate_limit_retries = 5
+        server_error_retry_count = 0
+        max_server_error_retries = 3
 
         try:
             while page < max_pages:
@@ -142,7 +144,7 @@ class TicketHandler:
                         f"{self.prod_base}/incidents/search",
                         headers=prod_headers,
                         json=payload,
-                        timeout=300,
+                        timeout=600,  # Increased to 10 minutes for large queries
                         verify=False
                     )
                     if response is None:
@@ -162,23 +164,57 @@ class TicketHandler:
                         time.sleep(backoff_time)
                         continue  # Retry same page
 
-                    response.raise_for_status()
-                    rate_limit_retry_count = 0  # Reset on successful request
+                    # Handle 502/503/504 server errors with retry logic
+                    if response.status_code in [502, 503, 504]:
+                        server_error_retry_count += 1
+                        if server_error_retry_count > max_server_error_retries:
+                            log.error(f"Exceeded max server error retries ({max_server_error_retries}) for status {response.status_code}")
+                            response.raise_for_status()  # Raise to trigger outer exception handler
 
-                except requests.exceptions.HTTPError as e:
-                    if hasattr(e, 'response') and e.response is not None and e.response.status_code == 429:
-                        rate_limit_retry_count += 1
-                        if rate_limit_retry_count > max_rate_limit_retries:
-                            log.error(f"Exceeded max rate limit retries ({max_rate_limit_retries})")
-                            break
-
-                        backoff_time = 2 ** rate_limit_retry_count
-                        log.warning(f"Rate limit hit (429). Retry {rate_limit_retry_count}/{max_rate_limit_retries}. "
+                        # Exponential backoff for server errors: 5, 10, 20 seconds
+                        backoff_time = 5 * (2 ** (server_error_retry_count - 1))
+                        log.warning(f"Server error {response.status_code} on page {page}. "
+                                    f"Retry {server_error_retry_count}/{max_server_error_retries}. "
                                     f"Backing off for {backoff_time} seconds...")
                         time.sleep(backoff_time)
-                        continue
-                    else:
-                        raise  # Re-raise other HTTP errors
+                        continue  # Retry same page
+
+                    response.raise_for_status()
+                    rate_limit_retry_count = 0  # Reset on successful request
+                    server_error_retry_count = 0  # Reset on successful request
+
+                except requests.exceptions.HTTPError as e:
+                    if hasattr(e, 'response') and e.response is not None:
+                        # Handle 429 rate limiting
+                        if e.response.status_code == 429:
+                            rate_limit_retry_count += 1
+                            if rate_limit_retry_count > max_rate_limit_retries:
+                                log.error(f"Exceeded max rate limit retries ({max_rate_limit_retries})")
+                                break
+
+                            backoff_time = 2 ** rate_limit_retry_count
+                            log.warning(f"Rate limit hit (429). Retry {rate_limit_retry_count}/{max_rate_limit_retries}. "
+                                        f"Backing off for {backoff_time} seconds...")
+                            time.sleep(backoff_time)
+                            continue
+
+                        # Handle 502/503/504 server errors
+                        if e.response.status_code in [502, 503, 504]:
+                            server_error_retry_count += 1
+                            if server_error_retry_count > max_server_error_retries:
+                                log.error(f"Exceeded max server error retries ({max_server_error_retries}) for status {e.response.status_code}")
+                                raise
+
+                            # Exponential backoff for server errors: 5, 10, 20 seconds
+                            backoff_time = 5 * (2 ** (server_error_retry_count - 1))
+                            log.warning(f"Server error {e.response.status_code} on page {page}. "
+                                        f"Retry {server_error_retry_count}/{max_server_error_retries}. "
+                                        f"Backing off for {backoff_time} seconds...")
+                            time.sleep(backoff_time)
+                            continue
+
+                    # Re-raise other HTTP errors
+                    raise
 
                 data = response.json().get('data', [])
                 if not data:
@@ -195,10 +231,10 @@ class TicketHandler:
                     log.debug(f"Completed: {len(all_tickets)} total tickets fetched")
                     break
 
-                # Add small delay between pages to avoid hitting rate limits
+                # Add delay between pages to avoid hitting rate limits
                 # This helps when multiple jobs are running concurrently
                 if page > 0:  # No delay before first page
-                    time.sleep(0.5)  # 500ms delay between pages
+                    time.sleep(1.0)  # Increased to 1 second delay between pages
 
                 page += 1
 
@@ -228,6 +264,8 @@ class TicketHandler:
         }
         max_rate_limit_retries = 5
         rate_limit_retry_count = 0
+        server_error_retry_count = 0
+        max_server_error_retries = 3
 
         try:
             if period:
@@ -241,7 +279,7 @@ class TicketHandler:
                         f"{self.prod_base}/incidents/search",
                         headers=prod_headers,
                         json=payload,
-                        timeout=300,
+                        timeout=600,  # Increased to 10 minutes for large queries
                         verify=False
                     )
                     if response is None:
@@ -260,23 +298,56 @@ class TicketHandler:
                         time.sleep(backoff_time)
                         continue
 
+                    # Handle 502/503/504 server errors with retry logic
+                    if response.status_code in [502, 503, 504]:
+                        server_error_retry_count += 1
+                        if server_error_retry_count > max_server_error_retries:
+                            log.error(f"Exceeded max server error retries ({max_server_error_retries}) for status {response.status_code}")
+                            response.raise_for_status()
+
+                        # Exponential backoff for server errors: 5, 10, 20 seconds
+                        backoff_time = 5 * (2 ** (server_error_retry_count - 1))
+                        log.warning(f"Server error {response.status_code}. "
+                                    f"Retry {server_error_retry_count}/{max_server_error_retries}. "
+                                    f"Backing off for {backoff_time} seconds...")
+                        time.sleep(backoff_time)
+                        continue
+
                     response.raise_for_status()
                     return response.json().get('data', [])
 
                 except requests.exceptions.HTTPError as e:
-                    if hasattr(e, 'response') and e.response is not None and e.response.status_code == 429:
-                        rate_limit_retry_count += 1
-                        if rate_limit_retry_count > max_rate_limit_retries:
-                            log.error(f"Exceeded max rate limit retries ({max_rate_limit_retries})")
-                            return []
+                    if hasattr(e, 'response') and e.response is not None:
+                        # Handle 429 rate limiting
+                        if e.response.status_code == 429:
+                            rate_limit_retry_count += 1
+                            if rate_limit_retry_count > max_rate_limit_retries:
+                                log.error(f"Exceeded max rate limit retries ({max_rate_limit_retries})")
+                                return []
 
-                        backoff_time = 2 ** rate_limit_retry_count
-                        log.warning(f"Rate limit hit (429). Retry {rate_limit_retry_count}/{max_rate_limit_retries}. "
-                                    f"Backing off for {backoff_time} seconds...")
-                        time.sleep(backoff_time)
-                        continue
-                    else:
-                        raise
+                            backoff_time = 2 ** rate_limit_retry_count
+                            log.warning(f"Rate limit hit (429). Retry {rate_limit_retry_count}/{max_rate_limit_retries}. "
+                                        f"Backing off for {backoff_time} seconds...")
+                            time.sleep(backoff_time)
+                            continue
+
+                        # Handle 502/503/504 server errors
+                        if e.response.status_code in [502, 503, 504]:
+                            server_error_retry_count += 1
+                            if server_error_retry_count > max_server_error_retries:
+                                log.error(f"Exceeded max server error retries ({max_server_error_retries}) for status {e.response.status_code}")
+                                raise
+
+                            # Exponential backoff for server errors: 5, 10, 20 seconds
+                            backoff_time = 5 * (2 ** (server_error_retry_count - 1))
+                            log.warning(f"Server error {e.response.status_code}. "
+                                        f"Retry {server_error_retry_count}/{max_server_error_retries}. "
+                                        f"Backing off for {backoff_time} seconds...")
+                            time.sleep(backoff_time)
+                            continue
+
+                    # Re-raise other HTTP errors
+                    raise
 
         except Exception as e:
             log.error(f"Error in _fetch_from_api: {str(e)}")

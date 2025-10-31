@@ -7,6 +7,7 @@ This file provides guidance to AI CLI agents (Claude Code, Gemini, etc.) when wo
 - Remember, prioritize direct, critical feedback over politeness or excessive agreement. Challenge my assumptions when they are unsound
 - Be concise and to the point. Avoid unnecessary fluff or filler
 - Use bullet points and lists for clarity
+- Don't create tests or documentation unless explicitly asked to
 
 ## Common Development Commands
 
