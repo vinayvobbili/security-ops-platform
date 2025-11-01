@@ -530,55 +530,51 @@ class TicketHandler:
             log.error(f"Error creating incident: {e}")
             raise
 
-    def update_incident(self, ticket_id: str, update_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    def update_incident(self, ticket_id: str, update_data: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Update an existing incident in XSOAR.
+        Update an existing incident in XSOAR using POST /incident endpoint.
 
         Args:
-            ticket_id: The incident ID to update
+            ticket_id: The XSOAR incident ID to update
             update_data: Dictionary of fields to update
 
         Returns:
-            Updated incident data or None if failed
+            Updated incident data dictionary
+
+        Example:
+            update_data = {
+                "owner": "user@example.com",
+                "status": 1
+            }
+
+        Note:
+            - Uses version -1 to force update
+            - The id field is automatically added if not present
         """
-        if not ticket_id or not update_data:
-            log.error("Ticket ID or update data is empty. Cannot update incident.")
-            return None
+        # Ensure id and version are in update_data
+        if 'id' not in update_data:
+            update_data['id'] = ticket_id
+        if 'version' not in update_data:
+            update_data['version'] = -1
 
-        log.debug(f"Updating ticket {ticket_id} with data: {update_data}")
-
-        # Format payload to match XSOAR API expectations
-        # Based on dev tools: {"data": {"owner": "..."}, "id": "..."}
-        payload = {
-            "data": update_data,
-            "id": ticket_id
-        }
+        log.debug(f"Updating incident {ticket_id} with data: {update_data}")
 
         try:
             response = self.client.generic_request(
-                path='/incident/update',
+                path='/incident',
                 method='POST',
-                body=payload
+                body=update_data
             )
+            log.info(f"Successfully updated incident {ticket_id}")
             return _parse_generic_response(response)
         except ApiException as e:
-            log.error(f"Error updating incident: {e}")
-            return None
+            log.error(f"Error updating incident {ticket_id}: {e}")
+            raise
 
-    def assign_owner(self, ticket_id, owner_email_address):
+    def assign_owner(self, ticket_id: str, owner_email_address: str) -> Dict[str, Any]:
         """Assigns an owner to the specified ticket."""
-        if not ticket_id or not owner_email_address:
-            log.error("Ticket ID or owner email address is empty. Cannot assign owner.")
-            return None
-
         log.debug(f"Assigning owner {owner_email_address} to ticket {ticket_id}")
-
-        # Use the existing update_incident method which uses /incident/update endpoint
-        update_data = {
-            "owner": owner_email_address
-        }
-
-        return self.update_incident(ticket_id, update_data)
+        return self.update_incident(ticket_id, {"owner": owner_email_address})
 
     def link_tickets(self, parent_ticket_id: str, link_ticket_id: str) -> Optional[Dict[str, Any]]:
         """
@@ -909,7 +905,7 @@ def main():
     """
     # print(json.dumps(get_user_notes('878736'), indent=4))
     dev_ticket_handler = TicketHandler(XsoarEnvironment.DEV)
-    print(dev_ticket_handler.assign_owner('1375022', 'user@company.com'))
+    print(dev_ticket_handler.assign_owner('1375022', 'edison.enerio@company.com'))
 
 
 if __name__ == "__main__":
