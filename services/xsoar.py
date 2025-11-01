@@ -27,6 +27,7 @@ import json
 import logging
 import time
 from datetime import datetime
+from pprint import pprint
 from typing import Any, Dict, List, Optional, Tuple
 
 import demisto_client
@@ -92,170 +93,6 @@ dev_client = demisto_client.configure(
 )
 
 
-def get_case_data_with_notes(incident_id: str, max_retries: int = 3) -> Dict[str, Any]:
-    """
-    Fetch incident details along with notes from prod environment.
-
-    Args:
-        incident_id: The XSOAR incident ID
-        max_retries: Maximum number of retry attempts for rate limiting/server errors
-
-    Returns:
-        Dictionary containing incident investigation data with notes
-
-    Raises:
-        ApiException: If API call fails after all retries
-    """
-    retry_count = 0
-
-    while retry_count <= max_retries:
-        try:
-            response = prod_client.generic_request(
-                path=f'/investigation/{incident_id}',
-                method='POST',
-                body={}
-            )
-            return _parse_generic_response(response)
-        except ApiException as e:
-            # Handle rate limiting (429)
-            if e.status == 429:
-                retry_count += 1
-                if retry_count > max_retries:
-                    log.error(f"Exceeded max retries ({max_retries}) for investigation {incident_id} due to rate limiting")
-                    raise
-
-                # Exponential backoff for rate limiting
-                backoff_time = 5 * (2 ** (retry_count - 1))
-                log.warning(f"Rate limit hit (429) for investigation {incident_id}. "
-                            f"Retry {retry_count}/{max_retries}. "
-                            f"Backing off for {backoff_time} seconds...")
-                time.sleep(backoff_time)
-                continue
-
-            # Handle server errors (502, 503, 504)
-            elif e.status in [502, 503, 504]:
-                retry_count += 1
-                if retry_count > max_retries:
-                    log.error(f"Exceeded max retries ({max_retries}) for investigation {incident_id} due to server error {e.status}")
-                    raise
-
-                backoff_time = 5 * (2 ** (retry_count - 1))
-                log.warning(f"Server error {e.status} for investigation {incident_id}. "
-                            f"Retry {retry_count}/{max_retries}. "
-                            f"Backing off for {backoff_time} seconds...")
-                time.sleep(backoff_time)
-                continue
-
-            # For other errors, log and raise immediately
-            else:
-                log.error(f"Error fetching investigation {incident_id}: {e}")
-                raise
-
-    # Should not reach here, but just in case
-    raise ApiException(f"Failed to fetch investigation {incident_id} after {max_retries} retries")
-
-
-def get_user_notes(incident_id: str) -> List[Dict[str, str]]:
-    """
-    Fetch user notes for a given incident from prod environment.
-
-    Args:
-        incident_id: The XSOAR incident ID
-
-    Returns:
-        List of formatted notes with note_text, author, and created_at fields,
-        sorted with latest note first
-    """
-    case_data_with_notes = get_case_data_with_notes(incident_id)
-    entries = case_data_with_notes.get('entries', [])
-    user_notes = [entry for entry in entries if entry.get('note')]
-
-    # Format notes with required fields
-    et_tz = pytz.timezone('America/New_York')
-    formatted_notes = []
-    for note in user_notes:
-        # Parse ISO format timestamp
-        created_str = note.get('created', '')
-        if created_str:
-            # Parse ISO 8601 format: "2025-10-23T22:24:17.48233Z"
-            dt_utc = datetime.fromisoformat(created_str.replace('Z', '+00:00'))
-            dt_et = dt_utc.astimezone(et_tz)
-            created_at = dt_et.strftime('%m/%d/%Y %I:%M %p ET')
-        else:
-            created_at = ''
-
-        formatted_notes.append({
-            'note_text': note.get('contents', ''),
-            'author': note.get('user', 'DBot'),
-            'created_at': created_at
-        })
-
-    # Return with latest note first
-    return list(reversed(formatted_notes))
-
-
-def get_case_data(incident_id: str, max_retries: int = 3) -> Dict[str, Any]:
-    """
-    Fetch incident details from prod environment.
-
-    Args:
-        incident_id: The XSOAR incident ID
-        max_retries: Maximum number of retry attempts for rate limiting/server errors
-
-    Returns:
-        Dictionary containing incident details
-
-    Raises:
-        ApiException: If API call fails after all retries
-    """
-    retry_count = 0
-
-    while retry_count <= max_retries:
-        try:
-            # Use generic_request to load incident
-            response = prod_client.generic_request(
-                path=f'/incident/load/{incident_id}',
-                method='GET'
-            )
-            return _parse_generic_response(response)
-        except ApiException as e:
-            # Handle rate limiting (429)
-            if e.status == 429:
-                retry_count += 1
-                if retry_count > max_retries:
-                    log.error(f"Exceeded max retries ({max_retries}) for incident {incident_id} due to rate limiting")
-                    raise
-
-                backoff_time = 5 * (2 ** (retry_count - 1))
-                log.warning(f"Rate limit hit (429) for incident {incident_id}. "
-                            f"Retry {retry_count}/{max_retries}. "
-                            f"Backing off for {backoff_time} seconds...")
-                time.sleep(backoff_time)
-                continue
-
-            # Handle server errors (502, 503, 504)
-            elif e.status in [502, 503, 504]:
-                retry_count += 1
-                if retry_count > max_retries:
-                    log.error(f"Exceeded max retries ({max_retries}) for incident {incident_id} due to server error {e.status}")
-                    raise
-
-                backoff_time = 5 * (2 ** (retry_count - 1))
-                log.warning(f"Server error {e.status} for incident {incident_id}. "
-                            f"Retry {retry_count}/{max_retries}. "
-                            f"Backing off for {backoff_time} seconds...")
-                time.sleep(backoff_time)
-                continue
-
-            # For other errors, log and raise immediately
-            else:
-                log.error(f"Error fetching incident {incident_id}: {e}")
-                raise
-
-    # Should not reach here, but just in case
-    raise ApiException(f"Failed to fetch incident {incident_id} after {max_retries} retries")
-
-
 def import_ticket(source_ticket_number: str, requestor_email_address: Optional[str] = None) -> Tuple[Any, str]:
     """
     Import ticket from prod to dev environment.
@@ -268,9 +105,10 @@ def import_ticket(source_ticket_number: str, requestor_email_address: Optional[s
         Tuple of (ticket_id, ticket_url) or (error_dict, '') if failed
     """
     log.info(f"Importing ticket {source_ticket_number} from prod to dev")
+    prod_ticket_handler = TicketHandler(XsoarEnvironment.PROD)
     dev_ticket_handler = TicketHandler(XsoarEnvironment.DEV)
 
-    incident_data = get_case_data(source_ticket_number)
+    incident_data = prod_ticket_handler.get_case_data(source_ticket_number)
     log.debug(f"Retrieved incident data for {source_ticket_number}")
     if requestor_email_address:
         incident_data['owner'] = requestor_email_address
@@ -548,14 +386,17 @@ class TicketHandler:
             }
 
         Note:
-            - Uses version -1 to force update
+            - Fetches current incident version for optimistic locking
             - The id field is automatically added if not present
         """
-        # Ensure id and version are in update_data
+        # Ensure id is in update_data
         if 'id' not in update_data:
             update_data['id'] = ticket_id
-        if 'version' not in update_data:
-            update_data['version'] = -1
+
+        case_data = self.get_case_data(ticket_id)
+        current_version = case_data.get('version', -1)
+        update_data['version'] = current_version
+        log.debug(f"Fetched current version {current_version} for incident {ticket_id}")
 
         log.debug(f"Updating incident {ticket_id} with data: {update_data}")
 
@@ -753,6 +594,167 @@ class TicketHandler:
             log.error(f"Error creating incident in dev: {e}")
             return {"error": str(e)}
 
+    def get_case_data(self, incident_id: str, max_retries: int = 3) -> Dict[str, Any]:
+        """
+        Fetch incident details.
+
+        Args:
+            incident_id: The XSOAR incident ID
+            max_retries: Maximum number of retry attempts for rate limiting/server errors
+
+        Returns:
+            Dictionary containing incident details
+
+        Raises:
+            ApiException: If API call fails after all retries
+        """
+        retry_count = 0
+
+        while retry_count <= max_retries:
+            try:
+                # Use generic_request to load incident
+                response = self.client.generic_request(
+                    path=f'/incident/load/{incident_id}',
+                    method='GET'
+                )
+                return _parse_generic_response(response)
+            except ApiException as e:
+                # Handle rate limiting (429)
+                if e.status == 429:
+                    retry_count += 1
+                    if retry_count > max_retries:
+                        log.error(f"Exceeded max retries ({max_retries}) for incident {incident_id} due to rate limiting")
+                        raise
+
+                    backoff_time = 5 * (2 ** (retry_count - 1))
+                    log.warning(f"Rate limit hit (429) for incident {incident_id}. "
+                                f"Retry {retry_count}/{max_retries}. "
+                                f"Backing off for {backoff_time} seconds...")
+                    time.sleep(backoff_time)
+                    continue
+
+                # Handle server errors (502, 503, 504)
+                elif e.status in [502, 503, 504]:
+                    retry_count += 1
+                    if retry_count > max_retries:
+                        log.error(f"Exceeded max retries ({max_retries}) for incident {incident_id} due to server error {e.status}")
+                        raise
+
+                    backoff_time = 5 * (2 ** (retry_count - 1))
+                    log.warning(f"Server error {e.status} for incident {incident_id}. "
+                                f"Retry {retry_count}/{max_retries}. "
+                                f"Backing off for {backoff_time} seconds...")
+                    time.sleep(backoff_time)
+                    continue
+
+                # For other errors, log and raise immediately
+                else:
+                    log.error(f"Error fetching incident {incident_id}: {e}")
+                    raise
+
+        # Should not reach here, but just in case
+        raise ApiException(f"Failed to fetch incident {incident_id} after {max_retries} retries")
+
+    def get_case_data_with_notes(self, incident_id: str, max_retries: int = 3) -> Dict[str, Any]:
+        """
+        Fetch incident details along with notes.
+
+        Args:
+            incident_id: The XSOAR incident ID
+            max_retries: Maximum number of retry attempts for rate limiting/server errors
+
+        Returns:
+            Dictionary containing incident investigation data with notes
+
+        Raises:
+            ApiException: If API call fails after all retries
+        """
+        retry_count = 0
+
+        while retry_count <= max_retries:
+            try:
+                response = self.client.generic_request(
+                    path=f'/investigation/{incident_id}',
+                    method='POST',
+                    body={}
+                )
+                return _parse_generic_response(response)
+            except ApiException as e:
+                # Handle rate limiting (429)
+                if e.status == 429:
+                    retry_count += 1
+                    if retry_count > max_retries:
+                        log.error(f"Exceeded max retries ({max_retries}) for investigation {incident_id} due to rate limiting")
+                        raise
+
+                    # Exponential backoff for rate limiting
+                    backoff_time = 5 * (2 ** (retry_count - 1))
+                    log.warning(f"Rate limit hit (429) for investigation {incident_id}. "
+                                f"Retry {retry_count}/{max_retries}. "
+                                f"Backing off for {backoff_time} seconds...")
+                    time.sleep(backoff_time)
+                    continue
+
+                # Handle server errors (502, 503, 504)
+                elif e.status in [502, 503, 504]:
+                    retry_count += 1
+                    if retry_count > max_retries:
+                        log.error(f"Exceeded max retries ({max_retries}) for investigation {incident_id} due to server error {e.status}")
+                        raise
+
+                    backoff_time = 5 * (2 ** (retry_count - 1))
+                    log.warning(f"Server error {e.status} for investigation {incident_id}. "
+                                f"Retry {retry_count}/{max_retries}. "
+                                f"Backing off for {backoff_time} seconds...")
+                    time.sleep(backoff_time)
+                    continue
+
+                # For other errors, log and raise immediately
+                else:
+                    log.error(f"Error fetching investigation {incident_id}: {e}")
+                    raise
+
+        # Should not reach here, but just in case
+        raise ApiException(f"Failed to fetch investigation {incident_id} after {max_retries} retries")
+
+    def get_user_notes(self, incident_id: str) -> List[Dict[str, str]]:
+        """
+        Fetch user notes for a given incident.
+
+        Args:
+            incident_id: The XSOAR incident ID
+
+        Returns:
+            List of formatted notes with note_text, author, and created_at fields,
+            sorted with latest note first
+        """
+        case_data_with_notes = self.get_case_data_with_notes(incident_id)
+        entries = case_data_with_notes.get('entries', [])
+        user_notes = [entry for entry in entries if entry.get('note')]
+
+        # Format notes with required fields
+        et_tz = pytz.timezone('America/New_York')
+        formatted_notes = []
+        for note in user_notes:
+            # Parse ISO format timestamp
+            created_str = note.get('created', '')
+            if created_str:
+                # Parse ISO 8601 format: "2025-10-23T22:24:17.48233Z"
+                dt_utc = datetime.fromisoformat(created_str.replace('Z', '+00:00'))
+                dt_et = dt_utc.astimezone(et_tz)
+                created_at = dt_et.strftime('%m/%d/%Y %I:%M %p ET')
+            else:
+                created_at = ''
+
+            formatted_notes.append({
+                'note_text': note.get('contents', ''),
+                'author': note.get('user', 'DBot'),
+                'created_at': created_at
+            })
+
+        # Return with latest note first
+        return list(reversed(formatted_notes))
+
 
 class ListHandler:
     """Handler for XSOAR list operations."""
@@ -904,8 +906,11 @@ def main():
         dev_list = ListHandler(XsoarEnvironment.DEV)
     """
     # print(json.dumps(get_user_notes('878736'), indent=4))
+
     dev_ticket_handler = TicketHandler(XsoarEnvironment.DEV)
-    print(dev_ticket_handler.assign_owner('1375022', 'edison.enerio@company.com'))
+    pprint(dev_ticket_handler.get_case_data('1375128'))
+
+    print(dev_ticket_handler.assign_owner('1375128', 'user@company.com'))
 
 
 if __name__ == "__main__":
