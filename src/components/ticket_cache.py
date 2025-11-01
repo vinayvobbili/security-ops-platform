@@ -196,7 +196,7 @@ class TicketCache:
 
         for attempt in range(max_retries):
             try:
-                ticket['notes'] = xsoar.get_user_notes(ticket_id)
+                ticket['notes'] = self.ticket_handler.get_user_notes(ticket_id)
                 return ticket
             except Exception as e:
                 error_msg = str(e)
