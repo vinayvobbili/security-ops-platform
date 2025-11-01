@@ -1,16 +1,16 @@
 import base64
 import datetime
 import json
-import time
 import logging
+import time
 from datetime import datetime, timedelta
 
 import pytz
 import requests
 
-from my_config import get_config
 from data.data_maps import azdo_projects, azdo_orgs
-from services.xsoar import ListHandler, CONFIG
+from my_config import get_config
+from services.xsoar import ListHandler, CONFIG, XsoarEnvironment
 from src.utils.http_utils import RobustHTTPSession
 
 logger = logging.getLogger(__name__)
@@ -29,7 +29,7 @@ headers = {
 # Create a robust HTTP session with longer timeout for Azure DevOps
 azdo_session = RobustHTTPSession(max_retries=3, timeout=120, backoff_factor=0.5)
 
-list_handler = ListHandler()
+prod_list_handler = ListHandler(XsoarEnvironment.PROD)
 
 
 def fetch_work_items(query: str):

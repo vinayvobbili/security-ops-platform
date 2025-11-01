@@ -5,7 +5,7 @@ import pytz
 from webexpythonsdk import WebexAPI
 
 from my_config import get_config
-from services.xsoar import TicketHandler
+from services.xsoar import TicketHandler, XsoarEnvironment
 from src.secops import get_staffing_data, get_current_shift
 
 CONFIG = get_config()
@@ -161,7 +161,7 @@ def start(room_id):
     }
     """
     try:
-        ticket_handler = TicketHandler()
+        ticket_handler = TicketHandler(XsoarEnvironment.PROD)
         query = '-category:job type:METCIRT -owner:"" timetorespond.runStatus:running (timetorespond.slaStatus:risk or timetorespond.slaStatus:2)'
         tickets = ticket_handler.get_tickets(query)
 

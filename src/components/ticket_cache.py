@@ -12,7 +12,7 @@ from tqdm import tqdm
 
 from my_config import get_config
 from services import xsoar
-from services.xsoar import TicketHandler
+from services.xsoar import TicketHandler, XsoarEnvironment
 
 CONFIG = get_config()
 log = logging.getLogger(__name__)
@@ -38,7 +38,7 @@ class TicketCache:
     """
 
     def __init__(self):
-        self.ticket_handler = TicketHandler()
+        self.ticket_handler = TicketHandler(XsoarEnvironment.PROD)
         self.root_directory = Path(__file__).parent.parent.parent
 
     # System fields we want to extract

@@ -1,7 +1,7 @@
 from webexpythonsdk import WebexAPI
 
 from my_config import get_config
-from services.xsoar import TicketHandler
+from services.xsoar import TicketHandler, XsoarEnvironment
 from datetime import datetime
 from tabulate import tabulate
 
@@ -11,7 +11,7 @@ webex_api = WebexAPI(access_token=CONFIG.webex_bot_access_token_soar)
 
 def send_report(room_id):
     try:
-        ticket_handler = TicketHandler()
+        ticket_handler = TicketHandler(XsoarEnvironment.PROD)
         query = '-status:closed -category:job type:METCIRT owner:""'
         tickets = ticket_handler.get_tickets(query)
         if not tickets:

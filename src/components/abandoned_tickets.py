@@ -3,7 +3,7 @@ import pandas as pd
 import pytz
 from webexpythonsdk import WebexAPI
 import my_config as config
-from services.xsoar import TicketHandler
+from services.xsoar import TicketHandler, XsoarEnvironment
 
 config = config.get_config()
 
@@ -20,7 +20,7 @@ eastern = pytz.timezone('US/Eastern')  # Define the Eastern time zone
 
 def get_last_entry_date(incident_id):
     """Fetch the last touched date (last entry date) of an incident."""
-    incident_fetcher = TicketHandler()
+    incident_fetcher = TicketHandler(XsoarEnvironment.PROD)
     entries = incident_fetcher.get_entries(incident_id)  # Ensure `get_entries` fetches incident entries
 
     if not entries:
@@ -65,7 +65,7 @@ def send_report():
 
     # Query for all open tickets (no time filter needed for abandoned tickets check)
     query = f'-status:closed type:{config.ticket_type_prefix} -type:"{config.ticket_type_prefix} Third Party Compromise"'
-    tickets = TicketHandler().get_tickets(query=query)
+    tickets = TicketHandler(XsoarEnvironment.PROD).get_tickets(query=query)
 
     if not tickets:
         logger.info("No tickets found.")
