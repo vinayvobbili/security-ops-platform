@@ -73,4 +73,4 @@ python -m pytest tests/test_retry_utils.py -v
 
 ## Full Documentation
 
-See [docs/retry_mechanism.md](../../docs/retry_mechanism.md) for complete documentation.
+See [docs/retry_mechanism.md](retry_mechanism.md) for complete documentation.

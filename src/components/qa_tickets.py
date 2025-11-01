@@ -33,7 +33,7 @@ from tabulate import tabulate
 from webexpythonsdk import WebexAPI
 
 from my_config import get_config
-from services.xsoar import TicketHandler
+from services.xsoar import TicketHandler, XsoarEnvironment
 
 CONFIG = get_config()
 webex_api = WebexAPI(access_token=CONFIG.webex_bot_access_token_soar)
@@ -67,7 +67,7 @@ def format_summary_message(summary, total):
 
 def generate(room_id):
     try:
-        ticket_handler = TicketHandler()
+        ticket_handler = TicketHandler(XsoarEnvironment.PROD)
         # Calculate the start of the work week (previous Monday)
         # Since this script runs on Monday at 8am ET, we go back 7 days to get to previous Monday
         today = datetime.now()
@@ -127,7 +127,9 @@ def generate(room_id):
                 continue
             ticket_handler.link_tickets(qa_ticket['id'], source_ticket['id'])
             participants = ticket_handler.get_participants(source_ticket['id'])
-            stake_holders = [source_ticket['owner']] + participants
+            # Extract email addresses from participant dictionaries
+            participant_emails = [p.get('email') for p in participants if p.get('email')]
+            stake_holders = [source_ticket['owner']] + participant_emails
             for stake_holder in stake_holders:
                 ticket_handler.add_participant(qa_ticket['id'], stake_holder)
             qa_ticket_url = CONFIG.xsoar_prod_ui_base_url + "/Custom/caseinfoid/" + qa_ticket['id']

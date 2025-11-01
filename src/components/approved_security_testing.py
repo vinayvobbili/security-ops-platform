@@ -2,17 +2,17 @@ import logging
 from datetime import datetime
 
 from my_config import get_config
-from services.xsoar import ListHandler
+from services.xsoar import ListHandler, XsoarEnvironment
 
 CONFIG = get_config()
 approved_testing_list_name = f"{CONFIG.team_name}_Approved_Testing"
-list_handler = ListHandler()
+prod_list_handler = ListHandler(XsoarEnvironment.PROD)
 
 
 def removed_expired_entries():
     """Cleans expired entries from the approved testing list."""
     try:
-        approved_test_items = list_handler.get_list_data_by_name(approved_testing_list_name)
+        approved_test_items = prod_list_handler.get_list_data_by_name(approved_testing_list_name)
         today = datetime.now()
 
         updated_approved_test_items = {}
@@ -28,7 +28,7 @@ def removed_expired_entries():
                     continue
             updated_approved_test_items[category] = valid_items
 
-        list_handler.save(approved_testing_list_name, updated_approved_test_items)
+        prod_list_handler.save(approved_testing_list_name, updated_approved_test_items)
     except Exception as e:
         logging.error(f"Error during clean operation: {str(e)}")
 

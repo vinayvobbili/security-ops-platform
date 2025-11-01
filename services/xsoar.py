@@ -5,6 +5,20 @@ This module provides a wrapper around the official demisto-py SDK
 to maintain backward compatibility with existing code while leveraging
 the official Palo Alto Networks XSOAR Python client.
 
+Usage:
+    from services.xsoar import TicketHandler, ListHandler, XsoarEnvironment
+
+    # Use prod environment (default)
+    prod_handler = TicketHandler()
+    prod_handler = TicketHandler(XsoarEnvironment.PROD)
+
+    # Use dev environment
+    dev_handler = TicketHandler(XsoarEnvironment.DEV)
+
+    # Same for ListHandler
+    prod_list = ListHandler()
+    dev_list = ListHandler(XsoarEnvironment.DEV)
+
 Migration Date: 2024-10-31
 Original: services/xsoar.py.backup
 """
@@ -13,6 +27,7 @@ import json
 import logging
 import time
 from datetime import datetime
+from typing import Any, Dict, List, Optional, Tuple
 
 import demisto_client
 import pytz
@@ -22,15 +37,22 @@ from demisto_client.demisto_api.models import SearchIncidentsData
 from urllib3.exceptions import InsecureRequestWarning
 
 from my_config import get_config
+from src.utils.xsoar_enums import XsoarEnvironment
 
 # For easier access to ApiException
 ApiException = rest.ApiException
 
 
-def _parse_generic_response(response):
+def _parse_generic_response(response: Optional[Tuple]) -> Dict[str, Any]:
     """
     Parse response from generic_request which returns (body, status, headers) tuple.
     Body might be JSON string or Python repr string.
+
+    Args:
+        response: Tuple containing (body, status, headers) from API call
+
+    Returns:
+        Parsed response as dictionary, empty dict if parsing fails
     """
     if not response or not isinstance(response, tuple) or len(response) < 1:
         return {}
@@ -70,8 +92,20 @@ dev_client = demisto_client.configure(
 )
 
 
-def get_case_data_with_notes(incident_id, max_retries=3):
-    """Fetch incident details along with notes from prod environment"""
+def get_case_data_with_notes(incident_id: str, max_retries: int = 3) -> Dict[str, Any]:
+    """
+    Fetch incident details along with notes from prod environment.
+
+    Args:
+        incident_id: The XSOAR incident ID
+        max_retries: Maximum number of retry attempts for rate limiting/server errors
+
+    Returns:
+        Dictionary containing incident investigation data with notes
+
+    Raises:
+        ApiException: If API call fails after all retries
+    """
     retry_count = 0
 
     while retry_count <= max_retries:
@@ -93,8 +127,8 @@ def get_case_data_with_notes(incident_id, max_retries=3):
                 # Exponential backoff for rate limiting
                 backoff_time = 5 * (2 ** (retry_count - 1))
                 log.warning(f"Rate limit hit (429) for investigation {incident_id}. "
-                           f"Retry {retry_count}/{max_retries}. "
-                           f"Backing off for {backoff_time} seconds...")
+                            f"Retry {retry_count}/{max_retries}. "
+                            f"Backing off for {backoff_time} seconds...")
                 time.sleep(backoff_time)
                 continue
 
@@ -107,8 +141,8 @@ def get_case_data_with_notes(incident_id, max_retries=3):
 
                 backoff_time = 5 * (2 ** (retry_count - 1))
                 log.warning(f"Server error {e.status} for investigation {incident_id}. "
-                           f"Retry {retry_count}/{max_retries}. "
-                           f"Backing off for {backoff_time} seconds...")
+                            f"Retry {retry_count}/{max_retries}. "
+                            f"Backing off for {backoff_time} seconds...")
                 time.sleep(backoff_time)
                 continue
 
@@ -121,8 +155,17 @@ def get_case_data_with_notes(incident_id, max_retries=3):
     raise ApiException(f"Failed to fetch investigation {incident_id} after {max_retries} retries")
 
 
-def get_user_notes(incident_id):
-    """Fetch user notes for a given incident from prod environment"""
+def get_user_notes(incident_id: str) -> List[Dict[str, str]]:
+    """
+    Fetch user notes for a given incident from prod environment.
+
+    Args:
+        incident_id: The XSOAR incident ID
+
+    Returns:
+        List of formatted notes with note_text, author, and created_at fields,
+        sorted with latest note first
+    """
     case_data_with_notes = get_case_data_with_notes(incident_id)
     entries = case_data_with_notes.get('entries', [])
     user_notes = [entry for entry in entries if entry.get('note')]
@@ -151,8 +194,20 @@ def get_user_notes(incident_id):
     return list(reversed(formatted_notes))
 
 
-def get_case_data(incident_id, max_retries=3):
-    """Fetch incident details from prod environment"""
+def get_case_data(incident_id: str, max_retries: int = 3) -> Dict[str, Any]:
+    """
+    Fetch incident details from prod environment.
+
+    Args:
+        incident_id: The XSOAR incident ID
+        max_retries: Maximum number of retry attempts for rate limiting/server errors
+
+    Returns:
+        Dictionary containing incident details
+
+    Raises:
+        ApiException: If API call fails after all retries
+    """
     retry_count = 0
 
     while retry_count <= max_retries:
@@ -173,8 +228,8 @@ def get_case_data(incident_id, max_retries=3):
 
                 backoff_time = 5 * (2 ** (retry_count - 1))
                 log.warning(f"Rate limit hit (429) for incident {incident_id}. "
-                           f"Retry {retry_count}/{max_retries}. "
-                           f"Backing off for {backoff_time} seconds...")
+                            f"Retry {retry_count}/{max_retries}. "
+                            f"Backing off for {backoff_time} seconds...")
                 time.sleep(backoff_time)
                 continue
 
@@ -187,8 +242,8 @@ def get_case_data(incident_id, max_retries=3):
 
                 backoff_time = 5 * (2 ** (retry_count - 1))
                 log.warning(f"Server error {e.status} for incident {incident_id}. "
-                           f"Retry {retry_count}/{max_retries}. "
-                           f"Backing off for {backoff_time} seconds...")
+                            f"Retry {retry_count}/{max_retries}. "
+                            f"Backing off for {backoff_time} seconds...")
                 time.sleep(backoff_time)
                 continue
 
@@ -201,41 +256,89 @@ def get_case_data(incident_id, max_retries=3):
     raise ApiException(f"Failed to fetch incident {incident_id} after {max_retries} retries")
 
 
-def import_ticket(source_ticket_number, requestor_email_address=None):
-    """Import ticket from prod to dev"""
-    ticket_handler = TicketHandler()
+def import_ticket(source_ticket_number: str, requestor_email_address: Optional[str] = None) -> Tuple[Any, str]:
+    """
+    Import ticket from prod to dev environment.
+
+    Args:
+        source_ticket_number: The incident ID from prod to import
+        requestor_email_address: Optional email to set as owner in dev
+
+    Returns:
+        Tuple of (ticket_id, ticket_url) or (error_dict, '') if failed
+    """
+    log.info(f"Importing ticket {source_ticket_number} from prod to dev")
+    dev_ticket_handler = TicketHandler(XsoarEnvironment.DEV)
 
     incident_data = get_case_data(source_ticket_number)
+    log.debug(f"Retrieved incident data for {source_ticket_number}")
     if requestor_email_address:
         incident_data['owner'] = requestor_email_address
 
-    new_ticket_data = ticket_handler.create_in_dev(incident_data)
+    new_ticket_data = dev_ticket_handler.create_in_dev(incident_data)
 
     if 'error' in new_ticket_data:
+        log.error(f"Failed to import ticket {source_ticket_number}: {new_ticket_data.get('error')}")
         return new_ticket_data, ''
 
-    return new_ticket_data['id'], f'{CONFIG.xsoar_dev_ui_base_url}/Custom/caseinfoid/{new_ticket_data["id"]}'
+    ticket_id = new_ticket_data['id']
+    ticket_url = f'{CONFIG.xsoar_dev_ui_base_url}/Custom/caseinfoid/{ticket_id}'
+    log.info(f"Successfully imported ticket {source_ticket_number} to dev as {ticket_id}")
+    return ticket_id, ticket_url
 
 
 class TicketHandler:
-    def __init__(self):
-        self.prod_base = CONFIG.xsoar_prod_api_base_url
-        self.dev_base = CONFIG.xsoar_dev_api_base_url
-        self.client = prod_client
-        self.dev_client = dev_client
+    """Handler for XSOAR ticket operations including search, create, update, and link."""
 
-    def get_tickets(self, query, period=None, size=20000, paginate=True):
-        """Fetch security incidents from XSOAR using demisto-py SDK"""
+    def __init__(self, environment: XsoarEnvironment = XsoarEnvironment.PROD):
+        """
+        Initialize TicketHandler with XSOAR environment.
+
+        Args:
+            environment: XsoarEnvironment enum (PROD or DEV), defaults to PROD
+        """
+        if environment == XsoarEnvironment.PROD:
+            self.client = prod_client
+        elif environment == XsoarEnvironment.DEV:
+            self.client = dev_client
+        else:
+            raise ValueError(f"Invalid environment: {environment}. Must be XsoarEnvironment.PROD or XsoarEnvironment.DEV")
+
+    def get_tickets(self, query: str, period: Optional[Dict[str, Any]] = None,
+                    size: int = 20000, paginate: bool = True) -> List[Dict[str, Any]]:
+        """
+        Fetch security incidents from XSOAR using demisto-py SDK.
+
+        Args:
+            query: XSOAR query string for filtering incidents
+            period: Optional time period filter
+            size: Maximum number of results (used when paginate=False)
+            paginate: Whether to fetch all results with pagination
+
+        Returns:
+            List of incident dictionaries
+        """
         full_query = query + f' -category:job -type:"{CONFIG.team_name} Ticket QA" -type:"{CONFIG.team_name} SNOW Whitelist Request"'
 
         log.debug(f"Making API call for query: {query}")
 
         if paginate:
             return self._fetch_paginated(full_query, period)
-        return self._fetch_from_api(full_query, period, size)
+        return self._fetch_unpaginated(full_query, period, size)
 
-    def _fetch_paginated(self, query, period, page_size=5000):
-        """Fetch tickets with pagination using demisto-py SDK"""
+    def _fetch_paginated(self, query: str, period: Optional[Dict[str, Any]],
+                         page_size: int = 5000) -> List[Dict[str, Any]]:
+        """
+        Fetch tickets with pagination using demisto-py SDK.
+
+        Args:
+            query: XSOAR query string
+            period: Optional time period filter
+            page_size: Number of results per page
+
+        Returns:
+            List of all fetched incident dictionaries
+        """
         all_tickets = []
         page = 0
         max_pages = 100
@@ -244,7 +347,7 @@ class TicketHandler:
 
         try:
             while page < max_pages:
-                filter_data = {
+                filter_data: Dict[str, Any] = {
                     "query": query,
                     "page": page,
                     "size": page_size,
@@ -326,9 +429,9 @@ class TicketHandler:
             log.error(f"Query that failed: {query}")
             return all_tickets  # Return what we have so far
 
-    def _fetch_from_api(self, query, period, size):
-        """Fetch tickets directly from XSOAR API using demisto-py SDK"""
-        filter_data = {
+    def _fetch_unpaginated(self, query, period, size):
+        """Fetch tickets directly from XSOAR API using demisto-py SDK (single page, no pagination)"""
+        filter_data: Dict[str, Any] = {
             "query": query,
             "page": 0,
             "size": size,
@@ -378,14 +481,25 @@ class TicketHandler:
                         return []
 
         except Exception as e:
-            log.error(f"Error in _fetch_from_api: {str(e)}")
+            log.error(f"Error in _fetch_unpaginated: {str(e)}")
             log.error(f"Query that failed: {query}")
             return []
 
-    def get_entries(self, incident_id):
-        """Fetch entries (comments, notes) for a given incident"""
+    def get_entries(self, incident_id: str) -> List[Dict[str, Any]]:
+        """
+        Fetch entries (comments, notes) for a given incident.
+
+        Args:
+            incident_id: The XSOAR incident ID
+
+        Returns:
+            List of entry dictionaries
+
+        Raises:
+            ApiException: If API call fails
+        """
         try:
-            response = prod_client.generic_request(
+            response = self.client.generic_request(
                 path=f'/incidents/{incident_id}/entries',
                 method='GET'
             )
@@ -395,8 +509,19 @@ class TicketHandler:
             log.error(f"Error fetching entries for incident {incident_id}: {e}")
             raise
 
-    def create(self, payload):
-        """Create a new incident in prod XSOAR"""
+    def create(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Create a new incident in XSOAR.
+
+        Args:
+            payload: Incident data dictionary
+
+        Returns:
+            Created incident data
+
+        Raises:
+            ApiException: If incident creation fails
+        """
         payload.update({"all": True, "createInvestigation": True, "force": True})
         try:
             response = self.client.create_incident(create_incident_request=payload)
@@ -405,8 +530,67 @@ class TicketHandler:
             log.error(f"Error creating incident: {e}")
             raise
 
-    def link_tickets(self, parent_ticket_id, link_ticket_id):
-        """Links the source ticket to the newly created QA ticket in XSOAR."""
+    def update_incident(self, ticket_id: str, update_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """
+        Update an existing incident in XSOAR.
+
+        Args:
+            ticket_id: The incident ID to update
+            update_data: Dictionary of fields to update
+
+        Returns:
+            Updated incident data or None if failed
+        """
+        if not ticket_id or not update_data:
+            log.error("Ticket ID or update data is empty. Cannot update incident.")
+            return None
+
+        log.debug(f"Updating ticket {ticket_id} with data: {update_data}")
+
+        # Format payload to match XSOAR API expectations
+        # Based on dev tools: {"data": {"owner": "..."}, "id": "..."}
+        payload = {
+            "data": update_data,
+            "id": ticket_id
+        }
+
+        try:
+            response = self.client.generic_request(
+                path='/incident/update',
+                method='POST',
+                body=payload
+            )
+            return _parse_generic_response(response)
+        except ApiException as e:
+            log.error(f"Error updating incident: {e}")
+            return None
+
+    def assign_owner(self, ticket_id, owner_email_address):
+        """Assigns an owner to the specified ticket."""
+        if not ticket_id or not owner_email_address:
+            log.error("Ticket ID or owner email address is empty. Cannot assign owner.")
+            return None
+
+        log.debug(f"Assigning owner {owner_email_address} to ticket {ticket_id}")
+
+        # Use the existing update_incident method which uses /incident/update endpoint
+        update_data = {
+            "owner": owner_email_address
+        }
+
+        return self.update_incident(ticket_id, update_data)
+
+    def link_tickets(self, parent_ticket_id: str, link_ticket_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Links the source ticket to the newly created QA ticket in XSOAR.
+
+        Args:
+            parent_ticket_id: The parent ticket ID
+            link_ticket_id: The ticket ID to link to parent
+
+        Returns:
+            Response data or None if failed
+        """
         if not link_ticket_id or not parent_ticket_id:
             log.error("Ticket ID or QA Ticket ID is empty. Cannot link tickets.")
             return None
@@ -427,7 +611,7 @@ class TicketHandler:
         }
 
         try:
-            response = prod_client.generic_request(
+            response = self.client.generic_request(
                 path='/xsoar/entry',
                 method='POST',
                 body=entry_data
@@ -437,8 +621,17 @@ class TicketHandler:
             log.error(f"Error linking tickets: {e}")
             return None
 
-    def add_participant(self, ticket_id, participant_email_address):
-        """Adds a participant to the incident."""
+    def add_participant(self, ticket_id: str, participant_email_address: str) -> Optional[Dict[str, Any]]:
+        """
+        Adds a participant to the incident.
+
+        Args:
+            ticket_id: The incident ID
+            participant_email_address: Email address of participant to add
+
+        Returns:
+            Response data or None if failed
+        """
         if not ticket_id or not participant_email_address:
             log.error("Ticket ID or participant email is empty. Cannot add participant.")
             return None
@@ -455,7 +648,7 @@ class TicketHandler:
         }
 
         try:
-            response = prod_client.generic_request(
+            response = self.client.generic_request(
                 path='/xsoar/entry',
                 method='POST',
                 body=entry_data
@@ -465,8 +658,20 @@ class TicketHandler:
             log.error(f"Error adding participant: {e}")
             return None
 
-    def get_participants(self, incident_id):
-        """Get participants (users) for a given incident."""
+    def get_participants(self, incident_id: str) -> List[Dict[str, Any]]:
+        """
+        Get participants (users) for a given incident.
+
+        Args:
+            incident_id: The incident ID
+
+        Returns:
+            List of participant dictionaries
+
+        Raises:
+            ValueError: If investigation not found
+            ApiException: If API call fails
+        """
         if not incident_id:
             log.error("Incident ID is empty. Cannot get participants.")
             return []
@@ -474,7 +679,7 @@ class TicketHandler:
         log.debug(f"Getting participants for incident {incident_id}")
 
         try:
-            response = prod_client.generic_request(
+            response = self.client.generic_request(
                 path=f'/investigation/{incident_id}',
                 method='POST',
                 body={}
@@ -513,8 +718,17 @@ class TicketHandler:
             log.error(f"Error completing task {task_id} in incident {incident_id}: {e}")
             raise
 
-    def create_in_dev(self, payload):
-        """Create a new incident in dev XSOAR"""
+    def create_in_dev(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Create a new incident in dev XSOAR with cleaned payload.
+
+        Args:
+            payload: Incident data dictionary
+
+        Returns:
+            Created incident data or error dictionary
+        """
+        log.debug("Creating incident in dev environment")
         # Clean payload for dev creation
         for key in ['id', 'phase', 'status', 'roles']:
             payload.pop(key, None)
@@ -537,7 +751,7 @@ class TicketHandler:
             payload["CustomFields"]["slabreachreason"] = "Place Holder - To be updated by SOC"
 
         try:
-            response = self.dev_client.create_incident(create_incident_request=payload)
+            response = self.client.create_incident(create_incident_request=payload)
             return response.to_dict() if hasattr(response, 'to_dict') else response
         except ApiException as e:
             log.error(f"Error creating incident in dev: {e}")
@@ -545,14 +759,31 @@ class TicketHandler:
 
 
 class ListHandler:
-    def __init__(self):
-        self.base_url = CONFIG.xsoar_prod_api_base_url
-        self.client = prod_client
+    """Handler for XSOAR list operations."""
 
-    def get_all_lists(self):
-        """Get all lists from XSOAR"""
+    def __init__(self, environment: XsoarEnvironment = XsoarEnvironment.PROD):
+        """
+        Initialize ListHandler with XSOAR environment.
+
+        Args:
+            environment: XsoarEnvironment enum (PROD or DEV), defaults to PROD
+        """
+        if environment == XsoarEnvironment.PROD:
+            self.client = prod_client
+        elif environment == XsoarEnvironment.DEV:
+            self.client = dev_client
+        else:
+            raise ValueError(f"Invalid environment: {environment}. Must be XsoarEnvironment.PROD or XsoarEnvironment.DEV")
+
+    def get_all_lists(self) -> List[Dict[str, Any]]:
+        """
+        Get all lists from XSOAR.
+
+        Returns:
+            List of XSOAR list dictionaries
+        """
         try:
-            response = prod_client.generic_request(
+            response = self.client.generic_request(
                 path='/lists',
                 method='GET'
             )
@@ -584,8 +815,20 @@ class ListHandler:
             return None
         return list_item['version']
 
-    def save(self, list_name, list_data):
-        """Save list data"""
+    def save(self, list_name: str, list_data: Any) -> Dict[str, Any]:
+        """
+        Save list data to XSOAR.
+
+        Args:
+            list_name: Name of the list
+            list_data: Data to save (will be JSON serialized)
+
+        Returns:
+            Response data from save operation
+
+        Raises:
+            ApiException: If save operation fails
+        """
         list_version = self.get_list_version_by_name(list_name)
 
         payload = {
@@ -597,7 +840,7 @@ class ListHandler:
         }
 
         try:
-            response = prod_client.generic_request(
+            response = self.client.generic_request(
                 path='/lists/save',
                 method='POST',
                 body=payload
@@ -607,8 +850,20 @@ class ListHandler:
             log.error(f"Error saving list: {e}")
             raise
 
-    def save_as_text(self, list_name, list_data):
-        """Save list data as plain text (comma-separated string)."""
+    def save_as_text(self, list_name: str, list_data: List[str]) -> Dict[str, Any]:
+        """
+        Save list data as plain text (comma-separated string).
+
+        Args:
+            list_name: Name of the list
+            list_data: List of strings to save
+
+        Returns:
+            Response data from save operation
+
+        Raises:
+            ApiException: If save operation fails
+        """
         list_version = self.get_list_version_by_name(list_name)
         payload = {
             "data": ','.join(list_data),
@@ -619,7 +874,7 @@ class ListHandler:
         }
 
         try:
-            response = prod_client.generic_request(
+            response = self.client.generic_request(
                 path='/lists/save',
                 method='POST',
                 body=payload
@@ -637,8 +892,24 @@ class ListHandler:
 
 
 def main():
-    """Main function that demonstrates core functionality of this module"""
-    print(json.dumps(get_user_notes('878736'), indent=4))
+    """
+    Main function that demonstrates core functionality of this module.
+
+    Example usage:
+        # Use prod environment (default)
+        prod_handler = TicketHandler()
+        prod_handler = TicketHandler(XsoarEnvironment.PROD)
+
+        # Use dev environment
+        dev_handler = TicketHandler(XsoarEnvironment.DEV)
+
+        # Same for ListHandler
+        prod_list = ListHandler()
+        dev_list = ListHandler(XsoarEnvironment.DEV)
+    """
+    # print(json.dumps(get_user_notes('878736'), indent=4))
+    dev_ticket_handler = TicketHandler(XsoarEnvironment.DEV)
+    print(dev_ticket_handler.assign_owner('1375022', 'user@company.com'))
 
 
 if __name__ == "__main__":

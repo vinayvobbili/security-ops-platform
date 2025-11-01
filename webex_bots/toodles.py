@@ -67,11 +67,13 @@ CONFIG = get_config()
 
 # ALWAYS configure SSL for proxy environments (auto-detects ZScaler/proxies)
 from src.utils.ssl_config import configure_ssl_if_needed
+
 configure_ssl_if_needed(verbose=True)
 
 # ALWAYS apply enhanced WebSocket patches for connection resilience
 # This is critical to prevent the bot from going to sleep
 from src.utils.enhanced_websocket_client import patch_websocket_client
+
 patch_websocket_client()
 
 import ipaddress
@@ -100,7 +102,7 @@ from data.data_maps import azdo_projects, azdo_orgs, azdo_area_paths
 from services import xsoar, azdo
 from services.approved_testing_utils import add_approved_testing_entry
 from services.crowdstrike import CrowdStrikeClient
-from services.xsoar import ListHandler, TicketHandler
+from services.xsoar import ListHandler, TicketHandler, XsoarEnvironment
 from src.components.url_lookup_traffic import URLChecker
 from src.utils.http_utils import get_session
 from src.utils.logging_utils import log_activity
@@ -204,8 +206,9 @@ dev_headers = {
 }
 headers = prod_headers
 
-incident_handler = TicketHandler()
-list_handler = ListHandler()
+# Initialize XSOAR handlers for production environment
+prod_incident_handler = TicketHandler(XsoarEnvironment.PROD)
+prod_list_handler = ListHandler(XsoarEnvironment.PROD)
 
 NEW_TICKET_CARD = {
     "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
@@ -1206,7 +1209,7 @@ def get_url_card():
     Returns a card with error message if XSOAR is not configured or list is unavailable.
     """
     try:
-        metcirt_urls = list_handler.get_list_data_by_name('METCIRT URLs')
+        metcirt_urls = prod_list_handler.get_list_data_by_name('METCIRT URLs')
         actions = []
 
         # Handle case where list is not found or XSOAR is not configured
@@ -1345,7 +1348,7 @@ class CreateXSOARTicket(Command):
                 'securitycategory': 'CAT-5: Scans/Probes/Attempted Access'
             }
         }
-        result = incident_handler.create(incident)
+        result = prod_incident_handler.create(incident)
         new_incident_id = result.get('id')
         incident_url = CONFIG.xsoar_prod_ui_base_url + '/Custom/caseinfoid/' + new_incident_id
         reply = f"{activity['actor']['displayName']}, Ticket [#{new_incident_id}]({incident_url}) has been created in XSOAR Prod."
@@ -1388,7 +1391,7 @@ class IOCHunt(Command):
                 'huntsource': 'Other'
             }
         }
-        result = incident_handler.create(incident)
+        result = prod_incident_handler.create(incident)
         ticket_no = result.get('id')
         incident_url = CONFIG.xsoar_prod_ui_base_url + '/Custom/caseinfoid/' + ticket_no
 
@@ -1427,7 +1430,7 @@ class CreateThreatHunt(Command):
                            'threat_hunt_desc'].strip() + f"\nSubmitted by: {activity['actor']['emailAddress']}",
             'type': "Threat Hunt"
         }
-        result = incident_handler.create(incident)
+        result = prod_incident_handler.create(incident)
         ticket_no = result.get('id')
         ticket_title = attachment_actions.inputs['threat_hunt_title'].strip()
         incident_url = CONFIG.xsoar_prod_ui_base_url + '/Custom/caseinfoid/' + ticket_no
@@ -1514,11 +1517,11 @@ class Review(Command):
         curr_date = datetime.now()
         ticket_no = attachment_actions.inputs["incident_id"]
 
-        list_dict = list_handler.get_list_data_by_name("review").get('Tickets')
+        list_dict = prod_list_handler.get_list_data_by_name("review").get('Tickets')
         add_entry_to_reviews(list_dict, ticket_no, activity['actor']['emailAddress'], curr_date.strftime("%x"),
                              attachment_actions.inputs["review_notes"])
         reformat = {"Tickets": list_dict}
-        list_handler.save(reformat, "review")
+        prod_list_handler.save(reformat, "review")
 
         return f"Ticket {ticket_no} has been added to Reviews."
 
@@ -1546,7 +1549,7 @@ def reformat_date(date_str):
 
 
 def get_approved_testing_entries_table():
-    approved_test_items = list_handler.get_list_data_by_name(approved_testing_list_name)
+    approved_test_items = prod_list_handler.get_list_data_by_name(approved_testing_list_name)
 
     # Prepare data for tabulation
     table_data = []
@@ -1714,7 +1717,7 @@ class AddApprovedTestingEntry(Command):
         submit_date = datetime.now().strftime("%m/%d/%Y")
         try:
             add_approved_testing_entry(
-                list_handler,
+                prod_list_handler,
                 approved_testing_list_name,
                 approved_testing_master_list_name,
                 usernames,
@@ -1758,7 +1761,7 @@ def add_entry_to_reviews(dict_full, ticket_id, person, date, message):
 
 
 def announce_new_threat_hunt(ticket_no, ticket_title, incident_url, person_id):
-    webex_data = list_handler.get_list_data_by_name('METCIRT Webex')
+    webex_data = prod_list_handler.get_list_data_by_name('METCIRT Webex')
     headers = {
         'Content-Type': 'application/json',
         'Authorization': f"Bearer {CONFIG.webex_bot_access_token_toodles}"
@@ -1959,8 +1962,8 @@ class FetchXSOARTickets(Command):
         query += f" email:{email}" if email else ''
         query += f" hostname:{hostname}" if hostname else ''
 
-        ticket_handler = TicketHandler()
-        tickets = ticket_handler.get_tickets(query=query)
+        prod_ticket_handler = TicketHandler(XsoarEnvironment.PROD)
+        tickets = prod_ticket_handler.get_tickets(query=query)
         if tickets:
             for ticket in tickets:
                 message = f"[X#{ticket.get('id')}]({CONFIG.xsoar_prod_ui_base_url}/Custom/caseinfoid/{ticket.get('id')}) - {ticket.get('name')}\n"

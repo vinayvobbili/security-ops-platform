@@ -3,7 +3,7 @@ from webexteamssdk import WebexTeamsAPI
 
 from my_config import get_config
 from services.crowdstrike import CrowdStrikeClient
-from services.xsoar import ListHandler
+from services.xsoar import ListHandler, XsoarEnvironment
 
 offline_hosts_list_name: str = 'Offline_Hosts'
 
@@ -18,7 +18,7 @@ xsoar_headers = {
 
 crowdstrike = CrowdStrikeClient()
 
-list_handler = ListHandler()
+prod_list_handler = ListHandler(XsoarEnvironment.PROD)
 
 
 def send_webex_notification(host_name, ticket_id):
@@ -32,7 +32,7 @@ def send_webex_notification(host_name, ticket_id):
 
 def start():
     try:
-        offline_hosts_data = list_handler.get_list_data_by_name(offline_hosts_list_name)
+        offline_hosts_data = prod_list_handler.get_list_data_by_name(offline_hosts_list_name)
         if not offline_hosts_data:
             return
         # Always treat as comma-separated string
@@ -50,7 +50,7 @@ def start():
                 send_webex_notification(hostname, ticket_id)
                 online_hosts.append(f"{hostname}-{ticket_id}")
         if online_hosts:
-            list_handler.save_as_text(offline_hosts_list_name, list(set(offline_hosts) - set(online_hosts)))
+            prod_list_handler.save_as_text(offline_hosts_list_name, list(set(offline_hosts) - set(online_hosts)))
     except Exception as ex:
         print(f"There was an issue in the VerifyHostOnlineStatus integration. Error: {str(ex)}")
 

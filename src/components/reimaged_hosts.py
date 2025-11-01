@@ -5,7 +5,7 @@ from pathlib import Path
 import pytz
 
 import my_config as config
-from services.xsoar import TicketHandler
+from services.xsoar import TicketHandler, XsoarEnvironment
 
 config = config.get_config()
 
@@ -30,7 +30,7 @@ def get_details():
         end_str = end_date.astimezone(pytz.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
 
         query = f'-category:job reimagerequired:Yes created:>={start_str} created:<={end_str}'
-        tickets = TicketHandler().get_tickets(query=query)
+        tickets = TicketHandler(XsoarEnvironment.PROD).get_tickets(query=query)
         result = []
         tuc_seconds_list = []
         for t in tickets:

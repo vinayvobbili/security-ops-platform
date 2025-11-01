@@ -53,6 +53,7 @@ except Exception as e:  # Broad except to handle partial dependency failures
 
 from my_config import get_config
 from services import xsoar
+from services.xsoar import XsoarEnvironment
 from services.approved_testing_utils import add_approved_testing_entry
 from src import secops
 from src.components import apt_names_fetcher, secops_shift_metrics
@@ -84,8 +85,9 @@ logging.getLogger('waitress').setLevel(logging.WARNING)
 
 blocked_ip_ranges = []  # ["10.49.70.0/24", "10.50.70.0/24"]
 
-list_handler = xsoar.ListHandler()
-incident_handler = xsoar.TicketHandler()
+# Initialize XSOAR handlers for production environment
+prod_list_handler = xsoar.ListHandler(XsoarEnvironment.PROD)
+prod_ticket_handler = xsoar.TicketHandler(XsoarEnvironment.PROD)
 
 # Add module logger (was missing previously)
 logger = logging.getLogger(__name__)
@@ -249,7 +251,7 @@ def handle_msoc_form_submission():
     """Handles MSOC form submissions and processes the data."""
     form = request.form.to_dict()
     form['type'] = 'MSOC Site Security Device Management'
-    response = incident_handler.create_in_dev(form)
+    response = prod_ticket_handler.create_in_dev(form)
     # Return a JSON response
     return jsonify({
         'status': 'success',
@@ -291,7 +293,7 @@ def handle_speak_up_form_submission():
         f"Issue Type: {form.get('issueType')} \n"
         f"Description: {form.get('description')} \n"
     )
-    response = incident_handler.create(form)
+    response = prod_ticket_handler.create(form)
     # Return a JSON response
     return jsonify({
         'status': 'success',
@@ -322,7 +324,7 @@ def import_xsoar_ticket():
 @log_web_activity
 def get_approved_testing_entries():
     """Fetches approved testing records and displays them in separate HTML tables."""
-    approved_testing_records = list_handler.get_list_data_by_name(f'{CONFIG.team_name}_Approved_Testing')
+    approved_testing_records = prod_list_handler.get_list_data_by_name(f'{CONFIG.team_name}_Approved_Testing')
 
     if not approved_testing_records:
         return "<h2>No Approved Testing Records Found</h2>"
@@ -358,7 +360,7 @@ def parse_date(date_str: str) -> datetime:
 def get_upcoming_travel():
     """Fetches upcoming travel records and displays them."""
     upcoming_travel_records = [
-        record for record in list_handler.get_list_data_by_name('DnR_Upcoming_Travel')
+        record for record in prod_list_handler.get_list_data_by_name('DnR_Upcoming_Travel')
         if parse_date(record['vacation_end_date']) >= datetime.now()
     ]
 
@@ -382,8 +384,8 @@ def handle_travel_form_submission():
     """Handles the Upcoming Travel Notification form submissions and processes the data."""
     form = request.form.to_dict()
 
-    # Submit to list_handler instead of incident_handler
-    response = list_handler.add_item_to_list('DnR_Upcoming_Travel', {
+    # Submit to prod_list_handler instead of prod_incident_handler
+    response = prod_list_handler.add_item_to_list('DnR_Upcoming_Travel', {
         "traveller_email_address": form.get('traveller_email_address'),
         "work_location": form.get('work_location'),
         "vacation_location": form.get('vacation_location'),
@@ -429,7 +431,7 @@ def handle_red_team_testing_form_submission():
     approved_testing_master_list_name = f"{CONFIG.team_name}_Approved_Testing_MASTER"
     try:
         add_approved_testing_entry(
-            list_handler,
+            prod_list_handler,
             approved_testing_list_name,
             approved_testing_master_list_name,
             usernames,
@@ -1070,7 +1072,7 @@ def api_xsoar_incidents():
     size = int(request.args.get('size', 50))
 
     try:
-        incidents = incident_handler.get_tickets(query, period, size)
+        incidents = prod_ticket_handler.get_tickets(query, period, size)
         return jsonify({'success': True, 'incidents': incidents})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
@@ -1082,7 +1084,7 @@ def api_xsoar_incident_detail(incident_id):
     """API to get XSOAR incident details"""
     try:
         incident = xsoar.get_case_data(incident_id)
-        entries = incident_handler.get_entries(incident_id)
+        entries = prod_ticket_handler.get_entries(incident_id)
         return jsonify({'success': True, 'incident': incident, 'entries': entries})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
@@ -1094,7 +1096,7 @@ def xsoar_incident_detail(incident_id):
     """XSOAR incident detail view"""
     try:
         incident = xsoar.get_case_data(incident_id)
-        entries = incident_handler.get_entries(incident_id)
+        entries = prod_ticket_handler.get_entries(incident_id)
         return render_template('xsoar_incident_detail.html',
                                incident=incident, entries=entries)
     except requests.exceptions.HTTPError as e:
@@ -1112,7 +1114,7 @@ def xsoar_incident_detail(incident_id):
 def api_xsoar_incident_entries(incident_id):
     """API to get incident entries/comments"""
     try:
-        entries = incident_handler.get_entries(incident_id)
+        entries = prod_ticket_handler.get_entries(incident_id)
         return jsonify({'success': True, 'entries': entries})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
@@ -1124,7 +1126,7 @@ def api_xsoar_link_incident(incident_id):
     """API to link incidents"""
     link_incident_id = request.json.get('link_incident_id')
     try:
-        result = incident_handler.link_tickets(incident_id, link_incident_id)
+        result = prod_ticket_handler.link_tickets(incident_id, link_incident_id)
         return jsonify({'success': True, 'result': result})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
@@ -1136,7 +1138,7 @@ def api_xsoar_add_participant(incident_id):
     """API to add participant to incident"""
     email = request.json.get('email')
     try:
-        result = incident_handler.add_participant(incident_id, email)
+        result = prod_ticket_handler.add_participant(incident_id, email)
         return jsonify({'success': True, 'result': result})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
@@ -1252,7 +1254,7 @@ def get_shift_list():
                         metrics = secops_shift_metrics.get_shift_metrics(
                             date_obj=base_date,
                             shift_name=shift_name,
-                            ticket_handler=incident_handler,
+                            ticket_handler=prod_ticket_handler,
                             day_name=shift_day_name,
                             total_staff=total_staff,
                             security_actions=security_actions,
@@ -1686,7 +1688,7 @@ def api_create_x_ticket():
             }
         }
 
-        result = incident_handler.create(incident)
+        result = prod_ticket_handler.create(incident)
         new_incident_id = result.get('id')
         incident_url = CONFIG.xsoar_prod_ui_base_url + '/Custom/caseinfoid/' + new_incident_id
 
@@ -1728,7 +1730,7 @@ def api_approved_testing():
 
         try:
             add_approved_testing_entry(
-                list_handler,
+                prod_list_handler,
                 approved_testing_list_name,
                 approved_testing_master_list_name,
                 usernames,
@@ -1783,7 +1785,7 @@ def api_ioc_hunt():
             }
         }
 
-        result = incident_handler.create(incident)
+        result = prod_ticket_handler.create(incident)
         ticket_no = result.get('id')
         incident_url = CONFIG.xsoar_prod_ui_base_url + '/Custom/caseinfoid/' + ticket_no
 
@@ -1822,7 +1824,7 @@ def api_threat_hunt():
             'type': "Threat Hunt"
         }
 
-        result = incident_handler.create(incident)
+        result = prod_ticket_handler.create(incident)
         ticket_no = result.get('id')
         incident_url = CONFIG.xsoar_prod_ui_base_url + '/Custom/caseinfoid/' + ticket_no
 
@@ -1866,11 +1868,11 @@ def verify_command_form():
     task_id = request.args.get('task_id', '')
 
     return render_template('command_verification_form.html',
-                         command=command,
-                         timestamp=timestamp,
-                         system=system,
-                         ticket_id=ticket_id,
-                         task_id=task_id)
+                           command=command,
+                           timestamp=timestamp,
+                           system=system,
+                           ticket_id=ticket_id,
+                           task_id=task_id)
 
 
 @app.route('/submit-command-verification', methods=['POST'])
@@ -1892,7 +1894,7 @@ def submit_command_verification():
         # Complete the XSOAR task if ticket_id and task_id are provided
         if ticket_id and task_id:
             try:
-                result = incident_handler.complete_task(ticket_id, task_id, recognized)
+                result = prod_ticket_handler.complete_task(ticket_id, task_id, recognized)
                 logger.info(f"Successfully completed XSOAR task {task_id} in ticket {ticket_id} with response: {recognized}")
 
                 return jsonify({

@@ -3,7 +3,7 @@ import logging
 from webexpythonsdk import WebexAPI
 
 from my_config import get_config
-from services.xsoar import TicketHandler
+from services.xsoar import TicketHandler, XsoarEnvironment
 
 CONFIG = get_config()
 webex_api = WebexAPI(access_token=CONFIG.webex_bot_access_token_soar)
@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 def start(room_id):
     try:
-        ticket_handler = TicketHandler()
+        ticket_handler = TicketHandler(XsoarEnvironment.PROD)
         query = '-status:closed -category:job type:METCIRT metcirtincidentnotificationsla.runStatus:running metcirtincidentnotificationsla.slaStatus:2'
         # query = '-category:job type:METCIRT timetorespond.runStatus:running'
         tickets = ticket_handler.get_tickets(query)

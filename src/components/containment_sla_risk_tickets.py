@@ -5,7 +5,7 @@ import pytz
 from webexpythonsdk import WebexAPI
 
 from my_config import get_config
-from services.xsoar import TicketHandler
+from services.xsoar import TicketHandler, XsoarEnvironment
 
 CONFIG = get_config()
 webex_api = WebexAPI(access_token=CONFIG.webex_bot_access_token_soar)
@@ -154,7 +154,7 @@ def start(room_id):
     - SLA durations are typically 15 minutes for containment
     """
     try:
-        ticket_handler = TicketHandler()
+        ticket_handler = TicketHandler(XsoarEnvironment.PROD)
         query = '-category:job type:METCIRT timetocontain.runStatus:running (timetocontain.slaStatus:risk or timetocontain.slaStatus:2) -hostname:""'
         tickets = ticket_handler.get_tickets(query)
 
@@ -202,7 +202,6 @@ def start(room_id):
         )
 
     except Exception as e:
-        error_message = f"❌ **Error processing containment SLA tickets:** {str(e)}"
         logger.error(f"Critical error in containment SLA processing: {e}", exc_info=True)
 
 

@@ -6,7 +6,7 @@ from pytz import timezone
 from webexteamssdk import WebexTeamsAPI, ApiError
 
 from my_config import get_config
-from services.xsoar import ListHandler
+from services.xsoar import ListHandler, XsoarEnvironment
 
 # --- Configuration and Initialization ---
 CONFIG = get_config()
@@ -16,7 +16,7 @@ webex_api = WebexTeamsAPI(access_token=CONFIG.webex_bot_access_token_toodles)
 log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
-list_handler = ListHandler()
+prod_list_handler = ListHandler(XsoarEnvironment.PROD)
 
 
 # --- Helper Function ---
@@ -43,7 +43,7 @@ def _get_on_call_details_by_monday_date(monday_date_str: str) -> Optional[Dict[s
         A dictionary {'name': str, 'email': str} if found, otherwise None.
     """
     try:
-        on_call_list_data = list_handler.get_list_data_by_name('Spear_OnCall')
+        on_call_list_data = prod_list_handler.get_list_data_by_name('Spear_OnCall')
         # Basic validation for expected structure
         if not isinstance(on_call_list_data, dict) or \
                 'rotation' not in on_call_list_data or \
@@ -188,7 +188,7 @@ def get_rotation() -> List[Dict]:
         A list of rotation dictionaries, sorted by date, or an empty list on error.
     """
     try:
-        on_call_list_data = list_handler.get_list_data_by_name('Spear_OnCall')
+        on_call_list_data = prod_list_handler.get_list_data_by_name('Spear_OnCall')
         if not isinstance(on_call_list_data, dict) or 'rotation' not in on_call_list_data or not isinstance(on_call_list_data['rotation'], list):
             log.error("XSOAR list 'Spear_OnCall' has unexpected structure or missing 'rotation' key.")
             return []

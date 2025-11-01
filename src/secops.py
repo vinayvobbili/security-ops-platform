@@ -20,7 +20,7 @@ from webexpythonsdk.models.cards import (
 
 from my_config import get_config
 from services import azdo
-from services.xsoar import TicketHandler, ListHandler
+from services.xsoar import TicketHandler, ListHandler, XsoarEnvironment
 from src.components import oncall
 
 # Set up logging for tenacity retries
@@ -29,7 +29,7 @@ logging.basicConfig(level=logging.INFO)
 
 config = get_config()
 webex_api = WebexAPI(config.webex_bot_access_token_soar, disable_ssl_verify=True, single_request_timeout=180)
-list_handler = ListHandler()
+prod_list_handler = ListHandler(XsoarEnvironment.PROD)
 BASE_QUERY = f'type:{config.team_name} -owner:""'
 root_directory = Path(__file__).parent.parent
 
@@ -91,7 +91,7 @@ def get_current_shift():
 def get_open_tickets():
     """Get formatted string of open tickets with links."""
     try:
-        all_tickets = TicketHandler().get_tickets(query=BASE_QUERY + ' -status:closed')
+        all_tickets = TicketHandler(XsoarEnvironment.PROD).get_tickets(query=BASE_QUERY + ' -status:closed')
         total_tickets = len(all_tickets)
         ticket_show_count = min(total_tickets, ShiftConstants.TICKET_SHOW_COUNT)
 
@@ -348,7 +348,7 @@ def get_shift_ticket_metrics(days_back, shift_start_hour):
         from src.components import secops_shift_metrics
 
         eastern = pytz.timezone(ShiftConstants.EASTERN_TZ)
-        incident_fetcher = TicketHandler()
+        incident_fetcher = TicketHandler(XsoarEnvironment.PROD)
 
         # Calculate target date
         target_date = datetime.now(eastern) - timedelta(days=days_back)
@@ -394,7 +394,7 @@ class SecurityActionsCalculator:
     def count_domains_blocked_in_period(start_time, end_time):
         """Count domains blocked during a specific time period."""
         try:
-            domain_list = list_handler.get_list_data_by_name(f'{config.team_name} Blocked Domains')
+            domain_list = prod_list_handler.get_list_data_by_name(f'{config.team_name} Blocked Domains')
             if not domain_list:
                 return 0
 
@@ -432,7 +432,7 @@ def get_shift_security_actions(days_back, shift_start_hour):
     """
     try:
         eastern = pytz.timezone(ShiftConstants.EASTERN_TZ)
-        incident_fetcher = TicketHandler()
+        incident_fetcher = TicketHandler(XsoarEnvironment.PROD)
 
         # Calculate exact shift window
         target_date = datetime.now(eastern) - timedelta(days=days_back)
@@ -502,7 +502,7 @@ def announce_previous_shift_performance(room_id, shift_name):
         day_name = target_date.strftime("%A")
 
         # Get shift metrics using the component
-        incident_fetcher = TicketHandler()
+        incident_fetcher = TicketHandler(XsoarEnvironment.PROD)
         base_date = datetime(target_date.year, target_date.month, target_date.day)
 
         # Calculate exact shift window for additional queries
@@ -559,7 +559,7 @@ def announce_previous_shift_performance(room_id, shift_name):
         shift_end_naive = end_dt.replace(tzinfo=None)
 
         # Process domains blocked during shift window
-        all_domains = list_handler.get_list_data_by_name(f'{config.team_name} Blocked Domains')
+        all_domains = prod_list_handler.get_list_data_by_name(f'{config.team_name} Blocked Domains')
         domains_blocked = []
         for item in all_domains:
             if 'blocked_at' in item:
@@ -568,7 +568,7 @@ def announce_previous_shift_performance(room_id, shift_name):
                     domains_blocked.append(item['domain'])
 
         # Process IP addresses blocked during shift window
-        all_ips = list_handler.get_list_data_by_name(f'{config.team_name} Blocked IP Addresses')
+        all_ips = prod_list_handler.get_list_data_by_name(f'{config.team_name} Blocked IP Addresses')
         ip_addresses_blocked = []
         for item in all_ips:
             if 'blocked_at' in item:
@@ -577,7 +577,7 @@ def announce_previous_shift_performance(room_id, shift_name):
                     ip_addresses_blocked.append(item['ip_address'])
 
         # Process hosts contained during shift window
-        all_hosts = list_handler.get_list_data_by_name(f'{config.team_name} Contained Hosts')
+        all_hosts = prod_list_handler.get_list_data_by_name(f'{config.team_name} Contained Hosts')
         hosts_contained_list = []
         for item in all_hosts:
             if 'contained_at' in item:
@@ -686,7 +686,7 @@ class ShiftChangeFormatter:
     @staticmethod
     def get_hosts_in_containment():
         """Get formatted list of hosts currently in containment."""
-        hosts_data = list_handler.get_list_data_by_name(f'{config.team_name} Contained Hosts')
+        hosts_data = prod_list_handler.get_list_data_by_name(f'{config.team_name} Contained Hosts')
 
         formatted_hosts = []
         for item in hosts_data:
