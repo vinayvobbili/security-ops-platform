@@ -1083,7 +1083,7 @@ def api_xsoar_incidents():
 def api_xsoar_incident_detail(incident_id):
     """API to get XSOAR incident details"""
     try:
-        incident = xsoar.get_case_data(incident_id)
+        incident = prod_ticket_handler.get_case_data(incident_id)
         entries = prod_ticket_handler.get_entries(incident_id)
         return jsonify({'success': True, 'incident': incident, 'entries': entries})
     except Exception as e:
@@ -1095,7 +1095,7 @@ def api_xsoar_incident_detail(incident_id):
 def xsoar_incident_detail(incident_id):
     """XSOAR incident detail view"""
     try:
-        incident = xsoar.get_case_data(incident_id)
+        incident = prod_ticket_handler.get_case_data(incident_id)
         entries = prod_ticket_handler.get_entries(incident_id)
         return render_template('xsoar_incident_detail.html',
                                incident=incident, entries=entries)
