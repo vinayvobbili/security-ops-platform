@@ -136,7 +136,6 @@ class TicketHandler:
         Args:
             environment: XsoarEnvironment enum (PROD or DEV), defaults to PROD
         """
-        self.environment = environment
         if environment == XsoarEnvironment.PROD:
             self.client = prod_client
         elif environment == XsoarEnvironment.DEV:
@@ -605,15 +604,10 @@ class TicketHandler:
             log.error(f"Task '{task_name}' not found in ticket {ticket_id}")
             raise ValueError(f"Task '{task_name}' not found in ticket {ticket_id}")
 
-        # Determine which environment credentials to use
-        if self.environment == XsoarEnvironment.DEV:
-            base_url = CONFIG.xsoar_dev_api_base_url
-            auth_key = CONFIG.xsoar_dev_auth_key
-            auth_id = CONFIG.xsoar_dev_auth_id
-        else:
-            base_url = CONFIG.xsoar_prod_api_base_url
-            auth_key = CONFIG.xsoar_prod_auth_key
-            auth_id = CONFIG.xsoar_prod_auth_id
+        # Extract credentials from the already-configured client
+        base_url = self.client.api_client.configuration.host
+        auth_key = self.client.api_client.configuration.api_key.get('authorization')
+        auth_id = self.client.api_client.configuration.api_key.get('x-xdr-auth-id')
 
         # Build full URL
         url = f'{base_url}/xsoar/public/v1/inv-playbook/task/complete'
