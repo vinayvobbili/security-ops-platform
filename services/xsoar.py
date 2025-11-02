@@ -536,28 +536,29 @@ class TicketHandler:
                 log.error(f"API error {e.status}: {e}")
                 raise
 
-    def complete_task(self, incident_id, task_id, response_value):
-        """Complete a conditional task in a playbook."""
-        if not incident_id or not task_id:
-            log.error("Incident ID or Task ID is empty. Cannot complete task.")
-            return None
+    def get_playbook_task_id(self, ticket_id, task_name):
+        response = self.client.generic_request(
+            path=f'/investigation/{ticket_id}/workplan',
+            method='GET'
+        )
+        tasks = response.json()['invPlaybook']['tasks']
+        for k, v in tasks.items():
+            if v.get('task', {}).get('name') == task_name:
+                return v['id']
+        return None
 
-        log.info(f"Completing task {task_id} in incident {incident_id} with response: {response_value}")
+    def complete_task(self, ticket_id, task_name, task_input=None):
+        """Complete a task in a playbook."""
 
-        try:
-            # Use the complete_task method from demisto-py
-            task_data = {
-                "investigationId": incident_id,
-                "id": task_id,
-                "data": response_value
-            }
-            response = self.client.complete_task(task_data=task_data)
-            log.info(f"Successfully completed task {task_id} in incident {incident_id}")
-            return response.to_dict() if hasattr(response, 'to_dict') else response
+        log.debug(f"Completing task {task_name} in the ticket {ticket_id} with response: {task_input}")
 
-        except ApiException as e:
-            log.error(f"Error completing task {task_id} in incident {incident_id}: {e}")
-            raise
+        task_id = self.get_playbook_task_id(ticket_id, task_name)
+        task_data = {
+            "investigationId": ticket_id,
+            "taskId": task_id,
+            "taskInput": task_input
+        }
+        return self.client.simple_complete_task(task_data=task_data)
 
     def create_in_dev(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """
