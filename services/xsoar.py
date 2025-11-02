@@ -559,7 +559,7 @@ class TicketHandler:
             "taskId": task_id,
             "taskInput": task_input
         }
-        return self.client.simple_complete_task(task_data=task_data)
+        return self.client.simple_complete_task(inv_task_info=task_data)
 
     def create_in_dev(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """
