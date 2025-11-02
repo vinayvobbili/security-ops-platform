@@ -1,9 +1,10 @@
 import json
 
-import requests
 from webex_bot.models.command import Command
-from webex_bot.models.response import Response
 from webex_bot.webex_bot import WebexBot
+
+from services.xsoar import TicketHandler
+from src.utils import XsoarEnvironment
 
 metcirt_webex = demisto.executeCommand("getList", {
     "listName": "METCIRT Webex"
@@ -12,6 +13,7 @@ metcirt_webex = json.loads(metcirt_webex)
 notification_room_id = metcirt_webex['channels']['new_ticket_notifs']
 BOT_ACCESS_TOKEN = metcirt_webex['bot_access_token']
 WEBEX_API_URL = metcirt_webex['api_url']
+
 
 class ProcessAcknowledgement(Command):
     """confirm acknowledgement"""
@@ -24,10 +26,10 @@ class ProcessAcknowledgement(Command):
         )
 
     def execute(self, message, attachment_actions, activity):
-
         # get acknowledger's details and set him as the owner of the incident
         acknowledger_emailAddress = activity['actor']['emailAddress']
-
+        dev_ticket_handler = TicketHandler(XsoarEnvironment.DEV)
+        dev_ticket_handler.assign_owner(acknowledger_emailAddress)
 
         # close acknowledgement task
         waiting_tasks = demisto.executeCommand("GetIncidentTasksByState", {
@@ -41,6 +43,7 @@ class ProcessAcknowledgement(Command):
             'incidentId': incident_id,
             'id': ack_task_id
         })
+
 
 def main():
     """the main"""

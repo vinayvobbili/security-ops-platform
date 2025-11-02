@@ -389,22 +389,26 @@ class TicketHandler:
             - Fetches current incident version for optimistic locking
             - The id field is automatically added if not present
         """
-        # Ensure id is in update_data
-        if 'id' not in update_data:
-            update_data['id'] = ticket_id
-
+        # Fetch current incident data to get the latest version and merge with updates
         case_data = self.get_case_data(ticket_id)
-        current_version = case_data.get('version', -1)
-        update_data['version'] = current_version
+        current_version = case_data.get('version')
+
         log.debug(f"Fetched current version {current_version} for incident {ticket_id}")
 
-        log.debug(f"Updating incident {ticket_id} with data: {update_data}")
+        # Start with all current case data, then apply updates on top
+        # This preserves all existing fields that aren't being changed
+        merged_data = case_data.copy()
+        merged_data.update(update_data)
+        merged_data['id'] = ticket_id
+        merged_data['version'] = current_version
+
+        log.debug(f"Updating incident {ticket_id} with merged data")
 
         try:
             response = self.client.generic_request(
                 path='/incident',
                 method='POST',
-                body=update_data
+                body=merged_data
             )
             log.info(f"Successfully updated incident {ticket_id}")
             return _parse_generic_response(response)
@@ -906,11 +910,11 @@ def main():
         dev_list = ListHandler(XsoarEnvironment.DEV)
     """
     # print(json.dumps(get_user_notes('878736'), indent=4))
-
+    ticket_id = '1374341'
     dev_ticket_handler = TicketHandler(XsoarEnvironment.DEV)
-    pprint(dev_ticket_handler.get_case_data('1375128'))
+    pprint(dev_ticket_handler.get_case_data(ticket_id))
 
-    print(dev_ticket_handler.assign_owner('1375128', 'user@company.com'))
+    pprint(dev_ticket_handler.assign_owner(ticket_id, 'user@company.com'))
 
 
 if __name__ == "__main__":
