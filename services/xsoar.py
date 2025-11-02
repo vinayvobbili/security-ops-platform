@@ -541,7 +541,8 @@ class TicketHandler:
             path=f'/investigation/{ticket_id}/workplan',
             method='GET'
         )
-        tasks = response.json()['invPlaybook']['tasks']
+        data = _parse_generic_response(response)
+        tasks = data.get('invPlaybook', {}).get('tasks', {})
         for k, v in tasks.items():
             if v.get('task', {}).get('name') == task_name:
                 return v['id']
