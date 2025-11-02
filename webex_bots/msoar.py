@@ -1,36 +1,11 @@
 import logging
-import os
-import ssl
+
 import requests
-import urllib3
 from webex_bot.models.command import Command
 from webex_bot.webex_bot import WebexBot
 
 from services.xsoar import TicketHandler, ListHandler
 from src.utils import XsoarEnvironment
-
-# Disable SSL warnings and verification for ZScaler
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-os.environ['PYTHONHTTPSVERIFY'] = '0'
-os.environ['CURL_CA_BUNDLE'] = ''
-os.environ['REQUESTS_CA_BUNDLE'] = ''
-os.environ['SSL_CERT_FILE'] = ''
-
-# Monkey-patch requests to disable SSL verification globally for ZScaler
-original_request = requests.Session.request
-def patched_request(self, method, url, **kwargs):
-    kwargs['verify'] = False
-    return original_request(self, method, url, **kwargs)
-requests.Session.request = patched_request
-
-# Patch SSL context to not verify certificates
-original_create_default_context = ssl.create_default_context
-def patched_create_default_context(*args, **kwargs):
-    context = original_create_default_context(*args, **kwargs)
-    context.check_hostname = False
-    context.verify_mode = ssl.CERT_NONE
-    return context
-ssl.create_default_context = patched_create_default_context
 
 logger = logging.getLogger(__name__)
 
@@ -73,8 +48,7 @@ def get_bot_info(access_token):
     try:
         response = requests.get(
             'https://webexapis.com/v1/people/me',
-            headers={'Authorization': f'Bearer {access_token}'},
-            verify=False
+            headers={'Authorization': f'Bearer {access_token}'}
         )
         response.raise_for_status()
         return response.json()
@@ -93,7 +67,6 @@ def main():
     )
 
     logger.info("🚀 Starting METCIRT SOAR bot")
-    logger.info("🔓 SSL verification disabled for ZScaler compatibility")
 
     # Get and display bot information
     bot_info = get_bot_info(BOT_ACCESS_TOKEN)
