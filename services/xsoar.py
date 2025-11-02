@@ -544,25 +544,25 @@ class TicketHandler:
         data = _parse_generic_response(response)
         tasks = data.get('invPlaybook', {}).get('tasks', {})
 
-        print(f"\n{'='*60}")
-        print(f"DEBUG: Searching for task '{task_name}' in ticket {ticket_id}")
-        print(f"DEBUG: Number of tasks found: {len(tasks)}")
-        print(f"DEBUG: Tasks dictionary keys: {list(tasks.keys())[:10]}")  # Show first 10 keys
+        log.error(f"{'='*60}")
+        log.error(f"DEBUG: Searching for task '{task_name}' in ticket {ticket_id}")
+        log.error(f"DEBUG: Number of tasks found: {len(tasks)}")
+        log.error(f"DEBUG: Tasks dictionary keys: {list(tasks.keys())[:10]}")
 
         for k, v in tasks.items():
             # Log task details for debugging
             task_info = v.get('task', {})
             task_id = v.get('id')
             task_task_name = task_info.get('name')
-            print(f"  Task ID: {task_id}, Name: '{task_task_name}'")
+            log.error(f"  Task ID: {task_id}, Name: '{task_task_name}'")
 
             if task_task_name == task_name:
-                print(f"  ✓ Match found! Returning task ID: {task_id}")
-                print(f"{'='*60}\n")
+                log.error(f"  ✓ Match found! Returning task ID: {task_id}")
+                log.error(f"{'='*60}")
                 return task_id
 
-        print(f"ERROR: Task '{task_name}' not found")
-        print(f"{'='*60}\n")
+        log.error(f"ERROR: Task '{task_name}' not found")
+        log.error(f"{'='*60}")
         log.warning(f"Task '{task_name}' not found in ticket {ticket_id}. Available tasks logged above.")
         return None
 
