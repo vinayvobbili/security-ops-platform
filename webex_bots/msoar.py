@@ -39,7 +39,7 @@ class ProcessAcknowledgement(Command):
         logger.info(f"✓ Assigned owner for ticket {ticket_id}")
 
         # close acknowledgement task
-        dev_ticket_handler.complete_task(ticket_id, "Acknowledge Ticket")
+        dev_ticket_handler.complete_task(ticket_id, "Acknowledge Ticket", 'Yes')
         logger.info(f"✓ Completed acknowledgement task for ticket {ticket_id}")
 
 
