@@ -43,6 +43,20 @@ class ProcessAcknowledgement(Command):
         logger.info(f"✓ Completed acknowledgement task for ticket {ticket_id}")
 
 
+class Hi(Command):
+    """Simple Hi command to check if bot is alive."""
+
+    def __init__(self):
+        super().__init__(
+            command_keyword="hi",
+            delete_previous_message=False,
+            exact_command_keyword_match=False,
+        )
+
+    def execute(self, message, attachment_actions, activity):
+        return "Hi 👋🏾"
+
+
 def get_bot_info(access_token):
     """Fetch bot information from Webex API"""
     try:
@@ -91,6 +105,7 @@ def main():
 
     logger.info("📝 Registering commands...")
     bot.add_command(ProcessAcknowledgement())
+    bot.add_command(Hi())
     logger.info("✓ Bot commands registered")
 
     logger.info("👂 Bot is now listening for messages...")
