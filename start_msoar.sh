@@ -1,6 +1,6 @@
 #!/bin/bash
 
-cd /Users/user/PycharmProjects/IR || exit 1
+cd /home/vinay/pub/IR || exit 1
 
 # Kill existing msoar process if running
 echo "Stopping existing MSOAR instances..."
@@ -15,7 +15,7 @@ mkdir -p logs
 
 # Start new msoar instance in background
 # Python logging handles all output - no need to redirect here
-nohup env PYTHONPATH=/Users/user/PycharmProjects/IR .venv/bin/python webex_bots/msoar.py >> logs/msoar.log 2>&1 &
+nohup env PYTHONPATH=/home/vinay/pub/IR .venv/bin/python webex_bots/msoar.py >> logs/msoar.log 2>&1 &
 
 echo "Starting MSOAR bot..."
 echo ""
@@ -41,8 +41,8 @@ if pgrep -f "webex_bots/msoar.py" > /dev/null; then
     PID=$(pgrep -f 'webex_bots/msoar.py')
     echo "✅ MSOAR is running (PID: $PID)"
     echo ""
-    echo "To view logs: tail -f /Users/user/PycharmProjects/IR/logs/msoar.log"
+    echo "To view logs: tail -f /home/vinay/pub/IR/logs/msoar.log"
 else
     echo "❌ Warning: MSOAR process not found"
-    echo "Check logs: tail -20 /Users/user/PycharmProjects/IR/logs/msoar.log"
+    echo "Check logs: tail -20 /home/vinay/pub/IR/logs/msoar.log"
 fi
