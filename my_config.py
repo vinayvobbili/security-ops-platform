@@ -32,6 +32,7 @@ def get_config():
     return Config(
         webex_bot_access_token_moneyball=os.environ.get("WEBEX_BOT_ACCESS_TOKEN_MONEYBALL"),
         webex_bot_access_token_soar=os.environ.get("WEBEX_BOT_ACCESS_TOKEN_SOAR"),
+        webex_bot_access_token_dev_xsoar=os.environ.get("WEBEX_BOT_ACCESS_TOKEN_DEV_XSOAR"),
         webex_bot_access_token_toodles=os.environ.get("WEBEX_BOT_ACCESS_TOKEN_TOODLES"),
         webex_bot_access_token_jarvais=os.environ.get("WEBEX_BOT_ACCESS_TOKEN_JARVAIS"),
         webex_bot_access_token_barnacles=os.environ.get("WEBEX_BOT_ACCESS_TOKEN_BARNACLES"),
@@ -53,6 +54,7 @@ def get_config():
         webex_room_id_response_sla_risk=os.environ.get("WEBEX_ROOM_ID_RESPONSE_SLA_RISK"),
         webex_room_id_containment_sla_risk=os.environ.get("WEBEX_ROOM_ID_CONTAINMENT_SLA_RISK"),
         webex_room_id_qa_tickets=os.environ.get("WEBEX_ROOM_ID_QA_TICKETS"),
+        webex_room_id_new_ticket_notifications=os.environ.get("WEBEX_ROOM_ID_NEW_TICKET_NOTIFICATIONS"),
         xsoar_prod_api_base_url=os.environ.get("XSOAR_PROD_API_BASE_URL"),
         xsoar_prod_ui_base_url=os.environ.get("XSOAR_PROD_UI_BASE_URL"),
         xsoar_dev_api_base_url=os.environ.get("XSOAR_DEV_API_BASE_URL"),
@@ -138,6 +140,7 @@ class Config:
     """Configuration settings for the application."""
     webex_bot_access_token_moneyball: Optional[str] = None
     webex_bot_access_token_soar: Optional[str] = None
+    webex_bot_access_token_dev_xsoar: Optional[str] = None
     webex_bot_access_token_toodles: Optional[str] = None
     webex_bot_access_token_jarvais: Optional[str] = None
     webex_bot_access_token_barnacles: Optional[str] = None
@@ -159,6 +162,7 @@ class Config:
     webex_room_id_response_sla_risk: Optional[str] = None
     webex_room_id_containment_sla_risk: Optional[str] = None
     webex_room_id_qa_tickets: Optional[str] = None
+    webex_room_id_new_ticket_notifications: Optional[str] = None
     xsoar_prod_api_base_url: Optional[str] = None
     xsoar_prod_ui_base_url: Optional[str] = None
     xsoar_dev_api_base_url: Optional[str] = None
