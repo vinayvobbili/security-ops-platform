@@ -788,8 +788,8 @@ def announce_shift_change(shift_name, room_id, sleep_time=30):
 
 def main():
     """Main function to run the scheduled jobs."""
-    room_id = config.webex_room_id_soc_shift_updates
-    announce_shift_change('morning', room_id, sleep_time=0)
+    room_id = config.webex_room_id_vinay_test_space
+    announce_shift_change('night', room_id, sleep_time=0)
     print(get_staffing_data())
 
 
