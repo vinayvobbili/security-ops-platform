@@ -615,7 +615,7 @@ class TicketHandler:
             auth_id = CONFIG.xsoar_prod_auth_id
 
         # Build full URL
-        url = f'{base_url}/xsoar/public/v1/inv-playbook/task/complete'
+        url = f'{base_url}/inv-playbook/task/complete'
 
         # Use the working multipart/form-data format from the custom script
         file_comment = "Completing via API"
