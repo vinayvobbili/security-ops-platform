@@ -1521,7 +1521,7 @@ class Review(Command):
         add_entry_to_reviews(list_dict, ticket_no, activity['actor']['emailAddress'], curr_date.strftime("%x"),
                              attachment_actions.inputs["review_notes"])
         reformat = {"Tickets": list_dict}
-        prod_list_handler.save(reformat, "review")
+        prod_list_handler.save(str(reformat), "review")
 
         return f"Ticket {ticket_no} has been added to Reviews."
 
@@ -2291,7 +2291,7 @@ def toodles_initialization(bot_instance=None):
         bot_instance.add_command(Who())
         bot_instance.add_command(Rotation())
         bot_instance.add_command(ContainmentStatusCS())
-        bot_instance.add_command(Review())
+        # bot_instance.add_command(Review())
         bot_instance.add_command(GetNewXTicketForm())
         bot_instance.add_command(CreateXSOARTicket())
         bot_instance.add_command(IOC())
