@@ -1,6 +1,8 @@
 #!/bin/bash
 
-cd /Users/user/PycharmProjects/IR || exit 1
+# Get the directory where this script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR" || exit 1
 
 # Kill existing jarvais process if running
 echo "Stopping existing Jarvais instances..."
@@ -15,7 +17,7 @@ mkdir -p logs
 
 # Start new jarvais instance in background
 # Python logging handles all output - no need to redirect here
-nohup env PYTHONPATH=/Users/user/PycharmProjects/IR .venv/bin/python webex_bots/jarvais.py &
+nohup env PYTHONPATH="$SCRIPT_DIR" .venv/bin/python webex_bots/jarvais.py &
 
 echo "Starting Jarvais bot..."
 echo ""
@@ -41,8 +43,8 @@ if pgrep -f "webex_bots/jarvais.py" > /dev/null; then
     PID=$(pgrep -f 'webex_bots/jarvais.py')
     echo "✅ Jarvais is running (PID: $PID)"
     echo ""
-    echo "To view logs: tail -f /Users/user/PycharmProjects/IR/logs/jarvais.log"
+    echo "To view logs: tail -f $SCRIPT_DIR/logs/jarvais.log"
 else
     echo "❌ Warning: Jarvais process not found"
-    echo "Check logs: tail -20 /Users/user/PycharmProjects/IR/logs/jarvais.log"
+    echo "Check logs: tail -20 $SCRIPT_DIR/logs/jarvais.log"
 fi
