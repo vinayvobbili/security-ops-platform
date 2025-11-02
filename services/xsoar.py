@@ -537,6 +537,16 @@ class TicketHandler:
                 raise
 
     def get_playbook_task_id(self, ticket_id, task_name):
+        """
+        Search for a task by name in the playbook, including sub-playbooks.
+
+        Args:
+            ticket_id: The XSOAR incident/investigation ID
+            task_name: Name of the task to find
+
+        Returns:
+            Task ID if found, None otherwise
+        """
         response = self.client.generic_request(
             path=f'/investigation/{ticket_id}/workplan',
             method='GET'
@@ -544,27 +554,42 @@ class TicketHandler:
         data = _parse_generic_response(response)
         tasks = data.get('invPlaybook', {}).get('tasks', {})
 
-        log.error(f"{'='*60}")
-        log.error(f"DEBUG: Searching for task '{task_name}' in ticket {ticket_id}")
-        log.error(f"DEBUG: Number of tasks found: {len(tasks)}")
-        log.error(f"DEBUG: Tasks dictionary keys: {list(tasks.keys())[:10]}")
+        log.info(f"Searching for task '{task_name}' in ticket {ticket_id}")
 
-        for k, v in tasks.items():
-            # Log task details for debugging
-            task_info = v.get('task', {})
-            task_id = v.get('id')
-            task_task_name = task_info.get('name')
-            log.error(f"  Task ID: {task_id}, Name: '{task_task_name}'")
+        # Recursive function to search through tasks and sub-playbooks
+        def search_tasks(tasks_dict, depth=0):
+            indent = "  " * depth
+            for k, v in tasks_dict.items():
+                task_info = v.get('task', {})
+                task_id = v.get('id')
+                task_task_name = task_info.get('name')
 
-            if task_task_name == task_name:
-                log.error(f"  ✓ Match found! Returning task ID: {task_id}")
-                log.error(f"{'='*60}")
-                return task_id
+                log.debug(f"{indent}Task ID: {task_id}, Name: '{task_task_name}'")
 
-        log.error(f"ERROR: Task '{task_name}' not found")
-        log.error(f"{'='*60}")
-        log.warning(f"Task '{task_name}' not found in ticket {ticket_id}. Available tasks logged above.")
-        return None
+                # Check if this is the task we're looking for
+                if task_task_name == task_name:
+                    log.info(f"✓ Found task '{task_name}' with ID: {task_id}")
+                    return task_id
+
+                # Check if this task has a sub-playbook
+                if 'subPlaybook' in v:
+                    sub_tasks = v.get('subPlaybook', {}).get('tasks', {})
+                    if sub_tasks:
+                        log.debug(f"{indent}  → Searching sub-playbook with {len(sub_tasks)} tasks")
+                        result = search_tasks(sub_tasks, depth + 1)
+                        if result:
+                            return result
+
+            return None
+
+        # Search through all tasks recursively
+        task_id = search_tasks(tasks)
+
+        if task_id:
+            return task_id
+        else:
+            log.warning(f"Task '{task_name}' not found in ticket {ticket_id} (searched main playbook and all sub-playbooks)")
+            return None
 
     def complete_task(self, ticket_id, task_name, task_input=''):
         """
