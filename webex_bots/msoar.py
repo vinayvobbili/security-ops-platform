@@ -1,21 +1,21 @@
 import logging
-from logging.handlers import RotatingFileHandler
 import os
 import time
+from logging.handlers import RotatingFileHandler
 
 import requests
 from webex_bot.models.command import Command
 from webex_bot.webex_bot import WebexBot
 
-from services.xsoar import TicketHandler, ListHandler
+from my_config import get_config
+from services.xsoar import TicketHandler
 from src.utils import XsoarEnvironment
 
 logger = logging.getLogger(__name__)
 
-dev_list_handler = ListHandler(XsoarEnvironment.DEV)
-metcirt_webex = dev_list_handler.get_list_data_by_name("METCIRT Webex")
-notification_room_id = metcirt_webex['channels']['new_ticket_notifs']
-BOT_ACCESS_TOKEN = metcirt_webex['bot_access_token']
+CONFIG = get_config()
+BOT_ACCESS_TOKEN = CONFIG.webex_bot_access_token_dev_xsoar
+NOTIFICATION_ROOM_ID = CONFIG.webex_room_id_new_ticket_notifications
 
 
 class ProcessAcknowledgement(Command):
@@ -122,13 +122,13 @@ def main():
     else:
         logger.info(f"🤖 Bot name: METCIRT SOAR")
 
-    logger.info(f"📍 Notification room ID: {notification_room_id}")
+    logger.info(f"📍 Notification room ID: {NOTIFICATION_ROOM_ID}")
 
     logger.info("🔧 Initializing WebexBot...")
     bot = WebexBot(
         teams_bot_token=BOT_ACCESS_TOKEN,
         approved_domains=['company.com'],
-        approved_rooms=[notification_room_id],
+        approved_rooms=[NOTIFICATION_ROOM_ID],
         bot_name="METCIRT SOAR",
         log_level="Warning"
 

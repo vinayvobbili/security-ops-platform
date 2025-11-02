@@ -1,3 +1,5 @@
+from pprint import pprint
+
 import requests
 from webexteamssdk import WebexTeamsAPI
 
@@ -5,7 +7,7 @@ from my_config import get_config
 
 # Load configuration
 config = get_config()
-BOT_ACCESS_TOKEN = config.webex_bot_access_token_hal9000
+BOT_ACCESS_TOKEN = config.webex_bot_access_token_dev_xsoar
 
 # Initialize Webex API client
 webex_api = WebexTeamsAPI(access_token=BOT_ACCESS_TOKEN)
@@ -29,7 +31,7 @@ def get_webex_bot_rooms(bot_access_token):
 
     try:
         # Make the API request
-        response = requests.get(url, headers=headers)
+        response = requests.get(url, headers=headers, verify=False)
 
         # Check if the request was successful
         if response.status_code == 200:
@@ -119,7 +121,7 @@ def send_file_to_webex_room(room_id, file_path, message=None):
 
 # Usage example
 def main():
-    pass
+    pprint(get_webex_bot_rooms(BOT_ACCESS_TOKEN))
 
 
 if __name__ == "__main__":
