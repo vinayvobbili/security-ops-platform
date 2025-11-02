@@ -138,8 +138,14 @@ class TicketHandler:
         """
         if environment == XsoarEnvironment.PROD:
             self.client = prod_client
+            self.base_url = CONFIG.xsoar_prod_api_base_url
+            self.auth_key = CONFIG.xsoar_prod_auth_key
+            self.auth_id = CONFIG.xsoar_prod_auth_id
         elif environment == XsoarEnvironment.DEV:
             self.client = dev_client
+            self.base_url = CONFIG.xsoar_dev_api_base_url
+            self.auth_key = CONFIG.xsoar_dev_auth_key
+            self.auth_id = CONFIG.xsoar_dev_auth_id
         else:
             raise ValueError(f"Invalid environment: {environment}. Must be XsoarEnvironment.PROD or XsoarEnvironment.DEV")
 
@@ -604,18 +610,8 @@ class TicketHandler:
             log.error(f"Task '{task_name}' not found in ticket {ticket_id}")
             raise ValueError(f"Task '{task_name}' not found in ticket {ticket_id}")
 
-        # Determine which environment by checking which client we have
-        if self.client is dev_client:
-            base_url = CONFIG.xsoar_dev_api_base_url
-            auth_key = CONFIG.xsoar_dev_auth_key
-            auth_id = CONFIG.xsoar_dev_auth_id
-        else:
-            base_url = CONFIG.xsoar_prod_api_base_url
-            auth_key = CONFIG.xsoar_prod_auth_key
-            auth_id = CONFIG.xsoar_prod_auth_id
-
-        # Build full URL
-        url = f'{base_url}/inv-playbook/task/complete'
+        # Build full URL using instance variables set during initialization
+        url = f'{self.base_url}/inv-playbook/task/complete'
 
         # Use the working multipart/form-data format from the custom script
         file_comment = "Completing via API"
@@ -642,8 +638,8 @@ class TicketHandler:
         )
 
         headers = {
-            'Authorization': auth_key,
-            'x-xdr-auth-id': auth_id,
+            'Authorization': self.auth_key,
+            'x-xdr-auth-id': self.auth_id,
             'Content-Type': 'multipart/form-data; boundary=---011000010111000001101001',
             'Accept': 'application/json'
         }
