@@ -25,6 +25,7 @@ Original: services/xsoar.py.backup
 import ast
 import json
 import logging
+import requests
 import time
 from datetime import datetime
 from pprint import pprint
@@ -135,6 +136,7 @@ class TicketHandler:
         Args:
             environment: XsoarEnvironment enum (PROD or DEV), defaults to PROD
         """
+        self.environment = environment
         if environment == XsoarEnvironment.PROD:
             self.client = prod_client
         elif environment == XsoarEnvironment.DEV:
@@ -603,41 +605,60 @@ class TicketHandler:
             log.error(f"Task '{task_name}' not found in ticket {ticket_id}")
             raise ValueError(f"Task '{task_name}' not found in ticket {ticket_id}")
 
+        # Determine which environment credentials to use
+        if self.environment == XsoarEnvironment.DEV:
+            base_url = CONFIG.xsoar_dev_api_base_url
+            auth_key = CONFIG.xsoar_dev_auth_key
+            auth_id = CONFIG.xsoar_dev_auth_id
+        else:
+            base_url = CONFIG.xsoar_prod_api_base_url
+            auth_key = CONFIG.xsoar_prod_auth_key
+            auth_id = CONFIG.xsoar_prod_auth_id
+
+        # Build full URL
+        url = f'{base_url}/xsoar/public/v1/inv-playbook/task/complete'
+
         # Use the working multipart/form-data format from the custom script
         file_comment = "Completing via API"
         file_name = ""
 
         # Build multipart/form-data payload manually
-        boundary = "---011000010111000001101001"
         payload = (
-            f"-----011000010111000001101001\r\n"
-            f"Content-Disposition: form-data; name=\"investigationId\"\r\n\r\n"
+            "-----011000010111000001101001\r\n"
+            "Content-Disposition: form-data; name=\"investigationId\"\r\n\r\n"
             f"{ticket_id}\r\n"
-            f"-----011000010111000001101001\r\n"
-            f"Content-Disposition: form-data; name=\"fileName\"\r\n\r\n"
+            "-----011000010111000001101001\r\n"
+            "Content-Disposition: form-data; name=\"fileName\"\r\n\r\n"
             f"{file_name}\r\n"
-            f"-----011000010111000001101001\r\n"
-            f"Content-Disposition: form-data; name=\"fileComment\"\r\n\r\n"
+            "-----011000010111000001101001\r\n"
+            "Content-Disposition: form-data; name=\"fileComment\"\r\n\r\n"
             f"{file_comment}\r\n"
-            f"-----011000010111000001101001\r\n"
-            f"Content-Disposition: form-data; name=\"taskId\"\r\n\r\n"
+            "-----011000010111000001101001\r\n"
+            "Content-Disposition: form-data; name=\"taskId\"\r\n\r\n"
             f"{task_id}\r\n"
-            f"-----011000010111000001101001\r\n"
-            f"Content-Disposition: form-data; name=\"taskInput\"\r\n\r\n"
+            "-----011000010111000001101001\r\n"
+            "Content-Disposition: form-data; name=\"taskInput\"\r\n\r\n"
             f"{task_input}\r\n"
-            f"-----011000010111000001101001--\r\n"
+            "-----011000010111000001101001--\r\n"
         )
 
+        headers = {
+            'Authorization': auth_key,
+            'x-xdr-auth-id': auth_id,
+            'Content-Type': 'multipart/form-data; boundary=---011000010111000001101001',
+            'Accept': 'application/json'
+        }
+
         try:
-            response = self.client.generic_request(
-                path='/xsoar/public/v1/inv-playbook/task/complete',
-                method='POST',
-                body=payload,
-                content_type=f'multipart/form-data; boundary={boundary}'
-            )
+            response = requests.post(url, data=payload, headers=headers, verify=False)
+            response.raise_for_status()
             log.info(f"Successfully completed task '{task_name}' (ID: {task_id}) in ticket {ticket_id}")
-            return _parse_generic_response(response)
-        except ApiException as e:
+
+            if response.text:
+                return response.json()
+            else:
+                return {}
+        except requests.exceptions.RequestException as e:
             log.error(f"Error completing task '{task_name}' in ticket {ticket_id}: {e}")
             raise
 
