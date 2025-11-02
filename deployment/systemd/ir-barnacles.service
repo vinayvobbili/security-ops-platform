@@ -1,0 +1,27 @@
+[Unit]
+Description=IR Barnacles Bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=vinay
+Group=vinay
+WorkingDirectory=/home/vinay/pub/IR
+Environment="PYTHONPATH=/home/vinay/pub/IR"
+ExecStart=/home/vinay/pub/IR/.venv/bin/python webex_bots/barnacles.py
+
+# Restart on failure
+Restart=on-failure
+RestartSec=30
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ir-barnacles
+
+# Resource limits
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target
