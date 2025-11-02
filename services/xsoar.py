@@ -548,18 +548,62 @@ class TicketHandler:
                 return v['id']
         return None
 
-    def complete_task(self, ticket_id, task_name, task_input=None):
-        """Complete a task in a playbook."""
+    def complete_task(self, ticket_id, task_name, task_input=''):
+        """
+        Complete a task in a playbook.
 
+        Args:
+            ticket_id: The XSOAR incident/investigation ID
+            task_name: Name of the task to complete
+            task_input: Optional input/completion message for the task
+
+        Returns:
+            Response from the API
+        """
         log.debug(f"Completing task {task_name} in the ticket {ticket_id} with response: {task_input}")
 
         task_id = self.get_playbook_task_id(ticket_id, task_name)
-        task_data = {
-            "investigationId": ticket_id,
-            "taskId": task_id,
-            "taskInput": task_input
-        }
-        return self.client.simple_complete_task(inv_task_info=task_data)
+        if not task_id:
+            log.error(f"Task '{task_name}' not found in ticket {ticket_id}")
+            raise ValueError(f"Task '{task_name}' not found in ticket {ticket_id}")
+
+        # Use the working multipart/form-data format from the custom script
+        file_comment = "Completing via API"
+        file_name = ""
+
+        # Build multipart/form-data payload manually
+        boundary = "---011000010111000001101001"
+        payload = (
+            f"-----011000010111000001101001\r\n"
+            f"Content-Disposition: form-data; name=\"investigationId\"\r\n\r\n"
+            f"{ticket_id}\r\n"
+            f"-----011000010111000001101001\r\n"
+            f"Content-Disposition: form-data; name=\"fileName\"\r\n\r\n"
+            f"{file_name}\r\n"
+            f"-----011000010111000001101001\r\n"
+            f"Content-Disposition: form-data; name=\"fileComment\"\r\n\r\n"
+            f"{file_comment}\r\n"
+            f"-----011000010111000001101001\r\n"
+            f"Content-Disposition: form-data; name=\"taskId\"\r\n\r\n"
+            f"{task_id}\r\n"
+            f"-----011000010111000001101001\r\n"
+            f"Content-Disposition: form-data; name=\"taskInput\"\r\n\r\n"
+            f"{task_input}\r\n"
+            f"-----011000010111000001101001--\r\n"
+        )
+
+        try:
+            response = self.client.generic_request(
+                path='/xsoar/public/v1/inv-playbook/task/complete',
+                method='POST',
+                body=payload,
+                content_type=f'multipart/form-data; boundary={boundary}'
+            )
+            log.info(f"Successfully completed task '{task_name}' (ID: {task_id}) in ticket {ticket_id}")
+            return _parse_generic_response(response)
+        except ApiException as e:
+            log.error(f"Error completing task '{task_name}' in ticket {ticket_id}: {e}")
+            raise
 
     def create_in_dev(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """
