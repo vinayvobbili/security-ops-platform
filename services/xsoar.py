@@ -544,19 +544,21 @@ class TicketHandler:
         data = _parse_generic_response(response)
         tasks = data.get('invPlaybook', {}).get('tasks', {})
 
-        log.debug(f"Searching for task '{task_name}' in ticket {ticket_id}")
+        log.info(f"Searching for task '{task_name}' in ticket {ticket_id}")
+        log.info(f"Number of tasks found: {len(tasks)}")
+
         for k, v in tasks.items():
             # Log task details for debugging
             task_info = v.get('task', {})
             task_id = v.get('id')
             task_task_name = task_info.get('name')
-            log.debug(f"  Found task ID: {task_id}, name: '{task_task_name}'")
+            log.info(f"  Task ID: {task_id}, Name: '{task_task_name}'")
 
             if task_task_name == task_name:
-                log.debug(f"  ✓ Match found! Task ID: {task_id}")
+                log.info(f"  ✓ Match found! Returning task ID: {task_id}")
                 return task_id
 
-        log.warning(f"Task '{task_name}' not found in ticket {ticket_id}")
+        log.warning(f"Task '{task_name}' not found in ticket {ticket_id}. Available tasks logged above.")
         return None
 
     def complete_task(self, ticket_id, task_name, task_input=''):
