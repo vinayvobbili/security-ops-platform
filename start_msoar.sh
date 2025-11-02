@@ -15,7 +15,7 @@ mkdir -p logs
 
 # Start new msoar instance in background
 # Python logging handles all output - no need to redirect here
-nohup env PYTHONPATH=/home/vinay/pub/IR .venv/bin/python webex_bots/msoar.py >> logs/msoar.log 2>&1 &
+nohup env PYTHONPATH=/home/vinay/pub/IR .venv/bin/python webex_bots/msoar.py &
 
 echo "Starting MSOAR bot..."
 echo ""
