@@ -65,16 +65,16 @@ def complete_playbook_task(
 
 
 if __name__ == "__main__":
-    # Configure your task details here
-    investigation_id = '1374041'
-    task_id = "3"  # '4f85629d-ba5f-4db7-8914-eab182c2ddfe'
+    # Test completing "Acknowledge Ticket" task
+    investigation_id = '1375188'
+    task_id = "276"  # From get_playbook_task_id.py - Acknowledge Ticket
     file_comment = "Completing via API"
-    # For conditional tasks, task_input should be the route name
-    # Available routes for this task: "Yes" or "else"
-    # "Yes" -> Close ticket (task #4)
-    # "else" -> Notify analyst (task #5)
-    task_input = "Yes"  # Change to "Yes" or "else" to choose the route
+    # Data Collection task requires "Yes" answer
+    task_input = "Yes"
     file_name = ""
+
+    print(f"Attempting to complete task ID {task_id} in ticket {investigation_id}")
+    print(f"Task input: {task_input}\n")
 
     result = complete_playbook_task(
         investigation_id=investigation_id,
@@ -84,4 +84,5 @@ if __name__ == "__main__":
         file_name=file_name
     )
 
+    print("\nResult:")
     print(result)
