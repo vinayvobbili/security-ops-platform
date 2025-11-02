@@ -1,7 +1,5 @@
 import logging
 import os
-import socket
-import threading
 import time
 from logging.handlers import RotatingFileHandler
 
@@ -60,29 +58,6 @@ class Hi(Command):
 
     def execute(self, message, attachment_actions, activity):
         return "Hi 👋🏾"
-
-
-def dns_cache_warmer():
-    """Keep DNS cache warm by periodically resolving Webex hostnames.
-
-    Prevents 'Temporary failure in name resolution' errors after idle periods
-    by ensuring DNS entries don't expire when the bot is inactive.
-    """
-    webex_hosts = [
-        'webexapis.com',
-        'conv-a.wbx2.com',
-        'wbx2.com'
-    ]
-
-    while True:
-        for host in webex_hosts:
-            try:
-                socket.getaddrinfo(host, 443, socket.AF_INET, socket.SOCK_STREAM)
-            except Exception:
-                pass  # Silently ignore DNS failures in background thread
-
-        # Refresh every 5 minutes to keep cache warm
-        time.sleep(300)
 
 
 def get_bot_info(access_token):
@@ -165,12 +140,6 @@ def main():
     bot.add_command(ProcessAcknowledgement())
     bot.add_command(Hi())
     logger.info("✓ Bot commands registered")
-
-    # Start DNS cache warmer to prevent stale DNS after idle periods
-    logger.info("🔄 Starting DNS cache warmer...")
-    dns_thread = threading.Thread(target=dns_cache_warmer, daemon=True, name="DNSCacheWarmer")
-    dns_thread.start()
-    logger.info("✓ DNS cache warmer started")
 
     logger.info("👂 Bot is now listening for messages...")
     bot.run()
