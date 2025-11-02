@@ -1,6 +1,7 @@
 import logging
 from logging.handlers import RotatingFileHandler
 import os
+import time
 
 import requests
 from webex_bot.models.command import Command
@@ -89,16 +90,16 @@ def main():
         backupCount=5
     )
     file_handler.setLevel(logging.INFO)
-    file_handler.setFormatter(
-        logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    )
+    file_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    file_formatter.converter = time.localtime  # Use local timezone instead of UTC
+    file_handler.setFormatter(file_formatter)
 
     # Also log to console
     console_handler = logging.StreamHandler()
     console_handler.setLevel(logging.INFO)
-    console_handler.setFormatter(
-        logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    )
+    console_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    console_formatter.converter = time.localtime  # Use local timezone instead of UTC
+    console_handler.setFormatter(console_formatter)
 
     # Configure root logger
     root_logger = logging.getLogger()
