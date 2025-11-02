@@ -62,6 +62,22 @@ This installs 6 systemd services:
 - `ir-barnacles` - Barnacles bot
 - `ir-jarvais` - Jarvais bot
 
+### 3. Web-Based Log Viewer (Logdy)
+
+Install Logdy for browser-based log viewing:
+
+```bash
+cd /home/vinay/pub/IR/deployment
+bash setup_logdy.sh
+```
+
+This installs:
+- Logdy binary to `~/bin/logdy`
+- `ir-logdy` systemd service
+- Secure password for web UI access
+
+Access the log viewer at `http://<VM-IP>:8030` with the password shown during setup.
+
 ## Managing Services
 
 ### Starting Services
@@ -97,6 +113,19 @@ sudo systemctl status ir-msoar
 
 ### Viewing Logs
 
+**Web UI (Recommended):**
+
+Access Logdy web interface:
+```
+http://<VM-IP>:8030
+```
+- Real-time streaming of all IR service logs
+- Search, filter, and highlight capabilities
+- No SSH access required
+- Password protected
+
+**Command Line:**
+
 View logs in real-time:
 ```bash
 journalctl -u ir-msoar -f
@@ -110,6 +139,13 @@ journalctl -u ir-msoar -n 100
 View logs from all IR services:
 ```bash
 journalctl -u ir-* -f
+```
+
+**File-based:**
+
+Traditional log files still available:
+```bash
+tail -f /home/vinay/pub/IR/logs/msoar.log
 ```
 
 ### Restarting After Code Changes
@@ -136,6 +172,7 @@ sudo systemctl restart ir-all-jobs ir-msoar ir-money-ball ir-toodles ir-barnacle
 - ✅ TCP connections stay fresh (60-second keepalive)
 - ✅ Reliable DNS with explicit servers
 - ✅ Centralized logging via journald
+- ✅ Web-based log viewer (Logdy) - no SSH required
 - ✅ Easy service management with systemctl
 
 ## Verification

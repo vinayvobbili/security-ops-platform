@@ -1,0 +1,27 @@
+[Unit]
+Description=Logdy Log Viewer for IR Services
+After=network-online.target ir-all-jobs.service ir-msoar.service ir-money-ball.service ir-toodles.service ir-barnacles.service ir-jarvais.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=vinay
+Group=vinay
+WorkingDirectory=/home/vinay/pub/IR
+
+# Stream all IR service logs through Logdy
+# -ip 0.0.0.0 makes it accessible from other machines on the network
+# -p 8030 sets the port
+ExecStart=/bin/bash -c 'journalctl -u "ir-*" -f --no-hostname --output=short | /home/vinay/bin/logdy stdin -ip 0.0.0.0 -p 8030 --ui-pass=$(cat /home/vinay/pub/IR/.logdy_password 2>/dev/null || echo "changeme")'
+
+# Restart on failure
+Restart=on-failure
+RestartSec=10
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ir-logdy
+
+[Install]
+WantedBy=multi-user.target
