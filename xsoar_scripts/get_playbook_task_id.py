@@ -3,7 +3,9 @@ import requests
 from my_config import get_config
 
 CONFIG = get_config()
-url = 'https://api-msoardev.crtx.us.paloaltonetworks.com/xsoar/investigation/1374041/workplan'
+ticket_id = '1374041'
+task_name = 'Does the user recognize the alerted activity?'
+url = f'https://api-msoardev.crtx.us.paloaltonetworks.com/xsoar/investigation/{ticket_id}/workplan'
 dev_headers = {
     'Authorization': CONFIG.xsoar_dev_auth_key,
     'x-xdr-auth-id': CONFIG.xsoar_dev_auth_id,
@@ -13,7 +15,7 @@ dev_headers = {
 response = requests.request("GET", url, headers=dev_headers)
 tasks = response.json()['invPlaybook']['tasks']
 for k, v in tasks.items():
-    if v.get('task', {}).get('name') == 'Does the user recognize the alerted activity?':
+    if v.get('task', {}).get('name') == task_name:
         print("State:", v['state'])
         print("Task ID:", v['id'])
         # print("\nFull Task Details:")
