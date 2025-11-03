@@ -4,8 +4,23 @@ cd /home/vinay/pub/IR || exit 1
 
 # Kill existing msoar process if running
 echo "Stopping existing MSOAR instances..."
-pkill -f "webex_bots/msoar.py"
-sleep 1
+pkill -f msoar
+sleep 2
+
+# Force kill any remaining processes
+if pgrep -f msoar > /dev/null; then
+    echo "Force killing stubborn processes..."
+    pkill -9 -f msoar
+    sleep 1
+fi
+
+# Verify all processes are gone
+if pgrep -f msoar > /dev/null; then
+    echo "⚠️  Warning: Some MSOAR processes are still running:"
+    pgrep -f msoar
+    echo "Manual intervention required"
+    exit 1
+fi
 
 # Ensure logs directory exists
 mkdir -p logs
