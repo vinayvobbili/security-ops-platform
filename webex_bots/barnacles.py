@@ -33,6 +33,8 @@ logging.getLogger('__main__').setLevel(logging.INFO)
 logging.getLogger('src.utils.bot_resilience').setLevel(logging.INFO)
 logging.getLogger('src.utils.webex_device_manager').setLevel(logging.INFO)
 
+# Note: Noisy library logs are suppressed by ResilientBot framework
+
 logger = logging.getLogger(__name__)
 
 # ALWAYS configure SSL for proxy environments (auto-detects ZScaler/proxies)
