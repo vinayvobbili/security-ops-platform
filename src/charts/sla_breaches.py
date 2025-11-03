@@ -58,10 +58,14 @@ def get_tickets_by_periods(tickets):
         response_sla_status = custom_fields.get('timetorespond', {}).get('slaStatus', custom_fields.get('responsesla', {}).get('slaStatus'))
         containment_sla_status = custom_fields.get('timetocontain', {}).get('slaStatus', custom_fields.get('containmentsla', {}).get('slaStatus'))
 
-        incident_date = datetime.strptime(
-            ticket['created'],
-            '%Y-%m-%dT%H:%M:%S.%fZ' if '.' in ticket['created'] else '%Y-%m-%dT%H:%M:%SZ'
-        ).date()
+        # Handle both datetime objects and string formats
+        if isinstance(ticket['created'], datetime):
+            incident_date = ticket['created'].date()
+        else:
+            incident_date = datetime.strptime(
+                ticket['created'],
+                '%Y-%m-%dT%H:%M:%S.%fZ' if '.' in ticket['created'] else '%Y-%m-%dT%H:%M:%SZ'
+            ).date()
 
         # Update metrics for each time period
         if yesterday_start <= incident_date <= yesterday_end:
