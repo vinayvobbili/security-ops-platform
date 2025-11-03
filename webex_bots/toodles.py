@@ -76,6 +76,16 @@ from src.utils.enhanced_websocket_client import patch_websocket_client
 
 patch_websocket_client()
 
+# Patch the default HTTP timeout for WebSocket device registration calls
+# The WebSocket client makes HTTP calls to register/refresh devices, and the default 60s timeout
+# is too short for unreliable networks, causing "Read timed out" errors
+try:
+    import webexpythonsdk.config
+    webexpythonsdk.config.DEFAULT_SINGLE_REQUEST_TIMEOUT = 180
+    logger.info("⏱️  Increased SDK HTTP timeout from 60s to 180s for device registration")
+except Exception as timeout_patch_error:
+    logger.warning(f"⚠️  Could not patch SDK timeout: {timeout_patch_error}")
+
 import ipaddress
 import re
 from datetime import datetime, timedelta
