@@ -111,7 +111,11 @@ from src.utils.webex_device_manager import cleanup_devices_on_startup
 # Get robust HTTP session instance
 http_session = get_session()
 
-webex_api = WebexAPI(CONFIG.webex_bot_access_token_toodles)
+# Increase timeout from default 60s to 180s for unreliable networks
+webex_api = WebexAPI(
+    access_token=CONFIG.webex_bot_access_token_toodles,
+    single_request_timeout=180
+)
 
 # Global variables
 bot_instance = None
