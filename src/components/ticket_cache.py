@@ -399,7 +399,7 @@ def main():
     """CLI entry point with visual output."""
     log.info("Starting ticket caching process")
     cache = TicketCache()
-    cache.generate(lookback_days=1)
+    cache.generate(lookback_days=10)
 
     # Display sample tickets
     today = datetime.now(ZoneInfo("America/New_York")).strftime('%m-%d-%Y')
