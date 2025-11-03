@@ -80,13 +80,19 @@ log = logging.getLogger(__name__)
 
 # Configure connection pool size to match parallel workers (50)
 # This prevents "Connection pool is full" warnings when using ThreadPoolExecutor with 50 workers
-# Monkey-patch urllib3's PoolManager to use larger default pool sizes
+# Patch urllib3.PoolManager to use larger default maxsize before creating clients
+import functools
+
 _original_poolmanager_init = urllib3.PoolManager.__init__
 
 
-def _patched_poolmanager_init(self, num_pools=10, maxsize=50, **kwargs):
+@functools.wraps(_original_poolmanager_init)
+def _patched_poolmanager_init(self, *args, **kwargs):
     """Patched PoolManager init with larger default maxsize."""
-    _original_poolmanager_init(self, num_pools=num_pools, maxsize=maxsize, **kwargs)
+    # Set maxsize to 50 if not explicitly provided
+    if 'maxsize' not in kwargs:
+        kwargs['maxsize'] = 50
+    return _original_poolmanager_init(self, *args, **kwargs)
 
 
 urllib3.PoolManager.__init__ = _patched_poolmanager_init
@@ -105,6 +111,18 @@ dev_client = demisto_client.configure(
     auth_id=CONFIG.xsoar_dev_auth_id,
     verify_ssl=False
 )
+
+# Also configure the rest client's pool manager if available
+for client in [prod_client, dev_client]:
+    if hasattr(client, 'api_client') and hasattr(client.api_client, 'rest_client'):
+        rest_client = client.api_client.rest_client
+        if hasattr(rest_client, 'pool_manager'):
+            # Recreate pool manager with maxsize=50
+            rest_client.pool_manager = urllib3.PoolManager(
+                num_pools=10,
+                maxsize=50,
+                cert_reqs='CERT_NONE' if not client.api_client.configuration.verify_ssl else 'CERT_REQUIRED'
+            )
 
 
 def import_ticket(source_ticket_number: str, requestor_email_address: Optional[str] = None) -> Tuple[Any, str]:
