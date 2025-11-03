@@ -5,7 +5,6 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-IR_DIR="/home/vinay/pub/IR"
 
 echo "================================================"
 echo "Setting up Log Viewers with nginx Landing Page"
