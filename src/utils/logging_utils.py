@@ -41,7 +41,7 @@ class ColoredFormatter(logging.Formatter):
             return log_message
 
 
-def setup_bot_logging(
+def setup_logging(
         bot_name: str,
         log_level=logging.INFO,
         log_dir: str = 'logs',
@@ -134,6 +134,7 @@ def get_room_name_cached(room_id: str, bot_access_token: str) -> str:
     except Exception as e:
         logger.warning(f"Failed to fetch room name for {room_id}: {e}")
         return 'Unknown'
+
 
 # Directory for logs (should be set by the main app)
 LOG_FILE_DIR = Path(__file__).parent.parent.parent / 'data' / 'transient' / 'logs'
