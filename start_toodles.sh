@@ -4,7 +4,7 @@ cd /home/vinay/pub/IR || exit 1
 
 # Kill existing toodles process if running
 echo "Stopping existing Toodles instances..."
-pkill -f "webex_bots/toodles.py"
+pkill -f "webex_bots/toodles"
 sleep 1
 
 # Ensure logs directory exists
@@ -37,8 +37,8 @@ done
 echo ""
 
 # Check if the process is actually running
-if pgrep -f "webex_bots/toodles.py" > /dev/null; then
-    PID=$(pgrep -f 'webex_bots/toodles.py')
+if pgrep -f "webex_bots/toodles" > /dev/null; then
+    PID=$(pgrep -f 'webex_bots/toodles')
     echo "✅ Toodles is running (PID: $PID)"
     echo ""
     echo "To view logs: tail -f /home/vinay/pub/IR/logs/toodles.log"
