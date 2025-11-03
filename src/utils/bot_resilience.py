@@ -137,6 +137,29 @@ class ResilientBot:
         except Exception as timeout_patch_error:
             logger.warning(f"⚠️  Could not patch SDK timeout: {timeout_patch_error}")
 
+        # Apply WebSocket keepalive patch for VM environments behind firewalls
+        # VMs with multiple firewalls can drop idle TCP connections, causing message loss
+        # This patch configures more aggressive ping/pong to keep connections alive
+        try:
+            import websockets
+
+            # Store the original connect function
+            original_connect = websockets.connect
+
+            # Create a wrapper that adds keepalive parameters
+            def connect_with_keepalive(*args, **kwargs):
+                # Set aggressive ping interval (15 seconds) to keep connection alive through firewalls
+                # Default is 20 seconds which may not be frequent enough for multi-firewall environments
+                kwargs.setdefault('ping_interval', 15)
+                kwargs.setdefault('ping_timeout', 10)
+                return original_connect(*args, **kwargs)
+
+            # Replace the connect function globally
+            websockets.connect = connect_with_keepalive
+            logger.info("🔧 Patched WebSocket to use 15s ping interval for firewall keepalive")
+        except Exception as websocket_patch_error:
+            logger.warning(f"⚠️  Could not patch WebSocket keepalive: {websocket_patch_error}")
+
         self.bot_name = bot_name  # Will be set after bot creation if not provided
         self.bot_factory = bot_factory
         self.initialization_func = initialization_func
