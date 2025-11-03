@@ -39,14 +39,14 @@ echo ""
 
 # Install nginx configuration
 echo "Installing nginx configuration..."
-sudo cp "$SCRIPT_DIR/nginx-logdy.conf" /etc/nginx/sites-available/ir-logdy.conf
-sudo ln -sf /etc/nginx/sites-available/ir-logdy.conf /etc/nginx/sites-enabled/ir-logdy.conf
+sudo cp "$SCRIPT_DIR/nginx-log-viewer.conf" /etc/nginx/sites-available/ir-log-viewer.conf
+sudo ln -sf /etc/nginx/sites-available/ir-log-viewer.conf /etc/nginx/sites-enabled/ir-log-viewer.conf
 sudo nginx -t
 echo "  ✓ nginx configuration installed"
 echo ""
 
-# Stop and disable old Logdy services if they exist
-echo "Cleaning up old Logdy services..."
+# Stop and disable old Logdy services if they exist (cleanup from previous setup)
+echo "Cleaning up old services (if any)..."
 for service in all toodles msoar money-ball jarvais barnacles jobs; do
     if systemctl list-unit-files | grep -q "^ir-logdy-${service}.service"; then
         sudo systemctl stop ir-logdy-${service} 2>/dev/null || true
@@ -54,9 +54,11 @@ for service in all toodles msoar money-ball jarvais barnacles jobs; do
     fi
 done
 
-# Remove old Logdy service files
+# Remove old service files and configs
 sudo rm -f /etc/systemd/system/ir-logdy-*.service
-echo "  ✓ Old services cleaned up"
+sudo rm -f /etc/nginx/sites-enabled/ir-logdy.conf
+sudo rm -f /etc/nginx/sites-available/ir-logdy.conf
+echo "  ✓ Old services and configs cleaned up"
 echo ""
 
 # Install new Python log viewer systemd services
