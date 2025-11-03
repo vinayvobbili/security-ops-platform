@@ -11,7 +11,6 @@ from zoneinfo import ZoneInfo
 from tqdm import tqdm
 
 from my_config import get_config
-from services import xsoar
 from services.xsoar import TicketHandler, XsoarEnvironment
 
 CONFIG = get_config()
@@ -184,8 +183,7 @@ class TicketCache:
         return 'gt30'
 
     # ---------------------------- Core Pipeline ----------------------------
-    @staticmethod
-    def _fetch_notes_for_ticket(ticket: Ticket, max_retries: int = 3) -> Ticket:
+    def _fetch_notes_for_ticket(self, ticket: Ticket, max_retries: int = 3) -> Ticket:
         """Fetch notes for a single ticket using get_case_data_with_notes with rate limiting.
         Only includes actual user notes (entries with a 'user' attribute), filtering out system entries.
         """
