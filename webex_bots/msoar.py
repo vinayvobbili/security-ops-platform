@@ -17,38 +17,7 @@ CONFIG = get_config()
 BOT_ACCESS_TOKEN = CONFIG.webex_bot_access_token_dev_xsoar
 NOTIFICATION_ROOM_ID = CONFIG.webex_room_id_new_ticket_notifications
 
-# Patch the default HTTP timeout for WebSocket device registration calls
-# The WebSocket client makes HTTP calls to register/refresh devices, and the default 60s timeout
-# is too short for unreliable networks, causing "Read timed out" errors
-try:
-    import webexpythonsdk.config
-    webexpythonsdk.config.DEFAULT_SINGLE_REQUEST_TIMEOUT = 180
-    logger.info("⏱️  Increased SDK HTTP timeout from 60s to 180s for device registration")
-except Exception as timeout_patch_error:
-    logger.warning(f"⚠️  Could not patch SDK timeout: {timeout_patch_error}")
-
-# Patch WebSocket to use aggressive keepalive to prevent connection drops on VM network
-# The VM experiences TCP timeouts due to NAT/firewall dropping idle connections
-try:
-    import websockets
-    import functools
-
-    # Store the original connect function
-    original_connect = websockets.connect
-
-    # Create a wrapper that adds keepalive parameters
-    def connect_with_keepalive(*args, **kwargs):
-        # Set aggressive ping interval (15 seconds) to keep connection alive
-        # Default is 20 seconds which may not be frequent enough for the VM's network
-        kwargs.setdefault('ping_interval', 15)
-        kwargs.setdefault('ping_timeout', 10)
-        return original_connect(*args, **kwargs)
-
-    # Replace the connect function
-    websockets.connect = connect_with_keepalive
-    logger.info("🔧 Patched WebSocket to use 15s ping interval for keepalive")
-except Exception as websocket_patch_error:
-    logger.warning(f"⚠️  Could not patch WebSocket keepalive: {websocket_patch_error}")
+# Note: SDK timeout and WebSocket keepalive patches are now handled by ResilientBot framework
 
 
 class ProcessAcknowledgement(Command):
@@ -107,8 +76,33 @@ def get_bot_info(access_token):
         return None
 
 
+def msoar_bot_factory():
+    """Create MSOAR bot instance"""
+    logger.info("🔧 Initializing WebexBot...")
+    bot = WebexBot(
+        teams_bot_token=BOT_ACCESS_TOKEN,
+        approved_domains=['company.com'],
+        approved_rooms=[NOTIFICATION_ROOM_ID],
+        bot_name="METCIRT SOAR",
+        log_level="Warning"
+    )
+    logger.info("✓ WebexBot initialized")
+    return bot
+
+
+def msoar_initialization(bot_instance=None):
+    """Initialize MSOAR commands"""
+    if bot_instance:
+        logger.info("📝 Registering commands...")
+        bot_instance.add_command(ProcessAcknowledgement())
+        bot_instance.add_command(Hi())
+        logger.info("✓ Bot commands registered")
+        return True
+    return False
+
+
 def main():
-    """the main"""
+    """MSOAR main - uses resilience framework for automatic reconnection and firewall handling"""
 
     # Configure logging with rotation
     # Max 10MB per file, keep 5 backups (total ~50MB of logs)
@@ -159,24 +153,24 @@ def main():
 
     logger.info(f"📍 Notification room ID: {NOTIFICATION_ROOM_ID}")
 
-    logger.info("🔧 Initializing WebexBot...")
-    bot = WebexBot(
-        teams_bot_token=BOT_ACCESS_TOKEN,
-        approved_domains=['company.com'],
-        approved_rooms=[NOTIFICATION_ROOM_ID],
-        bot_name="METCIRT SOAR",
-        log_level="Warning"
+    # Use ResilientBot framework for automatic reconnection and firewall handling
+    from src.utils.bot_resilience import ResilientBot
 
+    logger.info("🛡️ Starting with ResilientBot framework for enhanced firewall resilience")
+
+    resilient_runner = ResilientBot(
+        bot_name="MSOAR",
+        bot_factory=msoar_bot_factory,
+        initialization_func=msoar_initialization,
+        max_retries=5,
+        initial_retry_delay=30,
+        max_retry_delay=300,
+        keepalive_interval=60,  # Aggressive keepalive for VM behind firewalls
+        proactive_reconnection_interval=600  # Force reconnect every 10 min to prevent sleep
     )
-    logger.info("✓ WebexBot initialized")
-
-    logger.info("📝 Registering commands...")
-    bot.add_command(ProcessAcknowledgement())
-    bot.add_command(Hi())
-    logger.info("✓ Bot commands registered")
 
     logger.info("👂 Bot is now listening for messages...")
-    bot.run()
+    resilient_runner.run()
 
 
 if __name__ in ('__main__', '__builtin__', 'builtins'):
