@@ -18,9 +18,6 @@ BOT_ACCESS_TOKEN = CONFIG.webex_bot_access_token_dev_xsoar
 NOTIFICATION_ROOM_ID = CONFIG.webex_room_id_new_ticket_notifications
 
 
-# Note: SDK timeout and WebSocket keepalive patches are now handled by ResilientBot framework
-
-
 class ProcessAcknowledgement(Command):
     """confirm acknowledgement"""
 
