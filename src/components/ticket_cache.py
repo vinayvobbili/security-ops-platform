@@ -5,7 +5,6 @@ Runs in trusted environment - minimal defensive coding per AGENTS.md.
 """
 import json
 import logging
-import pprint
 import re
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -307,7 +306,8 @@ class TicketCache:
 
         return ui_ticket
 
-    def _add_computed_fields(self, ticket: Ticket, current_time: datetime) -> None:
+    @staticmethod
+    def _add_computed_fields(ticket: Ticket, current_time: datetime) -> None:
         """Compute derived fields: age, resolution time, SLA status, display formats."""
         # Parse dates
         created_dt = parse_date(ticket.get('created'))
@@ -413,14 +413,14 @@ def main():
         print(f"\n📊 Data generated at: {cached_data.get('data_generated_at', 'Unknown')}")
         print(f"📦 Total tickets: {cached_data.get('total_count', len(tickets))}")
 
-        print("\n" + "=" * 80)
-        print("SAMPLE UI TICKETS (first 3 for inspection):")
-        print("=" * 80)
-        pp = pprint.PrettyPrinter(indent=2, width=100)
-        for i, ticket in enumerate(tickets[:3], 1):
-            print(f"\n--- Ticket #{i} ---")
-            pp.pprint(ticket)
-        print("=" * 80)
+        # print("\n" + "=" * 80)
+        # print("SAMPLE UI TICKETS (first 3 for inspection):")
+        # print("=" * 80)
+        # pp = pprint.PrettyPrinter(indent=2, width=100)
+        # for i, ticket in enumerate(tickets[:3], 1):
+        #     print(f"\n--- Ticket #{i} ---")
+        #     pp.pprint(ticket)
+        # print("=" * 80)
 
     log.info("Ticket caching process completed")
 

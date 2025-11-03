@@ -25,7 +25,6 @@ Original: services/xsoar.py.backup
 import ast
 import json
 import logging
-import requests
 import time
 from datetime import datetime
 from pprint import pprint
@@ -33,6 +32,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import demisto_client
 import pytz
+import requests
 import urllib3
 from demisto_client.demisto_api import rest
 from demisto_client.demisto_api.models import SearchIncidentsData
@@ -77,6 +77,19 @@ urllib3.disable_warnings(InsecureRequestWarning)
 
 CONFIG = get_config()
 log = logging.getLogger(__name__)
+
+# Configure connection pool size to match parallel workers (50)
+# This prevents "Connection pool is full" warnings when using ThreadPoolExecutor with 50 workers
+# Monkey-patch urllib3's PoolManager to use larger default pool sizes
+_original_poolmanager_init = urllib3.PoolManager.__init__
+
+
+def _patched_poolmanager_init(self, num_pools=10, maxsize=50, **kwargs):
+    """Patched PoolManager init with larger default maxsize."""
+    _original_poolmanager_init(self, num_pools=num_pools, maxsize=maxsize, **kwargs)
+
+
+urllib3.PoolManager.__init__ = _patched_poolmanager_init
 
 # Initialize demisto-py clients for prod and dev environments
 prod_client = demisto_client.configure(
