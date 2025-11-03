@@ -1,11 +1,17 @@
+"""Ticket cache component for XSOAR data.
+
+Fetches tickets from XSOAR, processes for UI consumption, and caches locally.
+Runs in trusted environment - minimal defensive coding per AGENTS.md.
+"""
 import json
 import logging
 import pprint
+import re
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Dict, Any, List, Optional, Iterable, Union
+from typing import Dict, Any, List, Optional, Union
 from zoneinfo import ZoneInfo
 
 from tqdm import tqdm
@@ -16,229 +22,154 @@ from services.xsoar import TicketHandler, XsoarEnvironment
 CONFIG = get_config()
 log = logging.getLogger(__name__)
 
-# Simple alias / minimal shape hint (keep lightweight; avoid over-engineering)
 Ticket = Dict[str, Any]
+LOOKBACK_DAYS = 90
 
-# Simple adjustable lookback window. Set to 9 for quick local tests; keep 90 in normal runs.
-LOOKBACK_DAYS = 90  # Change manually when needed.
+# Field mappings for ticket extraction
+SYSTEM_FIELDS = {
+    'id': 'id',
+    'name': 'name',
+    'type': 'type',
+    'status': 'status',
+    'severity': 'severity',
+    'owner': 'owner',
+    'created': 'created',
+    'closed': 'closed',
+}
 
+CUSTOM_FIELDS = {
+    'affected_country': 'affectedcountry',
+    'affected_region': 'affectedregion',
+    'impact': 'impact',
+    'automation_level': 'automationlevel',
+    'hostname': 'hostname',
+    'username': 'username',
+}
+
+# Status and severity display mappings
+STATUS_DISPLAY = {0: 'Pending', 1: 'Active', 2: 'Closed'}
+SEVERITY_DISPLAY = {0: 'Unknown', 1: 'Low', 2: 'Medium', 3: 'High', 4: 'Critical'}
+
+
+# ---------------------------- Utility Functions ----------------------------
+
+def parse_date(raw: Optional[Union[str, int, datetime]]) -> Optional[datetime]:
+    """Parse date from various formats: datetime object, Unix timestamp, or ISO string.
+
+    Returns timezone-aware datetime or None. Handles XSOAR's mixed date formats.
+    Trusted environment - minimal error handling.
+    """
+    if not raw:
+        return None
+
+    # Already parsed datetime
+    if isinstance(raw, datetime):
+        return raw if raw.tzinfo else raw.replace(tzinfo=timezone.utc)
+
+    # Unix timestamp (milliseconds or seconds)
+    if isinstance(raw, (int, float)):
+        if raw == 0:
+            return None
+        timestamp = raw / 1000 if raw > 10 ** 10 else raw
+        return datetime.fromtimestamp(timestamp, tz=timezone.utc)
+
+    # ISO string
+    if isinstance(raw, str):
+        return datetime.fromisoformat(raw.replace('Z', '+00:00'))
+
+    return None
+
+
+def age_category(days: Optional[int]) -> str:
+    """Categorize ticket age into buckets: le7, le30, gt30, all."""
+    if days is None:
+        return 'all'
+    if days <= 7:
+        return 'le7'
+    if days <= 30:
+        return 'le30'
+    return 'gt30'
+
+
+def resolution_bucket(days: Optional[int], is_open: bool) -> str:
+    """Categorize resolution time: open, lt7, lt14, lt30, gt30, unknown."""
+    if is_open:
+        return 'open'
+    if days is None:
+        return 'unknown'
+    if days < 7:
+        return 'lt7'
+    if days < 14:
+        return 'lt14'
+    if days < 30:
+        return 'lt30'
+    return 'gt30'
+
+
+def clean_owner_name(owner: str) -> str:
+    """Remove @company.com domain from owner email."""
+    if not owner or owner == 'Unknown':
+        return owner
+    return owner.replace('@company.com', '')
+
+
+def clean_type_name(ticket_type: str) -> str:
+    """Remove METCIRT prefix from ticket types."""
+    if not ticket_type or ticket_type == 'Unknown':
+        return ticket_type
+    return re.sub(r'^METCIRT[_\-\s]*', '', ticket_type, flags=re.IGNORECASE).strip()
+
+
+def format_date_display(date_obj: Optional[Union[str, datetime]]) -> str:
+    """Format date as MM/DD for UI display."""
+    if not date_obj:
+        return ''
+    if isinstance(date_obj, datetime):
+        return f"{date_obj.month:02d}/{date_obj.day:02d}"
+    if isinstance(date_obj, str):
+        dt = parse_date(date_obj)
+        return f"{dt.month:02d}/{dt.day:02d}" if dt else ''
+    return str(date_obj)
+
+
+def json_serializer(obj: Any) -> str:
+    """Serialize datetime objects to ISO format for JSON."""
+    if isinstance(obj, datetime):
+        return obj.isoformat()
+    raise TypeError(f"Type {type(obj)} not serializable")
+
+
+# ---------------------------- Main Class ----------------------------
 
 class TicketCache:
-    """Simple ticket caching: fetch raw data from XSOAR, process for UI, save both versions.
+    """Cache XSOAR tickets locally with UI processing.
 
-    Process:
-    1. Fetch raw data from XSOAR
-    2. Process data for UI:
-       2.1 Extract system fields (id, name, type, status, etc.)
-       2.2 Extract custom fields from CustomFields object
-       2.3 Calculate derived fields (age, resolution time, display formats)
-       2.4 Apply transformations (remove METCIRT, @company.com, etc.)
+    Three-step pipeline:
+    1. Fetch raw tickets from XSOAR (with notes enrichment)
+    2. Process for UI (flatten structure, compute derived fields)
     3. Save both raw and processed versions
     """
 
     def __init__(self):
         self.ticket_handler = TicketHandler(XsoarEnvironment.PROD)
         self.root_directory = Path(__file__).parent.parent.parent
-
-    # System fields we want to extract
-    SYSTEM_FIELDS = {
-        'id': 'id',
-        'name': 'name',
-        'type': 'type',
-        'status': 'status',
-        'severity': 'severity',
-        'owner': 'owner',
-        'created': 'created',
-        'closed': 'closed',
-    }
-
-    # Custom fields we want to extract from CustomFields
-    CUSTOM_FIELDS = {
-        'affected_country': 'affectedcountry',
-        'affected_region': 'affectedregion',
-        'impact': 'impact',
-        'automation_level': 'automationlevel',
-        'hostname': 'hostname',
-        'username': 'username',
-    }
-
-    # Calculated fields we compute from other fields
-    CALCULATED_FIELDS = {
-        'is_open': 'status in (0, 1)',  # Pending or Active status
-        'currently_aging_days': '(current_time - created).days if open else None',  # Days since creation for open tickets
-        'days_since_creation': '(current_time - created).days',  # Total days since creation
-        'resolution_time_days': '(closed - created).days if both exist',  # Days to resolve
-        'resolution_bucket': 'categorical grouping of resolution_time_days',  # open, lt7, lt14, lt30, gt30
-        'has_resolution_time': 'resolution_time_days is not None',  # Boolean flag
-        'age_category': 'categorical grouping of currently_aging_days',  # le7, le30, gt30, all
-        'created_days_ago': 'alias for days_since_creation',  # Legacy field name
-        'status_display': 'human readable status names',  # Pending/Active/Closed
-        'severity_display': 'human readable severity names',  # Low/Medium/High/Critical
-        'created_display': 'MM/DD formatted creation date',  # Display format
-        'closed_display': 'MM/DD formatted close date',  # Display format
-        'has_breached_response_sla': 'timetorespond.breachTriggered boolean',  # Response SLA breach flag
-        'has_breached_containment_sla': 'timetocontain.breachTriggered boolean',  # Containment SLA breach flag
-        'time_to_respond_secs': 'timetorespond.totalDuration in seconds',  # Response time in seconds
-        'time_to_contain_secs': 'timetocontain.totalDuration in seconds',  # Containment time in seconds
-        'has_hostname': 'hostname field is not None/empty',  # Boolean flag for hostname presence
-    }
-
-    # ---------------------------- Data Transformations ----------------------------
-    @staticmethod
-    def _parse_date(raw: Optional[str]) -> Optional[datetime]:
-        """Parse an ISO-ish timestamp (with optional trailing Z). Return None if invalid.
-        Keep intentionally small + forgiving (trusted environment per AGENTS.md)."""
-        if not raw:
-            return None
-        try:
-            return datetime.fromisoformat(raw.replace('Z', '+00:00'))
-        except ValueError:
-            # Fallback: try common millisecond format without manual timezone (assume UTC if 'Z')
-            try:
-                if raw.endswith('Z'):
-                    return datetime.strptime(raw, '%Y-%m-%dT%H:%M:%S.%fZ').replace(tzinfo=timezone.utc)
-            except ValueError:
-                return None
-        return None
-
-    @staticmethod
-    def _age_category(currently_aging_days: Optional[int]) -> str:
-        if currently_aging_days is None:
-            return 'all'
-        if currently_aging_days <= 7:
-            return 'le7'
-        if currently_aging_days <= 30:
-            return 'le30'
-        return 'gt30'
-
-    @staticmethod
-    def _clean_owner_name(owner: str) -> str:
-        """Remove @company.com suffix from owner names."""
-        if not owner or owner == 'Unknown':
-            return owner
-        return owner.replace('@company.com', '')
-
-    @staticmethod
-    def _clean_type_name(ticket_type: str) -> str:
-        """Remove METCIRT prefix from ticket types."""
-        if not ticket_type or ticket_type == 'Unknown':
-            return ticket_type
-        import re
-        return re.sub(r'^METCIRT[_\-\s]*', '', ticket_type, flags=re.IGNORECASE).strip()
-
-    @staticmethod
-    def _format_date_for_display(date_str: Optional[str]) -> str:
-        if not date_str:
-            return ''
-        try:
-            d = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
-            return f"{d.month:02d}/{d.day:02d}"
-        except Exception:
-            return date_str
-
-    @staticmethod
-    def _extract_duration(time_obj: Optional[Dict[str, Any]]) -> Optional[int]:
-        if isinstance(time_obj, dict):
-            return time_obj.get('totalDuration')
-        return None
-
-    @staticmethod
-    def _extract_breach_status(time_obj: Optional[Dict[str, Any]]) -> bool:
-        if not isinstance(time_obj, dict):
-            return False
-        return bool(time_obj.get('breachTriggered') in (True, 'true'))
-
-    @staticmethod
-    def _format_duration(seconds: Optional[int]) -> str:
-        if not seconds or seconds <= 0:
-            return '0:00'
-        return f"{seconds // 60}:{seconds % 60:02d}"
-
-    @staticmethod
-    def _extract_chart_date(date_str: Optional[str]) -> Optional[str]:
-        dt = TicketCache._parse_date(date_str)
-        return dt.strftime('%Y-%m-%d') if dt else None
-
-    @staticmethod
-    def _resolution_bucket(resolution_days: Optional[int], is_open: bool) -> str:
-        """Map numeric resolution time (in days) to a discrete bucket for UI filtering.
-        Buckets:
-          open   -> ticket still open (no resolution yet)
-          lt7    -> resolved in <7 days
-          lt14   -> resolved in 7-13 days
-          lt30   -> resolved in 14-29 days
-          gt30   -> resolved in >=30 days
-          unknown-> malformed / missing closed timestamp even though status implies closed
-        """
-        if is_open:
-            return 'open'
-        if resolution_days is None:
-            return 'unknown'
-        if resolution_days < 7:
-            return 'lt7'
-        if resolution_days < 14:
-            return 'lt14'
-        if resolution_days < 30:
-            return 'lt30'
-        return 'gt30'
-
-    # ---------------------------- Core Pipeline ----------------------------
-    def _fetch_notes_for_ticket(self, ticket: Ticket, max_retries: int = 3) -> Ticket:
-        """Fetch notes for a single ticket using get_case_data_with_notes with rate limiting.
-        Only includes actual user notes (entries with a 'user' attribute), filtering out system entries.
-        """
-        ticket_id = ticket.get('id')
-        if not ticket_id:
-            ticket['notes'] = []
-            return ticket
-
-        for attempt in range(max_retries):
-            try:
-                ticket['notes'] = self.ticket_handler.get_user_notes(ticket_id)
-                return ticket
-            except Exception as e:
-                error_msg = str(e)
-                # Check if it's a 429 rate limit error
-                if '429' in error_msg or 'Too Many Requests' in error_msg:
-                    if attempt < max_retries - 1:
-                        # Exponential backoff for rate limits
-                        wait_time = (2 ** attempt) * 2  # 2s, 4s, 8s
-                        log.debug(f"Rate limited for ticket {ticket_id}, waiting {wait_time}s (attempt {attempt + 1}/{max_retries})")
-                        time.sleep(wait_time)
-                        continue
-                    else:
-                        log.warning(f"Failed to fetch notes for ticket {ticket_id} after {max_retries} attempts (rate limited)")
-                        ticket['notes'] = []
-                        return ticket
-                else:
-                    # For other errors, log and skip
-                    log.warning(f"Failed to fetch notes for ticket {ticket_id}: {e}")
-                    ticket['notes'] = []
-                    return ticket
-
-        ticket['notes'] = []
-        return ticket
+        log.debug(f"Initialized TicketCache with root: {self.root_directory}")
 
     @classmethod
-    def generate(cls, lookback_days=90) -> None:
-        """Simple 3-step process: fetch, process, save."""
-
-        # Create an instance for this operation
+    def generate(cls, lookback_days: int = 90) -> None:
+        """Run complete ticket caching pipeline."""
+        log.info(f"Starting ticket cache generation (lookback={lookback_days}d)")
         instance = cls()
 
-        # Step 1: Fetch raw data from XSOAR
+        # Three-step pipeline
         raw_tickets = instance._fetch_raw_tickets(lookback_days)
-
-        # Step 2: Process for UI (flatten and transform)
         ui_tickets = instance._process_for_ui(raw_tickets)
-
-        # Step 3: Save both versions
         instance._save_tickets(raw_tickets, ui_tickets)
 
-        #
+        log.info("Ticket cache generation complete")
 
     def _fetch_raw_tickets(self, lookback_days: int) -> List[Ticket]:
-        """Step 1: Fetch raw tickets from XSOAR and enrich with notes in parallel."""
+        """Fetch tickets from XSOAR and enrich with notes in parallel."""
         end_date = datetime.now(timezone.utc)
         start_date = end_date - timedelta(days=lookback_days)
         query = (
@@ -247,147 +178,208 @@ class TicketCache:
             f"type:{CONFIG.team_name} -closeReason:Duplicate"
         )
 
+        log.debug(f"XSOAR query: {query}")
         print(f"🔍 Fetching tickets from XSOAR for past {lookback_days} days...")
-        raw_tickets: Union[List[Ticket], Iterable[Ticket], None] = self.ticket_handler.get_tickets(query, paginate=True)
-        tickets: List[Ticket] = [] if raw_tickets is None else [t for t in raw_tickets if isinstance(t, dict)]
-        log.info(f"Fetched {len(tickets)} tickets (lookback={lookback_days}d) from XSOAR")
 
-        # Enrich tickets with notes in parallel
-        if tickets:
-            max_workers = 50  # Balanced: not too high to overwhelm API, not too low to be slow
-            print(f"📝 Enriching {len(tickets)} tickets with notes (parallel)...max workers={max_workers}")
-            with ThreadPoolExecutor(max_workers) as executor:
-                future_to_ticket = {executor.submit(self._fetch_notes_for_ticket, ticket): ticket for ticket in tickets}
-                enriched_tickets = []
-                failed_count = 0
-                for future in tqdm(as_completed(future_to_ticket), total=len(tickets), desc="Fetching notes", unit="ticket"):
-                    try:
-                        result = future.result()
-                        enriched_tickets.append(result)
-                    except Exception as e:
-                        failed_count += 1
-                        original_ticket = future_to_ticket[future]
-                        ticket_id = original_ticket.get('id', 'unknown')
-                        log.error(f"Failed to process ticket enrichment for {ticket_id}: {e}")
-                        # Add ticket without notes instead of skipping it entirely
-                        original_ticket['notes'] = []
-                        enriched_tickets.append(original_ticket)
+        raw_tickets = self.ticket_handler.get_tickets(query, paginate=True)
+        tickets = [] if raw_tickets is None else [t for t in raw_tickets if isinstance(t, dict)]
+        log.info(f"Fetched {len(tickets)} tickets from XSOAR")
 
-            log.info(f"Enriched {len(enriched_tickets)} tickets with notes ({failed_count} failed)")
-            if failed_count > 0:
-                log.warning(f"{failed_count} tickets were enriched without notes due to API errors")
-            return enriched_tickets
+        if not tickets:
+            log.warning("No tickets fetched from XSOAR")
+            return []
 
-        return tickets
+        # Parallel notes enrichment
+        return self._enrich_with_notes(tickets)
+
+    def _enrich_with_notes(self, tickets: List[Ticket]) -> List[Ticket]:
+        """Enrich tickets with user notes in parallel."""
+        max_workers = 50
+        print(f"📝 Enriching {len(tickets)} tickets with notes (parallel, workers={max_workers})...")
+        log.debug(f"Starting parallel notes enrichment with {max_workers} workers")
+
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {
+                executor.submit(self._fetch_notes_for_ticket, ticket): ticket
+                for ticket in tickets
+            }
+
+            enriched = []
+            failed = 0
+
+            for future in tqdm(as_completed(futures), total=len(tickets),
+                               desc="Fetching notes", unit="ticket"):
+                try:
+                    enriched.append(future.result())
+                except Exception as e:
+                    failed += 1
+                    ticket = futures[future]
+                    ticket_id = ticket.get('id', 'unknown')
+                    log.error(f"Failed to enrich ticket {ticket_id}: {e}")
+                    ticket['notes'] = []
+                    enriched.append(ticket)
+
+        log.info(f"Enriched {len(enriched)} tickets ({failed} failed)")
+        return enriched
+
+    def _fetch_notes_for_ticket(self, ticket: Ticket, max_retries: int = 3) -> Ticket:
+        """Fetch user notes for a single ticket with retry on rate limit."""
+        ticket_id = ticket.get('id')
+        if not ticket_id:
+            ticket['notes'] = []
+            return ticket
+
+        for attempt in range(max_retries):
+            try:
+                ticket['notes'] = self.ticket_handler.get_user_notes(ticket_id)
+                log.debug(f"Fetched {len(ticket['notes'])} notes for ticket {ticket_id}")
+                return ticket
+            except Exception as e:
+                error_msg = str(e)
+
+                # Rate limit handling with exponential backoff
+                if '429' in error_msg or 'Too Many Requests' in error_msg:
+                    if attempt < max_retries - 1:
+                        wait_time = (2 ** attempt) * 2
+                        log.debug(f"Rate limited ticket {ticket_id}, waiting {wait_time}s")
+                        time.sleep(wait_time)
+                        continue
+                    log.warning(f"Rate limit exceeded for ticket {ticket_id} after {max_retries} attempts")
+                else:
+                    log.warning(f"Failed to fetch notes for ticket {ticket_id}: {e}")
+
+                ticket['notes'] = []
+                return ticket
+
+        ticket['notes'] = []
+        return ticket
 
     def _process_for_ui(self, raw_tickets: List[Ticket]) -> List[Ticket]:
-        """Step 2: Process raw tickets into flattened UI format."""
+        """Process raw tickets into flattened UI format with computed fields."""
+        print(f"⚙️ Processing {len(raw_tickets)} tickets for UI...")
+        log.debug("Starting UI processing pipeline")
+
         ui_tickets = []
         current_time = datetime.now(timezone.utc)
 
-        print(f"⚙️ Processing {len(raw_tickets)} tickets for UI...")
         for ticket in tqdm(raw_tickets, desc="Processing tickets", unit="ticket"):
             try:
                 ui_ticket = self._flatten_ticket(ticket, current_time)
                 ui_tickets.append(ui_ticket)
             except Exception as e:
-                log.warning(f"Failed to process ticket {ticket.get('id', 'unknown')}: {e}")
-                continue
+                ticket_id = ticket.get('id', 'unknown')
+                log.warning(f"Failed to process ticket {ticket_id}: {e}")
 
-        log.info(f"Processed {len(ui_tickets)} tickets for UI")
+        log.info(f"Processed {len(ui_tickets)}/{len(raw_tickets)} tickets successfully")
         return ui_tickets
 
     def _flatten_ticket(self, ticket: Ticket, current_time: datetime) -> Ticket:
-        """Convert a raw ticket to flattened UI format."""
-        # Extract system fields
+        """Flatten ticket structure: extract fields, apply transforms, compute derived fields."""
         ui_ticket = {}
-        for ui_field, system_field in self.SYSTEM_FIELDS.items():
-            ui_ticket[ui_field] = ticket.get(system_field, 'Unknown' if ui_field in ['name', 'owner'] else 0)
+
+        # Extract system fields
+        for ui_field, sys_field in SYSTEM_FIELDS.items():
+            default = 'Unknown' if ui_field in ('name', 'owner') else 0
+            ui_ticket[ui_field] = ticket.get(sys_field, default)
 
         # Extract custom fields
         custom_fields = ticket.get('CustomFields', {})
-        for ui_field, custom_field in self.CUSTOM_FIELDS.items():
+        for ui_field, custom_field in CUSTOM_FIELDS.items():
             ui_ticket[ui_field] = custom_fields.get(custom_field, 'Unknown')
 
-        # Extract SLA timing objects for computed fields (from CustomFields)
+        # Extract SLA timing for computed fields
         ui_ticket['_timetorespond'] = custom_fields.get('timetorespond', {})
         ui_ticket['_timetocontain'] = custom_fields.get('timetocontain', {})
 
-        # Apply transformations
-        ui_ticket['type'] = self._clean_type_name(ui_ticket.get('type', 'Unknown'))
-        ui_ticket['owner'] = self._clean_owner_name(ui_ticket.get('owner', 'Unknown'))
+        # Apply name transformations
+        ui_ticket['type'] = clean_type_name(ui_ticket['type'])
+        ui_ticket['owner'] = clean_owner_name(ui_ticket['owner'])
 
         # Add computed fields
         self._add_computed_fields(ui_ticket, current_time)
 
-        # Add user notes (filtered to only include entries with 'user' attribute)
-        # This keeps file size manageable while still providing access to actual user comments
+        # Add notes
         ui_ticket['notes'] = ticket.get('notes', [])
 
-        # Remove temporary SLA objects (they're only needed for computation)
+        # Clean up temporary fields
         ui_ticket.pop('_timetorespond', None)
         ui_ticket.pop('_timetocontain', None)
 
         return ui_ticket
 
     def _add_computed_fields(self, ticket: Ticket, current_time: datetime) -> None:
-        """Add computed fields like age, resolution time, etc."""
-        created_dt = self._parse_date(ticket.get('created'))
-        closed_dt = self._parse_date(ticket.get('closed'))
-        status = ticket.get('status', 0)
+        """Compute derived fields: age, resolution time, SLA status, display formats."""
+        # Parse dates
+        created_dt = parse_date(ticket.get('created'))
+        closed_dt = parse_date(ticket.get('closed'))
+
+        # Convert status/severity to int (XSOAR sometimes returns strings)
+        status = int(ticket.get('status', 0))
+        severity = int(ticket.get('severity', 0))
         is_open = status in (0, 1)
 
-        # Age and timing calculations
+        log.debug(f"Computing fields for ticket {ticket.get('id')}: "
+                  f"status={status}, severity={severity}, created={created_dt}")
+
+        # Time calculations
         currently_aging_days = (current_time - created_dt).days if (created_dt and is_open) else None
         days_since_creation = (current_time - created_dt).days if created_dt else None
         resolution_time_days = (closed_dt - created_dt).days if (created_dt and closed_dt) else None
 
-        # Extract SLA timing data
+        # SLA data
         timetorespond = ticket.get('_timetorespond', {})
         timetocontain = ticket.get('_timetocontain', {})
 
-        # Add all computed fields
+        # Update ticket with all computed fields
         ticket.update({
+            # Status and timing
             'is_open': is_open,
             'currently_aging_days': currently_aging_days,
             'days_since_creation': days_since_creation,
-            'resolution_time_days': resolution_time_days,
-            'resolution_bucket': self._resolution_bucket(resolution_time_days, is_open),
-            'has_resolution_time': resolution_time_days is not None,
-            'age_category': self._age_category(currently_aging_days),
             'created_days_ago': days_since_creation,
-            # SLA fields
-            'has_breached_response_sla': bool(timetorespond.get('breachTriggered', False)),
-            'has_breached_containment_sla': bool(timetocontain.get('breachTriggered', False)),
+            'resolution_time_days': resolution_time_days,
+            'has_resolution_time': resolution_time_days is not None,
+
+            # Categories
+            'age_category': age_category(currently_aging_days),
+            'resolution_bucket': resolution_bucket(resolution_time_days, is_open),
+
+            # SLA breach flags
+            'has_breached_response_sla': bool(timetorespond.get('breachTriggered')),
+            'has_breached_containment_sla': bool(timetocontain.get('breachTriggered')),
             'time_to_respond_secs': timetorespond.get('totalDuration', 0),
             'time_to_contain_secs': timetocontain.get('totalDuration', 0),
-            # Hostname presence
-            'has_hostname': bool(ticket.get('hostname') and ticket['hostname'].strip() and ticket['hostname'] != 'Unknown'),
-            # Display fields
-            'status_display': {0: 'Pending', 1: 'Active', 2: 'Closed'}.get(status, 'Unknown'),
-            'severity_display': {0: 'Unknown', 1: 'Low', 2: 'Medium', 3: 'High', 4: 'Critical'}.get(ticket.get('severity', 0), 'Unknown'),
-            'created_display': self._format_date_for_display(ticket.get('created')),
-            'closed_display': self._format_date_for_display(ticket.get('closed')),
+
+            # Host presence
+            'has_hostname': bool(ticket.get('hostname') and
+                                 ticket['hostname'].strip() and
+                                 ticket['hostname'] != 'Unknown'),
+
+            # Display formats
+            'status_display': STATUS_DISPLAY.get(status, 'Unknown'),
+            'severity_display': SEVERITY_DISPLAY.get(severity, 'Unknown'),
+            'created_display': format_date_display(ticket.get('created')),
+            'closed_display': format_date_display(ticket.get('closed')),
         })
 
     def _save_tickets(self, raw_tickets: List[Ticket], ui_tickets: List[Ticket]) -> None:
-        """Step 3: Save both raw and UI ticket data to data/transient location."""
-        today_date = datetime.now(ZoneInfo("America/New_York")).strftime('%m-%d-%Y')
-
-        # Primary location (data/transient/secOps)
-        output_dir = self.root_directory / 'data' / 'transient' / 'secOps' / today_date
+        """Save both raw and UI-processed tickets to JSON files."""
+        today = datetime.now(ZoneInfo("America/New_York")).strftime('%m-%d-%Y')
+        output_dir = self.root_directory / 'data' / 'transient' / 'secOps' / today
         output_dir.mkdir(parents=True, exist_ok=True)
+
+        log.info(f"Saving tickets to {output_dir}")
 
         # Save raw tickets
         print("💾 Saving raw ticket data...")
         raw_path = output_dir / 'past_90_days_tickets_raw.json'
         with open(raw_path, 'w') as f:
-            json.dump(raw_tickets, f, indent=4)
+            json.dump(raw_tickets, f, indent=4, default=json_serializer)
         log.info(f"Saved {len(raw_tickets)} raw tickets to {raw_path}")
 
         # Save UI tickets with metadata
         print("📊 Saving UI ticket data...")
-        ui_data_with_metadata = {
+        ui_data = {
             'data': ui_tickets,
             'data_generated_at': datetime.now(ZoneInfo("America/New_York")).isoformat(),
             'total_count': len(ui_tickets)
@@ -395,30 +387,31 @@ class TicketCache:
 
         ui_path = output_dir / 'past_90_days_tickets.json'
         with open(ui_path, 'w') as f:
-            json.dump(ui_data_with_metadata, f, indent=2)
+            json.dump(ui_data, f, indent=2, default=json_serializer)
         log.info(f"Saved {len(ui_tickets)} UI tickets to {ui_path}")
 
         print("✅ Ticket caching completed successfully!")
 
 
+# ---------------------------- CLI Entry Point ----------------------------
+
 def main():
+    """CLI entry point with visual output."""
     log.info("Starting ticket caching process")
     cache = TicketCache()
-    cache.generate(lookback_days=9)
+    cache.generate(lookback_days=1)
 
-    # Pretty print first 3 tickets for visual inspection
-    ui_path = cache.root_directory / 'data' / 'transient' / 'secOps' / datetime.now(ZoneInfo("America/New_York")).strftime('%m-%d-%Y') / 'past_90_days_tickets.json'
+    # Display sample tickets
+    today = datetime.now(ZoneInfo("America/New_York")).strftime('%m-%d-%Y')
+    ui_path = cache.root_directory / 'data' / 'transient' / 'secOps' / today / 'past_90_days_tickets.json'
+
     if ui_path.exists():
         with open(ui_path, 'r') as f:
             cached_data = json.load(f)
 
-        # Extract tickets from new format (with metadata) or old format (just array)
-        if isinstance(cached_data, dict) and 'data' in cached_data:
-            tickets = cached_data['data']
-            print(f"\n📊 Data generated at: {cached_data.get('data_generated_at', 'Unknown')}")
-            print(f"📦 Total tickets: {cached_data.get('total_count', len(tickets))}")
-        else:
-            tickets = cached_data  # Old format fallback
+        tickets = cached_data.get('data', cached_data)
+        print(f"\n📊 Data generated at: {cached_data.get('data_generated_at', 'Unknown')}")
+        print(f"📦 Total tickets: {cached_data.get('total_count', len(tickets))}")
 
         print("\n" + "=" * 80)
         print("SAMPLE UI TICKETS (first 3 for inspection):")
@@ -433,5 +426,8 @@ def main():
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
     main()
