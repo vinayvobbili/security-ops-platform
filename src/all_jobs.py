@@ -34,10 +34,10 @@ from src.components import (
     containment_sla_risk_tickets, incident_declaration_sla_risk
 )
 from src.utils.fs_utils import make_dir_for_todays_charts
-from src.utils.logging_utils import setup_bot_logging
+from src.utils.logging_utils import setup_logging
 
 # Configure logging with centralized utility
-setup_bot_logging(
+setup_logging(
     bot_name='all_jobs',
     log_level=logging.WARNING,
     info_modules=['__main__'],

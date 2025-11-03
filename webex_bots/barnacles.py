@@ -9,10 +9,10 @@ sys.path.insert(0, str(ROOT_DIRECTORY))
 # Setup logging FIRST before any imports that might use it
 import logging
 
-from src.utils.logging_utils import setup_bot_logging
+from src.utils.logging_utils import setup_logging
 
 # Configure logging with centralized utility
-setup_bot_logging(
+setup_logging(
     bot_name='barnacles',
     log_level=logging.WARNING,
     log_dir=str(ROOT_DIRECTORY / "logs"),

@@ -28,10 +28,10 @@ sys.path.insert(0, str(PROJECT_ROOT))
 # Setup logging FIRST before any imports that might use it
 import logging
 
-from src.utils.logging_utils import setup_bot_logging
+from src.utils.logging_utils import setup_logging
 
 # Configure logging with centralized utility (colors enabled by default)
-setup_bot_logging(
+setup_logging(
     bot_name='hal9000',
     log_level=logging.WARNING,
     log_dir=str(PROJECT_ROOT / "logs"),
