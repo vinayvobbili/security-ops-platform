@@ -57,7 +57,7 @@ from services.xsoar import XsoarEnvironment
 from services.approved_testing_utils import add_approved_testing_entry
 from src import secops
 from src.components import apt_names_fetcher, secops_shift_metrics
-from src.utils.logging_utils import is_scanner_request, log_web_activity
+from src.utils.logging_utils import is_scanner_request, log_web_activity, setup_bot_logging
 
 CONFIG = get_config()
 
@@ -72,16 +72,24 @@ NUM_WORKERS = 10
 MAX_CONNECTIONS = 100
 COMPANY_EMAIL_DOMAIN = '@' + CONFIG.my_web_domain
 
+# Configure logging with centralized utility
+setup_bot_logging(
+    bot_name='web_server',
+    log_level=logging.WARNING,
+    info_modules=['__main__'],
+    use_colors=True
+)
+
+# Suppress noisy library logs
+logging.getLogger('werkzeug').setLevel(logging.WARNING)
+logging.getLogger('waitress').setLevel(logging.WARNING)
+
 app = Flask(__name__, static_folder='static', static_url_path='/static', template_folder='templates')
 app.secret_key = CONFIG.flask_secret_key if hasattr(CONFIG, 'flask_secret_key') else 'your-secret-key-change-this'
 eastern = pytz.timezone('US/Eastern')
 
 # Store server start time
 SERVER_START_TIME = datetime.now(eastern)
-
-# Configure logging to suppress werkzeug INFO logs for PAC files and other noise
-logging.getLogger('werkzeug').setLevel(logging.WARNING)
-logging.getLogger('waitress').setLevel(logging.WARNING)
 
 blocked_ip_ranges = []  # ["10.49.70.0/24", "10.50.70.0/24"]
 

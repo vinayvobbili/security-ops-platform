@@ -26,60 +26,17 @@ PROJECT_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
 # Setup logging FIRST before any imports that might use it
-import logging.handlers
+import logging
 
+from src.utils.logging_utils import setup_bot_logging
 
-class ColoredFormatter(logging.Formatter):
-    """Custom formatter to add colors to console output"""
-
-    def format(self, record):
-        # Get the original formatted message without colors first
-        log_message = super().format(record)
-
-        # Only colorize WARNING and ERROR levels, leave INFO as default
-        if record.levelname == 'WARNING':
-            return f"\033[33m{log_message}\033[0m"  # Yellow
-        elif record.levelname == 'ERROR':
-            return f"\033[31m{log_message}\033[0m"  # Red
-        elif record.levelname == 'CRITICAL':
-            return f"\033[35m{log_message}\033[0m"  # Magenta
-        else:
-            # INFO, DEBUG and others - no color (default terminal color)
-            return log_message
-
-
-# Ensure logs directory exists
-(PROJECT_ROOT / "logs").mkdir(exist_ok=True)
-
-# Create file handler (no colors for file)
-file_handler = logging.handlers.RotatingFileHandler(
-    PROJECT_ROOT / "logs" / "hal9000.log",
-    maxBytes=10 * 1024 * 1024,  # 10MB
-    backupCount=5
+# Configure logging with centralized utility (colors enabled by default)
+setup_bot_logging(
+    bot_name='hal9000',
+    log_level=logging.WARNING,
+    log_dir=str(PROJECT_ROOT / "logs"),
+    info_modules=['__main__', 'src.utils.bot_resilience', 'src.utils.webex_device_manager']
 )
-file_handler.setFormatter(logging.Formatter(
-    '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-))
-
-# Create console handler with colors
-console_handler = logging.StreamHandler()
-console_handler.setFormatter(ColoredFormatter(
-    '%(asctime)s - %(levelname)s - %(message)s'
-))
-
-# Configure root logger with simple approach
-# Set root logger to WARNING to avoid flooding
-logging.basicConfig(
-    level=logging.WARNING,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[file_handler, console_handler],
-    force=True  # Override any existing logging config
-)
-
-# Enable INFO level only for startup-related loggers
-logging.getLogger('__main__').setLevel(logging.INFO)
-logging.getLogger('src.utils.bot_resilience').setLevel(logging.INFO)
-logging.getLogger('src.utils.webex_device_manager').setLevel(logging.INFO)
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARNING)  # Ensure bot logger also uses WARNING level

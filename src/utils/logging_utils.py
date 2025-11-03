@@ -3,8 +3,10 @@ import logging
 import os
 import re
 import tempfile
+import time
 from datetime import datetime
 from functools import wraps, lru_cache
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 from flask import request
@@ -18,6 +20,96 @@ config = get_config()
 
 # Setup logger for this module
 logger = logging.getLogger(__name__)
+
+
+class ColoredFormatter(logging.Formatter):
+    """Custom formatter to add colors to console output"""
+
+    def format(self, record):
+        # Get the original formatted message without colors first
+        log_message = super().format(record)
+
+        # Only colorize WARNING and ERROR levels, leave INFO as default
+        if record.levelname == 'WARNING':
+            return f"\033[33m{log_message}\033[0m"  # Yellow
+        elif record.levelname == 'ERROR':
+            return f"\033[31m{log_message}\033[0m"  # Red
+        elif record.levelname == 'CRITICAL':
+            return f"\033[35m{log_message}\033[0m"  # Magenta
+        else:
+            # INFO, DEBUG and others - no color (default terminal color)
+            return log_message
+
+
+def setup_bot_logging(
+        bot_name: str,
+        log_level=logging.INFO,
+        log_dir: str = 'logs',
+        info_modules: list[str] = None,
+        use_colors: bool = True
+):
+    """
+    Configure standardized logging for bots with rotation.
+
+    Sets up both file and console handlers with:
+    - Rotating file handler (10MB max per file, 5 backups)
+    - Console handler with colored output (by default)
+    - Local timezone formatting
+    - Consistent format across all bots
+
+    Args:
+        bot_name: Name of the bot (e.g., 'msoar', 'hal9000')
+        log_level: Logging level for root logger (default: logging.INFO)
+        log_dir: Directory for log files (default: 'logs')
+        info_modules: List of module names to set to INFO level (useful when root is WARNING)
+        use_colors: Whether to use colored console output (default: True)
+
+    Returns:
+        logging.Logger: Root logger instance (configured)
+    """
+    # Create log directory if it doesn't exist
+    os.makedirs(log_dir, exist_ok=True)
+    log_file = os.path.join(log_dir, f'{bot_name}.log')
+
+    # Create rotating file handler (10MB max, 5 backups = ~50MB total)
+    file_handler = RotatingFileHandler(
+        log_file,
+        maxBytes=10 * 1024 * 1024,  # 10MB
+        backupCount=5
+    )
+    file_handler.setLevel(log_level if log_level != logging.WARNING else logging.INFO)
+    file_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    file_formatter.converter = time.localtime  # Use local timezone instead of UTC
+    file_handler.setFormatter(file_formatter)
+
+    # Create console handler for real-time monitoring
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(log_level if log_level != logging.WARNING else logging.INFO)
+
+    # Use colored formatter by default for better visibility
+    if use_colors:
+        console_formatter = ColoredFormatter('%(asctime)s - %(levelname)s - %(message)s')
+    else:
+        console_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        console_formatter.converter = time.localtime  # Use local timezone instead of UTC
+
+    console_handler.setFormatter(console_formatter)
+
+    # Configure root logger using basicConfig for consistency
+    logging.basicConfig(
+        level=log_level,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        handlers=[file_handler, console_handler],
+        force=True  # Override any existing logging config
+    )
+
+    # Set specific modules to INFO level if provided
+    if info_modules:
+        for module_name in info_modules:
+            logging.getLogger(module_name).setLevel(logging.INFO)
+
+    return logging.getLogger()
+
 
 # Room name cache to avoid repeated API calls
 # Cache up to 100 room names with TTL (no expiry, rooms rarely change names)

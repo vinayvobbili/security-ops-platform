@@ -1,7 +1,4 @@
 import logging
-import os
-import time
-from logging.handlers import RotatingFileHandler
 
 import requests
 from webex_bot.models.command import Command
@@ -10,6 +7,7 @@ from webex_bot.webex_bot import WebexBot
 from my_config import get_config
 from services.xsoar import TicketHandler
 from src.utils import XsoarEnvironment
+from src.utils.logging_utils import setup_bot_logging
 
 logger = logging.getLogger(__name__)
 
@@ -102,35 +100,8 @@ def msoar_initialization(bot_instance=None):
 def main():
     """MSOAR main - uses resilience framework for automatic reconnection and firewall handling"""
 
-    # Configure logging with rotation
-    # Max 10MB per file, keep 5 backups (total ~50MB of logs)
-    log_dir = 'logs'
-    os.makedirs(log_dir, exist_ok=True)
-    log_file = os.path.join(log_dir, 'msoar.log')
-
-    # Create rotating file handler
-    file_handler = RotatingFileHandler(
-        log_file,
-        maxBytes=10 * 1024 * 1024,  # 10MB
-        backupCount=5
-    )
-    file_handler.setLevel(logging.INFO)
-    file_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    file_formatter.converter = time.localtime  # Use local timezone instead of UTC
-    file_handler.setFormatter(file_formatter)
-
-    # Also log to console
-    console_handler = logging.StreamHandler()
-    console_handler.setLevel(logging.INFO)
-    console_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    console_formatter.converter = time.localtime  # Use local timezone instead of UTC
-    console_handler.setFormatter(console_formatter)
-
-    # Configure root logger
-    root_logger = logging.getLogger()
-    root_logger.setLevel(logging.INFO)
-    root_logger.addHandler(file_handler)
-    root_logger.addHandler(console_handler)
+    # Configure logging with centralized utility
+    setup_bot_logging('msoar')
 
     # Note: Noisy library logs are suppressed by ResilientBot framework
 
