@@ -45,23 +45,7 @@ sudo nginx -t
 echo "  ✓ nginx configuration installed"
 echo ""
 
-# Stop and disable old Logdy services if they exist (cleanup from previous setup)
-echo "Cleaning up old services (if any)..."
-for service in all toodles msoar money-ball jarvais barnacles jobs; do
-    if systemctl list-unit-files | grep -q "^ir-logdy-${service}.service"; then
-        sudo systemctl stop ir-logdy-${service} 2>/dev/null || true
-        sudo systemctl disable ir-logdy-${service} 2>/dev/null || true
-    fi
-done
-
-# Remove old service files and configs
-sudo rm -f /etc/systemd/system/ir-logdy-*.service
-sudo rm -f /etc/nginx/sites-enabled/ir-logdy.conf
-sudo rm -f /etc/nginx/sites-available/ir-logdy.conf
-echo "  ✓ Old services and configs cleaned up"
-echo ""
-
-# Install new Python log viewer systemd services
+# Install Python log viewer systemd services
 echo "Installing new log viewer systemd services..."
 sudo cp "$SCRIPT_DIR/systemd"/ir-log-viewer-*.service /etc/systemd/system/
 sudo systemctl daemon-reload
@@ -93,10 +77,6 @@ echo "Restarting nginx..."
 sudo systemctl restart nginx
 echo "  ✓ nginx restarted"
 echo ""
-
-# Get VM details
-VM_IP=$(hostname -I | awk '{print $1}')
-VM_HOSTNAME=$(hostname)
 
 echo "================================================"
 echo "✅ Log Viewers Setup Complete!"
