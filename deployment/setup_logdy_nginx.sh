@@ -1,0 +1,126 @@
+#!/bin/bash
+# Setup Logdy with nginx reverse proxy for organized log viewing
+# Run this script with: bash setup_logdy_nginx.sh
+
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+IR_DIR="/home/vinay/pub/IR"
+
+echo "================================================"
+echo "Setting up Logdy with nginx Reverse Proxy"
+echo "================================================"
+echo ""
+
+# Check if logdy is installed
+if [ ! -f "$HOME/bin/logdy" ]; then
+    echo "Installing Logdy..."
+    cd /tmp
+    wget -q https://github.com/logdyhq/logdy-core/releases/download/v0.17.0/logdy_linux_amd64
+    chmod +x logdy_linux_amd64
+    mv logdy_linux_amd64 ~/bin/logdy
+    echo "  ✓ Logdy installed to ~/bin/logdy"
+else
+    echo "  ✓ Logdy already installed"
+fi
+echo ""
+
+# Install nginx if not present
+if ! command -v nginx &> /dev/null; then
+    echo "Installing nginx..."
+    sudo apt-get update -qq
+    sudo apt-get install -y nginx apache2-utils
+    echo "  ✓ nginx installed"
+else
+    echo "  ✓ nginx already installed"
+fi
+echo ""
+
+# Create htpasswd file for basic auth
+echo "Setting up password protection..."
+echo -n "metcirt" | sudo htpasswd -i -c /home/vinay/pub/IR/.htpasswd admin
+sudo chown vinay:vinay /home/vinay/pub/IR/.htpasswd
+sudo chmod 600 /home/vinay/pub/IR/.htpasswd
+echo "  ✓ Password configured (username: admin, password: metcirt)"
+echo ""
+
+# Install nginx configuration
+echo "Installing nginx configuration..."
+sudo cp "$SCRIPT_DIR/nginx-logdy.conf" /etc/nginx/sites-available/ir-logdy.conf
+sudo ln -sf /etc/nginx/sites-available/ir-logdy.conf /etc/nginx/sites-enabled/ir-logdy.conf
+sudo nginx -t
+echo "  ✓ nginx configuration installed"
+echo ""
+
+# Stop and disable old ir-logdy service if it exists
+if systemctl list-unit-files | grep -q "^ir-logdy.service"; then
+    echo "Disabling old ir-logdy service..."
+    sudo systemctl stop ir-logdy 2>/dev/null || true
+    sudo systemctl disable ir-logdy 2>/dev/null || true
+    echo "  ✓ Old service disabled"
+fi
+echo ""
+
+# Install all logdy systemd services
+echo "Installing Logdy systemd services..."
+sudo cp "$SCRIPT_DIR/systemd"/ir-logdy-*.service /etc/systemd/system/
+sudo systemctl daemon-reload
+
+# Enable all services
+for service in all toodles msoar money-ball jarvais barnacles jobs; do
+    sudo systemctl enable ir-logdy-${service}.service
+done
+echo "  ✓ Systemd services installed and enabled"
+echo ""
+
+# Start all logdy services
+echo "Starting Logdy services..."
+for service in all toodles msoar money-ball jarvais barnacles jobs; do
+    sudo systemctl start ir-logdy-${service}.service
+done
+sleep 2
+echo "  ✓ All Logdy services started"
+echo ""
+
+# Restart nginx
+echo "Restarting nginx..."
+sudo systemctl restart nginx
+echo "  ✓ nginx restarted"
+echo ""
+
+# Get VM details
+VM_IP=$(hostname -I | awk '{print $1}')
+VM_HOSTNAME=$(hostname)
+
+echo "================================================"
+echo "✅ Logdy Setup Complete!"
+echo "================================================"
+echo ""
+echo "Access the log viewer at:"
+echo "  http://metcirt-lab-12.internal.company.com:8030"
+echo ""
+echo "Available log views:"
+echo "  /all          - All services combined (journalctl)"
+echo "  /toodles      - Toodles bot logs only"
+echo "  /msoar        - MSOAR bot logs only"
+echo "  /money-ball   - MoneyBall bot logs only"
+echo "  /jarvais      - Jarvais bot logs only"
+echo "  /barnacles    - Barnacles bot logs only"
+echo "  /jobs         - All Jobs scheduler logs only"
+echo ""
+echo "Login credentials:"
+echo "  Username: admin"
+echo "  Password: metcirt"
+echo ""
+echo "Features:"
+echo "  ✓ Real-time log streaming"
+echo "  ✓ Color-coded log levels"
+echo "  ✓ Search and filter functionality"
+echo "  ✓ Password protected"
+echo "  ✓ No SSH access required"
+echo ""
+echo "Management:"
+echo "  Check status: sudo systemctl status ir-logdy-*"
+echo "  Restart all:  for s in all toodles msoar money-ball jarvais barnacles jobs; do sudo systemctl restart ir-logdy-\$s; done"
+echo "  nginx status: sudo systemctl status nginx"
+echo ""

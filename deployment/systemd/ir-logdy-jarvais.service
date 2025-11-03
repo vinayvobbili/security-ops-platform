@@ -1,0 +1,19 @@
+[Unit]
+Description=Logdy - Jarvais Logs
+After=network-online.target ir-jarvais.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=vinay
+Group=vinay
+WorkingDirectory=/home/vinay/pub/IR
+ExecStart=/bin/bash -c 'tail -f /home/vinay/pub/IR/logs/jarvais.log | /home/vinay/bin/logdy stdin --ui-ip 127.0.0.1 -p 8035'
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ir-logdy-jarvais
+
+[Install]
+WantedBy=multi-user.target
