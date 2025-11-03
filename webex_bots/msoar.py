@@ -132,12 +132,7 @@ def main():
     root_logger.addHandler(file_handler)
     root_logger.addHandler(console_handler)
 
-    # Suppress verbose library logs, but keep WebSocket connection info visible
-    logging.getLogger('webex_bot.webex_bot').setLevel(logging.WARNING)
-    logging.getLogger('webex_bot.websockets.webex_websocket_client').setLevel(logging.INFO)  # Show connection status
-    logging.getLogger('webexpythonsdk').setLevel(logging.WARNING)
-    logging.getLogger('urllib3').setLevel(logging.ERROR)  # Suppress connection pool warnings
-    logging.getLogger('asyncio').setLevel(logging.CRITICAL)  # Suppress asyncio future errors
+    # Note: Noisy library logs are suppressed by ResilientBot framework
 
     logger.info("🚀 Starting METCIRT SOAR bot")
 

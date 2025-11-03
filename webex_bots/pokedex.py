@@ -86,9 +86,7 @@ logging.getLogger('src.utils.webex_device_manager').setLevel(logging.INFO)
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARNING)  # Ensure bot logger also uses WARNING level
 
-# Suppress noisy third-party loggers
-logging.getLogger('webex_websocket_client').setLevel(logging.WARNING)
-logging.getLogger('webex_bot').setLevel(logging.WARNING)
+# Note: Noisy library logs are suppressed by ResilientBot framework
 
 # Now safe to import modules that use logging
 import csv
