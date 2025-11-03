@@ -57,7 +57,7 @@ from services.xsoar import XsoarEnvironment
 from services.approved_testing_utils import add_approved_testing_entry
 from src import secops
 from src.components import apt_names_fetcher, secops_shift_metrics
-from src.utils.logging_utils import is_scanner_request, log_web_activity, setup_bot_logging
+from src.utils.logging_utils import is_scanner_request, log_web_activity, setup_logging
 
 CONFIG = get_config()
 
@@ -73,7 +73,7 @@ MAX_CONNECTIONS = 100
 COMPANY_EMAIL_DOMAIN = '@' + CONFIG.my_web_domain
 
 # Configure logging with centralized utility
-setup_bot_logging(
+setup_logging(
     bot_name='web_server',
     log_level=logging.WARNING,
     info_modules=['__main__'],
@@ -636,7 +636,7 @@ def relay_data_async(client_sock, target_sock):
                 pass
 
 
-class OptimizedProxy(http.server.SimpleHTTPRequestHandler):
+class OptimizedProxy(http.server.BaseHTTPRequestHandler):
     protocol_version = 'HTTP/1.1'  # Enable keep-alive
 
     def do_GET(self):
