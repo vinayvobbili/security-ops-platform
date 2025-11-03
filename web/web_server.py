@@ -64,7 +64,7 @@ CONFIG = get_config()
 # Server configuration constants
 SHOULD_START_PROXY = True  # Enable proxy server
 USE_DEBUG_MODE = CONFIG.web_server_debug_mode_on
-PROXY_PORT = 8080  # Proxy listens on 8080
+PROXY_PORT = 8081
 # Allow environment override; default to 8080 for non-root dev usage
 WEB_SERVER_PORT = CONFIG.web_server_port
 BUFFER_SIZE = 16384
