@@ -36,3 +36,10 @@ tests
 certs/*
 
 node_modules
+
+# Password and auth files
+.htpasswd
+.logdy_password
+
+# Process output files
+nohup.out
