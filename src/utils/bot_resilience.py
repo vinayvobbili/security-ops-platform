@@ -127,6 +127,14 @@ class ResilientBot:
             proactive_reconnection_interval: Force clean reconnect at this interval (seconds, None to disable)
             disable_proxy_interval_adjustment: Don't automatically adjust intervals when proxy detected
         """
+        # Suppress noisy websocket logs for all bots
+        # These INFO-level logs create excessive noise without adding value
+        logging.getLogger('webex_bot.websockets.webex_websocket_client').setLevel(logging.WARNING)
+        logging.getLogger('webex_bot.webex_bot').setLevel(logging.WARNING)
+        logging.getLogger('webexpythonsdk').setLevel(logging.WARNING)
+        logging.getLogger('urllib3').setLevel(logging.ERROR)
+        logging.getLogger('asyncio').setLevel(logging.CRITICAL)
+
         # Apply SDK timeout patch for all bots using this resilience framework
         # The WebSocket client makes HTTP calls to register/refresh devices, and the default 60s timeout
         # is too short for unreliable networks, causing "Read timed out" errors
