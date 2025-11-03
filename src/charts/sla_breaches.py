@@ -7,7 +7,9 @@ import matplotlib.transforms as transforms
 import numpy as np
 from matplotlib import pyplot as plt
 from pytz import timezone
+
 from src.charts.chart_style import apply_chart_style
+
 apply_chart_style()
 
 # Add the project root to Python path
@@ -115,8 +117,6 @@ def save_sla_breaches_chart(ticket_slas_by_periods, period_label="Yesterday"):
         ticket_slas_by_periods['Past 7 days'].containment_sla_breach_count,
         ticket_slas_by_periods['Yesterday'].containment_sla_breach_count
     ]
-
-    ticket_counts = [thirty_days_ticket_count, seven_days_ticket_count, yesterday_ticket_count]
 
     # Enhanced figure with better proportions and styling
     fig, ax1 = plt.subplots(figsize=(14, 10), facecolor='#f8f9fa')
