@@ -8,7 +8,7 @@ Type=simple
 User=vinay
 Group=vinay
 WorkingDirectory=/home/vinay/pub/IR
-ExecStart=/bin/bash -c 'tail -f /home/vinay/pub/IR/logs/barnacles.log | /home/vinay/bin/logdy stdin --ui-ip 127.0.0.1 -p 8036'
+ExecStart=/bin/bash -c 'tail -f /home/vinay/pub/IR/logs/barnacles.log | /home/vinay/bin/logdy stdin --ui-ip 0.0.0.0 -p 8036 --ui-pass=$(cat /home/vinay/pub/IR/.logdy_password 2>/dev/null || echo "metcirt")'
 Restart=on-failure
 RestartSec=10
 StandardOutput=journal

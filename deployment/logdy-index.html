@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IR Log Viewer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            max-width: 800px;
+            width: 100%;
+            padding: 40px;
+        }
+
+        h1 {
+            color: #2d3748;
+            margin-bottom: 10px;
+            font-size: 2em;
+        }
+
+        .subtitle {
+            color: #718096;
+            margin-bottom: 30px;
+            font-size: 1.1em;
+        }
+
+        .log-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 16px;
+            margin-bottom: 30px;
+        }
+
+        .log-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 12px;
+            padding: 24px;
+            text-decoration: none;
+            color: white;
+            transition: transform 0.2s, box-shadow 0.2s;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .log-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 12px rgba(0,0,0,0.2);
+        }
+
+        .log-card.featured {
+            grid-column: 1 / -1;
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        }
+
+        .log-card h3 {
+            font-size: 1.3em;
+            margin-bottom: 8px;
+        }
+
+        .log-card p {
+            opacity: 0.9;
+            font-size: 0.9em;
+        }
+
+        .features {
+            background: #f7fafc;
+            border-radius: 12px;
+            padding: 20px;
+            margin-top: 30px;
+        }
+
+        .features h3 {
+            color: #2d3748;
+            margin-bottom: 12px;
+        }
+
+        .features ul {
+            list-style: none;
+            color: #4a5568;
+        }
+
+        .features li {
+            padding: 8px 0;
+            padding-left: 24px;
+            position: relative;
+        }
+
+        .features li:before {
+            content: "✓";
+            position: absolute;
+            left: 0;
+            color: #48bb78;
+            font-weight: bold;
+        }
+
+        .footer {
+            text-align: center;
+            margin-top: 30px;
+            color: #a0aec0;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 IR Log Viewer</h1>
+        <p class="subtitle">Real-time log monitoring for all IR services</p>
+
+        <div class="log-grid">
+            <a href="http://metcirt-lab-12.internal.company.com:8031" class="log-card featured" target="_blank">
+                <h3>📊 All Services</h3>
+                <p>Combined view of all IR services using journalctl</p>
+            </a>
+
+            <a href="http://metcirt-lab-12.internal.company.com:8032" class="log-card" target="_blank">
+                <h3>🎯 Toodles</h3>
+                <p>Toodles bot logs</p>
+            </a>
+
+            <a href="http://metcirt-lab-12.internal.company.com:8033" class="log-card" target="_blank">
+                <h3>🤖 MSOAR</h3>
+                <p>MSOAR bot logs</p>
+            </a>
+
+            <a href="http://metcirt-lab-12.internal.company.com:8034" class="log-card" target="_blank">
+                <h3>💰 MoneyBall</h3>
+                <p>MoneyBall bot logs</p>
+            </a>
+
+            <a href="http://metcirt-lab-12.internal.company.com:8035" class="log-card" target="_blank">
+                <h3>🛡️ Jarvais</h3>
+                <p>Jarvais bot logs</p>
+            </a>
+
+            <a href="http://metcirt-lab-12.internal.company.com:8036" class="log-card" target="_blank">
+                <h3>⚓ Barnacles</h3>
+                <p>Barnacles bot logs</p>
+            </a>
+
+            <a href="http://metcirt-lab-12.internal.company.com:8037" class="log-card" target="_blank">
+                <h3>⏰ All Jobs</h3>
+                <p>Scheduler logs</p>
+            </a>
+        </div>
+
+        <div class="features">
+            <h3>Features</h3>
+            <ul>
+                <li>Real-time log streaming</li>
+                <li>Color-coded log levels (ERROR, WARNING, INFO)</li>
+                <li>Full-text search across logs</li>
+                <li>Filter by log level and timestamp</li>
+                <li>No SSH access required</li>
+            </ul>
+        </div>
+
+        <div class="footer">
+            Powered by Logdy | METCIRT Security Operations
+        </div>
+    </div>
+</body>
+</html>
