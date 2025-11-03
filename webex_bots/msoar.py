@@ -7,7 +7,7 @@ from webex_bot.webex_bot import WebexBot
 from my_config import get_config
 from services.xsoar import TicketHandler
 from src.utils import XsoarEnvironment
-from src.utils.logging_utils import setup_bot_logging
+from src.utils.logging_utils import setup_logging
 
 logger = logging.getLogger(__name__)
 
@@ -101,7 +101,7 @@ def main():
     """MSOAR main - uses resilience framework for automatic reconnection and firewall handling"""
 
     # Configure logging with centralized utility
-    setup_bot_logging('msoar')
+    setup_logging('msoar')
 
     # Note: Noisy library logs are suppressed by ResilientBot framework
 

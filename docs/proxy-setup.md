@@ -21,20 +21,24 @@ The easiest way to use the proxy is through the SSH SOCKS5 tunnel on port 8888.
 ### Chrome with Proxy
 
 **Start Chrome with proxy:**
+
 ```bash
 ~/chrome-with-proxy.sh
 ```
 
 This script automatically:
+
 - Kills any existing SSH tunnel on port 8888
 - Creates a new SSH SOCKS5 tunnel to metcirt-lab
 - Launches Chrome with a separate profile using the proxy
 
 **Verify it's working:**
+
 - Visit `http://httpbin.org/ip` in the proxy Chrome window
 - You should see the VM's public IP (162.192.161.81) instead of your Mac's IP
 
 **Stop the tunnel:**
+
 ```bash
 pkill -f 'ssh.*-D 8888.*metcirt-lab'
 ```
@@ -52,6 +56,7 @@ claude
 #### Option 2: Permanent Configuration
 
 Add to `~/.zshrc`:
+
 ```bash
 # Proxy for Claude CLI via SSH tunnel to metcirt-lab
 export ALL_PROXY="socks5://localhost:8888"
@@ -59,6 +64,7 @@ export all_proxy="socks5://localhost:8888"
 ```
 
 Then reload your shell:
+
 ```bash
 source ~/.zshrc
 ```
@@ -76,21 +82,25 @@ claude --version
 ### Manual Tunnel Management
 
 **Start tunnel manually:**
+
 ```bash
 ssh -D 8888 -N -f metcirt-lab
 ```
 
 **Check if tunnel is running:**
+
 ```bash
 ps aux | grep "ssh.*-D 8888" | grep -v grep
 ```
 
 **Stop tunnel:**
+
 ```bash
 pkill -f 'ssh.*-D 8888.*metcirt-lab'
 ```
 
 **Restart tunnel:**
+
 ```bash
 pkill -f 'ssh.*-D 8888.*metcirt-lab' && ssh -D 8888 -N -f metcirt-lab
 ```
@@ -111,6 +121,7 @@ Expected output should show the VM's IP address.
 ### Known Issues
 
 The HTTP proxy running on the VM at port 8081 has bugs:
+
 - Works from VM localhost
 - Times out when accessed from external IPs (like your Mac)
 - `do_CONNECT` method may not be getting called for external requests
@@ -118,6 +129,7 @@ The HTTP proxy running on the VM at port 8081 has bugs:
 ### Changes Made
 
 Modified `/web/web_server.py`:
+
 - Changed `OptimizedProxy` base class from `SimpleHTTPRequestHandler` to `BaseHTTPRequestHandler`
 - Committed as: `e96b78c5`
 
@@ -126,24 +138,24 @@ Modified `/web/web_server.py`:
 If we need to fix the HTTP proxy:
 
 1. **Add detailed logging:**
-   - Log all incoming connections
-   - Log request methods being called
-   - Track request routing
+    - Log all incoming connections
+    - Log request methods being called
+    - Track request routing
 
 2. **Network debugging:**
-   - Use `tcpdump` to capture traffic on port 8081
-   - Verify what packets are being received
-   - Check response packets being sent
+    - Use `tcpdump` to capture traffic on port 8081
+    - Verify what packets are being received
+    - Check response packets being sent
 
 3. **Configuration checks:**
-   - Verify firewall/iptables rules
-   - Check `ThreadingTCPServer` configuration
-   - Test binding to different interfaces
+    - Verify firewall/iptables rules
+    - Check `ThreadingTCPServer` configuration
+    - Test binding to different interfaces
 
 4. **Client testing:**
-   - Test with various clients (curl, wget, Python requests)
-   - Compare localhost vs external IP behavior
-   - Test different HTTP methods (GET, POST, CONNECT)
+    - Test with various clients (curl, wget, Python requests)
+    - Compare localhost vs external IP behavior
+    - Test different HTTP methods (GET, POST, CONNECT)
 
 ---
 

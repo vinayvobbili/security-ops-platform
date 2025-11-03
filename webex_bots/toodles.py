@@ -34,10 +34,10 @@ import logging
 
 ROOT_DIRECTORY = Path(__file__).parent.parent
 
-from src.utils.logging_utils import setup_bot_logging
+from src.utils.logging_utils import setup_logging
 
 # Configure logging with centralized utility
-setup_bot_logging(
+setup_logging(
     bot_name='toodles',
     log_level=logging.WARNING,
     log_dir=str(ROOT_DIRECTORY / "logs"),
