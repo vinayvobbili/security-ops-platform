@@ -1,0 +1,23 @@
+[Unit]
+Description=Log Viewer - MoneyBall
+After=network-online.target ir-money-ball.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=vinay
+Group=vinay
+WorkingDirectory=/home/vinay/pub/IR
+
+# Start log viewer for MoneyBall bot
+ExecStart=/home/vinay/pub/IR/.venv/bin/python deployment/log_viewer.py --port 8034 --title "MoneyBall Bot" --file /home/vinay/pub/IR/logs/money_ball.log
+
+Restart=on-failure
+RestartSec=10
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ir-log-viewer-money-ball
+
+[Install]
+WantedBy=multi-user.target
