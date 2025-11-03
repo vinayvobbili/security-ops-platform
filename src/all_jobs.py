@@ -34,15 +34,17 @@ from src.components import (
     containment_sla_risk_tickets, incident_declaration_sla_risk
 )
 from src.utils.fs_utils import make_dir_for_todays_charts
+from src.utils.logging_utils import setup_bot_logging
 
-# Configure logging
-logging.basicConfig(
-    level=logging.WARNING,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(sys.stdout)
-    ]
+# Configure logging with centralized utility
+setup_bot_logging(
+    bot_name='all_jobs',
+    log_level=logging.WARNING,
+    info_modules=['__main__'],
+    use_colors=True
 )
+
+# Suppress noisy library logs
 logging.getLogger("webexpythonsdk.restsession").setLevel(logging.ERROR)
 logging.getLogger("webexteamssdk.restsession").setLevel(logging.ERROR)
 logging.getLogger("openpyxl").setLevel(logging.ERROR)

@@ -7,31 +7,17 @@ ROOT_DIRECTORY = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT_DIRECTORY))
 
 # Setup logging FIRST before any imports that might use it
-import logging.handlers
+import logging
 
-# Ensure logs directory exists
-(ROOT_DIRECTORY / "logs").mkdir(exist_ok=True)
+from src.utils.logging_utils import setup_bot_logging
 
-# Setup logging with rotation and better formatting
-# Set root logger to WARNING to avoid flooding
-logging.basicConfig(
-    level=logging.WARNING,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.handlers.RotatingFileHandler(
-            ROOT_DIRECTORY / "logs" / "barnacles.log",
-            maxBytes=10 * 1024 * 1024,  # 10MB
-            backupCount=5
-        ),
-        logging.StreamHandler()
-    ],
-    force=True  # Force reconfiguration even if logging was already initialized
+# Configure logging with centralized utility
+setup_bot_logging(
+    bot_name='barnacles',
+    log_level=logging.WARNING,
+    log_dir=str(ROOT_DIRECTORY / "logs"),
+    info_modules=['__main__', 'src.utils.bot_resilience', 'src.utils.webex_device_manager']
 )
-
-# Enable INFO level only for startup-related loggers
-logging.getLogger('__main__').setLevel(logging.INFO)
-logging.getLogger('src.utils.bot_resilience').setLevel(logging.INFO)
-logging.getLogger('src.utils.webex_device_manager').setLevel(logging.INFO)
 
 # Note: Noisy library logs are suppressed by ResilientBot framework
 
