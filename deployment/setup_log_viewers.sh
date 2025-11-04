@@ -59,7 +59,15 @@ echo ""
 # Make log viewer script executable
 echo "Making log viewer script executable..."
 chmod +x "$SCRIPT_DIR/log_viewer.py"
+chmod +x "$SCRIPT_DIR/manage_log_viewers.sh"
 echo "  ✓ Script permissions set"
+echo ""
+
+# Create symlink in ~/bin for easy management
+echo "Creating management symlink..."
+mkdir -p ~/bin
+ln -sf /home/vinay/pub/IR/deployment/manage_log_viewers.sh ~/bin/start_log_service
+echo "  ✓ Symlink created: ~/bin/start_log_service"
 echo ""
 
 # Start all log viewer services
@@ -108,10 +116,16 @@ echo "  ✓ Password protected"
 echo "  ✓ No SSH access required"
 echo ""
 echo "Management:"
-echo "  Check status: sudo systemctl status ir-log-viewer-*"
-echo "  Restart all:  for s in all toodles msoar money-ball jarvais barnacles jobs; do sudo systemctl restart ir-log-viewer-\$s; done"
-echo "  nginx status: sudo systemctl status nginx"
-echo "  View logs:    sudo journalctl -u ir-log-viewer-* -f"
+echo "  Simple commands (via ~/bin/start_log_service):"
+echo "    start_log_service start    - Start all log viewers"
+echo "    start_log_service stop     - Stop all log viewers"
+echo "    start_log_service restart  - Restart all log viewers"
+echo "    start_log_service status   - Check status of all log viewers"
+echo ""
+echo "  Direct systemctl commands:"
+echo "    sudo systemctl status ir-log-viewer-*"
+echo "    sudo systemctl status nginx"
+echo "    sudo journalctl -u ir-log-viewer-* -f"
 echo ""
 echo "Testing locally (before firewall opens ports):"
 echo "  ssh -L 8030:localhost:8030 -L 8031:localhost:8031 -L 8032:localhost:8032 -L 8033:localhost:8033 -L 8034:localhost:8034 -L 8035:localhost:8035 -L 8036:localhost:8036 -L 8037:localhost:8037 metcirt-lab"
