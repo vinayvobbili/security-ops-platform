@@ -38,7 +38,7 @@ excel_path = root_directory / 'data' / 'transient' / 'secOps' / config.secops_sh
 try:
     wb = load_workbook(excel_path)
     # Select the sheet
-    sheet = wb['SecOps Roster 2025 SEP-OCT']
+    sheet = wb[config.secops_shift_staffing_sheet_name]
     EXCEL_AVAILABLE = True
 except FileNotFoundError:
     logger.warning(f"Excel file not found: {excel_path}. Staffing data will be unavailable.")
@@ -789,7 +789,7 @@ def announce_shift_change(shift_name, room_id, sleep_time=30):
 def main():
     """Main function to run the scheduled jobs."""
     room_id = config.webex_room_id_vinay_test_space
-    announce_shift_change('night', room_id, sleep_time=0)
+    announce_shift_change('morning', room_id, sleep_time=0)
     print(get_staffing_data())
 
 

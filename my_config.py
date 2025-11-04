@@ -89,6 +89,7 @@ def get_config():
         eradication_time=os.environ.get("ERADICATION_TIME"),
         closure_time=os.environ.get("CLOSURE_TIME"),
         secops_shift_staffing_filename=os.environ.get("SECOPS_STAFFING_FILENAME"),
+        secops_shift_staffing_sheet_name=os.environ.get("SECOPS_STAFFING_SHEETNAME"),
         snow_client_key=os.environ.get("SNOW_CLIENT_KEY"),
         snow_client_secret=os.environ.get("SNOW_CLIENT_SECRET"),
         snow_functional_account_id=os.environ.get("SNOW_FUNCTIONAL_ACCOUNT_ID"),
@@ -197,6 +198,7 @@ class Config:
     eradication_time: Optional[str] = None
     closure_time: Optional[str] = None
     secops_shift_staffing_filename: Optional[str] = None
+    secops_shift_staffing_sheet_name: Optional[str] = None
     snow_client_key: Optional[str] = None
     snow_client_secret: Optional[str] = None
     snow_functional_account_id: Optional[str] = None
