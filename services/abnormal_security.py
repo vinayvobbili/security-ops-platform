@@ -25,13 +25,13 @@ logger = logging.getLogger(__name__)
 class AbnormalSecurityClient:
     """Client for interacting with the Abnormal Security API."""
 
-    def __init__(self, api_token: str, base_url: str = "https://api.abnormalplatform.com"):
+    def __init__(self, api_token: str, base_url: str = "https://api.abnormalplatform.com/v1"):
         """
         Initialize the Abnormal Security API client.
 
         Args:
             api_token: API authentication token
-            base_url: Base URL for the API (default: https://api.abnormalplatform.com)
+            base_url: Base URL for the API (default: https://api.abnormalplatform.com/v1)
         """
         self.api_token = api_token
         self.base_url = base_url.rstrip('/')
@@ -203,7 +203,7 @@ class AbnormalSecurityClient:
 
         headers = {'mock-data': str(mock_data)}
 
-        return self._make_request('GET', '/v1/threats', params=params, headers=headers)
+        return self._make_request('GET', '/threats', params=params, headers=headers)
 
     def get_threat_details(
             self,
@@ -241,7 +241,7 @@ class AbnormalSecurityClient:
 
         return self._make_request(
             'GET',
-            f'/v1/threats/{threat_id}',
+            f'/threats/{threat_id}',
             params=params,
             headers=headers
         )
@@ -274,7 +274,7 @@ class AbnormalSecurityClient:
 
         return self._make_request(
             'POST',
-            f'/v1/threats/{threat_id}',
+            f'/threats/{threat_id}',
             json=body,
             headers=headers
         )
@@ -398,7 +398,7 @@ class AbnormalSecurityClient:
 
         headers = {'mock-data': str(mock_data)}
 
-        return self._make_request('GET', '/v1/cases', params=params, headers=headers)
+        return self._make_request('GET', '/cases', params=params, headers=headers)
 
     def get_case_details(
             self,
@@ -423,7 +423,7 @@ class AbnormalSecurityClient:
 
         return self._make_request(
             'GET',
-            f'/v1/cases/{case_id}',
+            f'/cases/{case_id}',
             headers=headers
         )
 
@@ -453,7 +453,7 @@ class AbnormalSecurityClient:
 
         return self._make_request(
             'POST',
-            f'/v1/cases/{case_id}',
+            f'/cases/{case_id}',
             json=body,
             headers=headers
         )
