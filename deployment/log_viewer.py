@@ -12,6 +12,7 @@ import threading
 import queue
 import logging
 from functools import wraps
+from typing import Optional
 from flask import Flask, Response, render_template_string, request
 
 # Setup logging
@@ -24,10 +25,10 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 
 # Global variables
-log_queue = queue.Queue(maxsize=1000)
-log_source_cmd = None
-auth_password = "metcirt"
-viewer_title = "Log Viewer"
+log_queue: queue.Queue = queue.Queue(maxsize=1000)
+log_source_cmd: Optional[list[str]] = None
+auth_password: str = "metcirt"
+viewer_title: str = "Log Viewer"
 
 # HTML template with inline CSS
 HTML_TEMPLATE = """
@@ -289,6 +290,10 @@ def read_log_stream():
     Start subprocess to tail logs and feed into queue.
     Runs in background thread.
     """
+    if log_source_cmd is None:
+        logger.error("log_source_cmd is not set")
+        return
+
     try:
         logger.info(f"Starting log stream: {' '.join(log_source_cmd)}")
 
@@ -307,7 +312,7 @@ def read_log_stream():
                 try:
                     log_queue.put(line.rstrip('\n'), block=False)
                 except queue.Full:
-                    # Drop oldest line if queue is full
+                    # Drop the oldest line if queue is full
                     try:
                         log_queue.get_nowait()
                         log_queue.put(line.rstrip('\n'), block=False)
