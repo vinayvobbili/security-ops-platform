@@ -97,7 +97,7 @@ def _patched_poolmanager_init(self, *args, **kwargs):
 
 urllib3.PoolManager.__init__ = _patched_poolmanager_init
 
-# Initialize demisto-py clients for prod and dev environments
+# Initialize demisto-py clients for prod and dev environments with timeout
 prod_client = demisto_client.configure(
     base_url=CONFIG.xsoar_prod_api_base_url,
     api_key=CONFIG.xsoar_prod_auth_key,
@@ -111,6 +111,14 @@ dev_client = demisto_client.configure(
     auth_id=CONFIG.xsoar_dev_auth_id,
     verify_ssl=False
 )
+
+# Configure connection and read timeouts for both clients (30 seconds each)
+# This prevents indefinite hangs when the API is unresponsive
+for client in [prod_client, dev_client]:
+    if hasattr(client, 'api_client') and hasattr(client.api_client, 'rest_client'):
+        rest_client = client.api_client.rest_client
+        # Set timeout: (connect_timeout, read_timeout) in seconds
+        rest_client.timeout = (30, 30)
 
 # Also configure the rest client's pool manager if available
 for client in [prod_client, dev_client]:
@@ -676,7 +684,7 @@ class TicketHandler:
         }
 
         try:
-            response = requests.post(url, data=payload, headers=headers, verify=False)
+            response = requests.post(url, data=payload, headers=headers, verify=False, timeout=30)
             response.raise_for_status()
             log.info(f"Successfully completed task '{task_name}' (ID: {task_id}) in ticket {ticket_id}")
 

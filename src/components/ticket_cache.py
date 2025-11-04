@@ -157,15 +157,19 @@ class TicketCache:
     @classmethod
     def generate(cls, lookback_days: int = 90) -> None:
         """Run complete ticket caching pipeline."""
-        log.info(f"Starting ticket cache generation (lookback={lookback_days}d)")
-        instance = cls()
+        try:
+            log.info(f"Starting ticket cache generation (lookback={lookback_days}d)")
+            instance = cls()
 
-        # Three-step pipeline
-        raw_tickets = instance._fetch_raw_tickets(lookback_days)
-        ui_tickets = instance._process_for_ui(raw_tickets)
-        instance._save_tickets(raw_tickets, ui_tickets)
+            # Three-step pipeline
+            raw_tickets = instance._fetch_raw_tickets(lookback_days)
+            ui_tickets = instance._process_for_ui(raw_tickets)
+            instance._save_tickets(raw_tickets, ui_tickets)
 
-        log.info("Ticket cache generation complete")
+            log.info("Ticket cache generation complete")
+        except Exception as e:
+            log.error(f"Ticket cache generation failed: {e}", exc_info=True)
+            raise
 
     def _fetch_raw_tickets(self, lookback_days: int) -> List[Ticket]:
         """Fetch tickets from XSOAR and enrich with notes in parallel."""
@@ -194,6 +198,7 @@ class TicketCache:
     def _enrich_with_notes(self, tickets: List[Ticket]) -> List[Ticket]:
         """Enrich tickets with user notes in parallel."""
         max_workers = 50
+        timeout_per_ticket = 30  # seconds
         print(f"📝 Enriching {len(tickets)} tickets with notes (parallel, workers={max_workers})...")
         log.debug(f"Starting parallel notes enrichment with {max_workers} workers")
 
@@ -209,7 +214,7 @@ class TicketCache:
             for future in tqdm(as_completed(futures), total=len(tickets),
                                desc="Fetching notes", unit="ticket"):
                 try:
-                    enriched.append(future.result())
+                    enriched.append(future.result(timeout=timeout_per_ticket))
                 except Exception as e:
                     failed += 1
                     ticket = futures[future]

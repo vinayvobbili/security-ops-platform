@@ -116,7 +116,7 @@ def main() -> None:
     # Daily chart generation - runs at midnight to prepare metrics for the next day
     schedule.every().day.at("00:01", eastern).do(lambda: safe_run(
         lambda: make_dir_for_todays_charts(helper_methods.CHARTS_DIR_PATH),
-        TicketCache.generate,
+        lambda: TicketCache.generate(),
         aging_tickets.make_chart,
         crowdstrike_efficacy.make_chart,
         crowdstrike_volume.make_chart,
