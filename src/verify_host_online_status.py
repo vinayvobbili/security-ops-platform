@@ -23,7 +23,11 @@ prod_list_handler = ListHandler(XsoarEnvironment.PROD)
 
 def send_webex_notification(host_name, ticket_id):
     incident_url = config.xsoar_prod_ui_base_url + "/Custom/caseinfoid/" + ticket_id
-    webex_teams_api = WebexTeamsAPI(access_token=config.webex_bot_access_token_soar)
+    # Configure timeout to prevent hanging if Webex API is slow/down
+    webex_teams_api = WebexTeamsAPI(
+        access_token=config.webex_bot_access_token_soar,
+        single_request_timeout=60  # 60 second timeout
+    )
     webex_teams_api.messages.create(
         roomId=config.webex_room_id_host_announcements,
         markdown=f'Host {host_name} associated with ticket [#{ticket_id}]({incident_url}) is now online'
