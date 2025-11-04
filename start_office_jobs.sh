@@ -4,7 +4,7 @@ cd /home/vinay/pub/IR || exit 1
 
 # Kill existing office_jobs process if running
 echo "Stopping existing Office Jobs instances..."
-pkill -f "src/office_jobs.py"
+pkill -f "src/office_jobs"
 sleep 1
 
 # Clear the log file to ensure we see fresh output
@@ -25,8 +25,8 @@ timeout 5 tail -f office_jobs.log 2>/dev/null | head -20 || true
 echo ""
 
 # Check if the process is actually running
-if pgrep -f "src/office_jobs.py" > /dev/null; then
-    PID=$(pgrep -f 'src/office_jobs.py')
+if pgrep -f "src/office_jobs" > /dev/null; then
+    PID=$(pgrep -f 'src/office_jobs')
     echo "✅ Office Jobs is running (PID: $PID)"
     echo ""
     echo "To view logs: tail -f /home/vinay/pub/IR/office_jobs.log"

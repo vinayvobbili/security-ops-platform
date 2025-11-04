@@ -4,7 +4,7 @@ cd /home/vinay/pub/IR || exit 1
 
 # Kill existing money_ball process if running
 echo "Stopping existing Money Ball instances..."
-pkill -f "webex_bots/money_ball.py"
+pkill -f "webex_bots/money_ball"
 sleep 1
 
 # Ensure logs directory exists
@@ -37,8 +37,8 @@ done
 echo ""
 
 # Check if the process is actually running
-if pgrep -f "webex_bots/money_ball.py" > /dev/null; then
-    PID=$(pgrep -f 'webex_bots/money_ball.py')
+if pgrep -f "webex_bots/money_ball" > /dev/null; then
+    PID=$(pgrep -f 'webex_bots/money_ball')
     echo "✅ Money Ball is running (PID: $PID)"
     echo ""
     echo "To view logs: tail -f /home/vinay/pub/IR/logs/money_ball.log"

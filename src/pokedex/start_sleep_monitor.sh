@@ -13,7 +13,7 @@ if [ -f "$LOCK_FILE" ]; then
 fi
 
 echo "Stopping any existing Sleep Monitor instances..."
-pkill -f "macbook_sleep_monitor.py" 2>/dev/null || true
+pkill -f "macbook_sleep_monitor" 2>/dev/null || true
 sleep 1
 
 echo "Starting MacBook Sleep Monitor for Pokedex..."
@@ -30,12 +30,8 @@ fi
 # Set Python path
 export PYTHONPATH="$PROJECT_DIR:$PYTHONPATH"
 
-# Clear the log file to ensure we see fresh output
-> "$LOG_FILE"
-
 # Start the monitor
 python3 "$SCRIPT_PATH" &
-MONITOR_PID=$!
 
 echo "Waiting for initialization..."
 sleep 2
@@ -48,8 +44,8 @@ if [ -f "$LOG_FILE" ]; then
 fi
 
 # Check if the process is actually running
-if pgrep -f "macbook_sleep_monitor.py" > /dev/null; then
-    PID=$(pgrep -f 'macbook_sleep_monitor.py')
+if pgrep -f "macbook_sleep_monitor" > /dev/null; then
+    PID=$(pgrep -f 'macbook_sleep_monitor')
     echo "✅ MacBook Sleep Monitor is running (PID: $PID)"
     echo ""
     echo "To view logs: tail -f $LOG_FILE"

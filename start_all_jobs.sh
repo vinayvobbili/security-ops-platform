@@ -4,7 +4,7 @@ cd /home/vinay/pub/IR || exit 1
 
 # Kill existing all_jobs process if running
 echo "Stopping existing All Jobs instances..."
-pkill -f "src/all_jobs.py"
+pkill -f "src/all_jobs"
 sleep 1
 
 # Clear the log file to ensure we see fresh output
@@ -25,8 +25,8 @@ timeout 5 tail -f logs/all_jobs.log 2>/dev/null | head -20 || true
 echo ""
 
 # Check if the process is actually running
-if pgrep -f "src/all_jobs.py" > /dev/null; then
-    PID=$(pgrep -f 'src/all_jobs.py')
+if pgrep -f "src/all_jobs" > /dev/null; then
+    PID=$(pgrep -f 'src/all_jobs')
     echo "✅ All Jobs is running (PID: $PID)"
     echo ""
     echo "To view logs: tail -f /home/vinay/pub/IR/logs/all_jobs.log"

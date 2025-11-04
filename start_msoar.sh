@@ -52,8 +52,8 @@ done
 echo ""
 
 # Check if the process is actually running
-if pgrep -f "webex_bots/msoar.py" > /dev/null; then
-    PID=$(pgrep -f 'webex_bots/msoar.py')
+if pgrep -f "webex_bots/msoar" > /dev/null; then
+    PID=$(pgrep -f 'webex_bots/msoar')
     echo "✅ MSOAR is running (PID: $PID)"
     echo ""
     echo "To view logs: tail -f /home/vinay/pub/IR/logs/msoar.log"
