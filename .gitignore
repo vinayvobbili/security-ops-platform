@@ -11,6 +11,7 @@ scheduler.pid
 web/static/audio
 local_pdfs_docs
 debug/*
+data/certs*
 
 # System files
 .DS_Store
@@ -42,4 +43,4 @@ node_modules
 .logdy_password
 
 # Process output files
-nohup.out
+nohup.outdata/certs/
