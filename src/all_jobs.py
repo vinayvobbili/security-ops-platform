@@ -14,6 +14,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 import time
 import traceback
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from typing import Callable
 
 import pytz
@@ -55,20 +56,29 @@ config = get_config()
 eastern = pytz.timezone('US/Eastern')
 
 
-def safe_run(*jobs: Callable[[], None]) -> None:
-    """Execute multiple jobs safely, continuing even if some fail.
+def safe_run(*jobs: Callable[[], None], timeout: int = 300) -> None:
+    """Execute multiple jobs safely with timeout protection, continuing even if some fail.
 
-    Each job is executed in sequence with independent error handling.
-    If one job fails, remaining jobs continue executing.
+    Each job is executed in sequence with independent error handling and timeout protection.
+    If one job fails or times out, remaining jobs continue executing.
 
     Args:
         *jobs: Variable number of callable functions to execute
+        timeout: Maximum seconds per job (default: 300 = 5 minutes)
     """
     for job in jobs:
+        job_name = getattr(job, '__name__', str(job))
         try:
-            job()
+            # Execute job with timeout protection using ThreadPoolExecutor
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(job)
+                try:
+                    future.result(timeout=timeout)
+                except FuturesTimeoutError:
+                    logger.error(f"Job timed out after {timeout} seconds: {job_name}")
+                    logger.error(f"This job was forcefully terminated to prevent scheduler hang")
         except Exception as e:
-            logger.error(f"Job execution failed: {e}")
+            logger.error(f"Job execution failed for {job_name}: {e}")
             logger.debug(traceback.format_exc())
 
 
@@ -116,7 +126,7 @@ def main() -> None:
     # Daily chart generation - runs at midnight to prepare metrics for the next day
     schedule.every().day.at("00:01", eastern).do(lambda: safe_run(
         lambda: make_dir_for_todays_charts(helper_methods.CHARTS_DIR_PATH),
-        lambda: TicketCache.generate(),
+        TicketCache.generate,
         aging_tickets.make_chart,
         crowdstrike_efficacy.make_chart,
         crowdstrike_volume.make_chart,

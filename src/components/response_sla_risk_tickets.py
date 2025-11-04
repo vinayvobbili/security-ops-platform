@@ -9,7 +9,11 @@ from services.xsoar import TicketHandler, XsoarEnvironment
 from src.secops import get_staffing_data, get_current_shift
 
 CONFIG = get_config()
-webex_api = WebexAPI(access_token=CONFIG.webex_bot_access_token_soar)
+# Configure timeout to prevent hanging if Webex API is slow/down
+webex_api = WebexAPI(
+    access_token=CONFIG.webex_bot_access_token_soar,
+    single_request_timeout=60  # 60 second timeout
+)
 
 # Configure logging for better error tracking
 logger = logging.getLogger(__name__)
