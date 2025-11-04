@@ -3,13 +3,14 @@
 #
 # Setup: ln -sf /home/vinay/pub/IR/deployment/manage_log_viewers.sh ~/bin/start_log_service
 # Usage: start_log_service [start|stop|restart|status]
+#        start_log_service (no args) - stops all existing services and starts them
 
 set -e
 
 # List of log viewer services (excluding jarvais - not used on VM)
 SERVICES="all toodles msoar money-ball barnacles jobs"
 
-ACTION="${1:-status}"
+ACTION="${1:-restart}"
 
 case "$ACTION" in
     start)
