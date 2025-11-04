@@ -5,40 +5,59 @@
 # Usage: start_log_service [start|stop|restart|status]
 #        start_log_service (no args) - stops all existing services and starts them
 
-set -e
-
-# List of log viewer services (excluding jarvais - not used on VM)
-SERVICES="all toodles msoar money-ball barnacles jobs"
+cd /home/vinay/pub/IR
 
 ACTION="${1:-restart}"
 
+start_viewers() {
+    echo "Starting log viewer services..."
+
+    # Port 8031: All IR Services (journalctl)
+    nohup /home/vinay/pub/IR/.venv/bin/python deployment/log_viewer.py --port 8031 --title "All IR Services" --journalctl "ir-*" >> logs/log_viewer_all.log 2>&1 &
+
+    # Port 8032: Toodles
+    nohup /home/vinay/pub/IR/.venv/bin/python deployment/log_viewer.py --port 8032 --title "Toodles Bot" --file /home/vinay/pub/IR/logs/toodles.log >> logs/log_viewer_toodles.log 2>&1 &
+
+    # Port 8033: MSOAR
+    nohup /home/vinay/pub/IR/.venv/bin/python deployment/log_viewer.py --port 8033 --title "MSOAR Bot" --file /home/vinay/pub/IR/logs/msoar.log >> logs/log_viewer_msoar.log 2>&1 &
+
+    # Port 8034: MoneyBall
+    nohup /home/vinay/pub/IR/.venv/bin/python deployment/log_viewer.py --port 8034 --title "MoneyBall Bot" --file /home/vinay/pub/IR/logs/money_ball.log >> logs/log_viewer_moneyball.log 2>&1 &
+
+    # Port 8036: Barnacles
+    nohup /home/vinay/pub/IR/.venv/bin/python deployment/log_viewer.py --port 8036 --title "Barnacles Bot" --file /home/vinay/pub/IR/logs/barnacles.log >> logs/log_viewer_barnacles.log 2>&1 &
+
+    # Port 8037: All Jobs Scheduler
+    nohup /home/vinay/pub/IR/.venv/bin/python deployment/log_viewer.py --port 8037 --title "All Jobs Scheduler" --file /home/vinay/pub/IR/logs/all_jobs.log >> logs/log_viewer_jobs.log 2>&1 &
+
+    sleep 2
+    echo "All log viewers started"
+}
+
+stop_viewers() {
+    echo "Stopping log viewer services..."
+    pkill -f "deployment/log_viewer.py" || true
+    sleep 2
+    echo "All log viewers stopped"
+}
+
 case "$ACTION" in
     start)
-        echo "Starting log viewer services..."
-        for service in $SERVICES; do
-            sudo systemctl start ir-log-viewer-${service}.service
-        done
-        echo "All log viewers started"
+        start_viewers
         ;;
 
     stop)
-        echo "Stopping log viewer services..."
-        for service in $SERVICES; do
-            sudo systemctl stop ir-log-viewer-${service}.service
-        done
-        echo "All log viewers stopped"
+        stop_viewers
         ;;
 
     restart)
-        echo "Restarting log viewer services..."
-        for service in $SERVICES; do
-            sudo systemctl restart ir-log-viewer-${service}.service
-        done
-        echo "All log viewers restarted"
+        stop_viewers
+        start_viewers
         ;;
 
     status)
-        sudo systemctl status ir-log-viewer-*.service
+        echo "Log viewer processes:"
+        ps aux | grep "deployment/log_viewer.py" | grep -v grep || echo "No log viewers running"
         ;;
 
     *)
