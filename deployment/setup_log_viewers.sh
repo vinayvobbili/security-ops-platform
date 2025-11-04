@@ -50,7 +50,7 @@ sudo cp "$SCRIPT_DIR/systemd"/ir-log-viewer-*.service /etc/systemd/system/
 sudo systemctl daemon-reload
 
 # Enable all services
-for service in all toodles msoar money-ball jarvais barnacles jobs; do
+for service in all toodles msoar money-ball barnacles jobs; do
     sudo systemctl enable ir-log-viewer-${service}.service
 done
 echo "  ✓ Systemd services installed and enabled"
@@ -64,7 +64,7 @@ echo ""
 
 # Start all log viewer services
 echo "Starting log viewer services..."
-for service in all toodles msoar money-ball jarvais barnacles jobs; do
+for service in all toodles msoar money-ball barnacles jobs; do
     sudo systemctl start ir-log-viewer-${service}.service
 done
 sleep 2
@@ -92,7 +92,7 @@ echo "  http://metcirt-lab-12.internal.company.com:8031 - All Services (journalc
 echo "  http://metcirt-lab-12.internal.company.com:8032 - Toodles"
 echo "  http://metcirt-lab-12.internal.company.com:8033 - MSOAR"
 echo "  http://metcirt-lab-12.internal.company.com:8034 - MoneyBall"
-echo "  http://metcirt-lab-12.internal.company.com:8035 - Jarvais"
+# echo "  http://metcirt-lab-12.internal.company.com:8035 - Jarvais"
 echo "  http://metcirt-lab-12.internal.company.com:8036 - Barnacles"
 echo "  http://metcirt-lab-12.internal.company.com:8037 - All Jobs"
 echo "  (Each protected with username: metcirt, password: metcirt)"
