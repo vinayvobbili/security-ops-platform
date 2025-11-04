@@ -3,13 +3,21 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
+# CRITICAL: Set SSL certificate paths BEFORE any imports that use requests
+# This must happen before importing encrypted env loader which might trigger SSL requests
+ROOT_DIR = Path(__file__).parent
+CUSTOM_CA_BUNDLE = str(ROOT_DIR / 'data' / 'certs' / 'custom-ca-bundle.pem')
+if os.path.exists(CUSTOM_CA_BUNDLE):
+    os.environ['REQUESTS_CA_BUNDLE'] = CUSTOM_CA_BUNDLE
+    os.environ['SSL_CERT_FILE'] = CUSTOM_CA_BUNDLE
+    os.environ['CURL_CA_BUNDLE'] = CUSTOM_CA_BUNDLE
+
 # Import encrypted environment loader
 from src.utils.env_encryption import load_encrypted_env, load_plaintext_env, EncryptionError
 
 # Load environment variables from two sources:
 # 1. .env (project root) - non-sensitive config like model names
 # 2. .secrets.age (data/transient/) - encrypted secrets (API keys, passwords)
-ROOT_DIR = Path(__file__).parent
 
 # Load plaintext .env first (low confidentiality config)
 env_file = ROOT_DIR / '.env'
@@ -133,6 +141,7 @@ def get_config():
         teams_toodles_tenant_id=os.environ.get("TEAMS_TOODLES_TENANT_ID"),
         toodles_password=os.environ.get("TOODLES_PASSWORD"),
         flask_secret_key=os.environ.get("FLASK_SECRET_KEY"),
+        abnormal_security_api_key=os.environ.get("ABNORMAL_SECURITY_API_KEY"),
     )
 
 
@@ -242,3 +251,4 @@ class Config:
     teams_toodles_tenant_id: Optional[str] = None
     toodles_password: Optional[str] = None
     flask_secret_key: Optional[str] = None
+    abnormal_security_api_key: Optional[str] = None
