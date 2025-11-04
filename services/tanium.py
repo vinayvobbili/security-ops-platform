@@ -711,7 +711,7 @@ def main():
 
         # Test searching for computers
         search_term = "VMVDI26940.METNET.NET"
-        instance_name = "Cloud"
+        instance_name = "On-Prem"  # or "Cloud"
         instance = client.get_instance_by_name(instance_name)
         url_info = f" (URL: {instance.server_url})" if instance else ""
         logger.info(f"\nSearching for computers containing '{search_term}' in {instance_name}{url_info}...")
