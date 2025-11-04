@@ -11,18 +11,23 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 import requests
 
 # ============================================================
+# SSL Configuration
+# ============================================================
+PROJECT_ROOT = Path(__file__).parent.parent
+CA_BUNDLE = PROJECT_ROOT / 'data' / 'certs' / 'custom-ca-bundle.pem'
+
+# ============================================================
 # PASTE YOUR API TOKENS HERE (one per line)
 # ============================================================
 TOKENS_TO_TEST = [
     # Paste your tokens here, one per line
-    # 'your_token_1_here',
 ]
 
 
 # ============================================================
 
 
-def test_token(token: str, index: int) -> bool:
+def check_token(token: str, index: int) -> bool:
     """Test an Abnormal Security API token."""
     url = 'https://api.abnormalplatform.com/v1/threats'
     headers = {
@@ -38,7 +43,7 @@ def test_token(token: str, index: int) -> bool:
     print(f"{'=' * 60}")
 
     try:
-        response = requests.get(url, headers=headers, params=params, timeout=10)
+        response = requests.get(url, headers=headers, params=params, timeout=10, verify=str(CA_BUNDLE))
         print(f"Status Code: {response.status_code}")
 
         if response.status_code == 200:
@@ -80,7 +85,7 @@ if __name__ == '__main__':
     working_tokens = []
 
     for i, token in enumerate(tokens):
-        if test_token(token, i):
+        if check_token(token, i):
             working_tokens.append(token)
 
     # Summary
