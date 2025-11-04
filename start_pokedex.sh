@@ -4,7 +4,7 @@ cd /Users/user/PycharmProjects/IR || exit 1
 
 # Kill existing pokedex process if running
 echo "Stopping existing the security assistant bot instances..."
-pkill -f "webex_bots/pokedex.py"
+pkill -f "webex_bots/pokedex"
 sleep 1
 
 # Clear the log file to ensure we see fresh output
@@ -34,8 +34,8 @@ done
 echo ""
 
 # Check if the process is actually running
-if pgrep -f "webex_bots/pokedex.py" > /dev/null; then
-    PID=$(pgrep -f 'webex_bots/pokedex.py')
+if pgrep -f "webex_bots/pokedex" > /dev/null; then
+    PID=$(pgrep -f 'webex_bots/pokedex')
     echo "✅ the security assistant bot is running (PID: $PID)"
     echo ""
     echo "To view logs: tail -f /Users/user/PycharmProjects/IR/pokedex.log"

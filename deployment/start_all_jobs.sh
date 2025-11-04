@@ -5,7 +5,7 @@
 cd /home/vinay/pub/IR
 
 # Kill any existing process
-pkill -f "all_jobs.py"
+pkill -f "all_jobs"
 sleep 2
 
 # Start with unbuffered Python output

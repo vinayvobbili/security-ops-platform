@@ -13,7 +13,7 @@ cd "$SCRIPT_DIR" || exit 1
 
 # Kill existing jarvais process if running
 echo "Stopping existing Jarvais instances..."
-pkill -f "webex_bots/jarvais.py"
+pkill -f "webex_bots/jarvais"
 sleep 1
 
 # Ensure logs directory exists
@@ -46,8 +46,8 @@ done
 echo ""
 
 # Check if the process is actually running
-if pgrep -f "webex_bots/jarvais.py" > /dev/null; then
-    PID=$(pgrep -f 'webex_bots/jarvais.py')
+if pgrep -f "webex_bots/jarvais" > /dev/null; then
+    PID=$(pgrep -f 'webex_bots/jarvais')
     echo "✅ Jarvais is running (PID: $PID)"
     echo ""
     echo "To view logs: tail -f $SCRIPT_DIR/logs/jarvais.log"

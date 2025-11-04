@@ -4,7 +4,7 @@ cd /home/vinay/pub/IR || exit 1
 
 # Kill existing barnacles process if running
 echo "Stopping existing the alert triage service instances..."
-pkill -f "webex_bots/barnacles.py"
+pkill -f "webex_bots/barnacles"
 sleep 1
 
 # Ensure logs directory exists
@@ -37,8 +37,8 @@ done
 echo ""
 
 # Check if the process is actually running
-if pgrep -f "webex_bots/barnacles.py" > /dev/null; then
-    PID=$(pgrep -f 'webex_bots/barnacles.py')
+if pgrep -f "webex_bots/barnacles" > /dev/null; then
+    PID=$(pgrep -f 'webex_bots/barnacles')
     echo "✅ the alert triage service is running (PID: $PID)"
     echo ""
     echo "To view logs: tail -f /home/vinay/pub/IR/logs/barnacles.log"
