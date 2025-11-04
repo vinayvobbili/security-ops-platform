@@ -112,23 +112,27 @@ dev_client = demisto_client.configure(
     verify_ssl=False
 )
 
-# Configure connection and read timeouts for both clients (30 seconds each)
-# This prevents indefinite hangs when the API is unresponsive
+# Configure connection and read timeouts for both clients
+# Connect timeout: 30s (how long to wait to establish connection)
+# Read timeout: 60s (how long to wait for response data after connection established)
+# This prevents indefinite hangs when the API is unresponsive while allowing legitimate slow queries
 for client in [prod_client, dev_client]:
     if hasattr(client, 'api_client') and hasattr(client.api_client, 'rest_client'):
         rest_client = client.api_client.rest_client
         # Set timeout: (connect_timeout, read_timeout) in seconds
-        rest_client.timeout = (30, 30)
+        rest_client.timeout = (30, 60)
 
 # Also configure the rest client's pool manager if available
 for client in [prod_client, dev_client]:
     if hasattr(client, 'api_client') and hasattr(client.api_client, 'rest_client'):
         rest_client = client.api_client.rest_client
         if hasattr(rest_client, 'pool_manager'):
-            # Recreate pool manager with maxsize=50
+            # Recreate pool manager with maxsize=50 and proper timeout configuration
+            # This prevents threads from hanging indefinitely waiting for connections
             rest_client.pool_manager = urllib3.PoolManager(
                 num_pools=10,
                 maxsize=50,
+                timeout=urllib3.Timeout(connect=30.0, read=60.0),
                 cert_reqs='CERT_NONE' if not client.api_client.configuration.verify_ssl else 'CERT_REQUIRED'
             )
 
@@ -1047,11 +1051,9 @@ def main():
         dev_list = ListHandler(XsoarEnvironment.DEV)
     """
     # print(json.dumps(get_user_notes('878736'), indent=4))
-    ticket_id = '1374341'
-    dev_ticket_handler = TicketHandler(XsoarEnvironment.DEV)
-    pprint(dev_ticket_handler.get_case_data(ticket_id))
-
-    pprint(dev_ticket_handler.assign_owner(ticket_id, 'user@company.com'))
+    ticket_id = '887229'
+    prod_ticket_handler = TicketHandler(XsoarEnvironment.PROD)
+    pprint(prod_ticket_handler.get_case_data_with_notes(ticket_id))
 
 
 if __name__ == "__main__":
