@@ -1,19 +1,20 @@
 import base64
+import concurrent.futures
 import json
 import logging
-import time
 import os
 import threading
+import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
 
 import pandas as pd
 import requests
-from tqdm import tqdm
-import concurrent.futures
-from filelock import FileLock
 import urllib3
+from filelock import FileLock
+from requests.adapters import HTTPAdapter
+from tqdm import tqdm
 
 from my_config import get_config
 
@@ -53,9 +54,9 @@ class ServiceNowTokenManager:
             if self.token_expiry:
                 time_remaining = self.token_expiry - time.time()
                 if time_remaining > 0:
-                    logger.info(f"✓ Loaded valid cached token, expires in {time_remaining/60:.1f} minutes")
+                    logger.info(f"✓ Loaded valid cached token, expires in {time_remaining / 60:.1f} minutes")
                 else:
-                    logger.info(f"⚠ Cached token expired {-time_remaining/60:.1f} minutes ago, fetching new token")
+                    logger.info(f"⚠ Cached token expired {-time_remaining / 60:.1f} minutes ago, fetching new token")
 
         if not self.access_token or (self.token_expiry and time.time() >= self.token_expiry):
             logger.info("No valid cached token available, requesting new token")
@@ -124,7 +125,7 @@ class ServiceNowTokenManager:
 
         expires_in = token_data.get('expires_in', 3540)  # 59 minutes default (ServiceNow tokens valid for 60 min)
         self.token_expiry = time.time() + expires_in
-        logger.info(f"✓ Token updated, expires in {expires_in}s ({expires_in/60:.1f} minutes)")
+        logger.info(f"✓ Token updated, expires in {expires_in}s ({expires_in / 60:.1f} minutes)")
 
     def get_auth_headers(self):
         # Check if token needs refresh (refresh 2 min before expiry to avoid mid-batch expiration)
@@ -173,7 +174,7 @@ class ServiceNowClient:
         # Create persistent session with connection pooling
         logger.info("Creating HTTP session with connection pooling (pool_size=60, max_retries=3)")
         self.session = requests.Session()
-        adapter = requests.adapters.HTTPAdapter(
+        adapter = HTTPAdapter(
             pool_connections=60,
             pool_maxsize=60,
             max_retries=3,
@@ -187,7 +188,7 @@ class ServiceNowClient:
         self.min_request_interval = 1.0 / requests_per_second
         self.last_request_time = 0
         self.rate_limit_lock = threading.Lock()
-        logger.info(f"Rate limiting enabled: {requests_per_second} requests/second (min {self.min_request_interval*1000:.0f}ms between requests)")
+        logger.info(f"Rate limiting enabled: {requests_per_second} requests/second (min {self.min_request_interval * 1000:.0f}ms between requests)")
         logger.debug("ServiceNowClient initialized successfully")
 
     def _wait_for_rate_limit(self):
@@ -398,7 +399,9 @@ def enrich_host_report(input_file):
     logger.info(f"Processing {len(hostnames)} valid hostnames from {input_file}")
 
     # Create client with rate limiting (10 requests/second to avoid HTTP 429)
-    client = ServiceNowClient(requests_per_second=10)
+    # NOTE: To improve throughput, try increasing to 20-50 req/s and monitor for HTTP 429 errors in logs
+    # Suggested progression: 20 → 30 → 50 req/s (code handles retries automatically)
+    client = ServiceNowClient(requests_per_second=20)
     snow_data = {}
     errors_occurred = False
     error_count = 0
@@ -469,10 +472,10 @@ def enrich_host_report(input_file):
             result = snow_data[short_hostname]
             # If there is an error, always set category to empty string
             if result.get('status') == 'ServiceNow API Error':
-                df.at[idx, 'SNOW_category'] = ''
+                df.loc[idx, 'SNOW_category'] = ''  # type: ignore[call-overload]
             for col in snow_columns:
                 if col in result and not (col == 'category' and result.get('status') == 'ServiceNow API Error'):
-                    df.at[idx, f'SNOW_{col}'] = result[col]
+                    df.loc[idx, f'SNOW_{col}'] = result[col]  # type: ignore[call-overload]
 
     merge_elapsed = time.time() - merge_start
     logger.info(f"Merged ServiceNow data into dataframe in {merge_elapsed:.1f}s")

@@ -270,7 +270,7 @@ def seek_approval_to_ring_tag_tanium(room_id, total_hosts=None):
                     Column(
                         width="stretch",
                         items=[
-                            TextBlock(text=f"I can tag servers from On-Prem Tanium instance {hosts_info}. Do you want to proceed?", wrap=True)
+                            TextBlock(text=f"I can tag workstations and server in Tanium {hosts_info}. Do you want to proceed?", wrap=True)
                         ],
                         verticalContentAlignment=VerticalContentAlignment.CENTER
                     )
