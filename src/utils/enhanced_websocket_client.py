@@ -180,7 +180,13 @@ def patch_websocket_client():
 
             while True:
                 try:
-                    asyncio.get_event_loop().run_until_complete(_connect_and_listen())
+                    # Get or create event loop if needed
+                    try:
+                        loop = asyncio.get_event_loop()
+                    except RuntimeError:
+                        loop = asyncio.new_event_loop()
+                        asyncio.set_event_loop(loop)
+                    loop.run_until_complete(_connect_and_listen())
                     # If we get here, the connection was successful, reset failure counter
                     consecutive_failures = 0
                     current_404_retries = 0
@@ -204,7 +210,13 @@ def patch_websocket_client():
                         # Add a delay before retrying to avoid hammering the server
                         delay = min(5 * current_404_retries, 30)  # Progressive delay up to 30s
                         logger.debug(f"Waiting {delay} seconds before retry attempt {current_404_retries}...")
-                        asyncio.get_event_loop().run_until_complete(asyncio.sleep(delay))
+                        # Get or create event loop if needed
+                        try:
+                            loop = asyncio.get_event_loop()
+                        except RuntimeError:
+                            loop = asyncio.new_event_loop()
+                            asyncio.set_event_loop(loop)
+                        loop.run_until_complete(asyncio.sleep(delay))
                     else:
                         # For non-404 errors, just raise the exception
                         raise
@@ -229,7 +241,13 @@ def patch_websocket_client():
                     # Progressive delay based on failure count
                     delay = min(5 * consecutive_failures, 60)
                     logger.debug(f"Waiting {delay} seconds before attempting to reconnect...")
-                    asyncio.get_event_loop().run_until_complete(asyncio.sleep(delay))
+                    # Get or create event loop if needed
+                    try:
+                        loop = asyncio.get_event_loop()
+                    except RuntimeError:
+                        loop = asyncio.new_event_loop()
+                        asyncio.set_event_loop(loop)
+                    loop.run_until_complete(asyncio.sleep(delay))
 
                 except Exception as runException:
                     consecutive_failures += 1
@@ -250,7 +268,13 @@ def patch_websocket_client():
                     # Wait a bit before reconnecting with progressive backoff
                     delay = min(5 * consecutive_failures, 60)
                     logger.debug(f"Waiting {delay} seconds before attempting to reconnect...")
-                    asyncio.get_event_loop().run_until_complete(asyncio.sleep(delay))
+                    # Get or create event loop if needed
+                    try:
+                        loop = asyncio.get_event_loop()
+                    except RuntimeError:
+                        loop = asyncio.new_event_loop()
+                        asyncio.set_event_loop(loop)
+                    loop.run_until_complete(asyncio.sleep(delay))
 
         # Apply the patch
         WebexWebsocketClient.run = enhanced_run
