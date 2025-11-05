@@ -6,7 +6,7 @@ Usage:
     client = TaniumClient()
     filename = client.get_and_export_all_computers()
 """
-
+import json
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -178,7 +178,7 @@ def get_package_id_for_instance(source: str, os_platform: str) -> str:
 
     # Check for non-Windows platforms
     is_non_windows = any(platform in os_lower for platform in
-                        ["linux", "unix", "mac", "darwin", "aix", "solaris", "freebsd"])
+                         ["linux", "unix", "mac", "darwin", "aix", "solaris", "freebsd"])
 
     if is_cloud:
         # Cloud instance package IDs
@@ -710,12 +710,13 @@ def main():
         #     logger.info(f"  Action ID: {action_id}")
 
         # Test searching for computers
-        search_term = "VMVDI26940.METNET.NET"
+        search_term = "CNSZPWXD2304.acmechina.com"
         instance_name = "On-Prem"  # or "Cloud"
         instance = client.get_instance_by_name(instance_name)
         url_info = f" (URL: {instance.server_url})" if instance else ""
         logger.info(f"\nSearching for computers containing '{search_term}' in {instance_name}{url_info}...")
         matches = client.search_computers(search_term, instance_name, limit=5)
+        print(json.dumps(matches, indent=2))
         for comp in matches:
             logger.info(f" - {comp.name} (ID: {comp.id}, Last Seen: {comp.eidLastSeen}, Tags: {comp.custom_tags})")
 

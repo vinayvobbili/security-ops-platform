@@ -142,6 +142,7 @@ This file provides guidance to AI CLI agents (Claude Code, Gemini, etc.) when wo
     - This is the correct tool calling pattern, not "double HTTP calls" but necessary conversation flow
 - Chart generation automated with daily timestamped directories
 - Configuration supports multiple Webex rooms for different operational contexts
+- Never ever read .secret file directly; always use environment variables for sensitive data
 
 ### Security Integrations
 
