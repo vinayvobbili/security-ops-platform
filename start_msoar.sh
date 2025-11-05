@@ -38,12 +38,12 @@ echo ""
 # Wait for the log file to appear and contain data
 sleep 2
 
-# Tail the log file until we see the listening message or timeout after 30 seconds
+# Tail the log file until we see device cleanup complete or timeout after 30 seconds
 timeout 30 tail -f logs/msoar.log 2>/dev/null | while read -r line; do
     echo "$line"
-    if echo "$line" | grep -q "Bot is now listening for messages"; then
+    if echo "$line" | grep -q "Device cleanup complete"; then
         # Give it a few more seconds to finish initialization
-        sleep 2
+        sleep 3
         pkill -P $$ tail  # Kill the tail process
         break
     fi
