@@ -165,7 +165,11 @@ def main():
     """MSOAR main - uses resilience framework for automatic reconnection and firewall handling"""
 
     # Configure logging with centralized utility
-    setup_logging('msoar')
+    setup_logging(
+        bot_name='msoar',
+        log_level=logging.INFO,
+        info_modules=['__main__', 'src.utils.bot_resilience', 'src.utils.webex_device_manager']
+    )
 
     logger.info("🚀 Starting METCIRT SOAR bot")
 
@@ -205,7 +209,7 @@ def main():
         proactive_reconnection_interval=600  # Force reconnect every 10 min to prevent sleep
     )
 
-    logger.info("👂 Bot is now listening for messages...")
+    # Resilience framework will log startup status - no need for premature log here
     resilient_runner.run()
 
 
