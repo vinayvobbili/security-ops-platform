@@ -47,7 +47,6 @@ This file provides guidance to AI CLI agents (Claude Code, Gemini, etc.) when wo
 ### Running the Application
 
 - **Web Dashboard**: `python web/web_server.py` - Starts Flask web server with security operations dashboard
-- **Streamlit Demo**: `python streamlit_app.py` - Simple Streamlit demo app
 - **Webex Bots**: Various bots in `webex_bots/` directory, each can be run individually
 
 ### Bot Management (Pokedex SOC Bot)
