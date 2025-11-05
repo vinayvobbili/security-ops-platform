@@ -2,7 +2,7 @@
 # Startup script for all_jobs scheduler
 # This ensures proper logging and process management
 
-cd /home/vinay/pub/IR
+cd /home/vinay/pub/IR || exit
 
 # Kill any existing process
 pkill -f "all_jobs"
