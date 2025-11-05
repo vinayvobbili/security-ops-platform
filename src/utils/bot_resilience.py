@@ -480,9 +480,27 @@ class ResilientBot:
                 
                 def run_with_interrupt():
                     try:
+                        # Create event loop for this thread (Python 3.12+ requirement)
+                        import asyncio
+                        try:
+                            loop = asyncio.new_event_loop()
+                            asyncio.set_event_loop(loop)
+                            logger.debug(f"Created new event loop for bot thread")
+                        except Exception as loop_error:
+                            logger.warning(f"Could not create event loop for bot thread: {loop_error}")
+                        
                         self.bot_instance.run()
                     except (KeyboardInterrupt, SystemExit):
                         logger.debug("Bot run interrupted")
+                    finally:
+                        # Clean up event loop
+                        try:
+                            import asyncio
+                            loop = asyncio.get_event_loop()
+                            if not loop.is_closed():
+                                loop.close()
+                        except Exception:
+                            pass
                 
                 # Run in a way that can be interrupted
                 bot_run_thread = threading.Thread(target=run_with_interrupt, daemon=True)
