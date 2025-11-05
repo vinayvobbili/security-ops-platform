@@ -7,7 +7,7 @@ This file provides guidance to AI CLI agents (Claude Code, Gemini, etc.) when wo
 - Remember, prioritize direct, critical feedback over politeness or excessive agreement. Challenge my assumptions when they are unsound
 - Be concise and to the point. Avoid unnecessary fluff or filler
 - Use bullet points and lists for clarity
-- Always discuss the plan/design before implementing significant changes
+- Always discuss the design before implementing significant changes. Plan twice, code once!
 - Don't waste my tokens on unnecessary tests or documentation unless explicitly requested
 
 ## Network and Web Fetch Limitations
