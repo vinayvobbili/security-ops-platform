@@ -21,6 +21,7 @@ CA_BUNDLE = PROJECT_ROOT / 'data' / 'certs' / 'custom-ca-bundle.pem'
 # ============================================================
 TOKENS_TO_TEST = [
     # Paste your tokens here, one per line
+    ''
 ]
 
 

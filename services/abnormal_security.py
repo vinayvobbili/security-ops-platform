@@ -7,7 +7,7 @@ Provides methods for retrieving and managing email threats.
 
 import logging
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional, Dict, Any, List, Literal
 
@@ -20,6 +20,20 @@ from my_config import get_config
 
 CONFIG = get_config()
 logger = logging.getLogger(__name__)
+
+
+class AbnormalSecurityError(Exception):
+    """Custom exception for Abnormal Security client errors with context and suggestions."""
+    def __init__(self, status_code: int, endpoint: str, detail: str, suggestions: List[str]):
+        self.status_code = status_code
+        self.endpoint = endpoint
+        self.detail = detail
+        self.suggestions = suggestions
+        message = (
+            f"AbnormalSecurityError {status_code} on {endpoint}: {detail}\n"
+            f"Suggestions:\n - " + "\n - ".join(suggestions)
+        )
+        super().__init__(message)
 
 
 class AbnormalSecurityClient:
@@ -38,7 +52,9 @@ class AbnormalSecurityClient:
         self.session = requests.Session()
         self.session.headers.update({
             'Authorization': f'Bearer {api_token}',
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'User-Agent': 'IR-AbnormalSecurityClient/1.0'
         })
 
     def _make_request(
@@ -81,6 +97,32 @@ class AbnormalSecurityClient:
         )
 
         logger.debug(f"Response status: {response.status_code}")
+        if response.status_code >= 400:
+            body_preview = response.text[:500]
+            request_id = response.headers.get('X-Request-ID') or response.headers.get('x-request-id')
+            if request_id:
+                logger.warning("API error %s for %s (request_id=%s): %s", response.status_code, endpoint, request_id, body_preview)
+            else:
+                logger.warning("API error %s for %s: %s", response.status_code, endpoint, body_preview)
+            if response.status_code == 403:
+                suggestions: List[str] = []
+                try:
+                    detail_json = response.json()
+                    detail_msg = detail_json.get('detail') or detail_json.get('message') or body_preview
+                except Exception:
+                    detail_msg = body_preview
+                if request_id:
+                    detail_msg = f"{detail_msg} (request_id={request_id})"
+                suggestions.append("Verify the API token has correct permissions (Threats & Cases scopes).")
+                suggestions.append("Confirm Abnormal platform API access is enabled for your tenant/account.")
+                suggestions.append("Double-check you are using the production token, not a UI session token.")
+                suggestions.append("Remove or simplify filters to rule out filter-based permission issues.")
+                suggestions.append("If recently rotated credentials, restart process to clear old token cache.")
+                suggestions.append("Ensure base_url is correct; some tenants may use region-specific host.")
+                if request_id:
+                    suggestions.append(f"Provide request_id {request_id} to Abnormal support for faster tracing.")
+                suggestions.append("Contact Abnormal support with the timestamp and request details if issue persists.")
+                raise AbnormalSecurityError(403, endpoint, detail_msg, suggestions)
         response.raise_for_status()
 
         # Handle 202 responses that may not have JSON
@@ -144,36 +186,37 @@ class AbnormalSecurityClient:
                 'Unknown Partner',
                 'None / Others'
             ]] = None,
-            mock_data: bool = False
+            mock_data: bool = False  # deprecated, kept for backward compatibility
     ) -> Dict[str, Any]:
         """
-        Get a list of threats.
+        Get a list of threats from the Abnormal Security API.
+
+        NOTE: This method performs a real network call. Ensure you have a valid
+        production API token configured. The mock_data parameter is deprecated
+        and ignored.
 
         Args:
             filter_param: Time-based filter (format: 'receivedTime gte YYYY-MM-DDTHH:MM:SSZ lte YYYY-MM-DDTHH:MM:SSZ')
             page_size: Number of threats per page (default: 100, min: 1)
             page_number: Page number to retrieve (default: 1, min: 1)
-            source: Filter by detection source ('all', 'advanced', 'attacks', 'borderline', 'spam')
+            source: Detection source filter
             sender: Filter by sender name or email
             recipient: Filter by recipient name or email
             subject: Filter by email subject
             topic: Filter by email topic
-            attack_type: Filter by type of attack
+            attack_type: Filter by attack type
             attack_vector: Filter by attack vector
-            attack_strategy: Filter by attack strategy
+            attack_strategy: Filter by strategy
             impersonated_party: Filter by impersonated party
-            mock_data: Return test data if True
+            mock_data: Deprecated (ignored)
 
         Returns:
-            Dictionary containing paginated list of threats
+            Dictionary containing paginated list of threats.
 
-        Example:
-            >>> client = AbnormalSecurityClient('your-token')
-            >>> threats = client.get_threats(
-            ...     filter_param='receivedTime gte 2024-01-01T00:00:00Z lte 2024-12-31T23:59:59Z',
-            ...     page_size=50,
-            ...     source='attacks'
-            ... )
+        Example (will call real API, skipped in doctest):
+            >>> client = AbnormalSecurityClient('real-token')  # doctest: +SKIP
+            >>> threats = client.get_threats(page_size=10)  # doctest: +SKIP
+            >>> len(threats.get('threats', []))  # doctest: +SKIP
         """
         params = {
             'pageSize': page_size,
@@ -201,83 +244,60 @@ class AbnormalSecurityClient:
         if impersonated_party:
             params['impersonatedParty'] = impersonated_party
 
-        headers = {'mock-data': str(mock_data)}
-
-        return self._make_request('GET', '/threats', params=params, headers=headers)
+        return self._make_request('GET', '/threats', params=params)
 
     def get_threat_details(
             self,
             threat_id: str,
             page_size: int = 100,
             page_number: int = 1,
-            mock_data: bool = False
+            mock_data: bool = False  # deprecated
     ) -> Dict[str, Any]:
         """
-        Get detailed information about a specific threat.
+        Get detailed information about a specific threat (real API call).
 
         Args:
             threat_id: UUID of the threat
-            page_size: Number of messages per page (default: 100, min: 1)
-            page_number: Page number (default: 1, min: 1) - currently limited to 10 results
-            mock_data: Return test data if True
+            page_size: Number of messages per page
+            page_number: Page number
+            mock_data: Deprecated (ignored)
 
         Returns:
-            Dictionary containing threat details including messages
+            Dictionary of threat details.
 
-        Note:
-            Total results cannot exceed 2000 due to database limitations.
-            Currently only 10 results for messages will show, full pagination support coming soon.
-
-        Example:
-            >>> client = AbnormalSecurityClient('your-token')
-            >>> threat = client.get_threat_details('threat-uuid-here')
+        Example (skipped):
+            >>> client = AbnormalSecurityClient('real-token')  # doctest: +SKIP
+            >>> detail = client.get_threat_details('threat-uuid')  # doctest: +SKIP
         """
         params = {
             'pageSize': page_size,
             'pageNumber': page_number
         }
-
-        headers = {'mock-data': str(mock_data)}
-
-        return self._make_request(
-            'GET',
-            f'/threats/{threat_id}',
-            params=params,
-            headers=headers
-        )
+        return self._make_request('GET', f'/threats/{threat_id}', params=params)
 
     def manage_threat(
             self,
             threat_id: str,
             action: Literal['remediate', 'unremediate'],
-            mock_data: bool = False
+            mock_data: bool = False  # deprecated
     ) -> Dict[str, Any]:
         """
-        Remediate or unremediate a threat.
+        Remediate or unremediate a threat (real API call).
 
         Args:
             threat_id: UUID of the threat
-            action: Action to perform ('remediate' or 'unremediate')
-            mock_data: Return test data if True
+            action: 'remediate' or 'unremediate'
+            mock_data: Deprecated (ignored)
 
         Returns:
-            Dictionary containing actionId and status URL (202 response)
+            202 response body containing actionId and statusUrl (if synchronous JSON provided).
 
-        Example:
-            >>> client = AbnormalSecurityClient('your-token')
-            >>> response = client.manage_threat('threat-uuid', 'remediate')
-            >>> action_id = response['actionId']
-            >>> status_url = response['statusUrl']
+        Example (skipped):
+            >>> client = AbnormalSecurityClient('real-token')  # doctest: +SKIP
+            >>> resp = client.manage_threat('threat-uuid', 'remediate')  # doctest: +SKIP
         """
         body = {'action': action}
-        headers = {'mock-data': str(mock_data)}
-
-        return self._make_request(
-            'POST',
-            f'/threats/{threat_id}',
-            json=body,
-            headers=headers
-        )
+        return self._make_request('POST', f'/threats/{threat_id}', json=body)
 
     def get_threats_by_timerange(
             self,
@@ -286,28 +306,18 @@ class AbnormalSecurityClient:
             **kwargs
     ) -> Dict[str, Any]:
         """
-        Convenience method to get threats within a time range.
+        Convenience wrapper around get_threats using a time range.
 
-        Args:
-            start_time: Start datetime
-            end_time: End datetime
-            **kwargs: Additional arguments passed to get_threats()
-
-        Returns:
-            Dictionary containing paginated list of threats
-
-        Example:
-            >>> from datetime import datetime, timedelta
-            >>> client = AbnormalSecurityClient('your-token')
-            >>> end = datetime.now()
-            >>> start = end - timedelta(days=7)
-            >>> threats = client.get_threats_by_timerange(start, end, source='attacks')
+        Example (skipped):
+            >>> from datetime import datetime, timedelta  # doctest: +SKIP
+            >>> client = AbnormalSecurityClient('real-token')  # doctest: +SKIP
+            >>> end = datetime.now(timezone.utc); start = end - timedelta(days=1)  # doctest: +SKIP
+            >>> client.get_threats_by_timerange(start, end)  # doctest: +SKIP
         """
         filter_str = (
             f"receivedTime gte {start_time.strftime('%Y-%m-%dT%H:%M:%SZ')} "
             f"lte {end_time.strftime('%Y-%m-%dT%H:%M:%SZ')}"
         )
-
         return self.get_threats(filter_param=filter_str, **kwargs)
 
     def get_all_threats(
@@ -317,146 +327,75 @@ class AbnormalSecurityClient:
             **kwargs
     ) -> List[Dict[str, Any]]:
         """
-        Get all threats across multiple pages.
+        Paginate through all threat pages until exhaustion or max_pages.
 
-        Args:
-            filter_param: Time-based filter (required for pagination)
-            max_pages: Maximum number of pages to retrieve (None for all)
-            **kwargs: Additional arguments passed to get_threats()
-
-        Returns:
-            List of all threat dictionaries
-
-        Example:
-            >>> client = AbnormalSecurityClient('your-token')
-            >>> all_threats = client.get_all_threats(
-            ...     filter_param='receivedTime gte 2024-01-01T00:00:00Z lte 2024-12-31T23:59:59Z',
-            ...     source='attacks'
-            ... )
+        Example (skipped):
+            >>> client = AbnormalSecurityClient('real-token')  # doctest: +SKIP
+            >>> all_threats = client.get_all_threats('receivedTime gte 2024-01-01T00:00:00Z lte 2024-01-02T00:00:00Z')  # doctest: +SKIP
         """
-        all_threats = []
+        all_threats: List[Dict[str, Any]] = []
         page_number = 1
-
         while True:
             if max_pages and page_number > max_pages:
                 break
-
-            response = self.get_threats(
-                filter_param=filter_param,
-                page_number=page_number,
-                **kwargs
-            )
-
+            response = self.get_threats(filter_param=filter_param, page_number=page_number, **kwargs)
             threats = response.get('threats', [])
             all_threats.extend(threats)
-
-            # Check if there are more pages
             next_page = response.get('nextPageNumber')
             if not next_page:
                 break
-
             page_number = next_page
-
         return all_threats
-
-    # Cases API Methods
 
     def get_cases(
             self,
             filter_param: Optional[str] = None,
             page_size: int = 100,
             page_number: int = 1,
-            mock_data: bool = False
+            mock_data: bool = False  # deprecated
     ) -> Dict[str, Any]:
         """
-        Get a list of Abnormal cases.
+        Retrieve Abnormal cases (real API call).
 
-        Args:
-            filter_param: Time-based filter (format: '{FILTER_KEY} gte YYYY-MM-DDTHH:MM:SSZ lte YYYY-MM-DDTHH:MM:SSZ')
-                         Supported filter keys: 'lastModifiedTime', 'createdTime', 'customerVisibleTime'
-            page_size: Number of cases per page (default: 100, min: 1)
-            page_number: Page number to retrieve (default: 1, min: 1)
-            mock_data: Return test data if True
-
-        Returns:
-            Dictionary containing paginated list of cases
-
-        Example:
-            >>> client = AbnormalSecurityClient('your-token')
-            >>> cases = client.get_cases(
-            ...     filter_param='lastModifiedTime gte 2024-01-01T00:00:00Z lte 2024-12-31T23:59:59Z',
-            ...     page_size=50
-            ... )
+        Example (skipped):
+            >>> client = AbnormalSecurityClient('real-token')  # doctest: +SKIP
+            >>> client.get_cases(page_size=10)  # doctest: +SKIP
         """
         params: Dict[str, Any] = {
             'pageSize': page_size,
             'pageNumber': page_number
         }
-
         if filter_param:
             params['filter'] = filter_param
-
-        headers = {'mock-data': str(mock_data)}
-
-        return self._make_request('GET', '/cases', params=params, headers=headers)
+        return self._make_request('GET', '/cases', params=params)
 
     def get_case_details(
             self,
             case_id: str,
-            mock_data: bool = False
+            mock_data: bool = False  # deprecated
     ) -> Dict[str, Any]:
+        """Get details for a single case (real API).
+
+        Example (skipped):
+            >>> client = AbnormalSecurityClient('real-token')  # doctest: +SKIP
+            >>> client.get_case_details('case-id')  # doctest: +SKIP
         """
-        Get detailed information about a specific Abnormal case.
-
-        Args:
-            case_id: ID of the case
-            mock_data: Return test data if True
-
-        Returns:
-            Dictionary containing case details
-
-        Example:
-            >>> client = AbnormalSecurityClient('your-token')
-            >>> case = client.get_case_details('case-id-here')
-        """
-        headers = {'mock-data': str(mock_data)}
-
-        return self._make_request(
-            'GET',
-            f'/cases/{case_id}',
-            headers=headers
-        )
+        return self._make_request('GET', f'/cases/{case_id}')
 
     def manage_case(
             self,
             case_id: str,
             action: str,
-            mock_data: bool = False
+            mock_data: bool = False  # deprecated
     ) -> Dict[str, Any]:
-        """
-        Update the status of an Abnormal case.
+        """Update a case status (real API call).
 
-        Args:
-            case_id: ID of the case
-            action: New case status (the specific status values depend on your Abnormal Security configuration)
-            mock_data: Return test data if True
-
-        Returns:
-            Dictionary containing response (202 response)
-
-        Example:
-            >>> client = AbnormalSecurityClient('your-token')
-            >>> response = client.manage_case('case-id', 'acknowledged')
+        Example (skipped):
+            >>> client = AbnormalSecurityClient('real-token')  # doctest: +SKIP
+            >>> client.manage_case('case-id', 'acknowledged')  # doctest: +SKIP
         """
         body = {'action': action}
-        headers = {'mock-data': str(mock_data)}
-
-        return self._make_request(
-            'POST',
-            f'/cases/{case_id}',
-            json=body,
-            headers=headers
-        )
+        return self._make_request('POST', f'/cases/{case_id}', json=body)
 
     def get_cases_by_timerange(
             self,
@@ -465,30 +404,18 @@ class AbnormalSecurityClient:
             filter_key: Literal['lastModifiedTime', 'createdTime', 'customerVisibleTime'] = 'lastModifiedTime',
             **kwargs
     ) -> Dict[str, Any]:
-        """
-        Convenience method to get cases within a time range.
+        """Wrapper around get_cases for a time window.
 
-        Args:
-            start_time: Start datetime
-            end_time: End datetime
-            filter_key: Time field to filter on ('lastModifiedTime', 'createdTime', or 'customerVisibleTime')
-            **kwargs: Additional arguments passed to get_cases()
-
-        Returns:
-            Dictionary containing paginated list of cases
-
-        Example:
-            >>> from datetime import datetime, timedelta
-            >>> client = AbnormalSecurityClient('your-token')
-            >>> end = datetime.now()
-            >>> start = end - timedelta(days=7)
-            >>> cases = client.get_cases_by_timerange(start, end, filter_key='lastModifiedTime')
+        Example (skipped):
+            >>> from datetime import datetime, timedelta  # doctest: +SKIP
+            >>> client = AbnormalSecurityClient('real-token')  # doctest: +SKIP
+            >>> end = datetime.now(timezone.utc); start = end - timedelta(days=1)  # doctest: +SKIP
+            >>> client.get_cases_by_timerange(start, end)  # doctest: +SKIP
         """
         filter_str = (
             f"{filter_key} gte {start_time.strftime('%Y-%m-%dT%H:%M:%SZ')} "
             f"lte {end_time.strftime('%Y-%m-%dT%H:%M:%SZ')}"
         )
-
         return self.get_cases(filter_param=filter_str, **kwargs)
 
     def get_all_cases(
@@ -497,47 +424,61 @@ class AbnormalSecurityClient:
             max_pages: Optional[int] = None,
             **kwargs
     ) -> List[Dict[str, Any]]:
+        """Paginate through all cases matching the filter.
+
+        Example (skipped):
+            >>> client = AbnormalSecurityClient('real-token')  # doctest: +SKIP
+            >>> client.get_all_cases('lastModifiedTime gte 2024-01-01T00:00:00Z lte 2024-01-02T00:00:00Z')  # doctest: +SKIP
         """
-        Get all cases across multiple pages.
-
-        Args:
-            filter_param: Time-based filter (required for pagination)
-            max_pages: Maximum number of pages to retrieve (None for all)
-            **kwargs: Additional arguments passed to get_cases()
-
-        Returns:
-            List of all case dictionaries
-
-        Example:
-            >>> client = AbnormalSecurityClient('your-token')
-            >>> all_cases = client.get_all_cases(
-            ...     filter_param='lastModifiedTime gte 2024-01-01T00:00:00Z lte 2024-12-31T23:59:59Z'
-            ... )
-        """
-        all_cases = []
+        all_cases: List[Dict[str, Any]] = []
         page_number = 1
-
         while True:
             if max_pages and page_number > max_pages:
                 break
-
-            response = self.get_cases(
-                filter_param=filter_param,
-                page_number=page_number,
-                **kwargs
-            )
-
+            response = self.get_cases(filter_param=filter_param, page_number=page_number, **kwargs)
             cases = response.get('cases', [])
             all_cases.extend(cases)
-
-            # Check if there are more pages
             next_page = response.get('nextPageNumber')
             if not next_page:
                 break
-
             page_number = next_page
-
         return all_cases
+
+    def diagnose_auth(self) -> Dict[str, Any]:
+        """Run lightweight auth/permission diagnostics.
+
+        Returns:
+            Dict with results of minimal endpoint probes.
+        """
+        results: Dict[str, Any] = {}
+        probes = [
+            ('/threats', {'pageSize': 1, 'pageNumber': 1, 'source': 'all'}),
+            ('/cases', {'pageSize': 1, 'pageNumber': 1})
+        ]
+        for endpoint, params in probes:
+            try:
+                data = self._make_request('GET', endpoint, params=params)
+                results[endpoint] = {
+                    'status': 'ok',
+                    'keys': list(data.keys())[:10]
+                }
+            except AbnormalSecurityError as ase:
+                results[endpoint] = {
+                    'status': 'forbidden',
+                    'detail': ase.detail,
+                    'suggestions': ase.suggestions
+                }
+            except requests.HTTPError as he:
+                results[endpoint] = {
+                    'status': f'http_error_{he.response.status_code}',
+                    'detail': str(he)
+                }
+            except Exception as e:
+                results[endpoint] = {
+                    'status': 'error',
+                    'detail': str(e)
+                }
+        return results
 
 
 def main():
@@ -590,6 +531,11 @@ def main():
                 logger.info(f"  Attack Type: {threat_details.get('attackType', 'N/A')}")
                 logger.info(f"  Subject: {threat_details.get('subject', 'N/A')}")
                 logger.info(f"  Sender: {threat_details.get('fromAddress', 'N/A')}")
+    except AbnormalSecurityError as ase:
+        logger.error(str(ase))
+        logger.info("Running auth diagnostics after 403...")
+        diag = client.diagnose_auth()
+        logger.info(f"Diagnostics: {diag}")
     except Exception as e:
         logger.error(f"Error getting threats: {e}", exc_info=True)
 
@@ -617,6 +563,11 @@ def main():
                 logger.info("Retrieved case details")
                 logger.info(f"  Severity: {case_details.get('severity', 'N/A')}")
                 logger.info(f"  Status: {case_details.get('status', 'N/A')}")
+    except AbnormalSecurityError as ase:
+        logger.error(str(ase))
+        logger.info("Running auth diagnostics after 403 on cases...")
+        diag = client.diagnose_auth()
+        logger.info(f"Diagnostics: {diag}")
     except Exception as e:
         logger.error(f"Error getting cases: {e}", exc_info=True)
 
@@ -636,6 +587,8 @@ def main():
 
         attack_threats = filtered_threats.get('threats', [])
         logger.info(f"Found {len(attack_threats)} attack threats")
+    except AbnormalSecurityError as ase:
+        logger.error(str(ase))
     except Exception as e:
         logger.error(f"Error getting filtered threats: {e}", exc_info=True)
 
