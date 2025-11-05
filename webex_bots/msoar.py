@@ -206,7 +206,6 @@ def main():
         initial_retry_delay=30,
         max_retry_delay=300,
         keepalive_interval=60,  # Aggressive keepalive for VM behind firewalls
-        proactive_reconnection_interval=600  # Force reconnect every 10 min to prevent sleep
     )
 
     # Resilience framework will log startup status - no need for premature log here

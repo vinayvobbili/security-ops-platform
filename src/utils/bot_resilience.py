@@ -54,75 +54,6 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 
-def _get_pid_file_path(bot_name):
-    """Get the path to the PID file for this bot"""
-    import tempfile
-    import os
-    pid_dir = os.path.join(tempfile.gettempdir(), 'webex_bots')
-    os.makedirs(pid_dir, exist_ok=True)
-    return os.path.join(pid_dir, f"{bot_name.lower().replace(' ', '_')}.pid")
-
-
-def _check_and_create_pid_file(bot_name):
-    """
-    Check if another instance is running and create PID file.
-    Returns True if we can proceed, False if another instance is running.
-    """
-    import os
-
-    pid_file = _get_pid_file_path(bot_name)
-    current_pid = os.getpid()
-    
-    # Check if PID file exists
-    if os.path.exists(pid_file):
-        try:
-            with open(pid_file, 'r') as f:
-                old_pid = int(f.read().strip())
-            
-            # Check if the process is still running
-            try:
-                os.kill(old_pid, 0)  # Signal 0 just checks if process exists
-                # Process exists
-                if old_pid != current_pid:
-                    logger.warning(f"Another instance of {bot_name} is already running (PID: {old_pid})")
-                    logger.warning(f"If this is incorrect, remove the PID file: {pid_file}")
-                    return False
-            except OSError:
-                # Process doesn't exist, clean up stale PID file
-                logger.debug(f"Cleaning up stale PID file for {bot_name}")
-                os.remove(pid_file)
-        except (ValueError, IOError) as e:
-            logger.warning(f"Invalid PID file, removing: {e}")
-            try:
-                os.remove(pid_file)
-            except:
-                pass
-    
-    # Create new PID file
-    try:
-        with open(pid_file, 'w') as f:
-            f.write(str(current_pid))
-        logger.debug(f"Created PID file for {bot_name}: {pid_file}")
-        return True
-    except IOError as e:
-        logger.error(f"Could not create PID file: {e}")
-        return True  # Don't block startup if we can't create PID file
-
-
-def _remove_pid_file(bot_name):
-    """Remove the PID file for this bot"""
-    import os
-    
-    pid_file = _get_pid_file_path(bot_name)
-    try:
-        if os.path.exists(pid_file):
-            os.remove(pid_file)
-            logger.debug(f"Removed PID file for {bot_name}")
-    except IOError as e:
-        logger.warning(f"Could not remove PID file: {e}")
-
-
-
 def _is_proxy_related_error(error):
     """Check if an error is likely related to proxy issues"""
     error_str = str(error).lower()
@@ -787,12 +718,6 @@ class ResilientBot:
         except Exception as e:
             logger.error(f"Error during graceful shutdown of {self.bot_name}: {e}")
 
-        # Remove PID file
-        try:
-            _remove_pid_file(self.bot_name)
-        except Exception as e:
-            logger.debug(f"Error removing PID file: {e}")
-        
     def run_with_reconnection(self):
         """Run bot with automatic reconnection on failures"""
         retry_delay = self.initial_retry_delay
@@ -1057,15 +982,10 @@ class ResilientBot:
         Main entry point - starts bot with full resilience features
         """
         try:
-            # Check for other instances using PID file
-            if not _check_and_create_pid_file(self.bot_name or "UnknownBot"):
-                logger.error(f"Cannot start {self.bot_name} - another instance is already running")
-                sys.exit(1)
-
-            # Kill any competing processes automatically
+            # Kill any competing processes automatically (auto-recovery from hung/stuck bots)
             killed_count = self._kill_competing_processes()
             if killed_count > 0:
-                logger.debug(f"🧹 Cleaned up {killed_count} competing process(es). Starting {self.bot_name}...")
+                logger.info(f"🧹 Cleaned up {killed_count} competing process(es). Starting {self.bot_name}...")
 
             # Start keepalive monitoring thread
             self.keepalive_thread = threading.Thread(target=self._keepalive_ping, daemon=True)
