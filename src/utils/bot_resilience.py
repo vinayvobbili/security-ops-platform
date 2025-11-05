@@ -380,14 +380,73 @@ class ResilientBot:
 
     def _run_bot_with_monitoring(self):
         """Run the bot with monitoring for reconnection requests"""
-        try:
-            # For now, just run the bot directly since the threading approach
-            # has asyncio event loop issues. The keepalive and websocket monitoring
-            # threads will handle reconnection detection.
-            self.bot_instance.run()
+        import threading
 
-        except Exception as e:
-            logger.error(f"Error running {self.bot_name}: {e}")
+        # Flag to track if bot.run() is still running
+        bot_running = threading.Event()
+        bot_running.set()
+
+        # Exception container to propagate errors from bot thread
+        bot_exception = [None]
+
+        def run_bot():
+            """Run bot in a separate thread so we can monitor it"""
+            try:
+                # Create event loop for this thread (Python 3.13+ requirement)
+                import asyncio
+                try:
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    logger.debug(f"Created new event loop for bot thread: {threading.current_thread().name}")
+                except Exception as loop_error:
+                    logger.warning(f"Could not create event loop for bot thread: {loop_error}")
+
+                # Run the bot
+                self.bot_instance.run()
+            except Exception as e:
+                logger.error(f"Error running {self.bot_name}: {e}")
+                bot_exception[0] = e
+            finally:
+                # Clean up event loop
+                try:
+                    import asyncio
+                    loop = asyncio.get_event_loop()
+                    if not loop.is_closed():
+                        loop.close()
+                except Exception:
+                    pass
+                bot_running.clear()
+
+        # Start bot in a separate thread
+        bot_thread = threading.Thread(target=run_bot, daemon=False)
+        bot_thread.start()
+        logger.debug(f"Bot thread started for {self.bot_name}")
+
+        # Monitor the bot thread and reconnection flag
+        try:
+            while bot_running.is_set() and not self._reconnection_needed and not self.shutdown_requested:
+                time.sleep(1)  # Check every second
+
+            # If reconnection was requested, forcefully stop the bot
+            if self._reconnection_needed:
+                logger.info(f"🔄 Reconnection requested, forcing {self.bot_name} to stop...")
+                # The WebSocket should already be closed by _trigger_reconnection()
+                # Just wait a bit for the bot thread to exit
+                bot_thread.join(timeout=10)
+                if bot_thread.is_alive():
+                    logger.warning(f"Bot thread for {self.bot_name} did not exit cleanly after 10s")
+                else:
+                    logger.info(f"✅ Bot thread for {self.bot_name} exited cleanly")
+            else:
+                # Bot stopped normally, wait for thread to finish
+                bot_thread.join(timeout=5)
+
+            # Propagate any exception that occurred in the bot thread
+            if bot_exception[0]:
+                raise bot_exception[0]
+
+        except KeyboardInterrupt:
+            logger.info(f"🛑 Keyboard interrupt received for {self.bot_name}")
             raise
 
     def _proactive_reconnection_monitor(self):
