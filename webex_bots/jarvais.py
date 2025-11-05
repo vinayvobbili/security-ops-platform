@@ -1168,7 +1168,7 @@ class Hi(Command):
 
     @log_activity(bot_access_token=CONFIG.webex_bot_access_token_jarvais, log_file_name="jarvais_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
-        return "Hi 👋"
+        return "Hi 👋🏾"
 
 
 def jarvais_bot_factory():
