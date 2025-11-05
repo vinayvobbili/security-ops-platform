@@ -56,15 +56,27 @@ config = get_config()
 eastern = pytz.timezone('US/Eastern')
 
 
-def safe_run(*jobs: Callable[[], None], timeout: int = 300) -> None:
+def safe_run(*jobs: Callable[[], None], timeout: int = 1800) -> None:
     """Execute multiple jobs safely with timeout protection, continuing even if some fail.
 
-    Each job is executed in sequence with independent error handling and timeout protection.
-    If one job fails or times out, remaining jobs continue executing.
+    Jobs are executed in SEQUENCE with independent error handling and timeout protection.
+    This is a BLOCKING function - it waits for all jobs to complete before returning.
+
+    Key guarantee: If one job fails or times out, remaining jobs STILL EXECUTE.
+    This ensures errors in one group don't prevent subsequent groups from running.
 
     Args:
         *jobs: Variable number of callable functions to execute
-        timeout: Maximum seconds per job (default: 300 = 5 minutes)
+        timeout: Maximum seconds per job (default: 1800 = 30 minutes)
+
+    Error Handling:
+        - Exceptions: Caught, logged, execution continues to next job
+        - Timeouts: Job killed, logged, execution continues to next job
+        - All jobs in the batch get a chance to run regardless of failures
+
+    Example:
+        If Group 1 has 6 jobs and job 3 fails, jobs 4-6 still run.
+        When Group 1 completes (even with failures), Group 2 runs next.
     """
     for job in jobs:
         job_name = getattr(job, '__name__', str(job))
@@ -77,9 +89,11 @@ def safe_run(*jobs: Callable[[], None], timeout: int = 300) -> None:
                 except FuturesTimeoutError:
                     logger.error(f"Job timed out after {timeout} seconds: {job_name}")
                     logger.error(f"This job was forcefully terminated to prevent scheduler hang")
+                    # Continue to next job despite timeout
         except Exception as e:
             logger.error(f"Job execution failed for {job_name}: {e}")
             logger.debug(traceback.format_exc())
+            # Continue to next job despite exception
 
 
 def main() -> None:
@@ -123,32 +137,58 @@ def main() -> None:
     print("Starting crash-proof job scheduler...")
     logger.info("Initializing security operations scheduler")
 
-    # Daily chart generation - runs at midnight to prepare metrics for the next day
-    # TicketCache.generate needs longer timeout (20 min) for enriching ~7000+ tickets with notes
+    # =============================================================================
+    # STABLE JOBS - Fast, reliable chart generation (runs FIRST for quick results)
+    # =============================================================================
+    # Note: Using generous timeouts since jobs are isolated - timeout is only
+    # to prevent infinite hangs, not to aggressively kill legitimate work
+
+    # Prepare directory (fast, runs first)
     schedule.every().day.at("00:01", eastern).do(lambda: safe_run(
         lambda: make_dir_for_todays_charts(helper_methods.CHARTS_DIR_PATH),
-        TicketCache.generate,
-        timeout=1200,  # 20 minutes for ticket cache generation
     ))
 
-    # Chart generation with standard timeout
-    schedule.every().day.at("00:25", eastern).do(lambda: safe_run(
+    # Group 1: Basic metrics charts (fast, data-driven from cache)
+    schedule.every().day.at("00:02", eastern).do(lambda: safe_run(
         aging_tickets.make_chart,
-        crowdstrike_efficacy.make_chart,
-        crowdstrike_volume.make_chart,
-        days_since_incident.make_chart,
-        de_stories.make_chart,
-        heatmap.create_choropleth_map,
         inflow.make_chart,
+        outflow.make_chart,
         lifespan.make_chart,
         mttr_mttc.make_chart,
-        outflow.make_chart,
-        qradar_rule_efficacy.make_chart,
-        re_stories.make_chart,
         sla_breaches.make_chart,
+    ))
+
+    # Group 2: Efficacy and volume charts (may call external APIs)
+    schedule.every().day.at("00:07", eastern).do(lambda: safe_run(
+        crowdstrike_efficacy.make_chart,
+        crowdstrike_volume.make_chart,
+        qradar_rule_efficacy.make_chart,
+        vectra_volume.make_chart,
+    ))
+
+    # Group 3: Story and status charts (stable, simple)
+    schedule.every().day.at("00:12", eastern).do(lambda: safe_run(
+        de_stories.make_chart,
+        re_stories.make_chart,
+        days_since_incident.make_chart,
         threat_tippers.make_chart,
         threatcon_level.make_chart,
-        vectra_volume.make_chart,
+    ))
+
+    # Group 4: Complex/slow charts (heatmap can be slow)
+    schedule.every().day.at("00:17", eastern).do(lambda: safe_run(
+        heatmap.create_choropleth_map,
+    ))
+
+    # =============================================================================
+    # UNSTABLE JOBS - High risk of timeout/failure, runs LAST after stable jobs
+    # =============================================================================
+
+    # Ticket cache generation (UNSTABLE - can take 15-20 min, fully isolated)
+    # Runs at 00:30 after all stable jobs complete, so it doesn't block anything
+    schedule.every().day.at("00:30", eastern).do(lambda: safe_run(
+        TicketCache.generate,
+        # Uses default 30-minute timeout - sufficient for ~7000+ tickets with retries
     ))
 
     # Host verification - checks endpoint connectivity every 5 minutes
