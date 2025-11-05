@@ -68,24 +68,10 @@ def patch_websocket_client():
                 logger.debug("WebSocket Received Message(raw): %s\n" % message)
                 try:
                     msg = json.loads(message)
-                    # Check if event loop is available and not closed before scheduling
-                    try:
-                        loop = asyncio.get_event_loop()
-                        # Check if loop is closed - this happens during shutdown/reconnection
-                        if loop.is_closed():
-                            logger.debug("Event loop is closed, skipping message processing")
-                            return
-                        loop.run_in_executor(None, self._process_incoming_websocket_message, msg)
-                    except RuntimeError as loop_error:
-                        # Event loop not available (happens during shutdown)
-                        if 'no current event loop' in str(loop_error).lower() or 'no running event loop' in str(loop_error).lower():
-                            logger.debug("No event loop available during shutdown, skipping message")
-                            return
-                        raise
+                    loop = asyncio.get_event_loop()
+                    loop.run_in_executor(None, self._process_incoming_websocket_message, msg)
                 except Exception as messageProcessingException:
-                    # Only log if it's not a shutdown-related error
-                    if 'cannot schedule new futures after shutdown' not in str(messageProcessingException).lower():
-                        logger.warning(
+                    logger.warning(
                         f"An exception occurred while processing message. Ignoring. {messageProcessingException}")
 
             @backoff.on_exception(
