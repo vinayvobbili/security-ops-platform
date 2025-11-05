@@ -69,8 +69,7 @@ def _check_and_create_pid_file(bot_name):
     Returns True if we can proceed, False if another instance is running.
     """
     import os
-    import signal
-    
+
     pid_file = _get_pid_file_path(bot_name)
     current_pid = os.getpid()
     
@@ -463,9 +462,11 @@ class ResilientBot:
 
         def run_bot():
             """Run bot in a separate thread so we can monitor it"""
+            import threading
+            import asyncio
+
             try:
                 # Create event loop for this thread (Python 3.13+ requirement)
-                import asyncio
                 try:
                     loop = asyncio.new_event_loop()
                     asyncio.set_event_loop(loop)
@@ -473,52 +474,15 @@ class ResilientBot:
                 except Exception as loop_error:
                     logger.warning(f"Could not create event loop for bot thread: {loop_error}")
 
-                # Run the bot
-                # Check stop flag periodically while running
-                import threading
-                stop_event = threading.Event()
-                
-                def run_with_interrupt():
-                    try:
-                        # Create event loop for this thread (Python 3.12+ requirement)
-                        import asyncio
-                        try:
-                            loop = asyncio.new_event_loop()
-                            asyncio.set_event_loop(loop)
-                            logger.debug(f"Created new event loop for bot thread")
-                        except Exception as loop_error:
-                            logger.warning(f"Could not create event loop for bot thread: {loop_error}")
-                        
-                        self.bot_instance.run()
-                    except (KeyboardInterrupt, SystemExit):
-                        logger.debug("Bot run interrupted")
-                    finally:
-                        # Clean up event loop
-                        try:
-                            import asyncio
-                            loop = asyncio.get_event_loop()
-                            if not loop.is_closed():
-                                loop.close()
-                        except Exception:
-                            pass
-                
-                # Run in a way that can be interrupted
-                bot_run_thread = threading.Thread(target=run_with_interrupt, daemon=True)
-                bot_run_thread.start()
-                
-                # Wait for bot to finish or stop flag
-                while bot_run_thread.is_alive() and not self._force_stop:
-                    bot_run_thread.join(timeout=1)
-                
-                if self._force_stop:
-                    logger.debug("Force stop requested, terminating bot")
+                # Run the bot (this blocks until bot stops or force_stop is set)
+                self.bot_instance.run()
+
             except Exception as e:
                 logger.error(f"Error running {self.bot_name}: {e}")
                 bot_exception[0] = e
             finally:
                 # Clean up event loop
                 try:
-                    import asyncio
                     loop = asyncio.get_event_loop()
                     if not loop.is_closed():
                         loop.close()
@@ -1142,13 +1106,13 @@ class ResilientBot:
     def run(self):
         """
         Main entry point - starts bot with full resilience features
-        # Check for other instances using PID file
-        if not _check_and_create_pid_file(self.bot_name or "UnknownBot"):
-            logger.error(f"Cannot start {self.bot_name} - another instance is already running")
-            sys.exit(1)
-        
         """
         try:
+            # Check for other instances using PID file
+            if not _check_and_create_pid_file(self.bot_name or "UnknownBot"):
+                logger.error(f"Cannot start {self.bot_name} - another instance is already running")
+                sys.exit(1)
+
             # Kill any competing processes automatically
             killed_count = self._kill_competing_processes()
             if killed_count > 0:
