@@ -2144,7 +2144,7 @@ class Hi(Command):
 
     @log_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles, log_file_name="toodles_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
-        return "Hi 👋"
+        return "Hi 👋🏾"
 
 
 class GetUrlBlockVerdictForm(Command):
