@@ -7,7 +7,8 @@ This file provides guidance to AI CLI agents (Claude Code, Gemini, etc.) when wo
 - Remember, prioritize direct, critical feedback over politeness or excessive agreement. Challenge my assumptions when they are unsound
 - Be concise and to the point. Avoid unnecessary fluff or filler
 - Use bullet points and lists for clarity
-- Don't create tests or documentation unless explicitly asked to
+- Always discuss the plan/design before implementing significant changes
+- Don't waste my tokens on unnecessary tests or documentation unless explicitly requested
 
 ## Network and Web Fetch Limitations
 
@@ -16,6 +17,7 @@ This file provides guidance to AI CLI agents (Claude Code, Gemini, etc.) when wo
 **Issue**: Claude Code's WebFetch tool may fail with "Unable to verify if domain is safe to fetch" errors due to enterprise security policies.
 
 **Root Cause**:
+
 - Zscaler (or similar enterprise proxies/firewalls) intercepts outbound requests from `claude.ai`
 - Corporate policies often block AI services from accessing external content
 - Less common domains (e.g., `jobright.ai`, newer sites) are frequently blocked by default
@@ -35,6 +37,7 @@ This file provides guidance to AI CLI agents (Claude Code, Gemini, etc.) when wo
 3. **Request IT exceptions** for specific domains you need Claude to access regularly
 
 **When This Happens**:
+
 - If WebFetch fails, immediately suggest using local curl as an alternative
 - Don't retry WebFetch multiple times - it won't work if blocked by enterprise policy
 - Inform user that this is likely a Zscaler/proxy issue, not a Claude Code bug
