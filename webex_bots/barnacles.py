@@ -162,7 +162,7 @@ class Hi(Command):
 
     @log_activity(config.webex_bot_access_token_barnacles, "barnacles_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
-        return "Hi 👋"
+        return "Hi 👋🏾"
 
 
 # Command to save notes

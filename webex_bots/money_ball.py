@@ -326,7 +326,7 @@ class Hi(Command):
 
     @log_activity(config.webex_bot_access_token_moneyball, "moneyball_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
-        return "Hi 👋"
+        return "Hi 👋🏾"
 
 
 def send_chart(room_id, display_name, chart_name, chart_filename):
