@@ -81,6 +81,7 @@ logging.getLogger().setLevel(logging.DEBUG)
 # Timezone constant for consistent usage
 EASTERN_TZ = ZoneInfo("America/New_York")
 
+
 # ============================================================================
 # Domain Models (Clean, focused data structures)
 # ============================================================================
@@ -236,7 +237,7 @@ class TaniumDataLoader:
             df = pd.read_excel(filename, dtype=str, engine='openpyxl', keep_default_na=False, na_values=[''])
 
             computers = []
-            for idx, row in df.iterrows():
+            for row_position, (idx, row) in enumerate(df.iterrows(), start=2):
                 try:
                     # Parse tags from the "Current Tags" column (may contain newline-separated tags)
                     tags_str = str(row.get('Current Tags', '')).strip()
@@ -256,7 +257,8 @@ class TaniumDataLoader:
                         )
                     )
                 except Exception as e:
-                    self.logger.warning(f"Error processing row {idx + 2}: {e}")
+                    # Use the enumerated row position (Excel-like starting at 2 to account for header row) to avoid arithmetic with non-int index
+                    self.logger.warning(f"Error processing row {row_position}: {e}")
 
             return computers
 
@@ -411,12 +413,12 @@ class SmartCountryResolver:
 
         name = computer.name.strip().lower()
 
-        # Priority 1.1: Set the country to India PMLI for all METLAP and PMDesk hosts
-        if name.lower().startswith('metlap') or name.lower().startswith('pmdesk'):
+        # Priority 1.1: Set the country to India PMLI for all METLAP*, PMDesk* and PMLI* hosts
+        if name.lower().startswith('metlap') or name.lower().startswith('pmdesk') or name.lower().startswith('pmli'):
             # print("Matched METLAP/PMDESK prefix -> India PMLI")
             country = 'India PMLI'
             was_country_guessed = False
-        # Priority 1.2: Set the country to India PMLI for all METLAP and PMDesk hosts
+        # Priority 1.2: Set the country to US for all IAZ* hosts
         elif name.lower().startswith('iaz'):
             # print("Matched IAZ prefix -> US")
             country = 'US'
