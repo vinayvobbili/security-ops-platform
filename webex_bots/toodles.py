@@ -2318,7 +2318,7 @@ def main():
         initial_retry_delay=30,
         max_retry_delay=300,
         keepalive_interval=60,  # More aggressive keepalive (was 120s default)
-        proactive_reconnection_interval=600  # Force reconnect every 10 min to prevent sleep
+        proactive_reconnection_interval=None  # Disabled - rely on keepalive to handle issues
     )
     resilient_runner.run()
 
