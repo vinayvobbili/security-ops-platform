@@ -1,5 +1,6 @@
 import logging
 
+from tenacity import retry, stop_after_attempt, wait_exponential, before_sleep_log
 from webexpythonsdk import WebexAPI
 
 from my_config import get_config
@@ -7,15 +8,21 @@ from services.xsoar import TicketHandler, XsoarEnvironment
 
 CONFIG = get_config()
 # Configure timeout to prevent hanging if Webex API is slow/down
+# Increased from 60s to 180s to handle network congestion
 webex_api = WebexAPI(
     access_token=CONFIG.webex_bot_access_token_soar,
-    single_request_timeout=60  # 60 second timeout
+    single_request_timeout=180  # 180 second timeout (3 minutes)
 )
 
 # Configure logging for better error tracking
 logger = logging.getLogger(__name__)
 
 
+@retry(
+    stop=stop_after_attempt(3),  # Retry up to 3 times
+    wait=wait_exponential(multiplier=2, min=2, max=10),  # Exponential backoff: 2s, 4s, 8s
+    before_sleep=before_sleep_log(logger, logging.WARNING),
+)
 def start(room_id):
     try:
         ticket_handler = TicketHandler(XsoarEnvironment.PROD)
@@ -39,6 +46,7 @@ def start(room_id):
         )
     except Exception as e:
         logger.error(f"Critical error in incident declaration SLA processing: {e}", exc_info=True)
+        raise  # Reraise to trigger retry
 
 
 if __name__ == "__main__":

@@ -198,7 +198,7 @@ class TicketCache:
     def _enrich_with_notes(self, tickets: List[Ticket]) -> List[Ticket]:
         """Enrich tickets with user notes in parallel."""
         max_workers = 50
-        timeout_per_ticket = 30  # seconds
+        timeout_per_ticket = 60  # seconds - increased from 30s to handle network congestion
         print(f"📝 Enriching {len(tickets)} tickets with notes (parallel, workers={max_workers})...")
         log.debug(f"Starting parallel notes enrichment with {max_workers} workers")
 
