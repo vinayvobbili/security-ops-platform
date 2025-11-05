@@ -459,7 +459,7 @@ class ResilientBot:
         bot_running.set()
 
         # Exception container to propagate errors from bot thread
-        bot_exception = [None]
+        bot_exception: list[Optional[Exception]] = [None]
 
         def run_bot():
             """Run bot in a separate thread so we can monitor it"""
