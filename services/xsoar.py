@@ -27,6 +27,7 @@ import json
 import logging
 import time
 from datetime import datetime
+from http.client import RemoteDisconnected
 from pprint import pprint
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -36,7 +37,7 @@ import requests
 import urllib3
 from demisto_client.demisto_api import rest
 from demisto_client.demisto_api.models import SearchIncidentsData
-from urllib3.exceptions import InsecureRequestWarning
+from urllib3.exceptions import InsecureRequestWarning, ProtocolError
 
 from my_config import get_config
 from src.utils.xsoar_enums import XsoarEnvironment
@@ -278,6 +279,20 @@ class TicketHandler:
                         time.sleep(1.0)
 
                     page += 1
+
+                except (RemoteDisconnected, ProtocolError, ConnectionError, requests.exceptions.ConnectionError) as e:
+                    # Handle connection errors with retry
+                    server_error_retry_count += 1
+                    if server_error_retry_count > max_server_error_retries:
+                        log.error(f"Exceeded max connection error retries ({max_server_error_retries})")
+                        break
+
+                    backoff_time = 5 * (2 ** (server_error_retry_count - 1))
+                    log.warning(f"Connection error on page {page}: {type(e).__name__}: {e}. "
+                                f"Retry {server_error_retry_count}/{max_server_error_retries}. "
+                                f"Backing off for {backoff_time} seconds...")
+                    time.sleep(backoff_time)
+                    continue  # Retry same page
 
                 except ApiException as e:
                     # Handle server errors (502, 503, 504) with retry

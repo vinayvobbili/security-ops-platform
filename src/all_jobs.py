@@ -124,9 +124,15 @@ def main() -> None:
     logger.info("Initializing security operations scheduler")
 
     # Daily chart generation - runs at midnight to prepare metrics for the next day
+    # TicketCache.generate needs longer timeout (20 min) for enriching ~7000+ tickets with notes
     schedule.every().day.at("00:01", eastern).do(lambda: safe_run(
         lambda: make_dir_for_todays_charts(helper_methods.CHARTS_DIR_PATH),
         TicketCache.generate,
+        timeout=1200,  # 20 minutes for ticket cache generation
+    ))
+
+    # Chart generation with standard timeout
+    schedule.every().day.at("00:25", eastern).do(lambda: safe_run(
         aging_tickets.make_chart,
         crowdstrike_efficacy.make_chart,
         crowdstrike_volume.make_chart,
