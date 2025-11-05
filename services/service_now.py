@@ -209,16 +209,16 @@ class ServiceNowClient:
 
         hostname = hostname.split('.')[0]  # Remove domain
 
-        # Try servers first
-        host_details = self._search_endpoint(self.server_url, hostname)
-        if host_details:
-            host_details['category'] = 'server'
-            return host_details
-
         # Try workstations
         host_details = self._search_endpoint(self.workstation_url, hostname)
         if host_details:
             host_details['category'] = 'workstation'
+            return host_details
+
+        # Try servers first
+        host_details = self._search_endpoint(self.server_url, hostname)
+        if host_details:
+            host_details['category'] = 'server'
             return host_details
 
         return {"name": hostname, "status": "Not Found"}
@@ -503,7 +503,7 @@ def enrich_host_report(input_file):
 if __name__ == "__main__":
     client = ServiceNowClient()
 
-    hostname = "CLF6R2VC4"
+    hostname = "USHZK3C64.internal.company.com"
     logger.info(f"Looking up in SNOW: {hostname}...")
 
     details = client.get_host_details(hostname)
