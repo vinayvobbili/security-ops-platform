@@ -280,7 +280,12 @@ class TaniumInstance:
 
         logger.info(f"Starting pagination for {self.name} with page_size={self.DEFAULT_PAGE_SIZE}, limit={limit}")
 
-        with tqdm.tqdm(desc=f"Fetching computers from {self.name}", unit="host") as pbar:
+        # Disable tqdm in non-interactive contexts (e.g., when called from bots/services)
+        # to prevent broken pipe errors
+        import sys
+        disable_tqdm = not sys.stdout.isatty()
+
+        with tqdm.tqdm(desc=f"Fetching computers from {self.name}", unit="host", disable=disable_tqdm) as pbar:
             page_num = 0
             while True:
                 page_num += 1
