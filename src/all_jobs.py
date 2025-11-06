@@ -153,7 +153,6 @@ def main() -> None:
         aging_tickets.make_chart,
         inflow.make_chart,
         outflow.make_chart,
-        lifespan.make_chart,
         mttr_mttc.make_chart,
         sla_breaches.make_chart,
     ))
@@ -164,6 +163,7 @@ def main() -> None:
         crowdstrike_volume.make_chart,
         qradar_rule_efficacy.make_chart,
         vectra_volume.make_chart,
+        lifespan.make_chart,
     ))
 
     # Group 3: Story and status charts (stable, simple)

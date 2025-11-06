@@ -1,5 +1,6 @@
 import json
 import logging
+import random
 import time
 import traceback
 from datetime import date
@@ -28,7 +29,7 @@ logger = logging.getLogger("tenacity.retry")
 logging.basicConfig(level=logging.INFO)
 
 config = get_config()
-webex_api = WebexAPI(config.webex_bot_access_token_soar, disable_ssl_verify=True, single_request_timeout=180)
+webex_api = WebexAPI(config.webex_bot_access_token_moneyball, disable_ssl_verify=True, single_request_timeout=180)
 prod_list_handler = ListHandler(XsoarEnvironment.PROD)
 BASE_QUERY = f'type:{config.team_name} -owner:""'
 root_directory = Path(__file__).parent.parent
@@ -67,6 +68,143 @@ class ShiftConstants:
     TICKET_SHOW_COUNT = 5
     SHIFT_DURATION_HOURS = 8
     EASTERN_TZ = 'US/Eastern'
+
+
+# Fun messages for Daily Operational Report charts
+DOR_CHART_MESSAGES = [
+    "📊 Brewing your daily dose of metrics...",
+    "🎨 Painting the security landscape...",
+    "📈 Charting the course to cyber victory...",
+    "🔥 Hot off the press - fresh security stats...",
+    "🎯 Bulls-eye! Here come your metrics...",
+    "🧙‍♂️ Conjuring operational insights...",
+    "🚀 Launching today's security snapshot...",
+    "🕵️‍♂️ Uncovering the secrets in the numbers...",
+    "🧠 Processing threat intelligence with style...",
+    "☕ Your morning metrics with a side of excellence...",
+    "🧩 Assembling the security puzzle...",
+    "🛡️ Forging your defense dashboard...",
+    "🌈 Adding color to your security posture...",
+    "🦉 The wise owl brings operational wisdom...",
+    "🎪 Step right up for the daily metrics show...",
+    "🎭 Presenting today's security performance...",
+    "🏆 Championship-level analytics incoming...",
+    "🎬 Rolling out the red carpet for your data...",
+    "🎻 Orchestrating a symphony of security stats...",
+    "🔮 Crystal ball reveals today's metrics...",
+    "🌟 Sprinkling stardust on your dashboard...",
+    "🎲 Rolling the dice on today's threat landscape...",
+    "🧊 Serving up ice-cold analytics...",
+    "🦄 Unicorn-powered metrics incoming...",
+    "🎺 Trumpeting today's security wins...",
+    "🧬 DNA analysis of your security posture...",
+    "🎰 Jackpot! Fresh metrics hitting your screen...",
+    "🏰 Building your fortress of data...",
+    "🎸 Rocking out with threat metrics...",
+    "🌊 Surfing the wave of security data...",
+    "🍕 Fresh out of the oven - hot metrics...",
+    "🎮 Level up! New stats unlocked...",
+    "🦅 Eagle-eye view of your operations...",
+    "⚡ Lightning-fast metrics delivery...",
+    "🎨 Michelangelo wishes he could paint data like this...",
+    "🧵 Weaving the tapestry of security excellence...",
+    "🏹 Targeting perfection with today's data...",
+    "🌋 Erupting with fresh operational insights...",
+    "🎩 Abracadabra! Metrics appear...",
+    "🦖 T-Rex-sized analytics incoming...",
+    "🍿 Grab your popcorn for today's metrics show...",
+    "🧲 Magnetically attracted to great data...",
+    "🎣 Reeling in the catch of the day...",
+    "🦋 Metamorphosis of raw data into beauty...",
+    "🎡 Taking you on a metrics rollercoaster...",
+    "🧪 Lab results are in! Pure analytical gold...",
+    "🗺️ X marks the spot - treasure map of metrics...",
+    "🎊 Confetti cannon of operational excellence...",
+    "🦁 Roaring into action with today's stats...",
+    "🌮 Taco Tuesday energy with Monday metrics...",
+]
+
+# Fun messages for shift performance
+SHIFT_PERFORMANCE_MESSAGES = [
+    "🌟 Previous shift absolutely crushed it!",
+    "🎖️ Medal ceremony for the previous shift!",
+    "👏 Round of applause for the last crew!",
+    "🏅 Here's how the legends before you did...",
+    "💪 Previous shift: Making security look easy!",
+    "🎭 The previous act was spectacular!",
+    "🦸‍♂️ Superhero shift stats incoming...",
+    "🔥 The last shift brought the heat!",
+    "⭐ Star performance from the previous crew!",
+    "🎯 Bullseye! Check out these shift stats...",
+    "🏆 Trophy-worthy performance from the last team!",
+    "🎪 The previous show was a blockbuster!",
+    "🦅 Soaring stats from the eagle-eyed crew!",
+    "🎬 Oscar-worthy shift performance!",
+    "🌊 Last shift made waves in security!",
+    "⚡ Electrifying performance report!",
+    "🎸 Previous shift rocked the SOC!",
+    "🚀 Blast off! Last crew reached orbit!",
+    "🎺 Fanfare for the magnificent shift before!",
+    "🦁 The pride has spoken - last shift roared!",
+    "🎨 Masterpiece metrics from the previous artists!",
+    "🧙‍♂️ Wizardry-level performance unveiled!",
+    "🎯 Dead-center performance stats!",
+    "🌟 Constellation of excellence from last shift!",
+    "🏰 Fortress defended brilliantly by previous guard!",
+]
+
+# Fun messages for shift changes
+SHIFT_CHANGE_MESSAGES = [
+    "🔔 Shift change alert! Fresh defenders incoming...",
+    "🌅 The guard is changing! New heroes on deck...",
+    "🎺 Sound the horns! Shift transition time...",
+    "🚨 New shift, who dis? Let's gooo!",
+    "⏰ Ding ding ding! Shift change o'clock!",
+    "🔄 Passing the security torch to the next crew...",
+    "🎪 Ladies and gentlemen, introducing your new shift!",
+    "🦸‍♀️ The next wave of defenders has arrived!",
+    "🌟 New shift stepping up to the plate!",
+    "🎬 And... action! New shift is live!",
+    "🏰 Changing of the guard at the castle!",
+    "🌊 Fresh wave of defenders rolling in...",
+    "🔥 New shift bringing the fire!",
+    "🎭 The stage is set for the next act!",
+    "🦅 Fresh eagles taking flight!",
+    "⚡ Power-up! New shift activated!",
+    "🎮 Player 2 has entered the game!",
+    "🚀 Launching the next mission crew!",
+    "🎸 New band taking the stage!",
+    "🏹 Fresh arrows in the quiver!",
+    "🌈 Rainbow bridge to the next shift!",
+    "🎯 Targets locked - new shift engaged!",
+    "🦁 The pride rotates - new lions on patrol!",
+    "🎊 Party time! New shift celebration!",
+    "🛡️ Shields up! New defenders ready!",
+    "🌟 The next constellation rises!",
+    "🎩 Top hats off to the incoming team!",
+    "🦸 Avengers... assemble! (New shift edition)",
+    "🔮 The prophecy foretold this shift change!",
+    "🏆 Championship roster taking the field!",
+]
+
+# Ouch messages for missing charts
+CHART_NOT_FOUND_MESSAGES = [
+    "🤕 Ouch! That chart went missing...",
+    "💥 Ouch! Chart file is playing hide and seek...",
+    "😵 Ouch! We lost that chart somewhere...",
+    "🆘 Ouch! Chart file took a vacation day...",
+    "🤦 Ouch! That chart ghosted us...",
+    "💔 Ouch! Chart file broke up with us...",
+    "🕵️ Ouch! Chart went into witness protection...",
+    "🏃 Ouch! Chart file ran away from home...",
+    "🎭 Ouch! Chart missed its curtain call...",
+    "🦖 Ouch! Chart got eaten by a data dinosaur...",
+    "🧙 Ouch! Chart vanished in a puff of smoke...",
+    "🎪 Ouch! Chart left the circus...",
+    "🛸 Ouch! Chart got abducted by aliens...",
+    "🏴‍☠️ Ouch! Chart walked the plank...",
+    "🎩 Ouch! Chart pulled a disappearing act...",
+]
 
 
 def get_current_shift():
@@ -620,9 +758,10 @@ def announce_previous_shift_performance(room_id, shift_name):
                 )
             ]
         )
+        fun_message = random.choice(SHIFT_PERFORMANCE_MESSAGES)
         webex_api.messages.create(
             roomId=room_id,
-            text="Previous Shift Performance!",
+            text=fun_message,
             attachments=[{"contentType": "application/vnd.microsoft.card.adaptive", "content": shift_performance.to_dict()}]
         )
     except Exception as e:
@@ -767,9 +906,10 @@ def announce_shift_change(shift_name, room_id, sleep_time=30):
 
         # Create and send message
         message_text = _create_shift_change_message(shift_name, shift_data)
+        fun_message = random.choice(SHIFT_CHANGE_MESSAGES)
         webex_api.messages.create(
             roomId=room_id,
-            text="Shift Change Notice!",
+            text=fun_message,
             markdown=message_text
         )
 
@@ -786,11 +926,52 @@ def announce_shift_change(shift_name, room_id, sleep_time=30):
         raise  # Reraise to trigger retry for non-network errors too
 
 
+def send_daily_operational_report_charts(room_id=config.webex_room_id_metrics):
+    """Send daily operational report charts to Webex room."""
+    try:
+        today = datetime.today()
+        charts_dir = root_directory / 'web' / 'static' / 'charts'
+        date_str = today.strftime('%m-%d-%Y')
+        secops_charts_path = charts_dir / date_str
+        dor_charts = [
+            'Aging Tickets.png',
+            'MTTR MTTC.png',
+            'SLA Breaches.png',
+            'Inflow Yesterday.png',
+            'Outflow Yesterday.png',
+        ]
+        for chart in dor_charts:
+            chart_path = secops_charts_path / chart
+            if chart_path.exists():
+                fun_message = random.choice(DOR_CHART_MESSAGES)
+                chart_title = chart.replace('.png', '')
+                webex_api.messages.create(
+                    roomId=room_id,
+                    text=f"{fun_message} - {chart_title}",
+                    markdown=f"{fun_message}\n\n📊 **{chart_title}**",
+                    files=[str(chart_path)]
+                )
+            else:
+                logger.warning(f"Chart file not found: {chart_path}")
+                ouch_message = random.choice(CHART_NOT_FOUND_MESSAGES)
+                chart_title = chart.replace('.png', '')
+                webex_api.messages.create(
+                    roomId=room_id,
+                    text=f"{ouch_message} - Missing: {chart_title}",
+                    markdown=f"{ouch_message}\n\n**Missing:** {chart_title}"
+                )
+
+    except Exception as e:
+        logger.error(f"Error in send_daily_operational_report_charts: {e}")
+        traceback.print_exc()
+
+
 def main():
     """Main function to run the scheduled jobs."""
     room_id = config.webex_room_id_vinay_test_space
-    announce_shift_change('morning', room_id, sleep_time=0)
-    print(get_staffing_data())
+    # announce_shift_change('morning', room_id, sleep_time=0)
+    # print(get_staffing_data())
+    send_daily_operational_report_charts(room_id)
 
 
 if __name__ == "__main__":
