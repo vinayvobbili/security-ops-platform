@@ -504,12 +504,11 @@ class ResilientBot:
     def _keepalive_ping(self):
         """Keep connection alive with periodic health checks"""
         wait = 60  # Start with 1 minute
-        ping_start = time.time()
         while not self.shutdown_requested:
             try:
                 if self.bot_instance and hasattr(self.bot_instance, 'teams'):
                     # Try a simple API call to test connection health
-
+                    ping_start = time.time()
                     self.bot_instance.teams.people.me()
                     ping_duration = time.time() - ping_start
 

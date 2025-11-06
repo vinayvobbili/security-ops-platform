@@ -1,16 +1,17 @@
 """
-Connection Health Monitoring
+Connection Health Monitoring (Keepalive-Focused)
 
-Tracks and logs detailed connection health metrics for Webex bots.
-Provides insights into connection stability, timeout patterns, and error rates.
+Tracks and logs keepalive ping health metrics for Webex bots.
+Monitors connection stability through periodic keepalive pings and logs failures.
+Triggers reactive reconnections on connection issues (no proactive restarts).
 
 Usage:
     from src.utils.connection_health import ConnectionHealthMonitor
 
     monitor = ConnectionHealthMonitor(bot_name="MoneyBall")
-    monitor.record_request_success(duration=1.2)
-    monitor.record_request_timeout(duration=60.0)
-    monitor.log_summary()
+    monitor.record_request_success(duration=1.2)  # Record successful keepalive ping
+    monitor.record_request_timeout(duration=60.0)  # Record ping timeout
+    monitor.log_summary()  # Log concise keepalive health summary
 """
 
 import logging
@@ -25,7 +26,11 @@ logger = logging.getLogger(__name__)
 
 class ConnectionHealthMonitor:
     """
-    Monitor connection health metrics for a Webex bot
+    Monitor keepalive ping health metrics for a Webex bot.
+
+    Tracks periodic keepalive pings to monitor connection stability.
+    Logs concise summaries and triggers reactive reconnections on failures.
+    Does NOT perform proactive/scheduled restarts.
     """
 
     def __init__(self, bot_name: str, window_size: int = 100):
@@ -181,25 +186,32 @@ class ConnectionHealthMonitor:
             }
 
     def log_summary(self):
-        """Log a summary of connection health metrics"""
+        """Log a summary of connection health metrics (keepalive-focused)"""
         metrics = self.get_metrics()
 
-        logger.info(f"📊 [{self.bot_name}] Connection Health Summary:")
-        logger.info(f"  Uptime: {metrics['uptime_formatted']}")
-        logger.info(f"  Total Requests: {metrics['total_requests']}")
-        logger.info(f"  Success Rate: {metrics['success_rate']:.1f}% (overall) | {metrics['recent_success_rate']:.1f}% (recent {self.window_size})")
-        logger.info(f"  Successful: {metrics['successful_requests']} | Failed: {metrics['failed_requests']}")
-        logger.info(f"  Timeouts: {metrics['timeout_requests']} | Connection Errors: {metrics['connection_error_requests']}")
-        logger.info(f"  Reconnections: {metrics['reconnection_count']}")
+        logger.info(f"📊 [{self.bot_name}] Keepalive Health: Uptime {metrics['uptime_formatted']} | "
+                   f"Pings: {metrics['successful_requests']}/{metrics['total_requests']} "
+                   f"({metrics['success_rate']:.1f}% success)")
 
+        # Only log detailed stats if there are issues
+        if metrics['failed_requests'] > 0:
+            logger.info(f"  ⚠️  Failures: {metrics['failed_requests']} "
+                       f"(Timeouts: {metrics['timeout_requests']}, Errors: {metrics['connection_error_requests']})")
+            if metrics['error_types']:
+                logger.info(f"  Error Types: {metrics['error_types']}")
+
+        # Log reconnections only if they occurred
+        if metrics['reconnection_count'] > 0:
+            logger.info(f"  🔄 Reconnections: {metrics['reconnection_count']}")
+
+        # Log response time for successful pings
         if metrics['successful_requests'] > 0:
-            logger.info(f"  Response Time: avg={metrics['avg_response_time']:.2f}s | min={metrics['min_response_time']:.2f}s | max={metrics['max_response_time']:.2f}s")
+            logger.debug(f"  Ping Response Time: avg={metrics['avg_response_time']:.2f}s | "
+                        f"min={metrics['min_response_time']:.2f}s | max={metrics['max_response_time']:.2f}s")
 
-        if metrics['time_since_last_success'] is not None:
-            logger.info(f"  Last Success: {metrics['time_since_last_success']:.1f}s ago")
-
-        if metrics['error_types']:
-            logger.info(f"  Error Types: {metrics['error_types']}")
+        # Warn if last success was too long ago
+        if metrics['time_since_last_success'] is not None and metrics['time_since_last_success'] > 120:
+            logger.warning(f"  ⚠️  Last successful ping: {metrics['time_since_last_success']:.0f}s ago")
 
     def log_periodic_summary(self, interval_seconds: int = 300):
         """
