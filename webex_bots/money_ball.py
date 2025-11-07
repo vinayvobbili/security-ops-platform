@@ -23,11 +23,13 @@ logger = logging.getLogger(__name__)
 
 # ALWAYS configure SSL for proxy environments (auto-detects ZScaler/proxies)
 from src.utils.ssl_config import configure_ssl_if_needed
+
 configure_ssl_if_needed(verbose=True)
 
 # ALWAYS apply enhanced WebSocket patches for connection resilience
 # This is critical to prevent the bot from going to sleep
 from src.utils.enhanced_websocket_client import patch_websocket_client
+
 patch_websocket_client()
 
 import os
@@ -162,7 +164,7 @@ class Outflow(Command):
 
     @log_activity(config.webex_bot_access_token_moneyball, "moneyball_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
-        send_chart(attachment_actions.json_data["roomId"], activity['actor']['displayName'], "Outflow Yesterday", "Outflow.png")
+        send_chart(attachment_actions.json_data["roomId"], activity['actor']['displayName'], "Outflow Yesterday", "Outflow Yesterday.png")
 
 
 class Inflow(Command):
@@ -351,7 +353,7 @@ def send_chart(room_id, display_name, chart_name, chart_filename):
         send_message_with_files(
             webex_api,
             room_id,
-            files=[chart_path],
+            files=[chart_path],  # type: ignore[arg-type]
             markdown=success_msg
         )
         logger.info(f"Successfully sent chart {chart_name} to room {room_id}")

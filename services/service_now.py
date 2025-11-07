@@ -400,7 +400,7 @@ def enrich_host_report(input_file):
     # Create client with rate limiting (10 requests/second to avoid HTTP 429)
     # NOTE: To improve throughput, try increasing to 20-50 req/s and monitor for HTTP 429 errors in logs
     # Suggested progression: 20 → 30 → 50 req/s (code handles retries automatically)
-    client = ServiceNowClient(requests_per_second=20)
+    client = ServiceNowClient(requests_per_second=30)
     snow_data = {}
     errors_occurred = False
     error_count = 0
