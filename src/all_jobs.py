@@ -268,9 +268,18 @@ def main() -> None:
     logger.info(f"All jobs scheduled successfully! Total jobs: {len(schedule.get_jobs())}")
     logger.info("Entering main scheduler loop...")
 
+    loop_counter = 0
     while True:
         try:
             schedule.run_pending()
+            loop_counter += 1
+
+            # Debug logging every 30 seconds
+            if loop_counter % 30 == 0:
+                next_run = schedule.next_run()
+                idle_seconds = schedule.idle_seconds()
+                logger.info(f"Loop iteration {loop_counter}: Next run at {next_run}, idle for {idle_seconds:.1f}s")
+
             time.sleep(1)
         except KeyboardInterrupt:
             logger.info("Scheduler stopped by user")
