@@ -96,6 +96,7 @@ blocked_ip_ranges = []  # ["10.49.70.0/24", "10.50.70.0/24"]
 # Initialize XSOAR handlers for production environment
 prod_list_handler = xsoar.ListHandler(XsoarEnvironment.PROD)
 prod_ticket_handler = xsoar.TicketHandler(XsoarEnvironment.PROD)
+dev_ticket_handler = xsoar.TicketHandler(XsoarEnvironment.DEV)
 
 # Add module logger (was missing previously)
 logger = logging.getLogger(__name__)
@@ -153,8 +154,8 @@ def _log_real_server():  # noqa: D401
 
         globals()['_runtime_server_info_sample'] = _runtime_server_info_sample_override  # swap reference for later calls
         print(f"[ServerDetect] Running under {server_type} ({server_software}) debug={app.debug} pid={os.getpid()}")
-    except Exception as e:
-        print(f"[ServerDetect] Failed to detect server: {e}")
+    except Exception as exc:
+        print(f"[ServerDetect] Failed to detect server: {exc}")
 
 
 @app.before_request
@@ -237,7 +238,7 @@ def get_ir_dashboard_slide_show():
 
 
 @app.route("/<path:filename>.pac")
-def proxy_pac_file(filename):
+def proxy_pac_file(filename):  # noqa: ARG001 - filename needed for route matching
     """Handle PAC file requests to reduce log clutter."""
     # Return empty PAC file content for any PAC file request
     pac_content = """function FindProxyForURL(url, host) {
@@ -452,10 +453,10 @@ def handle_red_team_testing_form_submission():
             submit_date,
             submitter_ip_address
         )
-    except ValueError as e:
+    except ValueError as val_err:
         return jsonify({
             'status': 'error',
-            'message': str(e)
+            'message': str(val_err)
         }, 400)
 
     return jsonify({
@@ -466,7 +467,7 @@ def handle_red_team_testing_form_submission():
 @app.route('/favicon.ico')
 def favicon():
     """Serve the favicon icon."""
-    return app.send_static_file('icons/favicon.ico')
+    return app.send_static_file('icons/acme-fav-icon.png')
 
 
 # HTTP connection pool for reusing connections
@@ -544,18 +545,18 @@ def _relay_sockets(client, target):
                         if not data:
                             return  # Connection closed
                         dest.sendall(data)
-                    except (socket.error, ConnectionResetError, BrokenPipeError, OSError) as e:
-                        if e.errno == 9:  # Bad file descriptor
+                    except (socket.error, ConnectionResetError, BrokenPipeError, OSError) as sock_err:
+                        if sock_err.errno == 9:  # Bad file descriptor
                             return
                         return  # Any socket error means we're done
-            except (OSError, ValueError) as e:
+            except (OSError, ValueError) as select_err:
                 # Handle select errors gracefully
-                if hasattr(e, 'errno') and e.errno == 9:  # Bad file descriptor
+                if hasattr(select_err, 'errno') and select_err.errno == 9:  # Bad file descriptor
                     break
                 return
-    except Exception:
-        # Catch any other unexpected errors
-        pass
+    except Exception as exc:  # noqa: S110 - Intentionally broad for socket cleanup
+        # Catch any other unexpected errors during socket relay
+        logger.error(f"Unexpected error during socket relay: {exc}", exc_info=True)
     finally:
         # Ensure sockets are properly closed
         for sock in [client, target]:
@@ -601,7 +602,8 @@ def relay_data_async(client_sock, target_sock):
                 )
             except asyncio.TimeoutError:
                 r = []
-            except Exception:
+            except Exception as exc:  # noqa: S110 - Intentionally broad for async relay errors
+                logger.error(f"Unexpected error during async relay: {exc}", exc_info=True)
                 break
 
             if not r:
@@ -622,13 +624,13 @@ def relay_data_async(client_sock, target_sock):
                 if not bytes_read:
                     break
                 client_sock.sendall(view[:bytes_read])
-    except Exception as e:
-        logger.error(f"Error during relay: {e}")
+    except Exception as relay_err:
+        logger.error(f"Error during relay: {relay_err}")
     finally:
         try:
             loop.close()
-        except Exception:
-            pass
+        except Exception as exc:  # noqa: S110 - Intentionally broad, cleanup only
+            logger.error(f"Error closing event loop during cleanup: {exc}", exc_info=True)
         for sock in [client_sock, target_sock]:
             try:
                 sock.close()
@@ -704,18 +706,18 @@ class OptimizedProxy(http.server.BaseHTTPRequestHandler):
                 self.send_error(502, f"Cannot connect to {target_host}:{target_port}")
             except (BrokenPipeError, ConnectionResetError, OSError):
                 pass
-        except (ConnectionRefusedError, OSError) as e:
+        except (ConnectionRefusedError, OSError) as conn_err:
             # Connection refused or other OS-level errors
             try:
-                if hasattr(e, 'errno') and e.errno == 9:  # Bad file descriptor
+                if hasattr(conn_err, 'errno') and conn_err.errno == 9:  # Bad file descriptor
                     return  # Client already disconnected
                 self.send_error(502, f"Cannot connect to {target_host}:{target_port}")
             except (BrokenPipeError, ConnectionResetError, OSError):
                 pass
-        except Exception as e:
+        except Exception as exc:
             # Catch any other unexpected errors
             try:
-                logger.error(f"CONNECT error: {e}")
+                logger.error(f"CONNECT error: {exc}")
                 self.send_error(502, f"Cannot connect to {target_host}:{target_port}")
             except (BrokenPipeError, ConnectionResetError, OSError):
                 pass
@@ -790,16 +792,16 @@ class OptimizedProxy(http.server.BaseHTTPRequestHandler):
             # Send response data to client
             self.wfile.write(content)
 
-        except (BrokenPipeError, ConnectionResetError, OSError) as e:
-            if hasattr(e, 'errno') and e.errno == 9:  # Bad file descriptor
+        except (BrokenPipeError, ConnectionResetError, OSError) as conn_err:
+            if hasattr(conn_err, 'errno') and conn_err.errno == 9:  # Bad file descriptor
                 return  # Client already disconnected, no need to respond
-            logger.error(f"Connection error during HTTP proxy request: {e}")
+            logger.error(f"Connection error during HTTP proxy request: {conn_err}")
             try:
                 self.send_error(502, "Bad Gateway")
             except (BrokenPipeError, ConnectionResetError, OSError):
                 pass
-        except Exception as e:
-            logger.error(f"Error during HTTP proxy request: {e}")
+        except Exception as exc:
+            logger.error(f"Error during HTTP proxy request: {exc}")
             try:
                 self.send_error(502, "Bad Gateway")
             except (BrokenPipeError, ConnectionResetError, OSError):
@@ -815,8 +817,8 @@ def start_proxy_server():
         socketserver.TCPServer.allow_reuse_address = True
         with socketserver.ThreadingTCPServer(("", PROXY_PORT), handler) as httpd:  # type: ignore[arg-type]
             httpd.serve_forever()
-    except Exception as e:
-        print(f"Failed to start proxy: {e}")
+    except Exception as exc:
+        print(f"Failed to start proxy: {exc}")
 
 
 @app.route("/api/apt-names", methods=["GET"])
@@ -872,8 +874,8 @@ def apt_other_names_search():
     try:
         apt_names = apt_names_fetcher.get_all_apt_names(file_path)
         app.logger.info(f"[APT Search] Loaded {len(apt_names)} APT names for dropdown")
-    except Exception as e:
-        app.logger.error(f"[APT Search] Error loading APT names: {str(e)}")
+    except Exception as exc:
+        app.logger.error(f"[APT Search] Error loading APT names: {str(exc)}")
         apt_names = []
 
     return render_template("apt_other_names_search.html", apt_names=apt_names)
@@ -944,13 +946,13 @@ def api_pokedex_status():
                 'components': components
             })
 
-    except Exception as e:
-        logger.error(f"Error checking Pokedex status: {e}")
+    except Exception as exc:
+        logger.error(f"Error checking Pokedex status: {exc}")
         return jsonify({
             'ready': False,
             'status': 'error',
             'message': 'Error checking chat status',
-            'error': str(e)
+            'error': str(exc)
         })
 
 
@@ -982,8 +984,8 @@ def api_pokedex_chat():
                 user_id=user_identifier,
                 room_id="web_chat"  # Use a common room_id for web chats
             )
-        except Exception as e:
-            logger.error(f"Error getting LLM response: {e}", exc_info=True)
+        except Exception as llm_err:
+            logger.error(f"Error getting LLM response: {llm_err}", exc_info=True)
             return jsonify({
                 'success': False,
                 'error': 'Failed to get response from AI. Please try again.'
@@ -994,8 +996,8 @@ def api_pokedex_chat():
             'response': response_text
         })
 
-    except Exception as e:
-        logger.error(f"Error in Pokedex chat API: {e}", exc_info=True)
+    except Exception as exc:
+        logger.error(f"Error in Pokedex chat API: {exc}", exc_info=True)
         return jsonify({
             'success': False,
             'error': 'An unexpected error occurred. Please try again.'
@@ -1040,8 +1042,8 @@ def api_pokedex_chat_stream():
                 # Send completion event
                 yield f"data: {json.dumps({'done': True})}\n\n"
 
-            except Exception as e:
-                logger.error(f"Error in streaming response: {e}", exc_info=True)
+            except Exception as stream_err:
+                logger.error(f"Error in streaming response: {stream_err}", exc_info=True)
                 yield f"data: {json.dumps({'error': 'Streaming error occurred'})}\n\n"
 
         # Return SSE response
@@ -1056,8 +1058,8 @@ def api_pokedex_chat_stream():
             }
         )
 
-    except Exception as e:
-        logger.error(f"Error in Pokedex streaming chat API: {e}", exc_info=True)
+    except Exception as exc:
+        logger.error(f"Error in Pokedex streaming chat API: {exc}", exc_info=True)
         return jsonify({
             'success': False,
             'error': 'An unexpected error occurred. Please try again.'
@@ -1082,8 +1084,8 @@ def api_xsoar_incidents():
     try:
         incidents = prod_ticket_handler.get_tickets(query, period, size)
         return jsonify({'success': True, 'incidents': incidents})
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
+    except Exception as exc:
+        return jsonify({'success': False, 'error': str(exc)}), 500
 
 
 @app.route('/api/xsoar/incident/<incident_id>')
@@ -1094,8 +1096,8 @@ def api_xsoar_incident_detail(incident_id):
         incident = prod_ticket_handler.get_case_data(incident_id)
         entries = prod_ticket_handler.get_entries(incident_id)
         return jsonify({'success': True, 'incident': incident, 'entries': entries})
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
+    except Exception as exc:
+        return jsonify({'success': False, 'error': str(exc)}), 500
 
 
 @app.route('/xsoar/incident/<incident_id>')
@@ -1107,14 +1109,14 @@ def xsoar_incident_detail(incident_id):
         entries = prod_ticket_handler.get_entries(incident_id)
         return render_template('xsoar_incident_detail.html',
                                incident=incident, entries=entries)
-    except requests.exceptions.HTTPError as e:
-        return f"XSOAR API Error for incident {incident_id}: HTTP {e.response.status_code} - {e.response.text}", 500
-    except requests.exceptions.ConnectionError as e:
-        return f"Connection Error for incident {incident_id}: {str(e)}", 500
-    except ValueError as e:
-        return f"Invalid JSON response for incident {incident_id}: {str(e)}", 500
-    except Exception as e:
-        return f"Error loading incident {incident_id}: {str(e)}", 500
+    except requests.exceptions.HTTPError as http_err:
+        return f"XSOAR API Error for incident {incident_id}: HTTP {http_err.response.status_code} - {http_err.response.text}", 500
+    except requests.exceptions.ConnectionError as conn_err:
+        return f"Connection Error for incident {incident_id}: {str(conn_err)}", 500
+    except ValueError as val_err:
+        return f"Invalid JSON response for incident {incident_id}: {str(val_err)}", 500
+    except Exception as exc:
+        return f"Error loading incident {incident_id}: {str(exc)}", 500
 
 
 @app.route('/api/xsoar/incident/<incident_id>/entries')
@@ -1124,8 +1126,8 @@ def api_xsoar_incident_entries(incident_id):
     try:
         entries = prod_ticket_handler.get_entries(incident_id)
         return jsonify({'success': True, 'entries': entries})
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
+    except Exception as exc:
+        return jsonify({'success': False, 'error': str(exc)}), 500
 
 
 @app.route('/api/xsoar/incident/<incident_id>/link', methods=['POST'])
@@ -1136,8 +1138,8 @@ def api_xsoar_link_incident(incident_id):
     try:
         result = prod_ticket_handler.link_tickets(incident_id, link_incident_id)
         return jsonify({'success': True, 'result': result})
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
+    except Exception as exc:
+        return jsonify({'success': False, 'error': str(exc)}), 500
 
 
 @app.route('/api/xsoar/incident/<incident_id>/participant', methods=['POST'])
@@ -1148,8 +1150,8 @@ def api_xsoar_add_participant(incident_id):
     try:
         result = prod_ticket_handler.add_participant(incident_id, email)
         return jsonify({'success': True, 'result': result})
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
+    except Exception as exc:
+        return jsonify({'success': False, 'error': str(exc)}), 500
 
 
 @app.route('/shift-performance')
@@ -1295,8 +1297,8 @@ def get_shift_list():
                             'detailed_staffing': metrics['detailed_staffing'],
                             'score': metrics['score']
                         })
-                except Exception as e:
-                    logger.error(f"Error getting staffing or metrics for {shift_day_name} {shift_name}: {e}")
+                except Exception as metrics_err:
+                    logger.error(f"Error getting staffing or metrics for {shift_day_name} {shift_name}: {metrics_err}")
                     current_shift = secops.get_current_shift()
                     if days_back > 0:
                         show_shift = True
@@ -1339,8 +1341,8 @@ def get_shift_list():
                         })
         result = {'success': True, 'data': shift_data}
         return jsonify(result)
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
+    except Exception as exc:
+        return jsonify({'success': False, 'error': str(exc)}), 500
 
 
 @app.route('/api/clear-cache', methods=['POST'])
@@ -1387,8 +1389,8 @@ def api_meaningful_metrics_data():
                 'data_generated_at': None
             })
 
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
+    except Exception as exc:
+        return jsonify({'success': False, 'error': str(exc)}), 500
 
 
 @app.route('/api/meaningful-metrics/export', methods=['POST'])
@@ -1476,7 +1478,7 @@ def api_meaningful_metrics_export():
                             # Try to parse ISO format or other common formats
                             try:
                                 dt = datetime.fromisoformat(value.replace('Z', '+00:00'))
-                            except:
+                            except (ValueError, AttributeError):
                                 dt = datetime.strptime(value, '%Y-%m-%dT%H:%M:%S.%fZ')
                         else:
                             dt = value
@@ -1489,8 +1491,8 @@ def api_meaningful_metrics_export():
 
                         # Format as MM/DD/YYYY HH:MM AM ET
                         value = dt_et.strftime('%m/%d/%Y %I:%M %p ET')
-                    except Exception as e:
-                        logger.warning(f"Could not format date {value}: {e}")
+                    except Exception as date_err:
+                        logger.warning(f"Could not format date {value}: {date_err}")
                         # Keep original value if formatting fails
                         pass
                 elif isinstance(value, list):
@@ -1569,9 +1571,9 @@ def api_meaningful_metrics_export():
             download_name='security_incidents.xlsx'
         )
 
-    except Exception as e:
-        logger.error(f"Error exporting meaningful metrics: {e}", exc_info=True)
-        return jsonify({'success': False, 'error': str(e)}), 500
+    except Exception as exc:
+        logger.error(f"Error exporting meaningful metrics: {exc}", exc_info=True)
+        return jsonify({'success': False, 'error': str(exc)}), 500
 
 
 @app.route("/healthz")
@@ -1605,8 +1607,9 @@ def healthz():
                 'uptime': uptime_str,
                 'uptime_seconds': uptime_seconds
             }
-        except Exception:
+        except Exception as exc:  # noqa: S110 - Intentionally broad for health check fallback
             # Fallback to cached sample established at first request
+            logger.warning(f"Could not get live server info in healthz endpoint, using cached fallback: {exc}", exc_info=True)
             server_info = _runtime_server_info_sample()
             server_info['host'] = 'unknown'
             server_info['port'] = WEB_SERVER_PORT
@@ -1620,8 +1623,8 @@ def healthz():
             "service": "ir_web_server",
             "server": server_info
         }), 200
-    except Exception as e:
-        return jsonify({"status": "error", "error": str(e)}), 500
+    except Exception as exc:
+        return jsonify({"status": "error", "error": str(exc)}), 500
 
 
 @app.route('/toodles')
@@ -1655,9 +1658,9 @@ def api_toodles_login():
         else:
             return jsonify({'success': False, 'error': 'Invalid password'}), 401
 
-    except Exception as e:
-        logger.error(f"Error in Toodles login: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+    except Exception as exc:
+        logger.error(f"Error in Toodles login: {exc}")
+        return jsonify({'success': False, 'error': str(exc)}), 500
 
 
 @app.route('/api/toodles/logout', methods=['POST'])
@@ -1705,9 +1708,9 @@ def api_create_x_ticket():
             'message': f'Ticket [#{new_incident_id}]({incident_url}) has been created in XSOAR Prod.'
         })
 
-    except Exception as e:
-        logger.error(f"Error creating X ticket: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+    except Exception as exc:
+        logger.error(f"Error creating X ticket: {exc}")
+        return jsonify({'success': False, 'error': str(exc)}), 500
 
 
 @app.route('/api/toodles/approved-testing', methods=['POST'])
@@ -1757,12 +1760,12 @@ def api_approved_testing():
                 'message': f'Your approved testing entry has been added. Expires at 5 PM ET on {keep_until}.'
             })
 
-        except ValueError as e:
-            return jsonify({'success': False, 'error': str(e)}), 400
+        except ValueError as val_err:
+            return jsonify({'success': False, 'error': str(val_err)}), 400
 
-    except Exception as e:
-        logger.error(f"Error adding approved testing: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+    except Exception as exc:
+        logger.error(f"Error adding approved testing: {exc}")
+        return jsonify({'success': False, 'error': str(exc)}), 500
 
 
 @app.route('/api/toodles/ioc-hunt', methods=['POST'])
@@ -1802,9 +1805,9 @@ def api_ioc_hunt():
             'message': f'A New IOC Hunt has been created in XSOAR. Ticket: [#{ticket_no}]({incident_url})'
         })
 
-    except Exception as e:
-        logger.error(f"Error creating IOC hunt: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+    except Exception as exc:
+        logger.error(f"Error creating IOC hunt: {exc}")
+        return jsonify({'success': False, 'error': str(exc)}), 500
 
 
 @app.route('/api/toodles/threat-hunt', methods=['POST'])
@@ -1841,9 +1844,9 @@ def api_threat_hunt():
             'message': f'A new Threat Hunt has been created in XSOAR. Ticket: [#{ticket_no}]({incident_url})'
         })
 
-    except Exception as e:
-        logger.error(f"Error creating threat hunt: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+    except Exception as exc:
+        logger.error(f"Error creating threat hunt: {exc}")
+        return jsonify({'success': False, 'error': str(exc)}), 500
 
 
 @app.route('/api/toodles/oncall', methods=['GET'])
@@ -1859,9 +1862,9 @@ def api_oncall():
             'data': on_call_person
         })
 
-    except Exception as e:
-        logger.error(f"Error getting on-call info: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+    except Exception as exc:
+        logger.error(f"Error getting on-call info: {exc}")
+        return jsonify({'success': False, 'error': str(exc)}), 500
 
 
 @app.route('/verify-command')
@@ -1890,27 +1893,20 @@ def submit_command_verification():
     try:
         data = request.form.to_dict()
         recognized = data.get('recognized')  # 'yes' or 'no'
-        ticket_id = data.get('ticket_id', '')
-        task_id = data.get('task_id', '')
-        command = data.get('command', '')
-        timestamp = data.get('timestamp', '')
-        system = data.get('system', '')
+        ticket_id = data.get('case_id', '')
 
         # Log the response
-        logger.info(f"Command verification response: recognized={recognized}, ticket_id={ticket_id}, task_id={task_id}, command={command}")
+        logger.info(f"Command verification response: recognized={recognized}, ticket_id={ticket_id}")
 
         # Complete the XSOAR task if ticket_id and task_id are provided
-        if ticket_id and task_id:
+        if ticket_id:
             try:
-                result = prod_ticket_handler.complete_task(ticket_id, task_id, recognized)
-                logger.info(f"Successfully completed XSOAR task {task_id} in ticket {ticket_id} with response: {recognized}")
+                dev_ticket_handler.complete_task(ticket_id, 'Does the employee recognize the alerted activity?', recognized)
+                logger.info(f"Successfully completed employee reach out XSOAR task in ticket {ticket_id} with response: {recognized}")
 
                 return jsonify({
                     'status': 'success',
-                    'recognized': recognized,
-                    'ticket_id': ticket_id,
-                    'task_id': task_id,
-                    'message': f'Thank you for your response. The task has been completed in XSOAR ticket #{ticket_id}.'
+                    'message': f'Thank you for your response. An analyst will contact you if required. You may now close this window!.'
                 })
             except Exception as xsoar_error:
                 logger.error(f"Error completing XSOAR task: {xsoar_error}")
@@ -1919,19 +1915,18 @@ def submit_command_verification():
                     'error': f'Failed to complete XSOAR task: {str(xsoar_error)}'
                 }), 500
         else:
-            # If no ticket_id or task_id, just log the response
-            logger.warning(f"No ticket_id or task_id provided. Response logged but not sent to XSOAR.")
+            # No ticket_id provided - just acknowledge receipt
+            logger.warning(f"Command verification submitted without ticket_id: recognized={recognized}")
             return jsonify({
                 'status': 'success',
-                'recognized': recognized,
-                'message': 'Thank you for your response. Your verification has been recorded.'
+                'message': 'Thank you for your response.'
             })
 
-    except Exception as e:
-        logger.error(f"Error submitting command verification: {e}")
+    except Exception as exc:
+        logger.error(f"Error submitting command verification: {exc}")
         return jsonify({
             'status': 'error',
-            'error': str(e)
+            'error': str(exc)
         }), 500
 
 
@@ -1963,8 +1958,8 @@ def main():
                     print("⚠️ LLM warmup skipped or failed - model will load on first request")
             else:
                 print("⚠️ Pokedex chat initialization failed - chat endpoint will return errors")
-    except Exception as e:
-        print(f"⚠️ Failed to initialize Pokedex chat: {e}")
+    except Exception as exc:
+        print(f"⚠️ Failed to initialize Pokedex chat: {exc}")
         print("   Chat endpoint will be available but may return errors")
 
     charts_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), 'static/charts'))
@@ -1987,8 +1982,8 @@ def main():
         print("Using Flask dev server with auto-reload (debug mode)")
         try:
             app.run(debug=True, host=host, port=WEB_SERVER_PORT, threaded=True, use_reloader=True)
-        except OSError as e:
-            if WEB_SERVER_PORT < 1024 and e.errno == 13:
+        except OSError as exc:
+            if WEB_SERVER_PORT < 1024 and exc.errno == 13:
                 fallback_port = 8080
                 print(f"\n{'=' * 70}")
                 print(f"❌ ERROR: Port {WEB_SERVER_PORT} is LOCKED/UNAVAILABLE")
@@ -2002,7 +1997,7 @@ def main():
                 print(f"\nFalling back to port {fallback_port}...")
                 print(f"{'=' * 70}\n")
                 app.run(debug=True, host=host, port=fallback_port, threaded=True, use_reloader=True)
-            elif e.errno == 48 or e.errno == 98:  # Address already in use
+            elif exc.errno == 48 or exc.errno == 98:  # Address already in use
                 print(f"\n{'=' * 70}")
                 print(f"❌ ERROR: Port {WEB_SERVER_PORT} is LOCKED/IN USE")
                 print(f"{'=' * 70}")
@@ -2021,9 +2016,9 @@ def main():
             print("Using Waitress WSGI server for production deployment")
             try:
                 serve(app, host=host, port=port, threads=20, channel_timeout=120)
-            except OSError as e:
+            except OSError as excep:
                 # Permission denied for privileged port without sudo/capability
-                if port < 1024 and e.errno == 13:  # Permission denied
+                if port < 1024 and excep.errno == 13:  # Permission denied
                     fallback_port = 8080
                     print(f"\n{'=' * 70}")
                     print(f"❌ ERROR: Port {port} is LOCKED/UNAVAILABLE")
@@ -2037,7 +2032,7 @@ def main():
                     print(f"\nFalling back to port {fallback_port}...")
                     print(f"{'=' * 70}\n")
                     serve(app, host=host, port=fallback_port, threads=20, channel_timeout=120)
-                elif e.errno == 48 or e.errno == 98:  # Address already in use
+                elif excep.errno == 48 or excep.errno == 98:  # Address already in use
                     print(f"\n{'=' * 70}")
                     print(f"❌ ERROR: Port {port} is LOCKED/IN USE")
                     print(f"{'=' * 70}")
@@ -2054,8 +2049,8 @@ def main():
             print("Waitress not available, falling back to Flask dev server")
             try:
                 app.run(debug=True, host=host, port=port, threaded=True, use_reloader=True)
-            except OSError as e:
-                if port < 1024 and e.errno == 13:
+            except OSError as ex:
+                if port < 1024 and ex.errno == 13:
                     fallback_port = 8080
                     print(f"\n{'=' * 70}")
                     print(f"❌ ERROR: Port {port} is LOCKED/UNAVAILABLE")
@@ -2069,7 +2064,7 @@ def main():
                     print(f"\nFalling back to port {fallback_port}...")
                     print(f"{'=' * 70}\n")
                     app.run(debug=True, host=host, port=fallback_port, threaded=True, use_reloader=True)
-                elif e.errno == 48 or e.errno == 98:  # Address already in use
+                elif ex.errno == 48 or ex.errno == 98:  # Address already in use
                     print(f"\n{'=' * 70}")
                     print(f"❌ ERROR: Port {port} is LOCKED/IN USE")
                     print(f"{'=' * 70}")
