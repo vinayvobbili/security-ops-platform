@@ -89,7 +89,7 @@ def safe_run(*jobs: Callable[[], None], timeout: int = 1800) -> None:
             executor = ThreadPoolExecutor(max_workers=1)
             future = executor.submit(job)
             try:
-                result = future.result(timeout=timeout)
+                future.result(timeout=timeout)
                 logger.debug(f"Job completed successfully: {job_name}")
             except FuturesTimeoutError:
                 logger.error(f"Job timed out after {timeout} seconds: {job_name}")
