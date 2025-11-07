@@ -80,20 +80,26 @@ def safe_run(*jobs: Callable[[], None], timeout: int = 1800) -> None:
     """
     for job in jobs:
         job_name = getattr(job, '__name__', str(job))
+        executor = None
         try:
             # Execute job with timeout protection using ThreadPoolExecutor
-            with ThreadPoolExecutor(max_workers=1) as executor:
-                future = executor.submit(job)
-                try:
-                    future.result(timeout=timeout)
-                except FuturesTimeoutError:
-                    logger.error(f"Job timed out after {timeout} seconds: {job_name}")
-                    logger.error(f"This job was forcefully terminated to prevent scheduler hang")
-                    # Continue to next job despite timeout
+            # Note: We manually manage executor lifecycle to avoid blocking on shutdown
+            executor = ThreadPoolExecutor(max_workers=1)
+            future = executor.submit(job)
+            try:
+                future.result(timeout=timeout)
+            except FuturesTimeoutError:
+                logger.error(f"Job timed out after {timeout} seconds: {job_name}")
+                logger.error(f"This job was forcefully terminated to prevent scheduler hang")
+                # Continue to next job despite timeout
         except Exception as e:
             logger.error(f"Job execution failed for {job_name}: {e}")
             logger.debug(traceback.format_exc())
             # Continue to next job despite exception
+        finally:
+            # Clean up executor without waiting for hung threads
+            if executor:
+                executor.shutdown(wait=False)
 
 
 def main() -> None:
