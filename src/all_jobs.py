@@ -150,11 +150,14 @@ def main() -> None:
     # to prevent infinite hangs, not to aggressively kill legitimate work
 
     # Prepare directory (fast, runs first)
+    logger.info("Scheduling daily chart jobs...")
     schedule.every().day.at("00:01", eastern).do(lambda: safe_run(
         lambda: make_dir_for_todays_charts(helper_methods.CHARTS_DIR_PATH),
     ))
+    logger.info("Daily chart jobs scheduled")
 
     # Group 1: Basic metrics charts (fast, data-driven from cache)
+    logger.info("Scheduling Group 1: Basic metrics charts...")
     schedule.every().day.at("00:02", eastern).do(lambda: safe_run(
         aging_tickets.make_chart,
         inflow.make_chart,
@@ -162,8 +165,10 @@ def main() -> None:
         mttr_mttc.make_chart,
         sla_breaches.make_chart,
     ))
+    logger.info("Group 1 scheduled")
 
     # Group 2: Efficacy and volume charts (may call external APIs)
+    logger.info("Scheduling Group 2: Efficacy and volume charts...")
     schedule.every().day.at("00:07", eastern).do(lambda: safe_run(
         crowdstrike_efficacy.make_chart,
         crowdstrike_volume.make_chart,
@@ -171,8 +176,10 @@ def main() -> None:
         vectra_volume.make_chart,
         lifespan.make_chart,
     ))
+    logger.info("Group 2 scheduled")
 
     # Group 3: Story and status charts (stable, simple)
+    logger.info("Scheduling Group 3: Story and status charts...")
     schedule.every().day.at("00:12", eastern).do(lambda: safe_run(
         de_stories.make_chart,
         re_stories.make_chart,
@@ -180,11 +187,14 @@ def main() -> None:
         threat_tippers.make_chart,
         threatcon_level.make_chart,
     ))
+    logger.info("Group 3 scheduled")
 
     # Group 4: Complex/slow charts (heatmap can be slow)
+    logger.info("Scheduling Group 4: Complex/slow charts...")
     schedule.every().day.at("00:17", eastern).do(lambda: safe_run(
         heatmap.create_choropleth_map,
     ))
+    logger.info("Group 4 scheduled")
 
     # =============================================================================
     # UNSTABLE JOBS - High risk of timeout/failure, runs LAST after stable jobs
@@ -192,15 +202,20 @@ def main() -> None:
 
     # Ticket cache generation (UNSTABLE - can take 15-20 min, fully isolated)
     # Runs at 00:30 after all stable jobs complete, so it doesn't block anything
+    logger.info("Scheduling ticket cache generation...")
     schedule.every().day.at("00:30", eastern).do(lambda: safe_run(
         TicketCache.generate,
         # Uses default 30-minute timeout - sufficient for ~7000+ tickets with retries
     ))
+    logger.info("Ticket cache scheduled")
 
     # Host verification - checks endpoint connectivity every 5 minutes
+    logger.info("Scheduling host verification...")
     schedule.every(5).minutes.do(lambda: safe_run(verify_host_online_status.start))
+    logger.info("Host verification scheduled")
 
     # Shift change announcements - notify SOC team at shift boundaries (04:30, 12:30, 20:30 ET)
+    logger.info("Scheduling shift change announcements...")
     room_id = config.webex_room_id_soc_shift_updates
     schedule.every().day.at("04:30", eastern).do(lambda: safe_run(
         lambda: secops.announce_shift_change('morning', room_id)
@@ -211,26 +226,34 @@ def main() -> None:
     schedule.every().day.at("20:30", eastern).do(lambda: safe_run(
         lambda: secops.announce_shift_change('night', room_id)
     ))
+    logger.info("Shift changes scheduled")
 
     # Weekly reports - send efficacy charts on Fridays at 08:00 ET
+    logger.info("Scheduling weekly reports...")
     schedule.every().friday.at("08:00", eastern).do(lambda: safe_run(
         qradar_rule_efficacy.send_charts,
         crowdstrike_efficacy.send_charts
     ))
+    logger.info("Weekly reports scheduled")
 
     # On-call management - alert before change (Friday 14:00) and announce (Monday 08:00)
+    logger.info("Scheduling on-call management...")
     schedule.every().friday.at("14:00", eastern).do(lambda: safe_run(oncall.alert_change))
     schedule.every().monday.at("08:00", eastern).do(lambda: safe_run(
         oncall.announce_change,
     ))
+    logger.info("On-call management scheduled")
 
     # Daily maintenance tasks
+    logger.info("Scheduling daily maintenance...")
     schedule.every().day.at("17:00", eastern).do(lambda: safe_run(
         approved_security_testing.removed_expired_entries
     ))
     schedule.every().day.at("07:00", eastern).do(lambda: safe_run(thithi.main))
+    logger.info("Daily maintenance scheduled")
 
     # SLA risk monitoring - continuous checks to prevent breaches
+    logger.info("Scheduling SLA risk monitoring...")
     schedule.every(1).minutes.do(lambda: safe_run(
         lambda: response_sla_risk_tickets.start(config.webex_room_id_response_sla_risk)
     ))
@@ -240,6 +263,10 @@ def main() -> None:
     schedule.every().hour.at(":00").do(lambda: safe_run(
         lambda: incident_declaration_sla_risk.start(config.webex_room_id_response_sla_risk),
     ))
+    logger.info("SLA risk monitoring scheduled")
+
+    logger.info(f"All jobs scheduled successfully! Total jobs: {len(schedule.get_jobs())}")
+    logger.info("Entering main scheduler loop...")
 
     while True:
         try:
