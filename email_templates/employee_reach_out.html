@@ -63,12 +63,19 @@
         }
 
 
-        .logo-fallback {
-            font-size: 30px;
-            font-weight: 700;
-            font-family: Arial, Helvetica, sans-serif;
-            color: #ffffff;
-            letter-spacing: 1px;
+        /* Enhanced mobile spacing */
+        @media only screen and (max-width: 640px) {
+            .warning-box {
+                padding: 22px 24px !important;
+            }
+
+            .warning-box p {
+                font-size: 17px !important;
+            }
+
+            .footer-section {
+                padding: 36px 28px !important;
+            }
         }
     </style>
 </head>
@@ -89,10 +96,13 @@
                                     <table role="presentation" class="header-table" style="width:100%; border-collapse:collapse;" cellpadding="0" cellspacing="0" border="0">
                                         <tr>
                                             <td class="logo-cell" style="width:100px; padding:10px 10px 10px 10px; vertical-align:middle;">
-                                                <!-- Updated logo to user-provided large base64 image -->
-                                                <img alt="Acme" src="about:blank" width="56" style="display:block; width:auto; height:auto; max-width:100%; border:0; outline:none; text-decoration:none; -ms-interpolation-mode:bicubic;"
+                                                <!-- Acme logo with proper fallback -->
+                                                <img alt="Acme" src="https://www.company.com/content/dam/acmecom/us/icons-header/Acme.png" width="120" height="56"
+                                                     style="display:block; width:120px; height:auto; max-width:100%; border:0; outline:none; text-decoration:none; -ms-interpolation-mode:bicubic;"
                                                      border="0"/>
-                                                <div class="logo-fallback" style="mso-hide:all; display:none;">Acme</div>
+                                                <!--[if mso]>
+                                                <span style="font-size:30px; font-weight:700; color:#ffffff; letter-spacing:1px;">Acme</span>
+                                                <![endif]-->
                                             </td>
                                             <td style="vertical-align:middle; padding:0;">
                                                 <h1 class="main-title" style="margin:0 0 22px 0; font-size:36px; color:#ffffff; font-weight:800; letter-spacing:-0.5px; line-height:1.12;"><br> Verify
@@ -120,34 +130,46 @@
                                 <!-- Body background subtly neutral with light brand hint -->
                                 <td class="body-section" style="padding:52px 72px 34px 72px; background-color:#F5F5F5; border-radius:0 0 24px 24px;">
                                     <!-- Verification prompt box recolored using green & light-blue tint -->
-                                    <p style="margin:0 0 22px 0; color:#333333; font-size:18px; line-height:1.7;">Hello, ${incident.username}</p>
-                                    <p style="margin:0 0 26px 0; color:#4a4a4a; font-size:18px; line-height:1.7;">Our security monitoring system has detected a command that was executed using your credentials. We need to verify if you
+                                    <p style="margin:0 0 24px 0; color:#003875; font-size:20px; font-weight:bold; line-height:1.5;">Hello, ${incident.username}</p>
+                                    <p style="margin:0 0 32px 0; color:#333333; font-size:18px; line-height:1.8;">Our security monitoring system has detected a command that was executed using your credentials. We need to verify if you
                                         recognize this activity.</p>
                                     <table role="presentation"
-                                           style="margin:32px 0 36px 0; background-color:#E6F5EC; border-radius:16px; border:2px solid #00A651;" cellpadding="0" cellspacing="0" border="0">
+                                           style="margin:32px 0 40px 0; background-color:#FFF9E6; border-radius:16px; border:3px solid #FFB800; box-shadow:0 2px 8px rgba(255,184,0,0.2);" cellpadding="0" cellspacing="0" border="0">
                                         <tr>
-                                            <td style="padding:26px 34px; text-align:center;">
-                                                <p style="margin:0; color:#0046AD; font-size:21px; font-weight:bold; line-height:1.5;">⚠️ We want to verify if you recognize this command ran in your name.</p>
+                                            <td class="warning-box" style="padding:28px 36px; text-align:center;">
+                                                <p style="margin:0 0 8px 0; font-size:32px; line-height:1;">⚠️</p>
+                                                <p style="margin:0; color:#003875; font-size:19px; font-weight:bold; line-height:1.6;">Action Required: Verify Command Execution</p>
+                                                <p style="margin:8px 0 0 0; color:#555555; font-size:16px; line-height:1.5;">We need to confirm if you recognize the command below that was executed using your credentials.</p>
                                             </td>
                                         </tr>
                                     </table>
                                     <!-- Command details header gradient updated -->
                                     <table role="presentation"
-                                           style="width:100%; border-collapse:collapse; margin-bottom:44px; background-color:#FFFFFF; border:2px #0046AD; border-radius:18px;" cellpadding="0" cellspacing="0" border="0">
+                                           style="width:100%; border-collapse:collapse; margin-bottom:44px; background-color:#FFFFFF; border-radius:18px; box-shadow:0 4px 12px rgba(0,70,173,0.15); overflow:hidden;" cellpadding="0"
+                                           cellspacing="0" border="0">
                                         <tr>
-                                            <td style="padding:0; border-radius:16px;">
-                                                <div style="background-color:#003875; padding:18px 34px; border-radius:16px 16px 0 0; border-bottom:2px solid #4A8BC2;">
+                                            <td style="padding:0;">
+                                                <div style="background-color:#003875; padding:18px 34px; border-bottom:3px solid #4A8BC2;">
                                                     <p style="margin:0; color:#FFFFFF; font-size:17px; font-weight:bold; letter-spacing:1px;">🔍 COMMAND DETAILS</p>
                                                 </div>
-                                                <div class="command-details-wrapper" style="padding:34px 34px 28px 34px;">
+                                                <div class="command-details-wrapper" style="padding:34px 34px 32px 34px;">
                                                     <p class="command-box"
-                                                       style="margin:0 0 24px 0; padding:20px 22px; background-color:#F5F5F5; border-radius:12px; color:#222; font-size:15px; font-family:'Courier New', monospace; word-break:break-all; border-left:6px solid #00A651;">{{ COMMAND_DETAILS }}</p>
-                                                    <table role="presentation" style="width:100%; border-collapse:collapse;" cellpadding="0" cellspacing="0" border="0">
+                                                       style="margin:0 0 28px 0; padding:22px 24px; background-color:#F8F9FA; border-radius:12px; color:#1a1a1a; font-size:15px; font-family:'Courier New', Courier, monospace; word-break:break-all; border-left:6px solid #00A651; box-shadow:inset 0 1px 3px rgba(0,0,0,0.05);">{{ COMMAND_DETAILS }}</p>
+                                                    <table role="presentation" style="width:100%; border-collapse:collapse; margin-top:8px;" cellpadding="0" cellspacing="0" border="0">
                                                         <tr>
-                                                            <td style="padding:12px 0; width:50%;"><p style="margin:0; color:#555555; font-size:14px;"><span style="display:inline-block; width:22px; text-align:center;">⏰</span><strong
-                                                                    style="color:#003875;">Time:</strong> {{ TIMESTAMP }}</p></td>
-                                                            <td style="padding:12px 0; width:50%;"><p style="margin:0; color:#555555; font-size:14px;"><span style="display:inline-block; width:22px; text-align:center;">💻</span><strong
-                                                                    style="color:#003875;">System:</strong> {{ SYSTEM_NAME }}</p></td>
+                                                            <td style="padding:14px 16px; width:50%; background-color:#F5FAFF; border-radius:8px;">
+                                                                <p style="margin:0; color:#333333; font-size:15px; line-height:1.6;">
+                                                                    <span style="display:inline-block; width:24px; text-align:center; font-size:18px;">⏰</span>
+                                                                    <strong style="color:#003875;">Time:</strong> {{ TIMESTAMP }}
+                                                                </p>
+                                                            </td>
+                                                            <td style="padding:0 8px; width:16px;"></td>
+                                                            <td style="padding:14px 16px; width:50%; background-color:#F5FAFF; border-radius:8px;">
+                                                                <p style="margin:0; color:#333333; font-size:15px; line-height:1.6;">
+                                                                    <span style="display:inline-block; width:24px; text-align:center; font-size:18px;">💻</span>
+                                                                    <strong style="color:#003875;">System:</strong> {{ SYSTEM_NAME }}
+                                                                </p>
+                                                            </td>
                                                         </tr>
                                                     </table>
                                                 </div>
@@ -155,33 +177,38 @@
                                         </tr>
                                     </table>
                                     <p style="margin:0 0 44px 0; color:#4a4a4a; font-size:18px; line-height:1.7; text-align:center;">Click the button below to fill out a form and confirm whether you recognize this activity.</p>
-                                    <!-- CTA button updated to brand blues -->
+                                    <!-- CTA button updated to brand blues with enhanced VML support -->
                                     <table role="presentation" style="margin:0 auto 44px auto;" cellpadding="0" cellspacing="0" border="0">
                                         <tr>
-                                            <td class="cta-button" align="center" style="border-radius:14px; background-color:#0046AD; border:1px solid #00A651;">
+                                            <td class="cta-button" align="center" style="border-radius:14px; background-color:#0046AD;">
+                                                <!--[if mso]>
+                                                <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word"
+                                                             href="http://localhost/verify-command?case_id=${incident.id}"
+                                                             style="height:72px;v-text-anchor:middle;width:320px;"
+                                                             arcsize="19%"
+                                                             strokecolor="#00A651"
+                                                             strokeweight="2pt"
+                                                             fillcolor="#0046AD">
+                                                    <w:anchorlock/>
+                                                    <div style="color:#ffffff; font-family:Arial, sans-serif; font-size:20px; font-weight:bold; letter-spacing:1px; text-align: center;">
+                                                        VERIFY COMMAND 📋
+                                                    </div>
+                                                </v:roundrect>
+                                                <![endif]-->
                                                 <!--[if !mso]><!-->
                                                 <a class="verify-link" href="http://localhost/verify-command?case_id=${incident.id}" target="_blank"
-                                                   style="display:inline-block; padding:24px 74px; color:#ffffff; text-decoration:none; font-size:20px; font-weight:bold; border-radius:14px; letter-spacing:1px; text-transform:uppercase;">
-                                                    GO TO FORM📋</a>
+                                                   style="display:inline-block; padding:24px 64px; color:#ffffff; text-decoration:none; font-size:20px; font-weight:bold; border-radius:14px; letter-spacing:1px; text-transform:uppercase; background-color:#0046AD; border:2px solid #00A651; box-shadow:0 4px 12px rgba(0,70,173,0.3);">
+                                                    VERIFY COMMAND 📋</a>
                                                 <!--<![endif]-->
-                                                <!--[if mso]>
-                                                <a href="http://localhost/verify-command?case_id=${incident.id}" target="_blank" style="text-decoration: none;">
-                                                    <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" style="height:55px;v-text-anchor:middle;width:300px;" arcsize="25%"
-                                                                 strokecolor="#00A651" fillcolor="#0046AD">
-                                                        <w:anchorlock/>
-                                                        <center style="color:#ffffff;font-family:sans-serif;font-size:20px;font-weight:bold;">
-                                                            GO TO FORM📋
-                                                        </center>
-                                                    </v:roundrect>
-                                                </a>
-                                                <![endif]-->
                                             </td>
                                         </tr>
                                     </table>
                                     <!-- Link fallback tinted -->
-                                    <div style="text-align:center; padding:28px; background-color:#E6F5EC; border-radius:16px; margin-bottom:52px;">
-                                        <p style="margin:0 0 16px 0; color:#555; font-size:14px; line-height:1.6;">If the button doesn't work, copy and paste this link:</p>
-                                        <p style="margin:0; color:#0046AD; font-size:14px; word-break:break-all; font-family:'Courier New', monospace;">http://localhost/verify-command?case_id=${incident.id}</p>
+                                    <div style="text-align:center; padding:32px 28px; background-color:#F5FAFF; border-radius:16px; margin-bottom:52px; border:2px dashed #4A8BC2;">
+                                        <p style="margin:0 0 14px 0; color:#003875; font-size:15px; font-weight:600; line-height:1.6;">Alternative: Copy & Paste Link</p>
+                                        <p style="margin:0 0 18px 0; color:#666666; font-size:13px; line-height:1.6;">If the button above doesn't work, use this direct link:</p>
+                                        <p style="margin:0; color:#0046AD; font-size:13px; word-break:break-all; font-family:'Courier New', Courier, monospace; background-color:#FFFFFF; padding:14px 18px; border-radius:8px; border:1px solid #E0ECF7;">
+                                            http://localhost/verify-command?case_id=${incident.id}</p>
                                     </div>
                                 </td>
                             </tr>
@@ -195,21 +222,29 @@
                                     </table>
                                 </td>
                             </tr>
-                            <!-- Footer (kept original neutral styling, only minor accent tweak) -->
+                            <!-- Footer enhanced with better visual hierarchy -->
                             <tr>
-                                <td style="padding:44px 52px 46px 52px; background-color:#F8F9FA; border-top:4px solid #0046AD; border-radius:0 0 28px 28px;">
-                                    <div style="text-align:center; margin-bottom:22px;">
-                                        <div style="display:inline-block; padding:12px 20px; background-color:#FFFFFF; border-radius:28px; border:1px solid #0046AD;">
-                                            <span style="color:#0046AD; font-size:11px; font-weight:bold; letter-spacing:1px;">🔒 AUTOMATED SECURITY ALERT</span>
+                                <td class="footer-section" style="padding:48px 52px 48px 52px; background-color:#F8F9FA; border-top:4px solid #0046AD; border-radius:0 0 28px 28px;">
+                                    <div style="text-align:center; margin-bottom:28px;">
+                                        <div style="display:inline-block; padding:14px 24px; background-color:#FFFFFF; border-radius:30px; border:2px solid #0046AD; box-shadow:0 2px 6px rgba(0,70,173,0.1);">
+                                            <span style="color:#0046AD; font-size:12px; font-weight:bold; letter-spacing:1px;">🔒 AUTOMATED SECURITY ALERT</span>
                                         </div>
                                     </div>
-                                    <p style="margin:0 0 16px 0; color:#5a5a5a; font-size:13px; line-height:1.6; text-align:center;">This is an automated alert from the Acme Cyber Incident Response Team.<br>Please do not reply to this
-                                        email.</p>
-                                    <p style="margin:0 0 20px 0; color:#5a5a5a; font-size:13px; line-height:1.6; text-align:center;">For questions or concerns, contact the Security Operations Center:<br><a href="mailto:security@company.com"
-                                                                                                                                                                                                              style="color:#0046AD; text-decoration:none; font-weight:bold;">📧
-                                        security@company.com</a></p>
-                                    <div style="border-top:1px solid #CED6DD; padding-top:18px; text-align:center;">
-                                        <p style="margin:0; color:#999999; font-size:11px; line-height:1.5;">&copy; 2025 Acme. All rights reserved.</p>
+                                    <p style="margin:0 0 20px 0; color:#555555; font-size:14px; line-height:1.7; text-align:center;">
+                                        This is an automated alert from the <strong style="color:#003875;">Acme Cyber Incident Response Team</strong>.<br>
+                                        Please do not reply to this email.
+                                    </p>
+                                    <p style="margin:0 0 28px 0; color:#555555; font-size:14px; line-height:1.7; text-align:center;">
+                                        For questions or concerns, contact the Security Operations Center:<br>
+                                        <a href="mailto:security@company.com" style="color:#0046AD; text-decoration:none; font-weight:bold; display:inline-block; margin-top:6px;">
+                                            📧 security@company.com
+                                        </a>
+                                    </p>
+                                    <div style="border-top:2px solid #E0ECF7; padding-top:24px; text-align:center;">
+                                        <p style="margin:0 0 8px 0; color:#888888; font-size:12px; line-height:1.5;">
+                                            <strong>Acme Cyber Incident Response</strong>
+                                        </p>
+                                        <p style="margin:0; color:#999999; font-size:11px; line-height:1.5;">&copy; 2025 Acme. All rights reserved. | Confidential & Proprietary</p>
                                     </div>
                                 </td>
                             </tr>
