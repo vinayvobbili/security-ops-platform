@@ -38,10 +38,11 @@ from src.utils.fs_utils import make_dir_for_todays_charts
 from src.utils.logging_utils import setup_logging
 
 # Configure logging with centralized utility
+# Enable DEBUG for troubleshooting scheduler execution
 setup_logging(
     bot_name='all_jobs',
-    log_level=logging.WARNING,
-    info_modules=['__main__'],
+    log_level=logging.DEBUG,
+    info_modules=['__main__', 'src.components.response_sla_risk_tickets'],
     use_colors=True
 )
 
@@ -78,8 +79,10 @@ def safe_run(*jobs: Callable[[], None], timeout: int = 1800) -> None:
         If Group 1 has 6 jobs and job 3 fails, jobs 4-6 still run.
         When Group 1 completes (even with failures), Group 2 runs next.
     """
+    logger.info(f"safe_run() called with {len(jobs)} job(s)")
     for job in jobs:
         job_name = getattr(job, '__name__', str(job))
+        logger.info(f"Starting job: {job_name}")
         executor = None
         try:
             # Execute job with timeout protection using ThreadPoolExecutor
@@ -87,7 +90,8 @@ def safe_run(*jobs: Callable[[], None], timeout: int = 1800) -> None:
             executor = ThreadPoolExecutor(max_workers=1)
             future = executor.submit(job)
             try:
-                future.result(timeout=timeout)
+                result = future.result(timeout=timeout)
+                logger.info(f"Job completed successfully: {job_name}")
             except FuturesTimeoutError:
                 logger.error(f"Job timed out after {timeout} seconds: {job_name}")
                 logger.error(f"This job was forcefully terminated to prevent scheduler hang")
@@ -253,16 +257,21 @@ def main() -> None:
     logger.info("Daily maintenance scheduled")
 
     # SLA risk monitoring - continuous checks to prevent breaches
+    # Simplify by creating direct callables instead of nested lambdas
     logger.info("Scheduling SLA risk monitoring...")
-    schedule.every(1).minutes.do(lambda: safe_run(
-        lambda: response_sla_risk_tickets.start(config.webex_room_id_response_sla_risk)
-    ))
-    schedule.every(3).minutes.do(lambda: safe_run(
-        lambda: containment_sla_risk_tickets.start(config.webex_room_id_containment_sla_risk)
-    ))
-    schedule.every().hour.at(":00").do(lambda: safe_run(
-        lambda: incident_declaration_sla_risk.start(config.webex_room_id_response_sla_risk),
-    ))
+
+    def run_response_sla():
+        safe_run(lambda: response_sla_risk_tickets.start(config.webex_room_id_response_sla_risk))
+
+    def run_containment_sla():
+        safe_run(lambda: containment_sla_risk_tickets.start(config.webex_room_id_containment_sla_risk))
+
+    def run_incident_sla():
+        safe_run(lambda: incident_declaration_sla_risk.start(config.webex_room_id_response_sla_risk))
+
+    schedule.every(1).minutes.do(run_response_sla)
+    schedule.every(3).minutes.do(run_containment_sla)
+    schedule.every().hour.at(":00").do(run_incident_sla)
     logger.info("SLA risk monitoring scheduled")
 
     logger.info(f"All jobs scheduled successfully! Total jobs: {len(schedule.get_jobs())}")

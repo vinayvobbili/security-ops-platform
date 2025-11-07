@@ -164,6 +164,7 @@ def start(room_id):
         "totalDuration": 57
     }
     """
+    logger.debug(f"[SCHEDULER DEBUG] response_sla_risk_tickets.start() called with room_id={room_id}")
     try:
         ticket_handler = TicketHandler(XsoarEnvironment.PROD)
         query = '-category:job type:METCIRT -owner:"" timetorespond.runStatus:running (timetorespond.slaStatus:risk or timetorespond.slaStatus:2)'
