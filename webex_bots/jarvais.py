@@ -1220,6 +1220,7 @@ def main():
         max_retries=5,
         initial_retry_delay=30,
         max_retry_delay=300,
+        # keepalive_interval defaults to 120s - staggered to avoid synchronized API load
     )
     resilient_runner.run()
 

@@ -440,7 +440,8 @@ def main():
         initialization_func=moneyball_initialization,
         max_retries=5,
         initial_retry_delay=30,
-        max_retry_delay=300
+        max_retry_delay=300,
+        keepalive_interval=105,  # Staggered to avoid synchronized API load (60s, 75s, 90s, 105s, 120s)
     )
     resilient_runner.run()
 
