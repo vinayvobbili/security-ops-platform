@@ -31,13 +31,50 @@ function submitVerification(response) {
         .then(data => {
             spinner.style.display = 'none';
             if (data.status === 'success') {
-                modalTitle.textContent = 'Thank You!';
-                modalMessage.textContent = data.message || 'Your response has been recorded successfully.';
+                // Replace entire page with Thank You message
+                document.body.innerHTML = `
+                    <div class="container">
+                        <div class="inner-container">
+                            <div class="header">
+                                <div class="header-content">
+                                    <div class="logo-section">
+                                        <img alt="MetLife" src="/static/images/MetLife logo dark.webp" style="background: transparent;"/>
+                                    </div>
+                                    <div class="header-text">
+                                        <h1>Thank You!</h1>
+                                        <div class="header-underline"></div>
+                                        <p>Cyber Incident Response Team</p>
+                                    </div>
+                                </div>
+                            </div>
 
-                // Close modal after 3 seconds
-                setTimeout(() => {
-                    modal.style.display = 'none';
-                }, 3000);
+                            <div class="separator"></div>
+
+                            <div class="content">
+                                <div class="success-box">
+                                    <div style="font-size: 64px; margin-bottom: 20px;">✅</div>
+                                    <h2>Response Recorded Successfully</h2>
+                                    <p class="subtitle">${data.message || 'Your response has been recorded successfully.'}</p>
+                                    <p class="subtitle" style="margin-top: 30px; font-size: 18px; font-weight: 600;">
+                                        You may now close this window.
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div class="separator"></div>
+
+                            <div class="footer">
+                                <p>For questions or concerns, contact the Security Operations Center:<br>
+                                    <a href="mailto:security@company.com">📧 security@company.com</a>
+                                </p>
+                                <div class="footer-divider">
+                                    <p class="footer-copyright"><strong>MetLife Cyber Incident Response</strong></p>
+                                    <p class="footer-legal">&copy; 2025 MetLife. All rights reserved. | Confidential & Proprietary</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
             } else {
                 modalTitle.textContent = 'Error';
                 modalMessage.textContent = 'There was an error submitting your response. Please try again or contact support.';
