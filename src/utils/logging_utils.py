@@ -95,13 +95,17 @@ def setup_logging(
 
     console_handler.setFormatter(console_formatter)
 
-    # Configure root logger using basicConfig for consistency
-    logging.basicConfig(
-        level=log_level,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        handlers=[file_handler, console_handler],
-        force=True  # Override any existing logging config
-    )
+    # Configure root logger - handlers already have formatters set
+    # Don't specify format= when providing custom handlers (it's ignored anyway)
+    root_logger = logging.getLogger()
+    root_logger.setLevel(log_level)
+
+    # Clear any existing handlers (force=True equivalent)
+    root_logger.handlers.clear()
+
+    # Add our configured handlers
+    root_logger.addHandler(file_handler)
+    root_logger.addHandler(console_handler)
 
     # Set specific modules to INFO level if provided
     if info_modules:
