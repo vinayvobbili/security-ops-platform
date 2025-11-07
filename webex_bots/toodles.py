@@ -46,6 +46,9 @@ setup_logging(
 
 logger = logging.getLogger(__name__)
 
+# Suppress noisy warnings from webex_bot module
+logging.getLogger('webex_bot.webex_bot').setLevel(logging.ERROR)
+
 # Load configuration early (before SSL config)
 from my_config import get_config
 
