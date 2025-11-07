@@ -78,34 +78,19 @@ def setup_logging(
         backupCount=5
     )
     file_handler.setLevel(log_level if log_level != logging.WARNING else logging.INFO)
-    file_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    file_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
     file_formatter.converter = time.localtime  # Use local timezone instead of UTC
     file_handler.setFormatter(file_formatter)
 
-    # Create console handler for real-time monitoring
-    console_handler = logging.StreamHandler()
-    console_handler.setLevel(log_level if log_level != logging.WARNING else logging.INFO)
-
-    # Use colored formatter by default for better visibility
-    if use_colors:
-        console_formatter = ColoredFormatter('%(asctime)s - %(levelname)s - %(message)s')
-    else:
-        console_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-        console_formatter.converter = time.localtime  # Use local timezone instead of UTC
-
-    console_handler.setFormatter(console_formatter)
-
-    # Configure root logger - handlers already have formatters set
-    # Don't specify format= when providing custom handlers (it's ignored anyway)
+    # Configure root logger - only use file handler to avoid duplicates
     root_logger = logging.getLogger()
     root_logger.setLevel(log_level)
 
     # Clear any existing handlers (force=True equivalent)
     root_logger.handlers.clear()
 
-    # Add our configured handlers
+    # Add file handler only (console output via tail -f is cleaner)
     root_logger.addHandler(file_handler)
-    root_logger.addHandler(console_handler)
 
     # Set specific modules to INFO level if provided
     if info_modules:
