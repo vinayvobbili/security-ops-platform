@@ -4,272 +4,66 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Command Verification - MetLife Security</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: Arial, Helvetica, sans-serif;
-            background-color: #f4f4f4;
-            padding: 20px;
-            line-height: 1.6;
-        }
-
-        .container {
-            max-width: 800px;
-            margin: 0 auto;
-            background-color: #ffffff;
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            overflow: hidden;
-        }
-
-        .header {
-            background-color: #01a982;
-            color: #ffffff;
-            padding: 30px 40px;
-        }
-
-        .header h1 {
-            margin: 0 0 5px 0;
-            font-size: 28px;
-        }
-
-        .header p {
-            margin: 0;
-            font-size: 14px;
-            opacity: 0.95;
-        }
-
-        .content {
-            padding: 40px;
-        }
-
-        .alert-box {
-            background-color: #fff3cd;
-            border-left: 4px solid #ffc107;
-            padding: 20px;
-            margin-bottom: 30px;
-            border-radius: 4px;
-        }
-
-        .alert-box p {
-            color: #856404;
-            margin: 0;
-            font-size: 15px;
-        }
-
-        .command-details {
-            background-color: #f8f9fa;
-            border-left: 4px solid #01a982;
-            padding: 25px;
-            margin-bottom: 30px;
-            border-radius: 4px;
-        }
-
-        .command-details h3 {
-            color: #333333;
-            margin: 0 0 15px 0;
-            font-size: 18px;
-        }
-
-        .detail-row {
-            margin-bottom: 15px;
-        }
-
-        .detail-row:last-child {
-            margin-bottom: 0;
-        }
-
-        .detail-label {
-            font-weight: bold;
-            color: #555555;
-            display: inline-block;
-            min-width: 100px;
-        }
-
-        .detail-value {
-            color: #333333;
-            font-family: 'Courier New', monospace;
-            word-break: break-all;
-            background-color: #ffffff;
-            padding: 8px 12px;
-            border-radius: 4px;
-            display: inline-block;
-            margin-top: 5px;
-            width: 100%;
-        }
-
-        .question-section {
-            margin: 40px 0 30px 0;
-            text-align: center;
-        }
-
-        .question-section h2 {
-            color: #333333;
-            font-size: 24px;
-            margin-bottom: 30px;
-        }
-
-        .button-container {
-            display: flex;
-            gap: 20px;
-            justify-content: center;
-            margin-top: 30px;
-        }
-
-        .btn {
-            padding: 18px 50px;
-            font-size: 18px;
-            font-weight: bold;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            min-width: 150px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-
-        .btn-no {
-            background-color: #dc3545;
-            color: #ffffff;
-        }
-
-        .btn-no:hover {
-            background-color: #c82333;
-            transform: translateY(-2px);
-            box-shadow: 0 4px 8px rgba(220, 53, 69, 0.3);
-        }
-
-        .btn-yes {
-            background-color: #28a745;
-            color: #ffffff;
-        }
-
-        .btn-yes:hover {
-            background-color: #218838;
-            transform: translateY(-2px);
-            box-shadow: 0 4px 8px rgba(40, 167, 69, 0.3);
-        }
-
-        .footer {
-            background-color: #f8f9fa;
-            padding: 25px 40px;
-            border-top: 1px solid #e0e0e0;
-            text-align: center;
-        }
-
-        .footer p {
-            color: #777777;
-            font-size: 13px;
-            margin: 0;
-            line-height: 1.8;
-        }
-
-        /* Modal styles */
-        .modal {
-            display: none;
-            position: fixed;
-            z-index: 1000;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0,0,0,0.5);
-        }
-
-        .modal-content {
-            background-color: #ffffff;
-            margin: 15% auto;
-            padding: 40px;
-            border-radius: 8px;
-            width: 90%;
-            max-width: 500px;
-            text-align: center;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-        }
-
-        .modal-content h3 {
-            color: #01a982;
-            margin-bottom: 15px;
-            font-size: 24px;
-        }
-
-        .modal-content p {
-            color: #555555;
-            font-size: 16px;
-            line-height: 1.6;
-        }
-
-        .spinner {
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid #01a982;
-            border-radius: 50%;
-            width: 40px;
-            height: 40px;
-            animation: spin 1s linear infinite;
-            margin: 20px auto;
-        }
-
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-
-        @media (max-width: 600px) {
-            .content {
-                padding: 20px;
-            }
-
-            .header {
-                padding: 20px;
-            }
-
-            .button-container {
-                flex-direction: column;
-            }
-
-            .btn {
-                width: 100%;
-            }
-        }
-    </style>
+    <link rel="stylesheet" href="/static/css/command_verification.css">
 </head>
 <body>
-    <div class="container">
+<!-- Hidden data container for JavaScript to access template variables -->
+<div id="verificationData" style="display: none;"
+     data-ticket-id="{{ ticket_id }}"
+     data-task-id="{{ task_id }}"
+     data-command="{{ command }}"
+     data-timestamp="{{ timestamp }}"
+     data-system="{{ system }}"></div>
+
+<div class="container">
+    <div class="inner-container">
         <div class="header">
-            <h1>MetLife</h1>
-            <p>Cyber Incident Response Team</p>
+            <div class="header-content">
+                <div class="logo-section">
+                    <img alt="MetLife" src="https://www.company.com/content/dam/metlifecom/us/icons-header/MetLife.png" width="120" height="56"/>
+                </div>
+                <div class="header-text">
+                    <h1>Verify Command Execution</h1>
+                    <div class="header-underline"></div>
+                    <p>Cyber Incident Response Team</p>
+                </div>
+            </div>
         </div>
+
+        <div class="separator"></div>
 
         <div class="content">
             <div class="alert-box">
-                <p><strong>Action Required:</strong> Please verify if you recognize the command execution detailed below.</p>
+                <div class="icon">⚠️</div>
+                <p class="title">Action Required: Verify Command Execution</p>
+                <p class="subtitle">We need to confirm if you recognize the command below that was executed using your credentials.</p>
             </div>
 
             <div class="command-details">
-                <h3>Command Execution Details</h3>
-                <div class="detail-row">
-                    <div class="detail-label">Command:</div>
-                    <div class="detail-value">{{ command }}</div>
+                <div class="command-details-header">
+                    <h3>🔍 COMMAND DETAILS</h3>
                 </div>
-                <div class="detail-row">
-                    <div class="detail-label">Timestamp:</div>
-                    <div class="detail-value">{{ timestamp }}</div>
-                </div>
-                <div class="detail-row">
-                    <div class="detail-label">System:</div>
-                    <div class="detail-value">{{ system }}</div>
+                <div class="command-details-body">
+                    <div class="detail-row">
+                        <div class="detail-label">Command:</div>
+                        <div class="detail-value">{{ command }}</div>
+                    </div>
+                    <div class="metadata-grid">
+                        <div class="metadata-item">
+                            <span class="icon">⏰</span>
+                            <strong>Time:</strong> {{ timestamp }}
+                        </div>
+                        <div class="metadata-item">
+                            <span class="icon">💻</span>
+                            <strong>System:</strong> {{ system }}
+                        </div>
+                    </div>
                 </div>
             </div>
 
             <div class="question-section">
                 <h2>Do you recognize this command?</h2>
-                <p style="color: #666; margin-bottom: 20px;">Please select one of the options below:</p>
+                <p class="subtitle">Please select one of the options below to confirm whether you recognize this activity.</p>
 
                 <div class="button-container">
                     <button class="btn btn-no" onclick="submitVerification('no')">No, I don't recognize it</button>
@@ -278,80 +72,33 @@
             </div>
         </div>
 
+        <div class="separator"></div>
+
         <div class="footer">
-            <p>This is an automated security verification from the MetLife Cyber Incident Response Team.</p>
-            <p>For questions or concerns, contact the Security Operations Center at <a href="mailto:security@company.com" style="color: #01a982; text-decoration: none;">security@company.com</a></p>
-            <p>&copy; 2025 MetLife. All rights reserved.</p>
+            <div class="security-badge">
+                <span>🔒 AUTOMATED SECURITY ALERT</span>
+            </div>
+            <p>This is an automated alert from the <strong>MetLife Cyber Incident Response Team</strong>.<br>Please do not reply to this email.</p>
+            <p>For questions or concerns, contact the Security Operations Center:<br>
+                <a href="mailto:security@company.com">📧 security@company.com</a>
+            </p>
+            <div class="footer-divider">
+                <p class="footer-copyright"><strong>MetLife Cyber Incident Response</strong></p>
+                <p class="footer-legal">&copy; 2025 MetLife. All rights reserved. | Confidential & Proprietary</p>
+            </div>
         </div>
     </div>
+</div>
 
-    <!-- Response Modal -->
-    <div id="responseModal" class="modal">
-        <div class="modal-content">
-            <div class="spinner" id="spinner"></div>
-            <h3 id="modalTitle">Processing...</h3>
-            <p id="modalMessage">Please wait while we record your response.</p>
-        </div>
+<!-- Response Modal -->
+<div id="responseModal" class="modal">
+    <div class="modal-content">
+        <div class="spinner" id="spinner"></div>
+        <h3 id="modalTitle">Processing...</h3>
+        <p id="modalMessage">Please wait while we record your response.</p>
     </div>
+</div>
 
-    <script>
-        function submitVerification(response) {
-            // Show modal with spinner
-            const modal = document.getElementById('responseModal');
-            const modalTitle = document.getElementById('modalTitle');
-            const modalMessage = document.getElementById('modalMessage');
-            const spinner = document.getElementById('spinner');
-
-            modal.style.display = 'block';
-            spinner.style.display = 'block';
-            modalTitle.textContent = 'Processing...';
-            modalMessage.textContent = 'Please wait while we record your response.';
-
-            // Prepare form data
-            const formData = new FormData();
-            formData.append('recognized', response);
-            formData.append('ticket_id', '{{ ticket_id }}');
-            formData.append('task_id', '{{ task_id }}');
-            formData.append('command', '{{ command }}');
-            formData.append('timestamp', '{{ timestamp }}');
-            formData.append('system', '{{ system }}');
-
-            // Submit to server
-            fetch('/submit-command-verification', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => response.json())
-            .then(data => {
-                spinner.style.display = 'none';
-                if (data.status === 'success') {
-                    modalTitle.textContent = 'Thank You!';
-                    modalMessage.textContent = data.message || 'Your response has been recorded successfully.';
-
-                    // Close modal after 3 seconds
-                    setTimeout(() => {
-                        modal.style.display = 'none';
-                    }, 3000);
-                } else {
-                    modalTitle.textContent = 'Error';
-                    modalMessage.textContent = 'There was an error submitting your response. Please try again or contact support.';
-                }
-            })
-            .catch(error => {
-                spinner.style.display = 'none';
-                modalTitle.textContent = 'Error';
-                modalMessage.textContent = 'Network error. Please check your connection and try again.';
-                console.error('Error:', error);
-            });
-        }
-
-        // Close modal when clicking outside of it
-        window.onclick = function(event) {
-            const modal = document.getElementById('responseModal');
-            if (event.target === modal) {
-                modal.style.display = 'none';
-            }
-        }
-    </script>
+<script src="/static/js/command_verification.js"></script>
 </body>
 </html>
