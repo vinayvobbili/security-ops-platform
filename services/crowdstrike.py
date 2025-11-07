@@ -38,7 +38,7 @@ class CrowdStrikeClient:
             print("[CrowdStrikeClient] Proxy not enabled.")
         self.use_host_write_creds = use_host_write_creds
         self.auth = self._create_auth()
-        self.hosts_client = Hosts(auth_object=self.auth)
+        self.hosts_client = Hosts(auth_object=self.auth, timeout=30)
         # Allow thread pool size to be set via env or parameter
         self.max_workers = max_workers or CS_FETCH_MAX_WORKERS
 
@@ -63,7 +63,8 @@ class CrowdStrikeClient:
             client_secret=client_secret,
             base_url=self.base_url,
             ssl_verify=False,
-            proxy=self.proxies
+            proxy=self.proxies,
+            timeout=30  # 30 second timeout to prevent indefinite hangs
         )
 
     def get_access_token(self) -> str:
@@ -180,7 +181,7 @@ class CrowdStrikeClient:
                 # Refresh auth token every 10 batches
                 if batch_count > 0 and batch_count % 10 == 0:
                     self.auth = self._create_auth()
-                    self.hosts_client = Hosts(auth_object=self.auth)
+                    self.hosts_client = Hosts(auth_object=self.auth, timeout=30)
 
                 response = self.hosts_client.query_devices_by_filter_scroll(
                     limit=limit, offset=offset
