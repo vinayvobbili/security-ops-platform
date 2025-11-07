@@ -1872,18 +1872,11 @@ def api_oncall():
 def verify_command_form():
     """Display command verification form"""
     # Get command details from query parameters
-    command = request.args.get('command', 'N/A')
-    timestamp = request.args.get('timestamp', 'N/A')
-    system = request.args.get('system', 'N/A')
-    ticket_id = request.args.get('ticket_id', '')
-    task_id = request.args.get('task_id', '')
+    ticket_id = request.args.get('case_id', '')
 
     return render_template('command_verification_form.html',
-                           command=command,
-                           timestamp=timestamp,
-                           system=system,
                            ticket_id=ticket_id,
-                           task_id=task_id)
+                           )
 
 
 @app.route('/submit-command-verification', methods=['POST'])
@@ -1893,7 +1886,7 @@ def submit_command_verification():
     try:
         data = request.form.to_dict()
         recognized = data.get('recognized')  # 'yes' or 'no'
-        ticket_id = data.get('case_id', '')
+        ticket_id = data.get('ticket_id', '')
 
         # Log the response
         logger.info(f"Command verification response: recognized={recognized}, ticket_id={ticket_id}")
@@ -1906,7 +1899,7 @@ def submit_command_verification():
 
                 return jsonify({
                     'status': 'success',
-                    'message': f'Thank you for your response. An analyst will contact you if required. You may now close this window!.'
+                    'message': f'Thank you for your response. An analyst will contact you if required.'
                 })
             except Exception as xsoar_error:
                 logger.error(f"Error completing XSOAR task: {xsoar_error}")

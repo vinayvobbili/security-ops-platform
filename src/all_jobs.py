@@ -261,16 +261,19 @@ def main() -> None:
     def run_response_sla():
         def response_sla_job():
             response_sla_risk_tickets.start(config.webex_room_id_response_sla_risk)
+
         safe_run(response_sla_job)
 
     def run_containment_sla():
         def containment_sla_job():
             containment_sla_risk_tickets.start(config.webex_room_id_containment_sla_risk)
+
         safe_run(containment_sla_job)
 
     def run_incident_sla():
         def incident_sla_job():
             incident_declaration_sla_risk.start(config.webex_room_id_response_sla_risk)
+
         safe_run(incident_sla_job)
 
     schedule.every(1).minutes.do(run_response_sla)
