@@ -403,7 +403,7 @@ class ResilientBot:
             ping_start = None  # Initialize to avoid reference before assignment
             try:
                 if self.bot_instance and hasattr(self.bot_instance, 'teams'):
-                    # Try a simple API call to test connection health
+                    # Simple API call to test connection health
                     ping_start = time.time()
                     self.bot_instance.teams.people.me()
                     ping_duration = time.time() - ping_start

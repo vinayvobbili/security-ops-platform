@@ -205,7 +205,7 @@ def main():
         max_retries=5,
         initial_retry_delay=30,
         max_retry_delay=300,
-        keepalive_interval=60,  # Aggressive keepalive for VM behind firewalls
+        keepalive_interval=60,  # Staggered to avoid synchronized API load (60s, 75s, 90s, 105s, 120s)
     )
 
     # Resilience framework will log startup status - no need for premature log here

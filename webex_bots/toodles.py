@@ -41,7 +41,7 @@ setup_logging(
     bot_name='toodles',
     log_level=logging.WARNING,
     log_dir=str(ROOT_DIRECTORY / "logs"),
-    info_modules=['__main__', 'src.utils.bot_resilience', 'src.utils.webex_device_manager']
+    info_modules=['__main__', 'src.utils.bot_resilience', 'src.utils.webex_device_manager', 'src.utils.connection_health']
 )
 
 logger = logging.getLogger(__name__)
@@ -2320,7 +2320,7 @@ def main():
         max_retries=5,
         initial_retry_delay=30,
         max_retry_delay=300,
-        keepalive_interval=60,  # More aggressive keepalive (was 120s default)
+        keepalive_interval=75,  # Staggered to avoid synchronized API load (60s, 75s, 90s, 105s, 120s)
     )
     resilient_runner.run()
 
