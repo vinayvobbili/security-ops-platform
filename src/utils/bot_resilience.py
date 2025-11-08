@@ -72,7 +72,8 @@ class ResilientBot:
                  max_retry_delay: int = 300,
                  keepalive_interval: int = 120,
                  max_keepalive_interval: int = 600,
-                 max_keepalive_failures: int = 5):
+                 max_keepalive_failures: int = 5,
+                 max_connection_age_hours: int = 12):
         """
         Initialize resilient bot runner
 
@@ -86,6 +87,7 @@ class ResilientBot:
             keepalive_interval: Keepalive ping interval (seconds)
             max_keepalive_interval: Maximum keepalive ping interval (seconds)
             max_keepalive_failures: Max consecutive keepalive failures before reconnection
+            max_connection_age_hours: Force reconnection after this many hours (prevents stale connections)
         """
         # Suppress noisy websocket logs for all bots
         # These INFO-level logs create excessive noise without adding value
@@ -116,15 +118,15 @@ class ResilientBot:
 
             # Create a wrapper that adds keepalive parameters
             def connect_with_keepalive(*args, **kwargs):
-                # Set aggressive ping interval (15 seconds) to keep connection alive
-                # Default is 20 seconds which may not be frequent enough
-                kwargs.setdefault('ping_interval', 15)
-                kwargs.setdefault('ping_timeout', 10)
+                # Set VERY aggressive ping interval (10 seconds) to prevent stale connections
+                # After long idle periods, connections can appear alive but stop receiving messages
+                kwargs.setdefault('ping_interval', 10)
+                kwargs.setdefault('ping_timeout', 5)
                 return original_connect(*args, **kwargs)
 
             # Replace the connect function globally
             websockets.connect = connect_with_keepalive
-            logger.info("🔧 Patched WebSocket to use 15s ping interval to prevent idle timeout")
+            logger.info("🔧 Patched WebSocket to use 10s ping interval to prevent stale connections")
         except Exception as websocket_patch_error:
             logger.warning(f"⚠️  Could not patch WebSocket keepalive: {websocket_patch_error}")
 
@@ -137,6 +139,7 @@ class ResilientBot:
         self.keepalive_interval = keepalive_interval
         self.max_keepalive_interval = max_keepalive_interval
         self.max_keepalive_failures = max_keepalive_failures
+        self.max_connection_age_hours = max_connection_age_hours
 
         # Runtime state
         self.bot_instance = None
@@ -223,6 +226,15 @@ class ResilientBot:
         while not self.shutdown_requested:
             try:
                 if self.bot_instance and hasattr(self.bot_instance, 'teams'):
+                    # Check if connection has been alive too long (prevents stale connections)
+                    if self._bot_start_time and self.max_connection_age_hours > 0:
+                        connection_age_hours = (datetime.now() - self._bot_start_time).total_seconds() / 3600
+                        if connection_age_hours >= self.max_connection_age_hours:
+                            logger.warning(f"🔄 Connection has been alive for {connection_age_hours:.1f}h (max: {self.max_connection_age_hours}h)")
+                            logger.warning(f"🔄 Forcing proactive reconnection to prevent stale connection issues")
+                            self._trigger_reconnection(f"Proactive reconnect after {connection_age_hours:.1f}h")
+                            break  # Exit keepalive thread - will restart with new bot instance
+
                     # Simple API call to test connection health
                     ping_start = time.time()
                     self.bot_instance.teams.people.me()
