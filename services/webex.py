@@ -1,5 +1,3 @@
-from pprint import pprint
-
 import requests
 from webexteamssdk import WebexTeamsAPI
 
@@ -7,7 +5,7 @@ from my_config import get_config
 
 # Load configuration
 config = get_config()
-BOT_ACCESS_TOKEN = config.webex_bot_access_token_moneyball
+BOT_ACCESS_TOKEN = config.webex_bot_access_token_jarvais
 
 # Initialize Webex API client
 webex_api = WebexTeamsAPI(access_token=BOT_ACCESS_TOKEN)
@@ -121,7 +119,12 @@ def send_file_to_webex_room(room_id, file_path, message=None):
 
 # Usage example
 def main():
-    pprint(get_webex_bot_rooms(BOT_ACCESS_TOKEN))
+    # pprint(get_webex_bot_rooms(BOT_ACCESS_TOKEN))
+    send_file_to_webex_room(
+        room_id=config.webex_room_id_epp_tagging,
+        file_path="/Users/user/PycharmProjects/IR/data/transient/cs_servers_with_invalid_ring_tags_only.xlsx",
+        message="Unique CS servers with Invalid Ring tags"
+    )
 
 
 if __name__ == "__main__":
