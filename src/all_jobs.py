@@ -138,6 +138,7 @@ CHART_GROUPS: List[dict] = [
             outflow.make_chart,
             mttr_mttc.make_chart,
             sla_breaches.make_chart,
+            secops.send_daily_operational_report_charts
         ]
     },
     {
