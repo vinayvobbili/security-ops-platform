@@ -45,8 +45,7 @@ def setup_logging(
         bot_name: str,
         log_level=logging.INFO,
         log_dir: str = 'logs',
-        info_modules: list[str] = None,
-        use_colors: bool = True
+        info_modules: list[str] = None
 ):
     """
     Configure standardized logging for bots with rotation.
@@ -62,7 +61,6 @@ def setup_logging(
         log_level: Logging level for root logger (default: logging.INFO)
         log_dir: Directory for log files (default: 'logs')
         info_modules: List of module names to set to INFO level (useful when root is WARNING)
-        use_colors: Whether to use colored console output (default: True)
 
     Returns:
         logging.Logger: Root logger instance (configured)
