@@ -54,42 +54,6 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 
-def _is_proxy_related_error(error):
-    """Check if an error is likely related to proxy issues"""
-    error_str = str(error).lower()
-    error_type = type(error).__name__.lower()
-
-    # Check both error message and exception type
-    proxy_indicators = [
-        'connection reset',
-        'connection aborted',
-        'ssl handshake failed',
-        'tunnel connection failed',
-        'proxy',
-        'certificate verify failed',
-        'connection refused',
-        'timed out',
-        'network is unreachable',
-        'errno 54',  # Connection reset by peer
-        'errno 61',  # Connection refused
-        'protocolerror',
-        'connectionresetarror',
-        'connectionabortederror'
-    ]
-
-    # Check for specific exception types
-    connection_exceptions = [
-        'connectionreseterror',
-        'connectionabortederror',
-        'connectionrefusederror',
-        'protocolerror',
-        'sslerror'
-    ]
-
-    return (any(indicator in error_str for indicator in proxy_indicators) or
-            any(exc_type in error_type for exc_type in connection_exceptions))
-
-
 class ResilientBot:
     """
     Resilient bot runner that handles:
@@ -106,10 +70,9 @@ class ResilientBot:
                  max_retries: int = 5,
                  initial_retry_delay: int = 30,
                  max_retry_delay: int = 300,
-                 keepalive_interval: int = 120,  # More frequent for proxy handling
+                 keepalive_interval: int = 120,
                  max_keepalive_interval: int = 600,
-                 proxy_detection: bool = True,  # Enable ZScaler proxy detection
-                 disable_proxy_interval_adjustment: bool = False):  # Don't adjust intervals for proxy
+                 max_keepalive_failures: int = 5):
         """
         Initialize resilient bot runner
 
@@ -120,10 +83,9 @@ class ResilientBot:
             max_retries: Maximum number of restart attempts
             initial_retry_delay: Initial delay between retries (seconds)
             max_retry_delay: Maximum delay between retries (seconds)
-            keepalive_interval: Normal keepalive ping interval (seconds)
+            keepalive_interval: Keepalive ping interval (seconds)
             max_keepalive_interval: Maximum keepalive ping interval (seconds)
-            proxy_detection: Enable ZScaler proxy detection
-            disable_proxy_interval_adjustment: Don't automatically adjust intervals when proxy detected
+            max_keepalive_failures: Max consecutive keepalive failures before reconnection
         """
         # Suppress noisy websocket logs for all bots
         # These INFO-level logs create excessive noise without adding value
@@ -143,9 +105,9 @@ class ResilientBot:
         except Exception as timeout_patch_error:
             logger.warning(f"⚠️  Could not patch SDK timeout: {timeout_patch_error}")
 
-        # Apply WebSocket keepalive patch for VM environments behind firewalls
-        # VMs with multiple firewalls can drop idle TCP connections, causing message loss
-        # This patch configures more aggressive ping/pong to keep connections alive
+        # Apply WebSocket keepalive patch to prevent idle connection timeouts
+        # Network middleboxes (firewalls, proxies, NAT) drop idle TCP connections
+        # This patch configures aggressive ping/pong to keep connections alive
         try:
             import websockets
 
@@ -154,15 +116,15 @@ class ResilientBot:
 
             # Create a wrapper that adds keepalive parameters
             def connect_with_keepalive(*args, **kwargs):
-                # Set aggressive ping interval (15 seconds) to keep connection alive through firewalls
-                # Default is 20 seconds which may not be frequent enough for multi-firewall environments
+                # Set aggressive ping interval (15 seconds) to keep connection alive
+                # Default is 20 seconds which may not be frequent enough
                 kwargs.setdefault('ping_interval', 15)
                 kwargs.setdefault('ping_timeout', 10)
                 return original_connect(*args, **kwargs)
 
             # Replace the connect function globally
             websockets.connect = connect_with_keepalive
-            logger.info("🔧 Patched WebSocket to use 15s ping interval for firewall keepalive")
+            logger.info("🔧 Patched WebSocket to use 15s ping interval to prevent idle timeout")
         except Exception as websocket_patch_error:
             logger.warning(f"⚠️  Could not patch WebSocket keepalive: {websocket_patch_error}")
 
@@ -174,39 +136,19 @@ class ResilientBot:
         self.max_retry_delay = max_retry_delay
         self.keepalive_interval = keepalive_interval
         self.max_keepalive_interval = max_keepalive_interval
-        self.proxy_detection = proxy_detection
-        self.disable_proxy_interval_adjustment = disable_proxy_interval_adjustment
+        self.max_keepalive_failures = max_keepalive_failures
 
         # Runtime state
         self.bot_instance = None
         self.shutdown_requested = False
         self.keepalive_thread = None
-        self.websocket_monitor_thread = None
-        self.exception_handler_thread = None
         self.last_successful_ping = datetime.now()
         self.consecutive_failures = 0
         self._bot_start_time = None
         self._bot_running = False  # Track if bot is currently running
 
-        # Setup connection health monitoring
-        self._health_monitor = None
-        from src.utils.connection_health import ConnectionHealthMonitor
-        try:
-
-            self._health_monitor = ConnectionHealthMonitor(bot_name=bot_name or "Bot")
-            logger.debug(f"📊 Connection health monitoring enabled for {bot_name or 'Bot'}")
-        except ImportError:
-            logger.debug("Connection health monitoring not available")
-
         # Setup signal handlers
         self._setup_signal_handlers()
-
-        # Setup asyncio exception handler for unhandled futures
-        self._setup_exception_handler()
-
-        # Detect proxy environment
-        if proxy_detection:
-            self._detect_proxy_environment()
 
     def _setup_signal_handlers(self):
         """Setup signal handlers for graceful shutdown"""
@@ -220,104 +162,29 @@ class ResilientBot:
         signal.signal(signal.SIGINT, signal_handler)
         signal.signal(signal.SIGTERM, signal_handler)
 
-    def _setup_exception_handler(self):
-        """Setup asyncio exception handler to catch unhandled future exceptions"""
-        try:
-            import asyncio
-            import functools
-
-            def exception_handler(_loop, context):
-                """Handle asyncio exceptions, particularly from unhandled futures"""
-                exception = context.get('exception')
-                if exception:
-                    logger.warning(f"Asyncio exception caught for {self.bot_name}: {exception}")
-
-                    # Handle tuple-format exceptions (e.g., ('Connection aborted.', RemoteDisconnected(...)))
-                    actual_exception = exception
-                    if isinstance(exception, tuple) and len(exception) > 0:
-                        # Extract the actual exception from the tuple
-                        for item in exception:
-                            if isinstance(item, Exception):
-                                actual_exception = item
-                                logger.debug(f"Extracted exception from tuple: {type(actual_exception).__name__}")
-                                break
-
-                    # Check if this is a connection-related error
-                    is_connection_error = (
-                            isinstance(actual_exception, (ConnectionResetError, ConnectionAbortedError, OSError, RequestsConnectionError, ProtocolError)) or
-                            _is_proxy_related_error(actual_exception)
-                    )
-
-                    # Also check the original exception in case it's a tuple with connection info
-                    if not is_connection_error and isinstance(exception, tuple):
-                        exception_str = str(exception).lower()
-                        if any(indicator in exception_str for indicator in ['connection aborted', 'connection reset', 'remote end closed', 'remotedisconnected']):
-                            is_connection_error = True
-                            logger.debug(f"Detected connection error from tuple string: {exception}")
-
-                    if is_connection_error:
-                        logger.warning(f"Connection-related asyncio exception detected for {self.bot_name}")
-                        # Just log the issue - don't try to reconnect
-                        # The bot will continue running and health monitoring will track the connection state
-                else:
-                    logger.warning(f"Asyncio context error for {self.bot_name}: {context}")
-
-            # Set the exception handler if we're in an event loop context
-            try:
-                loop = asyncio.get_event_loop()
-                loop.set_exception_handler(exception_handler)
-                logger.debug(f"Asyncio exception handler set for {self.bot_name}")
-            except RuntimeError:
-                # No event loop running, will be set when one is created
-                logger.debug(f"No event loop running yet for {self.bot_name}, exception handler will be set later")
-
-        except ImportError:
-            logger.debug("Asyncio not available, skipping exception handler setup")
-        except Exception as e:
-            logger.warning(f"Could not setup asyncio exception handler: {e}")
-
-    def _detect_proxy_environment(self):
-        """Detect if we're running behind a proxy (like ZScaler)"""
-        try:
-            import subprocess
-            import os
-
-            # Check for ZScaler process
-            result = subprocess.run(["ps", "aux"], capture_output=True, text=True)
-            if "zscaler" in result.stdout.lower():
-                logger.debug(f"🛡️ ZScaler proxy detected for {self.bot_name} - enabling enhanced monitoring")
-
-                # Only adjust intervals if not disabled
-                if not self.disable_proxy_interval_adjustment:
-                    # Reduce ping intervals for proxy environments
-                    self.keepalive_interval = min(60, self.keepalive_interval)
-                    logger.debug(f"📉 Adjusted intervals for ZScaler: keepalive={self.keepalive_interval}s, websocket={WEBSOCKET_PING_INTERVAL}s")
-                else:
-                    logger.debug(f"✓ Keeping configured intervals: keepalive={self.keepalive_interval}s, websocket={WEBSOCKET_PING_INTERVAL}s")
-                return True
-
-            # Check environment variables
-            proxy_vars = ['HTTP_PROXY', 'HTTPS_PROXY', 'http_proxy', 'https_proxy']
-            for var in proxy_vars:
-                if os.environ.get(var):
-                    logger.debug(f"🛡️ Proxy environment detected for {self.bot_name}: {var}")
-                    return True
-
-            return False
-        except Exception as e:
-            logger.warning(f"Could not detect proxy environment: {e}")
-            return False
-
     def _log_connection_issue(self, reason):
         """Log a connection issue without triggering reconnection"""
         logger.warning(f"⚠️ Connection issue detected for {self.bot_name}: {reason}")
-        logger.info(f"🔄 Bot will continue running - health monitoring active")
+        logger.info(f"🔄 Bot will continue running - monitoring active")
 
-        # Record in health monitor if available
-        if hasattr(self, '_health_monitor') and self._health_monitor:
-            # Don't call record_reconnection since we're not reconnecting
-            # Just let normal health tracking continue
-            pass
+    def _trigger_reconnection(self, reason):
+        """Trigger bot reconnection by stopping the current instance"""
+        logger.warning(f"🔄 Triggering reconnection for {self.bot_name}: {reason}")
+        try:
+            if self.bot_instance:
+                # Try to stop the bot gracefully
+                if hasattr(self.bot_instance, 'websocket_client') and self.bot_instance.websocket_client:
+                    ws_client = self.bot_instance.websocket_client
+                    if hasattr(ws_client, 'websocket') and ws_client.websocket:
+                        try:
+                            import asyncio
+                            loop = asyncio.get_event_loop()
+                            if hasattr(ws_client.websocket, 'close'):
+                                loop.run_until_complete(ws_client.websocket.close())
+                        except Exception as e:
+                            logger.debug(f"Error closing WebSocket for reconnection: {e}")
+        except Exception as e:
+            logger.warning(f"Error triggering reconnection: {e}")
 
     def _run_bot_with_monitoring(self):
         """Run the bot - simplified to just run without reconnection monitoring"""
@@ -350,57 +217,10 @@ class ResilientBot:
             except Exception:
                 pass
 
-    def _websocket_monitor(self):
-        """Monitor WebSocket connection health with proxy-aware logic and future exception handling"""
-        while not self.shutdown_requested:
-            try:
-                if self.bot_instance and hasattr(self.bot_instance, 'websocket_client'):
-                    ws_client = self.bot_instance.websocket_client
-
-                    # Check WebSocket connection state
-                    if hasattr(ws_client, 'websocket') and ws_client.websocket:
-                        # Try to send a ping if supported
-                        try:
-                            if hasattr(ws_client.websocket, 'ping'):
-                                ws_client.websocket.ping()
-                                logger.debug(f"WebSocket ping sent for {self.bot_name}")
-                        except (ConnectionResetError, ConnectionAbortedError, OSError, RequestsConnectionError, ProtocolError) as conn_error:
-                            logger.warning(f"WebSocket ping failed with connection error for {self.bot_name}: {conn_error}")
-                            self._log_connection_issue(f"WebSocket connection error: {type(conn_error).__name__}")
-                            # Continue monitoring - don't restart
-                        except Exception as ping_error:
-                            if _is_proxy_related_error(ping_error):
-                                logger.warning(f"WebSocket ping failed due to proxy issue: {ping_error}")
-                                self._log_connection_issue("WebSocket ping failure")
-                                # Continue monitoring - don't restart
-                            else:
-                                logger.debug(f"WebSocket ping failed: {ping_error}")
-
-                    # Check if we haven't had a successful ping in too long
-                    time_since_last_ping = (datetime.now() - self.last_successful_ping).total_seconds()
-                    if time_since_last_ping > 300:  # 5 minutes
-                        logger.warning(f"No successful ping for {self.bot_name} in {time_since_last_ping:.0f}s")
-                        if self.consecutive_failures > 3:
-                            self._log_connection_issue("Extended connection silence")
-                            # Continue monitoring - bot will stay running
-
-                time.sleep(WEBSOCKET_PING_INTERVAL)
-            except (ConnectionResetError, ConnectionAbortedError, OSError, RequestsConnectionError, ProtocolError) as conn_error:
-                if not self.shutdown_requested:
-                    logger.warning(f"WebSocket monitor connection error for {self.bot_name}: {conn_error}")
-                    self._log_connection_issue(f"WebSocket monitor connection error: {type(conn_error).__name__}")
-                    # Continue monitoring - bot will stay running
-                    time.sleep(WEBSOCKET_PING_INTERVAL)
-            except Exception as e:
-                if not self.shutdown_requested:
-                    logger.warning(f"WebSocket monitor error for {self.bot_name}: {e}")
-                    time.sleep(WEBSOCKET_PING_INTERVAL * 2)
-
     def _keepalive_ping(self):
         """Keep connection alive with periodic health checks"""
         wait = 60  # Start with 1 minute
         while not self.shutdown_requested:
-            ping_start = None  # Initialize to avoid reference before assignment
             try:
                 if self.bot_instance and hasattr(self.bot_instance, 'teams'):
                     # Simple API call to test connection health
@@ -413,43 +233,33 @@ class ResilientBot:
                     wait = self.keepalive_interval  # Reset to normal interval
                     logger.debug(f"Keepalive ping successful for {self.bot_name} ({ping_duration:.2f}s)")
 
-                    # Record in health monitor
-                    if self._health_monitor:
-                        self._health_monitor.record_request_success(ping_duration)
-                        # Log periodic summary (every 5 minutes by default)
-                        self._health_monitor.log_periodic_summary()
-
                 time.sleep(wait)
             except (ConnectionResetError, ConnectionAbortedError, OSError, RequestsConnectionError, ProtocolError) as conn_error:
                 if not self.shutdown_requested:
                     self.consecutive_failures += 1
-                    logger.warning(f"Keepalive ping failed for {self.bot_name} with connection error (failure #{self.consecutive_failures}): {conn_error}")
+                    logger.warning(f"Keepalive ping failed for {self.bot_name} with connection error (failure #{self.consecutive_failures}/{self.max_keepalive_failures}): {conn_error}")
 
-                    # Record in health monitor
-                    if self._health_monitor:
-                        self._health_monitor.record_connection_error(conn_error)
+                    # Check if we've exceeded max failures - trigger reconnection
+                    if self.consecutive_failures >= self.max_keepalive_failures:
+                        logger.error(f"❌ Max keepalive failures ({self.max_keepalive_failures}) reached. Triggering reconnection...")
+                        self._trigger_reconnection(f"Max keepalive failures: {type(conn_error).__name__}")
+                        break  # Exit keepalive thread - will restart with new bot instance
 
                     self._log_connection_issue(f"Connection error: {type(conn_error).__name__}")
-                    # Continue with exponential backoff - don't restart
                     wait = min(wait * 2, self.max_keepalive_interval)
+                    time.sleep(wait)
             except Exception as e:
                 if not self.shutdown_requested:
                     self.consecutive_failures += 1
-                    logger.warning(f"Keepalive ping failed for {self.bot_name} (failure #{self.consecutive_failures}): {e}")
+                    logger.warning(f"Keepalive ping failed for {self.bot_name} (failure #{self.consecutive_failures}/{self.max_keepalive_failures}): {e}")
 
-                    # Record in health monitor
-                    if self._health_monitor:
-                        if "timeout" in str(e).lower() or "timed out" in str(e).lower():
-                            timeout_duration = (time.time() - ping_start) if ping_start is not None else 60.0
-                            self._health_monitor.record_request_timeout(timeout_duration)
-                        else:
-                            self._health_monitor.record_connection_error(e)
+                    # Check if we've exceeded max failures - trigger reconnection
+                    if self.consecutive_failures >= self.max_keepalive_failures:
+                        logger.error(f"❌ Max keepalive failures ({self.max_keepalive_failures}) reached. Triggering reconnection...")
+                        self._trigger_reconnection("Max keepalive failures")
+                        break  # Exit keepalive thread - will restart with new bot instance
 
-                    # Check if this looks like a proxy/network issue
-                    if _is_proxy_related_error(e):
-                        logger.warning(f"Detected proxy-related error for {self.bot_name}")
-                        self._log_connection_issue("Proxy connection issue detected")
-
+                    self._log_connection_issue("Connection issue detected")
                     wait = min(wait * 2, self.max_keepalive_interval)  # Exponential backoff
                     time.sleep(wait)
 
@@ -462,8 +272,6 @@ class ResilientBot:
             # Stop monitoring threads
             if self.keepalive_thread and self.keepalive_thread.is_alive():
                 logger.debug("Stopping keepalive monitoring...")
-            if self.websocket_monitor_thread and self.websocket_monitor_thread.is_alive():
-                logger.debug("Stopping WebSocket monitoring...")
 
             # Properly close bot instance and WebSocket connections
             if self.bot_instance:
@@ -596,22 +404,13 @@ class ResilientBot:
                 logger.info(f"🚀 {self.bot_name} is up and running (startup in {init_duration:.1f}s)...")
                 print(f"🚀 {self.bot_name} is up and running (startup in {init_duration:.1f}s)...", flush=True)
 
-                # Set the health monitor in webex_messaging if available
-                if self._health_monitor:
-                    try:
-                        from src.utils import webex_messaging
-                        webex_messaging.set_health_monitor(self._health_monitor)
-                        logger.debug(f"📊 Health monitor connected to webex_messaging for {self.bot_name}")
-                    except Exception as e:
-                        logger.debug(f"Could not set health monitor in webex_messaging: {e}")
-
                 # Record bot start time for monitoring
                 self._bot_start_time = datetime.now()
                 self._bot_running = True
 
-                # Start the bot (this will block and run forever with health monitoring keeping it alive)
+                # Start the bot (this will block until failure or shutdown)
                 logger.debug(f"🌐 Starting {self.bot_name} main loop...")
-                logger.info(f"💓 Health monitoring will keep connection alive (no automatic reconnection)")
+                logger.info(f"💓 Keepalive monitoring active - will reconnect after {self.max_keepalive_failures} failures")
 
                 # Run the bot - this blocks until user stops it or fatal error
                 self._run_bot_with_monitoring()
@@ -642,122 +441,15 @@ class ResilientBot:
                     logger.error(f"❌ Failed to start {self.bot_name} after {max_startup_retries} attempts")
                     raise
 
-    def _kill_competing_processes(self):
-        """Find and kill any competing instances of this bot"""
-        try:
-            import subprocess
-            import os
-            import signal
-
-            # Get current process info
-            current_pid = os.getpid()
-
-            # If bot_name not set yet, try to create a temporary bot to extract the name
-            if not self.bot_name:
-                try:
-                    temp_bot = self.bot_factory()
-                    if hasattr(temp_bot, 'bot_name'):
-                        self.bot_name = temp_bot.bot_name
-                    elif hasattr(temp_bot, 'name'):
-                        self.bot_name = temp_bot.name
-                    # Clean up temp bot
-                    del temp_bot
-                except Exception as e:
-                    logger.warning(f"Could not extract bot name for process detection: {e}")
-                    return 0
-
-            # Final check - if bot_name is still None, we can't do process detection
-            if not self.bot_name:
-                logger.warning("Bot name is still None after extraction attempt - skipping process detection")
-                return 0
-
-            bot_script = f"{self.bot_name.lower()}.py"
-
-            # Check for other Python processes running the same bot script
-            result = subprocess.run(
-                ["ps", "aux"],
-                capture_output=True,
-                text=True
-            )
-
-            competing_processes = []
-            for line in result.stdout.split('\n'):
-                # More robust matching - check for python processes with our bot script
-                # Handle different path formats: relative, absolute, with/without full paths
-                if ("python" in line.lower() and
-                        (bot_script in line or
-                         f"webex_bots/{bot_script}" in line or
-                         f"/{bot_script}" in line.split()[-1] if line.split() else False)):
-
-                    # Extract PID (usually the second column)
-                    parts = line.split()
-                    if len(parts) > 1:
-                        try:
-                            pid = int(parts[1])
-                            if pid != current_pid:
-                                # Double-check this is actually our bot by looking at the full command
-                                if any(bot_script in part for part in parts):
-                                    competing_processes.append(pid)
-                        except ValueError:
-                            continue
-
-            # Kill competing processes
-            if competing_processes:
-                logger.debug(f"🔫 Found {len(competing_processes)} competing {self.bot_name} process(es). Terminating...")
-                for pid in competing_processes:
-                    try:
-                        logger.debug(f"Killing process {pid}...")
-                        os.kill(pid, signal.SIGTERM)
-                        time.sleep(1)  # Give process time to exit gracefully
-
-                        # Check if process is still running, force kill if needed
-                        try:
-                            os.kill(pid, 0)  # Check if process exists
-                            logger.warning(f"Process {pid} still running, force killing...")
-                            os.kill(pid, signal.SIGKILL)
-                        except OSError:
-                            # Process no longer exists, good
-                            pass
-
-                        logger.debug(f"✅ Successfully terminated process {pid}")
-                    except OSError as e:
-                        logger.warning(f"Could not kill process {pid}: {e}")
-
-                # Wait longer for proper WebSocket cleanup and avoid race conditions
-                logger.debug("⏳ Waiting 5s for complete WebSocket cleanup...")
-                time.sleep(5)
-
-                # Double-check no processes are still starting up
-                logger.debug("🔍 Performing final process check...")
-                time.sleep(2)
-            else:
-                logger.debug(f"✅ No competing {self.bot_name} processes detected")
-
-            return len(competing_processes)
-
-        except Exception as e:
-            logger.warning(f"Could not check/kill competing processes: {e}")
-            return 0
-
     def run(self):
         """
-        Main entry point - starts bot with full resilience features
+        Main entry point - starts bot with resilience features
         """
         try:
-            # Kill any competing processes automatically (auto-recovery from hung/stuck bots)
-            killed_count = self._kill_competing_processes()
-            if killed_count > 0:
-                logger.info(f"🧹 Cleaned up {killed_count} competing process(es). Starting {self.bot_name}...")
-
             # Start keepalive monitoring thread
             self.keepalive_thread = threading.Thread(target=self._keepalive_ping, daemon=True)
             self.keepalive_thread.start()
             logger.debug(f"💓 Keepalive monitoring started for {self.bot_name}")
-
-            # Start WebSocket monitoring thread for enhanced proxy handling
-            self.websocket_monitor_thread = threading.Thread(target=self._websocket_monitor, daemon=True)
-            self.websocket_monitor_thread.start()
-            logger.debug(f"🔌 WebSocket monitoring started for {self.bot_name}")
 
             # Run bot with reconnection logic
             self.run_with_reconnection()
