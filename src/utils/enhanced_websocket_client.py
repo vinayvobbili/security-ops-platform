@@ -124,12 +124,23 @@ def patch_websocket_client():
                 # the TCP connection appears alive. Use 10-second pings to prevent this.
                 connect_kwargs = {
                     'ssl': ssl_context,
-                    'extra_headers': self._get_headers(),
                     'ping_interval': 10,  # VERY aggressive - ping every 10s to prevent stale connections
                     'ping_timeout': 5,     # Fail fast if no pong in 5s
                     'close_timeout': WEBSOCKET_CLOSE_TIMEOUT,  # Clean close timeout
                     'max_size': 2**23,  # 8MB max message size
                 }
+
+                # API compatibility: websockets 12.0+ uses 'additional_headers', 11.x uses 'extra_headers'
+                # Check version and use the correct parameter name
+                try:
+                    from websockets import version as ws_version
+                    ws_major_version = int(ws_version.version.split('.')[0])
+                    header_param = 'additional_headers' if ws_major_version >= 12 else 'extra_headers'
+                except Exception:
+                    # Fallback: try using additional_headers first, then extra_headers
+                    header_param = 'extra_headers'  # Default to old API
+
+                connect_kwargs[header_param] = self._get_headers()
 
                 if self.proxies and "wss" in self.proxies:
                     logger.debug(f"Using proxy for websocket connection: {self.proxies['wss']}")
