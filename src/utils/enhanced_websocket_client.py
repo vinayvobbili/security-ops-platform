@@ -119,12 +119,14 @@ def patch_websocket_client():
                 ssl_context.check_hostname = False
                 ssl_context.verify_mode = ssl.CERT_NONE
 
-                # Setup connection with enhanced parameters
+                # Setup connection with VERY aggressive keepalive to prevent stale connections
+                # After long idle periods, some backends stop routing messages even though
+                # the TCP connection appears alive. Use 10-second pings to prevent this.
                 connect_kwargs = {
                     'ssl': ssl_context,
                     'extra_headers': self._get_headers(),
-                    'ping_interval': WEBSOCKET_PING_INTERVAL,  # Send ping every 30s
-                    'ping_timeout': WEBSOCKET_PING_TIMEOUT,    # Timeout after 15s
+                    'ping_interval': 10,  # VERY aggressive - ping every 10s to prevent stale connections
+                    'ping_timeout': 5,     # Fail fast if no pong in 5s
                     'close_timeout': WEBSOCKET_CLOSE_TIMEOUT,  # Clean close timeout
                     'max_size': 2**23,  # 8MB max message size
                 }
