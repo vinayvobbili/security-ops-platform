@@ -41,8 +41,7 @@ from src.utils.logging_utils import setup_logging
 setup_logging(
     bot_name='all_jobs',
     log_level=logging.INFO,
-    info_modules=['__main__', 'src.components.response_sla_risk_tickets'],
-    use_colors=True
+    info_modules=['__main__', 'src.components.response_sla_risk_tickets']
 )
 
 # Suppress noisy library logs

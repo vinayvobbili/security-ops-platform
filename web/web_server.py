@@ -76,8 +76,7 @@ COMPANY_EMAIL_DOMAIN = '@' + CONFIG.my_web_domain
 setup_logging(
     bot_name='web_server',
     log_level=logging.WARNING,
-    info_modules=['__main__'],
-    use_colors=True
+    info_modules=['__main__']
 )
 
 # Suppress noisy library logs
