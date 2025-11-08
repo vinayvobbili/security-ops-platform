@@ -25,7 +25,7 @@ botframework-connector
 requests
 aiohttp
 urllib3
-websockets==11.0.3  # Pinned: webex_bot 1.0.8 requires exactly 11.0.3
+websockets>=11.0.3,<15.0  # webex_bot 1.0.8 requires 11.0.3, but 14.2+ has critical stale connection fixes (requires enhanced_websocket_client.py compatibility patch)
 aiohttp-retry
 
 # Security/Authentication - Always use latest for security
