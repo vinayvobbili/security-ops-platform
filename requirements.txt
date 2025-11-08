@@ -9,7 +9,7 @@ python-dateutil
 # Webex/Communication
 webexpythonsdk==2.0.4 # recommended Python SDK for working with all Webex APIs. provides Python methods that map directly to the Webex REST APIs (e.g., messages.create(), rooms.list())
 webexteamssdk # deprecated
-webex_bot # the framework handles the WebSocket connection setup
+webex_bot==1.0.8 # the framework handles the WebSocket connection setup
 
 # Web Frameworks
 Flask
@@ -25,7 +25,7 @@ botframework-connector
 requests
 aiohttp
 urllib3
-websockets<12.0
+websockets==11.0.3  # Pinned: webex_bot 1.0.8 requires exactly 11.0.3
 aiohttp-retry
 
 # Security/Authentication - Always use latest for security
