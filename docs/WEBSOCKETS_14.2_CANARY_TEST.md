@@ -17,9 +17,11 @@
 ## 📋 What We Did Today (2025-11-08)
 
 ### Problem Being Solved
+
 **Bots fail to respond to the FIRST message after long idle periods** (8+ hours). Second message always works. This suggests stale WebSocket connections.
 
 ### Root Cause Investigation
+
 1. **Discovered**: Bots had keepalive pings, but only tested REST API (not WebSocket message channel)
 2. **Found**: websockets 11.0.3 (May 2023) has known bugs causing stale connections
 3. **Identified**: websockets 14.2 (Jan 2025) has critical fixes for our exact symptoms
@@ -27,23 +29,27 @@
 ### Solutions Implemented
 
 #### Layer 1: More Aggressive WebSocket Pings ✅
+
 - **Changed**: `ping_interval` from 30s → **10s** (3x more frequent)
 - **Changed**: `ping_timeout` from 15s → **5s** (fail faster)
 - **File**: `src/utils/enhanced_websocket_client.py`
 - **Commit**: `c4121c18`
 
 #### Layer 2: Proactive Reconnection ✅
+
 - **Added**: `max_connection_age_hours` parameter (default: 12 hours)
 - **Behavior**: Bot auto-reconnects every 12h even if healthy
 - **File**: `src/utils/bot_resilience.py`
 - **Commit**: `c4121c18`
 
 #### Layer 3: Package Upgrades ✅
+
 - **webex_bot**: Upgraded from 1.0.5 → **1.0.8** (local & VM synced)
 - **websockets**: Canary test 11.0.3 → **14.2** (the alert triage service only)
 - **Commits**: `b4443b07`, `d53c2e15`, `b5b94a9d`
 
 #### Layer 4: API Compatibility Fix ✅
+
 - **Problem**: websockets 12.0+ changed API (`extra_headers` → `additional_headers`)
 - **Solution**: Auto-detect version and use correct parameter name
 - **File**: `src/utils/enhanced_websocket_client.py` (lines 133-143)
@@ -56,6 +62,7 @@
 These bugs in 11.0.3 could be causing the "first message lost" symptom:
 
 ### Version 14.2 (January 2025)
+
 ```
 ✅ Prevents close() from blocking when network becomes unavailable
    or when receive buffers are saturated
@@ -65,12 +72,14 @@ These bugs in 11.0.3 could be causing the "first message lost" symptom:
 ```
 
 ### Version 14.1 (November 2024)
+
 ```
 ✅ Once connection is closed, messages previously received and buffered
    can be read (just like legacy implementation)
 ```
 
 ### Version 13.1 (September 2024)
+
 ```
 ✅ Fixed bug in threading implementation that could prevent program
    from exiting when connection wasn't closed properly
@@ -86,15 +95,16 @@ These bugs in 11.0.3 could be causing the "first message lost" symptom:
 
 ### On VM (lab-lab)
 
-| Bot | webex_bot | websockets | Status | Purpose |
-|-----|-----------|------------|--------|---------|
-| **the alert triage service** | 1.0.8 | **14.2** | 🧪 Running | **CANARY TEST** |
-| the notification service | 1.0.8 | 11.0.3 | ⏸️ Running | Baseline |
-| MoneyBall | 1.0.8 | 11.0.3 | ⏸️ Running | Baseline |
-| Jarvais | 1.0.8 | 11.0.3 | ⏸️ Running | Baseline |
-| the case orchestrator | 1.0.8 | 11.0.3 | ⏸️ Running | Baseline |
+| Bot           | webex_bot | websockets | Status     | Purpose         |
+|---------------|-----------|------------|------------|-----------------|
+| **the alert triage service** | 1.0.8     | **14.2**   | 🧪 Running | **CANARY TEST** |
+| the notification service       | 1.0.8     | 11.0.3     | ⏸️ Running | Baseline        |
+| MoneyBall     | 1.0.8     | 11.0.3     | ⏸️ Running | Baseline        |
+| the orchestration service        | 1.0.8     | 11.0.3     | ⏸️ Running | Baseline        |
+| the case orchestrator         | 1.0.8     | 11.0.3     | ⏸️ Running | Baseline        |
 
 ### Git Commits (Pushed to GitHub)
+
 ```
 b5b94a9d - Allow websockets 11.0.3 to 14.x upgrade in requirements.txt
 d53c2e15 - Add websockets 12.0+ API compatibility to enhanced_websocket_client
@@ -113,11 +123,11 @@ All on branch: `main`
 **After 8+ hours of idle time:**
 
 1. **Send FIRST message to the alert triage service** via Webex
-   - Simple message: "hi" or "status"
+    - Simple message: "hi" or "status"
 
 2. **Observe behavior:**
-   - ✅ **SUCCESS**: Bot responds to first message immediately
-   - ❌ **FAILURE**: First message ignored, second message works (same as before)
+    - ✅ **SUCCESS**: Bot responds to first message immediately
+    - ❌ **FAILURE**: First message ignored, second message works (same as before)
 
 ### Why This Test Matters
 
@@ -149,6 +159,7 @@ ssh lab-lab 'tail -100 ~/pub/IR/logs/barnacles.log | grep -E "Message|ERROR|WARN
 ### Expected Log Evidence
 
 **If test PASSES**, you should see:
+
 ```
 2025-11-09 [TIME] - INFO - [Received message from user]
 2025-11-09 [TIME] - INFO - [Bot processing command]
@@ -156,6 +167,7 @@ ssh lab-lab 'tail -100 ~/pub/IR/logs/barnacles.log | grep -E "Message|ERROR|WARN
 ```
 
 **If test FAILS**, you might see:
+
 ```
 2025-11-09 [TIME] - ERROR - Connection error / timeout
 2025-11-09 [TIME] - INFO - Triggering reconnection
@@ -181,7 +193,7 @@ ssh lab-lab 'cd ~/pub/IR && PYTHONPATH=. nohup .venv/bin/python webex_bots/toodl
 # Wait 2 minutes, verify the notification service works, then continue with next bot...
 
 # 3. Verify all bots running
-ssh lab-lab 'for bot in barnacles toodles money_ball jarvais msoar; do \
+ssh lab-lab 'for bot in barnacles toodles money_ball jarvis msoar; do \
   echo "=== $bot ==="; \
   .venv/bin/pip show websockets | grep Version; \
   ps aux | grep "${bot}.py" | grep -v grep; \
@@ -263,6 +275,7 @@ ssh lab-lab 'grep "Keepalive monitoring active" ~/pub/IR/logs/barnacles.log | ta
 ## 📊 Session Context for AI Assistants
 
 ### Files Modified
+
 ```
 src/utils/bot_resilience.py           - Resilience enhancements
 src/utils/enhanced_websocket_client.py - WebSocket compatibility & pings
@@ -272,13 +285,16 @@ requirements.txt                        - Package version updates
 ### Key Code Locations
 
 **10s ping configuration:**
+
 - `src/utils/enhanced_websocket_client.py:128` - `ping_interval: 10`
 - `src/utils/bot_resilience.py:123` - `kwargs.setdefault('ping_interval', 10)`
 
 **12h proactive reconnection:**
+
 - `src/utils/bot_resilience.py:230-236` - Connection age check
 
 **Version compatibility:**
+
 - `src/utils/enhanced_websocket_client.py:133-143` - Auto-detect extra_headers vs additional_headers
 
 ### Why We Chose Canary Approach
@@ -293,12 +309,14 @@ requirements.txt                        - Package version updates
 ## 📞 Quick Reference
 
 ### Bot Locations
+
 - **Repository**: github.com:vinayvobbili/security-ops-platform.git
 - **VM**: lab-lab (inr106)
 - **Path**: ~/pub/IR
 - **Logs**: ~/pub/IR/logs/
 
 ### Important Processes
+
 ```bash
 # View all running bots
 ssh lab-lab 'ps aux | grep "webex_bots/" | grep python | grep -v grep'
@@ -308,9 +326,10 @@ ssh lab-lab 'ps -o etime,cmd -p $(pgrep -f barnacles.py)'
 ```
 
 ### Log Viewer URLs (if configured)
+
 ```
 http://[VM_IP]:8036  # the alert triage service log viewer
-http://[VM_IP]:8035  # Jarvais log viewer
+http://[VM_IP]:8035  # the orchestration service log viewer
 http://[VM_IP]:8034  # MoneyBall log viewer
 http://[VM_IP]:8033  # the case orchestrator log viewer
 http://[VM_IP]:8032  # the notification service log viewer
@@ -321,16 +340,19 @@ http://[VM_IP]:8032  # the notification service log viewer
 ## 🎯 Success Metrics
 
 **Short-term (Tomorrow)**:
+
 - ✅ the alert triage service responds to first message after 8+ hour idle
 - ✅ No WebSocket connection errors in logs
 - ✅ No emergency reconnections triggered
 
 **Medium-term (1 week)**:
+
 - ✅ All bots respond to first message consistently
 - ✅ No increase in reconnection frequency
 - ✅ Proactive 12h reconnections happening smoothly
 
 **Long-term**:
+
 - ✅ Zero "first message lost" incidents
 - ✅ Stable connections lasting full 12h between proactive reconnects
 - ✅ WebSocket pings preventing any stale connections
@@ -340,11 +362,13 @@ http://[VM_IP]:8032  # the notification service log viewer
 ## 💡 Background Reading
 
 ### Related Docs
+
 - `docs/connection-health-improvements.md` - Previous connection work
 - `docs/ROOT_CAUSE_ANALYSIS.md` - Historical debugging
 - `docs/retry_mechanism.md` - Retry patterns
 
 ### External References
+
 - [websockets changelog](https://websockets.readthedocs.io/en/stable/project/changelog.html)
 - [webex_bot GitHub](https://github.com/fbradyirl/webex_bot)
 
