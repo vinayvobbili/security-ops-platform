@@ -138,7 +138,7 @@ def ask(user_message: str, user_id: str = "default", room_id: str = "default") -
 
         # Remove bot name mentions from anywhere in the message (common in group chats)
         bot_names = ['DnR_Pokedex', 'Pokedex', 'pokedex', 'dnr_pokedex',
-                     'HAL9000', 'hal9000', 'Jarvais', 'jarvais',
+                     'HAL9000', 'hal9000', 'Jarvis', 'jarvis',
                      'Toodles', 'toodles', 'Barnacles', 'barnacles']
 
         # Remove all bot name mentions from anywhere in the message
@@ -257,7 +257,7 @@ def ask_stream(user_message: str, user_id: str = "default", room_id: str = "defa
 
         # Remove bot name mentions
         bot_names = ['DnR_Pokedex', 'Pokedex', 'pokedex', 'dnr_pokedex',
-                     'HAL9000', 'hal9000', 'Jarvais', 'jarvais',
+                     'HAL9000', 'hal9000', 'Jarvis', 'jarvis',
                      'Toodles', 'toodles', 'Barnacles', 'barnacles']
 
         for bot_name in bot_names:

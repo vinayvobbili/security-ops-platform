@@ -60,7 +60,7 @@ This installs 6 systemd services:
 - `ir-money-ball` - MoneyBall bot
 - `ir-toodles` - Toodles bot
 - `ir-barnacles` - Barnacles bot
-- `ir-jarvais` - Jarvais bot
+- `ir-jarvis` - Jarvis bot
 
 ### 3. Web-Based Log Viewer (Logdy)
 
@@ -84,7 +84,7 @@ Access the log viewer at `http://<VM-IP>:8030` with the password shown during se
 
 Start all services:
 ```bash
-sudo systemctl start ir-all-jobs ir-msoar ir-money-ball ir-toodles ir-barnacles ir-jarvais
+sudo systemctl start ir-all-jobs ir-msoar ir-money-ball ir-toodles ir-barnacles ir-jarvis
 ```
 
 Start individual service:
@@ -96,7 +96,7 @@ sudo systemctl start ir-msoar
 
 Stop all services:
 ```bash
-sudo systemctl stop ir-all-jobs ir-msoar ir-money-ball ir-toodles ir-barnacles ir-jarvais
+sudo systemctl stop ir-all-jobs ir-msoar ir-money-ball ir-toodles ir-barnacles ir-jarvis
 ```
 
 ### Checking Status
@@ -152,7 +152,7 @@ tail -f /home/vinay/pub/IR/logs/msoar.log
 
 After pulling new code from git:
 ```bash
-sudo systemctl restart ir-all-jobs ir-msoar ir-money-ball ir-toodles ir-barnacles ir-jarvais
+sudo systemctl restart ir-all-jobs ir-msoar ir-money-ball ir-toodles ir-barnacles ir-jarvis
 ```
 
 ## Benefits

@@ -85,7 +85,7 @@ This file provides guidance to AI CLI agents (Claude Code, Gemini, etc.) when wo
     - `xsoar.py` - XSOAR SOAR platform integration
 
 - **`web/`** - Flask web application with security operations dashboard
-- **`webex_bots/`** - Multiple specialized chatbots (Pokedex, Jarvais, Barnacles, etc.)
+- **`webex_bots/`** - Multiple specialized chatbots (Pokedex, Jarvis, Barnacles, etc.)
 - **`data/`** - Configuration data, metrics, and transient storage
 
 ### Configuration Management
