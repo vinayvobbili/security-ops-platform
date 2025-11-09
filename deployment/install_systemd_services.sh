@@ -37,7 +37,7 @@ systemctl enable ir-msoar.service
 systemctl enable ir-money-ball.service
 systemctl enable ir-toodles.service
 systemctl enable ir-barnacles.service
-systemctl enable ir-jarvais.service
+systemctl enable ir-jarvis.service
 echo "  ✓ All services enabled"
 echo ""
 
@@ -51,12 +51,12 @@ echo "  - ir-msoar         (MSOAR bot)"
 echo "  - ir-money-ball    (MoneyBall bot)"
 echo "  - ir-toodles       (Toodles bot)"
 echo "  - ir-barnacles     (Barnacles bot)"
-echo "  - ir-jarvais       (Jarvais bot)"
+echo "  - ir-jarvis        (Jarvis bot)"
 echo ""
 echo "Management commands:"
-echo "  Start all:    sudo systemctl start ir-all-jobs ir-msoar ir-money-ball ir-toodles ir-barnacles ir-jarvais"
-echo "  Stop all:     sudo systemctl stop ir-all-jobs ir-msoar ir-money-ball ir-toodles ir-barnacles ir-jarvais"
-echo "  Restart all:  sudo systemctl restart ir-all-jobs ir-msoar ir-money-ball ir-toodles ir-barnacles ir-jarvais"
+echo "  Start all:    sudo systemctl start ir-all-jobs ir-msoar ir-money-ball ir-toodles ir-barnacles ir-jarvis"
+echo "  Stop all:     sudo systemctl stop ir-all-jobs ir-msoar ir-money-ball ir-toodles ir-barnacles ir-jarvis"
+echo "  Restart all:  sudo systemctl restart ir-all-jobs ir-msoar ir-money-ball ir-toodles ir-barnacles ir-jarvis"
 echo "  Status:       sudo systemctl status ir-*"
 echo ""
 echo "View logs:"

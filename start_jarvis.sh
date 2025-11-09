@@ -11,29 +11,29 @@ SCRIPT_DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
 
 cd "$SCRIPT_DIR" || exit 1
 
-# Kill existing jarvais process if running
-echo "Stopping existing Jarvais instances..."
-pkill -f "webex_bots/jarvais"
+# Kill existing jarvis process if running
+echo "Stopping existing Jarvis instances..."
+pkill -f "webex_bots/jarvis"
 sleep 1
 
 # Ensure logs directory exists
 mkdir -p logs
 
 # Clear the log file to ensure we see fresh output
-: > logs/jarvais.log
+: > logs/jarvis.log
 
-# Start new jarvais instance in background
+# Start new jarvis instance in background
 # Python logging handles all output - no need to redirect here
-nohup env PYTHONPATH="$SCRIPT_DIR" .venv/bin/python webex_bots/jarvais.py &
+nohup env PYTHONPATH="$SCRIPT_DIR" .venv/bin/python webex_bots/jarvis.py &
 
-echo "Starting Jarvais bot..."
+echo "Starting Jarvis bot..."
 echo ""
 
 # Wait for the log file to appear and contain data
 sleep 2
 
 # Tail the log file until we see device cleanup complete or timeout after 30 seconds
-timeout 30 tail -f logs/jarvais.log 2>/dev/null | while read -r line; do
+timeout 30 tail -f logs/jarvis.log 2>/dev/null | while read -r line; do
     echo "$line"
     if echo "$line" | grep -q "Device cleanup complete"; then
         # Give it a few more seconds to finish initialization
@@ -46,12 +46,12 @@ done
 echo ""
 
 # Check if the process is actually running
-if pgrep -f "webex_bots/jarvais" > /dev/null; then
-    PID=$(pgrep -f 'webex_bots/jarvais')
-    echo "✅ Jarvais is running (PID: $PID)"
+if pgrep -f "webex_bots/jarvis" > /dev/null; then
+    PID=$(pgrep -f 'webex_bots/jarvis')
+    echo "✅ Jarvis is running (PID: $PID)"
     echo ""
-    echo "To view logs: tail -f $SCRIPT_DIR/logs/jarvais.log"
+    echo "To view logs: tail -f $SCRIPT_DIR/logs/jarvis.log"
 else
-    echo "❌ Warning: Jarvais process not found"
-    echo "Check logs: tail -20 $SCRIPT_DIR/logs/jarvais.log"
+    echo "❌ Warning: Jarvis process not found"
+    echo "Check logs: tail -20 $SCRIPT_DIR/logs/jarvis.log"
 fi

@@ -100,7 +100,7 @@ echo "  http://metcirt-lab-12.internal.company.com:8031 - All Services (journalc
 echo "  http://metcirt-lab-12.internal.company.com:8032 - Toodles"
 echo "  http://metcirt-lab-12.internal.company.com:8033 - MSOAR"
 echo "  http://metcirt-lab-12.internal.company.com:8034 - MoneyBall"
-# echo "  http://metcirt-lab-12.internal.company.com:8035 - Jarvais"
+# echo "  http://metcirt-lab-12.internal.company.com:8035 - Jarvis"
 echo "  http://metcirt-lab-12.internal.company.com:8036 - Barnacles"
 echo "  http://metcirt-lab-12.internal.company.com:8037 - All Jobs"
 echo "  (Each protected with username: metcirt, password: metcirt)"

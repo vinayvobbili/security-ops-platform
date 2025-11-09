@@ -1,5 +1,5 @@
 [Unit]
-Description=IR Jarvais Bot
+Description=IR Jarvis Bot
 After=network-online.target
 Wants=network-online.target
 
@@ -9,7 +9,7 @@ User=vinay
 Group=vinay
 WorkingDirectory=/home/vinay/pub/IR
 Environment="PYTHONPATH=/home/vinay/pub/IR"
-ExecStart=/home/vinay/pub/IR/.venv/bin/python webex_bots/jarvais.py
+ExecStart=/home/vinay/pub/IR/.venv/bin/python webex_bots/jarvis.py
 
 # Restart on failure
 Restart=on-failure
@@ -18,7 +18,7 @@ RestartSec=30
 # Logging
 StandardOutput=journal
 StandardError=journal
-SyslogIdentifier=ir-jarvais
+SyslogIdentifier=ir-jarvis
 
 # Resource limits
 LimitNOFILE=65536

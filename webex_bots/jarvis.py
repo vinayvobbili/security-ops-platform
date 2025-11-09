@@ -14,7 +14,7 @@ from src.utils.logging_utils import setup_logging
 
 # Configure logging with centralized utility
 setup_logging(
-    bot_name='jarvais',
+    bot_name='jarvis',
     log_level=logging.WARNING,
     log_dir=str(ROOT_DIRECTORY / "logs"),
     info_modules=['__main__', 'src.utils.bot_resilience', 'src.utils.webex_device_manager']
@@ -58,7 +58,7 @@ from src.utils.webex_device_manager import cleanup_devices_on_startup
 CONFIG = get_config()
 DATA_DIR = ROOT_DIRECTORY / "data" / "transient" / "epp_device_tagging"
 
-webex_api = WebexTeamsAPI(access_token=CONFIG.webex_bot_access_token_jarvais)
+webex_api = WebexTeamsAPI(access_token=CONFIG.webex_bot_access_token_jarvis)
 
 # Global variables
 bot_instance = None
@@ -436,7 +436,7 @@ class GetCSHostsWithoutRingTag(Command):
             delete_previous_message=False,  # Keep the command visible for reuse
         )
 
-    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_jarvais, log_file_name="jarvais_activity_log.csv")
+    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_jarvis, log_file_name="jarvis_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
         room_id = attachment_actions.roomId
         loading_msg = get_random_loading_message()
@@ -478,7 +478,7 @@ class RingTagCSHosts(Command):
             delete_previous_message=True,
         )
 
-    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_jarvais, log_file_name="jarvais_activity_log.csv")
+    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_jarvis, log_file_name="jarvis_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
         room_id = attachment_actions.roomId
         loading_msg = get_random_loading_message()
@@ -511,7 +511,7 @@ class DontRingTagCSHosts(Command):
             delete_previous_message=True,
         )
 
-    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_jarvais, log_file_name="jarvais_activity_log.csv")
+    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_jarvis, log_file_name="jarvis_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
         return f"Alright {activity['actor']['displayName']}, I won't tag no more. Until next time!👋🏾"
 
@@ -524,7 +524,7 @@ class GetCSHostsWithInvalidRingTags(Command):
             delete_previous_message=True,
         )
 
-    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_jarvais, log_file_name="jarvais_activity_log.csv")
+    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_jarvis, log_file_name="jarvis_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
         today_date = datetime.now(EASTERN_TZ).strftime('%m-%d-%Y')
         room_id = attachment_actions.roomId
@@ -569,7 +569,7 @@ class DontRemoveInvalidRings(Command):
             delete_previous_message=True,
         )
 
-    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_jarvais, log_file_name="jarvais_activity_log.csv")
+    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_jarvis, log_file_name="jarvis_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
         return f"Alright {activity['actor']['displayName']}, I won't remove invalid Rings. Until next time!👋🏾"
 
@@ -581,7 +581,7 @@ class RemoveInvalidRings(Command):
             delete_previous_message=True,
         )
 
-    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_jarvais, log_file_name="jarvais_activity_log.csv")
+    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_jarvis, log_file_name="jarvis_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
         room_id = attachment_actions.roomId
         today_date = datetime.now(EASTERN_TZ).strftime('%m-%d-%Y')
@@ -637,7 +637,7 @@ class GetTaniumHostsWithoutRingTag(Command):
             delete_previous_message=True,
         )
 
-    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_jarvais, log_file_name="jarvais_activity_log.csv")
+    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_jarvis, log_file_name="jarvis_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
         room_id = attachment_actions.roomId
         loading_msg = get_random_loading_message()
@@ -727,7 +727,7 @@ class RingTagTaniumHosts(Command):
             delete_previous_message=True,
         )
 
-    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_jarvais, log_file_name="jarvais_activity_log.csv")
+    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_jarvis, log_file_name="jarvis_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
         room_id = attachment_actions.roomId
 
@@ -1076,7 +1076,7 @@ class DontRingTagTaniumHosts(Command):
             delete_previous_message=True,
         )
 
-    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_jarvais, log_file_name="jarvais_activity_log.csv")
+    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_jarvis, log_file_name="jarvis_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
         return f"Alright {activity['actor']['displayName']}, I won't tag Tanium hosts. Until next time!👋🏾"
 
@@ -1089,7 +1089,7 @@ class GetTaniumUnhealthyHosts(Command):
             delete_previous_message=True,
         )
 
-    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_jarvais, log_file_name="jarvais_activity_log.csv")
+    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_jarvis, log_file_name="jarvis_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
         room_id = attachment_actions.roomId
         message = f"Hello {activity['actor']['displayName']}! This is still work in progress. Please try again later."
@@ -1110,7 +1110,7 @@ class GetBotHealth(Command):
             delete_previous_message=True,
         )
 
-    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_jarvais, log_file_name="jarvais_activity_log.csv")
+    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_jarvis, log_file_name="jarvis_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
         room_id = attachment_actions.roomId
         current_time = datetime.now(EASTERN_TZ)
@@ -1126,7 +1126,7 @@ class GetBotHealth(Command):
         status_card = AdaptiveCard(
             body=[
                 TextBlock(
-                    text="🤖 Jarvais Bot Status",
+                    text="🤖 Jarvis Bot Status",
                     color=options.Colors.GOOD,
                     size=options.FontSize.LARGE,
                     weight=options.FontWeight.BOLDER,
@@ -1166,31 +1166,31 @@ class Hi(Command):
             exact_command_keyword_match=False,
         )
 
-    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_jarvais, log_file_name="jarvais_activity_log.csv")
+    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_jarvis, log_file_name="jarvis_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
         return "Hi 👋🏾"
 
 
-def jarvais_bot_factory():
-    """Create Jarvais bot instance"""
+def jarvis_bot_factory():
+    """Create Jarvis bot instance"""
     # Clean up stale device registrations before creating bot
     cleanup_devices_on_startup(
-        CONFIG.webex_bot_access_token_jarvais,
-        bot_name="Jarvais"
+        CONFIG.webex_bot_access_token_jarvis,
+        bot_name="Jarvis"
     )
 
     return WebexBot(
-        CONFIG.webex_bot_access_token_jarvais,
+        CONFIG.webex_bot_access_token_jarvis,
         approved_rooms=[CONFIG.webex_room_id_epp_tagging, CONFIG.webex_room_id_vinay_test_space],
-        bot_name="Jarvais - The Ring Tagging Assistant",
+        bot_name="Jarvis - The Ring Tagging Assistant",
         threads=True,
         log_level="ERROR",
         bot_help_subtitle="Your friendly tagging bot!"
     )
 
 
-def jarvais_initialization(bot_instance=None):
-    """Initialize Jarvais commands"""
+def jarvis_initialization(bot_instance=None):
+    """Initialize Jarvis commands"""
     if bot_instance:
         # Add commands to the bot
         bot_instance.add_command(GetCSHostsWithoutRingTag())
@@ -1210,13 +1210,13 @@ def jarvais_initialization(bot_instance=None):
 
 
 def main():
-    """Jarvais main with resilience framework"""
+    """Jarvis main with resilience framework"""
     from src.utils.bot_resilience import ResilientBot
 
     resilient_runner = ResilientBot(
-        bot_name="Jarvais",
-        bot_factory=jarvais_bot_factory,
-        initialization_func=jarvais_initialization,
+        bot_name="Jarvis",
+        bot_factory=jarvis_bot_factory,
+        initialization_func=jarvis_initialization,
         max_retries=5,
         initial_retry_delay=30,
         max_retry_delay=300,
