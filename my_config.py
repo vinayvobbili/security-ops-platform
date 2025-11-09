@@ -42,7 +42,7 @@ def get_config():
         webex_bot_access_token_soar=os.environ.get("WEBEX_BOT_ACCESS_TOKEN_SOAR"),
         webex_bot_access_token_dev_xsoar=os.environ.get("WEBEX_BOT_ACCESS_TOKEN_DEV_XSOAR"),
         webex_bot_access_token_toodles=os.environ.get("WEBEX_BOT_ACCESS_TOKEN_TOODLES"),
-        webex_bot_access_token_jarvais=os.environ.get("WEBEX_BOT_ACCESS_TOKEN_JARVAIS"),
+        webex_bot_access_token_jarvis=os.environ.get("WEBEX_BOT_ACCESS_TOKEN_JARVIS"),
         webex_bot_access_token_barnacles=os.environ.get("WEBEX_BOT_ACCESS_TOKEN_BARNACLES"),
         webex_bot_access_token_hal9000=os.environ.get("WEBEX_BOT_ACCESS_TOKEN_HAL9000"),
         webex_bot_access_token_pokedex=os.environ.get("WEBEX_BOT_ACCESS_TOKEN_POKEDEX"),
@@ -152,7 +152,7 @@ class Config:
     webex_bot_access_token_soar: Optional[str] = None
     webex_bot_access_token_dev_xsoar: Optional[str] = None
     webex_bot_access_token_toodles: Optional[str] = None
-    webex_bot_access_token_jarvais: Optional[str] = None
+    webex_bot_access_token_jarvis: Optional[str] = None
     webex_bot_access_token_barnacles: Optional[str] = None
     webex_bot_access_token_hal9000: Optional[str] = None
     webex_bot_access_token_pokedex: Optional[str] = None
