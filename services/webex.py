@@ -5,7 +5,7 @@ from my_config import get_config
 
 # Load configuration
 config = get_config()
-BOT_ACCESS_TOKEN = config.webex_bot_access_token_jarvais
+BOT_ACCESS_TOKEN = config.webex_bot_access_token_jarvis
 
 # Initialize Webex API client
 webex_api = WebexTeamsAPI(access_token=BOT_ACCESS_TOKEN)

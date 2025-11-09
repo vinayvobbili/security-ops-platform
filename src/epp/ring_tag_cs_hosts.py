@@ -583,7 +583,7 @@ Timing:
     def send_report(output_filename: str, time_report: str, room_id) -> bool:
         """Send a report via Webex with the result file attached."""
         try:
-            webex_api = WebexAPI(config.webex_bot_access_token_jarvais)
+            webex_api = WebexAPI(config.webex_bot_access_token_jarvis)
             response = webex_api.messages.create(
                 roomId=room_id,
                 markdown=f"EPP-Falcon ring tagging results are attached.\n\n```{time_report}",
