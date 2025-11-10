@@ -1,6 +1,7 @@
 import requests
 
 from my_config import get_config
+from xsoar_scripts.get_playbook_task_id import get_task_id
 
 
 def complete_playbook_task(
@@ -66,8 +67,12 @@ def complete_playbook_task(
 
 if __name__ == "__main__":
     # Test completing "Acknowledge Ticket" task
-    investigation_id = '1375188'
-    task_id = "276"  # From get_playbook_task_id.py - Acknowledge Ticket
+    investigation_id = '1377930'
+    task_name = "Does the employee recognize the alerted activity?"
+    task_id = get_task_id(
+        investigation_id=investigation_id,
+        task_name=task_name
+    )
     file_comment = "Completing via API"
     # Data Collection task requires "Yes" answer
     task_input = "Yes"
