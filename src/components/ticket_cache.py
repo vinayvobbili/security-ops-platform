@@ -254,10 +254,6 @@ class TicketCache:
                         if not result.get('notes'):
                             failed_count += 1
 
-                        # Warn about slow tickets
-                        if elapsed_time > 30:
-                            log.warning(f"Slow ticket {ticket.get('id', 'unknown')}: {elapsed_time:.1f}s")
-
                     except TimeoutError:
                         log.error(f"Ticket {ticket.get('id', 'unknown')} timed out after {elapsed_time:.1f}s")
                         ticket['notes'] = []
