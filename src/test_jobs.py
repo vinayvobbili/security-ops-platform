@@ -1,12 +1,11 @@
 #!/usr/bin/python3
 
 from src.charts.chart_style import apply_chart_style
+from src.components.ticket_cache import TicketCache
 
 apply_chart_style()
 
-import time
 import pytz
-import schedule
 import logging
 from time import perf_counter
 from datetime import datetime
@@ -31,7 +30,6 @@ from src.charts import (
     threat_tippers,
     crowdstrike_efficacy,
 )
-from src.components.ticket_cache import TicketCache
 from src.utils.fs_utils import make_dir_for_todays_charts
 
 # --- Logging Setup ---
@@ -71,6 +69,7 @@ def run_all_charts():
 
     # Treat cache generation as its own timed step (optional chart-like step)
     # cache_result = _time_task("Ticket Cache", TicketCache.generate)
+    ticket_cache = TicketCache()
 
     tasks = [
         ("Aging Tickets", aging_tickets.make_chart),
@@ -89,6 +88,7 @@ def run_all_charts():
         ("ThreatCon Level", threatcon_level.make_chart),
         ("QRadar Rule Efficacy", qradar_rule_efficacy.make_chart),
         ("Threat Tippers", threat_tippers.make_chart),
+        ("Ticket Cache", ticket_cache.generate),
     ]
 
     results = []
@@ -129,16 +129,6 @@ def scheduler_process():
     logger.info("[office_jobs] Initial run starting...")
     run_all_charts()
     logger.info("[office_jobs] Initial run complete. Scheduling jobs...")
-
-    # Hourly cache refresh on the hour
-    schedule.every().hour.at(":00").do(TicketCache.generate)
-
-    # Daily full chart run at 00:01 local system time (schedule isn't TZ-aware)
-    schedule.every().day.at("00:01").do(run_all_charts)
-
-    while True:
-        schedule.run_pending()
-        time.sleep(60)
 
 
 def main():
