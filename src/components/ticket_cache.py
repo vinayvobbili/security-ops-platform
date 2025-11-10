@@ -5,8 +5,11 @@ Runs in trusted environment - minimal defensive coding per AGENTS.md.
 """
 import json
 import logging
+import random
 import re
+import threading
 import time
+from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -17,12 +20,153 @@ from tqdm import tqdm
 
 from my_config import get_config
 from services.xsoar import TicketHandler, XsoarEnvironment
+import os
 
 CONFIG = get_config()
 log = logging.getLogger(__name__)
 
 Ticket = Dict[str, Any]
 LOOKBACK_DAYS = 90
+# Configurable worker count via env var (default: 100, range: 10-200)
+DEFAULT_MAX_WORKERS = int(os.getenv('TICKET_ENRICHMENT_WORKERS', '100'))
+
+
+# ---------------------------- Metrics Tracking ----------------------------
+
+class EnrichmentMetrics:
+    """Thread-safe metrics tracker for ticket enrichment monitoring."""
+
+    def __init__(self):
+        self._lock = threading.Lock()
+        self.total_requests = 0
+        self.successful_requests = 0
+        self.failed_requests = 0
+        self.rate_limited_requests = 0
+        self.retry_counts = defaultdict(int)  # Count of retries per attempt number
+        self.total_retry_wait_time = 0.0  # Total time spent waiting on retries
+        self.start_time = None
+        self.end_time = None
+
+    def record_success(self):
+        """Record a successful ticket enrichment."""
+        with self._lock:
+            self.total_requests += 1
+            self.successful_requests += 1
+
+    def record_failure(self):
+        """Record a failed ticket enrichment."""
+        with self._lock:
+            self.total_requests += 1
+            self.failed_requests += 1
+
+    def record_rate_limit(self, attempt: int, wait_time: float):
+        """Record a rate limit event with retry attempt number and wait time."""
+        with self._lock:
+            self.rate_limited_requests += 1
+            self.retry_counts[attempt] += 1
+            self.total_retry_wait_time += wait_time
+
+    def start(self):
+        """Mark the start of enrichment."""
+        self.start_time = time.time()
+
+    def end(self):
+        """Mark the end of enrichment."""
+        self.end_time = time.time()
+
+    def get_summary(self) -> Dict[str, Any]:
+        """Get metrics summary."""
+        with self._lock:
+            elapsed = (self.end_time - self.start_time) if self.start_time and self.end_time else 0
+            rate_limit_rate = (self.rate_limited_requests / self.total_requests * 100) if self.total_requests > 0 else 0
+            success_rate = (self.successful_requests / self.total_requests * 100) if self.total_requests > 0 else 0
+            throughput = self.total_requests / elapsed if elapsed > 0 else 0
+
+            return {
+                'total_requests': self.total_requests,
+                'successful': self.successful_requests,
+                'failed': self.failed_requests,
+                'rate_limited': self.rate_limited_requests,
+                'rate_limit_percentage': rate_limit_rate,
+                'success_rate': success_rate,
+                'retry_breakdown': dict(self.retry_counts),
+                'total_retry_wait_time': self.total_retry_wait_time,
+                'elapsed_time': elapsed,
+                'throughput_per_sec': throughput
+            }
+
+    def print_summary(self, max_workers: int):
+        """Print formatted metrics summary."""
+        summary = self.get_summary()
+
+        print("\n" + "=" * 80)
+        print("📊 TICKET ENRICHMENT METRICS")
+        print("=" * 80)
+        print(f"Workers:              {max_workers}")
+        print(f"Total Requests:       {summary['total_requests']}")
+        print(f"✅ Successful:        {summary['successful']} ({summary['success_rate']:.1f}%)")
+        print(f"❌ Failed:            {summary['failed']}")
+        print(f"⏱️  Total Time:        {summary['elapsed_time']:.1f}s ({summary['elapsed_time']/60:.1f}m)")
+        print(f"⚡ Throughput:        {summary['throughput_per_sec']:.2f} tickets/sec")
+        print()
+        print(f"🚦 Rate Limited:      {summary['rate_limited']} requests ({summary['rate_limit_percentage']:.2f}%)")
+
+        if summary['retry_breakdown']:
+            print(f"   Retry Breakdown:")
+            for attempt, count in sorted(summary['retry_breakdown'].items()):
+                print(f"     - Attempt {attempt}: {count} retries")
+
+        if summary['total_retry_wait_time'] > 0:
+            avg_wait = summary['total_retry_wait_time'] / summary['rate_limited'] if summary['rate_limited'] > 0 else 0
+            print(f"   Total Wait Time:   {summary['total_retry_wait_time']:.1f}s ({summary['total_retry_wait_time']/60:.1f}m)")
+            print(f"   Avg Wait/Retry:    {avg_wait:.1f}s")
+
+        # Performance recommendations
+        print()
+        if summary['rate_limit_percentage'] > 15:
+            print("⚠️  HIGH RATE LIMITING - Consider reducing TICKET_ENRICHMENT_WORKERS")
+            recommended = max(10, int(max_workers * 0.7))
+            print(f"   Recommended: export TICKET_ENRICHMENT_WORKERS={recommended}")
+        elif summary['rate_limit_percentage'] < 3 and max_workers < 150:
+            print("✅ LOW RATE LIMITING - You can safely increase TICKET_ENRICHMENT_WORKERS")
+            recommended = min(200, int(max_workers * 1.3))
+            print(f"   Recommended: export TICKET_ENRICHMENT_WORKERS={recommended}")
+        else:
+            print("✅ RATE LIMITING WITHIN ACCEPTABLE RANGE")
+
+        print("=" * 80)
+
+    def save_to_file(self, output_dir: Path, max_workers: int):
+        """Save metrics to JSON file for historical tracking."""
+        summary = self.get_summary()
+        summary['max_workers'] = max_workers
+        summary['timestamp'] = datetime.now(timezone.utc).isoformat()
+
+        metrics_file = output_dir / 'enrichment_metrics.json'
+        try:
+            # Load existing metrics if file exists
+            if metrics_file.exists():
+                with open(metrics_file, 'r') as f:
+                    history = json.load(f)
+                    if not isinstance(history, list):
+                        history = [history]  # Convert old format
+            else:
+                history = []
+
+            # Append new metrics
+            history.append(summary)
+
+            # Keep only last 30 runs
+            history = history[-30:]
+
+            # Save updated history
+            with open(metrics_file, 'w') as f:
+                json.dump(history, f, indent=2)
+
+            log.debug(f"Saved enrichment metrics to {metrics_file}")
+        except Exception as e:
+            log.warning(f"Failed to save metrics: {e}")
+
 
 # Field mappings for ticket extraction
 SYSTEM_FIELDS = {
@@ -162,17 +306,21 @@ class TicketCache:
             instance = cls()
 
             # Three-step pipeline
-            raw_tickets = instance._fetch_raw_tickets(lookback_days)
+            raw_tickets, metrics = instance._fetch_raw_tickets(lookback_days)
             ui_tickets = instance._process_for_ui(raw_tickets)
-            instance._save_tickets(raw_tickets, ui_tickets)
+            instance._save_tickets(raw_tickets, ui_tickets, metrics)
 
             log.info("Ticket cache generation complete")
         except Exception as e:
             log.error(f"Ticket cache generation failed: {e}", exc_info=True)
             raise
 
-    def _fetch_raw_tickets(self, lookback_days: int) -> List[Ticket]:
-        """Fetch tickets from XSOAR and enrich with notes in parallel."""
+    def _fetch_raw_tickets(self, lookback_days: int) -> tuple[List[Ticket], EnrichmentMetrics]:
+        """Fetch tickets from XSOAR and enrich with notes in parallel.
+
+        Returns:
+            Tuple of (enriched_tickets, metrics)
+        """
         end_date = datetime.now(timezone.utc)
         start_date = end_date - timedelta(days=lookback_days)
         query = (
@@ -190,62 +338,108 @@ class TicketCache:
 
         if not tickets:
             log.warning("No tickets fetched from XSOAR")
-            return []
+            return [], EnrichmentMetrics()  # Return empty metrics
 
         # Parallel notes enrichment
         return self._enrich_with_notes(tickets)
 
-    def _enrich_with_notes(self, tickets: List[Ticket]) -> List[Ticket]:
-        """Enrich tickets with user notes in parallel."""
-        max_workers = 50
+    def _enrich_with_notes(self, tickets: List[Ticket]) -> tuple[List[Ticket], EnrichmentMetrics]:
+        """Enrich tickets with user notes in parallel.
+
+        Returns:
+            Tuple of (enriched_tickets, metrics)
+        """
+        # Conservative worker count to balance throughput vs rate limiting
+        # Default 100 workers = 2x improvement with lower rate limit risk
+        # Override with: export TICKET_ENRICHMENT_WORKERS=75 (or 50, 125, etc.)
+        max_workers = max(10, min(200, DEFAULT_MAX_WORKERS))  # Clamp to safe range
         timeout_per_ticket = 60  # seconds - increased from 30s to handle network congestion
+
+        # Initialize metrics tracking
+        metrics = EnrichmentMetrics()
+        metrics.start()
+
         print(f"📝 Enriching {len(tickets)} tickets with notes (parallel, workers={max_workers})...")
         log.debug(f"Starting parallel notes enrichment with {max_workers} workers")
 
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             futures = {
-                executor.submit(self._fetch_notes_for_ticket, ticket): ticket
+                executor.submit(self._fetch_notes_for_ticket, ticket, metrics): ticket
                 for ticket in tickets
             }
 
             enriched = []
             failed = 0
+            completed_futures = set()
 
-            for future in tqdm(as_completed(futures), total=len(tickets),
-                               desc="Fetching notes", unit="ticket"):
-                try:
-                    enriched.append(future.result(timeout=timeout_per_ticket))
-                except Exception as e:
-                    failed += 1
-                    ticket = futures[future]
-                    ticket_id = ticket.get('id', 'unknown')
-                    log.error(f"Failed to enrich ticket {ticket_id}: {e}")
-                    ticket['notes'] = []
-                    enriched.append(ticket)
+            # Calculate overall timeout: worst case = all tickets timeout at max (60s each)
+            # With 100 workers, max tickets per worker = ceil(7645/100) = 77
+            # Worst case: 77 tickets × 60s = 4620s (~77 min), add 50% buffer = 6930s (~115 min)
+            tickets_per_worker = (len(tickets) + max_workers - 1) // max_workers
+            overall_timeout = tickets_per_worker * timeout_per_ticket * 1.5
+            log.debug(f"Overall enrichment timeout: {overall_timeout:.0f}s ({overall_timeout/60:.1f}m) "
+                     f"[{tickets_per_worker} tickets/worker max]")
 
+            try:
+                for future in tqdm(as_completed(futures, timeout=overall_timeout), total=len(tickets),
+                                   desc="Fetching notes", unit="ticket"):
+                    completed_futures.add(future)
+                    try:
+                        enriched.append(future.result(timeout=timeout_per_ticket))
+                    except Exception as e:
+                        failed += 1
+                        ticket = futures[future]
+                        ticket_id = ticket.get('id', 'unknown')
+                        log.error(f"Failed to enrich ticket {ticket_id}: {e}")
+                        ticket['notes'] = []
+                        enriched.append(ticket)
+            except TimeoutError:
+                # Overall timeout reached - add remaining tickets with empty notes
+                log.error(f"Overall enrichment timeout reached after {overall_timeout:.0f}s")
+                for future, ticket in futures.items():
+                    if future not in completed_futures:
+                        failed += 1
+                        ticket_id = ticket.get('id', 'unknown')
+                        log.warning(f"Ticket {ticket_id} did not complete - adding with empty notes")
+                        ticket['notes'] = []
+                        enriched.append(ticket)
+
+        # End metrics tracking and display summary
+        metrics.end()
         log.info(f"Enriched {len(enriched)} tickets ({failed} failed)")
-        return enriched
+        metrics.print_summary(max_workers)
 
-    def _fetch_notes_for_ticket(self, ticket: Ticket, max_retries: int = 3) -> Ticket:
+        return enriched, metrics
+
+    def _fetch_notes_for_ticket(self, ticket: Ticket, metrics: EnrichmentMetrics, max_retries: int = 3) -> Ticket:
         """Fetch user notes for a single ticket with retry on rate limit."""
         ticket_id = ticket.get('id')
         if not ticket_id:
             ticket['notes'] = []
+            metrics.record_failure()
             return ticket
 
         for attempt in range(max_retries):
             try:
                 ticket['notes'] = self.ticket_handler.get_user_notes(ticket_id)
                 log.debug(f"Fetched {len(ticket['notes'])} notes for ticket {ticket_id}")
+                metrics.record_success()
                 return ticket
             except Exception as e:
                 error_msg = str(e)
 
-                # Rate limit handling with exponential backoff
+                # Rate limit handling with exponential backoff + jitter
+                # Jitter prevents thundering herd when many workers retry simultaneously
                 if '429' in error_msg or 'Too Many Requests' in error_msg:
                     if attempt < max_retries - 1:
-                        wait_time = (2 ** attempt) * 2
-                        log.debug(f"Rate limited ticket {ticket_id}, waiting {wait_time}s")
+                        base_wait = (2 ** attempt) * 2
+                        jitter = random.uniform(0, base_wait * 0.5)  # Add 0-50% jitter
+                        wait_time = base_wait + jitter
+
+                        # Record rate limit event
+                        metrics.record_rate_limit(attempt, wait_time)
+
+                        log.debug(f"Rate limited ticket {ticket_id}, waiting {wait_time:.1f}s")
                         time.sleep(wait_time)
                         continue
                     log.warning(f"Rate limit exceeded for ticket {ticket_id} after {max_retries} attempts")
@@ -253,9 +447,11 @@ class TicketCache:
                     log.warning(f"Failed to fetch notes for ticket {ticket_id}: {e}")
 
                 ticket['notes'] = []
+                metrics.record_failure()
                 return ticket
 
         ticket['notes'] = []
+        metrics.record_failure()
         return ticket
 
     def _process_for_ui(self, raw_tickets: List[Ticket]) -> List[Ticket]:
@@ -367,8 +563,9 @@ class TicketCache:
             'closed_display': format_date_display(ticket.get('closed')),
         })
 
-    def _save_tickets(self, raw_tickets: List[Ticket], ui_tickets: List[Ticket]) -> None:
-        """Save both raw and UI-processed tickets to JSON files."""
+    def _save_tickets(self, raw_tickets: List[Ticket], ui_tickets: List[Ticket],
+                     metrics: EnrichmentMetrics) -> None:
+        """Save both raw and UI-processed tickets to JSON files, plus enrichment metrics."""
         today = datetime.now(ZoneInfo("America/New_York")).strftime('%m-%d-%Y')
         output_dir = self.root_directory / 'data' / 'transient' / 'secOps' / today
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -394,6 +591,11 @@ class TicketCache:
         with open(ui_path, 'w') as f:
             json.dump(ui_data, f, indent=2, default=json_serializer)
         log.info(f"Saved {len(ui_tickets)} UI tickets to {ui_path}")
+
+        # Save enrichment metrics for historical tracking
+        print("📈 Saving enrichment metrics...")
+        max_workers = max(10, min(200, DEFAULT_MAX_WORKERS))
+        metrics.save_to_file(output_dir, max_workers)
 
         print("✅ Ticket caching completed successfully!")
 

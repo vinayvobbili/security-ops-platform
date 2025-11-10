@@ -56,6 +56,7 @@ eastern = pytz.timezone('US/Eastern')
 
 # Default per-job timeout (seconds)
 DEFAULT_JOB_TIMEOUT = 1800  # 30 minutes
+TICKET_CACHE_TIMEOUT = 7200  # 120 minutes (2 hours) for ticket enrichment job
 
 
 def safe_run(*jobs: Callable[[], None], timeout: int = DEFAULT_JOB_TIMEOUT) -> None:
@@ -185,9 +186,11 @@ def main() -> None:
     for group in CHART_GROUPS:
         schedule_group(group['time'], group['name'], group['jobs'])
 
-    # Ticket cache (unstable, isolated)
+    # Ticket cache (unstable, isolated) - uses extended timeout
     logger.info("Scheduling ticket cache generation at 00:30 ET (may be slow)...")
-    schedule_daily('00:30', TicketCache.generate)
+    schedule.every().day.at('00:30', eastern).do(
+        lambda: safe_run(TicketCache.generate, timeout=TICKET_CACHE_TIMEOUT)
+    )
 
     # Host verification
     logger.info("Scheduling host verification every 5 minutes...")
