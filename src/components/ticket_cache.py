@@ -5,6 +5,7 @@ Runs in trusted environment - minimal defensive coding per AGENTS.md.
 """
 import json
 import logging
+import os
 import random
 import re
 import threading
@@ -20,7 +21,6 @@ from tqdm import tqdm
 
 from my_config import get_config
 from services.xsoar import TicketHandler, XsoarEnvironment
-import os
 
 CONFIG = get_config()
 log = logging.getLogger(__name__)
@@ -106,7 +106,7 @@ class EnrichmentMetrics:
         print(f"Total Requests:       {summary['total_requests']}")
         print(f"✅ Successful:        {summary['successful']} ({summary['success_rate']:.1f}%)")
         print(f"❌ Failed:            {summary['failed']}")
-        print(f"⏱️  Total Time:        {summary['elapsed_time']:.1f}s ({summary['elapsed_time']/60:.1f}m)")
+        print(f"⏱️  Total Time:        {summary['elapsed_time']:.1f}s ({summary['elapsed_time'] / 60:.1f}m)")
         print(f"⚡ Throughput:        {summary['throughput_per_sec']:.2f} tickets/sec")
         print()
         print(f"🚦 Rate Limited:      {summary['rate_limited']} requests ({summary['rate_limit_percentage']:.2f}%)")
@@ -118,7 +118,7 @@ class EnrichmentMetrics:
 
         if summary['total_retry_wait_time'] > 0:
             avg_wait = summary['total_retry_wait_time'] / summary['rate_limited'] if summary['rate_limited'] > 0 else 0
-            print(f"   Total Wait Time:   {summary['total_retry_wait_time']:.1f}s ({summary['total_retry_wait_time']/60:.1f}m)")
+            print(f"   Total Wait Time:   {summary['total_retry_wait_time']:.1f}s ({summary['total_retry_wait_time'] / 60:.1f}m)")
             print(f"   Avg Wait/Retry:    {avg_wait:.1f}s")
 
         # Performance recommendations
@@ -377,8 +377,8 @@ class TicketCache:
             # Worst case: 77 tickets × 60s = 4620s (~77 min), add 50% buffer = 6930s (~115 min)
             tickets_per_worker = (len(tickets) + max_workers - 1) // max_workers
             overall_timeout = tickets_per_worker * timeout_per_ticket * 1.5
-            log.debug(f"Overall enrichment timeout: {overall_timeout:.0f}s ({overall_timeout/60:.1f}m) "
-                     f"[{tickets_per_worker} tickets/worker max]")
+            log.debug(f"Overall enrichment timeout: {overall_timeout:.0f}s ({overall_timeout / 60:.1f}m) "
+                      f"[{tickets_per_worker} tickets/worker max]")
 
             try:
                 for future in tqdm(as_completed(futures, timeout=overall_timeout), total=len(tickets),
@@ -564,7 +564,7 @@ class TicketCache:
         })
 
     def _save_tickets(self, raw_tickets: List[Ticket], ui_tickets: List[Ticket],
-                     metrics: EnrichmentMetrics) -> None:
+                      metrics: EnrichmentMetrics) -> None:
         """Save both raw and UI-processed tickets to JSON files, plus enrichment metrics."""
         today = datetime.now(ZoneInfo("America/New_York")).strftime('%m-%d-%Y')
         output_dir = self.root_directory / 'data' / 'transient' / 'secOps' / today
