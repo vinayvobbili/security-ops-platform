@@ -28,7 +28,6 @@ import logging
 import time
 from datetime import datetime
 from http.client import RemoteDisconnected
-from pprint import pprint
 from typing import Any, Dict, List, Optional, Tuple
 
 import demisto_client
@@ -84,19 +83,19 @@ log = logging.getLogger(__name__)
 # Patch urllib3.PoolManager to use larger default maxsize before creating clients
 import functools
 
-_original_poolmanager_init = urllib3.PoolManager.__init__
+_original_pool_manager_init = urllib3.PoolManager.__init__
 
 
-@functools.wraps(_original_poolmanager_init)
-def _patched_poolmanager_init(self, *args, **kwargs):
+@functools.wraps(_original_pool_manager_init)
+def _patched_pool_manager_init(self, *args, **kwargs):
     """Patched PoolManager init with larger default maxsize."""
     # Set maxsize to 50 if not explicitly provided
     if 'maxsize' not in kwargs:
         kwargs['maxsize'] = 50
-    return _original_poolmanager_init(self, *args, **kwargs)
+    return _original_pool_manager_init(self, *args, **kwargs)
 
 
-urllib3.PoolManager.__init__ = _patched_poolmanager_init
+urllib3.PoolManager.__init__ = _patched_pool_manager_init
 
 # Initialize demisto-py clients for prod and dev environments with timeout
 prod_client = demisto_client.configure(
@@ -623,13 +622,13 @@ class TicketHandler:
         def search_tasks(tasks_dict, depth=0):
             for k, v in tasks_dict.items():
                 task_info = v.get('task', {})
-                task_id = v.get('id')
+                playbook_task_id = v.get('id')
                 found_task_name = task_info.get('name')
 
                 # Check if this is the task we're looking for
                 if found_task_name == target_task_name:
-                    log.debug(f"Found task '{target_task_name}' with ID: {task_id} in ticket {ticket_id}")
-                    return task_id
+                    log.debug(f"Found task '{target_task_name}' with ID: {playbook_task_id} in ticket {ticket_id}")
+                    return playbook_task_id
 
                 # Check if this task has a sub-playbook
                 if 'subPlaybook' in v:
@@ -705,11 +704,27 @@ class TicketHandler:
         try:
             response = requests.post(url, data=payload, headers=headers, verify=False, timeout=30)
             response.raise_for_status()
-            log.info(f"Successfully completed task '{task_name}' (ID: {task_id}) in ticket {ticket_id}")
 
+            # Parse response and check for XSOAR-specific errors
             if response.text:
-                return response.json()
+                response_data = response.json()
+
+                # Check if response contains an error field
+                if isinstance(response_data, dict) and 'error' in response_data:
+                    error_msg = response_data['error']
+
+                    # Check for "Task is completed already" error
+                    if 'Task is completed already' in str(error_msg):
+                        log.warning(f"Task '{task_name}' (ID: {task_id}) in ticket {ticket_id} is already completed: {error_msg}")
+                        raise ValueError(f"Task '{task_name}' is already completed: {error_msg}")
+                    else:
+                        log.error(f"Error from XSOAR when completing task '{task_name}': {error_msg}")
+                        raise ValueError(f"XSOAR error: {error_msg}")
+
+                log.info(f"Successfully completed task '{task_name}' (ID: {task_id}) in ticket {ticket_id}")
+                return response_data
             else:
+                log.info(f"Successfully completed task '{task_name}' (ID: {task_id}) in ticket {ticket_id}")
                 return {}
         except requests.exceptions.RequestException as e:
             log.error(f"Error completing task '{task_name}' in ticket {ticket_id}: {e}")
@@ -1066,9 +1081,11 @@ def main():
         dev_list = ListHandler(XsoarEnvironment.DEV)
     """
     # print(json.dumps(get_user_notes('878736'), indent=4))
-    ticket_id = '887229'
-    prod_ticket_handler = TicketHandler(XsoarEnvironment.PROD)
-    pprint(prod_ticket_handler.get_case_data_with_notes(ticket_id))
+    ticket_id = '1377930'
+    task_name = 'Does the employee recognize the alerted activity?'
+    # pprint(prod_ticket_handler.get_case_data_with_notes(ticket_id))
+    dev_ticket_handler = TicketHandler(XsoarEnvironment.DEV)
+    print(dev_ticket_handler.complete_task(ticket_id, task_name))
 
 
 if __name__ == "__main__":
