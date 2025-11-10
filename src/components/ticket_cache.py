@@ -202,62 +202,49 @@ class TicketCache:
     def _enrich_with_notes(self, tickets: List[Ticket]) -> List[Ticket]:
         """Enrich tickets with user notes in parallel.
 
-        Simple with live progress: poll every 2s to update progress bar.
+        Uses as_completed() for efficient iteration. Timeout after 10 minutes.
         """
+        from concurrent.futures import as_completed, TimeoutError as FuturesTimeoutError
+
         start_time = time.time()
         print(f"📝 Enriching {len(tickets)} tickets with notes (workers={MAX_WORKERS})...")
+        print(f"⏱️  Max wait time: 10 minutes (HTTP timeout is 60s per request)")
+
+        enriched = []
+        failed_count = 0
 
         with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
             # Submit all tasks
+            log.debug(f"Submitting {len(tickets)} tasks to {MAX_WORKERS} workers...")
             futures = {executor.submit(self._fetch_notes_for_ticket, ticket): ticket
                       for ticket in tickets}
+            log.debug(f"All tasks submitted. Waiting for completions...")
 
-            # Monitor progress with updates every 2 seconds
-            pbar = tqdm(total=len(tickets), desc="Fetching notes", unit="ticket")
-            all_futures = set(futures.keys())
-            max_wait = 300  # 5 minutes max
-            elapsed = 0
-            check_interval = 2  # Check every 2 seconds
-
-            while elapsed < max_wait:
-                done, pending = wait(all_futures, timeout=check_interval)
-                completed_count = len(done)
-                pbar.n = completed_count
-                pbar.refresh()
-
-                if not pending:
-                    break  # All done!
-
-                elapsed += check_interval
-                all_futures = pending
-
-            pbar.close()
-
-            # Final wait to collect results
-            done, not_done = wait(futures.keys(), timeout=0)
-
-            # Process completed tickets
-            enriched = []
-            failed_count = 0
-            for future in done:
-                try:
-                    result = future.result(timeout=1)
-                    enriched.append(result)
-                    # Check if it actually has notes (success) or empty (failed)
-                    if not result.get('notes'):
+            # Process with as_completed and 10-minute total timeout
+            # With 100 workers and 60s HTTP timeout, worst case is ~7 minutes
+            completed = set()
+            try:
+                for future in tqdm(as_completed(futures.keys(), timeout=600),
+                                  total=len(tickets), desc="Fetching notes", unit="ticket"):
+                    completed.add(future)
+                    try:
+                        result = future.result(timeout=1)
+                        enriched.append(result)
+                        if not result.get('notes'):
+                            failed_count += 1
+                    except Exception as e:
+                        ticket = futures[future]
+                        log.warning(f"Failed ticket {ticket.get('id', 'unknown')}: {e}")
+                        ticket['notes'] = []
+                        enriched.append(ticket)
                         failed_count += 1
-                except Exception as e:
-                    ticket = futures[future]
-                    ticket_id = ticket.get('id', 'unknown')
-                    log.warning(f"Failed ticket {ticket_id}: {e}")
-                    ticket['notes'] = []
-                    enriched.append(ticket)
-                    failed_count += 1
 
-            # Handle tickets that didn't complete
-            if not_done:
-                log.warning(f"Timeout: {len(not_done)} tickets didn't complete in {max_wait}s")
-                for future in not_done:
+            except FuturesTimeoutError:
+                # Timeout after 10 minutes - add remaining tickets
+                remaining = set(futures.keys()) - completed
+                log.error(f"TIMEOUT after 600s: {len(remaining)}/{len(tickets)} tickets didn't complete")
+                log.error(f"This suggests severe API issues or network problems")
+                for future in remaining:
                     ticket = futures[future]
                     ticket['notes'] = []
                     enriched.append(ticket)
@@ -268,8 +255,7 @@ class TicketCache:
         log.info(f"Enriched {len(enriched)} tickets in {elapsed:.1f}s "
                 f"({success_count} success, {failed_count} failed)")
 
-        # Log high failure rate warning
-        if failed_count > len(enriched) * 0.1:  # >10% failure
+        if failed_count > len(enriched) * 0.1:
             failure_pct = (failed_count / len(enriched)) * 100
             log.error(f"HIGH FAILURE RATE: {failure_pct:.1f}% ({failed_count}/{len(enriched)}) "
                      f"- Check API rate limits or network issues")
@@ -287,10 +273,13 @@ class TicketCache:
             return ticket
 
         try:
+            # Debug: log when we START fetching (to verify workers are running)
+            log.debug(f"START fetching notes for ticket {ticket_id}")
             notes = self.ticket_handler.get_user_notes(ticket_id)
             ticket['notes'] = notes if notes else []
             if not notes:
                 log.debug(f"Ticket {ticket_id}: API returned empty/null notes")
+            log.debug(f"DONE fetching notes for ticket {ticket_id}")
         except Exception as e:
             # Log error type for debugging high failure rates
             error_type = type(e).__name__
