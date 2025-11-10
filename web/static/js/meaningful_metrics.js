@@ -1501,8 +1501,30 @@ function getChartColors() {
         });
     }
 
+    function getCurrentFilters() {
+        // Gather all current filter values
+        const dateSlider = document.getElementById('dateRangeSlider');
+        const mttrSlider = document.getElementById('mttrRangeSlider');
+        const mttcSlider = document.getElementById('mttcRangeSlider');
+        const ageSlider = document.getElementById('ageRangeSlider');
+
+        return {
+            dateRange: parseInt(dateSlider ? dateSlider.value : 30),
+            mttrFilter: parseInt(mttrSlider ? mttrSlider.value : 0),
+            mttcFilter: parseInt(mttcSlider ? mttcSlider.value : 0),
+            ageFilter: parseInt(ageSlider ? ageSlider.value : 0),
+            countries: Array.from(document.querySelectorAll('#countryFilter input:checked')).map(cb => cb.value),
+            regions: Array.from(document.querySelectorAll('#regionFilter input:checked')).map(cb => cb.value),
+            impacts: Array.from(document.querySelectorAll('#impactFilter input:checked')).map(cb => cb.value),
+            severities: Array.from(document.querySelectorAll('#severityFilter input:checked')).map(cb => cb.value),
+            ticketTypes: Array.from(document.querySelectorAll('#ticketTypeFilter input:checked')).map(cb => cb.value),
+            statuses: Array.from(document.querySelectorAll('#statusFilter input:checked')).map(cb => cb.value),
+            automationLevels: Array.from(document.querySelectorAll('#automationFilter input:checked')).map(cb => cb.value)
+        };
+    }
+
     async function exportToExcel() {
-        // Use server-side export for professional formatting
+        // Use server-side export with filter parameters instead of sending full data
         try {
             const exportBtn = document.getElementById('exportExcelBtn');
             const originalText = exportBtn.textContent;
@@ -1515,13 +1537,16 @@ function getChartColors() {
                 columnLabels[colId] = availableColumns[colId]?.label || colId;
             });
 
+            // Get current filter parameters instead of sending all filtered data
+            const filters = getCurrentFilters();
+
             const response = await fetch('/api/meaningful-metrics/export', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
-                    incidents: filteredData,
+                    filters: filters,
                     visible_columns: visibleColumns,
                     column_labels: columnLabels
                 })
