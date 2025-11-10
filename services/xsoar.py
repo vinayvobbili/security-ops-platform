@@ -78,8 +78,8 @@ urllib3.disable_warnings(InsecureRequestWarning)
 CONFIG = get_config()
 log = logging.getLogger(__name__)
 
-# Configure connection pool size to match parallel workers (50)
-# This prevents "Connection pool is full" warnings when using ThreadPoolExecutor with 50 workers
+# Configure connection pool size to match parallel workers (100)
+# This prevents "Connection pool is full" warnings when using ThreadPoolExecutor with 100 workers
 # Patch urllib3.PoolManager to use larger default maxsize before creating clients
 import functools
 
@@ -89,9 +89,9 @@ _original_pool_manager_init = urllib3.PoolManager.__init__
 @functools.wraps(_original_pool_manager_init)
 def _patched_pool_manager_init(self, *args, **kwargs):
     """Patched PoolManager init with larger default maxsize."""
-    # Set maxsize to 50 if not explicitly provided
+    # Set maxsize to 100 if not explicitly provided (matches ticket_cache.py worker count)
     if 'maxsize' not in kwargs:
-        kwargs['maxsize'] = 50
+        kwargs['maxsize'] = 100
     return _original_pool_manager_init(self, *args, **kwargs)
 
 
@@ -127,11 +127,11 @@ for client in [prod_client, dev_client]:
     if hasattr(client, 'api_client') and hasattr(client.api_client, 'rest_client'):
         rest_client = client.api_client.rest_client
         if hasattr(rest_client, 'pool_manager'):
-            # Recreate pool manager with maxsize=50 and proper timeout configuration
+            # Recreate pool manager with maxsize=100 and proper timeout configuration
             # This prevents threads from hanging indefinitely waiting for connections
             rest_client.pool_manager = urllib3.PoolManager(
                 num_pools=10,
-                maxsize=50,
+                maxsize=100,  # Balanced: 2x improvement vs rate limit safety
                 timeout=urllib3.Timeout(connect=30.0, read=60.0),
                 cert_reqs='CERT_NONE' if not client.api_client.configuration.verify_ssl else 'CERT_REQUIRED'
             )

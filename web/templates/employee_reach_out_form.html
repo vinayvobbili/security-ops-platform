@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Command Verification - MetLife Security</title>
+    <link rel="stylesheet" href="/static/css/employee_reach_out.css">
+</head>
+<body>
+<!-- Hidden data container for JavaScript to access template variables -->
+<div id="verificationData" style="display: none;"
+     data-ticket-id="{{ ticket_id }}"
+     data-task-id="{{ task_id }}"
+     data-command="{{ command }}"
+     data-timestamp="{{ timestamp }}"
+     data-system="{{ system }}"></div>
+
+<div class="container">
+    <div class="inner-container">
+        <div class="header">
+            <div class="header-content">
+                <div class="logo-section">
+                    <img alt="MetLife" src="/static/images/MetLife logo dark.webp" style="background: transparent;"/>
+                </div>
+                <div class="header-text">
+                    <h1>Verify Command Execution</h1>
+                    <div class="header-underline"></div>
+                    <p>Cyber Incident Response Team</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="separator"></div>
+
+        <div class="content">
+            <div class="alert-box">
+                <p class="title">⚠️ Action Required: Verify Command Execution</p>
+                <p class="subtitle">We need to confirm if you recognize the command below that was executed using your credentials.</p>
+            </div>
+
+            <div class="command-details">
+                <div class="command-details-header">
+                    <h3>🔍 COMMAND DETAILS</h3>
+                </div>
+                <div class="command-details-body">
+                    <div class="detail-row">
+                        <div class="detail-label">Command:</div>
+                        <div class="detail-value">{{ command }}</div>
+                    </div>
+                    <div class="metadata-grid">
+                        <div class="metadata-item">
+                            <span class="icon">⏰</span>
+                            <strong>Time:</strong> {{ timestamp }}
+                        </div>
+                        <div class="metadata-item">
+                            <span class="icon">💻</span>
+                            <strong>System:</strong> {{ system }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="question-section">
+                <h2>Do you recognize this command?</h2>
+                <p class="subtitle">Please select one of the options below to confirm whether you recognize this activity.</p>
+
+                <div class="form-fields">
+                    <div class="field-group">
+                        <label for="comments">Additional Comments (Optional):</label>
+                        <textarea id="comments" name="comments" rows="4" placeholder="Please provide any additional information or context..."></textarea>
+                    </div>
+
+                    <div class="field-group">
+                        <label for="fileUpload">Attach File (Optional):</label>
+                        <input type="file" id="fileUpload" name="fileUpload" accept="image/*,.pdf,.doc,.docx,.txt">
+                        <p class="field-hint">Supported formats: Images, PDF, Word documents, Text files (Max size: 10MB)</p>
+                        <p id="fileError" class="field-error" style="display: none;"></p>
+                    </div>
+                </div>
+
+                <div class="button-container">
+                    <button class="btn btn-no" onclick="submitVerification('no')">No, I don't recognize it</button>
+                    <button class="btn btn-yes" onclick="submitVerification('yes')">Yes, I recognize it</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="separator"></div>
+
+        <div class="footer">
+            <p>For questions or concerns, contact the Security Operations Center:<br>
+                <a href="mailto:security@company.com">📧 security@company.com</a>
+            </p>
+            <div class="footer-divider">
+                <p class="footer-copyright"><strong>MetLife Cyber Incident Response</strong></p>
+                <p class="footer-legal">&copy; 2025 MetLife. All rights reserved. | Confidential & Proprietary</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Response Modal -->
+<div id="responseModal" class="modal">
+    <div class="modal-content">
+        <div class="spinner" id="spinner"></div>
+        <h3 id="modalTitle">Processing...</h3>
+        <p id="modalMessage">Please wait while we record your response.</p>
+    </div>
+</div>
+
+<script src="/static/js/employee_reach_out.js"></script>
+</body>
+</html>

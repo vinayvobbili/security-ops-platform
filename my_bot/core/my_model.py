@@ -21,8 +21,9 @@ Created for MetLife Security Operations
 """
 import logging
 import time
-from my_bot.core.state_manager import get_state_manager
+
 from my_bot.core.session_manager import get_session_manager
+from my_bot.core.state_manager import get_state_manager
 
 logging.basicConfig(level=logging.ERROR)
 
@@ -253,7 +254,6 @@ def ask_stream(user_message: str, user_id: str = "default", room_id: str = "defa
         import re
 
         query = user_message.strip()
-        original_query = query
 
         # Remove bot name mentions
         bot_names = ['DnR_Pokedex', 'Pokedex', 'pokedex', 'dnr_pokedex',
