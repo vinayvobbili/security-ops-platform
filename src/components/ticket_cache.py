@@ -24,9 +24,9 @@ log = logging.getLogger(__name__)
 
 Ticket = Dict[str, Any]
 LOOKBACK_DAYS = 90
-# Configurable worker count via env var (default: 50)
-# Reduced from 100 to avoid API rate limiting
-MAX_WORKERS = int(os.getenv('TICKET_ENRICHMENT_WORKERS', '50'))
+# Configurable worker count via env var (default: 25)
+# Reduced from 100->50->25 to avoid API rate limiting
+MAX_WORKERS = int(os.getenv('TICKET_ENRICHMENT_WORKERS', '25'))
 
 
 # Field mappings for ticket extraction
