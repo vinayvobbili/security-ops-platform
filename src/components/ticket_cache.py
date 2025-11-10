@@ -8,7 +8,7 @@ import logging
 import os
 import re
 import time
-from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
+from concurrent.futures import ThreadPoolExecutor, wait
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Union
@@ -202,60 +202,42 @@ class TicketCache:
     def _enrich_with_notes(self, tickets: List[Ticket]) -> List[Ticket]:
         """Enrich tickets with user notes in parallel.
 
-        Uses simple ThreadPoolExecutor with HTTP-level timeouts already configured.
-        If no progress for 2 minutes, aborts remaining tickets.
+        Dead simple: submit all, wait with timeout, process what completed.
         """
         start_time = time.time()
         print(f"📝 Enriching {len(tickets)} tickets with notes (workers={MAX_WORKERS})...")
-
-        enriched = []
-        failed = 0
 
         with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
             # Submit all tasks
             futures = {executor.submit(self._fetch_notes_for_ticket, ticket): ticket
                       for ticket in tickets}
 
-            # Process with simple timeout for stuck detection
-            pbar = tqdm(total=len(tickets), desc="Fetching notes", unit="ticket")
-            pending = set(futures.keys())
-            no_progress_timeout = 120  # 2 minutes
+            # Wait for all (or timeout after 5 minutes)
+            # HTTP timeouts are 90s, so 5 min is generous for parallel execution
+            done, not_done = wait(futures.keys(), timeout=300)
 
-            while pending:
-                # Wait for at least one completion (or timeout if stuck)
-                done, pending = wait(pending, timeout=no_progress_timeout, return_when=FIRST_COMPLETED)
+            # Process completed tickets
+            enriched = []
+            for future in tqdm(done, desc="Processing completed", unit="ticket"):
+                try:
+                    enriched.append(future.result(timeout=1))
+                except Exception as e:
+                    ticket = futures[future]
+                    log.warning(f"Failed ticket {ticket.get('id', 'unknown')}: {e}")
+                    ticket['notes'] = []
+                    enriched.append(ticket)
 
-                if not done:
-                    # No progress for 2 minutes - abort remaining
-                    log.warning(f"No progress for {no_progress_timeout}s. "
-                               f"Aborting {len(pending)} remaining tickets.")
-                    for future in pending:
-                        ticket = futures[future]
-                        ticket['notes'] = []
-                        enriched.append(ticket)
-                        failed += 1
-                        pbar.update(1)
-                    break
-
-                # Process completed tickets
-                for future in done:
-                    try:
-                        result = future.result(timeout=1)  # Should be immediate
-                        enriched.append(result)
-                    except Exception as e:
-                        ticket = futures[future]
-                        log.warning(f"Failed to enrich ticket {ticket.get('id', 'unknown')}: {e}")
-                        ticket['notes'] = []
-                        enriched.append(ticket)
-                        failed += 1
-                    pbar.update(1)
-
-            pbar.close()
+            # Handle tickets that didn't complete
+            if not_done:
+                log.warning(f"Timeout: {len(not_done)} tickets didn't complete in 5 min, skipping")
+                for future in not_done:
+                    ticket = futures[future]
+                    ticket['notes'] = []
+                    enriched.append(ticket)
 
         elapsed = time.time() - start_time
-        success = len(enriched) - failed
-        log.info(f"Enriched {len(enriched)} tickets in {elapsed:.1f}s "
-                f"({success} success, {failed} failed)")
+        failed = sum(1 for t in enriched if not t.get('notes'))
+        log.info(f"Enriched {len(enriched)} tickets in {elapsed:.1f}s ({len(enriched)-failed} success, {failed} failed)")
 
         return enriched
 
