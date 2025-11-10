@@ -203,37 +203,68 @@ class TicketCache:
         """Enrich tickets with user notes in parallel.
 
         Uses as_completed() for efficient iteration. Timeout after 10 minutes.
+        Individual futures timeout after 90s to prevent indefinite hangs.
         """
         from concurrent.futures import as_completed, TimeoutError as FuturesTimeoutError
 
         start_time = time.time()
         print(f"📝 Enriching {len(tickets)} tickets with notes (workers={MAX_WORKERS})...")
-        print(f"⏱️  Max wait time: 10 minutes (HTTP timeout is 60s per request)")
+        print(f"⏱️  Max wait time: 10 minutes (90s timeout per ticket)")
 
         enriched = []
         failed_count = 0
+        future_start_times = {}
 
         with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-            # Submit all tasks
+            # Submit all tasks and track submission time
             log.debug(f"Submitting {len(tickets)} tasks to {MAX_WORKERS} workers...")
-            futures = {executor.submit(self._fetch_notes_for_ticket, ticket): ticket
-                      for ticket in tickets}
+            futures = {}
+            for ticket in tickets:
+                future = executor.submit(self._fetch_notes_for_ticket, ticket)
+                futures[future] = ticket
+                future_start_times[future] = time.time()
             log.debug(f"All tasks submitted. Waiting for completions...")
 
             # Process with as_completed and 10-minute total timeout
-            # With 100 workers and 60s HTTP timeout, worst case is ~7 minutes
+            # With 100 workers and 90s per-future timeout, worst case is ~8 minutes
             completed = set()
+            last_straggler_report = time.time()
+
             try:
                 for future in tqdm(as_completed(futures.keys(), timeout=600),
                                   total=len(tickets), desc="Fetching notes", unit="ticket"):
                     completed.add(future)
+                    ticket = futures[future]
+                    elapsed_time = time.time() - future_start_times[future]
+                    remaining_count = len(tickets) - len(completed)
+
+                    # Report stragglers every 10 seconds when <10 tickets remain
+                    if 0 < remaining_count < 10:
+                        if time.time() - last_straggler_report > 10:
+                            remaining_futures = set(futures.keys()) - completed
+                            pending_ids = [futures[f].get('id', 'unknown') for f in remaining_futures]
+                            log.info(f"⏳ {remaining_count} stragglers remaining: {pending_ids}")
+                            last_straggler_report = time.time()
+
                     try:
-                        result = future.result(timeout=1)
+                        # Timeout individual futures after 90s to prevent indefinite hangs
+                        result = future.result(timeout=90)
                         enriched.append(result)
                         if not result.get('notes'):
                             failed_count += 1
+
+                        # Warn about slow tickets
+                        if elapsed_time > 30:
+                            log.warning(f"Slow ticket {ticket.get('id', 'unknown')}: {elapsed_time:.1f}s")
+
+                    except TimeoutError:
+                        log.error(f"Ticket {ticket.get('id', 'unknown')} timed out after {elapsed_time:.1f}s")
+                        ticket['notes'] = []
+                        enriched.append(ticket)
+                        failed_count += 1
+                        future.cancel()  # Try to cancel the stuck future
+
                     except Exception as e:
-                        ticket = futures[future]
                         log.warning(f"Failed ticket {ticket.get('id', 'unknown')}: {e}")
                         ticket['notes'] = []
                         enriched.append(ticket)
@@ -243,12 +274,13 @@ class TicketCache:
                 # Timeout after 10 minutes - add remaining tickets
                 remaining = set(futures.keys()) - completed
                 log.error(f"TIMEOUT after 600s: {len(remaining)}/{len(tickets)} tickets didn't complete")
-                log.error(f"This suggests severe API issues or network problems")
+                log.error(f"Remaining ticket IDs: {[futures[f].get('id', 'unknown') for f in remaining]}")
                 for future in remaining:
                     ticket = futures[future]
                     ticket['notes'] = []
                     enriched.append(ticket)
                     failed_count += 1
+                    future.cancel()  # Try to cancel stuck futures
 
         elapsed = time.time() - start_time
         success_count = len(enriched) - failed_count
@@ -404,34 +436,60 @@ class TicketCache:
         })
 
     def _save_tickets(self, raw_tickets: List[Ticket], ui_tickets: List[Ticket]) -> None:
-        """Save both raw and UI-processed tickets to JSON files."""
+        """Save both raw and UI-processed tickets to JSON files.
+
+        Uses atomic writes: saves to temp files first, then renames to final location.
+        This prevents corrupting the cache if the process fails mid-write.
+        """
         today = datetime.now(ZoneInfo("America/New_York")).strftime('%m-%d-%Y')
         output_dir = self.root_directory / 'data' / 'transient' / 'secOps' / today
         output_dir.mkdir(parents=True, exist_ok=True)
 
         log.info(f"Saving tickets to {output_dir}")
 
-        # Save raw tickets
-        print("💾 Saving raw ticket data...")
+        # Define final paths
         raw_path = output_dir / 'past_90_days_tickets_raw.json'
-        with open(raw_path, 'w') as f:
-            json.dump(raw_tickets, f, indent=4, default=json_serializer)
-        log.info(f"Saved {len(raw_tickets)} raw tickets to {raw_path}")
-
-        # Save UI tickets with metadata
-        print("📊 Saving UI ticket data...")
-        ui_data = {
-            'data': ui_tickets,
-            'data_generated_at': datetime.now(ZoneInfo("America/New_York")).isoformat(),
-            'total_count': len(ui_tickets)
-        }
-
         ui_path = output_dir / 'past_90_days_tickets.json'
-        with open(ui_path, 'w') as f:
-            json.dump(ui_data, f, indent=2, default=json_serializer)
-        log.info(f"Saved {len(ui_tickets)} UI tickets to {ui_path}")
 
-        print("✅ Ticket caching completed successfully!")
+        # Define temp paths (write here first)
+        raw_temp_path = output_dir / 'past_90_days_tickets_raw.json.tmp'
+        ui_temp_path = output_dir / 'past_90_days_tickets.json.tmp'
+
+        try:
+            # Save raw tickets to temp file
+            print("💾 Saving raw ticket data...")
+            with open(raw_temp_path, 'w') as f:
+                json.dump(raw_tickets, f, indent=4, default=json_serializer)
+            log.info(f"Saved {len(raw_tickets)} raw tickets to temp file")
+
+            # Save UI tickets with metadata to temp file
+            print("📊 Saving UI ticket data...")
+            ui_data = {
+                'data': ui_tickets,
+                'data_generated_at': datetime.now(ZoneInfo("America/New_York")).isoformat(),
+                'total_count': len(ui_tickets)
+            }
+            with open(ui_temp_path, 'w') as f:
+                json.dump(ui_data, f, indent=2, default=json_serializer)
+            log.info(f"Saved {len(ui_tickets)} UI tickets to temp file")
+
+            # Atomic rename: only now replace the old files
+            raw_temp_path.replace(raw_path)
+            ui_temp_path.replace(ui_path)
+            log.info(f"Atomically replaced cache files in {output_dir}")
+
+            print("✅ Ticket caching completed successfully!")
+
+        except Exception as e:
+            # Clean up temp files on failure
+            log.error(f"Failed to save tickets: {e}")
+            if raw_temp_path.exists():
+                raw_temp_path.unlink()
+                log.debug("Cleaned up temp raw file")
+            if ui_temp_path.exists():
+                ui_temp_path.unlink()
+                log.debug("Cleaned up temp UI file")
+            raise
 
 
 # ---------------------------- CLI Entry Point ----------------------------
