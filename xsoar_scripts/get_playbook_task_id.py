@@ -3,24 +3,10 @@ import requests
 from my_config import get_config
 
 CONFIG = get_config()
-ticket_id = '1375188'
-target_task_name = 'Acknowledge Ticket'
-url = f'https://api-msoardev.crtx.us.paloaltonetworks.com/xsoar/investigation/{ticket_id}/workplan'
-dev_headers = {
-    'Authorization': CONFIG.xsoar_dev_auth_key,
-    'x-xdr-auth-id': CONFIG.xsoar_dev_auth_id,
-    'Content-Type': 'application/json'
-}
-
-response = requests.request("GET", url, headers=dev_headers)
-tasks = response.json()['invPlaybook']['tasks']
-
-print(f"Searching for task '{target_task_name}' in ticket {ticket_id}")
-print(f"Total tasks in main playbook: {len(tasks)}\n")
 
 
 # Recursive function to search through tasks and sub-playbooks
-def search_tasks(tasks_dict, depth=0):
+def search_tasks(tasks_dict, target_task_name, depth=0, ):
     indent = "  " * depth
     for k, v in tasks_dict.items():
         task_info = v.get('task', {})
@@ -48,10 +34,37 @@ def search_tasks(tasks_dict, depth=0):
     return None
 
 
-# Search through all tasks recursively
-task_id = search_tasks(tasks)
+def get_task_id(investigation_id, task_name):
+    url = f'https://api-msoardev.crtx.us.paloaltonetworks.com/xsoar/investigation/{investigation_id}/workplan'
+    dev_headers = {
+        'Authorization': CONFIG.xsoar_dev_auth_key,
+        'x-xdr-auth-id': CONFIG.xsoar_dev_auth_id,
+        'Content-Type': 'application/json'
+    }
 
-if task_id:
-    print(f"\n✅ Success! Found task '{target_task_name}' with ID: {task_id}")
-else:
-    print(f"\n❌ Task '{target_task_name}' not found in ticket {ticket_id}")
+    response = requests.request("GET", url, headers=dev_headers)
+    tasks = response.json()['invPlaybook']['tasks']
+
+    print(f"Searching for task '{task_name}' in ticket {investigation_id}...\n")
+    print(f"Total tasks in main playbook: {len(tasks)}\n")
+
+    # Search through all tasks recursively
+    task_id = search_tasks(tasks, target_task_name=task_name)
+
+    if task_id:
+        print(f"\n✅ Success! Found task '{task_name}' with ID: {task_id}")
+    else:
+        print(f"\n❌ Task '{task_name}' not found in ticket {investigation_id}")
+
+    return search_tasks(tasks, target_task_name=task_name)
+
+
+def main():
+    ticket_id = '1377930'  # Example ticket ID
+    target_task_name = "Does the employee recognize the alerted activity?"  # Example task name
+    task_id = get_task_id(ticket_id, target_task_name)
+    print(f"\nTask ID: {task_id}")
+
+
+if __name__ == "__main__":
+    main()
