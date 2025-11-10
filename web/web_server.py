@@ -1392,6 +1392,123 @@ def api_meaningful_metrics_data():
         return jsonify({'success': False, 'error': str(exc)}), 500
 
 
+def apply_filters_to_incidents(incidents, filters):
+    """Apply filters to incidents data - mirrors JavaScript filtering logic."""
+    date_range = filters.get('dateRange', 30)
+    mttr_filter = filters.get('mttrFilter', 0)
+    mttc_filter = filters.get('mttcFilter', 0)
+    age_filter = filters.get('ageFilter', 0)
+    countries = filters.get('countries', [])
+    regions = filters.get('regions', [])
+    impacts = filters.get('impacts', [])
+    severities = filters.get('severities', [])
+    ticket_types = filters.get('ticketTypes', [])
+    statuses = filters.get('statuses', [])
+    automation_levels = filters.get('automationLevels', [])
+
+    filtered_incidents = []
+
+    for item in incidents:
+        # Date filter - use pre-calculated days ago
+        if item.get('created_days_ago') is not None and item.get('created_days_ago') > date_range:
+            continue
+
+        # Location filters (countries and regions are mutually exclusive)
+        if countries or regions:
+            location_match = False
+
+            # Check countries if selected
+            if countries:
+                has_no_country = not item.get('affected_country') or item.get('affected_country') == 'Unknown' or item.get('affected_country', '').strip() == ''
+                should_show_no_country = 'No Country' in countries and has_no_country
+                should_show_with_country = any(c != 'No Country' and c == item.get('affected_country') for c in countries)
+                location_match = should_show_no_country or should_show_with_country
+
+            # Check regions if selected
+            if regions:
+                has_no_region = not item.get('affected_region') or item.get('affected_region') == 'Unknown' or item.get('affected_region', '').strip() == ''
+                should_show_no_region = 'No Region' in regions and has_no_region
+                should_show_with_region = any(r != 'No Region' and r == item.get('affected_region') for r in regions)
+                location_match = should_show_no_region or should_show_with_region
+
+            if not location_match:
+                continue
+
+        # Impact filter
+        if impacts:
+            has_no_impact = not item.get('impact') or item.get('impact') == 'Unknown' or item.get('impact', '').strip() == ''
+            should_show_no_impact = 'No Impact' in impacts and has_no_impact
+            should_show_with_impact = any(i != 'No Impact' and i == item.get('impact') for i in impacts)
+
+            if not should_show_no_impact and not should_show_with_impact:
+                continue
+
+        # Severity filter
+        if severities and str(item.get('severity')) not in severities:
+            continue
+
+        # Ticket type filter
+        if ticket_types and item.get('type') not in ticket_types:
+            continue
+
+        # Status filter
+        if statuses and str(item.get('status')) not in statuses:
+            continue
+
+        # Automation level filter
+        if automation_levels:
+            has_no_level = not item.get('automation_level') or item.get('automation_level') == 'Unknown' or item.get('automation_level', '').strip() == ''
+            should_show_no_level = 'No Level' in automation_levels and has_no_level
+            should_show_with_level = any(l != 'No Level' and l == item.get('automation_level') for l in automation_levels)
+
+            if not should_show_no_level and not should_show_with_level:
+                continue
+
+        # MTTR filter
+        if mttr_filter > 0:
+            mttr_seconds = item.get('time_to_respond_secs')
+            if mttr_seconds is None or mttr_seconds == 0:
+                continue  # Skip items without MTTR data
+
+            if mttr_filter == 1 and mttr_seconds > 180:
+                continue  # ≤3 mins (180 seconds)
+            if mttr_filter == 2 and mttr_seconds <= 180:
+                continue  # >3 mins
+            if mttr_filter == 3 and mttr_seconds <= 300:
+                continue  # >5 mins (300 seconds)
+
+        # MTTC filter - only consider cases with host populated
+        if mttc_filter > 0:
+            if not item.get('has_hostname'):
+                continue  # Skip items without host
+
+            mttc_seconds = item.get('time_to_contain_secs')
+            if mttc_seconds is None or mttc_seconds == 0:
+                continue  # Skip items without MTTC data
+
+            if mttc_filter == 1 and mttc_seconds > 300:
+                continue  # ≤5 mins (300 seconds)
+            if mttc_filter == 2 and mttc_seconds > 900:
+                continue  # ≤15 mins (900 seconds)
+            if mttc_filter == 3 and mttc_seconds <= 900:
+                continue  # >15 mins (900 seconds)
+
+        # Age filter - when set (>0), include ONLY tickets whose currently_aging_days exists and is strictly greater
+        if age_filter > 0:
+            aging_days = item.get('currently_aging_days')
+            if aging_days is None or aging_days == '':
+                continue  # exclude items without age
+            try:
+                if float(aging_days) <= age_filter:
+                    continue  # must be strictly greater than selected age
+            except (ValueError, TypeError):
+                continue
+
+        filtered_incidents.append(item)
+
+    return filtered_incidents
+
+
 @app.route('/api/meaningful-metrics/export', methods=['POST'])
 @log_web_activity
 def api_meaningful_metrics_export():
@@ -1400,16 +1517,38 @@ def api_meaningful_metrics_export():
     from flask import send_file
     from src.utils.excel_formatting import apply_professional_formatting
     import tempfile
+    import json
+    from pathlib import Path
 
     try:
-        # Get the filtered data from the request
+        # Get the filter parameters from the request
         data = request.get_json()
-        if not data or 'incidents' not in data:
-            return jsonify({'success': False, 'error': 'No data provided'}), 400
+        if not data or 'filters' not in data:
+            return jsonify({'success': False, 'error': 'No filters provided'}), 400
 
-        incidents = data['incidents']
+        filters = data['filters']
         visible_columns = data.get('visible_columns', [])
         column_labels = data.get('column_labels', {})
+
+        # Load data from cache (same logic as api_meaningful_metrics_data)
+        today_date = datetime.now(eastern).strftime('%m-%d-%Y')
+        root_directory = Path(__file__).parent.parent
+        cache_file = root_directory / 'data' / 'transient' / 'secOps' / today_date / 'past_90_days_tickets.json'
+
+        if not cache_file.exists():
+            return jsonify({'success': False, 'error': 'Cache file not found'}), 404
+
+        with open(cache_file, 'r') as f:
+            cached_data = json.load(f)
+
+        # Extract incidents data
+        if isinstance(cached_data, dict) and 'data' in cached_data:
+            all_incidents = cached_data['data']
+        else:
+            all_incidents = cached_data
+
+        # Apply filters server-side
+        incidents = apply_filters_to_incidents(all_incidents, filters)
 
         if not incidents:
             return jsonify({'success': False, 'error': 'No incidents to export'}), 400
