@@ -203,14 +203,14 @@ class TicketCache:
     def _enrich_with_notes(self, tickets: List[Ticket]) -> List[Ticket]:
         """Enrich tickets with user notes in parallel.
 
-        Uses as_completed() for efficient iteration. Timeout after 10 minutes.
+        Uses as_completed() for efficient iteration. No overall timeout.
         Individual futures timeout after 90s to prevent indefinite hangs.
         """
-        from concurrent.futures import as_completed, TimeoutError as FuturesTimeoutError
+        from concurrent.futures import as_completed
 
         start_time = time.time()
         print(f"📝 Enriching {len(tickets)} tickets with notes (workers={MAX_WORKERS})...")
-        print(f"⏱️  Max wait time: 10 minutes (90s timeout per ticket)")
+        print(f"⏱️  Individual ticket timeout: 90s (no overall job timeout)")
 
         enriched = []
         failed_count = 0
@@ -226,13 +226,13 @@ class TicketCache:
                 future_start_times[future] = time.time()
             log.debug(f"All tasks submitted. Waiting for completions...")
 
-            # Process with as_completed and 10-minute total timeout
-            # With 100 workers and 90s per-future timeout, worst case is ~8 minutes
+            # Process with as_completed - no overall timeout, will run until all complete
+            # Individual futures have 90s timeout to prevent indefinite hangs
             completed = set()
             last_straggler_report = time.time()
 
             try:
-                for future in tqdm(as_completed(futures.keys(), timeout=600),
+                for future in tqdm(as_completed(futures.keys()),
                                   total=len(tickets), desc="Fetching notes", unit="ticket"):
                     completed.add(future)
                     ticket = futures[future]
@@ -267,10 +267,11 @@ class TicketCache:
                         enriched.append(ticket)
                         failed_count += 1
 
-            except FuturesTimeoutError:
-                # Timeout after 10 minutes - add remaining tickets
+            except Exception as e:
+                # Handle any unexpected errors during iteration
+                log.error(f"Unexpected error during note enrichment: {e}")
                 remaining = set(futures.keys()) - completed
-                log.error(f"TIMEOUT after 600s: {len(remaining)}/{len(tickets)} tickets didn't complete")
+                log.error(f"Processing stopped: {len(remaining)}/{len(tickets)} tickets didn't complete")
                 log.error(f"Remaining ticket IDs: {[futures[f].get('id', 'unknown') for f in remaining]}")
                 for future in remaining:
                     ticket = futures[future]
@@ -278,6 +279,7 @@ class TicketCache:
                     enriched.append(ticket)
                     failed_count += 1
                     future.cancel()  # Try to cancel stuck futures
+                raise  # Re-raise to propagate the error
 
         elapsed = time.time() - start_time
         success_count = len(enriched) - failed_count
