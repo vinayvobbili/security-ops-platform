@@ -1519,6 +1519,7 @@ def api_meaningful_metrics_export():
     import tempfile
     import json
     from pathlib import Path
+    from datetime import datetime
 
     try:
         # Get the filter parameters from the request
