@@ -45,17 +45,22 @@ http://metcirt-lab-12.internal.company.com/api/countdown-timer?deadline=2025-11-
 **Visual Features:**
 - **Animated GIF** that counts down in real-time (60-second loop)
 - Shows seconds ticking down automatically when email is open
-- **Circular design** with 4 circles (Days, Hours, Minutes, Seconds)
+- **Compact circular design** with 3 circles (Hours, Minutes, Seconds)
+- No days displayed (max 4 hours)
+- Numbers prominently displayed (larger than labels)
 - Labels inside each circle below the numbers
-- All 4 time units always displayed
+- **Glossy visual effects for engagement:**
+  - Gradient fills on colored circles
+  - Highlight shine at top of circles
+  - Subtle shadow for depth
 - **Dynamic color-coding by urgency:**
   - 🟢 **Green** (2-4 hours remaining)
   - 🟠 **Orange** (1-2 hours remaining)
   - 🔴 **Red** (< 1 hour remaining or expired)
 - Last circle (seconds) has filled background with white text
-- Large, bold numbers for maximum readability
-- 720×180px optimized for email clients
-- Clean, professional design inspired by mailtimers.com
+- Large, bold numbers (42pt) with smaller labels (11pt)
+- 480×120px compact and optimized for email clients
+- Clean, modern design with visual flair
 - Fresh GIF generated each time email is opened
 
 ### 2. Email Template
