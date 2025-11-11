@@ -2099,7 +2099,7 @@ def countdown_timer():
         is_expired = total_seconds_remaining <= 0
 
         # Get custom title if provided
-        title = request.args.get('title', 'Time to Respond')
+        request.args.get('title', 'Time to Respond')
 
         # Image dimensions - compact and email-friendly
         img_width, img_height = 480, 120
@@ -2158,7 +2158,6 @@ def countdown_timer():
             # Calculate time for this frame
             current_total = max(0, total_seconds_remaining - seconds_offset)
 
-            days = current_total // 86400
             hours = (current_total % 86400) // 3600
             minutes = (current_total % 3600) // 60
             seconds = current_total % 60
