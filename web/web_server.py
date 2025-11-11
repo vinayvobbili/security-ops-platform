@@ -2101,32 +2101,33 @@ def countdown_timer():
         # Get custom title if provided
         title = request.args.get('title', 'Time to Respond')
 
-        # Image dimensions - wider for horizontal layout
-        img_width, img_height = 700, 160
+        # Image dimensions - wider for horizontal circular layout
+        img_width, img_height = 800, 200
 
         # Load fonts
         try:
-            number_font = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 72)
-            label_font = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 18)
-            colon_font = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 72)
+            number_font = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 56)
+            label_font = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 16)
         except (OSError, IOError):
             number_font = ImageFont.load_default()
             label_font = ImageFont.load_default()
-            colon_font = ImageFont.load_default()
 
-        # Color scheme based on urgency
+        # Color scheme inspired by mailtimers.com
+        page_bg_color = (248, 249, 250)  # Light gray background
+        circle_border_color = (72, 133, 166)  # Blue-teal border
+        circle_bg_color = (255, 255, 255)  # White circle background
+        number_color = (229, 110, 110)  # Coral/salmon red for numbers
+        label_color = (229, 110, 110)  # Coral/salmon red for labels
+
+        # Last circle (seconds) has filled background
         if is_expired:
-            bg_color = (255, 200, 200)  # Light red
-            text_color = (200, 0, 0)  # Dark red
-        elif total_seconds_remaining < 3 * 3600:  # Less than 3 hours
-            bg_color = (255, 220, 180)  # Light orange
-            text_color = (51, 51, 51)  # Dark gray/black
-        elif total_seconds_remaining < 12 * 3600:  # Less than 12 hours
-            bg_color = (255, 240, 180)  # Light yellow/beige
-            text_color = (51, 51, 51)  # Dark gray/black
+            last_circle_bg = (229, 110, 110)  # Red when expired
+            last_circle_number = (255, 255, 255)  # White text
+            last_circle_label = (255, 255, 255)  # White text
         else:
-            bg_color = (255, 250, 220)  # Light cream/beige
-            text_color = (51, 51, 51)  # Dark gray/black
+            last_circle_bg = (229, 110, 110)  # Coral/salmon red
+            last_circle_number = (255, 255, 255)  # White text
+            last_circle_label = (255, 255, 255)  # White text
 
         def create_frame(seconds_offset):
             """Create a single frame of the countdown timer.
@@ -2142,76 +2143,79 @@ def countdown_timer():
             minutes = (current_total % 3600) // 60
             seconds = current_total % 60
 
-            # Create image with colored background
-            img = Image.new('RGB', (img_width, img_height), color=bg_color)
+            # Create image with light gray background
+            img = Image.new('RGB', (img_width, img_height), color=page_bg_color)
             draw = ImageDraw.Draw(img)
-
-            # Add subtle border
-            draw.rectangle([(0, 0), (img_width-1, img_height-1)], outline=(200, 200, 180), width=2)
 
             # Determine which units to show (days only if > 0)
             if days > 0:
                 time_parts = [
-                    (f"{days:02d}", "Days"),
-                    (f"{hours:02d}", "Hours"),
-                    (f"{minutes:02d}", "Minutes"),
-                    (f"{seconds:02d}", "Seconds")
+                    (f"{days}", "DAYS"),
+                    (f"{hours:02d}", "HOURS"),
+                    (f"{minutes:02d}", "MINUTES"),
+                    (f"{seconds:02d}", "SECONDS")
                 ]
             else:
                 time_parts = [
-                    (f"{hours:02d}", "Hours"),
-                    (f"{minutes:02d}", "Minutes"),
-                    (f"{seconds:02d}", "Seconds")
+                    (f"{hours:02d}", "HOURS"),
+                    (f"{minutes:02d}", "MINUTES"),
+                    (f"{seconds:02d}", "SECONDS")
                 ]
 
-            # Calculate total width needed for horizontal layout
-            # Each number pair + label, plus colons between them
             num_parts = len(time_parts)
 
-            # Build the time string with colons (e.g., "01 : 23 : 59 : 40")
-            time_string_parts = []
+            # Circle dimensions
+            circle_diameter = 150
+            circle_radius = circle_diameter // 2
+            border_width = 6
+            spacing = 20  # Space between circles
+
+            # Calculate total width and starting position
+            total_width = (circle_diameter * num_parts) + (spacing * (num_parts - 1))
+            start_x = (img_width - total_width) // 2
+            center_y = img_height // 2
+
+            # Draw each circle with number and label
             for i, (value, label) in enumerate(time_parts):
-                time_string_parts.append(value)
-                if i < num_parts - 1:
-                    time_string_parts.append(" : ")
+                # Calculate circle position
+                circle_x = start_x + (i * (circle_diameter + spacing))
+                circle_y = center_y - circle_radius
 
-            time_string = "".join(time_string_parts)
+                # Determine colors for this circle
+                is_last = (i == num_parts - 1)
+                if is_last:
+                    bg = last_circle_bg
+                    num_color = last_circle_number
+                    lbl_color = last_circle_label
+                else:
+                    bg = circle_bg_color
+                    num_color = number_color
+                    lbl_color = label_color
 
-            # Measure the full time string
-            time_bbox = draw.textbbox((0, 0), time_string, font=number_font)
-            time_width = time_bbox[2] - time_bbox[0]
-            time_height = time_bbox[3] - time_bbox[1]
+                # Draw filled circle (background)
+                draw.ellipse(
+                    [(circle_x, circle_y), (circle_x + circle_diameter, circle_y + circle_diameter)],
+                    fill=bg,
+                    outline=circle_border_color,
+                    width=border_width
+                )
 
-            # Center the time string vertically in upper portion
-            time_y = 35
-            time_x = (img_width - time_width) // 2
-
-            # Draw the time string
-            draw.text((time_x, time_y), time_string, fill=text_color, font=number_font)
-
-            # Now draw labels below each number
-            # Calculate positions for each number segment
-            current_x = time_x
-            label_y = time_y + time_height + 5
-
-            for i, (value, label) in enumerate(time_parts):
-                # Measure this number
+                # Draw the number (centered in circle)
                 num_bbox = draw.textbbox((0, 0), value, font=number_font)
                 num_width = num_bbox[2] - num_bbox[0]
+                num_height = num_bbox[3] - num_bbox[1]
+                num_x = circle_x + (circle_diameter - num_width) // 2
+                num_y = circle_y + (circle_diameter - num_height) // 2 - 15
 
-                # Center label under this number
-                label_bbox = draw.textbbox((0, 0), label, font=label_font)
-                label_width = label_bbox[2] - label_bbox[0]
-                label_x = current_x + (num_width - label_width) // 2
+                draw.text((num_x, num_y), value, fill=num_color, font=number_font)
 
-                draw.text((label_x, label_y), label, fill=text_color, font=label_font)
+                # Draw the label (centered below number)
+                lbl_bbox = draw.textbbox((0, 0), label, font=label_font)
+                lbl_width = lbl_bbox[2] - lbl_bbox[0]
+                lbl_x = circle_x + (circle_diameter - lbl_width) // 2
+                lbl_y = num_y + num_height + 10
 
-                # Move to next position (number width + colon spacing)
-                current_x += num_width
-                if i < num_parts - 1:
-                    # Add spacing for the colon
-                    colon_bbox = draw.textbbox((0, 0), " : ", font=number_font)
-                    current_x += colon_bbox[2] - colon_bbox[0]
+                draw.text((lbl_x, lbl_y), label, fill=lbl_color, font=label_font)
 
             return img
 
@@ -2242,7 +2246,7 @@ def countdown_timer():
         # Return a simple error image
         try:
             from PIL import Image, ImageDraw, ImageFont
-            img = Image.new('RGB', (700, 160), color=(220, 53, 69))
+            img = Image.new('RGB', (800, 200), color=(220, 53, 69))
             draw = ImageDraw.Draw(img)
             error_text = "Error generating timer"
             try:
@@ -2251,7 +2255,7 @@ def countdown_timer():
                 error_font = ImageFont.load_default()
             bbox = draw.textbbox((0, 0), error_text, font=error_font)
             text_width = bbox[2] - bbox[0]
-            draw.text(((700 - text_width) // 2, 70), error_text, fill=(255, 255, 255), font=error_font)
+            draw.text(((800 - text_width) // 2, 90), error_text, fill=(255, 255, 255), font=error_font)
             img_buffer = BytesIO()
             img.save(img_buffer, format='GIF')
             img_buffer.seek(0)

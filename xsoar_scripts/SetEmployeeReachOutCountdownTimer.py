@@ -23,6 +23,7 @@ Example output context:
 """
 from datetime import datetime, timedelta
 from urllib.parse import quote
+
 import pytz
 
 # Configuration
@@ -76,10 +77,10 @@ def main():
                 'response_window_hours': RESPONSE_WINDOW_HOURS
             },
             'HumanReadable': f"✅ Countdown timer configured\n\n"
-                            f"**Response Deadline:** {deadline_iso}\n"
-                            f"**Response Window:** {RESPONSE_WINDOW_HOURS} hours\n"
-                            f"**Timer URL:** {countdown_url}\n\n"
-                            f"The countdown timer URL has been set and can be used in the email template with {{{{ COUNTDOWN_TIMER_URL }}}}",
+                             f"**Response Deadline:** {deadline_iso}\n"
+                             f"**Response Window:** {RESPONSE_WINDOW_HOURS} hours\n"
+                             f"**Timer URL:** {countdown_url}\n\n"
+                             f"The countdown timer URL has been set and can be used in the email template with {{{{ COUNTDOWN_TIMER_URL }}}}",
             'EntryContext': {
                 'EmployeeReachOut': {
                     'CountdownTimerURL': countdown_url,
