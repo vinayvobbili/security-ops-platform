@@ -2183,9 +2183,9 @@ def countdown_timer():
             minutes = (current_total % 3600) // 60
             seconds = current_total % 60
 
-            # Create image with light gray background
-            img = Image.new('RGB', (img_width, img_height), color=page_bg_color)
-            draw = ImageDraw.Draw(img)
+            # Create image with RGBA mode for transparency effects
+            img = Image.new('RGBA', (img_width, img_height), color=page_bg_color + (255,))
+            draw = ImageDraw.Draw(img, 'RGBA')
 
             # Only show hours, minutes, seconds (no days since max is 4 hours)
             time_parts = [
@@ -2224,7 +2224,17 @@ def countdown_timer():
                     num_color = number_color
                     lbl_color = label_color
 
-                # Draw simple circle - no effects, just clean design
+                # Draw circle with subtle drop shadow for depth
+                shadow_offset = 2
+                shadow_color = (200, 200, 200, 128)  # Light gray shadow
+                draw.ellipse(
+                    [(circle_x + shadow_offset, circle_y + shadow_offset),
+                     (circle_x + circle_diameter + shadow_offset, circle_y + circle_diameter + shadow_offset)],
+                    fill=shadow_color,
+                    outline=None
+                )
+
+                # Draw main circle with glossy gradient effect
                 draw.ellipse(
                     [(circle_x, circle_y), (circle_x + circle_diameter, circle_y + circle_diameter)],
                     fill=bg,
@@ -2232,21 +2242,34 @@ def countdown_timer():
                     width=border_width
                 )
 
+                # Add glossy shine effect (top half lighter)
+                if not is_last:  # Only on white circles for subtle glossy effect
+                    shine_overlay = Image.new('RGBA', (circle_diameter, circle_diameter // 2), (255, 255, 255, 30))
+                    img.paste(shine_overlay, (circle_x, circle_y), shine_overlay)
+
                 # Draw the number (centered in circle, bigger than label)
                 num_bbox = draw.textbbox((0, 0), value, font=number_font)
                 num_width = num_bbox[2] - num_bbox[0]
                 num_height = num_bbox[3] - num_bbox[1]
                 num_x = circle_x + (circle_diameter - num_width) // 2
-                num_y = circle_y + (circle_diameter - num_height) // 2 - 10
+                num_y = circle_y + (circle_diameter - num_height) // 2 - 12  # Moved up slightly
 
+                # Add subtle text shadow for depth
+                shadow_offset_text = 1
+                text_shadow_color = (0, 0, 0, 30) if is_last else (100, 100, 100, 50)
+                draw.text((num_x + shadow_offset_text, num_y + shadow_offset_text),
+                         value, fill=text_shadow_color, font=number_font)
                 draw.text((num_x, num_y), value, fill=num_color, font=number_font)
 
-                # Draw the label (centered below number, smaller text)
+                # Draw the label (centered below number with MORE spacing)
                 lbl_bbox = draw.textbbox((0, 0), label, font=label_font)
                 lbl_width = lbl_bbox[2] - lbl_bbox[0]
                 lbl_x = circle_x + (circle_diameter - lbl_width) // 2
-                lbl_y = num_y + num_height + 4
+                lbl_y = num_y + num_height + 10  # Increased from 4 to 10 pixels
 
+                # Add subtle label shadow
+                draw.text((lbl_x + shadow_offset_text, lbl_y + shadow_offset_text),
+                         label, fill=text_shadow_color, font=label_font)
                 draw.text((lbl_x, lbl_y), label, fill=lbl_color, font=label_font)
 
             return img
@@ -2257,7 +2280,13 @@ def countdown_timer():
 
         for i in range(num_frames):
             frame = create_frame(i)
-            frames.append(frame)
+            # Convert RGBA to RGB for GIF compatibility (composite on white background)
+            if frame.mode == 'RGBA':
+                rgb_frame = Image.new('RGB', frame.size, (255, 255, 255))
+                rgb_frame.paste(frame, mask=frame.split()[3])  # Use alpha channel as mask
+                frames.append(rgb_frame)
+            else:
+                frames.append(frame)
 
         # Save as animated GIF
         img_buffer = BytesIO()
