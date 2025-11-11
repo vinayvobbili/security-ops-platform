@@ -27,7 +27,8 @@ if _PROJECT_ROOT not in sys.path:
 # Third-party imports
 import pytz
 import requests
-from flask import Flask, abort, jsonify, render_template, request, session
+from flask import Flask, abort, jsonify, render_template, request, session, send_file
+from io import BytesIO
 
 # Local imports with graceful degradation
 try:
@@ -2060,6 +2061,180 @@ def submit_employee_response():
             'status': 'error',
             'error': str(exc)
         }), 500
+
+
+@app.route('/api/countdown-timer')
+def countdown_timer():
+    """Generate a countdown timer image for emails.
+
+    Query parameters:
+    - deadline: ISO 8601 timestamp (e.g., 2025-11-11T15:00:00-05:00)
+    - title: Optional title text (default: "Time to Respond")
+    """
+    try:
+        from PIL import Image, ImageDraw, ImageFont
+
+        # Get deadline from query params
+        deadline_str = request.args.get('deadline')
+        if not deadline_str:
+            return jsonify({'error': 'deadline parameter required'}), 400
+
+        # Parse deadline
+        try:
+            deadline = datetime.fromisoformat(deadline_str.replace('Z', '+00:00'))
+            if deadline.tzinfo is None:
+                deadline = eastern.localize(deadline)
+        except (ValueError, AttributeError) as parse_err:
+            return jsonify({'error': f'Invalid deadline format: {parse_err}'}), 400
+
+        # Calculate time remaining
+        now = datetime.now(eastern)
+        time_remaining = deadline - now
+
+        # Get custom title if provided
+        title = request.args.get('title', 'Time to Respond')
+
+        # Calculate hours, minutes, seconds
+        total_seconds = int(time_remaining.total_seconds())
+
+        if total_seconds <= 0:
+            # Expired
+            hours, minutes, seconds = 0, 0, 0
+            status_text = "EXPIRED"
+            bg_color = (220, 53, 69)  # Red
+        else:
+            hours = total_seconds // 3600
+            minutes = (total_seconds % 3600) // 60
+            seconds = total_seconds % 60
+
+            # Color based on urgency
+            if hours >= 12:
+                bg_color = (0, 166, 81)  # Acme Green
+                status_text = "ACTIVE"
+            elif hours >= 3:
+                bg_color = (255, 184, 0)  # Warning yellow
+                status_text = "ACTIVE"
+            else:
+                bg_color = (255, 87, 51)  # Urgent orange
+                status_text = "URGENT"
+
+        # Create image (600x200 for good email rendering)
+        img_width, img_height = 600, 200
+        img = Image.new('RGB', (img_width, img_height), color=(245, 245, 245))
+        draw = ImageDraw.Draw(img)
+
+        # Try to use a nice font, fallback to default
+        try:
+            title_font = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 24)
+            timer_font = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 48)
+            label_font = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 16)
+            status_font = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 14)
+        except (OSError, IOError):
+            # Fallback to default font
+            title_font = ImageFont.load_default()
+            timer_font = ImageFont.load_default()
+            label_font = ImageFont.load_default()
+            status_font = ImageFont.load_default()
+
+        # Draw colored header bar
+        draw.rectangle([(0, 0), (img_width, 50)], fill=bg_color)
+
+        # Draw title on colored bar
+        title_bbox = draw.textbbox((0, 0), title, font=title_font)
+        title_width = title_bbox[2] - title_bbox[0]
+        title_x = (img_width - title_width) // 2
+        draw.text((title_x, 15), title, fill=(255, 255, 255), font=title_font)
+
+        # Draw status badge
+        status_bbox = draw.textbbox((0, 0), status_text, font=status_font)
+        status_width = status_bbox[2] - status_bbox[0]
+        badge_padding = 10
+        badge_x = img_width - status_width - badge_padding * 2 - 10
+        badge_y = 60
+        badge_width = status_width + badge_padding * 2
+        badge_height = 24
+
+        # Draw status badge background
+        badge_color = (255, 255, 255) if total_seconds > 0 else (255, 200, 200)
+        draw.rounded_rectangle(
+            [(badge_x, badge_y), (badge_x + badge_width, badge_y + badge_height)],
+            radius=12,
+            fill=badge_color,
+            outline=bg_color,
+            width=2
+        )
+        draw.text((badge_x + badge_padding, badge_y + 4), status_text, fill=bg_color, font=status_font)
+
+        # Draw countdown boxes
+        box_width = 120
+        box_height = 90
+        box_spacing = 30
+        total_boxes_width = box_width * 3 + box_spacing * 2
+        start_x = (img_width - total_boxes_width) // 2
+        start_y = 70
+
+        time_units = [
+            (hours, "HOURS"),
+            (minutes, "MINUTES"),
+            (seconds, "SECONDS")
+        ]
+
+        for i, (value, label) in enumerate(time_units):
+            box_x = start_x + i * (box_width + box_spacing)
+
+            # Draw box with border
+            draw.rounded_rectangle(
+                [(box_x, start_y), (box_x + box_width, start_y + box_height)],
+                radius=10,
+                fill=(255, 255, 255),
+                outline=bg_color,
+                width=3
+            )
+
+            # Draw value
+            value_text = f"{value:02d}"
+            value_bbox = draw.textbbox((0, 0), value_text, font=timer_font)
+            value_width = value_bbox[2] - value_bbox[0]
+            value_height = value_bbox[3] - value_bbox[1]
+            value_x = box_x + (box_width - value_width) // 2
+            value_y = start_y + 15
+            draw.text((value_x, value_y), value_text, fill=bg_color, font=timer_font)
+
+            # Draw label
+            label_bbox = draw.textbbox((0, 0), label, font=label_font)
+            label_width = label_bbox[2] - label_bbox[0]
+            label_x = box_x + (box_width - label_width) // 2
+            label_y = start_y + box_height - 30
+            draw.text((label_x, label_y), label, fill=(100, 100, 100), font=label_font)
+
+        # Save to bytes buffer
+        img_buffer = BytesIO()
+        img.save(img_buffer, format='PNG')
+        img_buffer.seek(0)
+
+        return send_file(img_buffer, mimetype='image/png', as_attachment=False)
+
+    except Exception as exc:
+        logger.error(f"Error generating countdown timer: {exc}", exc_info=True)
+        # Return a simple error image
+        try:
+            from PIL import Image, ImageDraw, ImageFont
+            img = Image.new('RGB', (600, 200), color=(220, 53, 69))
+            draw = ImageDraw.Draw(img)
+            error_text = "Error generating timer"
+            try:
+                error_font = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 20)
+            except (OSError, IOError):
+                error_font = ImageFont.load_default()
+            bbox = draw.textbbox((0, 0), error_text, font=error_font)
+            text_width = bbox[2] - bbox[0]
+            draw.text(((600 - text_width) // 2, 90), error_text, fill=(255, 255, 255), font=error_font)
+            img_buffer = BytesIO()
+            img.save(img_buffer, format='PNG')
+            img_buffer.seek(0)
+            return send_file(img_buffer, mimetype='image/png', as_attachment=False)
+        except Exception:
+            return jsonify({'error': str(exc)}), 500
 
 
 def main():
