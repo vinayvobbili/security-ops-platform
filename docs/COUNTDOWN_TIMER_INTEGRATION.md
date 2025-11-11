@@ -43,14 +43,17 @@ http://lab-vm1.internal.company.com/api/countdown-timer?deadline=2025-11-11T15:0
 ```
 
 **Visual Features:**
-- Displays hours, minutes, and seconds remaining
+- **Animated GIF** that counts down in real-time (60-second loop)
+- Shows seconds ticking down automatically when email is open
+- Displays days, hours, minutes, and seconds remaining
 - Color-coded by urgency:
-  - 🟢 Green (≥12 hours): "ACTIVE"
-  - 🟡 Yellow (3-12 hours): "ACTIVE"
-  - 🟠 Orange (<3 hours): "URGENT"
-  - 🔴 Red (expired): "EXPIRED"
-- 600x200px image optimized for email clients
-- Rounded corners and professional styling matching Acme brand
+  - 🟢 Green (≥12 hours remaining)
+  - 🟡 Yellow (3-12 hours remaining)
+  - 🟠 Orange (<3 hours remaining)
+  - 🔴 Red (expired)
+- 600x180px optimized for email clients
+- Clean, modern design similar to emailcountdowntimer.com
+- Fresh GIF generated each time email is opened
 
 ### 2. Email Template
 **File:** `email_templates/employee_reach_out.html` (line 145-156)
