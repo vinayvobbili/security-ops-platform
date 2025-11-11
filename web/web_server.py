@@ -2065,7 +2065,10 @@ def submit_employee_response():
 
 @app.route('/api/countdown-timer')
 def countdown_timer():
-    """Generate a countdown timer image for emails.
+    """Generate an animated countdown timer GIF for emails.
+
+    Creates a 60-second animated GIF that counts down in real-time.
+    Each time the email is opened, a fresh GIF is generated from current time.
 
     Query parameters:
     - deadline: ISO 8601 timestamp (e.g., 2025-11-11T15:00:00-05:00)
@@ -2087,139 +2090,154 @@ def countdown_timer():
         except (ValueError, AttributeError) as parse_err:
             return jsonify({'error': f'Invalid deadline format: {parse_err}'}), 400
 
-        # Calculate time remaining
+        # Calculate time remaining from now
         now = datetime.now(eastern)
         time_remaining = deadline - now
+        total_seconds_remaining = int(time_remaining.total_seconds())
+
+        # Determine if expired
+        is_expired = total_seconds_remaining <= 0
 
         # Get custom title if provided
         title = request.args.get('title', 'Time to Respond')
 
-        # Calculate hours, minutes, seconds
-        total_seconds = int(time_remaining.total_seconds())
+        # Image dimensions
+        img_width, img_height = 600, 180
 
-        if total_seconds <= 0:
-            # Expired
-            hours, minutes, seconds = 0, 0, 0
-            status_text = "EXPIRED"
-            bg_color = (220, 53, 69)  # Red
-        else:
-            hours = total_seconds // 3600
-            minutes = (total_seconds % 3600) // 60
-            seconds = total_seconds % 60
-
-            # Color based on urgency
-            if hours >= 12:
-                bg_color = (0, 166, 81)  # Acme Green
-                status_text = "ACTIVE"
-            elif hours >= 3:
-                bg_color = (255, 184, 0)  # Warning yellow
-                status_text = "ACTIVE"
-            else:
-                bg_color = (255, 87, 51)  # Urgent orange
-                status_text = "URGENT"
-
-        # Create image (600x200 for good email rendering)
-        img_width, img_height = 600, 200
-        img = Image.new('RGB', (img_width, img_height), color=(245, 245, 245))
-        draw = ImageDraw.Draw(img)
-
-        # Try to use a nice font, fallback to default
+        # Load fonts
         try:
-            title_font = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 24)
-            timer_font = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 48)
-            label_font = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 16)
-            status_font = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 14)
+            number_font = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 56)
+            label_font = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 14)
+            title_font = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 18)
         except (OSError, IOError):
-            # Fallback to default font
-            title_font = ImageFont.load_default()
-            timer_font = ImageFont.load_default()
+            number_font = ImageFont.load_default()
             label_font = ImageFont.load_default()
-            status_font = ImageFont.load_default()
+            title_font = ImageFont.load_default()
 
-        # Draw colored header bar
-        draw.rectangle([(0, 0), (img_width, 50)], fill=bg_color)
+        # Color scheme based on urgency
+        if is_expired:
+            box_color = (220, 53, 69)  # Red
+            text_color = (255, 255, 255)
+        elif total_seconds_remaining < 3 * 3600:  # Less than 3 hours
+            box_color = (255, 111, 0)  # Orange
+            text_color = (255, 255, 255)
+        elif total_seconds_remaining < 12 * 3600:  # Less than 12 hours
+            box_color = (255, 184, 0)  # Yellow
+            text_color = (51, 51, 51)
+        else:
+            box_color = (0, 166, 81)  # Green
+            text_color = (255, 255, 255)
 
-        # Draw title on colored bar
-        title_bbox = draw.textbbox((0, 0), title, font=title_font)
-        title_width = title_bbox[2] - title_bbox[0]
-        title_x = (img_width - title_width) // 2
-        draw.text((title_x, 15), title, fill=(255, 255, 255), font=title_font)
+        def create_frame(seconds_offset):
+            """Create a single frame of the countdown timer.
 
-        # Draw status badge
-        status_bbox = draw.textbbox((0, 0), status_text, font=status_font)
-        status_width = status_bbox[2] - status_bbox[0]
-        badge_padding = 10
-        badge_x = img_width - status_width - badge_padding * 2 - 10
-        badge_y = 60
-        badge_width = status_width + badge_padding * 2
-        badge_height = 24
+            Args:
+                seconds_offset: Number of seconds to subtract from current time
+            """
+            # Calculate time for this frame
+            current_total = max(0, total_seconds_remaining - seconds_offset)
 
-        # Draw status badge background
-        badge_color = (255, 255, 255) if total_seconds > 0 else (255, 200, 200)
-        draw.rounded_rectangle(
-            [(badge_x, badge_y), (badge_x + badge_width, badge_y + badge_height)],
-            radius=12,
-            fill=badge_color,
-            outline=bg_color,
-            width=2
-        )
-        draw.text((badge_x + badge_padding, badge_y + 4), status_text, fill=bg_color, font=status_font)
+            days = current_total // 86400
+            hours = (current_total % 86400) // 3600
+            minutes = (current_total % 3600) // 60
+            seconds = current_total % 60
 
-        # Draw countdown boxes
-        box_width = 120
-        box_height = 90
-        box_spacing = 30
-        total_boxes_width = box_width * 3 + box_spacing * 2
-        start_x = (img_width - total_boxes_width) // 2
-        start_y = 70
+            # Create image with light background
+            img = Image.new('RGB', (img_width, img_height), color=(248, 249, 250))
+            draw = ImageDraw.Draw(img)
 
-        time_units = [
-            (hours, "HOURS"),
-            (minutes, "MINUTES"),
-            (seconds, "SECONDS")
-        ]
+            # Draw title bar at top
+            title_height = 40
+            draw.rectangle([(0, 0), (img_width, title_height)], fill=(51, 51, 51))
 
-        for i, (value, label) in enumerate(time_units):
-            box_x = start_x + i * (box_width + box_spacing)
+            # Draw title text
+            title_bbox = draw.textbbox((0, 0), title, font=title_font)
+            title_width = title_bbox[2] - title_bbox[0]
+            title_x = (img_width - title_width) // 2
+            draw.text((title_x, 12), title, fill=(255, 255, 255), font=title_font)
 
-            # Draw box with border
-            draw.rounded_rectangle(
-                [(box_x, start_y), (box_x + box_width, start_y + box_height)],
-                radius=10,
-                fill=(255, 255, 255),
-                outline=bg_color,
-                width=3
-            )
+            # Countdown boxes
+            box_width = 120
+            box_height = 100
+            box_spacing = 20
 
-            # Draw value
-            value_text = f"{value:02d}"
-            value_bbox = draw.textbbox((0, 0), value_text, font=timer_font)
-            value_width = value_bbox[2] - value_bbox[0]
-            value_height = value_bbox[3] - value_bbox[1]
-            value_x = box_x + (box_width - value_width) // 2
-            value_y = start_y + 15
-            draw.text((value_x, value_y), value_text, fill=bg_color, font=timer_font)
+            # Determine which units to show (days only if > 0)
+            if days > 0:
+                time_units = [
+                    (days, "DAYS"),
+                    (hours, "HOURS"),
+                    (minutes, "MINS"),
+                    (seconds, "SECS")
+                ]
+                num_boxes = 4
+            else:
+                time_units = [
+                    (hours, "HOURS"),
+                    (minutes, "MINS"),
+                    (seconds, "SECS")
+                ]
+                num_boxes = 3
 
-            # Draw label
-            label_bbox = draw.textbbox((0, 0), label, font=label_font)
-            label_width = label_bbox[2] - label_bbox[0]
-            label_x = box_x + (box_width - label_width) // 2
-            label_y = start_y + box_height - 30
-            draw.text((label_x, label_y), label, fill=(100, 100, 100), font=label_font)
+            total_boxes_width = box_width * num_boxes + box_spacing * (num_boxes - 1)
+            start_x = (img_width - total_boxes_width) // 2
+            start_y = title_height + 20
 
-        # Save to bytes buffer
+            for i, (value, label) in enumerate(time_units):
+                box_x = start_x + i * (box_width + box_spacing)
+
+                # Draw box with colored background
+                draw.rounded_rectangle(
+                    [(box_x, start_y), (box_x + box_width, start_y + box_height)],
+                    radius=8,
+                    fill=box_color
+                )
+
+                # Draw value (number)
+                value_text = f"{value:02d}"
+                value_bbox = draw.textbbox((0, 0), value_text, font=number_font)
+                value_width = value_bbox[2] - value_bbox[0]
+                value_height = value_bbox[3] - value_bbox[1]
+                value_x = box_x + (box_width - value_width) // 2
+                value_y = start_y + 20
+                draw.text((value_x, value_y), value_text, fill=text_color, font=number_font)
+
+                # Draw label
+                label_bbox = draw.textbbox((0, 0), label, font=label_font)
+                label_width = label_bbox[2] - label_bbox[0]
+                label_x = box_x + (box_width - label_width) // 2
+                label_y = start_y + box_height - 25
+                draw.text((label_x, label_y), label, fill=text_color, font=label_font)
+
+            return img
+
+        # Generate animated GIF frames
+        frames = []
+        num_frames = 60 if not is_expired else 1  # 60 seconds of animation, or 1 frame if expired
+
+        for i in range(num_frames):
+            frame = create_frame(i)
+            frames.append(frame)
+
+        # Save as animated GIF
         img_buffer = BytesIO()
-        img.save(img_buffer, format='PNG')
+        frames[0].save(
+            img_buffer,
+            format='GIF',
+            save_all=True,
+            append_images=frames[1:],
+            duration=1000,  # 1000ms = 1 second per frame
+            loop=0  # Loop forever
+        )
         img_buffer.seek(0)
 
-        return send_file(img_buffer, mimetype='image/png', as_attachment=False)
+        return send_file(img_buffer, mimetype='image/gif', as_attachment=False)
 
     except Exception as exc:
         logger.error(f"Error generating countdown timer: {exc}", exc_info=True)
         # Return a simple error image
         try:
             from PIL import Image, ImageDraw, ImageFont
-            img = Image.new('RGB', (600, 200), color=(220, 53, 69))
+            img = Image.new('RGB', (600, 180), color=(220, 53, 69))
             draw = ImageDraw.Draw(img)
             error_text = "Error generating timer"
             try:
@@ -2228,11 +2246,11 @@ def countdown_timer():
                 error_font = ImageFont.load_default()
             bbox = draw.textbbox((0, 0), error_text, font=error_font)
             text_width = bbox[2] - bbox[0]
-            draw.text(((600 - text_width) // 2, 90), error_text, fill=(255, 255, 255), font=error_font)
+            draw.text(((600 - text_width) // 2, 80), error_text, fill=(255, 255, 255), font=error_font)
             img_buffer = BytesIO()
-            img.save(img_buffer, format='PNG')
+            img.save(img_buffer, format='GIF')
             img_buffer.seek(0)
-            return send_file(img_buffer, mimetype='image/png', as_attachment=False)
+            return send_file(img_buffer, mimetype='image/gif', as_attachment=False)
         except Exception:
             return jsonify({'error': str(exc)}), 500
 
