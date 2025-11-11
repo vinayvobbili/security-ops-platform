@@ -45,22 +45,25 @@ http://metcirt-lab-12.internal.company.com/api/countdown-timer?deadline=2025-11-
 **Visual Features:**
 - **Animated GIF** that counts down in real-time (60-second loop)
 - Shows seconds ticking down automatically when email is open
-- Displays days, hours, minutes, and seconds remaining
-- Color-coded by urgency:
-  - 🟢 Green (≥12 hours remaining)
-  - 🟡 Yellow (3-12 hours remaining)
-  - 🟠 Orange (<3 hours remaining)
-  - 🔴 Red (expired)
-- 600x180px optimized for email clients
-- Clean, modern design similar to emailcountdowntimer.com
+- **Horizontal layout** with large bold numbers and colon separators (e.g., "01 : 23 : 59 : 40")
+- Labels below each time unit (Days, Hours, Minutes, Seconds)
+- Displays days, hours, minutes, and seconds (days shown only when >0)
+- Color-coded background by urgency:
+  - Light cream/beige (≥12 hours remaining)
+  - Light yellow (3-12 hours remaining)
+  - Light orange (<3 hours remaining)
+  - Light red (expired)
+- Bold black text for maximum readability
+- 700x160px optimized for email clients
+- Clean, professional design inspired by emailcountdowntimer.com
 - Fresh GIF generated each time email is opened
 
 ### 2. Email Template
-**File:** `email_templates/employee_reach_out.html` (line 145-156)
+**File:** `email_templates/employee_reach_out.html` (lines 212-223)
 
-The countdown timer image has been added to the email template between the warning box and command details.
+The countdown timer image has been added to the email template below the "Verify Command" button and alternative link section.
 
-**Template Variable:** `{{ COUNTDOWN_TIMER_URL }}`
+**Template Variable:** `${EmployeeReachOut.CountdownTimerURL}`
 
 ### 3. XSOAR Automation Script
 **File:** `xsoar_scripts/SetEmployeeReachOutCountdownTimer.py`
