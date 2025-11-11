@@ -2,9 +2,9 @@
 XSOAR Script: Set Employee Reach Out Countdown Timer
 
 Generates a countdown timer URL for the employee reach out email.
-The countdown timer displays the time remaining for the employee to respond (24 hours).
+The countdown timer displays the time remaining for the employee to respond (4 hours).
 
-This script calculates the deadline (current time + 24 hours) and creates a URL
+This script calculates the deadline (current time + 4 hours) and creates a URL
 that points to the web server's countdown timer endpoint.
 
 Usage:
@@ -28,7 +28,7 @@ import pytz
 
 # Configuration
 WEB_SERVER_BASE_URL = "http://metcirt-lab-12.internal.company.com"  # Update this to your web server URL
-RESPONSE_WINDOW_HOURS = 24  # Number of hours for employee to respond
+RESPONSE_WINDOW_HOURS = 4  # Number of hours for employee to respond
 TIMER_TITLE = "Time to Respond"
 
 

@@ -4,7 +4,7 @@
 
 This guide explains how to use the custom email countdown timer for employee reach out emails sent from Cortex XSOAR.
 
-The countdown timer is a dynamic image that updates each time the email is opened, showing the remaining time for the employee to respond.
+The countdown timer is a dynamic image that updates each time the email is opened, showing the remaining time (4 hours) for the employee to respond.
 
 ## Architecture
 
@@ -19,7 +19,7 @@ The countdown timer is a dynamic image that updates each time the email is opene
 ```
 
 1. **XSOAR Playbook** runs `SetEmployeeReachOutCountdownTimer` script
-2. Script calculates deadline (current time + 24 hours)
+2. Script calculates deadline (current time + 4 hours)
 3. Script generates countdown timer URL with deadline parameter
 4. Email HTML template includes `<img>` tag with the countdown URL
 5. When email is opened, client fetches image from web server
@@ -45,17 +45,17 @@ http://metcirt-lab-12.internal.company.com/api/countdown-timer?deadline=2025-11-
 **Visual Features:**
 - **Animated GIF** that counts down in real-time (60-second loop)
 - Shows seconds ticking down automatically when email is open
-- **Horizontal layout** with large bold numbers and colon separators (e.g., "01 : 23 : 59 : 40")
-- Labels below each time unit (Days, Hours, Minutes, Seconds)
-- Displays days, hours, minutes, and seconds (days shown only when >0)
-- Color-coded background by urgency:
-  - Light cream/beige (≥12 hours remaining)
-  - Light yellow (3-12 hours remaining)
-  - Light orange (<3 hours remaining)
-  - Light red (expired)
-- Bold black text for maximum readability
-- 700x160px optimized for email clients
-- Clean, professional design inspired by emailcountdowntimer.com
+- **Circular design** with 4 circles (Days, Hours, Minutes, Seconds)
+- Labels inside each circle below the numbers
+- All 4 time units always displayed
+- **Dynamic color-coding by urgency:**
+  - 🟢 **Green** (2-4 hours remaining)
+  - 🟠 **Orange** (1-2 hours remaining)
+  - 🔴 **Red** (< 1 hour remaining or expired)
+- Last circle (seconds) has filled background with white text
+- Large, bold numbers for maximum readability
+- 720×180px optimized for email clients
+- Clean, professional design inspired by mailtimers.com
 - Fresh GIF generated each time email is opened
 
 ### 2. Email Template
@@ -134,7 +134,7 @@ WEB_SERVER_BASE_URL = "https://your-domain.com"
 Edit `SetEmployeeReachOutCountdownTimer.py`:
 
 ```python
-RESPONSE_WINDOW_HOURS = 24  # Change to desired hours (e.g., 48, 72)
+RESPONSE_WINDOW_HOURS = 4  # Change to desired hours (e.g., 2, 8, 12)
 ```
 
 ### Customize Timer Title
@@ -150,12 +150,15 @@ TIMER_TITLE = "Time to Respond"  # Change to your desired text
 Edit `web/web_server.py` (countdown_timer function):
 
 ```python
-if hours >= 12:
-    bg_color = (0, 166, 81)  # Green - adjust threshold
-elif hours >= 3:
-    bg_color = (255, 184, 0)  # Yellow - adjust threshold
+if hours_remaining < 1:
+    # Red: < 1 hour
+    circle_border_color = (220, 53, 69)
+elif hours_remaining < 2:
+    # Orange: 1-2 hours
+    circle_border_color = (255, 133, 27)
 else:
-    bg_color = (255, 87, 51)  # Orange
+    # Green: 2-4 hours
+    circle_border_color = (40, 167, 69)
 ```
 
 ## Testing
@@ -167,13 +170,13 @@ else:
    python web/web_server.py
    ```
 
-2. Generate a test deadline (24 hours from now):
+2. Generate a test deadline (4 hours from now):
    ```python
    from datetime import datetime, timedelta
    import pytz
 
    eastern = pytz.timezone('US/Eastern')
-   deadline = (datetime.now(eastern) + timedelta(hours=24)).isoformat()
+   deadline = (datetime.now(eastern) + timedelta(hours=4)).isoformat()
    print(f"http://localhost:8080/api/countdown-timer?deadline={deadline}")
    ```
 
@@ -207,7 +210,7 @@ else:
 2. Verify the output shows:
    - Countdown timer URL
    - Response deadline timestamp
-   - Response window (24 hours)
+   - Response window (4 hours)
 
 3. Check context data:
    ```

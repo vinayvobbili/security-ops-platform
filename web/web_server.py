@@ -2101,33 +2101,53 @@ def countdown_timer():
         # Get custom title if provided
         title = request.args.get('title', 'Time to Respond')
 
-        # Image dimensions - wider for horizontal circular layout
-        img_width, img_height = 800, 200
+        # Image dimensions - optimized for email display
+        img_width, img_height = 720, 180
 
-        # Load fonts
+        # Load fonts - larger for better readability
         try:
-            number_font = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 56)
-            label_font = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 16)
+            number_font = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 68)
+            label_font = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 14)
         except (OSError, IOError):
             number_font = ImageFont.load_default()
             label_font = ImageFont.load_default()
 
-        # Color scheme inspired by mailtimers.com
-        page_bg_color = (248, 249, 250)  # Light gray background
-        circle_border_color = (72, 133, 166)  # Blue-teal border
-        circle_bg_color = (255, 255, 255)  # White circle background
-        number_color = (229, 110, 110)  # Coral/salmon red for numbers
-        label_color = (229, 110, 110)  # Coral/salmon red for labels
+        # Dynamic color scheme based on time remaining
+        page_bg_color = (255, 255, 255)  # Pure white background
 
-        # Last circle (seconds) has filled background
+        # Calculate hours remaining for color determination
+        hours_remaining = total_seconds_remaining / 3600
+
+        # Determine colors based on time remaining
+        # Green: 2-4 hours | Orange: 1-2 hours | Red: < 1 hour
         if is_expired:
-            last_circle_bg = (229, 110, 110)  # Red when expired
-            last_circle_number = (255, 255, 255)  # White text
-            last_circle_label = (255, 255, 255)  # White text
+            # Expired - Red
+            circle_border_color = (220, 53, 69)
+            number_color = (220, 53, 69)
+            label_color = (220, 53, 69)
+            last_circle_bg = (220, 53, 69)
+        elif hours_remaining < 1:
+            # Red: < 1 hour
+            circle_border_color = (220, 53, 69)
+            number_color = (220, 53, 69)
+            label_color = (220, 53, 69)
+            last_circle_bg = (220, 53, 69)
+        elif hours_remaining < 2:
+            # Orange: 1-2 hours
+            circle_border_color = (255, 133, 27)
+            number_color = (255, 133, 27)
+            label_color = (255, 133, 27)
+            last_circle_bg = (255, 133, 27)
         else:
-            last_circle_bg = (229, 110, 110)  # Coral/salmon red
-            last_circle_number = (255, 255, 255)  # White text
-            last_circle_label = (255, 255, 255)  # White text
+            # Green: 2-4 hours
+            circle_border_color = (40, 167, 69)
+            number_color = (40, 167, 69)
+            label_color = (40, 167, 69)
+            last_circle_bg = (40, 167, 69)
+
+        circle_bg_color = (255, 255, 255)  # White circle background
+        last_circle_number = (255, 255, 255)  # White text
+        last_circle_label = (255, 255, 255)  # White text
 
         def create_frame(seconds_offset):
             """Create a single frame of the countdown timer.
@@ -2147,28 +2167,21 @@ def countdown_timer():
             img = Image.new('RGB', (img_width, img_height), color=page_bg_color)
             draw = ImageDraw.Draw(img)
 
-            # Determine which units to show (days only if > 0)
-            if days > 0:
-                time_parts = [
-                    (f"{days}", "DAYS"),
-                    (f"{hours:02d}", "HOURS"),
-                    (f"{minutes:02d}", "MINUTES"),
-                    (f"{seconds:02d}", "SECONDS")
-                ]
-            else:
-                time_parts = [
-                    (f"{hours:02d}", "HOURS"),
-                    (f"{minutes:02d}", "MINUTES"),
-                    (f"{seconds:02d}", "SECONDS")
-                ]
+            # Always show all 4 units (days, hours, minutes, seconds)
+            time_parts = [
+                (f"{days}", "DAYS"),
+                (f"{hours:02d}", "HOURS"),
+                (f"{minutes:02d}", "MINUTES"),
+                (f"{seconds:02d}", "SECONDS")
+            ]
 
             num_parts = len(time_parts)
 
-            # Circle dimensions
-            circle_diameter = 150
+            # Circle dimensions - smaller circles with better proportions
+            circle_diameter = 140
             circle_radius = circle_diameter // 2
-            border_width = 6
-            spacing = 20  # Space between circles
+            border_width = 7
+            spacing = 15  # Space between circles
 
             # Calculate total width and starting position
             total_width = (circle_diameter * num_parts) + (spacing * (num_parts - 1))
@@ -2205,7 +2218,7 @@ def countdown_timer():
                 num_width = num_bbox[2] - num_bbox[0]
                 num_height = num_bbox[3] - num_bbox[1]
                 num_x = circle_x + (circle_diameter - num_width) // 2
-                num_y = circle_y + (circle_diameter - num_height) // 2 - 15
+                num_y = circle_y + (circle_diameter - num_height) // 2 - 18
 
                 draw.text((num_x, num_y), value, fill=num_color, font=number_font)
 
@@ -2213,7 +2226,7 @@ def countdown_timer():
                 lbl_bbox = draw.textbbox((0, 0), label, font=label_font)
                 lbl_width = lbl_bbox[2] - lbl_bbox[0]
                 lbl_x = circle_x + (circle_diameter - lbl_width) // 2
-                lbl_y = num_y + num_height + 10
+                lbl_y = num_y + num_height + 8
 
                 draw.text((lbl_x, lbl_y), label, fill=lbl_color, font=label_font)
 
@@ -2246,7 +2259,7 @@ def countdown_timer():
         # Return a simple error image
         try:
             from PIL import Image, ImageDraw, ImageFont
-            img = Image.new('RGB', (800, 200), color=(220, 53, 69))
+            img = Image.new('RGB', (720, 180), color=(220, 53, 69))
             draw = ImageDraw.Draw(img)
             error_text = "Error generating timer"
             try:
@@ -2255,7 +2268,7 @@ def countdown_timer():
                 error_font = ImageFont.load_default()
             bbox = draw.textbbox((0, 0), error_text, font=error_font)
             text_width = bbox[2] - bbox[0]
-            draw.text(((800 - text_width) // 2, 90), error_text, fill=(255, 255, 255), font=error_font)
+            draw.text(((720 - text_width) // 2, 80), error_text, fill=(255, 255, 255), font=error_font)
             img_buffer = BytesIO()
             img.save(img_buffer, format='GIF')
             img_buffer.seek(0)
