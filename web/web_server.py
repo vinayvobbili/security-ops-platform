@@ -2101,32 +2101,32 @@ def countdown_timer():
         # Get custom title if provided
         title = request.args.get('title', 'Time to Respond')
 
-        # Image dimensions
-        img_width, img_height = 600, 180
+        # Image dimensions - wider for horizontal layout
+        img_width, img_height = 700, 160
 
         # Load fonts
         try:
-            number_font = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 56)
-            label_font = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 14)
-            title_font = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 18)
+            number_font = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 72)
+            label_font = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 18)
+            colon_font = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 72)
         except (OSError, IOError):
             number_font = ImageFont.load_default()
             label_font = ImageFont.load_default()
-            title_font = ImageFont.load_default()
+            colon_font = ImageFont.load_default()
 
         # Color scheme based on urgency
         if is_expired:
-            box_color = (220, 53, 69)  # Red
-            text_color = (255, 255, 255)
+            bg_color = (255, 200, 200)  # Light red
+            text_color = (200, 0, 0)  # Dark red
         elif total_seconds_remaining < 3 * 3600:  # Less than 3 hours
-            box_color = (255, 111, 0)  # Orange
-            text_color = (255, 255, 255)
+            bg_color = (255, 220, 180)  # Light orange
+            text_color = (51, 51, 51)  # Dark gray/black
         elif total_seconds_remaining < 12 * 3600:  # Less than 12 hours
-            box_color = (255, 184, 0)  # Yellow
-            text_color = (51, 51, 51)
+            bg_color = (255, 240, 180)  # Light yellow/beige
+            text_color = (51, 51, 51)  # Dark gray/black
         else:
-            box_color = (0, 166, 81)  # Green
-            text_color = (255, 255, 255)
+            bg_color = (255, 250, 220)  # Light cream/beige
+            text_color = (51, 51, 51)  # Dark gray/black
 
         def create_frame(seconds_offset):
             """Create a single frame of the countdown timer.
@@ -2142,71 +2142,76 @@ def countdown_timer():
             minutes = (current_total % 3600) // 60
             seconds = current_total % 60
 
-            # Create image with light background
-            img = Image.new('RGB', (img_width, img_height), color=(248, 249, 250))
+            # Create image with colored background
+            img = Image.new('RGB', (img_width, img_height), color=bg_color)
             draw = ImageDraw.Draw(img)
 
-            # Draw title bar at top
-            title_height = 40
-            draw.rectangle([(0, 0), (img_width, title_height)], fill=(51, 51, 51))
-
-            # Draw title text
-            title_bbox = draw.textbbox((0, 0), title, font=title_font)
-            title_width = title_bbox[2] - title_bbox[0]
-            title_x = (img_width - title_width) // 2
-            draw.text((title_x, 12), title, fill=(255, 255, 255), font=title_font)
-
-            # Countdown boxes
-            box_width = 120
-            box_height = 100
-            box_spacing = 20
+            # Add subtle border
+            draw.rectangle([(0, 0), (img_width-1, img_height-1)], outline=(200, 200, 180), width=2)
 
             # Determine which units to show (days only if > 0)
             if days > 0:
-                time_units = [
-                    (days, "DAYS"),
-                    (hours, "HOURS"),
-                    (minutes, "MINS"),
-                    (seconds, "SECS")
+                time_parts = [
+                    (f"{days:02d}", "Days"),
+                    (f"{hours:02d}", "Hours"),
+                    (f"{minutes:02d}", "Minutes"),
+                    (f"{seconds:02d}", "Seconds")
                 ]
-                num_boxes = 4
             else:
-                time_units = [
-                    (hours, "HOURS"),
-                    (minutes, "MINS"),
-                    (seconds, "SECS")
+                time_parts = [
+                    (f"{hours:02d}", "Hours"),
+                    (f"{minutes:02d}", "Minutes"),
+                    (f"{seconds:02d}", "Seconds")
                 ]
-                num_boxes = 3
 
-            total_boxes_width = box_width * num_boxes + box_spacing * (num_boxes - 1)
-            start_x = (img_width - total_boxes_width) // 2
-            start_y = title_height + 20
+            # Calculate total width needed for horizontal layout
+            # Each number pair + label, plus colons between them
+            num_parts = len(time_parts)
 
-            for i, (value, label) in enumerate(time_units):
-                box_x = start_x + i * (box_width + box_spacing)
+            # Build the time string with colons (e.g., "01 : 23 : 59 : 40")
+            time_string_parts = []
+            for i, (value, label) in enumerate(time_parts):
+                time_string_parts.append(value)
+                if i < num_parts - 1:
+                    time_string_parts.append(" : ")
 
-                # Draw box with colored background
-                draw.rounded_rectangle(
-                    [(box_x, start_y), (box_x + box_width, start_y + box_height)],
-                    radius=8,
-                    fill=box_color
-                )
+            time_string = "".join(time_string_parts)
 
-                # Draw value (number)
-                value_text = f"{value:02d}"
-                value_bbox = draw.textbbox((0, 0), value_text, font=number_font)
-                value_width = value_bbox[2] - value_bbox[0]
-                value_height = value_bbox[3] - value_bbox[1]
-                value_x = box_x + (box_width - value_width) // 2
-                value_y = start_y + 20
-                draw.text((value_x, value_y), value_text, fill=text_color, font=number_font)
+            # Measure the full time string
+            time_bbox = draw.textbbox((0, 0), time_string, font=number_font)
+            time_width = time_bbox[2] - time_bbox[0]
+            time_height = time_bbox[3] - time_bbox[1]
 
-                # Draw label
+            # Center the time string vertically in upper portion
+            time_y = 35
+            time_x = (img_width - time_width) // 2
+
+            # Draw the time string
+            draw.text((time_x, time_y), time_string, fill=text_color, font=number_font)
+
+            # Now draw labels below each number
+            # Calculate positions for each number segment
+            current_x = time_x
+            label_y = time_y + time_height + 5
+
+            for i, (value, label) in enumerate(time_parts):
+                # Measure this number
+                num_bbox = draw.textbbox((0, 0), value, font=number_font)
+                num_width = num_bbox[2] - num_bbox[0]
+
+                # Center label under this number
                 label_bbox = draw.textbbox((0, 0), label, font=label_font)
                 label_width = label_bbox[2] - label_bbox[0]
-                label_x = box_x + (box_width - label_width) // 2
-                label_y = start_y + box_height - 25
+                label_x = current_x + (num_width - label_width) // 2
+
                 draw.text((label_x, label_y), label, fill=text_color, font=label_font)
+
+                # Move to next position (number width + colon spacing)
+                current_x += num_width
+                if i < num_parts - 1:
+                    # Add spacing for the colon
+                    colon_bbox = draw.textbbox((0, 0), " : ", font=number_font)
+                    current_x += colon_bbox[2] - colon_bbox[0]
 
             return img
 
@@ -2237,7 +2242,7 @@ def countdown_timer():
         # Return a simple error image
         try:
             from PIL import Image, ImageDraw, ImageFont
-            img = Image.new('RGB', (600, 180), color=(220, 53, 69))
+            img = Image.new('RGB', (700, 160), color=(220, 53, 69))
             draw = ImageDraw.Draw(img)
             error_text = "Error generating timer"
             try:
@@ -2246,7 +2251,7 @@ def countdown_timer():
                 error_font = ImageFont.load_default()
             bbox = draw.textbbox((0, 0), error_text, font=error_font)
             text_width = bbox[2] - bbox[0]
-            draw.text(((600 - text_width) // 2, 80), error_text, fill=(255, 255, 255), font=error_font)
+            draw.text(((700 - text_width) // 2, 70), error_text, fill=(255, 255, 255), font=error_font)
             img_buffer = BytesIO()
             img.save(img_buffer, format='GIF')
             img_buffer.seek(0)
