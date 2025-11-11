@@ -2106,11 +2106,15 @@ def countdown_timer():
 
         # Load fonts - bigger numbers, smaller labels
         # Try multiple font paths for cross-platform compatibility
+        import os
+        home_dir = os.path.expanduser("~")
         font_paths = [
-            "/usr/share/fonts/truetype/msttcorefonts/Arial.ttf",  # Linux (Ubuntu with msttcorefonts)
-            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",    # Linux (DejaVu fallback)
+            f"{home_dir}/.fonts/Roboto-Medium.ttf",                # Roboto Medium (user installed)
+            f"{home_dir}/.fonts/Roboto-Regular.ttf",               # Roboto Regular (user installed)
+            "/usr/share/fonts/truetype/msttcorefonts/Arial.ttf",   # Linux (Ubuntu with msttcorefonts)
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",     # Linux (DejaVu fallback)
             "/System/Library/Fonts/Helvetica.ttc",                 # macOS
-            "Arial.ttf",                                           # Windows
+            "Arial.ttf",                                            # Windows
         ]
 
         number_font = None
