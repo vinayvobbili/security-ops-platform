@@ -2105,10 +2105,27 @@ def countdown_timer():
         img_width, img_height = 480, 120
 
         # Load fonts - bigger numbers, smaller labels
-        try:
-            number_font = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 42)
-            label_font = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 11)
-        except (OSError, IOError):
+        # Try multiple font paths for cross-platform compatibility
+        font_paths = [
+            "/usr/share/fonts/truetype/msttcorefonts/Arial.ttf",  # Linux (Ubuntu with msttcorefonts)
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",    # Linux (DejaVu fallback)
+            "/System/Library/Fonts/Helvetica.ttc",                 # macOS
+            "Arial.ttf",                                           # Windows
+        ]
+
+        number_font = None
+        label_font = None
+
+        for font_path in font_paths:
+            try:
+                number_font = ImageFont.truetype(font_path, 42)
+                label_font = ImageFont.truetype(font_path, 11)
+                break
+            except (OSError, IOError):
+                continue
+
+        # Fallback to default if no fonts found
+        if number_font is None:
             number_font = ImageFont.load_default()
             label_font = ImageFont.load_default()
 
