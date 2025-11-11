@@ -63,10 +63,6 @@ def main():
         # Generate the countdown timer URL
         countdown_url, deadline_iso = generate_countdown_timer_url()
 
-        # Set context variables for use in email template
-        demisto.setContext('COUNTDOWN_TIMER_URL', countdown_url)
-        demisto.setContext('RESPONSE_DEADLINE', deadline_iso)
-
         # Return results for display
         return_results({
             'Type': entryTypes['note'],
