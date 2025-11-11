@@ -209,18 +209,22 @@
                                         <p style="margin:0; color:#0046AD; font-size:13px; word-break:break-all; font-family:'Courier New', Courier, monospace; background-color:#FFFFFF; padding:14px 18px; border-radius:8px; border:1px solid #E0ECF7;">
                                             http://localhost/employee-reach-out?case_id=${incident.id}</p>
                                     </div>
-                                    <!-- Countdown Timer -->
-                                    <table role="presentation" style="width:100%; border-collapse:collapse; margin-bottom:32px;" cellpadding="0" cellspacing="0" border="0">
-                                        <tr>
-                                            <td style="text-align:center;">
-                                                <!-- Dynamic countdown timer GIF - updates each time email is opened -->
-                                                <img src="${EmployeeReachOut.CountdownTimerURL}"
-                                                     alt="Countdown Timer"
-                                                     style="max-width:800px; width:100%; height:auto;"
-                                                     border="0"/>
-                                            </td>
-                                        </tr>
-                                    </table>
+                                    <!-- Countdown Timer Section -->
+                                    <div style="text-align:center; padding:28px 32px; background-color:#FFFFFF; border-radius:16px; margin-bottom:36px; border:2px solid #E0ECF7; box-shadow:0 2px 8px rgba(0,70,173,0.08);">
+                                        <p style="margin:0 0 8px 0; color:#003875; font-size:16px; font-weight:bold; text-transform:uppercase; letter-spacing:1px;">⏰ Time Remaining</p>
+                                        <p style="margin:0 0 22px 0; color:#666666; font-size:14px; line-height:1.6;">You have 4 hours to respond to this security verification request</p>
+                                        <table role="presentation" style="width:100%; border-collapse:collapse;" cellpadding="0" cellspacing="0" border="0">
+                                            <tr>
+                                                <td style="text-align:center;">
+                                                    <!-- Dynamic countdown timer GIF - updates each time email is opened -->
+                                                    <img src="${EmployeeReachOut.CountdownTimerURL}"
+                                                         alt="Countdown Timer"
+                                                         style="max-width:720px; width:100%; height:auto;"
+                                                         border="0"/>
+                                                </td>
+                                            </tr>
+                                        </table>
+                                    </div>
                                 </td>
                             </tr>
                             <!-- Decorative separator before footer updated -->
