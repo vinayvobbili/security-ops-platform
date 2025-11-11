@@ -2204,71 +2204,13 @@ def countdown_timer():
                     num_color = number_color
                     lbl_color = label_color
 
-                # Create glossy effect with multiple layers
-
-                # 1. Draw outer shadow for depth
-                shadow_offset = 3
-                shadow_color = (200, 200, 200, 100)  # Light gray shadow
-                for offset in range(shadow_offset, 0, -1):
-                    shadow_alpha = int(30 * (shadow_offset - offset) / shadow_offset)
-                    draw.ellipse(
-                        [(circle_x + offset, circle_y + offset),
-                         (circle_x + circle_diameter + offset, circle_y + circle_diameter + offset)],
-                        fill=None,
-                        outline=(220, 220, 220),
-                        width=1
-                    )
-
-                # 2. Draw main circle with gradient effect (simulate by drawing multiple circles)
-                if is_last:
-                    # For filled circle, create gradient from top (lighter) to bottom (darker)
-                    for y_offset in range(circle_diameter):
-                        # Calculate gradient color
-                        ratio = y_offset / circle_diameter
-                        r = int(bg[0] + (bg[0] * 0.15 * (1 - ratio)))
-                        g = int(bg[1] + (bg[1] * 0.15 * (1 - ratio)))
-                        b = int(bg[2] + (bg[2] * 0.15 * (1 - ratio)))
-                        gradient_color = (min(255, r), min(255, g), min(255, b))
-
-                        # Draw horizontal line for gradient
-                        y_pos = circle_y + y_offset
-                        # Calculate x bounds for this y position (circle equation)
-                        y_from_center = y_offset - circle_radius
-                        if abs(y_from_center) < circle_radius:
-                            x_offset = int((circle_radius**2 - y_from_center**2)**0.5)
-                            x_start = circle_x + circle_radius - x_offset
-                            x_end = circle_x + circle_radius + x_offset
-                            draw.line([(x_start, y_pos), (x_end, y_pos)], fill=gradient_color, width=1)
-                else:
-                    # For white circles, just draw solid
-                    draw.ellipse(
-                        [(circle_x, circle_y), (circle_x + circle_diameter, circle_y + circle_diameter)],
-                        fill=bg,
-                        outline=None
-                    )
-
-                # 3. Draw border
+                # Draw simple circle - no effects, just clean design
                 draw.ellipse(
                     [(circle_x, circle_y), (circle_x + circle_diameter, circle_y + circle_diameter)],
-                    fill=None,
+                    fill=bg,
                     outline=circle_border_color,
                     width=border_width
                 )
-
-                # 4. Add glossy highlight at top (white semi-transparent arc)
-                highlight_height = int(circle_diameter * 0.35)
-                highlight_y = circle_y + int(circle_diameter * 0.15)
-                for h_offset in range(highlight_height):
-                    ratio = h_offset / highlight_height
-                    alpha = int(40 * (1 - ratio))  # Fade out
-                    y_pos = highlight_y + h_offset
-                    y_from_center = (y_pos - circle_y) - circle_radius
-                    if abs(y_from_center) < circle_radius:
-                        x_offset = int((circle_radius**2 - y_from_center**2)**0.5 * 0.7)  # Narrower highlight
-                        x_start = circle_x + circle_radius - x_offset
-                        x_end = circle_x + circle_radius + x_offset
-                        highlight_color = (255, 255, 255) if is_last else (255, 255, 255)
-                        draw.line([(x_start, y_pos), (x_end, y_pos)], fill=highlight_color, width=1)
 
                 # Draw the number (centered in circle, bigger than label)
                 num_bbox = draw.textbbox((0, 0), value, font=number_font)
