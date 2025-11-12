@@ -181,7 +181,12 @@ def patch_websocket_client():
                         except websockets.ConnectionClosed as e:
                             logger.warning(f"WebSocket connection closed: {e.code} {e.reason}")
                             raise  # Let backoff handle reconnection
+                        except (RuntimeError, OSError, ConnectionError) as fatal_error:
+                            # Fatal WebSocket errors that require reconnection
+                            logger.error(f"Fatal WebSocket error: {fatal_error}")
+                            raise  # Exit loop and trigger reconnection via backoff
                         except Exception as recv_error:
+                            # Log but continue for other non-fatal errors (e.g., message parsing)
                             logger.error(f"Error receiving WebSocket message: {recv_error}")
                             # Don't raise for individual message errors, continue listening
 
