@@ -57,22 +57,24 @@ def generate_countdown_timer_gif(deadline_str: str, title: str = "Time to Respon
     # Determine if expired
     is_expired = total_seconds_remaining <= 0
 
-    # Image dimensions
+    # Image dimensions (will render at 2x for sharpness, then scale down)
     img_width, img_height = 500, 140
+    scale_factor = 2
+    render_width, render_height = img_width * scale_factor, img_height * scale_factor
 
-    # Load fonts
-    number_font, label_font = _load_fonts()
+    # Load fonts (at 2x scale for sharpness)
+    number_font, label_font = _load_fonts(scale_factor=scale_factor)
 
     # Dynamic color scheme based on urgency
     hours_remaining = total_seconds_remaining / 3600
 
     # Determine colors based on urgency
     if is_expired or hours_remaining < 1:
-        progress_color = (220, 53, 69)  # Red
+        progress_color = (220, 53, 69)  # Red (sharp!)
     elif hours_remaining < 2:
-        progress_color = (255, 133, 27)  # Orange
+        progress_color = (200, 100, 20)  # Dark Orange
     else:
-        progress_color = (40, 167, 69)  # Green
+        progress_color = (20, 120, 40)  # Dark Green
 
     def draw_circular_progress(img_array, center_x, center_y, radius, width, progress, color):
         """Draw anti-aliased circular progress arc using OpenCV.
@@ -123,8 +125,8 @@ def generate_countdown_timer_gif(deadline_str: str, title: str = "Time to Respon
         minutes = (current_total % 3600) // 60
         seconds = current_total % 60
 
-        # Create numpy array (height, width, channels) - RGB format
-        img_array = np.full((img_height, img_width, 3), 255, dtype=np.uint8)
+        # Create numpy array at 2x resolution for sharpness (height, width, channels) - RGB format
+        img_array = np.full((render_height, render_width, 3), 255, dtype=np.uint8)
 
         # Time units: (value, label, max_value)
         time_units = [
@@ -133,16 +135,16 @@ def generate_countdown_timer_gif(deadline_str: str, title: str = "Time to Respon
             (seconds, "SECONDS", 60)
         ]
 
-        # Circle parameters
-        circle_diameter = 110
+        # Circle parameters (scaled for high-res rendering)
+        circle_diameter = 110 * scale_factor
         circle_radius = circle_diameter // 2
-        arc_width = 10
-        spacing = 20
+        arc_width = 10 * scale_factor
+        spacing = 20 * scale_factor
 
         # Calculate positions
         total_width = (circle_diameter * 3) + (spacing * 2)
-        start_x = (img_width - total_width) // 2
-        center_y = img_height // 2
+        start_x = (render_width - total_width) // 2
+        center_y = render_height // 2
 
         # Draw circular progress arcs using OpenCV
         for idx, (value, label, max_val) in enumerate(time_units):
@@ -168,21 +170,25 @@ def generate_countdown_timer_gif(deadline_str: str, title: str = "Time to Respon
             num_width = num_bbox[2] - num_bbox[0]
             num_height = num_bbox[3] - num_bbox[1]
             num_x = center_x - num_width // 2
-            num_y = center_y - num_height // 2 - 8
+            num_y = center_y - num_height // 2 - (8 * scale_factor)
 
-            # Number shadow
-            draw.text((num_x + 2, num_y + 2), num_text, fill=(200, 200, 200), font=number_font)
+            # Number shadow (subtle, scaled)
+            shadow_offset = 1 * scale_factor
+            draw.text((num_x + shadow_offset, num_y + shadow_offset), num_text, fill=(220, 220, 220), font=number_font)
             draw.text((num_x, num_y), num_text, fill=progress_color, font=number_font)
 
             # Draw label
             lbl_bbox = draw.textbbox((0, 0), label, font=label_font)
             lbl_width = lbl_bbox[2] - lbl_bbox[0]
             lbl_x = center_x - lbl_width // 2
-            lbl_y = num_y + num_height + 16
+            lbl_y = num_y + num_height + (16 * scale_factor)
 
-            # Label shadow
-            draw.text((lbl_x + 1, lbl_y + 1), label, fill=(200, 200, 200), font=label_font)
-            draw.text((lbl_x, lbl_y), label, fill=(100, 100, 100), font=label_font)
+            # Label shadow (subtle, scaled)
+            draw.text((lbl_x + shadow_offset, lbl_y + shadow_offset), label, fill=(220, 220, 220), font=label_font)
+            draw.text((lbl_x, lbl_y), label, fill=(0, 0, 0), font=label_font)
+
+        # Scale down to final size using high-quality resampling for sharpness
+        img = img.resize((img_width, img_height), Image.Resampling.LANCZOS)
 
         return img
 
@@ -208,8 +214,12 @@ def generate_countdown_timer_gif(deadline_str: str, title: str = "Time to Respon
     return img_buffer
 
 
-def _load_fonts():
-    """Load fonts for the countdown timer."""
+def _load_fonts(scale_factor=1):
+    """Load fonts for the countdown timer.
+
+    Args:
+        scale_factor: Multiplier for font sizes (for supersampling)
+    """
     home_dir = os.path.expanduser("~")
     font_paths = [
         f"{home_dir}/.fonts/Roboto-Medium.ttf",
@@ -225,8 +235,8 @@ def _load_fonts():
 
     for font_path in font_paths:
         try:
-            number_font = ImageFont.truetype(font_path, 48)
-            label_font = ImageFont.truetype(font_path, 12)
+            number_font = ImageFont.truetype(font_path, 48 * scale_factor)
+            label_font = ImageFont.truetype(font_path, 12 * scale_factor)
             break
         except (OSError, IOError):
             continue
