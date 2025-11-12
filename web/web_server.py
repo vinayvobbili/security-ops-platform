@@ -28,7 +28,6 @@ if _PROJECT_ROOT not in sys.path:
 import pytz
 import requests
 from flask import Flask, abort, jsonify, render_template, request, session, send_file
-from io import BytesIO
 
 # Local imports with graceful degradation
 try:
@@ -58,6 +57,7 @@ from services.xsoar import XsoarEnvironment
 from services.approved_testing_utils import add_approved_testing_entry
 from src import secops
 from src.components import apt_names_fetcher, secops_shift_metrics
+from src.components.countdown_timer_generator_v2 import generate_countdown_timer_gif, generate_error_timer_gif
 from src.utils.logging_utils import is_scanner_request, log_web_activity, setup_logging
 
 CONFIG = get_config()
@@ -2075,252 +2075,27 @@ def countdown_timer():
     - title: Optional title text (default: "Time to Respond")
     """
     try:
-        from PIL import Image, ImageDraw, ImageFont
-
         # Get deadline from query params
         deadline_str = request.args.get('deadline')
         if not deadline_str:
             return jsonify({'error': 'deadline parameter required'}), 400
 
-        # Parse deadline
-        try:
-            deadline = datetime.fromisoformat(deadline_str.replace('Z', '+00:00'))
-            if deadline.tzinfo is None:
-                deadline = eastern.localize(deadline)
-        except (ValueError, AttributeError) as parse_err:
-            return jsonify({'error': f'Invalid deadline format: {parse_err}'}), 400
-
-        # Calculate time remaining from now
-        now = datetime.now(eastern)
-        time_remaining = deadline - now
-        total_seconds_remaining = int(time_remaining.total_seconds())
-
-        # Determine if expired
-        is_expired = total_seconds_remaining <= 0
-
         # Get custom title if provided
-        request.args.get('title', 'Time to Respond')
+        title = request.args.get('title', 'Time to Respond')
 
-        # Image dimensions - compact and email-friendly
-        img_width, img_height = 480, 120
-
-        # Load fonts - bigger numbers, smaller labels
-        # Try multiple font paths for cross-platform compatibility
-        import os
-        home_dir = os.path.expanduser("~")
-        font_paths = [
-            f"{home_dir}/.fonts/Roboto-Medium.ttf",                # Roboto Medium (user installed)
-            f"{home_dir}/.fonts/Roboto-Regular.ttf",               # Roboto Regular (user installed)
-            "/usr/share/fonts/truetype/msttcorefonts/Arial.ttf",   # Linux (Ubuntu with msttcorefonts)
-            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",     # Linux (DejaVu fallback)
-            "/System/Library/Fonts/Helvetica.ttc",                 # macOS
-            "Arial.ttf",                                            # Windows
-        ]
-
-        number_font = None
-        label_font = None
-
-        for font_path in font_paths:
-            try:
-                number_font = ImageFont.truetype(font_path, 42)
-                label_font = ImageFont.truetype(font_path, 11)
-                break
-            except (OSError, IOError):
-                continue
-
-        # Fallback to default if no fonts found
-        if number_font is None:
-            number_font = ImageFont.load_default()
-            label_font = ImageFont.load_default()
-
-        # Dynamic color scheme based on time remaining
-        page_bg_color = (255, 255, 255)  # Pure white background
-
-        # Calculate hours remaining for color determination
-        hours_remaining = total_seconds_remaining / 3600
-
-        # Determine colors based on time remaining
-        # Green: 2-4 hours | Orange: 1-2 hours | Red: < 1 hour
-        if is_expired:
-            # Expired - Red
-            circle_border_color = (220, 53, 69)
-            number_color = (220, 53, 69)
-            label_color = (220, 53, 69)
-            last_circle_bg = (220, 53, 69)
-        elif hours_remaining < 1:
-            # Red: < 1 hour
-            circle_border_color = (220, 53, 69)
-            number_color = (220, 53, 69)
-            label_color = (220, 53, 69)
-            last_circle_bg = (220, 53, 69)
-        elif hours_remaining < 2:
-            # Orange: 1-2 hours
-            circle_border_color = (255, 133, 27)
-            number_color = (255, 133, 27)
-            label_color = (255, 133, 27)
-            last_circle_bg = (255, 133, 27)
-        else:
-            # Green: 2-4 hours
-            circle_border_color = (40, 167, 69)
-            number_color = (40, 167, 69)
-            label_color = (40, 167, 69)
-            last_circle_bg = (40, 167, 69)
-
-        circle_bg_color = (255, 255, 255)  # White circle background
-        last_circle_number = (255, 255, 255)  # White text
-        last_circle_label = (255, 255, 255)  # White text
-
-        def create_frame(seconds_offset):
-            """Create a single frame of the countdown timer.
-
-            Args:
-                seconds_offset: Number of seconds to subtract from current time
-            """
-            # Calculate time for this frame
-            current_total = max(0, total_seconds_remaining - seconds_offset)
-
-            hours = (current_total % 86400) // 3600
-            minutes = (current_total % 3600) // 60
-            seconds = current_total % 60
-
-            # Create image with RGBA mode for transparency effects
-            img = Image.new('RGBA', (img_width, img_height), color=page_bg_color + (255,))
-            draw = ImageDraw.Draw(img, 'RGBA')
-
-            # Only show hours, minutes, seconds (no days since max is 4 hours)
-            time_parts = [
-                (f"{hours:02d}", "HOURS"),
-                (f"{minutes:02d}", "MINUTES"),
-                (f"{seconds:02d}", "SECONDS")
-            ]
-
-            num_parts = len(time_parts)
-
-            # Circle dimensions - half the size for compact design
-            circle_diameter = 90
-            circle_radius = circle_diameter // 2
-            border_width = 5
-            spacing = 12  # Space between circles
-
-            # Calculate total width and starting position
-            total_width = (circle_diameter * num_parts) + (spacing * (num_parts - 1))
-            start_x = (img_width - total_width) // 2
-            center_y = img_height // 2
-
-            # Draw each circle with number and label
-            for i, (value, label) in enumerate(time_parts):
-                # Calculate circle position
-                circle_x = start_x + (i * (circle_diameter + spacing))
-                circle_y = center_y - circle_radius
-
-                # Determine colors for this circle
-                is_last = (i == num_parts - 1)
-                if is_last:
-                    bg = last_circle_bg
-                    num_color = last_circle_number
-                    lbl_color = last_circle_label
-                else:
-                    bg = circle_bg_color
-                    num_color = number_color
-                    lbl_color = label_color
-
-                # Draw circle with subtle drop shadow for depth
-                shadow_offset = 2
-                shadow_color = (200, 200, 200, 128)  # Light gray shadow
-                draw.ellipse(
-                    [(circle_x + shadow_offset, circle_y + shadow_offset),
-                     (circle_x + circle_diameter + shadow_offset, circle_y + circle_diameter + shadow_offset)],
-                    fill=shadow_color,
-                    outline=None
-                )
-
-                # Draw main circle with glossy gradient effect
-                draw.ellipse(
-                    [(circle_x, circle_y), (circle_x + circle_diameter, circle_y + circle_diameter)],
-                    fill=bg,
-                    outline=circle_border_color,
-                    width=border_width
-                )
-
-                # Add glossy shine effect (top half lighter)
-                if not is_last:  # Only on white circles for subtle glossy effect
-                    shine_overlay = Image.new('RGBA', (circle_diameter, circle_diameter // 2), (255, 255, 255, 30))
-                    img.paste(shine_overlay, (circle_x, circle_y), shine_overlay)
-
-                # Draw the number (centered in circle, bigger than label)
-                num_bbox = draw.textbbox((0, 0), value, font=number_font)
-                num_width = num_bbox[2] - num_bbox[0]
-                num_height = num_bbox[3] - num_bbox[1]
-                num_x = circle_x + (circle_diameter - num_width) // 2
-                num_y = circle_y + (circle_diameter - num_height) // 2 - 12  # Moved up slightly
-
-                # Add subtle text shadow for depth
-                shadow_offset_text = 1
-                text_shadow_color = (0, 0, 0, 30) if is_last else (100, 100, 100, 50)
-                draw.text((num_x + shadow_offset_text, num_y + shadow_offset_text),
-                         value, fill=text_shadow_color, font=number_font)
-                draw.text((num_x, num_y), value, fill=num_color, font=number_font)
-
-                # Draw the label (centered below number with MORE spacing)
-                lbl_bbox = draw.textbbox((0, 0), label, font=label_font)
-                lbl_width = lbl_bbox[2] - lbl_bbox[0]
-                lbl_x = circle_x + (circle_diameter - lbl_width) // 2
-                lbl_y = num_y + num_height + 10  # Increased from 4 to 10 pixels
-
-                # Add subtle label shadow
-                draw.text((lbl_x + shadow_offset_text, lbl_y + shadow_offset_text),
-                         label, fill=text_shadow_color, font=label_font)
-                draw.text((lbl_x, lbl_y), label, fill=lbl_color, font=label_font)
-
-            return img
-
-        # Generate animated GIF frames
-        frames = []
-        num_frames = 60 if not is_expired else 1  # 60 seconds of animation, or 1 frame if expired
-
-        for i in range(num_frames):
-            frame = create_frame(i)
-            # Convert RGBA to RGB for GIF compatibility (composite on white background)
-            if frame.mode == 'RGBA':
-                rgb_frame = Image.new('RGB', frame.size, (255, 255, 255))
-                rgb_frame.paste(frame, mask=frame.split()[3])  # Use alpha channel as mask
-                frames.append(rgb_frame)
-            else:
-                frames.append(frame)
-
-        # Save as animated GIF
-        img_buffer = BytesIO()
-        frames[0].save(
-            img_buffer,
-            format='GIF',
-            save_all=True,
-            append_images=frames[1:],
-            duration=1000,  # 1000ms = 1 second per frame
-            loop=0  # Loop forever
-        )
-        img_buffer.seek(0)
-
+        # Generate the countdown timer GIF
+        img_buffer = countdown_timer_generator.generate_countdown_timer_gif(deadline_str)
         return send_file(img_buffer, mimetype='image/gif', as_attachment=False)
 
+    except ValueError as val_err:
+        logger.error(f"Invalid deadline format: {val_err}", exc_info=True)
+        return jsonify({'error': str(val_err)}), 400
     except Exception as exc:
         logger.error(f"Error generating countdown timer: {exc}", exc_info=True)
         # Return a simple error image
         try:
-            from PIL import Image, ImageDraw, ImageFont
-            img = Image.new('RGB', (480, 120), color=(220, 53, 69))
-            draw = ImageDraw.Draw(img)
-            error_text = "Error generating timer"
-            try:
-                error_font = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 16)
-            except (OSError, IOError):
-                error_font = ImageFont.load_default()
-            bbox = draw.textbbox((0, 0), error_text, font=error_font)
-            text_width = bbox[2] - bbox[0]
-            draw.text(((480 - text_width) // 2, 50), error_text, fill=(255, 255, 255), font=error_font)
-            img_buffer = BytesIO()
-            img.save(img_buffer, format='GIF')
-            img_buffer.seek(0)
-            return send_file(img_buffer, mimetype='image/gif', as_attachment=False)
+            error_buffer = countdown_timer_generator.generate_error_timer_gif()
+            return send_file(error_buffer, mimetype='image/gif', as_attachment=False)
         except Exception:
             return jsonify({'error': str(exc)}), 500
 
