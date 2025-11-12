@@ -56,8 +56,7 @@ from services import xsoar
 from services.xsoar import XsoarEnvironment
 from services.approved_testing_utils import add_approved_testing_entry
 from src import secops
-from src.components import apt_names_fetcher, secops_shift_metrics
-from src.components.countdown_timer_generator_v2 import generate_countdown_timer_gif, generate_error_timer_gif
+from src.components import apt_names_fetcher, secops_shift_metrics, countdown_timer_generator_v2
 from src.utils.logging_utils import is_scanner_request, log_web_activity, setup_logging
 
 CONFIG = get_config()
@@ -2080,11 +2079,8 @@ def countdown_timer():
         if not deadline_str:
             return jsonify({'error': 'deadline parameter required'}), 400
 
-        # Get custom title if provided
-        title = request.args.get('title', 'Time to Respond')
-
         # Generate the countdown timer GIF
-        img_buffer = countdown_timer_generator.generate_countdown_timer_gif(deadline_str)
+        img_buffer = countdown_timer_generator_v2.generate_countdown_timer_gif(deadline_str)
         return send_file(img_buffer, mimetype='image/gif', as_attachment=False)
 
     except ValueError as val_err:
@@ -2093,11 +2089,8 @@ def countdown_timer():
     except Exception as exc:
         logger.error(f"Error generating countdown timer: {exc}", exc_info=True)
         # Return a simple error image
-        try:
-            error_buffer = countdown_timer_generator.generate_error_timer_gif()
-            return send_file(error_buffer, mimetype='image/gif', as_attachment=False)
-        except Exception:
-            return jsonify({'error': str(exc)}), 500
+        error_buffer = countdown_timer_generator_v2.generate_error_timer_gif()
+        return send_file(error_buffer, mimetype='image/gif', as_attachment=False)
 
 
 def main():
