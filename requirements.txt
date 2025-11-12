@@ -50,6 +50,7 @@ msoffcrypto-tool
 
 # Image Processing
 pillow
+opencv-python-headless
 pytesseract
 Cartopy
 
