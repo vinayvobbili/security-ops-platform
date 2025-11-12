@@ -121,9 +121,9 @@ def send_file_to_webex_room(room_id, file_path, message=None):
 def main():
     # pprint(get_webex_bot_rooms(BOT_ACCESS_TOKEN))
     send_file_to_webex_room(
-        room_id=config.webex_room_id_epp_tagging,
-        file_path="/Users/user/PycharmProjects/IR/data/transient/cs_servers_with_invalid_ring_tags_only.xlsx",
-        message="Unique CS servers with Invalid Ring tags"
+        room_id=config.webex_room_id_epp_tanium_tagging,
+        file_path='/Users/user/PycharmProjects/IR/data/transient/epp_device_tagging/11-12-2025/Tanium_Ring_Tags_Report.xlsx',
+        message="Here's the list of Tanium hosts without a Ring Tag. Ring tags have also been generated for your review."
     )
 
 

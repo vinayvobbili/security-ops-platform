@@ -51,7 +51,8 @@ def get_config():
         webex_room_id_aging_tickets=os.environ.get("WEBEX_ROOM_ID_AGING_TICKETS"),
         webex_room_id_vinay_test_space=os.environ.get("WEBEX_ROOM_ID_VINAY_TEST_SPACE"),
         webex_room_id_soc_shift_updates=os.environ.get("WEBEX_ROOM_ID_SOC_SHIFT_UPDATES"),
-        webex_room_id_epp_tagging=os.environ.get("WEBEX_ROOM_ID_EPP_TAGGING"),
+        webex_room_id_epp_crowdstrike_tagging=os.environ.get("WEBEX_ROOM_ID_EPP_CROWDSTRIKE_TAGGING"),
+        webex_room_id_epp_tanium_tagging=os.environ.get("WEBEX_ROOM_ID_EPP_TANIUM_TAGGING"),
         webex_room_id_metrics=os.environ.get("WEBEX_ROOM_ID_METRICS"),
         webex_room_id_threatcon_collab=os.environ.get("WEBEX_ROOM_ID_THREATCON_COLLAB"),
         webex_room_id_gosc_t2=os.environ.get("WEBEX_ROOM_ID_GOSC_T2"),
@@ -161,7 +162,8 @@ class Config:
     webex_room_id_aging_tickets: Optional[str] = None
     webex_room_id_vinay_test_space: Optional[str] = None
     webex_room_id_soc_shift_updates: Optional[str] = None
-    webex_room_id_epp_tagging: Optional[str] = None
+    webex_room_id_epp_crowdstrike_tagging: Optional[str] = None
+    webex_room_id_epp_tanium_tagging: Optional[str] = None
     webex_room_id_metrics: Optional[str] = None
     webex_room_id_threatcon_collab: Optional[str] = None
     webex_room_id_gosc_t2: Optional[str] = None
