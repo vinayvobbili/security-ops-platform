@@ -1181,7 +1181,7 @@ def jarvis_bot_factory():
 
     return WebexBot(
         CONFIG.webex_bot_access_token_jarvis,
-        approved_rooms=[CONFIG.webex_room_id_epp_tagging, CONFIG.webex_room_id_vinay_test_space],
+        approved_rooms=[CONFIG.webex_room_id_epp_crowdstrike_tagging, CONFIG.webex_room_id_epp_tanium_tagging, CONFIG.webex_room_id_vinay_test_space],
         bot_name="Jarvis - The Ring Tagging Assistant",
         threads=True,
         log_level="ERROR",
