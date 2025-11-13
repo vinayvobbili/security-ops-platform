@@ -900,7 +900,7 @@ class RingTagTaniumHosts(Command):
             total_groups = len(host_groups)
             logger.info(f"Grouped {num_to_tag} hosts into {total_groups} bulk tagging operations")
 
-            with tqdm(total=total_groups, desc="Bulk tagging host groups", unit="group") as pbar:
+            with tqdm(total=total_groups, desc="Bulk tagging host groups", unit="group", disable=not sys.stdout.isatty()) as pbar:
                 for (source, ring_tag, package_id), hosts in host_groups.items():
                     pbar.set_description(f"Tagging {len(hosts)} hosts in {source} with {ring_tag}")
 
