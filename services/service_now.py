@@ -3,6 +3,7 @@ import concurrent.futures
 import json
 import logging
 import os
+import sys
 import threading
 import time
 from datetime import datetime
@@ -421,7 +422,7 @@ def enrich_host_report(input_file):
         futures = {executor.submit(enrich_single_host, hostname): hostname for hostname in hostnames}
         logger.info(f"Submitted {len(futures)} tasks to thread pool")
 
-        for idx, future in enumerate(tqdm(concurrent.futures.as_completed(futures), total=len(futures), desc="Enriching hosts with ServiceNow"), 1):
+        for idx, future in enumerate(tqdm(concurrent.futures.as_completed(futures), total=len(futures), desc="Enriching hosts with ServiceNow", disable=not sys.stdout.isatty()), 1):
             short_hostname, details = future.result()
             if details:
                 snow_data[short_hostname] = details

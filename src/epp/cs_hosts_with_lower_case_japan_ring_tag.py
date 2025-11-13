@@ -1,5 +1,6 @@
 from datetime import datetime
 from pathlib import Path
+import sys
 
 import pandas as pd
 import logging
@@ -33,7 +34,7 @@ def get_cs_hosts_with_japan_ring_tag():
     logging.debug(f"Reading Excel file: {cached_path}")
     df = pd.read_excel(cached_path)
     filtered_hosts = []
-    for _, row in tqdm(df.iterrows(), total=len(df), desc="Filtering hosts"):  # Progress bar
+    for _, row in tqdm(df.iterrows(), total=len(df), desc="Filtering hosts", disable=not sys.stdout.isatty()):  # Progress bar
         tags = str(row.get('Current Tags', ''))
         if any(tag.startswith('FalconGroupingTags/JapanWksRing') for tag in tags.split(', ')):
             filtered_hosts.append(row.to_dict())

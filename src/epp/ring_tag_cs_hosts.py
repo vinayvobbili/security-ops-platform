@@ -22,6 +22,7 @@ import io
 import json
 import math
 import pstats
+import sys
 import time
 import logging
 from collections import defaultdict
@@ -160,7 +161,7 @@ class Host:
             # Create hosts first
             host_objects = [Host(hostname) for hostname in hostnames]
             # Initialize in parallel with progress tracking
-            for host in tqdm(executor.map(lambda host: host.initialize() or host, host_objects), total=len(host_objects), desc="Initializing hosts"):
+            for host in tqdm(executor.map(lambda host: host.initialize() or host, host_objects), total=len(host_objects), desc="Initializing hosts", disable=not sys.stdout.isatty()):
                 yield host
 
     def initialize(self) -> None:
@@ -421,7 +422,7 @@ class TagManager:
         """
         from tqdm import tqdm
         total = len(hosts_with_tags_to_remove)
-        for i in tqdm(range(0, total, batch_size), desc="Removing tags from hosts"):
+        for i in tqdm(range(0, total, batch_size), desc="Removing tags from hosts", disable=not sys.stdout.isatty()):
             batch = hosts_with_tags_to_remove[i:i + batch_size]
             device_ids = [item['device_id'] for item in batch]
             tags_to_remove = list({tag for item in batch for tag in item['tags']})
