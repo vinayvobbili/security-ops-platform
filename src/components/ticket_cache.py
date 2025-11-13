@@ -7,6 +7,7 @@ import json
 import logging
 import os
 import re
+import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
@@ -233,7 +234,7 @@ class TicketCache:
 
             try:
                 for future in tqdm(as_completed(futures.keys()),
-                                  total=len(tickets), desc="Fetching notes", unit="ticket"):
+                                  total=len(tickets), desc="Fetching notes", unit="ticket", disable=not sys.stdout.isatty()):
                     completed.add(future)
                     ticket = futures[future]
                     elapsed_time = time.time() - future_start_times[future]
@@ -333,7 +334,7 @@ class TicketCache:
         ui_tickets = []
         current_time = datetime.now(timezone.utc)
 
-        for ticket in tqdm(raw_tickets, desc="Processing tickets", unit="ticket"):
+        for ticket in tqdm(raw_tickets, desc="Processing tickets", unit="ticket", disable=not sys.stdout.isatty()):
             try:
                 ui_ticket = self._flatten_ticket(ticket, current_time)
                 ui_tickets.append(ui_ticket)

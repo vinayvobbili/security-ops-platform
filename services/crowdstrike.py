@@ -4,6 +4,7 @@ from urllib3.exceptions import InsecureRequestWarning
 urllib3.disable_warnings(InsecureRequestWarning)
 
 import concurrent.futures
+import sys
 import time
 from datetime import datetime
 from pathlib import Path
@@ -199,7 +200,7 @@ class CrowdStrikeClient:
 
                 futures = [
                     executor.submit(process_host_details, id_batch)
-                    for id_batch in tqdm.tqdm(host_id_batches, desc="Processing host batches")
+                    for id_batch in tqdm.tqdm(host_id_batches, desc="Processing host batches", disable=not sys.stdout.isatty())
                 ]
                 concurrent.futures.wait(futures)
 
