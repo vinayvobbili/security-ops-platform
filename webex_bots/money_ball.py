@@ -387,7 +387,8 @@ def moneyball_bot_factory():
     logger.info("🌐 Creating WebexBot instance...")
     bot = WebexBot(
         config.webex_bot_access_token_moneyball,
-        approved_rooms=[config.webex_room_id_vinay_test_space, config.webex_room_id_metrics],
+        # approved_rooms disabled - bot lacks spark:memberships_read scope for validation
+        # Security: Only add this bot to authorized rooms to control access
         bot_name="MoneyBall - The Metrics & Analytics Bot",
         threads=True,
         log_level="WARNING",  # Changed from ERROR to see more details
