@@ -60,9 +60,6 @@ DATA_DIR = ROOT_DIRECTORY / "data" / "transient" / "epp_device_tagging"
 
 webex_api = WebexTeamsAPI(access_token=CONFIG.webex_bot_access_token_jarvis)
 
-# Global variables
-bot_instance = None
-
 # Timezone constant for consistent usage
 EASTERN_TZ = ZoneInfo("America/New_York")
 
@@ -639,6 +636,9 @@ class GetTaniumHostsWithoutRingTag(Command):
 
     @log_activity(bot_access_token=CONFIG.webex_bot_access_token_jarvis, log_file_name="jarvis_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
+        import time
+        start_time = time.time()
+
         room_id = attachment_actions.roomId
         loading_msg = get_random_loading_message()
         webex_api.messages.create(
@@ -678,46 +678,63 @@ class GetTaniumHostsWithoutRingTag(Command):
             )
             return
 
-        # Count total hosts in report and hosts with successfully generated tags (both Cloud and On-Prem)
-        df = pd.read_excel(filepath)
-        total_hosts_in_report = len(df)
-        hosts_with_generated_tags = df[
-            (df['Generated Tag'].notna()) &
-            (df['Generated Tag'] != '') &
-            (~df['Comments'].str.contains('missing|couldn\'t be generated|error', case=False, na=False))
-            ]
-        hosts_with_generated_tags_count = len(hosts_with_generated_tags)
+        # Wrap message sending in exception handling
+        try:
+            # Count total hosts in report and hosts with successfully generated tags (both Cloud and On-Prem)
+            df = pd.read_excel(filepath)
+            total_hosts_in_report = len(df)
+            hosts_with_generated_tags = df[
+                (df['Generated Tag'].notna()) &
+                (df['Generated Tag'] != '') &
+                (~df['Comments'].str.contains('missing|couldn\'t be generated|error', case=False, na=False))
+                ]
+            hosts_with_generated_tags_count = len(hosts_with_generated_tags)
 
-        # Count by source for informational purposes
-        cloud_count = len(hosts_with_generated_tags[hosts_with_generated_tags['Source'].str.contains('Cloud', case=False, na=False)])
-        onprem_count = len(hosts_with_generated_tags[hosts_with_generated_tags['Source'].str.contains('On-Prem', case=False, na=False)])
+            # Count by source for informational purposes
+            cloud_count = len(hosts_with_generated_tags[hosts_with_generated_tags['Source'].str.contains('Cloud', case=False, na=False)])
+            onprem_count = len(hosts_with_generated_tags[hosts_with_generated_tags['Source'].str.contains('On-Prem', case=False, na=False)])
 
-        # Check which instances were actually used in the report
-        from services.tanium import TaniumClient
-        client = TaniumClient()
-        available_instances = client.list_available_instances()
-        instances_msg = f"📡 **Active instances:** {', '.join(available_instances)}"
-        if len(available_instances) < 2:
-            instances_msg += f"\n⚠️ **Note:** Only {len(available_instances)} of 2 configured instances is accessible from this server"
+            # Check which instances were actually used in the report
+            from services.tanium import TaniumClient
+            client = TaniumClient()
+            available_instances = client.list_available_instances()
+            instances_msg = f"📡 **Active instances:** {', '.join(available_instances)}"
+            if len(available_instances) < 2:
+                instances_msg += f"\n⚠️ **Note:** Only {len(available_instances)} of 2 configured instances is accessible from this server"
 
-        # Calculate hosts with issues
-        hosts_with_issues = total_hosts_in_report - hosts_with_generated_tags_count
+            # Calculate hosts with issues
+            hosts_with_issues = total_hosts_in_report - hosts_with_generated_tags_count
 
-        message = f"Hello {activity['actor']['displayName']}! Here's the list of Tanium hosts without a Ring Tag. Ring tags have also been generated for your review.\n\n"
-        message += f"{instances_msg}\n\n"
-        message += f"**Summary:**\n"
-        message += f"- Total hosts without ring tags: {total_hosts_in_report:,}\n"
-        message += f"- Hosts with ring tags generated: {hosts_with_generated_tags_count:,}\n"
-        message += f"  - Cloud: {cloud_count:,}\n"
-        message += f"  - On-Prem: {onprem_count:,}\n"
-        message += f"- Hosts with errors/missing data: {hosts_with_issues:,}"
+            # Calculate execution time
+            import time
+            execution_time = time.time() - start_time
+            minutes, seconds = divmod(int(execution_time), 60)
+            time_str = f"{minutes}m {seconds}s" if minutes > 0 else f"{seconds}s"
 
-        webex_api.messages.create(
-            roomId=room_id,
-            markdown=message,
-            files=[str(filepath)]
-        )
-        seek_approval_to_ring_tag_tanium(room_id, total_hosts=hosts_with_generated_tags_count)
+            message = f"Hello {activity['actor']['displayName']}! Here's the list of Tanium hosts without a Ring Tag. Ring tags have also been generated for your review.\n\n"
+            message += f"{instances_msg}\n\n"
+            message += f"**Summary:**\n"
+            message += f"- Total hosts without ring tags: {total_hosts_in_report:,}\n"
+            message += f"- Hosts with ring tags generated: {hosts_with_generated_tags_count:,}\n"
+            message += f"  - Cloud: {cloud_count:,}\n"
+            message += f"  - On-Prem: {onprem_count:,}\n"
+            message += f"- Hosts with errors/missing data: {hosts_with_issues:,}\n"
+            message += f"- ⏱️ Report generation time: {time_str}"
+
+            logger.info(f"Sending Tanium report to room {room_id}: {total_hosts_in_report} hosts, {hosts_with_generated_tags_count} with tags")
+            webex_api.messages.create(
+                roomId=room_id,
+                markdown=message,
+                files=[str(filepath)]
+            )
+            logger.info(f"Successfully sent Tanium report to room {room_id}")
+            seek_approval_to_ring_tag_tanium(room_id, total_hosts=hosts_with_generated_tags_count)
+        except Exception as e:
+            logger.error(f"Error sending Tanium report to Webex: {e}", exc_info=True)
+            webex_api.messages.create(
+                roomId=room_id,
+                markdown=f"❌ Report was generated successfully but failed to send via Webex: {str(e)}"
+            )
 
 
 class RingTagTaniumHosts(Command):
@@ -1189,22 +1206,22 @@ def jarvis_bot_factory():
     )
 
 
-def jarvis_initialization(bot_instance=None):
+def jarvis_initialization(bot):
     """Initialize Jarvis commands"""
-    if bot_instance:
+    if bot:
         # Add commands to the bot
-        bot_instance.add_command(GetCSHostsWithoutRingTag())
-        bot_instance.add_command(RingTagCSHosts())
-        bot_instance.add_command(DontRingTagCSHosts())
-        bot_instance.add_command(GetCSHostsWithInvalidRingTags())
-        bot_instance.add_command(RemoveInvalidRings())
-        bot_instance.add_command(DontRemoveInvalidRings())
-        bot_instance.add_command(GetTaniumHostsWithoutRingTag())
-        bot_instance.add_command(RingTagTaniumHosts())
-        bot_instance.add_command(DontRingTagTaniumHosts())
-        bot_instance.add_command(GetTaniumUnhealthyHosts())
-        bot_instance.add_command(GetBotHealth())
-        bot_instance.add_command(Hi())
+        bot.add_command(GetCSHostsWithoutRingTag())
+        bot.add_command(RingTagCSHosts())
+        bot.add_command(DontRingTagCSHosts())
+        bot.add_command(GetCSHostsWithInvalidRingTags())
+        bot.add_command(RemoveInvalidRings())
+        bot.add_command(DontRemoveInvalidRings())
+        bot.add_command(GetTaniumHostsWithoutRingTag())
+        bot.add_command(RingTagTaniumHosts())
+        bot.add_command(DontRingTagTaniumHosts())
+        bot.add_command(GetTaniumUnhealthyHosts())
+        bot.add_command(GetBotHealth())
+        bot.add_command(Hi())
         return True
     return False
 
