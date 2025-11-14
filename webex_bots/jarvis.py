@@ -1239,8 +1239,16 @@ def main():
         max_retries=5,
         initial_retry_delay=30,
         max_retry_delay=300,
-        # keepalive_interval defaults to 120s - staggered to avoid synchronized API load
+        # Multi-layered firewall defense:
+        # - TCP keepalive (60s) keeps firewall connection tracking alive (ROOT CAUSE FIX)
+        # - Idle timeout (15min) as safety net - reconnect before typical 30min firewall timeout
+        max_idle_minutes=15,  # Aggressive reconnect for VM behind 2 firewalls
     )
+
+    # Store resilient_runner globally so commands can update message activity
+    global _resilient_runner
+    _resilient_runner = resilient_runner
+
     resilient_runner.run()
 
 
