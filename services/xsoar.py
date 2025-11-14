@@ -931,6 +931,53 @@ class TicketHandler:
         # Return with latest note first
         return list(reversed(formatted_notes))
 
+    def create_new_entry_in_existing_ticket(self, incident_id: str, entry_data: str,
+                                            markdown: bool = True) -> Optional[Dict[str, Any]]:
+        """
+        Create a new entry (note) in an existing ticket.
+
+        Args:
+            incident_id: The XSOAR incident ID
+            entry_data: The entry content (note text)
+            markdown: Whether to render the entry as markdown (default: True)
+
+        Returns:
+            Response data from the API, or None if failed
+
+        Example:
+            # Add a note
+            handler.create_new_entry_in_existing_ticket("123456", "This is a note")
+
+            # Add a note without markdown
+            handler.create_new_entry_in_existing_ticket("123456", "Plain text note", markdown=False)
+        """
+        if not incident_id or not entry_data:
+            log.error("Incident ID or entry data is empty. Cannot create entry.")
+            return None
+
+        log.debug(f"Creating new note in ticket {incident_id}")
+
+        # Payload matches what XSOAR UI sends when creating a note
+        payload = {
+            "id": "",
+            "version": 0,
+            "investigationId": incident_id,
+            "data": entry_data,
+            "markdown": markdown,
+        }
+
+        try:
+            response = self.client.generic_request(
+                path='/xsoar/entry',
+                method='POST',
+                body=payload
+            )
+            log.info(f"Successfully created note in ticket {incident_id}")
+            return _parse_generic_response(response)
+        except ApiException as e:
+            log.error(f"Error creating note in ticket {incident_id}: {e}")
+            return None
+
 
 class ListHandler:
     """Handler for XSOAR list operations."""
@@ -1082,11 +1129,14 @@ def main():
         dev_list = ListHandler(XsoarEnvironment.DEV)
     """
     # print(json.dumps(get_user_notes('878736'), indent=4))
-    ticket_id = '1377930'
+    ticket_id = '1378685'
     task_name = 'Does the employee recognize the alerted activity?'
     # pprint(prod_ticket_handler.get_case_data_with_notes(ticket_id))
     dev_ticket_handler = TicketHandler(XsoarEnvironment.DEV)
-    print(dev_ticket_handler.complete_task(ticket_id, task_name))
+    # print(dev_ticket_handler.complete_task(ticket_id, task_name))
+
+    print(dev_ticket_handler.create_new_entry_in_existing_ticket(ticket_id, "This is my note"))
+    # print(dev_ticket_handler.create_new_entry_in_existing_ticket(ticket_id, "!Print value=test", markdown=False))
 
 
 if __name__ == "__main__":

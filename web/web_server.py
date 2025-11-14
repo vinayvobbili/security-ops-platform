@@ -2041,6 +2041,13 @@ def submit_employee_response():
                 dev_ticket_handler.complete_task(ticket_id, 'Does the employee recognize the alerted activity?', recognized)
                 logger.info(f"Successfully completed employee reach out XSOAR task in ticket {ticket_id} with response: {recognized}")
 
+                # extract the comments from the form and add as a note to the ticket
+                comments = data.get('comments', '').strip()
+                if comments:
+                    note_content = f"Employee Comments:\n{comments}"
+                    dev_ticket_handler.add_note_to_ticket(ticket_id, note_content)
+                    logger.info(f"Added employee comments to ticket {ticket_id}")
+
                 return jsonify({
                     'status': 'success',
                     'message': f'Thank you for your response. An analyst will contact you if required.'
