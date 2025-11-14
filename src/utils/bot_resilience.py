@@ -127,13 +127,13 @@ class ResilientBot:
             # Store the original create_connection function
             _orig_create_connection = connection.create_connection
 
-            def create_connection_with_timeout(address, timeout=socket._GLOBAL_DEFAULT_TIMEOUT, *args, **kwargs):
+            def create_connection_with_timeout(address, timeout=None, *args, **kwargs):
                 """Wrapper that sets both read AND write timeouts on sockets"""
                 sock = _orig_create_connection(address, timeout, *args, **kwargs)
 
                 # Set socket-level timeouts for BOTH read and write operations
                 # This prevents hangs during large file uploads on unreliable networks
-                if timeout is not None and timeout != socket._GLOBAL_DEFAULT_TIMEOUT:
+                if timeout is not None:
                     sock.settimeout(timeout)
                 else:
                     # Default to 180s if no timeout specified
@@ -170,8 +170,8 @@ class ResilientBot:
 
                 # Wrap it to enable TCP keepalive after connection is established
                 class TCPKeepaliveConnection:
-                    def __init__(self, connection):
-                        self._connection = connection
+                    def __init__(self, ws_connection):
+                        self._connection = ws_connection
 
                     async def __aenter__(self):
                         # Establish the WebSocket connection
@@ -207,8 +207,8 @@ class ResilientBot:
 
                         return websocket
 
-                    async def __aexit__(self, *args, **kwargs):
-                        return await self._connection.__aexit__(*args, **kwargs)
+                    async def __aexit__(self, *exit_args, **exit_kwargs):
+                        return await self._connection.__aexit__(*exit_args, **exit_kwargs)
 
                 return TCPKeepaliveConnection(connection_context)
 
@@ -315,7 +315,8 @@ class ResilientBot:
                 loop = asyncio.get_event_loop()
                 if not loop.is_closed():
                     loop.close()
-            except Exception:
+            except Exception:  # noqa: S110 - Broad exception is intentional for cleanup
+                # Ignore all errors during event loop cleanup
                 pass
 
     def _keepalive_ping(self):
@@ -552,7 +553,8 @@ class ResilientBot:
                     logger.warning(f"🔄 Retrying startup in {retry_delay}s...")
                     try:
                         self._graceful_shutdown()
-                    except Exception:
+                    except Exception:  # noqa: S110 - Broad exception is intentional for cleanup
+                        # Ignore shutdown errors during retry - we want to retry anyway
                         pass
                     time.sleep(retry_delay)
                     retry_delay = min(retry_delay * 2, 60)  # Cap at 60s
