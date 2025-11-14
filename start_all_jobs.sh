@@ -7,8 +7,8 @@ echo "Stopping existing All Jobs instances..."
 pkill -f "src/all_jobs"
 sleep 1
 
-# Clear the log file to ensure we see fresh output
-: > logs/all_jobs.log
+# Note: Log file preserved for historical troubleshooting
+# Use log rotation instead of wiping logs on restart
 
 # Start new all_jobs instance in background
 nohup env PYTHONPATH=/home/vinay/pub/IR .venv/bin/python src/all_jobs.py >> logs/all_jobs.log 2>&1 &
