@@ -73,9 +73,17 @@ class ResilientBot:
                  keepalive_interval: int = 120,
                  max_keepalive_interval: int = 600,
                  max_keepalive_failures: int = 5,
-                 max_connection_age_hours: int = 12):
+                 max_connection_age_hours: int = 12,
+                 max_idle_minutes: int = 20):
         """
-        Initialize resilient bot runner
+        Initialize resilient bot runner with multi-layered firewall traversal strategy
+
+        Multi-layered defense against firewall/NAT connection timeouts:
+        1. TCP keepalive (60s): Keeps firewall connection tracking tables alive - ROOT CAUSE FIX
+        2. WebSocket ping (10s): Application-level keepalive for quick failure detection
+        3. API health checks (120s): Detects stale application state
+        4. Idle timeout (20min): Proactive reconnection if no messages received
+        5. Max age (12h): Prevents long-lived connection degradation
 
         Args:
             bot_factory: Function that creates and returns a bot instance
@@ -88,6 +96,7 @@ class ResilientBot:
             max_keepalive_interval: Maximum keepalive ping interval (seconds)
             max_keepalive_failures: Max consecutive keepalive failures before reconnection
             max_connection_age_hours: Force reconnection after this many hours (prevents stale connections)
+            max_idle_minutes: Force reconnection if no messages received (default 20min, set lower than firewall timeout)
         """
         # Suppress noisy websocket logs for all bots
         # These INFO-level logs create excessive noise without adding value
@@ -107,26 +116,58 @@ class ResilientBot:
         except Exception as timeout_patch_error:
             logger.warning(f"⚠️  Could not patch SDK timeout: {timeout_patch_error}")
 
-        # Apply WebSocket keepalive patch to prevent idle connection timeouts
-        # Network middleboxes (firewalls, proxies, NAT) drop idle TCP connections
-        # This patch configures aggressive ping/pong to keep connections alive
+        # Apply WebSocket and TCP keepalive patches to prevent firewall connection tracking timeouts
+        # When behind firewalls/NAT (especially on VMs), idle connections get dropped from firewall
+        # state tables even if WebSocket pings work. TCP keepalive keeps firewall tracking alive.
         try:
             import websockets
+            import socket
 
             # Store the original connect function
             original_connect = websockets.connect
 
-            # Create a wrapper that adds keepalive parameters
-            def connect_with_keepalive(*args, **kwargs):
+            # Create a wrapper that adds both WebSocket pings AND TCP keepalive
+            async def connect_with_keepalive(*args, **kwargs):
                 # Set VERY aggressive ping interval (10 seconds) to prevent stale connections
-                # After long idle periods, connections can appear alive but stop receiving messages
                 kwargs.setdefault('ping_interval', 10)
                 kwargs.setdefault('ping_timeout', 5)
-                return original_connect(*args, **kwargs)
+
+                # Call original connect
+                websocket = await original_connect(*args, **kwargs)
+
+                # Enable TCP keepalive at socket level to keep firewall connection tracking alive
+                # This is the ROOT CAUSE FIX for firewall timeout issues
+                try:
+                    sock = websocket.transport.get_extra_info('socket')
+                    if sock:
+                        # Enable TCP keepalive
+                        sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+
+                        # Platform-specific keepalive tuning for aggressive firewall traversal
+                        import platform
+                        if platform.system() == 'Linux':
+                            # Linux: Start keepalive after 60s idle, probe every 30s, 3 probes before declaring dead
+                            # This ensures firewalls see activity at least every 60s
+                            sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 60)  # Start after 60s idle
+                            sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 30)  # Probe every 30s
+                            sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 3)  # 3 probes
+                            logger.debug("🔧 Enabled aggressive TCP keepalive for Linux (60s idle, 30s interval)")
+                        elif platform.system() == 'Darwin':  # macOS
+                            # macOS: Start keepalive after 60s idle, probe every 30s
+                            sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPALIVE, 60)  # Keepalive time
+                            logger.debug("🔧 Enabled TCP keepalive for macOS (60s idle)")
+                        else:
+                            logger.debug("🔧 Enabled basic TCP keepalive (OS defaults)")
+
+                        logger.debug("✅ TCP keepalive enabled on WebSocket to keep firewall connection tracking alive")
+                except Exception as tcp_keepalive_error:
+                    logger.warning(f"⚠️  Could not enable TCP keepalive on socket: {tcp_keepalive_error}")
+
+                return websocket
 
             # Replace the connect function globally
             websockets.connect = connect_with_keepalive
-            logger.info("🔧 Patched WebSocket to use 10s ping interval to prevent stale connections")
+            logger.info("🔧 Patched WebSocket with TCP keepalive to prevent firewall connection timeout")
         except Exception as websocket_patch_error:
             logger.warning(f"⚠️  Could not patch WebSocket keepalive: {websocket_patch_error}")
 
@@ -140,6 +181,7 @@ class ResilientBot:
         self.max_keepalive_interval = max_keepalive_interval
         self.max_keepalive_failures = max_keepalive_failures
         self.max_connection_age_hours = max_connection_age_hours
+        self.max_idle_minutes = max_idle_minutes
 
         # Runtime state
         self.bot_instance = None
@@ -149,6 +191,7 @@ class ResilientBot:
         self.consecutive_failures = 0
         self._bot_start_time = None
         self._bot_running = False  # Track if bot is currently running
+        self._last_message_received = datetime.now()  # Track last incoming message to detect stale connections
 
         # Setup signal handlers
         self._setup_signal_handlers()
@@ -164,6 +207,14 @@ class ResilientBot:
 
         signal.signal(signal.SIGINT, signal_handler)
         signal.signal(signal.SIGTERM, signal_handler)
+
+    def update_message_received(self):
+        """
+        Update the timestamp of the last received message.
+        Call this from your message handler to prevent idle timeout reconnections.
+        """
+        self._last_message_received = datetime.now()
+        logger.debug(f"📨 Message activity recorded for {self.bot_name}")
 
     def _log_connection_issue(self, reason):
         """Log a connection issue without triggering reconnection"""
@@ -226,6 +277,15 @@ class ResilientBot:
         while not self.shutdown_requested:
             try:
                 if self.bot_instance and hasattr(self.bot_instance, 'teams'):
+                    # Check if we haven't received any messages for too long (zombie connection detection)
+                    if self._last_message_received and self.max_idle_minutes > 0:
+                        idle_minutes = (datetime.now() - self._last_message_received).total_seconds() / 60
+                        if idle_minutes >= self.max_idle_minutes:
+                            logger.warning(f"💀 No messages received for {idle_minutes:.1f} minutes (max: {self.max_idle_minutes})")
+                            logger.warning(f"🔄 Connection appears stale - forcing reconnection to prevent missed messages")
+                            self._trigger_reconnection(f"Idle timeout after {idle_minutes:.1f}m without messages")
+                            break  # Exit keepalive thread - will restart with new bot instance
+
                     # Check if connection has been alive too long (prevents stale connections)
                     if self._bot_start_time and self.max_connection_age_hours > 0:
                         connection_age_hours = (datetime.now() - self._bot_start_time).total_seconds() / 3600
