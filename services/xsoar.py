@@ -931,8 +931,89 @@ class TicketHandler:
         # Return with latest note first
         return list(reversed(formatted_notes))
 
+    def _create_entry(self, incident_id: str, entry_data: str, endpoint: str,
+                      markdown: bool, max_retries: int = 3) -> Dict[str, Any]:
+        """
+        Internal helper method to create an entry in an existing ticket with retry logic.
+
+        Args:
+            incident_id: The XSOAR incident ID
+            entry_data: The entry content (note text or command)
+            endpoint: API endpoint ('/xsoar/entry/note' or '/xsoar/entry')
+            markdown: Whether to render the entry as markdown
+            max_retries: Maximum number of retry attempts for rate limiting/server errors
+
+        Returns:
+            Response data from the API
+
+        Raises:
+            ValueError: If incident_id or entry_data is empty
+            ApiException: If API call fails after all retries
+        """
+        # Validate inputs
+        if not incident_id:
+            raise ValueError("incident_id cannot be empty")
+        if not entry_data:
+            raise ValueError("entry_data cannot be empty")
+
+        retry_count = 0
+
+        while retry_count <= max_retries:
+            try:
+                payload = {
+                    "id": "",
+                    "version": 0,
+                    "investigationId": incident_id,
+                    "data": entry_data,
+                    "markdown": markdown,
+                }
+
+                response = self.client.generic_request(
+                    path=endpoint,
+                    method='POST',
+                    body=payload
+                )
+                return _parse_generic_response(response)
+
+            except ApiException as e:
+                # Handle rate limiting (429)
+                if e.status == 429:
+                    retry_count += 1
+                    if retry_count > max_retries:
+                        log.error(f"Exceeded max retries ({max_retries}) for {endpoint} on incident {incident_id} due to rate limiting")
+                        raise
+
+                    backoff_time = 5 * (2 ** (retry_count - 1))
+                    log.warning(f"Rate limit hit (429) for {endpoint} on incident {incident_id}. "
+                                f"Retry {retry_count}/{max_retries}. "
+                                f"Backing off for {backoff_time} seconds...")
+                    time.sleep(backoff_time)
+                    continue
+
+                # Handle server errors (502, 503, 504)
+                elif e.status in [502, 503, 504]:
+                    retry_count += 1
+                    if retry_count > max_retries:
+                        log.error(f"Exceeded max retries ({max_retries}) for {endpoint} on incident {incident_id} due to server error {e.status}")
+                        raise
+
+                    backoff_time = 5 * (2 ** (retry_count - 1))
+                    log.warning(f"Server error {e.status} for {endpoint} on incident {incident_id}. "
+                                f"Retry {retry_count}/{max_retries}. "
+                                f"Backing off for {backoff_time} seconds...")
+                    time.sleep(backoff_time)
+                    continue
+
+                # For other errors, log and raise immediately
+                else:
+                    log.error(f"Error calling {endpoint} for incident {incident_id}: {e}")
+                    raise
+
+        # Should not reach here, but just in case
+        raise ApiException(f"Failed to create entry at {endpoint} for incident {incident_id} after {max_retries} retries")
+
     def create_new_entry_in_existing_ticket(self, incident_id: str, entry_data: str,
-                                            markdown: bool = True) -> Optional[Dict[str, Any]]:
+                                            markdown: bool = True) -> Dict[str, Any]:
         """
         Create a new entry (note) in an existing ticket.
 
@@ -942,7 +1023,11 @@ class TicketHandler:
             markdown: Whether to render the entry as markdown (default: True)
 
         Returns:
-            Response data from the API, or None if failed
+            Response data from the API
+
+        Raises:
+            ValueError: If incident_id or entry_data is empty
+            ApiException: If API call fails after retries
 
         Example:
             # Add a note
@@ -951,32 +1036,50 @@ class TicketHandler:
             # Add a note without markdown
             handler.create_new_entry_in_existing_ticket("123456", "Plain text note", markdown=False)
         """
-        if not incident_id or not entry_data:
-            log.error("Incident ID or entry data is empty. Cannot create entry.")
-            return None
-
         log.debug(f"Creating new note in ticket {incident_id}")
+        result = self._create_entry(incident_id, entry_data, '/xsoar/entry/note', markdown)
+        log.info(f"Successfully created note in ticket {incident_id}")
+        return result
 
-        # Payload matches what XSOAR UI sends when creating a note
-        payload = {
-            "id": "",
-            "version": 0,
-            "investigationId": incident_id,
-            "data": entry_data,
-            "markdown": markdown,
-        }
+    def execute_command_in_war_room(self, incident_id: str, command: str) -> Dict[str, Any]:
+        """
+        Execute a command in the war room of the specified incident.
 
-        try:
-            response = self.client.generic_request(
-                path='/xsoar/entry',
-                method='POST',
-                body=payload
-            )
-            log.info(f"Successfully created note in ticket {incident_id}")
-            return _parse_generic_response(response)
-        except ApiException as e:
-            log.error(f"Error creating note in ticket {incident_id}: {e}")
-            return None
+        ⚠️ SECURITY WARNING:
+        This method executes arbitrary XSOAR commands in the war room.
+        Only use with trusted input. Malicious commands could compromise security
+        or modify incident data unexpectedly.
+
+        Args:
+            incident_id: The XSOAR incident ID
+            command: The XSOAR command to execute (e.g., "!ad-get-user username=jdoe")
+
+        Returns:
+            Response data from the API
+
+        Raises:
+            ValueError: If incident_id or command is empty
+            ApiException: If API call fails after retries
+
+        Example:
+            # Safe: Query Active Directory user information
+            handler.execute_command_in_war_room("123456", "!ad-get-user username=user")
+
+            # Safe: Get incident context
+            handler.execute_command_in_war_room("123456", "!Print value=${incident}")
+
+            # WARNING: Be careful with commands that modify data
+            # Only execute with validated/sanitized input
+
+        Note:
+            - Commands are executed in the incident's war room context
+            - Command execution is logged at INFO level for audit purposes
+            - Supports all XSOAR automation commands available in the war room
+        """
+        log.info(f"Executing war room command in ticket {incident_id}: {command}")
+        result = self._create_entry(incident_id, command, '/xsoar/entry', markdown=False)
+        log.info(f"Successfully executed command '{command}' in ticket {incident_id}")
+        return result
 
 
 class ListHandler:
@@ -1135,8 +1238,8 @@ def main():
     dev_ticket_handler = TicketHandler(XsoarEnvironment.DEV)
     # print(dev_ticket_handler.complete_task(ticket_id, task_name))
 
-    print(dev_ticket_handler.create_new_entry_in_existing_ticket(ticket_id, "This is my note"))
-    # print(dev_ticket_handler.create_new_entry_in_existing_ticket(ticket_id, "!Print value=test", markdown=False))
+    # print(dev_ticket_handler.create_new_entry_in_existing_ticket(ticket_id, "This is my note"))
+    print(dev_ticket_handler.execute_command_in_war_room(ticket_id, "!ad-get-user username=user"))
 
 
 if __name__ == "__main__":
