@@ -934,6 +934,7 @@ def announce_shift_change(shift_name, room_id, sleep_time=30):
 
 def send_daily_operational_report_charts(room_id=config.webex_room_id_metrics):
     """Send daily operational report charts to Webex room with retry logic for VM network timeouts."""
+    logger.info("📊 Starting daily operational report chart distribution")
 
     def send_chart_with_retry(room_id, text, markdown, files=None, max_retries=3):
         """Send chart with exponential backoff retry for network timeout errors"""
@@ -981,6 +982,7 @@ def send_daily_operational_report_charts(room_id=config.webex_room_id_metrics):
                     markdown=f"{fun_message}\n\n📊 **{chart_title}**",
                     files=[str(chart_path)]
                 )
+                logger.info(f"✅ Sent chart: {chart_title}")
             else:
                 logger.warning(f"Chart file not found: {chart_path}")
                 ouch_message = random.choice(CHART_NOT_FOUND_MESSAGES)
@@ -990,6 +992,8 @@ def send_daily_operational_report_charts(room_id=config.webex_room_id_metrics):
                     text=f"{ouch_message} - Missing: {chart_title}",
                     markdown=f"{ouch_message}\n\n**Missing:** {chart_title}"
                 )
+
+        logger.info(f"📊 Completed daily operational report chart distribution ({len(dor_charts)} charts processed)")
 
     except Exception as e:
         logger.error(f"Error in send_daily_operational_report_charts: {e}")
