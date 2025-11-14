@@ -7,8 +7,8 @@ echo "Stopping existing Pokedex instances..."
 pkill -f "webex_bots/pokedex"
 sleep 1
 
-# Clear the log file to ensure we see fresh output
-: > pokedex.log
+# Note: Log file preserved for historical troubleshooting
+# Use log rotation instead of wiping logs on restart
 
 # Start new pokedex instance in background
 # Python logging handles all output - no need to redirect here

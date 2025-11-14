@@ -19,8 +19,8 @@ sleep 1
 # Ensure logs directory exists
 mkdir -p logs
 
-# Clear the log file to ensure we see fresh output
-: > logs/jarvis.log
+# Note: Log file preserved for historical troubleshooting
+# Use log rotation instead of wiping logs on restart
 
 # Start new jarvis instance in background
 # Python logging handles all output - no need to redirect here
