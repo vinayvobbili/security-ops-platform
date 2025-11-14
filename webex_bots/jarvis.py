@@ -1231,6 +1231,20 @@ def jarvis_initialization(bot):
     return False
 
 
+def jarvis_initialization_with_tracking(bot_instance, resilient_runner):
+    """Initialize Jarvis with message activity tracking for idle detection"""
+    from src.utils.bot_resilience import enable_message_tracking
+
+    if not bot_instance:
+        return False
+
+    # Enable message tracking for idle timeout detection
+    enable_message_tracking(bot_instance, resilient_runner)
+
+    # Run original initialization
+    return jarvis_initialization(bot_instance)
+
+
 def main():
     """Jarvis main with resilience framework"""
     from src.utils.bot_resilience import ResilientBot
@@ -1238,7 +1252,7 @@ def main():
     resilient_runner = ResilientBot(
         bot_name="Jarvis",
         bot_factory=jarvis_bot_factory,
-        initialization_func=jarvis_initialization,
+        initialization_func=lambda bot: jarvis_initialization_with_tracking(bot, resilient_runner),
         max_retries=5,
         initial_retry_delay=30,
         max_retry_delay=300,

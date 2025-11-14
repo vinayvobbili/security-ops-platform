@@ -587,21 +587,58 @@ class ResilientBot:
         self._graceful_shutdown()
 
 
+def enable_message_tracking(bot_instance, resilient_runner):
+    """
+    Enable automatic message activity tracking for idle detection.
+
+    Wraps the bot's message processing to notify the resilience framework
+    whenever a message is received, enabling idle timeout detection.
+
+    Args:
+        bot_instance: The WebexBot instance
+        resilient_runner: The ResilientBot instance managing this bot
+
+    Usage:
+        def my_initialization(bot_instance):
+            # Enable idle detection
+            enable_message_tracking(bot_instance, resilient_runner)
+            # ... rest of initialization
+            return True
+    """
+    if not bot_instance or not hasattr(bot_instance, 'process_raw_command'):
+        logger.warning("Cannot enable message tracking - bot instance invalid or missing process_raw_command")
+        return
+
+    # Wrap the bot's process_raw_command to track message activity
+    original_process_raw_command = bot_instance.process_raw_command
+
+    def tracked_process_raw_command(*args, **kwargs):
+        """Wrapper that updates message timestamp for idle detection"""
+        # Notify resilience framework that a message was received
+        resilient_runner.update_message_received()
+        # Call original command processor
+        return original_process_raw_command(*args, **kwargs)
+
+    # Replace with tracked version
+    bot_instance.process_raw_command = tracked_process_raw_command
+    logger.info("✅ Message activity tracking enabled for idle detection")
+
+
 def create_resilient_main(bot_factory: Callable[[], Any],
                           initialization_func: Optional[Callable[[], bool]] = None,
                           bot_name: Optional[str] = None):
     """
     Convenience function to create a resilient main() function
-    
+
     Usage:
         def create_my_bot():
             return WebexBot(...)
-        
+
         def initialize_my_bot():
             return True
-        
+
         main = create_resilient_main(create_my_bot, initialize_my_bot)
-        
+
         if __name__ == "__main__":
             main()
     """

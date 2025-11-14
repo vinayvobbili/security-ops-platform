@@ -195,14 +195,23 @@ def main():
     logger.info(f"📍 Notification room ID: {NOTIFICATION_ROOM_ID}")
 
     # Use ResilientBot framework for automatic reconnection and firewall handling
-    from src.utils.bot_resilience import ResilientBot
+    from src.utils.bot_resilience import ResilientBot, enable_message_tracking
 
     logger.info("🛡️ Starting with ResilientBot framework for enhanced firewall resilience")
+
+    def msoar_initialization_with_tracking(bot_instance, resilient_runner):
+        """Initialize MSOAR with message activity tracking for idle detection"""
+        if not bot_instance:
+            return False
+        # Enable message tracking for idle timeout detection
+        enable_message_tracking(bot_instance, resilient_runner)
+        # Run original initialization
+        return msoar_initialization(bot_instance)
 
     resilient_runner = ResilientBot(
         bot_name="MSOAR",
         bot_factory=msoar_bot_factory,
-        initialization_func=msoar_initialization,
+        initialization_func=lambda bot: msoar_initialization_with_tracking(bot, resilient_runner),
         max_retries=5,
         initial_retry_delay=30,
         max_retry_delay=300,

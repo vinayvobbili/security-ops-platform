@@ -336,6 +336,20 @@ class Bot(WebexBot):
             )
 
 
+def initialize_bot_with_tracking(bot_instance, resilient_runner):
+    """Initialize HAL9000 with message activity tracking for idle detection"""
+    from src.utils.bot_resilience import enable_message_tracking
+
+    if not bot_instance:
+        return False
+
+    # Enable message tracking for idle timeout detection
+    enable_message_tracking(bot_instance, resilient_runner)
+
+    # Run original initialization (doesn't need bot_instance parameter)
+    return initialize_bot()
+
+
 def main():
     """HAL9000 main with resilience framework"""
     from src.utils.bot_resilience import ResilientBot
@@ -348,7 +362,7 @@ def main():
             # Security: Only add this bot to authorized rooms to control access
             bot_name="HAL9000"
         ),
-        initialization_func=initialize_bot,
+        initialization_func=lambda bot: initialize_bot_with_tracking(bot, resilient_runner),
         bot_name="HAL9000",
         max_retries=5,
         initial_retry_delay=30,

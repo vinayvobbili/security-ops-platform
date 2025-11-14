@@ -612,6 +612,20 @@ def barnacles_initialization(bot_instance=None):
     return False
 
 
+def barnacles_initialization_with_tracking(bot_instance, resilient_runner):
+    """Initialize Barnacles with message activity tracking for idle detection"""
+    from src.utils.bot_resilience import enable_message_tracking
+
+    if not bot_instance:
+        return False
+
+    # Enable message tracking for idle timeout detection
+    enable_message_tracking(bot_instance, resilient_runner)
+
+    # Run original initialization
+    return barnacles_initialization(bot_instance)
+
+
 def main():
     """Barnacles main - always uses resilience framework"""
     from src.utils.bot_resilience import ResilientBot
@@ -621,7 +635,7 @@ def main():
     resilient_runner = ResilientBot(
         bot_name="Barnacles",
         bot_factory=barnacles_bot_factory,
-        initialization_func=barnacles_initialization,
+        initialization_func=lambda bot: barnacles_initialization_with_tracking(bot, resilient_runner),
         max_retries=5,
         initial_retry_delay=30,
         max_retry_delay=300,

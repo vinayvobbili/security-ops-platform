@@ -2309,6 +2309,20 @@ def toodles_initialization(bot_instance=None):
     return False
 
 
+def toodles_initialization_with_tracking(bot_instance, resilient_runner):
+    """Initialize Toodles with message activity tracking for idle detection"""
+    from src.utils.bot_resilience import enable_message_tracking
+
+    if not bot_instance:
+        return False
+
+    # Enable message tracking for idle timeout detection
+    enable_message_tracking(bot_instance, resilient_runner)
+
+    # Run original initialization
+    return toodles_initialization(bot_instance)
+
+
 def main():
     """Toodles main - always uses resilience framework"""
     from src.utils.bot_resilience import ResilientBot
@@ -2318,7 +2332,7 @@ def main():
     resilient_runner = ResilientBot(
         bot_name="Toodles",
         bot_factory=toodles_bot_factory,
-        initialization_func=toodles_initialization,
+        initialization_func=lambda bot: toodles_initialization_with_tracking(bot, resilient_runner),
         max_retries=5,
         initial_retry_delay=30,
         max_retry_delay=300,
