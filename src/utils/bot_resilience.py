@@ -122,48 +122,64 @@ class ResilientBot:
         try:
             import websockets
             import socket
+            import functools
 
             # Store the original connect function
             original_connect = websockets.connect
 
             # Create a wrapper that adds both WebSocket pings AND TCP keepalive
-            async def connect_with_keepalive(*args, **kwargs):
+            # This must be a regular function, not async, to preserve the context manager protocol
+            def connect_with_keepalive(*args, **kwargs):
                 # Set VERY aggressive ping interval (10 seconds) to prevent stale connections
                 kwargs.setdefault('ping_interval', 10)
                 kwargs.setdefault('ping_timeout', 5)
 
-                # Call original connect
-                websocket = await original_connect(*args, **kwargs)
+                # Get the original connection context manager
+                connection_context = original_connect(*args, **kwargs)
 
-                # Enable TCP keepalive at socket level to keep firewall connection tracking alive
-                # This is the ROOT CAUSE FIX for firewall timeout issues
-                try:
-                    sock = websocket.transport.get_extra_info('socket')
-                    if sock:
-                        # Enable TCP keepalive
-                        sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+                # Wrap it to enable TCP keepalive after connection is established
+                class TCPKeepaliveConnection:
+                    def __init__(self, connection):
+                        self._connection = connection
 
-                        # Platform-specific keepalive tuning for aggressive firewall traversal
-                        import platform
-                        if platform.system() == 'Linux':
-                            # Linux: Start keepalive after 60s idle, probe every 30s, 3 probes before declaring dead
-                            # This ensures firewalls see activity at least every 60s
-                            sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 60)  # Start after 60s idle
-                            sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 30)  # Probe every 30s
-                            sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 3)  # 3 probes
-                            logger.debug("🔧 Enabled aggressive TCP keepalive for Linux (60s idle, 30s interval)")
-                        elif platform.system() == 'Darwin':  # macOS
-                            # macOS: Start keepalive after 60s idle, probe every 30s
-                            sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPALIVE, 60)  # Keepalive time
-                            logger.debug("🔧 Enabled TCP keepalive for macOS (60s idle)")
-                        else:
-                            logger.debug("🔧 Enabled basic TCP keepalive (OS defaults)")
+                    async def __aenter__(self):
+                        # Establish the WebSocket connection
+                        websocket = await self._connection.__aenter__()
 
-                        logger.debug("✅ TCP keepalive enabled on WebSocket to keep firewall connection tracking alive")
-                except Exception as tcp_keepalive_error:
-                    logger.warning(f"⚠️  Could not enable TCP keepalive on socket: {tcp_keepalive_error}")
+                        # Enable TCP keepalive at socket level to keep firewall connection tracking alive
+                        # This is the ROOT CAUSE FIX for firewall timeout issues
+                        try:
+                            sock = websocket.transport.get_extra_info('socket')
+                            if sock:
+                                # Enable TCP keepalive
+                                sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
 
-                return websocket
+                                # Platform-specific keepalive tuning for aggressive firewall traversal
+                                import platform
+                                if platform.system() == 'Linux':
+                                    # Linux: Start keepalive after 60s idle, probe every 30s, 3 probes before declaring dead
+                                    # This ensures firewalls see activity at least every 60s
+                                    sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 60)  # Start after 60s idle
+                                    sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 30)  # Probe every 30s
+                                    sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 3)  # 3 probes
+                                    logger.debug("🔧 Enabled aggressive TCP keepalive for Linux (60s idle, 30s interval)")
+                                elif platform.system() == 'Darwin':  # macOS
+                                    # macOS: Start keepalive after 60s idle
+                                    sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPALIVE, 60)  # Keepalive time
+                                    logger.debug("🔧 Enabled TCP keepalive for macOS (60s idle)")
+                                else:
+                                    logger.debug("🔧 Enabled basic TCP keepalive (OS defaults)")
+
+                                logger.debug("✅ TCP keepalive enabled on WebSocket to keep firewall connection tracking alive")
+                        except Exception as tcp_keepalive_error:
+                            logger.warning(f"⚠️  Could not enable TCP keepalive on socket: {tcp_keepalive_error}")
+
+                        return websocket
+
+                    async def __aexit__(self, *args, **kwargs):
+                        return await self._connection.__aexit__(*args, **kwargs)
+
+                return TCPKeepaliveConnection(connection_context)
 
             # Replace the connect function globally
             websockets.connect = connect_with_keepalive
