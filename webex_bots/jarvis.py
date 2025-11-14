@@ -1198,6 +1198,7 @@ def jarvis_bot_factory():
 
     return WebexBot(
         CONFIG.webex_bot_access_token_jarvis,
+        approved_domains=[CONFIG.my_web_domain],
         # approved_rooms disabled - bot lacks spark:memberships_read scope for validation
         # Security: Only add this bot to authorized rooms to control access
         bot_name="Jarvis - The Ring Tagging Assistant",
