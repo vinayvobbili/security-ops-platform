@@ -2266,6 +2266,7 @@ def toodles_bot_factory():
     return WebexBot(
         CONFIG.webex_bot_access_token_toodles,
         bot_name="Toodles Bot",
+        approved_domains=[CONFIG.my_web_domain],
         # approved_rooms disabled - bot lacks spark:memberships_read scope for validation
         # Security: Only add this bot to authorized rooms to control access
         log_level="ERROR",
