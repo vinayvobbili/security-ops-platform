@@ -74,7 +74,7 @@ class ResilientBot:
                  max_keepalive_interval: int = 600,
                  max_keepalive_failures: int = 5,
                  max_connection_age_hours: int = 12,
-                 max_idle_minutes: int = 20):
+                 max_idle_minutes: int = 10):
         """
         Initialize resilient bot runner with multi-layered firewall traversal strategy
 
@@ -82,8 +82,9 @@ class ResilientBot:
         1. TCP keepalive (60s): Keeps firewall connection tracking tables alive - ROOT CAUSE FIX
         2. WebSocket ping (10s): Application-level keepalive for quick failure detection
         3. API health checks (120s): Detects stale application state
-        4. Idle timeout (20min): Proactive reconnection if no messages received
+        4. Idle timeout (10min): Proactive reconnection if no messages received (VM networks)
         5. Max age (12h): Prevents long-lived connection degradation
+        6. Socket write timeout (180s): Prevents hangs during large file uploads on unreliable networks
 
         Args:
             bot_factory: Function that creates and returns a bot instance
@@ -96,7 +97,7 @@ class ResilientBot:
             max_keepalive_interval: Maximum keepalive ping interval (seconds)
             max_keepalive_failures: Max consecutive keepalive failures before reconnection
             max_connection_age_hours: Force reconnection after this many hours (prevents stale connections)
-            max_idle_minutes: Force reconnection if no messages received (default 20min, set lower than firewall timeout)
+            max_idle_minutes: Force reconnection if no messages received (default 10min for VM networks with aggressive firewalls)
         """
         # Suppress noisy websocket logs for all bots
         # These INFO-level logs create excessive noise without adding value
@@ -115,6 +116,36 @@ class ResilientBot:
             logger.info("⏱️  Increased SDK HTTP timeout from 60s to 180s for device registration")
         except Exception as timeout_patch_error:
             logger.warning(f"⚠️  Could not patch SDK timeout: {timeout_patch_error}")
+
+        # CRITICAL FIX: Patch socket-level write timeouts for VM network environments
+        # The VM has severe network issues (20K+ TCP timeouts), causing write operations to hang
+        # Python's socket library by default has NO write timeout, so uploads can hang forever
+        try:
+            import socket
+            from urllib3.util import connection
+
+            # Store the original create_connection function
+            _orig_create_connection = connection.create_connection
+
+            def create_connection_with_timeout(address, timeout=socket._GLOBAL_DEFAULT_TIMEOUT, *args, **kwargs):
+                """Wrapper that sets both read AND write timeouts on sockets"""
+                sock = _orig_create_connection(address, timeout, *args, **kwargs)
+
+                # Set socket-level timeouts for BOTH read and write operations
+                # This prevents hangs during large file uploads on unreliable networks
+                if timeout is not None and timeout != socket._GLOBAL_DEFAULT_TIMEOUT:
+                    sock.settimeout(timeout)
+                else:
+                    # Default to 180s if no timeout specified
+                    sock.settimeout(180.0)
+
+                return sock
+
+            # Monkey-patch urllib3's connection module (used by requests)
+            connection.create_connection = create_connection_with_timeout
+            logger.info("⏱️  Patched socket write timeouts to prevent hangs on VM network (180s)")
+        except Exception as socket_patch_error:
+            logger.warning(f"⚠️  Could not patch socket timeouts: {socket_patch_error}")
 
         # Apply WebSocket and TCP keepalive patches to prevent firewall connection tracking timeouts
         # When behind firewalls/NAT (especially on VMs), idle connections get dropped from firewall

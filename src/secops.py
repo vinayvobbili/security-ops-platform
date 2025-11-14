@@ -618,6 +618,12 @@ def get_shift_security_actions(days_back, shift_start_hour):
         }
 
 
+@retry(
+    reraise=False,  # Don't crash the caller - log and continue
+    stop=stop_after_attempt(3),  # Retry up to 3 times
+    wait=wait_exponential(multiplier=2, min=2, max=10),  # Exponential backoff
+    before_sleep=before_sleep_log(logger, logging.WARNING),
+)
 def announce_previous_shift_performance(room_id, shift_name):
     """Announce the performance of the previous shift in the Webex room using EXACT timestamps."""
     try:
@@ -927,7 +933,31 @@ def announce_shift_change(shift_name, room_id, sleep_time=30):
 
 
 def send_daily_operational_report_charts(room_id=config.webex_room_id_metrics):
-    """Send daily operational report charts to Webex room."""
+    """Send daily operational report charts to Webex room with retry logic for VM network timeouts."""
+
+    def send_chart_with_retry(room_id, text, markdown, files=None, max_retries=3):
+        """Send chart with exponential backoff retry for network timeout errors"""
+        import time
+        from requests.exceptions import ConnectionError, Timeout
+
+        for attempt in range(max_retries):
+            try:
+                webex_api.messages.create(
+                    roomId=room_id,
+                    text=text,
+                    markdown=markdown,
+                    files=files if files else None
+                )
+                return  # Success
+            except (ConnectionError, Timeout, TimeoutError) as e:
+                if attempt < max_retries - 1:
+                    wait_time = 2 ** attempt  # Exponential backoff: 1s, 2s, 4s
+                    logger.warning(f"⚠️  Chart upload timeout (attempt {attempt+1}/{max_retries}): {e}. Retrying in {wait_time}s...")
+                    time.sleep(wait_time)
+                else:
+                    logger.error(f"❌ Chart upload failed after {max_retries} attempts: {e}")
+                    raise
+
     try:
         today = datetime.today()
         charts_dir = root_directory / 'web' / 'static' / 'charts'
@@ -945,8 +975,8 @@ def send_daily_operational_report_charts(room_id=config.webex_room_id_metrics):
             if chart_path.exists():
                 fun_message = random.choice(DOR_CHART_MESSAGES)
                 chart_title = chart.replace('.png', '')
-                webex_api.messages.create(
-                    roomId=room_id,
+                send_chart_with_retry(
+                    room_id=room_id,
                     text=f"{fun_message} - {chart_title}",
                     markdown=f"{fun_message}\n\n📊 **{chart_title}**",
                     files=[str(chart_path)]
@@ -955,8 +985,8 @@ def send_daily_operational_report_charts(room_id=config.webex_room_id_metrics):
                 logger.warning(f"Chart file not found: {chart_path}")
                 ouch_message = random.choice(CHART_NOT_FOUND_MESSAGES)
                 chart_title = chart.replace('.png', '')
-                webex_api.messages.create(
-                    roomId=room_id,
+                send_chart_with_retry(
+                    room_id=room_id,
                     text=f"{ouch_message} - Missing: {chart_title}",
                     markdown=f"{ouch_message}\n\n**Missing:** {chart_title}"
                 )
