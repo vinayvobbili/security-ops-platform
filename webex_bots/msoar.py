@@ -130,7 +130,7 @@ def msoar_bot_factory() -> WebexBot:
     logger.info("🔧 Initializing WebexBot...")
     bot = WebexBot(
         teams_bot_token=BOT_ACCESS_TOKEN,
-        approved_domains=['company.com'],
+        approved_domains=[CONFIG.my_web_domain],
         # approved_rooms disabled - bot lacks spark:memberships_read scope for validation
         # Security: Only add this bot to authorized rooms to control access
         bot_name="METCIRT SOAR",

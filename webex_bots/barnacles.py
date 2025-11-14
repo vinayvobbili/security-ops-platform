@@ -588,7 +588,7 @@ def barnacles_bot_factory():
 
     return WebexBot(
         bot_token,
-        approved_rooms=[],
+        approved_domains=[config.my_web_domain],
         approved_users=config.barnacles_approved_users.split(','),
         bot_name="the alert triage service - The Captain's Assistant",
         threads=True,

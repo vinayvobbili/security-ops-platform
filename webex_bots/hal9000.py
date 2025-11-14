@@ -343,6 +343,7 @@ def main():
     resilient_runner = ResilientBot(
         bot_factory=lambda: Bot(
             teams_bot_token=WEBEX_ACCESS_TOKEN,
+            approved_domains=[CONFIG.my_web_domain],
             # approved_rooms disabled - bot lacks spark:memberships_read scope for validation
             # Security: Only add this bot to authorized rooms to control access
             bot_name="HAL9000"
