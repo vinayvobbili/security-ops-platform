@@ -24,7 +24,8 @@ restart_bot() {
 
     # Verify it started
     if pgrep -f "python.*webex_bots/${bot_name}.py" > /dev/null; then
-        local pid=$(pgrep -f "python.*webex_bots/${bot_name}.py")
+        local pid
+        pid=$(pgrep -f "python.*webex_bots/${bot_name}.py")
         echo "   ✅ $bot_name started (PID: $pid)"
     else
         echo "   ❌ $bot_name failed to start"
@@ -43,9 +44,15 @@ echo "📊 Final Status:"
 echo ""
 
 # Show all running bots
-ps aux | grep '[p]ython.*webex_bots' | grep -v log_viewer | while read -r line; do
-    pid=$(echo "$line" | awk '{print $2}')
-    bot=$(echo "$line" | grep -oP 'webex_bots/\K[^.]+')
+pgrep -f 'python.*webex_bots' | while read -r pid; do
+    # Get the full command line for this PID
+    cmd=$(ps -p "$pid" -o command= 2>/dev/null)
+    # Skip if it's the log_viewer
+    if [[ "$cmd" == *"log_viewer"* ]]; then
+        continue
+    fi
+    # Extract bot name
+    bot=$(echo "$cmd" | grep -oP 'webex_bots/\K[^.]+')
     uptime=$(ps -p "$pid" -o etime= 2>/dev/null | tr -d ' ')
     echo "✅ $bot (PID: $pid, Uptime: $uptime)"
 done

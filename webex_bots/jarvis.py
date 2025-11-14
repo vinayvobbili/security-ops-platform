@@ -63,6 +63,9 @@ webex_api = WebexTeamsAPI(access_token=CONFIG.webex_bot_access_token_jarvis)
 # Timezone constant for consistent usage
 EASTERN_TZ = ZoneInfo("America/New_York")
 
+# Global resilient bot runner instance (set in main())
+_resilient_runner = None
+
 # Fun loading messages
 LOADING_MESSAGES = [
     "🔮 Consulting the digital crystal ball...",
