@@ -2012,10 +2012,15 @@ def employee_reach_out_form():
     """Display employee reach out form"""
     # Get command details from query parameters
     ticket_id = request.args.get('case_id', '')
-
-    return render_template('employee_reach_out_form.html',
+    playbook_task_name = 'Does the employee recognize the alerted activity?'
+    task_id = dev_ticket_handler.get_playbook_task_id(ticket_id, target_task_name=playbook_task_name)
+    if task_id:
+        return render_template('employee_reach_out_form.html',
                            ticket_id=ticket_id,
                            )
+    else:
+        # this means that the task has already been closed
+        return render_template('employee_reach_out_already_completed.html')
 
 
 @app.route('/submit-employee-response', methods=['POST'])
