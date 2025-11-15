@@ -270,7 +270,9 @@ class ResilientBot:
         self._self_ping_marker = None  # Unique marker to identify self-ping messages
         self._last_self_ping_sent = None  # Timestamp of last self-ping sent
         self._last_self_ping_received = None  # Timestamp of last self-ping received
-        self._bot_email = None  # Bot's email address for self-messaging
+        self._bot_email = None  # Bot's email address
+        self._bot_person_id = None  # Bot's person ID
+        self._health_check_room_id = None  # Dedicated room ID for health checks
 
         # Setup signal handlers
         self._setup_signal_handlers()
@@ -312,21 +314,31 @@ class ResilientBot:
             return False
 
         try:
-            # Get bot's own email if we don't have it yet
-            if not self._bot_email:
-                me = self.bot_instance.teams.people.me()
-                self._bot_email = me.emails[0] if me.emails else None
-                if not self._bot_email:
-                    logger.warning("Cannot send self-ping - bot email not available")
-                    return False
+            # Get or create health check room
+            if not self._health_check_room_id:
+                # Try to find existing health check room
+                rooms = self.bot_instance.teams.rooms.list()
+                health_room_name = f"{self.bot_name}_HealthCheck"
+
+                for room in rooms:
+                    if hasattr(room, 'title') and room.title == health_room_name:
+                        self._health_check_room_id = room.id
+                        logger.debug(f"Found existing health check room: {health_room_name}")
+                        break
+
+                # Create new room if not found
+                if not self._health_check_room_id:
+                    new_room = self.bot_instance.teams.rooms.create(health_room_name)
+                    self._health_check_room_id = new_room.id
+                    logger.info(f"✅ Created health check room: {health_room_name}")
 
             # Generate unique marker for this ping
             import uuid
             self._self_ping_marker = f"SELF_PING_{uuid.uuid4().hex[:8]}"
 
-            # Send message to self
+            # Send message to health check room
             self.bot_instance.teams.messages.create(
-                toPersonEmail=self._bot_email,
+                roomId=self._health_check_room_id,
                 text=f"🏓 {self._self_ping_marker}"
             )
 
@@ -337,6 +349,7 @@ class ResilientBot:
 
         except Exception as e:
             logger.warning(f"Failed to send self-ping: {e}")
+            # Don't disable on first failure - might be transient
             return False
 
     def _mark_self_ping_received(self, message_text: str) -> bool:
