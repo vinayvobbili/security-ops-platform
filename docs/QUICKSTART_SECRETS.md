@@ -16,13 +16,13 @@ age -d -i ~/.config/age/key.txt data/transient/.secrets.age > data/transient/.se
 nano data/transient/.secrets
 
 # 4. Re-encrypt
-bash scripts/encrypt_secrets.sh
+bash misc_scripts/encrypt_secrets.sh
 
 # 5. Delete plaintext
 rm data/transient/.secrets
 
 # 6. Copy to Ubuntu
-bash scripts/sync_secrets.sh
+bash misc_scripts/sync_secrets.sh
 
 # Done! Restart app on Ubuntu.
 ```
@@ -111,10 +111,10 @@ EOF
 
 # Encrypt it
 cd ../..
-bash scripts/encrypt_secrets.sh
+bash misc_scripts/encrypt_secrets.sh
 
 # Copy to Ubuntu
-bash scripts/sync_secrets.sh
+bash misc_scripts/sync_secrets.sh
 
 # Delete plaintext
 rm data/transient/.secrets
@@ -145,9 +145,9 @@ python web/web_server.py
 scp vinay@inr106:~/pub/IR/data/transient/.secrets.age data/transient/
 age -d -i ~/.config/age/key.txt data/transient/.secrets.age > data/transient/.secrets
 nano data/transient/.secrets
-bash scripts/encrypt_secrets.sh
+bash misc_scripts/encrypt_secrets.sh
 rm data/transient/.secrets
-bash scripts/sync_secrets.sh
+bash misc_scripts/sync_secrets.sh
 
 # Ubuntu
 python web/web_server.py  # restart
@@ -190,13 +190,13 @@ Git Repo:
 
 ```bash
 # Encrypt secrets
-bash scripts/encrypt_secrets.sh
+bash misc_scripts/encrypt_secrets.sh
 
 # Sync to Ubuntu
-bash scripts/sync_secrets.sh
+bash misc_scripts/sync_secrets.sh
 
 # Or do both
-bash scripts/encrypt_secrets.sh && bash scripts/sync_secrets.sh
+bash misc_scripts/encrypt_secrets.sh && bash misc_scripts/sync_secrets.sh
 ```
 
 ## Troubleshooting
@@ -222,7 +222,7 @@ chmod 600 ~/.config/age/key.txt
 cd /Users/user/PycharmProjects/IR/data/transient
 nano .secrets  # add your secrets
 cd ../..
-bash scripts/encrypt_secrets.sh
-bash scripts/sync_secrets.sh
+bash misc_scripts/encrypt_secrets.sh
+bash misc_scripts/sync_secrets.sh
 rm data/transient/.secrets
 ```

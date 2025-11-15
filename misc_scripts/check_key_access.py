@@ -6,10 +6,10 @@ This script parses auditd logs to show who accessed the encryption key,
 when, and what they did with it.
 
 Usage:
-    python scripts/check_key_access.py
-    python scripts/check_key_access.py --last 24h
-    python scripts/check_key_access.py --suspicious
-    python scripts/check_key_access.py --summary
+    python misc_scripts/check_key_access.py
+    python misc_scripts/check_key_access.py --last 24h
+    python misc_scripts/check_key_access.py --suspicious
+    python misc_scripts/check_key_access.py --summary
 """
 
 import argparse
@@ -148,7 +148,7 @@ def display_events(events, show_suspicious_only=False):
         print("No audit events found for the age encryption key.")
         print()
         print("This could mean:")
-        print("  - Audit logging is not set up (run: bash scripts/setup_key_audit.sh)")
+        print("  - Audit logging is not set up (run: bash misc_scripts/setup_key_audit.sh)")
         print("  - The key has not been accessed yet")
         print("  - No events match your time filter")
         return

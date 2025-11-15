@@ -6,12 +6,12 @@ This script is designed to run periodically (via cron) to check for
 suspicious access to the encryption key and send notifications.
 
 Usage:
-    python scripts/monitor_key_access.py
-    python scripts/monitor_key_access.py --alert-webex
-    python scripts/monitor_key_access.py --alert-email
+    python misc_scripts/monitor_key_access.py
+    python misc_scripts/monitor_key_access.py --alert-webex
+    python misc_scripts/monitor_key_access.py --alert-email
 
 Cron example (check every hour):
-    0 * * * * cd /home/vinay/pub/IR && python scripts/monitor_key_access.py --alert-webex
+    0 * * * * cd /home/vinay/pub/IR && python misc_scripts/monitor_key_access.py --alert-webex
 """
 
 import argparse
@@ -159,7 +159,7 @@ Detected {len(analysis['suspicious'])} suspicious access attempts to encryption 
             reasons = ', '.join(event['reason'])
             message += f"\n{i}. {reasons}"
 
-        message += "\n\nRun `python scripts/check_key_access.py --suspicious` for details."
+        message += "\n\nRun `python misc_scripts/check_key_access.py --suspicious` for details."
 
         webex_api.messages.create(
             roomId=config.webex_room_id_vinay_test_space,
@@ -208,7 +208,7 @@ def send_console_alert(analysis):
 
         print()
         print("Run for full details:")
-        print("  python scripts/check_key_access.py --suspicious")
+        print("  python misc_scripts/check_key_access.py --suspicious")
         print()
 
 

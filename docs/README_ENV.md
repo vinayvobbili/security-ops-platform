@@ -42,7 +42,7 @@ nano .secrets
 
 # 3. Re-encrypt
 cd ../..  # back to project root
-bash scripts/encrypt_secrets.sh
+bash misc_scripts/encrypt_secrets.sh
 
 # 4. Delete plaintext
 rm data/transient/.secrets
@@ -69,7 +69,7 @@ age -d -i ~/.config/age/key.txt data/transient/.env.age > data/transient/.env.tm
 # Move secrets to .secrets
 
 # 3. Encrypt secrets
-bash scripts/encrypt_secrets.sh
+bash misc_scripts/encrypt_secrets.sh
 
 # 4. Clean up
 rm data/transient/.env.tmp
@@ -101,7 +101,7 @@ EOF
 
 # 3. Encrypt secrets
 cd ../..
-bash scripts/encrypt_secrets.sh
+bash misc_scripts/encrypt_secrets.sh
 
 # 4. Delete plaintext secrets
 rm data/transient/.secrets
@@ -178,7 +178,7 @@ cat data/transient/.env
 # Edit secrets (decrypt → edit → re-encrypt)
 age -d -i ~/.config/age/key.txt data/transient/.secrets.age > data/transient/.secrets
 nano data/transient/.secrets
-bash scripts/encrypt_secrets.sh
+bash misc_scripts/encrypt_secrets.sh
 rm data/transient/.secrets
 
 # Test config loads

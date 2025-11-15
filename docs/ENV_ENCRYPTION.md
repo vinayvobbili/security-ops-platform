@@ -15,7 +15,7 @@ This project uses `age` encryption to protect sensitive environment variables fr
 On your Ubuntu server, run:
 
 ```bash
-bash scripts/setup_age_encryption.sh
+bash misc_scripts/setup_age_encryption.sh
 ```
 
 This script will:
@@ -28,7 +28,7 @@ This script will:
 ### 2. Encrypt Your .env File
 
 ```bash
-python scripts/encrypt_secrets.py
+python misc_scripts/encrypt_secrets.py
 ```
 
 This will:
@@ -38,7 +38,7 @@ This will:
 
 **Recommended**: Delete the plaintext .env file after verifying encryption works:
 ```bash
-python scripts/encrypt_secrets.py --delete-plaintext
+python misc_scripts/encrypt_secrets.py --delete-plaintext
 ```
 
 ### 3. Verify It Works
@@ -85,7 +85,7 @@ age -d -i ~/.config/age/key.txt data/transient/.env.age > data/transient/.env
 nano data/transient/.env
 
 # 3. Re-encrypt
-python scripts/encrypt_secrets.py --delete-plaintext
+python misc_scripts/encrypt_secrets.py --delete-plaintext
 
 # 4. Restart your application
 pkill -f toodles.py
@@ -116,7 +116,7 @@ While encryption protects your secrets, you should also monitor access to the en
 
 ```bash
 # One-time setup
-bash scripts/setup_key_audit.sh
+bash misc_scripts/setup_key_audit.sh
 ```
 
 This installs and configures `auditd` to log all access to `~/.config/age/key.txt`, tracking:
@@ -129,22 +129,22 @@ This installs and configures `auditd` to log all access to `~/.config/age/key.tx
 
 View all key access events:
 ```bash
-python scripts/check_key_access.py
+python misc_scripts/check_key_access.py
 ```
 
 View only today's events:
 ```bash
-python scripts/check_key_access.py --today
+python misc_scripts/check_key_access.py --today
 ```
 
 View suspicious activity only:
 ```bash
-python scripts/check_key_access.py --suspicious
+python misc_scripts/check_key_access.py --suspicious
 ```
 
 View summary statistics:
 ```bash
-python scripts/check_key_access.py --summary
+python misc_scripts/check_key_access.py --summary
 ```
 
 ### What's Considered Suspicious?
@@ -163,13 +163,13 @@ Set up automated monitoring with alerts to Webex:
 
 ```bash
 # Run manually to test
-python scripts/monitor_key_access.py --alert-webex --dry-run
+python misc_scripts/monitor_key_access.py --alert-webex --dry-run
 
 # Set up cron job (check every hour)
 crontab -e
 
 # Add this line:
-0 * * * * cd /home/vinay/pub/IR && .venv/bin/python scripts/monitor_key_access.py --alert-webex
+0 * * * * cd /home/vinay/pub/IR && .venv/bin/python misc_scripts/monitor_key_access.py --alert-webex
 ```
 
 You'll receive a Webex message if suspicious activity is detected.
@@ -240,13 +240,13 @@ brew install age
 ### Error: "Age key not found"
 Run the setup script again:
 ```bash
-bash scripts/setup_age_encryption.sh
+bash misc_scripts/setup_age_encryption.sh
 ```
 
 ### Error: "Encrypted env file not found"
 You haven't encrypted your .env yet:
 ```bash
-python scripts/encrypt_secrets.py
+python misc_scripts/encrypt_secrets.py
 ```
 
 ### Application can't load secrets
@@ -263,7 +263,7 @@ sudo systemctl status auditd
 sudo auditctl -l | grep age_key_access
 
 # Re-run setup if needed
-bash scripts/setup_key_audit.sh
+bash misc_scripts/setup_key_audit.sh
 ```
 
 ### No audit events showing up
@@ -272,7 +272,7 @@ bash scripts/setup_key_audit.sh
 cat ~/.config/age/key.txt
 
 # Then check logs
-python scripts/check_key_access.py --last 5m
+python misc_scripts/check_key_access.py --last 5m
 ```
 
 ## Key Management
@@ -308,7 +308,7 @@ age -d -i ~/.config/age/key.txt data/transient/.env.age > data/transient/.env
 age-keygen -o ~/.config/age/key-new.txt
 
 # 3. Encrypt with new key
-python scripts/encrypt_secrets.py --key ~/.config/age/key-new.txt
+python misc_scripts/encrypt_secrets.py --key ~/.config/age/key-new.txt
 
 # 4. Replace old key
 mv ~/.config/age/key-new.txt ~/.config/age/key.txt

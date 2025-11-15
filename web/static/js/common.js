@@ -235,7 +235,7 @@ function applyTheme(mode) {
         btn.setAttribute('title', isDark ? 'Switch to light mode' : 'Switch to dark mode');
         btn.setAttribute('aria-pressed', isDark ? 'true' : 'false');
     }
-    // Notify any page-specific scripts (e.g., charts) of theme change
+    // Notify any page-specific misc_scripts (e.g., charts) of theme change
     window.dispatchEvent(new CustomEvent('themechange', {detail: {mode}}));
 }
 

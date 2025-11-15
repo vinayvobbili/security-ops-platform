@@ -8,9 +8,9 @@ This script:
 3. Optionally deletes the plaintext version for security
 
 Usage:
-    python scripts/encrypt_secrets.py
-    python scripts/encrypt_secrets.py --delete-plaintext
-    python scripts/encrypt_secrets.py --force  # Overwrite existing .secrets.age
+    python misc_scripts/encrypt_secrets.py
+    python misc_scripts/encrypt_secrets.py --delete-plaintext
+    python misc_scripts/encrypt_secrets.py --force  # Overwrite existing .secrets.age
 """
 
 import argparse
@@ -111,7 +111,7 @@ def main():
                 print(f"   nano {plaintext_path}")
                 print()
                 print("   # Re-encrypt")
-                print("   python scripts/encrypt_secrets.py --delete-plaintext")
+                print("   python misc_scripts/encrypt_secrets.py --delete-plaintext")
             else:
                 print("Plaintext file kept.")
                 print()
@@ -129,7 +129,7 @@ def main():
             print(f"   rm {plaintext_path}")
             print()
             print("   Or re-run with --delete-plaintext flag:")
-            print("   python scripts/encrypt_secrets.py --delete-plaintext")
+            print("   python misc_scripts/encrypt_secrets.py --delete-plaintext")
 
     except EncryptionError as e:
         print(f"✗ Encryption failed: {e}")

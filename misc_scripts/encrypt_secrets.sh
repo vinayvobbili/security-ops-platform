@@ -1,6 +1,6 @@
 #!/bin/bash
 # Encrypt .secrets file to .secrets.age
-# Usage: ./scripts/encrypt_secrets.sh
+# Usage: ./misc_scripts/encrypt_secrets.sh
 
 set -e
 
