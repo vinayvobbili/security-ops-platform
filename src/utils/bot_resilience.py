@@ -726,45 +726,39 @@ def enable_message_tracking(bot_instance, resilient_runner):
             # ... rest of initialization
             return True
     """
-    if not bot_instance or not hasattr(bot_instance, 'process_raw_command'):
-        logger.warning("Cannot enable message tracking - bot instance invalid or missing process_raw_command")
+    if not bot_instance or not hasattr(bot_instance, 'process_incoming_message'):
+        logger.warning("Cannot enable message tracking - bot instance invalid or missing process_incoming_message")
         return
 
-    # Wrap the bot's process_raw_command to track message activity
-    original_process_raw_command = bot_instance.process_raw_command
+    # Wrap the bot's process_incoming_message to intercept BEFORE SDK filters self-messages
+    original_process_incoming_message = bot_instance.process_incoming_message
 
-    def tracked_process_raw_command(*args, **kwargs):
-        """Wrapper that updates message timestamp and checks for self-ping"""
+    def tracked_process_incoming_message(teams_message, activity):
+        """Wrapper that intercepts messages before SDK filtering to detect self-pings"""
         # Extract message text to check for self-ping
         message_text = None
-        if len(args) > 0:
-            # First arg is typically the message object
-            message_obj = args[0]
-            if hasattr(message_obj, 'text'):
-                message_text = message_obj.text
-            elif isinstance(message_obj, dict) and 'text' in message_obj:
-                message_text = message_obj['text']
 
-        # Check if this is a self-ping message and mark it as received
+        if hasattr(teams_message, 'text'):
+            message_text = teams_message.text
+
+        # Check if this is a self-ping message (before SDK filters it)
         is_self_ping = False
         if message_text:
             is_self_ping = resilient_runner._mark_self_ping_received(message_text)
 
-        # Update message timestamp if this is NOT a self-ping
-        # (we don't want self-pings to reset the idle timer)
-        if not is_self_ping:
-            resilient_runner.update_message_received()
-
-        # Call original command processor only if NOT a self-ping
-        # (we don't want to process self-ping messages as regular commands)
-        if not is_self_ping:
-            return original_process_raw_command(*args, **kwargs)
-        else:
-            # Self-ping message - silently consume it
+        # If it's a self-ping, we've recorded it - return early to prevent SDK from logging warnings
+        if is_self_ping:
+            logger.debug(f"Self-ping intercepted and validated")
             return None
 
+        # Update message timestamp for non-self-ping messages
+        resilient_runner.update_message_received()
+
+        # Call original message processor for non-self-ping messages
+        return original_process_incoming_message(teams_message, activity)
+
     # Replace with tracked version
-    bot_instance.process_raw_command = tracked_process_raw_command
+    bot_instance.process_incoming_message = tracked_process_incoming_message
     logger.info("✅ Message activity tracking enabled for idle detection and self-ping validation")
 
 
