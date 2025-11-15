@@ -199,6 +199,9 @@ def main():
 
     logger.info("🛡️ Starting with ResilientBot framework for enhanced firewall resilience")
 
+    # Get config for peer ping setup
+    config = get_config()
+
     def msoar_initialization_with_tracking(bot_instance, resilient_runner):
         """Initialize MSOAR with message activity tracking for idle detection"""
         if not bot_instance:
@@ -216,6 +219,8 @@ def main():
         initial_retry_delay=30,
         max_retry_delay=300,
         keepalive_interval=60,  # Staggered to avoid synchronized API load (60s, 75s, 90s, 105s, 120s)
+        peer_bot_email=config.webex_bot_email_toodles,  # msoar → Toodles
+        peer_ping_interval_minutes=10,
     )
 
     # Resilience framework will log startup status - no need for premature log here
