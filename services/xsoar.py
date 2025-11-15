@@ -671,39 +671,29 @@ class TicketHandler:
         # Build full URL using instance variables set during initialization
         url = f'{self.base_url}/inv-playbook/task/complete'
 
-        # Use the working multipart/form-data format from the custom script
-        file_comment = "Completing via API"
-        file_name = ""
-
-        # Build multipart/form-data payload manually
-        payload = (
-            "-----011000010111000001101001\r\n"
-            "Content-Disposition: form-data; name=\"investigationId\"\r\n\r\n"
-            f"{ticket_id}\r\n"
-            "-----011000010111000001101001\r\n"
-            "Content-Disposition: form-data; name=\"fileName\"\r\n\r\n"
-            f"{file_name}\r\n"
-            "-----011000010111000001101001\r\n"
-            "Content-Disposition: form-data; name=\"fileComment\"\r\n\r\n"
-            f"{file_comment}\r\n"
-            "-----011000010111000001101001\r\n"
-            "Content-Disposition: form-data; name=\"taskId\"\r\n\r\n"
-            f"{task_id}\r\n"
-            "-----011000010111000001101001\r\n"
-            "Content-Disposition: form-data; name=\"taskInput\"\r\n\r\n"
-            f"{task_input}\r\n"
-            "-----011000010111000001101001--\r\n"
-        )
-
-        headers = {
-            'Authorization': self.auth_key,
-            'x-xdr-auth-id': self.auth_id,
-            'Content-Type': 'multipart/form-data; boundary=---011000010111000001101001',
-            'Accept': 'application/json'
-        }
-
         try:
-            response = requests.post(url, data=payload, headers=headers, verify=False, timeout=30)
+            # Use requests_toolbelt for proper multipart encoding
+            from requests_toolbelt.multipart.encoder import MultipartEncoder
+
+            # Build multipart/form-data payload
+            multipart_data = MultipartEncoder(
+                fields={
+                    'investigationId': ticket_id,
+                    'fileName': '',
+                    'fileComment': 'Completing via API',
+                    'taskId': task_id,
+                    'taskInput': task_input
+                }
+            )
+
+            headers = {
+                'Authorization': self.auth_key,
+                'x-xdr-auth-id': self.auth_id,
+                'Content-Type': multipart_data.content_type,
+                'Accept': 'application/json'
+            }
+
+            response = requests.post(url, data=multipart_data, headers=headers, verify=False, timeout=30)
             response.raise_for_status()
 
             # Parse response and check for XSOAR-specific errors
@@ -1081,6 +1071,122 @@ class TicketHandler:
         log.info(f"Successfully executed command '{command}' in ticket {incident_id}")
         return result
 
+    def upload_file_to_ticket(self, incident_id: str, file_path: str,
+                              comment: str = "",
+                              is_note_entry: bool = False,
+                              show_media_files: bool = False,
+                              tags: str = "") -> Dict[str, Any]:
+        """
+        Upload a file to the specified ticket's war room.
+
+        Args:
+            incident_id: The XSOAR incident ID
+            file_path: Path to the file to upload
+            comment: Optional comment for the file upload (fileComment field)
+            is_note_entry: Whether to show this as a note entry (default: False)
+            show_media_files: Whether to show media files (default: False)
+            tags: Comma-separated tags for the file
+
+        Returns:
+            Response data from the API
+
+        Raises:
+            ValueError: If incident_id or file_path is empty
+            FileNotFoundError: If the file doesn't exist
+            ApiException: If API call fails
+
+        Example:
+            handler.upload_file_to_ticket("123456", "/path/to/file.txt",
+                                         comment="Investigation evidence",
+                                         tags="evidence,malware")
+
+        Reference:
+            https://cortex-panw.stoplight.io/docs/cortex-xsoar-8/0csr093bgycdh-upload-content-to-an-incident-war-room-entry
+        """
+        import os
+
+        # Validate inputs
+        if not incident_id:
+            raise ValueError("incident_id cannot be empty")
+        if not file_path:
+            raise ValueError("file_path cannot be empty")
+        if not os.path.exists(file_path):
+            raise FileNotFoundError(f"File not found: {file_path}")
+
+        log.debug(f"Uploading file {file_path} to ticket {incident_id}")
+
+        # Build full URL - base_url already includes /xsoar/public/v1
+        url = f'{self.base_url}/entry/upload/{incident_id}'
+
+        # Get file name from path
+        file_name = os.path.basename(file_path)
+
+        try:
+            # Use requests_toolbelt for proper multipart encoding
+            from requests_toolbelt.multipart.encoder import MultipartEncoder
+
+            # Prepare multipart form data
+            with open(file_path, 'rb') as f:
+                file_content = f.read()
+
+            file_size = len(file_content)
+            log.debug(f"File size: {file_size} bytes")
+
+            multipart_data = MultipartEncoder(
+                fields={
+                    'file': (file_name, file_content, 'application/octet-stream'),
+                    'fileComment': comment,
+                    'isNoteEntry': str(is_note_entry).lower(),
+                    'showMediaFiles': str(show_media_files).lower(),
+                    'tags': tags
+                }
+            )
+
+            # Prepare headers with correct Content-Type from encoder
+            headers = {
+                'Authorization': self.auth_key,
+                'x-xdr-auth-id': self.auth_id,
+                'Content-Type': multipart_data.content_type,
+                'Accept': 'application/json'
+            }
+
+            response = requests.post(
+                url,
+                data=multipart_data,
+                headers=headers,
+                verify=False,
+                timeout=60
+            )
+
+            response.raise_for_status()
+
+            # Parse response
+            if response.text:
+                try:
+                    response_data = response.json()
+                except json.JSONDecodeError:
+                    log.warning(f"Could not parse response as JSON: {response.text}")
+                    response_data = {"raw_response": response.text}
+
+                # Check for XSOAR-specific errors
+                if isinstance(response_data, dict) and 'error' in response_data:
+                    error_msg = response_data['error']
+                    log.error(f"Error from XSOAR when uploading file to ticket {incident_id}: {error_msg}")
+                    raise ValueError(f"XSOAR error: {error_msg}")
+
+                log.info(f"Successfully uploaded file {file_name} to ticket {incident_id}")
+                return response_data
+            else:
+                log.info(f"Successfully uploaded file {file_name} to ticket {incident_id}")
+                return {}
+
+        except requests.exceptions.RequestException as e:
+            log.error(f"Error uploading file to ticket {incident_id}: {e}")
+            raise
+        except (IOError, OSError) as e:
+            log.error(f"Error reading file {file_path}: {e}")
+            raise
+
 
 class ListHandler:
     """Handler for XSOAR list operations."""
@@ -1231,15 +1337,27 @@ def main():
         prod_list = ListHandler()
         dev_list = ListHandler(XsoarEnvironment.DEV)
     """
-    # print(json.dumps(get_user_notes('878736'), indent=4))
-    ticket_id = '1378685'
-    task_name = 'Does the employee recognize the alerted activity?'
-    # pprint(prod_ticket_handler.get_case_data_with_notes(ticket_id))
-    dev_ticket_handler = TicketHandler(XsoarEnvironment.DEV)
+    # Example usage (commented out):
+    # ticket_id = '1378685'
+    # dev_ticket_handler = TicketHandler(XsoarEnvironment.DEV)
+    #
+    # Example: Get case data with notes
+    # print(json.dumps(dev_ticket_handler.get_case_data_with_notes(ticket_id), indent=4))
+    #
+    # Example: Complete a task
+    # task_name = 'Does the employee recognize the alerted activity?'
     # print(dev_ticket_handler.complete_task(ticket_id, task_name))
-
+    #
+    # Example: Create a note
     # print(dev_ticket_handler.create_new_entry_in_existing_ticket(ticket_id, "This is my note"))
-    print(dev_ticket_handler.execute_command_in_war_room(ticket_id, "!ad-get-user username=user"))
+    #
+    # Example: Execute war room command
+    # print(dev_ticket_handler.execute_command_in_war_room(ticket_id, "!ad-get-user username=user"))
+    #
+    # Example: Upload file
+    # file_path = "/path/to/file.pdf"
+    # print(dev_ticket_handler.upload_file_to_ticket(ticket_id, file_path, "Evidence file"))
+    pass
 
 
 if __name__ == "__main__":
