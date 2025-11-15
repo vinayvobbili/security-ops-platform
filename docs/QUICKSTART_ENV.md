@@ -64,7 +64,7 @@ nano .secrets  # copy secrets here
 
 # 3. Encrypt secrets
 cd ~/pub/IR
-bash scripts/encrypt_secrets.sh
+bash misc_scripts/encrypt_secrets.sh
 
 # 4. Clean up
 rm data/transient/.env.tmp
