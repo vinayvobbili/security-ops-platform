@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 # Import after logging setup
 try:
-    from webexpythonsdk import WebexTeamsAPI
+    from webexpythonsdk import WebexAPI
     from dotenv import load_dotenv
 except ImportError as e:
     logger.error(f"Failed to import required modules: {e}")
@@ -56,7 +56,7 @@ class BotHealthChecker:
         if not health_checker_token:
             raise ValueError("No health checker token found in environment")
 
-        self.api = WebexTeamsAPI(access_token=health_checker_token)
+        self.api = WebexAPI(access_token=health_checker_token)
 
         # Bot emails to check (configure these in .env or here)
         self.bot_emails = [

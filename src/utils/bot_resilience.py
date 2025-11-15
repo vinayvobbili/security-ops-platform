@@ -88,9 +88,11 @@ class ResilientBot:
                  max_keepalive_failures: int = 5,
                  max_connection_age_hours: int = 12,
                  max_idle_minutes: int = 10,
-                 enable_self_ping: bool = True,
+                 enable_self_ping: bool = False,
                  self_ping_interval_minutes: int = 5,
-                 self_ping_timeout_seconds: int = 60):
+                 self_ping_timeout_seconds: int = 60,
+                 peer_bot_email: Optional[str] = None,
+                 peer_ping_interval_minutes: int = 10):
         """
         Initialize resilient bot runner with multi-layered firewall traversal strategy
 
@@ -98,7 +100,7 @@ class ResilientBot:
         1. TCP keepalive (60s): Keeps firewall connection tracking tables alive - ROOT CAUSE FIX
         2. WebSocket ping (10s): Application-level keepalive for quick failure detection
         3. API health checks (120s): Detects stale application state
-        4. Self-ping validation (5min): Tests inbound path through firewall by sending bot a message
+        4. Peer ping (10min): Bot sends periodic message to another bot to keep both inbound paths active
         5. Idle timeout (10min): Proactive reconnection if no messages received (VM networks)
         6. Max age (12h): Prevents long-lived connection degradation
         7. Socket write timeout (180s): Prevents hangs during large file uploads on unreliable networks
@@ -115,9 +117,11 @@ class ResilientBot:
             max_keepalive_failures: Max consecutive keepalive failures before reconnection
             max_connection_age_hours: Force reconnection after this many hours (prevents stale connections)
             max_idle_minutes: Force reconnection if no messages received (default 10min for VM networks with aggressive firewalls)
-            enable_self_ping: Enable periodic self-ping to validate inbound firewall path (default True)
-            self_ping_interval_minutes: Send self-ping every N minutes to test inbound connectivity (default 5min)
-            self_ping_timeout_seconds: Reconnect if self-ping not received within N seconds (default 60s)
+            enable_self_ping: Enable periodic self-ping to validate inbound firewall path (deprecated, use peer_bot_email instead)
+            self_ping_interval_minutes: Send self-ping every N minutes to test inbound connectivity (deprecated)
+            self_ping_timeout_seconds: Reconnect if self-ping not received within N seconds (deprecated)
+            peer_bot_email: Email of another bot to send periodic pings to (recommended over self-ping)
+            peer_ping_interval_minutes: Send peer ping every N minutes (default 10min)
         """
         # Suppress noisy websocket logs for all bots
         # These INFO-level logs create excessive noise without adding value
@@ -253,6 +257,8 @@ class ResilientBot:
         self.enable_self_ping = enable_self_ping
         self.self_ping_interval_minutes = self_ping_interval_minutes
         self.self_ping_timeout_seconds = self_ping_timeout_seconds
+        self.peer_bot_email = peer_bot_email
+        self.peer_ping_interval_minutes = peer_ping_interval_minutes
 
         # Runtime state
         self.bot_instance = None
@@ -265,7 +271,7 @@ class ResilientBot:
         self._bot_running = False  # Track if bot is currently running
         self._last_message_received = datetime.now()  # Track last incoming message to detect stale connections
 
-        # Self-ping state for inbound path validation
+        # Self-ping state for inbound path validation (deprecated in favor of peer ping)
         self._pending_self_ping = None  # Timestamp of last sent self-ping awaiting receipt
         self._self_ping_marker = None  # Unique marker to identify self-ping messages
         self._last_self_ping_sent = None  # Timestamp of last self-ping sent
@@ -273,6 +279,9 @@ class ResilientBot:
         self._bot_email = None  # Bot's email address
         self._bot_person_id = None  # Bot's person ID
         self._health_check_room_id = None  # Dedicated room ID for health checks
+
+        # Peer ping state for mutual inbound path validation
+        self._last_peer_ping_sent = None  # Timestamp of last peer ping sent
 
         # Setup signal handlers
         self._setup_signal_handlers()
@@ -300,6 +309,33 @@ class ResilientBot:
         """
         self._last_message_received = datetime.now()
         logger.debug(f"📨 Message activity recorded for {self.bot_name}")
+
+    def _send_peer_ping(self):
+        """
+        Send a health check message to a peer bot to keep both bots' inbound paths active.
+        Returns True if sent successfully, False otherwise.
+        """
+        if not self.peer_bot_email:
+            return False
+
+        if not self.bot_instance or not hasattr(self.bot_instance, 'teams'):
+            logger.debug("Cannot send peer ping - bot instance not ready")
+            return False
+
+        try:
+            # Send a simple "Hi" message to the peer bot
+            self.bot_instance.teams.messages.create(
+                toPersonEmail=self.peer_bot_email,
+                text=f"👋 Hi from {self.bot_name}! (health check @ {datetime.now().strftime('%H:%M:%S')})"
+            )
+
+            self._last_peer_ping_sent = datetime.now()
+            logger.debug(f"👋 Sent peer ping to {self.peer_bot_email}")
+            return True
+
+        except Exception as e:
+            logger.warning(f"Failed to send peer ping to {self.peer_bot_email}: {e}")
+            return False
 
     def _send_self_ping(self):
         """
@@ -467,6 +503,23 @@ class ResilientBot:
                         if should_send_ping:
                             logger.info(f"🏓 Sending self-ping to validate inbound firewall path...")
                             self._send_self_ping()
+
+                    # Peer ping interval check - send periodic pings to peer bot
+                    if self.peer_bot_email and self.peer_ping_interval_minutes > 0:
+                        should_send_peer_ping = False
+
+                        if self._last_peer_ping_sent is None:
+                            # First peer ping - send after 1 minute of uptime
+                            if self._bot_start_time and (datetime.now() - self._bot_start_time).total_seconds() >= 60:
+                                should_send_peer_ping = True
+                        else:
+                            minutes_since_last_peer_ping = (datetime.now() - self._last_peer_ping_sent).total_seconds() / 60
+                            if minutes_since_last_peer_ping >= self.peer_ping_interval_minutes:
+                                should_send_peer_ping = True
+
+                        if should_send_peer_ping:
+                            logger.info(f"👋 Sending peer ping to {self.peer_bot_email} to keep inbound paths active...")
+                            self._send_peer_ping()
 
                     # Idle timeout check
                     if self._last_message_received and self.max_idle_minutes > 0:
@@ -644,6 +697,8 @@ class ResilientBot:
                 logger.info(f"💓 Keepalive monitoring active - will reconnect after {self.max_keepalive_failures} failures")
                 if self.enable_self_ping:
                     logger.info(f"🏓 Self-ping validation enabled - testing inbound path every {self.self_ping_interval_minutes}min (timeout: {self.self_ping_timeout_seconds}s)")
+                if self.peer_bot_email:
+                    logger.info(f"👋 Peer ping enabled - will ping {self.peer_bot_email} every {self.peer_ping_interval_minutes}min to keep inbound paths active")
                 # Block until bot finishes
                 self._run_bot_with_monitoring()
                 logger.info(f"{self.bot_name} run loop exited")
@@ -741,6 +796,8 @@ def enable_message_tracking(bot_instance, resilient_runner):
         if hasattr(teams_message, 'text'):
             message_text = teams_message.text
 
+        logger.debug(f"Intercepted incoming message: {message_text[:50] if message_text else 'No text'}...")
+
         # Check if this is a self-ping message (before SDK filters it)
         is_self_ping = False
         if message_text:
@@ -748,7 +805,7 @@ def enable_message_tracking(bot_instance, resilient_runner):
 
         # If it's a self-ping, we've recorded it - return early to prevent SDK from logging warnings
         if is_self_ping:
-            logger.debug(f"Self-ping intercepted and validated")
+            logger.info(f"✅ Self-ping intercepted and validated - inbound path working!")
             return None
 
         # Update message timestamp for non-self-ping messages
