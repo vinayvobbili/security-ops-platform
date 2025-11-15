@@ -227,7 +227,7 @@ sudo netplan apply
 sudo rm /etc/sysctl.d/99-ir-keepalive.conf
 sudo sysctl -p
 
-# Use old startup scripts
+# Use old startup misc_scripts
 cd /home/vinay/pub/IR
 ~/bin/start_all_jobs
 ~/bin/start_msoar

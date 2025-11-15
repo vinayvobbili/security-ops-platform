@@ -104,7 +104,7 @@ if __name__ == '__main__':
             print(f"ABNORMAL_SECURITY_API_KEY={token}")
 
         print("\nThen re-encrypt:")
-        print("bash scripts/encrypt_secrets.sh")
+        print("bash misc_scripts/encrypt_secrets.sh")
     else:
         print("\n❌ No working tokens found.")
         print("Please check with your Abnormal Security administrator.")

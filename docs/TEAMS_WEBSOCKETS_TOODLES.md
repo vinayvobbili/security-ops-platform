@@ -25,7 +25,7 @@ TEAMS_TOODLES_TENANT_ID=your-tenant-id-here
 ### 2. Encrypt Secrets
 
 ```bash
-python scripts/encrypt_secrets.py --plaintext data/transient/.secrets --output data/transient/.secrets.age --force
+python misc_scripts/encrypt_secrets.py --plaintext data/transient/.secrets --output data/transient/.secrets.age --force
 ```
 
 ### 3. Configure Azure Bot Service

@@ -6,7 +6,7 @@ This directory contains scripts to monitor access to your age encryption key.
 
 ### 1. Setup (one-time)
 ```bash
-bash scripts/setup_key_audit.sh
+bash misc_scripts/setup_key_audit.sh
 ```
 
 This installs `auditd` and configures it to track all access to `~/.config/age/key.txt`.
@@ -14,25 +14,25 @@ This installs `auditd` and configures it to track all access to `~/.config/age/k
 ### 2. Check for suspicious activity
 ```bash
 # View all access
-python scripts/check_key_access.py
+python misc_scripts/check_key_access.py
 
 # View only suspicious
-python scripts/check_key_access.py --suspicious
+python misc_scripts/check_key_access.py --suspicious
 
 # View summary
-python scripts/check_key_access.py --summary
+python misc_scripts/check_key_access.py --summary
 ```
 
 ### 3. Setup automated alerts (optional)
 ```bash
 # Test first
-python scripts/monitor_key_access.py --alert-webex --dry-run
+python misc_scripts/monitor_key_access.py --alert-webex --dry-run
 
 # Add to crontab for hourly checks
 crontab -e
 
 # Add this line:
-0 * * * * cd /home/vinay/pub/IR && .venv/bin/python scripts/monitor_key_access.py --alert-webex
+0 * * * * cd /home/vinay/pub/IR && .venv/bin/python misc_scripts/monitor_key_access.py --alert-webex
 ```
 
 ## Scripts Overview
@@ -44,7 +44,7 @@ crontab -e
 
 **Usage:**
 ```bash
-bash scripts/setup_key_audit.sh
+bash misc_scripts/setup_key_audit.sh
 ```
 
 ### `check_key_access.py`
@@ -55,19 +55,19 @@ bash scripts/setup_key_audit.sh
 **Usage:**
 ```bash
 # All events
-python scripts/check_key_access.py
+python misc_scripts/check_key_access.py
 
 # Only today
-python scripts/check_key_access.py --today
+python misc_scripts/check_key_access.py --today
 
 # Last 24 hours
-python scripts/check_key_access.py --last 24h
+python misc_scripts/check_key_access.py --last 24h
 
 # Only suspicious
-python scripts/check_key_access.py --suspicious
+python misc_scripts/check_key_access.py --suspicious
 
 # Summary only
-python scripts/check_key_access.py --summary
+python misc_scripts/check_key_access.py --summary
 ```
 
 ### `monitor_key_access.py`
@@ -78,13 +78,13 @@ python scripts/check_key_access.py --summary
 **Usage:**
 ```bash
 # Manual check with Webex alert
-python scripts/monitor_key_access.py --alert-webex
+python misc_scripts/monitor_key_access.py --alert-webex
 
 # Dry run (no alerts sent)
-python scripts/monitor_key_access.py --alert-webex --dry-run
+python misc_scripts/monitor_key_access.py --alert-webex --dry-run
 
 # Custom threshold (alert on 3+ suspicious events)
-python scripts/monitor_key_access.py --alert-webex --threshold 3
+python misc_scripts/monitor_key_access.py --alert-webex --threshold 3
 ```
 
 ## What's Considered Suspicious?
@@ -123,22 +123,22 @@ The scripts flag these patterns:
 
 ### Check every hour
 ```bash
-0 * * * * cd /home/vinay/pub/IR && .venv/bin/python scripts/monitor_key_access.py --alert-webex
+0 * * * * cd /home/vinay/pub/IR && .venv/bin/python misc_scripts/monitor_key_access.py --alert-webex
 ```
 
 ### Check every 30 minutes
 ```bash
-*/30 * * * * cd /home/vinay/pub/IR && .venv/bin/python scripts/monitor_key_access.py --alert-webex
+*/30 * * * * cd /home/vinay/pub/IR && .venv/bin/python misc_scripts/monitor_key_access.py --alert-webex
 ```
 
 ### Check daily at 9 AM
 ```bash
-0 9 * * * cd /home/vinay/pub/IR && .venv/bin/python scripts/monitor_key_access.py --alert-webex
+0 9 * * * cd /home/vinay/pub/IR && .venv/bin/python misc_scripts/monitor_key_access.py --alert-webex
 ```
 
 ### Check and send email summary daily
 ```bash
-0 8 * * * cd /home/vinay/pub/IR && .venv/bin/python scripts/check_key_access.py --summary --today > /tmp/audit_report.txt && mail -s "Daily Key Access Report" you@example.com < /tmp/audit_report.txt
+0 8 * * * cd /home/vinay/pub/IR && .venv/bin/python misc_scripts/check_key_access.py --summary --today > /tmp/audit_report.txt && mail -s "Daily Key Access Report" you@example.com < /tmp/audit_report.txt
 ```
 
 ## Troubleshooting
@@ -155,7 +155,7 @@ sudo auditctl -l | grep age_key_access
 cat ~/.config/age/key.txt
 
 # Check logs
-python scripts/check_key_access.py --last 5m
+python misc_scripts/check_key_access.py --last 5m
 ```
 
 ### auditd not installed?
