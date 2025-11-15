@@ -271,15 +271,6 @@ class ResilientBot:
         self._bot_running = False  # Track if bot is currently running
         self._last_message_received = datetime.now()  # Track last incoming message to detect stale connections
 
-        # Self-ping state for inbound path validation (deprecated in favor of peer ping)
-        self._pending_self_ping = None  # Timestamp of last sent self-ping awaiting receipt
-        self._self_ping_marker = None  # Unique marker to identify self-ping messages
-        self._last_self_ping_sent = None  # Timestamp of last self-ping sent
-        self._last_self_ping_received = None  # Timestamp of last self-ping received
-        self._bot_email = None  # Bot's email address
-        self._bot_person_id = None  # Bot's person ID
-        self._health_check_room_id = None  # Dedicated room ID for health checks
-
         # Peer ping state for mutual inbound path validation
         self._last_peer_ping_sent = None  # Timestamp of last peer ping sent
 
@@ -336,79 +327,6 @@ class ResilientBot:
         except Exception as e:
             logger.warning(f"Failed to send peer ping to {self.peer_bot_email}: {e}")
             return False
-
-    def _send_self_ping(self):
-        """
-        Send a test message to the bot itself to validate inbound firewall path.
-        Returns True if sent successfully, False otherwise.
-        """
-        if not self.enable_self_ping:
-            return False
-
-        if not self.bot_instance or not hasattr(self.bot_instance, 'teams'):
-            logger.debug("Cannot send self-ping - bot instance not ready")
-            return False
-
-        try:
-            # Get or create health check room
-            if not self._health_check_room_id:
-                # Try to find existing health check room
-                rooms = self.bot_instance.teams.rooms.list()
-                health_room_name = f"{self.bot_name}_HealthCheck"
-
-                for room in rooms:
-                    if hasattr(room, 'title') and room.title == health_room_name:
-                        self._health_check_room_id = room.id
-                        logger.debug(f"Found existing health check room: {health_room_name}")
-                        break
-
-                # Create new room if not found
-                if not self._health_check_room_id:
-                    new_room = self.bot_instance.teams.rooms.create(health_room_name)
-                    self._health_check_room_id = new_room.id
-                    logger.info(f"✅ Created health check room: {health_room_name}")
-
-            # Generate unique marker for this ping
-            import uuid
-            self._self_ping_marker = f"SELF_PING_{uuid.uuid4().hex[:8]}"
-
-            # Send message to health check room
-            self.bot_instance.teams.messages.create(
-                roomId=self._health_check_room_id,
-                text=f"🏓 {self._self_ping_marker}"
-            )
-
-            self._last_self_ping_sent = datetime.now()
-            self._pending_self_ping = self._last_self_ping_sent
-            logger.debug(f"🏓 Self-ping sent to validate inbound path (marker: {self._self_ping_marker})")
-            return True
-
-        except Exception as e:
-            logger.warning(f"Failed to send self-ping: {e}")
-            # Don't disable on first failure - might be transient
-            return False
-
-    def _mark_self_ping_received(self, message_text: str) -> bool:
-        """
-        Check if a received message is a self-ping and mark it as received.
-        Returns True if this was a self-ping message, False otherwise.
-        """
-        if not self.enable_self_ping or not self._self_ping_marker:
-            return False
-
-        if self._self_ping_marker in message_text:
-            self._last_self_ping_received = datetime.now()
-            self._pending_self_ping = None
-
-            if self._last_self_ping_sent:
-                round_trip_ms = (self._last_self_ping_received - self._last_self_ping_sent).total_seconds() * 1000
-                logger.debug(f"✅ Self-ping received (round-trip: {round_trip_ms:.0f}ms) - inbound path validated")
-            else:
-                logger.debug(f"✅ Self-ping received - inbound path validated")
-
-            return True
-
-        return False
 
     def _log_connection_issue(self, reason):
         """Log a connection issue without triggering reconnection"""
@@ -478,32 +396,6 @@ class ResilientBot:
         while not self.shutdown_requested and not self._reconnect_requested:
             try:
                 if self.bot_instance and hasattr(self.bot_instance, 'teams'):
-                    # Self-ping timeout check - MUST come before idle check
-                    # If a self-ping is pending and has timed out, the inbound path is broken
-                    if self.enable_self_ping and self._pending_self_ping:
-                        pending_seconds = (datetime.now() - self._pending_self_ping).total_seconds()
-                        if pending_seconds >= self.self_ping_timeout_seconds:
-                            logger.error(f"❌ Self-ping timeout after {pending_seconds:.0f}s (max: {self.self_ping_timeout_seconds}s)")
-                            logger.error("🔥 Inbound firewall path appears BROKEN - messages cannot reach bot")
-                            self._trigger_reconnection(f"Self-ping timeout - inbound path broken")
-                            break
-
-                    # Self-ping interval check - send periodic self-pings to validate inbound path
-                    if self.enable_self_ping and self.self_ping_interval_minutes > 0:
-                        should_send_ping = False
-
-                        if self._last_self_ping_sent is None:
-                            # First self-ping - send immediately after startup
-                            should_send_ping = True
-                        else:
-                            minutes_since_last_ping = (datetime.now() - self._last_self_ping_sent).total_seconds() / 60
-                            if minutes_since_last_ping >= self.self_ping_interval_minutes:
-                                should_send_ping = True
-
-                        if should_send_ping:
-                            logger.info(f"🏓 Sending self-ping to validate inbound firewall path...")
-                            self._send_self_ping()
-
                     # Peer ping interval check - send periodic pings to peer bot
                     if self.peer_bot_email and self.peer_ping_interval_minutes > 0:
                         should_send_peer_ping = False
@@ -695,8 +587,6 @@ class ResilientBot:
                 self.keepalive_thread.start()
                 logger.debug(f"💓 Keepalive monitoring started for {self.bot_name}")
                 logger.info(f"💓 Keepalive monitoring active - will reconnect after {self.max_keepalive_failures} failures")
-                if self.enable_self_ping:
-                    logger.info(f"🏓 Self-ping validation enabled - testing inbound path every {self.self_ping_interval_minutes}min (timeout: {self.self_ping_timeout_seconds}s)")
                 if self.peer_bot_email:
                     logger.info(f"👋 Peer ping enabled - will ping {self.peer_bot_email} every {self.peer_ping_interval_minutes}min to keep inbound paths active")
                 # Block until bot finishes
@@ -764,11 +654,10 @@ class ResilientBot:
 
 def enable_message_tracking(bot_instance, resilient_runner):
     """
-    Enable automatic message activity tracking for idle detection and self-ping validation.
+    Enable automatic message activity tracking for idle detection.
 
     Wraps the bot's message processing to notify the resilience framework
-    whenever a message is received, enabling idle timeout detection and inbound
-    path validation via self-ping messages.
+    whenever a message is received, enabling idle timeout detection.
 
     Args:
         bot_instance: The WebexBot instance
@@ -776,7 +665,7 @@ def enable_message_tracking(bot_instance, resilient_runner):
 
     Usage:
         def my_initialization(bot_instance):
-            # Enable idle detection and self-ping validation
+            # Enable idle detection
             enable_message_tracking(bot_instance, resilient_runner)
             # ... rest of initialization
             return True
@@ -785,38 +674,20 @@ def enable_message_tracking(bot_instance, resilient_runner):
         logger.warning("Cannot enable message tracking - bot instance invalid or missing process_incoming_message")
         return
 
-    # Wrap the bot's process_incoming_message to intercept BEFORE SDK filters self-messages
+    # Wrap the bot's process_incoming_message to track message activity
     original_process_incoming_message = bot_instance.process_incoming_message
 
     def tracked_process_incoming_message(teams_message, activity):
-        """Wrapper that intercepts messages before SDK filtering to detect self-pings"""
-        # Extract message text to check for self-ping
-        message_text = None
-
-        if hasattr(teams_message, 'text'):
-            message_text = teams_message.text
-
-        logger.debug(f"Intercepted incoming message: {message_text[:50] if message_text else 'No text'}...")
-
-        # Check if this is a self-ping message (before SDK filters it)
-        is_self_ping = False
-        if message_text:
-            is_self_ping = resilient_runner._mark_self_ping_received(message_text)
-
-        # If it's a self-ping, we've recorded it - return early to prevent SDK from logging warnings
-        if is_self_ping:
-            logger.info(f"✅ Self-ping intercepted and validated - inbound path working!")
-            return None
-
-        # Update message timestamp for non-self-ping messages
+        """Wrapper that updates message timestamp for idle detection"""
+        # Update message timestamp
         resilient_runner.update_message_received()
 
-        # Call original message processor for non-self-ping messages
+        # Call original message processor
         return original_process_incoming_message(teams_message, activity)
 
     # Replace with tracked version
     bot_instance.process_incoming_message = tracked_process_incoming_message
-    logger.info("✅ Message activity tracking enabled for idle detection and self-ping validation")
+    logger.info("✅ Message activity tracking enabled for idle detection")
 
 
 def create_resilient_main(bot_factory: Callable[[], Any],
