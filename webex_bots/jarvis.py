@@ -1249,6 +1249,9 @@ def main():
     """Jarvis main with resilience framework"""
     from src.utils.bot_resilience import ResilientBot
 
+    # Get config for peer ping setup
+    config = get_config()
+
     resilient_runner = ResilientBot(
         bot_name="Jarvis",
         bot_factory=jarvis_bot_factory,
@@ -1260,6 +1263,8 @@ def main():
         # - TCP keepalive (60s) keeps firewall connection tracking alive (ROOT CAUSE FIX)
         # - Idle timeout (15min) as safety net - reconnect before typical 30min firewall timeout
         max_idle_minutes=15,  # Aggressive reconnect for VM behind 2 firewalls
+        peer_bot_email=config.webex_bot_email_barnacles,  # Jarvis → Barnacles
+        peer_ping_interval_minutes=10,
     )
 
     # Store resilient_runner globally so commands can update message activity
