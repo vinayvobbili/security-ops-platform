@@ -632,6 +632,9 @@ def main():
 
     logger.info("Starting the alert triage service with standard resilience framework")
 
+    # Get config for peer ping setup
+    config = get_config()
+
     resilient_runner = ResilientBot(
         bot_name="the alert triage service",
         bot_factory=barnacles_bot_factory,
@@ -640,6 +643,8 @@ def main():
         initial_retry_delay=30,
         max_retry_delay=300,
         keepalive_interval=90,  # Staggered to avoid synchronized API load (60s, 75s, 90s, 105s, 120s)
+        peer_bot_email=config.webex_bot_email_money_ball,  # the alert triage service → Money_Ball
+        peer_ping_interval_minutes=10,
     )
     resilient_runner.run()
 
