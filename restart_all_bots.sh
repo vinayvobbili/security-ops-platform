@@ -8,6 +8,16 @@ echo "🔄 Restarting all Webex bots with reconnection fix"
 echo "=================================================="
 echo ""
 
+# Pull latest code from git
+echo "📥 Pulling latest code from git..."
+cd "$BOT_DIR" || exit 1
+if git pull; then
+    echo "   ✅ Code updated successfully"
+else
+    echo "   ⚠️  Git pull failed, continuing with current code"
+fi
+echo ""
+
 # Function to restart a single bot
 restart_bot() {
     local bot_name=$1
