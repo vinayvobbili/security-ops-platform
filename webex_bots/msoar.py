@@ -1,3 +1,9 @@
+import sys
+from pathlib import Path
+
+# Add parent directory to path so we can import my_config
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 import logging
 from typing import Any, Dict, Optional
 
