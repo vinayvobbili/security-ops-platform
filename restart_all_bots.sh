@@ -11,6 +11,10 @@ echo ""
 # Pull latest code from git
 echo "📥 Pulling latest code from git..."
 cd "$BOT_DIR" || exit 1
+
+# Discard any local changes to ensure clean pull
+git restore . 2>/dev/null
+
 if git pull; then
     echo "   ✅ Code updated successfully"
 else
