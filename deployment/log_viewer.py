@@ -11,6 +11,7 @@ import subprocess
 import threading
 import queue
 import logging
+from collections import deque
 from functools import wraps
 from typing import Optional
 from flask import Flask, Response, render_template_string, request
@@ -26,6 +27,8 @@ app = Flask(__name__)
 
 # Global variables
 log_queue: queue.Queue = queue.Queue(maxsize=1000)
+recent_lines: deque = deque(maxlen=200)  # Buffer of last 200 lines for new connections
+recent_lines_lock = threading.Lock()  # Protect the recent_lines buffer
 log_source_cmd: Optional[list[str]] = None
 auth_password: str = "metcirt"
 viewer_title: str = "Log Viewer"
@@ -306,16 +309,23 @@ def read_log_stream():
             universal_newlines=True
         )
 
-        # Read lines and put into queue
+        # Read lines and put into queue and recent_lines buffer
         for line in iter(process.stdout.readline, ''):
             if line:
+                stripped_line = line.rstrip('\n')
+
+                # Add to recent lines buffer (for new connections)
+                with recent_lines_lock:
+                    recent_lines.append(stripped_line)
+
+                # Add to queue (for active streaming connections)
                 try:
-                    log_queue.put(line.rstrip('\n'), block=False)
+                    log_queue.put(stripped_line, block=False)
                 except queue.Full:
                     # Drop the oldest line if queue is full
                     try:
                         log_queue.get_nowait()
-                        log_queue.put(line.rstrip('\n'), block=False)
+                        log_queue.put(stripped_line, block=False)
                     except:
                         pass
 
@@ -342,7 +352,14 @@ def stream():
         # Send initial connection message
         yield f"data: === Connected to {viewer_title} ===\n\n"
 
-        # Stream log lines
+        # Send buffered recent lines first (so new connections see history)
+        with recent_lines_lock:
+            buffered_lines = list(recent_lines)
+
+        for line in buffered_lines:
+            yield f"data: {line}\n\n"
+
+        # Now stream new log lines in real-time
         while True:
             try:
                 line = log_queue.get(timeout=1)
