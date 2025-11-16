@@ -1,0 +1,11 @@
+[Unit]
+Description=IR Peer Ping Timer - Run every 5 minutes
+Requires=ir-peer-ping.service
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+AccuracySec=30s
+
+[Install]
+WantedBy=timers.target

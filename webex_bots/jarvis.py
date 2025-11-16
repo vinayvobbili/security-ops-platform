@@ -1274,7 +1274,7 @@ def main():
         # - TCP keepalive (60s) keeps firewall connection tracking alive (ROOT CAUSE FIX)
         # - Idle timeout (15min) as safety net - reconnect before typical 30min firewall timeout
         max_idle_minutes=15,  # Aggressive reconnect for VM behind 2 firewalls
-        peer_bot_email=config.webex_bot_email_barnacles,  # Jarvis → Barnacles
+        peer_bot_email=None,  # Disabled - using standalone peer_ping_keepalive.py script instead
         peer_ping_interval_minutes=10,
     )
 

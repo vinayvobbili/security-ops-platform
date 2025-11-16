@@ -2351,7 +2351,7 @@ def main():
         initial_retry_delay=30,
         max_retry_delay=300,
         keepalive_interval=75,  # Staggered to avoid synchronized API load (60s, 75s, 90s, 105s, 120s)
-        peer_bot_email=config.webex_bot_email_jarvis,  # Toodles → Jarvis
+        peer_bot_email=None,  # Disabled - using standalone peer_ping_keepalive.py script instead
         peer_ping_interval_minutes=10,
     )
     resilient_runner.run()
