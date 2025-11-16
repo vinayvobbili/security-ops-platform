@@ -51,6 +51,7 @@ def get_config():
         webex_bot_email_hal9000=os.environ.get("WEBEX_BOT_EMAIL_HAL9000"),
         webex_bot_email_toodles=os.environ.get("WEBEX_BOT_EMAIL_TOODLES"),
         webex_bot_email_jarvis=os.environ.get("WEBEX_BOT_EMAIL_JARVIS"),
+        webex_bot_email_tars=os.environ.get("WEBEX_BOT_EMAIL_TARS"),
         webex_bot_email_barnacles=os.environ.get("WEBEX_BOT_EMAIL_BARNACLES"),
         webex_bot_email_money_ball=os.environ.get("WEBEX_BOT_EMAIL_MONEY_BALL"),
         webex_bot_email_msoar=os.environ.get("WEBEX_BOT_EMAIL_MSOAR"),
@@ -161,6 +162,7 @@ class Config:
     webex_bot_access_token_dev_xsoar: Optional[str] = None
     webex_bot_access_token_toodles: Optional[str] = None
     webex_bot_access_token_jarvis: Optional[str] = None
+    webex_bot_access_token_tars: Optional[str] = None
     webex_bot_access_token_barnacles: Optional[str] = None
     webex_bot_access_token_hal9000: Optional[str] = None
     webex_bot_access_token_pokedex: Optional[str] = None
