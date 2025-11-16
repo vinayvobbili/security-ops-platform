@@ -1,0 +1,23 @@
+[Unit]
+Description=Log Viewer - TARS
+After=network-online.target ir-tars.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=vinay
+Group=vinay
+WorkingDirectory=/home/vinay/pub/IR
+
+# Start log viewer for TARS bot
+ExecStart=/home/vinay/pub/IR/.venv/bin/python deployment/log_viewer.py --port 8038 --title "TARS Bot" --file /home/vinay/pub/IR/logs/tars.log
+
+Restart=on-failure
+RestartSec=10
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ir-log-viewer-tars
+
+[Install]
+WantedBy=multi-user.target

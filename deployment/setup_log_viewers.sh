@@ -50,7 +50,7 @@ sudo cp "$SCRIPT_DIR/systemd"/ir-log-viewer-*.service /etc/systemd/system/
 sudo systemctl daemon-reload
 
 # Enable all services
-for service in all toodles msoar money-ball barnacles jobs; do
+for service in all toodles msoar money-ball barnacles tars jobs jarvis; do
     sudo systemctl enable ir-log-viewer-${service}.service
 done
 echo "  ✓ Systemd services installed and enabled"
@@ -72,7 +72,7 @@ echo ""
 
 # Start all log viewer services
 echo "Starting log viewer services..."
-for service in all toodles msoar money-ball barnacles jobs; do
+for service in all toodles msoar money-ball barnacles tars jobs jarvis; do
     sudo systemctl start ir-log-viewer-${service}.service
 done
 sleep 2
@@ -89,8 +89,6 @@ echo "================================================"
 echo "✅ Log Viewers Setup Complete!"
 echo "================================================"
 echo ""
-echo "IMPORTANT: Ask network engineer to open ports 8030-8037"
-echo ""
 echo "Landing page:"
 echo "  http://metcirt-lab-12.internal.company.com:8030"
 echo "  (Username: metcirt, Password: metcirt)"
@@ -100,8 +98,9 @@ echo "  http://metcirt-lab-12.internal.company.com:8031 - All Services (journalc
 echo "  http://metcirt-lab-12.internal.company.com:8032 - Toodles"
 echo "  http://metcirt-lab-12.internal.company.com:8033 - MSOAR"
 echo "  http://metcirt-lab-12.internal.company.com:8034 - MoneyBall"
-# echo "  http://metcirt-lab-12.internal.company.com:8035 - Jarvis"
+echo "  http://metcirt-lab-12.internal.company.com:8035 - Jarvis"
 echo "  http://metcirt-lab-12.internal.company.com:8036 - Barnacles"
+echo "  http://metcirt-lab-12.internal.company.com:8038 - TARS"
 echo "  http://metcirt-lab-12.internal.company.com:8037 - All Jobs"
 echo "  (Each protected with username: metcirt, password: metcirt)"
 echo ""
@@ -128,6 +127,6 @@ echo "    sudo systemctl status nginx"
 echo "    sudo journalctl -u ir-log-viewer-* -f"
 echo ""
 echo "Testing locally (before firewall opens ports):"
-echo "  ssh -L 8030:localhost:8030 -L 8031:localhost:8031 -L 8032:localhost:8032 -L 8033:localhost:8033 -L 8034:localhost:8034 -L 8035:localhost:8035 -L 8036:localhost:8036 -L 8037:localhost:8037 metcirt-lab"
+echo "  ssh -L 8030:localhost:8030 -L 8031:localhost:8031 -L 8032:localhost:8032 -L 8033:localhost:8033 -L 8034:localhost:8034 -L 8035:localhost:8035 -L 8036:localhost:8036 -L 8037:localhost:8037 -L 8038:localhost:8038 metcirt-lab"
 echo "  Then access: http://localhost:8030"
 echo ""
