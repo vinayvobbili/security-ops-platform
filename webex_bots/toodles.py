@@ -2270,6 +2270,7 @@ def toodles_bot_factory():
         CONFIG.webex_bot_email_money_ball,
         CONFIG.webex_bot_email_jarvis,
         CONFIG.webex_bot_email_pokedex,
+        CONFIG.webex_bot_email_pinger,  # Pinger bot for keepalive
     ]
 
     return WebexBot(

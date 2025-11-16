@@ -142,6 +142,7 @@ def msoar_bot_factory() -> WebexBot:
         CONFIG.webex_bot_email_money_ball,
         CONFIG.webex_bot_email_jarvis,
         CONFIG.webex_bot_email_pokedex,
+        CONFIG.webex_bot_email_pinger,  # Pinger bot for keepalive
     ]
 
     bot = WebexBot(
