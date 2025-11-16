@@ -43,6 +43,7 @@ def get_config():
         webex_bot_access_token_dev_xsoar=os.environ.get("WEBEX_BOT_ACCESS_TOKEN_DEV_XSOAR"),
         webex_bot_access_token_toodles=os.environ.get("WEBEX_BOT_ACCESS_TOKEN_TOODLES"),
         webex_bot_access_token_jarvis=os.environ.get("WEBEX_BOT_ACCESS_TOKEN_JARVIS"),
+        webex_bot_access_token_tars=os.environ.get("WEBEX_BOT_ACCESS_TOKEN_TARS"),
         webex_bot_access_token_barnacles=os.environ.get("WEBEX_BOT_ACCESS_TOKEN_BARNACLES"),
         webex_bot_access_token_hal9000=os.environ.get("WEBEX_BOT_ACCESS_TOKEN_HAL9000"),
         webex_bot_access_token_pokedex=os.environ.get("WEBEX_BOT_ACCESS_TOKEN_POKEDEX"),
