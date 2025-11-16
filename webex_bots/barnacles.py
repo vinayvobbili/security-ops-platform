@@ -586,10 +586,21 @@ def barnacles_bot_factory():
         bot_name="Barnacles"
     )
 
+    # Build approved users list: configured users + all bots for peer ping communication
+    configured_users = config.barnacles_approved_users.split(',')
+    bot_emails = [
+        config.webex_bot_email_toodles,
+        config.webex_bot_email_msoar,
+        config.webex_bot_email_money_ball,
+        config.webex_bot_email_jarvis,
+        config.webex_bot_email_pokedex,
+    ]
+    approved_users = configured_users + bot_emails
+
     return WebexBot(
         bot_token,
         approved_domains=[config.my_web_domain],
-        approved_users=config.barnacles_approved_users.split(','),
+        approved_users=approved_users,  # Allow configured users + other bots for peer ping
         bot_name="Barnacles - The Captain's Assistant",
         threads=True,
         log_level="ERROR",

@@ -134,9 +134,20 @@ def msoar_bot_factory() -> WebexBot:
         raise RuntimeError("Missing notification room ID (CONFIG.webex_room_id_new_ticket_notifications)")
 
     logger.info("🔧 Initializing WebexBot...")
+
+    # Build approved users list: employees + all bots for peer ping communication
+    approved_bot_emails = [
+        CONFIG.webex_bot_email_toodles,
+        CONFIG.webex_bot_email_barnacles,
+        CONFIG.webex_bot_email_money_ball,
+        CONFIG.webex_bot_email_jarvis,
+        CONFIG.webex_bot_email_pokedex,
+    ]
+
     bot = WebexBot(
         teams_bot_token=BOT_ACCESS_TOKEN,
         approved_domains=[CONFIG.my_web_domain],
+        approved_users=approved_bot_emails,  # Allow other bots for peer ping
         # approved_rooms disabled - bot lacks spark:memberships_read scope for validation
         # Security: Only add this bot to authorized rooms to control access
         bot_name="METCIRT SOAR",

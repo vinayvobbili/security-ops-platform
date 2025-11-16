@@ -1199,9 +1199,19 @@ def jarvis_bot_factory():
         bot_name="Jarvis"
     )
 
+    # Build approved users list: employees + all bots for peer ping communication
+    approved_bot_emails = [
+        CONFIG.webex_bot_email_toodles,
+        CONFIG.webex_bot_email_msoar,
+        CONFIG.webex_bot_email_barnacles,
+        CONFIG.webex_bot_email_money_ball,
+        CONFIG.webex_bot_email_pokedex,
+    ]
+
     return WebexBot(
         CONFIG.webex_bot_access_token_jarvis,
         approved_domains=[CONFIG.my_web_domain],
+        approved_users=approved_bot_emails,  # Allow other bots for peer ping
         # approved_rooms disabled - bot lacks spark:memberships_read scope for validation
         # Security: Only add this bot to authorized rooms to control access
         bot_name="Jarvis - The Ring Tagging Assistant",

@@ -2263,10 +2263,20 @@ def toodles_bot_factory():
         bot_name="Toodles"
     )
 
+    # Build approved users list: employees + all bots for peer ping communication
+    approved_bot_emails = [
+        CONFIG.webex_bot_email_msoar,
+        CONFIG.webex_bot_email_barnacles,
+        CONFIG.webex_bot_email_money_ball,
+        CONFIG.webex_bot_email_jarvis,
+        CONFIG.webex_bot_email_pokedex,
+    ]
+
     return WebexBot(
         CONFIG.webex_bot_access_token_toodles,
         bot_name="Toodles Bot",
         approved_domains=[CONFIG.my_web_domain],
+        approved_users=approved_bot_emails,  # Allow other bots for peer ping
         # approved_rooms disabled - bot lacks spark:memberships_read scope for validation
         # Security: Only add this bot to authorized rooms to control access
         log_level="ERROR",
