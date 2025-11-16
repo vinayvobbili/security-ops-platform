@@ -393,7 +393,8 @@ def moneyball_bot_factory():
         bot_name="MoneyBall - The Metrics & Analytics Bot",
         threads=True,
         log_level="WARNING",  # Changed from ERROR to see more details
-        bot_help_subtitle="Your friendly neighborhood metrics bot! Click a button to get charts and reports!"
+        bot_help_subtitle="Your friendly neighborhood metrics bot! Click a button to get charts and reports!",
+        allow_bot_to_bot=True  # Enable peer ping health checks from other bots
     )
     logger.info("✅ WebexBot instance created successfully")
 

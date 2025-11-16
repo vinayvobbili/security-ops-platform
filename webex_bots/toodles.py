@@ -2271,7 +2271,8 @@ def toodles_bot_factory():
         # Security: Only add this bot to authorized rooms to control access
         log_level="ERROR",
         threads=True,
-        bot_help_subtitle="Your friendly toolbox bot!"
+        bot_help_subtitle="Your friendly toolbox bot!",
+        allow_bot_to_bot=True  # Enable peer ping health checks from other bots
     )
 
 
