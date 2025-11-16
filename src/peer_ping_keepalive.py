@@ -25,6 +25,7 @@ logging.basicConfig(
 CONFIG = get_config()
 
 # List of all bots to ping
+# PingBot pings all production bots to keep NAT paths active
 BOTS_TO_PING = [
     ("Toodles", CONFIG.webex_bot_email_toodles),
     ("MSOAR", CONFIG.webex_bot_email_msoar),
@@ -61,11 +62,11 @@ def send_peer_pings(access_token: str):
 
 def main():
     """Main entry point."""
-    # Use Toodles token as the sender (could be any bot or user token)
-    access_token = CONFIG.webex_bot_access_token_toodles
+    # Use Pinger bot token to send pings to all production bots
+    access_token = CONFIG.webex_bot_access_token_pinger
 
     if not access_token:
-        logger.error("❌ Missing Webex access token")
+        logger.error("❌ Missing Pinger bot Webex access token")
         return 1
 
     try:
