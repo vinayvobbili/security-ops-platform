@@ -140,7 +140,8 @@ def msoar_bot_factory() -> WebexBot:
         # approved_rooms disabled - bot lacks spark:memberships_read scope for validation
         # Security: Only add this bot to authorized rooms to control access
         bot_name="METCIRT SOAR",
-        log_level="Warning"
+        log_level="Warning",
+        allow_bot_to_bot=True  # Enable peer ping health checks from other bots
     )
     logger.info("✓ WebexBot initialized")
     return bot

@@ -321,11 +321,11 @@ class ResilientBot:
             )
 
             self._last_peer_ping_sent = datetime.now()
-            logger.debug(f"👋 Sent peer ping to {self.peer_bot_email}")
+            logger.info(f"✅ Sent peer ping to {self.peer_bot_email} successfully")
             return True
 
         except Exception as e:
-            logger.warning(f"Failed to send peer ping to {self.peer_bot_email}: {e}")
+            logger.warning(f"❌ Failed to send peer ping to {self.peer_bot_email}: {e}")
             return False
 
     def _log_connection_issue(self, reason):
@@ -679,8 +679,17 @@ def enable_message_tracking(bot_instance, resilient_runner):
 
     def tracked_process_incoming_message(teams_message, activity):
         """Wrapper that updates message timestamp for idle detection"""
-        # Update message timestamp
+        # Always update message timestamp for ANY incoming message (including peer pings)
         resilient_runner.update_message_received()
+
+        # Check if this is a peer ping health check message
+        message_text = teams_message.text if hasattr(teams_message, 'text') else ''
+        if message_text and 'health check @' in message_text:
+            # This is a peer ping - log it and don't process further (prevents command execution)
+            sender_email = activity.get('actor', {}).get('emailAddress', 'unknown')
+            logger.info(f"📨 Received peer ping from {sender_email} - connection healthy")
+            # Don't return None - let the message be processed normally but it won't match any commands
+            # This ensures the health check is logged but doesn't trigger bot responses
 
         # Call original message processor
         return original_process_incoming_message(teams_message, activity)
