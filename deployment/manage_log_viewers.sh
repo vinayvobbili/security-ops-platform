@@ -24,11 +24,14 @@ start_viewers() {
     # Port 8034: MoneyBall
     nohup /home/vinay/pub/IR/.venv/bin/python deployment/log_viewer.py --port 8034 --title "MoneyBall Bot" --file /home/vinay/pub/IR/logs/money_ball.log >> logs/log_viewer_moneyball.log 2>&1 &
 
+    # Port 8035: Jarvis
+    nohup /home/vinay/pub/IR/.venv/bin/python deployment/log_viewer.py --port 8035 --title "Jarvis Bot" --file /home/vinay/pub/IR/logs/jarvis.log >> logs/log_viewer_jarvis.log 2>&1 &
+
     # Port 8036: Barnacles
     nohup /home/vinay/pub/IR/.venv/bin/python deployment/log_viewer.py --port 8036 --title "Barnacles Bot" --file /home/vinay/pub/IR/logs/barnacles.log >> logs/log_viewer_barnacles.log 2>&1 &
 
-    # Port 8037: All Jobs Scheduler
-    nohup /home/vinay/pub/IR/.venv/bin/python deployment/log_viewer.py --port 8037 --title "All Jobs Scheduler" --file /home/vinay/pub/IR/logs/all_jobs.log >> logs/log_viewer_jobs.log 2>&1 &
+    # Port 8037: All Jobs Scheduler (includes peer ping logs)
+    nohup /home/vinay/pub/IR/.venv/bin/python deployment/log_viewer.py --port 8037 --title "All Jobs Scheduler (includes Peer Ping)" --file /home/vinay/pub/IR/logs/all_jobs.log >> logs/log_viewer_jobs.log 2>&1 &
 
     sleep 2
     echo "All log viewers started"
