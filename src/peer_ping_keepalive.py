@@ -31,6 +31,7 @@ BOTS_TO_PING = [
     ("MSOAR", CONFIG.webex_bot_email_msoar),
     ("MoneyBall", CONFIG.webex_bot_email_money_ball),
     ("Jarvis", CONFIG.webex_bot_email_jarvis),
+    ("Tars", CONFIG.webex_bot_email_tars),
     ("Barnacles", CONFIG.webex_bot_email_barnacles),
 ]
 
@@ -49,15 +50,15 @@ def send_peer_pings(access_token: str):
         try:
             api.messages.create(
                 toPersonEmail=bot_email,
-                text=f"hello @ {timestamp}"  # Simple greeting that triggers bot response
+                text=f"Hi @ {timestamp}"  # Simple greeting that triggers bot response
             )
-            logger.info(f"  ✅ Pinged {bot_name} ({bot_email})")
+            logger.debug(f"  ✅ Pinged {bot_name} ({bot_email})")
             success_count += 1
         except Exception as e:
             logger.error(f"  ❌ Failed to ping {bot_name}: {e}")
             fail_count += 1
 
-    logger.info(f"✅ Peer ping cycle complete: {success_count} successful, {fail_count} failed")
+    logger.debug(f"✅ Peer ping cycle complete: {success_count} successful, {fail_count} failed")
 
 
 def main():
