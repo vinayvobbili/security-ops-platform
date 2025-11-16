@@ -593,7 +593,8 @@ def barnacles_bot_factory():
         bot_name="Barnacles - The Captain's Assistant",
         threads=True,
         log_level="ERROR",
-        bot_help_subtitle="Click a button to start!"
+        bot_help_subtitle="Click a button to start!",
+        allow_bot_to_bot=True  # Enable peer ping health checks from other bots
     )
 
 

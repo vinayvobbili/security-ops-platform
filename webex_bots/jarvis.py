@@ -1207,7 +1207,8 @@ def jarvis_bot_factory():
         bot_name="Jarvis - The Ring Tagging Assistant",
         threads=True,
         log_level="ERROR",
-        bot_help_subtitle="Your friendly tagging bot!"
+        bot_help_subtitle="Your friendly tagging bot!",
+        allow_bot_to_bot=True  # Enable peer ping health checks from other bots
     )
 
 
