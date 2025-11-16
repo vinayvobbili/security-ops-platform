@@ -36,6 +36,7 @@ from src.components import (
 )
 from src.utils.fs_utils import make_dir_for_todays_charts
 from src.utils.logging_utils import setup_logging
+from src import peer_ping_keepalive
 
 # Configure logging with centralized utility
 setup_logging(
@@ -195,6 +196,12 @@ def main() -> None:
     # Host verification
     logger.info("Scheduling host verification every 5 minutes...")
     schedule.every(5).minutes.do(lambda: safe_run(verify_host_online_status.start))
+
+    # Peer ping keepalive for bot NAT paths
+    logger.info("Scheduling peer ping keepalive every 5 minutes...")
+    schedule.every(5).minutes.do(
+        lambda: safe_run(lambda: peer_ping_keepalive.send_peer_pings(config.webex_bot_access_token_pinger))
+    )
 
     # Shift changes
     logger.info("Scheduling shift change announcements...")
