@@ -176,6 +176,7 @@ class Config:
     webex_bot_email_money_ball: Optional[str] = None
     webex_bot_email_msoar: Optional[str] = None
     webex_bot_email_pinger: Optional[str] = None
+    webex_bot_email_tars: Optional[str] = None
     webex_room_id_aging_tickets: Optional[str] = None
     webex_room_id_vinay_test_space: Optional[str] = None
     webex_room_id_soc_shift_updates: Optional[str] = None
