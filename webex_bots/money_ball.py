@@ -391,6 +391,7 @@ def moneyball_bot_factory():
         config.webex_bot_email_barnacles,
         config.webex_bot_email_jarvis,
         config.webex_bot_email_pokedex,
+        config.webex_bot_email_pinger,  # Pinger bot for keepalive
     ]
 
     logger.info("🌐 Creating WebexBot instance...")

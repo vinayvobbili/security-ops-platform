@@ -594,6 +594,7 @@ def barnacles_bot_factory():
         config.webex_bot_email_money_ball,
         config.webex_bot_email_jarvis,
         config.webex_bot_email_pokedex,
+        config.webex_bot_email_pinger,  # Pinger bot for keepalive
     ]
     approved_users = configured_users + bot_emails
 
