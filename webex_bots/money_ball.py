@@ -384,10 +384,20 @@ def moneyball_bot_factory():
         bot_name="MoneyBall"
     )
 
+    # Build approved users list: employees + all bots for peer ping communication
+    approved_bot_emails = [
+        config.webex_bot_email_toodles,
+        config.webex_bot_email_msoar,
+        config.webex_bot_email_barnacles,
+        config.webex_bot_email_jarvis,
+        config.webex_bot_email_pokedex,
+    ]
+
     logger.info("🌐 Creating WebexBot instance...")
     bot = WebexBot(
         config.webex_bot_access_token_moneyball,
         approved_domains=[config.my_web_domain],
+        approved_users=approved_bot_emails,  # Allow other bots for peer ping
         # approved_rooms disabled - bot lacks spark:memberships_read scope for validation
         # Security: Only add this bot to authorized rooms to control access
         bot_name="MoneyBall - The Metrics & Analytics Bot",
