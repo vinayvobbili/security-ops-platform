@@ -314,10 +314,10 @@ class ResilientBot:
             return False
 
         try:
-            # Send a simple "Hi" message to the peer bot
+            # Send peer ping (avoiding command keywords to prevent response loops)
             self.bot_instance.teams.messages.create(
                 toPersonEmail=self.peer_bot_email,
-                text=f"👋 Hi from {self.bot_name}! (health check @ {datetime.now().strftime('%H:%M:%S')})"
+                text=f"🔔 Peer ping from {self.bot_name} @ {datetime.now().strftime('%H:%M:%S')}"
             )
 
             self._last_peer_ping_sent = datetime.now()
