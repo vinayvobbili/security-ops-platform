@@ -1,7 +1,7 @@
 #!/bin/bash
 # Safely restart all Webex bots with the reconnection fix
 
-BOTS=("toodles" "barnacles" "money_ball" "msoar")
+BOTS=("toodles" "barnacles" "money_ball" "msoar" "jarvis" "tars")
 BOT_DIR="$HOME/pub/IR"
 
 echo "🔄 Restarting all Webex bots with reconnection fix"
