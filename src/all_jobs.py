@@ -41,7 +41,7 @@ from src import peer_ping_keepalive
 # Configure logging with centralized utility
 setup_logging(
     bot_name='all_jobs',
-    log_level=logging.DEBUG,  # Temporarily set to DEBUG for peer ping debugging
+    log_level=logging.INFO,  # Temporarily set to DEBUG for peer ping debugging
     info_modules=['__main__', 'src.components.response_sla_risk_tickets']
 )
 
