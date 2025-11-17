@@ -50,6 +50,8 @@ def send_peer_pings(access_token: str):
 
     success_count = 0
     fail_count = 0
+    successful_bots = []
+    failed_bots = []
 
     for bot_name, bot_email in BOTS_TO_PING:
         try:
@@ -88,14 +90,23 @@ def send_peer_pings(access_token: str):
             if bot_reply:
                 logger.debug(f"  ✅ {bot_name} replied: {bot_reply.text}")
                 success_count += 1
+                successful_bots.append(bot_name)
             else:
                 logger.debug(f"  ⚠️  No reply from {bot_name} yet")
                 fail_count += 1
+                failed_bots.append(bot_name)
         except Exception as e:
             logger.error(f"  ❌ Failed to ping {bot_name}: {e}")
             fail_count += 1
+            failed_bots.append(bot_name)
 
-    logger.info(f"✅ Peer ping cycle complete: {success_count} successful, {fail_count} failed")
+    # Build summary message
+    summary = f"✅ Peer ping cycle complete: {success_count} successful, {fail_count} failed"
+    if successful_bots:
+        summary += f"\n  Successful: {', '.join(successful_bots)}"
+    if failed_bots:
+        summary += f"\n  Failed: {', '.join(failed_bots)}"
+    logger.info(summary)
 
 
 def main():
