@@ -21,6 +21,8 @@ setup_logging(
 )
 
 logger = logging.getLogger(__name__)
+# Suppress warnings from webexteamssdk library (bot-to-bot messages, command not found)
+logging.getLogger('webexteamssdk').setLevel(logging.ERROR)
 
 from src.utils.ssl_config import configure_ssl_if_needed
 

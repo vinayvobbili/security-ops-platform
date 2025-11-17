@@ -48,6 +48,8 @@ logger = logging.getLogger(__name__)
 
 # Suppress noisy warnings from webex_bot module
 logging.getLogger('webex_bot.webex_bot').setLevel(logging.ERROR)
+# Suppress warnings from webexteamssdk library (bot-to-bot messages, command not found)
+logging.getLogger('webexteamssdk').setLevel(logging.ERROR)
 
 # Load configuration early (before SSL config)
 from my_config import get_config
