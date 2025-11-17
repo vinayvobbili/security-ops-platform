@@ -13,8 +13,9 @@ import warnings
 from pathlib import Path
 
 # Suppress noisy library loggers BEFORE imports to prevent startup spam
-logging.getLogger("webexpythonsdk.restsession").setLevel(logging.CRITICAL)
-logging.getLogger("webexteamssdk.restsession").setLevel(logging.CRITICAL)
+# Set to WARNING to hide INFO/DEBUG but still show errors and warnings
+logging.getLogger("webexpythonsdk.restsession").setLevel(logging.WARNING)
+logging.getLogger("webexteamssdk.restsession").setLevel(logging.WARNING)
 logging.getLogger("urllib3.connectionpool").setLevel(logging.WARNING)
 warnings.filterwarnings("ignore", category=UserWarning, module="openpyxl")
 
