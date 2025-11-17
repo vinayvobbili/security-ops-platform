@@ -130,17 +130,30 @@ for client in [prod_client, dev_client]:
         # Set timeout: (connect_timeout, read_timeout) in seconds
         rest_client.timeout = (30, 60)
 
+# Configure retry strategy for connection resilience
+# Retry on connection errors, but not on HTTP errors (let application handle those)
+retry_strategy = urllib3.Retry(
+    total=3,  # Max 3 retries
+    connect=3,  # Retry connection failures
+    read=2,  # Retry read timeouts
+    status=0,  # Don't retry on HTTP status codes (handle in application logic)
+    backoff_factor=1,  # Wait 1s, 2s, 4s between retries
+    allowed_methods=["GET", "POST", "PUT", "DELETE"],  # Retry on all methods
+    raise_on_status=False  # Don't raise exception on retry exhaustion, let app handle it
+)
+
 # Also configure the rest client's pool manager if available
 for client in [prod_client, dev_client]:
     if hasattr(client, 'api_client') and hasattr(client.api_client, 'rest_client'):
         rest_client = client.api_client.rest_client
         if hasattr(rest_client, 'pool_manager'):
-            # Recreate pool manager with maxsize=25 and proper timeout configuration
+            # Recreate pool manager with maxsize=25, proper timeout configuration, and retry logic
             # This prevents threads from hanging indefinitely waiting for connections
             rest_client.pool_manager = urllib3.PoolManager(
                 num_pools=10,
                 maxsize=25,  # Reduced from 100->50->25 to avoid API rate limiting
                 timeout=urllib3.Timeout(connect=30.0, read=60.0),
+                retries=retry_strategy,  # Add retry logic for transient network issues
                 cert_reqs='CERT_NONE' if not client.api_client.configuration.verify_ssl else 'CERT_REQUIRED'
             )
 

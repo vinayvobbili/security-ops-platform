@@ -1,0 +1,16 @@
+[Unit]
+Description=IR Web Server (Flask Dashboard)
+After=network.target
+
+[Service]
+Type=simple
+User=vinay
+WorkingDirectory=/home/vinay/pub/IR
+Environment="PATH=/home/vinay/pub/IR/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+Environment="SKIP_POKEDEX_WARMUP=true"
+ExecStart=/home/vinay/pub/IR/.venv/bin/python /home/vinay/pub/IR/web/web_server.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
