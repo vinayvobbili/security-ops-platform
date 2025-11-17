@@ -23,6 +23,10 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 
+# Suppress verbose HTTP logs from libraries
+logging.getLogger('urllib3').setLevel(logging.WARNING)
+logging.getLogger('webexteamssdk').setLevel(logging.WARNING)
+
 CONFIG = get_config()
 
 # List of all bots to ping
@@ -58,11 +62,17 @@ def send_peer_pings(access_token: str):
             logger.debug(f'Message sent: {response.id}')
 
             # Wait for bot to respond
-            time.sleep(3)  # Wait 3 seconds for bot to process and reply
+            time.sleep(5)  # Wait 5 seconds for bot to process and reply
 
             # Fetch recent messages from the room to get bot's reply
             room_id = response.roomId
-            messages = api.messages.list(roomId=room_id, max=5)
+            messages = list(api.messages.list(roomId=room_id, max=10))
+
+            logger.debug(f"  Found {len(messages)} messages in room")
+
+            # Debug: print all messages
+            # for idx, msg in enumerate(messages):
+            #     logger.debug(f"    Msg {idx}: from={msg.personEmail}, created={msg.created}, text={msg.text[:50] if hasattr(msg, 'text') and msg.text else 'N/A'}")
 
             # Find the bot's reply (not our own message)
             bot_reply = None
@@ -77,15 +87,15 @@ def send_peer_pings(access_token: str):
 
             if bot_reply:
                 logger.debug(f"  ✅ {bot_name} replied: {bot_reply.text}")
+                success_count += 1
             else:
                 logger.debug(f"  ⚠️  No reply from {bot_name} yet")
-
-            success_count += 1
+                fail_count += 1
         except Exception as e:
             logger.error(f"  ❌ Failed to ping {bot_name}: {e}")
             fail_count += 1
 
-    logger.debug(f"✅ Peer ping cycle complete: {success_count} successful, {fail_count} failed")
+    logger.info(f"✅ Peer ping cycle complete: {success_count} successful, {fail_count} failed")
 
 
 def main():
