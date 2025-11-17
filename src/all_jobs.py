@@ -135,29 +135,20 @@ def schedule_shift(time_str: str, shift_name: str, room_id: str) -> None:
     schedule_daily(time_str, lambda: secops.announce_shift_change(shift_name, room_id), name=f"shift_{shift_name}")
 
 
-def schedule_sla(interval: str, job: Callable[[], None], name: str = None, timeout: int = None) -> None:
-    """Schedule SLA job based on interval descriptor with smart timeout.
+def schedule_sla(interval: str, job: Callable[[], None], name: str, timeout: int) -> None:
+    """Schedule SLA job based on interval descriptor.
 
     Interval formats supported:
-    - 'minutes:<n>'   -> every n minutes (timeout defaults to n*60 - 10 seconds)
-    - 'hourly:00'     -> every hour at :00 (timeout defaults to 3600 - 60 seconds)
+    - 'minutes:<n>'   -> every n minutes
+    - 'hourly:00'     -> every hour at :00
 
     Args:
         interval: Interval descriptor (e.g., 'minutes:1', 'hourly:00')
         job: Callable job to schedule
-        name: Optional descriptive name for logs
-        timeout: Optional timeout in seconds (auto-calculated from interval if not provided)
+        name: Descriptive name for logs (required)
+        timeout: Timeout in seconds (required - should be less than interval to prevent overlap)
     """
     kind, value = interval.split(':', 1)
-
-    # Calculate smart timeout based on interval if not provided
-    if timeout is None:
-        if kind == 'minutes':
-            # For n-minute intervals, timeout = n*60 - 10 seconds (leave buffer for next run)
-            timeout = max(10, int(value) * 60 - 10)
-        elif kind == 'hourly':
-            # For hourly jobs, timeout = 59 minutes (leave 1 minute buffer)
-            timeout = 3540
 
     if kind == 'minutes':
         schedule.every(int(value)).minutes.do(lambda: safe_run(job, name=name, timeout=timeout))
@@ -271,9 +262,9 @@ def main() -> None:
 
     # SLA risk monitoring
     logger.info("Scheduling SLA risk monitoring jobs...")
-    schedule_sla('minutes:1', lambda: response_sla_risk_tickets.start(config.webex_room_id_response_sla_risk), name="response_sla_risk")
-    schedule_sla('minutes:3', lambda: containment_sla_risk_tickets.start(config.webex_room_id_containment_sla_risk), name="containment_sla_risk")
-    schedule_sla('hourly:00', lambda: incident_declaration_sla_risk.start(config.webex_room_id_response_sla_risk), name="incident_declaration_sla_risk")
+    schedule_sla('minutes:1', lambda: response_sla_risk_tickets.start(config.webex_room_id_response_sla_risk), name="response_sla_risk", timeout=50)
+    schedule_sla('minutes:3', lambda: containment_sla_risk_tickets.start(config.webex_room_id_containment_sla_risk), name="containment_sla_risk", timeout=170)
+    schedule_sla('hourly:00', lambda: incident_declaration_sla_risk.start(config.webex_room_id_response_sla_risk), name="incident_declaration_sla_risk", timeout=3540)
 
     total_jobs = len(schedule.get_jobs())
     logger.info(f"All jobs scheduled successfully! Total jobs: {total_jobs}")
