@@ -612,10 +612,15 @@ class TicketHandler:
         Returns:
             Task ID if found, None otherwise
         """
-        response = self.client.generic_request(
-            path=f'/investigation/{ticket_id}/workplan',
-            method='GET'
-        )
+        try:
+            response = self.client.generic_request(
+                path=f'/investigation/{ticket_id}/workplan',
+                method='GET'
+            )
+        except ApiException as e:
+            log.error(f"Error fetching workplan for ticket {ticket_id}: {e}")
+            return None
+
         data = _parse_generic_response(response)
         tasks = data.get('invPlaybook', {}).get('tasks', {})
 
@@ -1338,8 +1343,12 @@ def main():
         dev_list = ListHandler(XsoarEnvironment.DEV)
     """
     # Example usage (commented out):
-    # ticket_id = '1378685'
-    # dev_ticket_handler = TicketHandler(XsoarEnvironment.DEV)
+    ticket_id = '1378457'
+    playbook_task_name = 'Does the employee recognize the alerted activity?'
+    dev_ticket_handler = TicketHandler(XsoarEnvironment.DEV)
+    task_id = dev_ticket_handler.get_playbook_task_id(ticket_id, playbook_task_name)
+    print(task_id)
+
     #
     # Example: Get case data with notes
     # print(json.dumps(dev_ticket_handler.get_case_data_with_notes(ticket_id), indent=4))
