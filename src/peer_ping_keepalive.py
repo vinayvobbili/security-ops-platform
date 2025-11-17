@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG,
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 
@@ -48,10 +48,12 @@ def send_peer_pings(access_token: str):
 
     for bot_name, bot_email in BOTS_TO_PING:
         try:
-            api.messages.create(
+            logger.debug(f"Pinging {bot_name} ({bot_email})...")
+            response = api.messages.create(
                 toPersonEmail=bot_email,
                 text=f"Hi @ {timestamp}"  # Simple greeting that triggers bot response
             )
+            logger.debug(response)
             logger.debug(f"  ✅ Pinged {bot_name} ({bot_email})")
             success_count += 1
         except Exception as e:
