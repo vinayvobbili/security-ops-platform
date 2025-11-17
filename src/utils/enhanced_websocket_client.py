@@ -182,8 +182,14 @@ def patch_websocket_client():
                             logger.warning(f"WebSocket connection closed: {e.code} {e.reason}")
                             raise  # Let backoff handle reconnection
                         except (RuntimeError, OSError, ConnectionError) as fatal_error:
-                            # Fatal WebSocket errors that require reconnection
-                            logger.error(f"Fatal WebSocket error: {fatal_error}")
+                            # Check if this is a shutdown-related error (event loop closed)
+                            error_msg = str(fatal_error).lower()
+                            if "event loop" in error_msg or "loop" in error_msg:
+                                # Suppress event loop errors during shutdown - these are expected
+                                logger.debug(f"WebSocket shutting down: {fatal_error}")
+                            else:
+                                # Log other fatal errors that require reconnection
+                                logger.error(f"Fatal WebSocket error: {fatal_error}")
                             raise  # Exit loop and trigger reconnection via backoff
                         except Exception as recv_error:
                             # Log but continue for other non-fatal errors (e.g., message parsing)

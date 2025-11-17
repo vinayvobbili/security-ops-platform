@@ -284,10 +284,10 @@ class ResilientBot:
             return
 
         def signal_handler(sig, _):
-            logger.info(f"🛑 Signal {sig} received, shutting down {self.bot_name}...")
+            logger.info(f"🛑 Signal {sig} received, initiating graceful shutdown of {self.bot_name}...")
             self.shutdown_requested = True
-            self._graceful_shutdown()
-            sys.exit(0)
+            # Don't call sys.exit immediately - let the run loop exit naturally
+            # This prevents race conditions with event loop cleanup
 
         signal.signal(signal.SIGINT, signal_handler)
         signal.signal(signal.SIGTERM, signal_handler)
@@ -465,16 +465,14 @@ class ResilientBot:
         """Perform graceful shutdown cleanup with proper WebSocket handling"""
         try:
             self.shutdown_requested = True
-            logger.debug(f"🛑 Performing graceful shutdown of {self.bot_name}...")
+            logger.info(f"🛑 Performing graceful shutdown of {self.bot_name}...")
 
             if self.keepalive_thread and self.keepalive_thread.is_alive():
                 logger.debug("Stopping keepalive monitoring thread...")
 
             if not self.bot_instance:
-                logger.debug(f"✅ {self.bot_name} shutdown complete")
+                logger.info(f"✅ {self.bot_name} shutdown complete")
                 return
-
-            logger.debug("Closing WebSocket connections...")
 
             # Close WebSocket connection if it exists
             if hasattr(self.bot_instance, 'websocket_client') and self.bot_instance.websocket_client:
@@ -495,43 +493,45 @@ class ResilientBot:
                         asyncio.set_event_loop(loop)
                         logger.debug("Created new event loop for WebSocket cleanup")
 
-                    # Close WebSocket with timeout
+                    # Close WebSocket with timeout and suppress errors
                     if hasattr(ws_client.websocket, 'close'):
                         try:
                             close_task = ws_client.websocket.close()
-                            loop.run_until_complete(asyncio.wait_for(close_task, timeout=5.0))
+                            loop.run_until_complete(asyncio.wait_for(close_task, timeout=2.0))
                             logger.debug("WebSocket closed gracefully")
                         except asyncio.TimeoutError:
-                            logger.warning("WebSocket close timed out, forcing closure")
+                            logger.debug("WebSocket close timed out (expected during shutdown)")
+                        except RuntimeError as e:
+                            # Suppress "Event loop is closed" and "no running event loop" errors during shutdown
+                            if "event loop" in str(e).lower():
+                                logger.debug(f"WebSocket cleanup skipped - event loop already closed")
+                            else:
+                                logger.debug(f"WebSocket close runtime error: {e}")
                         except Exception as ws_close_error:  # noqa: S110 - Broad exception is intentional for cleanup
-                            logger.warning(f"WebSocket close error: {ws_close_error}")
+                            logger.debug(f"WebSocket close error (suppressed during shutdown): {ws_close_error}")
 
-                        # Give time for cleanup
-                        time.sleep(0.5)
-
-                # Try additional cleanup methods
+                # Try additional cleanup methods (but don't wait)
                 if hasattr(ws_client, 'close'):
                     try:
                         ws_client.close()
-                    except Exception as e:  # noqa: S110 - Broad exception is intentional for cleanup
-                        logger.debug(f"WebSocket client close method error: {e}")
+                    except Exception:  # noqa: S110 - Suppress all errors during emergency cleanup
+                        pass
 
             # Try bot-level stop method
             if hasattr(self.bot_instance, 'stop'):
                 try:
                     self.bot_instance.stop()
-                except Exception as e:  # noqa: S110 - Broad exception is intentional for cleanup
-                    logger.debug(f"Bot stop method error: {e}")
+                except Exception:  # noqa: S110 - Suppress all errors during emergency cleanup
+                    pass
 
             # Clear bot instance
-            logger.debug("Clearing bot instance...")
             self.bot_instance = None
-            logger.debug(f"✅ {self.bot_name} shutdown complete")
+            logger.info(f"✅ {self.bot_name} shutdown complete")
 
         except Exception as e:  # noqa: S110 - Broad exception is intentional for shutdown
             # Outer safety net - should rarely be hit since inner operations are protected
             # but critical to prevent crashes during final cleanup (e.g., corrupted state, firewall issues)
-            logger.error(f"Error during graceful shutdown of {self.bot_name}: {e}")
+            logger.debug(f"Shutdown error (suppressed): {e}")
 
     def run_with_reconnection(self):
         """Run bot for a single lifecycle with startup retries. Returns when bot stops or reconnection requested."""
