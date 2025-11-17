@@ -198,7 +198,7 @@ def main() -> None:
     schedule.every(5).minutes.do(lambda: safe_run(verify_host_online_status.start))
 
     # Peer ping keepalive for bot NAT paths
-    logger.info("Scheduling peer ping keepalive every 5 minutes...")
+    logger.info("Scheduling peer ping keepalive Hi messages...")
     schedule.every(10).minutes.do(
         lambda: safe_run(lambda: peer_ping_keepalive.send_peer_pings(config.webex_bot_access_token_pinger))
     )
