@@ -9,7 +9,14 @@ scheduler resilience.
 
 import logging
 import sys
+import warnings
 from pathlib import Path
+
+# Suppress noisy library loggers BEFORE imports to prevent startup spam
+logging.getLogger("webexpythonsdk.restsession").setLevel(logging.CRITICAL)
+logging.getLogger("webexteamssdk.restsession").setLevel(logging.CRITICAL)
+logging.getLogger("urllib3.connectionpool").setLevel(logging.WARNING)
+warnings.filterwarnings("ignore", category=UserWarning, module="openpyxl")
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 import time
@@ -44,17 +51,6 @@ setup_logging(
     log_level=logging.INFO,  # Temporarily set to DEBUG for peer ping debugging
     info_modules=['__main__', 'src.components.response_sla_risk_tickets', 'services.xsoar']
 )
-
-# Suppress noisy library logs (disable propagation to prevent showing in root logger)
-for logger_name in ["webexpythonsdk.restsession", "webexteamssdk.restsession", "openpyxl"]:
-    lib_logger = logging.getLogger(logger_name)
-    lib_logger.setLevel(logging.CRITICAL)  # Effectively silent
-    lib_logger.propagate = False
-
-# urllib3 - show warnings but not debug/info
-urllib3_logger = logging.getLogger("urllib3.connectionpool")
-urllib3_logger.setLevel(logging.WARNING)
-urllib3_logger.propagate = False
 
 # Set XSOAR logging to INFO (connection issues have been resolved)
 logging.getLogger("services.xsoar").setLevel(logging.INFO)
