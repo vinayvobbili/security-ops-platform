@@ -76,7 +76,7 @@ def setup_logging(
         backupCount=5
     )
     file_handler.setLevel(log_level if log_level != logging.WARNING else logging.INFO)
-    file_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    file_formatter = logging.Formatter('%(asctime)s - %(filename)s:%(lineno)d - %(levelname)s - %(message)s')
     file_formatter.converter = time.localtime  # Use local timezone instead of UTC
     file_handler.setFormatter(file_formatter)
 
