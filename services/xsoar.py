@@ -25,6 +25,7 @@ Original: services/xsoar.py.backup
 import ast
 import json
 import logging
+import sys
 import time
 from datetime import datetime
 from http.client import RemoteDisconnected
@@ -36,6 +37,7 @@ import requests
 import urllib3
 from demisto_client.demisto_api import rest
 from demisto_client.demisto_api.models import SearchIncidentsData
+from tqdm import tqdm
 from urllib3.exceptions import InsecureRequestWarning, ProtocolError
 
 from my_config import get_config
@@ -234,6 +236,10 @@ class TicketHandler:
         server_error_retry_count = 0
         max_server_error_retries = 3
 
+        # Create progress bar if running interactively (not in a non-TTY environment)
+        use_progress_bar = sys.stdout.isatty()
+        pbar = tqdm(desc="Fetching tickets", unit=" tickets", disable=not use_progress_bar) if use_progress_bar else None
+
         try:
             while page < max_pages:
                 filter_data: Dict[str, Any] = {
@@ -264,9 +270,15 @@ class TicketHandler:
                     data = [item.to_dict() if hasattr(item, 'to_dict') else item for item in raw_data]
                     all_tickets.extend(data)
 
-                    # Show progress
-                    if page % 5 == 0 or len(data) < page_size:
-                        log.debug(f"  Fetched {len(all_tickets)} tickets so far...")
+                    # Update progress bar
+                    if pbar:
+                        pbar.update(len(data))
+                        pbar.set_postfix({"pages": page + 1, "total": len(all_tickets)})
+
+                    # Show progress (only if no progress bar)
+                    if not use_progress_bar:
+                        if page % 5 == 0 or len(data) < page_size:
+                            log.info(f"  Fetched {len(all_tickets)} tickets so far...")
                     log.debug(f"Fetched page {page}: {len(data)} tickets (total so far: {len(all_tickets)})")
 
                     # Check if we've reached the end
@@ -324,10 +336,15 @@ class TicketHandler:
             if page >= max_pages:
                 log.debug(f"Warning: Reached max_pages limit ({max_pages}). Total: {len(all_tickets)} tickets")
 
+            if pbar:
+                pbar.close()
+
             log.debug(f"Total tickets fetched: {len(all_tickets)}")
             return all_tickets
 
         except Exception as e:
+            if pbar:
+                pbar.close()
             log.error(f"Error in _fetch_paginated: {str(e)}")
             log.error(f"Query that failed: {query}")
             return all_tickets  # Return what we have so far
