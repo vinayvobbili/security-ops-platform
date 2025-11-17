@@ -17,6 +17,8 @@ from src.utils import XsoarEnvironment
 from src.utils.logging_utils import setup_logging
 
 logger = logging.getLogger(__name__)
+# Suppress warnings from webexteamssdk library (bot-to-bot messages, command not found)
+logging.getLogger('webexteamssdk').setLevel(logging.ERROR)
 
 CONFIG = get_config()
 BOT_ACCESS_TOKEN = getattr(CONFIG, 'webex_bot_access_token_dev_xsoar', None)

@@ -40,6 +40,8 @@ setup_logging(
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARNING)  # Ensure bot logger also uses WARNING level
+# Suppress warnings from webexteamssdk library (bot-to-bot messages, command not found)
+logging.getLogger('webexteamssdk').setLevel(logging.ERROR)
 
 # Now safe to import modules that use logging
 import csv
