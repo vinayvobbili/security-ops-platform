@@ -50,8 +50,8 @@ logging.getLogger("webexpythonsdk.restsession").setLevel(logging.ERROR)
 logging.getLogger("webexteamssdk.restsession").setLevel(logging.ERROR)
 logging.getLogger("openpyxl").setLevel(logging.ERROR)
 
-# Enable DEBUG logging for XSOAR to diagnose connection issues
-logging.getLogger("services.xsoar").setLevel(logging.DEBUG)
+# Set XSOAR logging to INFO (connection issues have been resolved)
+logging.getLogger("services.xsoar").setLevel(logging.INFO)
 
 logger = logging.getLogger(__name__)
 

@@ -80,10 +80,10 @@ urllib3.disable_warnings(InsecureRequestWarning)
 CONFIG = get_config()
 log = logging.getLogger(__name__)
 
-# Enable debug logging for urllib3 to diagnose connection issues
-# This will show retry attempts and connection errors
+# Set urllib3 logging to WARNING to reduce log noise
+# Shows connection errors and retries, but not successful connections
 urllib3_logger = logging.getLogger("urllib3.connectionpool")
-urllib3_logger.setLevel(logging.DEBUG)
+urllib3_logger.setLevel(logging.WARNING)
 
 # Configure connection pool size to match parallel workers (25)
 # This prevents "Connection pool is full" warnings when using ThreadPoolExecutor with 25 workers
