@@ -45,11 +45,16 @@ setup_logging(
     info_modules=['__main__', 'src.components.response_sla_risk_tickets', 'services.xsoar']
 )
 
-# Suppress noisy library logs
-logging.getLogger("webexpythonsdk.restsession").setLevel(logging.ERROR)
-logging.getLogger("webexteamssdk.restsession").setLevel(logging.ERROR)
-logging.getLogger("openpyxl").setLevel(logging.ERROR)
-logging.getLogger("urllib3.connectionpool").setLevel(logging.WARNING)
+# Suppress noisy library logs (disable propagation to prevent showing in root logger)
+for logger_name in ["webexpythonsdk.restsession", "webexteamssdk.restsession", "openpyxl"]:
+    lib_logger = logging.getLogger(logger_name)
+    lib_logger.setLevel(logging.CRITICAL)  # Effectively silent
+    lib_logger.propagate = False
+
+# urllib3 - show warnings but not debug/info
+urllib3_logger = logging.getLogger("urllib3.connectionpool")
+urllib3_logger.setLevel(logging.WARNING)
+urllib3_logger.propagate = False
 
 # Set XSOAR logging to INFO (connection issues have been resolved)
 logging.getLogger("services.xsoar").setLevel(logging.INFO)
