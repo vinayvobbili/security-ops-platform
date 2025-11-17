@@ -135,23 +135,34 @@ def schedule_shift(time_str: str, shift_name: str, room_id: str) -> None:
     schedule_daily(time_str, lambda: secops.announce_shift_change(shift_name, room_id), name=f"shift_{shift_name}")
 
 
-def schedule_sla(interval: str, job: Callable[[], None], name: str = None) -> None:
-    """Schedule SLA job based on interval descriptor.
+def schedule_sla(interval: str, job: Callable[[], None], name: str = None, timeout: int = None) -> None:
+    """Schedule SLA job based on interval descriptor with smart timeout.
 
     Interval formats supported:
-    - 'minutes:<n>'   -> every n minutes
-    - 'hourly:00'     -> every hour at :00 (string after colon passed to .at())
+    - 'minutes:<n>'   -> every n minutes (timeout defaults to n*60 - 10 seconds)
+    - 'hourly:00'     -> every hour at :00 (timeout defaults to 3600 - 60 seconds)
 
     Args:
         interval: Interval descriptor (e.g., 'minutes:1', 'hourly:00')
         job: Callable job to schedule
         name: Optional descriptive name for logs
+        timeout: Optional timeout in seconds (auto-calculated from interval if not provided)
     """
     kind, value = interval.split(':', 1)
+
+    # Calculate smart timeout based on interval if not provided
+    if timeout is None:
+        if kind == 'minutes':
+            # For n-minute intervals, timeout = n*60 - 10 seconds (leave buffer for next run)
+            timeout = max(10, int(value) * 60 - 10)
+        elif kind == 'hourly':
+            # For hourly jobs, timeout = 59 minutes (leave 1 minute buffer)
+            timeout = 3540
+
     if kind == 'minutes':
-        schedule.every(int(value)).minutes.do(lambda: safe_run(job, name=name))
+        schedule.every(int(value)).minutes.do(lambda: safe_run(job, name=name, timeout=timeout))
     elif kind == 'hourly':
-        schedule.every().hour.at(f":{value}").do(lambda: safe_run(job, name=name))
+        schedule.every().hour.at(f":{value}").do(lambda: safe_run(job, name=name, timeout=timeout))
     else:
         logger.error(f"Unsupported SLA interval format: {interval}")
 
