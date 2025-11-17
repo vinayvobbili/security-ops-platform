@@ -8,6 +8,7 @@ avoiding bot-to-bot complexity and message loops.
 Run via cron or systemd timer every 5-10 minutes.
 """
 import logging
+import time
 from datetime import datetime
 
 from webexteamssdk import WebexTeamsAPI
@@ -49,12 +50,36 @@ def send_peer_pings(access_token: str):
     for bot_name, bot_email in BOTS_TO_PING:
         try:
             logger.debug(f"Pinging {bot_name} ({bot_email})...")
+            # Send the message
             response = api.messages.create(
                 toPersonEmail=bot_email,
                 text=f"Hi @ {timestamp}"  # Simple greeting that triggers bot response
             )
-            logger.debug(response)
-            logger.debug(f"  ✅ Pinged {bot_name} ({bot_email})")
+            logger.debug(f'Message sent: {response.id}')
+
+            # Wait for bot to respond
+            time.sleep(3)  # Wait 3 seconds for bot to process and reply
+
+            # Fetch recent messages from the room to get bot's reply
+            room_id = response.roomId
+            messages = api.messages.list(roomId=room_id, max=5)
+
+            # Find the bot's reply (not our own message)
+            bot_reply = None
+            for msg in messages:
+                # Skip our own message
+                if msg.id == response.id:
+                    continue
+                # Check if it's from the bot (newer than our message)
+                if msg.personEmail == bot_email and msg.created > response.created:
+                    bot_reply = msg
+                    break
+
+            if bot_reply:
+                logger.debug(f"  ✅ {bot_name} replied: {bot_reply.text}")
+            else:
+                logger.debug(f"  ⚠️  No reply from {bot_name} yet")
+
             success_count += 1
         except Exception as e:
             logger.error(f"  ❌ Failed to ping {bot_name}: {e}")
