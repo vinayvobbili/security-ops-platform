@@ -80,6 +80,11 @@ urllib3.disable_warnings(InsecureRequestWarning)
 CONFIG = get_config()
 log = logging.getLogger(__name__)
 
+# Enable debug logging for urllib3 to diagnose connection issues
+# This will show retry attempts and connection errors
+urllib3_logger = logging.getLogger("urllib3.connectionpool")
+urllib3_logger.setLevel(logging.DEBUG)
+
 # Configure connection pool size to match parallel workers (25)
 # This prevents "Connection pool is full" warnings when using ThreadPoolExecutor with 25 workers
 # Patch urllib3.PoolManager to use larger default maxsize before creating clients
@@ -1234,16 +1239,37 @@ class ListHandler:
         Returns:
             List of XSOAR list dictionaries
         """
+        import inspect
+        import time
+
+        # Get caller information for debugging
+        caller_frame = inspect.currentframe().f_back
+        caller_info = inspect.getframeinfo(caller_frame)
+        caller_function = caller_frame.f_code.co_name
+        caller_file = caller_info.filename.split('/')[-1] if caller_info.filename else 'unknown'
+
+        start_time = time.time()
+        log.debug(f"get_all_lists() called by {caller_file}:{caller_function}() at line {caller_info.lineno}")
+
         try:
+            log.debug(f"Making request to /lists endpoint...")
             response = self.client.generic_request(
                 path='/lists',
                 method='GET'
             )
+            elapsed = time.time() - start_time
+            log.debug(f"get_all_lists() completed successfully in {elapsed:.2f}s")
+
             result = _parse_generic_response(response)
             # Result should be a list, but if it's a dict, return empty list
             return result if isinstance(result, list) else []
         except ApiException as e:
-            log.error(f"Error in get_all_lists: {e}")
+            elapsed = time.time() - start_time
+            log.error(f"Error in get_all_lists after {elapsed:.2f}s (called by {caller_file}:{caller_function}): {e}")
+            return []
+        except Exception as e:
+            elapsed = time.time() - start_time
+            log.error(f"Unexpected error in get_all_lists after {elapsed:.2f}s (called by {caller_file}:{caller_function}): {e}")
             return []
 
     def get_list_data_by_name(self, list_name):
