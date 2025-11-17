@@ -63,19 +63,28 @@ DEFAULT_JOB_TIMEOUT = 1800  # 30 minutes
 TICKET_CACHE_TIMEOUT = 7200  # 120 minutes (2 hours) for ticket enrichment job
 
 
-def safe_run(*jobs: Callable[[], None], timeout: int = DEFAULT_JOB_TIMEOUT) -> None:
+def safe_run(*jobs: Callable[[], None], timeout: int = DEFAULT_JOB_TIMEOUT, name: str = None) -> None:
     """Execute multiple jobs safely with timeout protection, continuing even if some fail.
 
     Sequentially runs each provided job. Each job is isolated with its own ThreadPoolExecutor
     to enforce a timeout and prevent the entire scheduler from hanging.
+
+    Args:
+        *jobs: One or more callable jobs to execute
+        timeout: Maximum execution time per job in seconds
+        name: Optional descriptive name for the job(s) in logs (overrides auto-detected names)
     """
     import time
     if not jobs:
         logger.debug("safe_run() called with 0 jobs - nothing to do")
         return
     logger.debug(f"safe_run() running {len(jobs)} job(s) with timeout={timeout}s")
-    for job in jobs:
-        job_name = getattr(job, '__name__', repr(job))
+    for i, job in enumerate(jobs):
+        # Use provided name, or try to extract function name, or fall back to repr
+        if name:
+            job_name = name if len(jobs) == 1 else f"{name}[{i+1}/{len(jobs)}]"
+        else:
+            job_name = getattr(job, '__name__', repr(job))
         executor = None
         start_time = time.time()
         logger.info(f">>> Starting job: {job_name}")
@@ -102,34 +111,46 @@ def safe_run(*jobs: Callable[[], None], timeout: int = DEFAULT_JOB_TIMEOUT) -> N
 # Helper functions for cleaner scheduling
 # ----------------------------------------------------------------------------------
 
-def schedule_daily(time_str: str, *jobs: Callable[[], None]) -> None:
-    """Schedule a set of jobs to run daily at a given time (Eastern)."""
-    schedule.every().day.at(time_str, eastern).do(lambda: safe_run(*jobs))
+def schedule_daily(time_str: str, *jobs: Callable[[], None], name: str = None) -> None:
+    """Schedule a set of jobs to run daily at a given time (Eastern).
+
+    Args:
+        time_str: Time in 'HH:MM' format (Eastern timezone)
+        *jobs: One or more callable jobs to execute
+        name: Optional descriptive name for logs
+    """
+    schedule.every().day.at(time_str, eastern).do(lambda: safe_run(*jobs, name=name))
 
 
 def schedule_group(time_str: str, name: str, jobs: Iterable[Callable[[], None]]) -> None:
     """Schedule a named group of jobs and log registration."""
     job_list = list(jobs)
     logger.info(f"Scheduling {name} ({len(job_list)} job(s)) at {time_str} ET")
-    schedule_daily(time_str, *job_list)
+    schedule_daily(time_str, *job_list, name=name)
 
 
 def schedule_shift(time_str: str, shift_name: str, room_id: str) -> None:
-    schedule_daily(time_str, lambda: secops.announce_shift_change(shift_name, room_id))
+    """Schedule a shift change announcement."""
+    schedule_daily(time_str, lambda: secops.announce_shift_change(shift_name, room_id), name=f"shift_{shift_name}")
 
 
-def schedule_sla(interval: str, job: Callable[[], None]) -> None:
+def schedule_sla(interval: str, job: Callable[[], None], name: str = None) -> None:
     """Schedule SLA job based on interval descriptor.
 
     Interval formats supported:
     - 'minutes:<n>'   -> every n minutes
     - 'hourly:00'     -> every hour at :00 (string after colon passed to .at())
+
+    Args:
+        interval: Interval descriptor (e.g., 'minutes:1', 'hourly:00')
+        job: Callable job to schedule
+        name: Optional descriptive name for logs
     """
     kind, value = interval.split(':', 1)
     if kind == 'minutes':
-        schedule.every(int(value)).minutes.do(lambda: safe_run(job))
+        schedule.every(int(value)).minutes.do(lambda: safe_run(job, name=name))
     elif kind == 'hourly':
-        schedule.every().hour.at(f":{value}").do(lambda: safe_run(job))
+        schedule.every().hour.at(f":{value}").do(lambda: safe_run(job, name=name))
     else:
         logger.error(f"Unsupported SLA interval format: {interval}")
 
@@ -189,7 +210,7 @@ def main() -> None:
 
     # Directory preparation (first, fast)
     logger.info("Scheduling daily chart directory preparation...")
-    schedule_daily('00:01', lambda: make_dir_for_todays_charts(helper_methods.CHARTS_DIR_PATH))
+    schedule_daily('00:01', lambda: make_dir_for_todays_charts(helper_methods.CHARTS_DIR_PATH), name="chart_dir_prep")
 
     # Chart groups (data-driven)
     for group in CHART_GROUPS:
@@ -198,17 +219,17 @@ def main() -> None:
     # Ticket cache (unstable, isolated) - uses extended timeout
     logger.info("Scheduling ticket cache generation at 00:30 ET (may be slow)...")
     schedule.every().day.at('00:30', eastern).do(
-        lambda: safe_run(TicketCache.generate, timeout=TICKET_CACHE_TIMEOUT)
+        lambda: safe_run(TicketCache.generate, timeout=TICKET_CACHE_TIMEOUT, name="ticket_cache")
     )
 
     # Host verification
     logger.info("Scheduling host verification every 5 minutes...")
-    schedule.every(5).minutes.do(lambda: safe_run(verify_host_online_status.start))
+    schedule.every(5).minutes.do(lambda: safe_run(verify_host_online_status.start, name="host_verification"))
 
     # Peer ping keepalive for bot NAT paths
     logger.info("Scheduling peer ping keepalive Hi messages...")
     schedule.every(5).minutes.do(
-        lambda: safe_run(lambda: peer_ping_keepalive.send_peer_pings(config.webex_bot_access_token_pinger))
+        lambda: safe_run(lambda: peer_ping_keepalive.send_peer_pings(config.webex_bot_access_token_pinger), name="peer_ping_keepalive")
     )
 
     # Shift changes
@@ -222,13 +243,14 @@ def main() -> None:
     logger.info("Scheduling weekly efficacy report (Friday 08:00 ET)...")
     schedule.every().friday.at('08:00', eastern).do(lambda: safe_run(
         qradar_rule_efficacy.send_charts,
-        crowdstrike_efficacy.send_charts
+        crowdstrike_efficacy.send_charts,
+        name="weekly_efficacy_report"
     ))
 
     # On-call management
     logger.info("Scheduling on-call management (Fri alert, Mon announce)...")
-    schedule.every().friday.at('14:00', eastern).do(lambda: safe_run(oncall.alert_change))
-    schedule.every().monday.at('08:00', eastern).do(lambda: safe_run(oncall.announce_change))
+    schedule.every().friday.at('14:00', eastern).do(lambda: safe_run(oncall.alert_change, name="oncall_alert"))
+    schedule.every().monday.at('08:00', eastern).do(lambda: safe_run(oncall.announce_change, name="oncall_announce"))
 
     # Daily maintenance
     logger.info("Scheduling daily maintenance tasks...")
@@ -237,9 +259,9 @@ def main() -> None:
 
     # SLA risk monitoring
     logger.info("Scheduling SLA risk monitoring jobs...")
-    schedule_sla('minutes:1', lambda: response_sla_risk_tickets.start(config.webex_room_id_response_sla_risk))
-    schedule_sla('minutes:3', lambda: containment_sla_risk_tickets.start(config.webex_room_id_containment_sla_risk))
-    schedule_sla('hourly:00', lambda: incident_declaration_sla_risk.start(config.webex_room_id_response_sla_risk))
+    schedule_sla('minutes:1', lambda: response_sla_risk_tickets.start(config.webex_room_id_response_sla_risk), name="response_sla_risk")
+    schedule_sla('minutes:3', lambda: containment_sla_risk_tickets.start(config.webex_room_id_containment_sla_risk), name="containment_sla_risk")
+    schedule_sla('hourly:00', lambda: incident_declaration_sla_risk.start(config.webex_room_id_response_sla_risk), name="incident_declaration_sla_risk")
 
     total_jobs = len(schedule.get_jobs())
     logger.info(f"All jobs scheduled successfully! Total jobs: {total_jobs}")
