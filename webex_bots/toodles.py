@@ -46,10 +46,8 @@ setup_logging(
 
 logger = logging.getLogger(__name__)
 
-# Suppress noisy warnings from webex_bot module
-logging.getLogger('webex_bot.webex_bot').setLevel(logging.ERROR)
-# Suppress warnings from webexteamssdk library (bot-to-bot messages, command not found)
-logging.getLogger('webexteamssdk').setLevel(logging.ERROR)
+# Note: Logging suppression for webex_bot, webexpythonsdk, etc. is handled centrally
+# in src/utils/bot_resilience.py (applies to all bots using the resilience framework)
 
 # Load configuration early (before SSL config)
 from my_config import get_config

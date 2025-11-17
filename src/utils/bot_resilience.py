@@ -123,13 +123,13 @@ class ResilientBot:
             peer_bot_email: Email of another bot to send periodic pings to (recommended over self-ping)
             peer_ping_interval_minutes: Send peer ping every N minutes (default 10min)
         """
-        # Suppress noisy websocket logs for all bots
-        # These INFO-level logs create excessive noise without adding value
-        logging.getLogger('webex_bot.websockets.webex_websocket_client').setLevel(logging.WARNING)
-        logging.getLogger('webex_bot.webex_bot').setLevel(logging.WARNING)
-        logging.getLogger('webexpythonsdk').setLevel(logging.WARNING)
-        logging.getLogger('urllib3').setLevel(logging.ERROR)
-        logging.getLogger('asyncio').setLevel(logging.CRITICAL)
+        # Suppress noisy logs for all bots
+        # These INFO/WARNING-level logs create excessive noise without adding value
+        # Suppress all webex_bot warnings (bot-to-bot messages, self-messages, command not found, etc.)
+        logging.getLogger('webex_bot').setLevel(logging.ERROR)  # Covers all webex_bot submodules
+        logging.getLogger('webexpythonsdk').setLevel(logging.ERROR)  # SDK warnings
+        logging.getLogger('urllib3').setLevel(logging.ERROR)  # HTTP connection pool warnings
+        logging.getLogger('asyncio').setLevel(logging.CRITICAL)  # Async loop warnings
 
         # Apply SDK timeout patch for all bots using this resilience framework
         # The WebSocket client makes HTTP calls to register/refresh devices, and the default 60s timeout
