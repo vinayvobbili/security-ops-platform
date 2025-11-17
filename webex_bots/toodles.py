@@ -2341,9 +2341,6 @@ def main():
 
     logger.info("Starting Toodles with standard resilience framework")
 
-    # Get config for peer ping setup
-    config = get_config()
-
     resilient_runner = ResilientBot(
         bot_name="Toodles",
         bot_factory=toodles_bot_factory,
