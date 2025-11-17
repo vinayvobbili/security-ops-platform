@@ -67,6 +67,7 @@ filelock
 config
 
 # AI/LangChain - Use latest for features and fixes
+langchain
 langchain-community
 langchain-core
 langchain-ollama
