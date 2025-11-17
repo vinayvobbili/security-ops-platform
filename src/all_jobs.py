@@ -41,14 +41,17 @@ from src import peer_ping_keepalive
 # Configure logging with centralized utility
 setup_logging(
     bot_name='all_jobs',
-    log_level=logging.INFO,  # Temporarily set to DEBUG for peer ping debugging
-    info_modules=['__main__', 'src.components.response_sla_risk_tickets']
+    log_level=logging.DEBUG,  # Temporarily set to DEBUG for peer ping debugging
+    info_modules=['__main__', 'src.components.response_sla_risk_tickets', 'services.xsoar']
 )
 
 # Suppress noisy library logs
 logging.getLogger("webexpythonsdk.restsession").setLevel(logging.ERROR)
 logging.getLogger("webexteamssdk.restsession").setLevel(logging.ERROR)
 logging.getLogger("openpyxl").setLevel(logging.ERROR)
+
+# Enable DEBUG logging for XSOAR to diagnose connection issues
+logging.getLogger("services.xsoar").setLevel(logging.DEBUG)
 
 logger = logging.getLogger(__name__)
 
@@ -66,6 +69,7 @@ def safe_run(*jobs: Callable[[], None], timeout: int = DEFAULT_JOB_TIMEOUT) -> N
     Sequentially runs each provided job. Each job is isolated with its own ThreadPoolExecutor
     to enforce a timeout and prevent the entire scheduler from hanging.
     """
+    import time
     if not jobs:
         logger.debug("safe_run() called with 0 jobs - nothing to do")
         return
@@ -73,17 +77,21 @@ def safe_run(*jobs: Callable[[], None], timeout: int = DEFAULT_JOB_TIMEOUT) -> N
     for job in jobs:
         job_name = getattr(job, '__name__', repr(job))
         executor = None
-        logger.debug(f"Starting job: {job_name}")
+        start_time = time.time()
+        logger.info(f">>> Starting job: {job_name}")
         try:
             executor = ThreadPoolExecutor(max_workers=1)
             future = executor.submit(job)
             try:
                 future.result(timeout=timeout)
-                logger.debug(f"Job completed successfully: {job_name}")
+                elapsed = time.time() - start_time
+                logger.info(f"<<< Job completed successfully: {job_name} (took {elapsed:.2f}s)")
             except FuturesTimeoutError:
-                logger.error(f"Job timed out after {timeout} seconds: {job_name}")
+                elapsed = time.time() - start_time
+                logger.error(f"Job timed out after {timeout} seconds: {job_name} (elapsed {elapsed:.2f}s)")
         except Exception as e:
-            logger.error(f"Job execution failed for {job_name}: {e}")
+            elapsed = time.time() - start_time
+            logger.error(f"Job execution failed for {job_name} after {elapsed:.2f}s: {e}")
             logger.debug(traceback.format_exc())
         finally:
             if executor:
