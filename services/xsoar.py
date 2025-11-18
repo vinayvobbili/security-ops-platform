@@ -123,13 +123,16 @@ dev_client = demisto_client.configure(
 
 # Configure connection and read timeouts for both clients
 # Connect timeout: 30s (how long to wait to establish connection)
-# Read timeout: 60s (how long to wait for response data after connection established)
+# Read timeout: 180s (how long to wait for response data after connection established)
 # This prevents indefinite hangs when the API is unresponsive while allowing legitimate slow queries
+# Increased to 180s to handle slow network environments (VMs) where pages can take 100+ seconds
 for client in [prod_client, dev_client]:
     if hasattr(client, 'api_client') and hasattr(client.api_client, 'rest_client'):
         rest_client = client.api_client.rest_client
         # Set timeout: (connect_timeout, read_timeout) in seconds
-        rest_client.timeout = (30, 60)
+        # Can be overridden via XSOAR_READ_TIMEOUT env var
+        read_timeout = int(os.getenv('XSOAR_READ_TIMEOUT', '180'))
+        rest_client.timeout = (30, read_timeout)
 
 # Configure retry strategy for connection resilience
 # Retry on connection errors, but not on HTTP errors (let application handle those)
@@ -150,10 +153,12 @@ for client in [prod_client, dev_client]:
         if hasattr(rest_client, 'pool_manager'):
             # Recreate pool manager with maxsize=25, proper timeout configuration, and retry logic
             # This prevents threads from hanging indefinitely waiting for connections
+            # Read timeout increased to 180s to handle slow network environments (VMs)
+            read_timeout = int(os.getenv('XSOAR_READ_TIMEOUT', '180'))
             rest_client.pool_manager = urllib3.PoolManager(
                 num_pools=10,
                 maxsize=25,  # Reduced from 100->50->25 to avoid API rate limiting
-                timeout=urllib3.Timeout(connect=30.0, read=60.0),
+                timeout=urllib3.Timeout(connect=30.0, read=float(read_timeout)),
                 retries=retry_strategy,  # Add retry logic for transient network issues
                 cert_reqs='CERT_NONE' if not client.api_client.configuration.verify_ssl else 'CERT_REQUIRED'
             )
@@ -193,6 +198,15 @@ def import_ticket(source_ticket_number: str, requestor_email_address: Optional[s
 
 class TicketHandler:
     """Handler for XSOAR ticket operations including search, create, update, and link."""
+
+    # Configuration class variables (can be overridden via env vars)
+    # Smaller page sizes (1000-2000) work better for slow networks (VMs)
+    # Larger page sizes (5000) work better for fast networks (local dev)
+    DEFAULT_PAGE_SIZE = int(os.getenv('XSOAR_PAGE_SIZE', '2000'))
+
+    # Read timeout for API requests (seconds)
+    # Increase this for slow network environments where pages take 100+ seconds
+    READ_TIMEOUT = int(os.getenv('XSOAR_READ_TIMEOUT', '180'))
 
     def __init__(self, environment: XsoarEnvironment = XsoarEnvironment.PROD):
         """
@@ -270,18 +284,26 @@ class TicketHandler:
         return self._fetch_unpaginated(full_query, period, size)
 
     def _fetch_paginated(self, query: str, period: Optional[Dict[str, Any]],
-                         page_size: int = 5000) -> List[Dict[str, Any]]:
+                         page_size: int = None) -> List[Dict[str, Any]]:
         """
         Fetch tickets with pagination using demisto-py SDK.
 
         Args:
             query: XSOAR query string
             period: Optional time period filter
-            page_size: Number of results per page
+            page_size: Number of results per page (default from env var or 2000)
 
         Returns:
             List of all fetched incident dictionaries
+
+        Note:
+            Page size can be controlled via XSOAR_PAGE_SIZE env var.
+            Smaller pages (1000-2000) are better for slow networks.
+            Larger pages (5000) are better for fast networks.
         """
+        # Use default page size if not specified
+        if page_size is None:
+            page_size = TicketHandler.DEFAULT_PAGE_SIZE
         all_tickets = []
         page = 0
         max_pages = 100
