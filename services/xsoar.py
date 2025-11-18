@@ -258,6 +258,11 @@ class TicketHandler:
         use_progress_bar = sys.stdout.isatty()
         pbar = tqdm(desc="Fetching tickets", unit=" tickets", disable=not use_progress_bar) if use_progress_bar else None
 
+        # Log start of pagination for visibility
+        log.info(f"Starting paginated fetch with page_size={page_size}, max_pages={max_pages}")
+        if not use_progress_bar:
+            log.info("Running in non-TTY mode (no progress bar), will log each page...")
+
         try:
             while page < max_pages:
                 filter_data: Dict[str, Any] = {
@@ -269,7 +274,8 @@ class TicketHandler:
                 if period:
                     filter_data["period"] = period
 
-                log.debug(f"Fetching page {page} with size {page_size}")
+                # Log at INFO level for better visibility on VMs
+                log.info(f"Fetching page {page} (size: {page_size})...")
 
                 try:
                     # Use search_incidents method from demisto-py
@@ -282,6 +288,7 @@ class TicketHandler:
                     # Extract data from response and convert to dicts for backward compatibility
                     raw_data = response.data if hasattr(response, 'data') else []
                     if not raw_data:
+                        log.info("No more data returned, pagination complete")
                         break
 
                     # Convert model objects to dictionaries
@@ -293,15 +300,15 @@ class TicketHandler:
                         pbar.update(len(data))
                         pbar.set_postfix({"pages": page + 1, "total": len(all_tickets)})
 
-                    # Show progress (only if no progress bar)
+                    # Show progress - log every page for better VM visibility
                     if not use_progress_bar:
-                        if page % 5 == 0 or len(data) < page_size:
-                            log.info(f"  Fetched {len(all_tickets)} tickets so far...")
-                    log.debug(f"Fetched page {page}: {len(data)} tickets (total so far: {len(all_tickets)})")
+                        log.info(f"  ✓ Page {page} complete: fetched {len(data)} tickets (total: {len(all_tickets)})")
+                    else:
+                        log.debug(f"Fetched page {page}: {len(data)} tickets (total so far: {len(all_tickets)})")
 
                     # Check if we've reached the end
                     if len(data) < page_size:
-                        log.debug(f"Completed: {len(all_tickets)} total tickets fetched")
+                        log.info(f"Pagination complete: fetched {len(all_tickets)} total tickets across {page + 1} pages")
                         break
 
                     # Delay between pages to avoid rate limiting
@@ -352,12 +359,12 @@ class TicketHandler:
                         break
 
             if page >= max_pages:
-                log.debug(f"Warning: Reached max_pages limit ({max_pages}). Total: {len(all_tickets)} tickets")
+                log.warning(f"Reached max_pages limit ({max_pages}). Total: {len(all_tickets)} tickets - there may be more data")
 
             if pbar:
                 pbar.close()
 
-            log.debug(f"Total tickets fetched: {len(all_tickets)}")
+            log.info(f"✓ Fetch complete: {len(all_tickets)} total tickets retrieved")
             return all_tickets
 
         except Exception as e:
@@ -365,6 +372,7 @@ class TicketHandler:
                 pbar.close()
             log.error(f"Error in _fetch_paginated: {str(e)}")
             log.error(f"Query that failed: {query}")
+            log.info(f"Returning {len(all_tickets)} tickets collected before error")
             return all_tickets  # Return what we have so far
 
     def _fetch_unpaginated(self, query, period, size):
