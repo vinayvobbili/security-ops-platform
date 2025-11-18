@@ -25,6 +25,7 @@ Original: services/xsoar.py.backup
 import ast
 import json
 import logging
+import os
 import sys
 import time
 from datetime import datetime
@@ -238,7 +239,7 @@ class TicketHandler:
             test_filter = {"query": "id:1", "page": 0, "size": 1}
             test_search = SearchIncidentsData(filter=test_filter)
             test_response = self.client.search_incidents(filter=test_search)
-            log.info(f"  ✓ XSOAR API is reachable and responding")
+            log.info(f"  ✓ XSOAR API is reachable and responding: {type(test_response)}")
         except Exception as e:
             log.error(f"  ✗ XSOAR API connectivity test failed: {e}")
             log.error(f"  This may indicate network issues, API outage, or authentication problems")
@@ -268,7 +269,8 @@ class TicketHandler:
         max_server_error_retries = 3
 
         # Create progress bar if running interactively (not in a non-TTY environment)
-        use_progress_bar = sys.stdout.isatty()
+        # Can be forced via FORCE_PROGRESS_BAR=true environment variable for PyCharm
+        use_progress_bar = sys.stdout.isatty() or os.getenv('FORCE_PROGRESS_BAR', '').lower() == 'true'
         pbar = tqdm(desc="Fetching tickets", unit=" tickets", disable=not use_progress_bar) if use_progress_bar else None
 
         # Log start of pagination for visibility
