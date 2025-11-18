@@ -354,40 +354,27 @@ class Bot(WebexBot):
             )
 
 
-def initialize_bot_with_tracking(bot_instance, resilient_runner):
-    """Initialize Pokedex with message activity tracking for idle detection"""
-    from src.utils.bot_resilience import enable_message_tracking
-
-    if not bot_instance:
-        return False
-
-    # Enable message tracking for idle timeout detection
-    enable_message_tracking(bot_instance, resilient_runner)
-
-    # Run original initialization (doesn't need bot_instance parameter)
-    return initialize_bot()
-
-
 def main():
-    """Pokedex main - uses standard resilience framework"""
-    from src.utils.bot_resilience import ResilientBot
-
+    """Pokedex main - simplified to use basic WebexBot (keepalive handled by peer_ping_keepalive.py)"""
     bot_name = "Pokedex"
+    logger.info("Starting Pokedex with basic WebexBot")
 
-    logger.info("🔧 Using standard resilience framework")
-    resilient_runner = ResilientBot(
-        bot_factory=lambda: Bot(
-            teams_bot_token=WEBEX_ACCESS_TOKEN,
-            approved_domains=[CONFIG.my_web_domain],
-            # approved_rooms disabled - bot lacks spark:memberships_read scope for validation
-            # Security: Only add this bot to authorized rooms to control access
-            bot_name=bot_name
-        ),
-        initialization_func=lambda bot: initialize_bot_with_tracking(bot, resilient_runner),
+    # Create bot instance
+    bot = Bot(
+        teams_bot_token=WEBEX_ACCESS_TOKEN,
+        approved_domains=[CONFIG.my_web_domain],
+        # approved_rooms disabled - bot lacks spark:memberships_read scope for validation
+        # Security: Only add this bot to authorized rooms to control access
         bot_name=bot_name
     )
 
-    resilient_runner.run()
+    # Initialize bot
+    initialize_bot()
+
+    # Run bot (simple and direct)
+    logger.info("🚀 Pokedex is up and running...")
+    print("🚀 Pokedex is up and running...", flush=True)
+    bot.run()
 
 
 if __name__ == "__main__":
