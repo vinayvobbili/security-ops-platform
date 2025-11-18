@@ -355,7 +355,7 @@ class Bot(WebexBot):
 
 
 def main():
-    """Pokedex main - simplified to use basic WebexBot (keepalive handled by peer_ping_keepalive.py)"""
+    """Pokédex main - simplified to use basic WebexBot (keepalive handled by peer_ping_keepalive.py)"""
     bot_name = "Pokedex"
     logger.info("Starting Pokedex with basic WebexBot")
 
