@@ -34,26 +34,36 @@ Made XSOAR API operations configurable via environment variables to optimize for
 ### 2. Ticket Note Enrichment (`src/components/ticket_cache.py`)
 
 #### `TICKET_ENRICHMENT_WORKERS`
-- **Default**: 10 parallel workers
+- **Default**: 5 parallel workers (optimized for VM reliability)
 - **Fast networks (Mac)**: Use 25 workers
-- **Slow networks (VM)**: Use 5-10 workers
-- **Why**: Fewer parallel requests prevents overwhelming slow networks
+- **Very slow networks**: Use 3 workers
+- **Why**: Fewer parallel requests = less network congestion = higher success rate
 
 #### `TICKET_ENRICHMENT_TIMEOUT`
-- **Default**: 180 seconds per ticket
+- **Default**: 300 seconds (5 min) per ticket (optimized for VM)
 - **Fast networks (Mac)**: Use 90 seconds
-- **Slow networks (VM)**: Use 180-300 seconds
-- **Why**: Individual ticket note fetches need more time on slow networks
+- **Ultra-patient mode**: Use 600 seconds (10 min)
+- **Why**: Longer timeout allows slow requests to complete instead of failing
+
+#### `SKIP_NOTE_ENRICHMENT`
+- **Default**: false (notes enabled - prioritizes completeness)
+- **Quick mode**: Set to true to skip notes entirely
+- **Why**: Note enrichment is slow but completes with enough time/patience
 
 ---
 
 ## Usage Examples
 
-### VM (Slow Network) - Use Defaults
+### VM (Slow Network) - Complete Data Strategy (DEFAULT)
 ```bash
-# No env vars needed - defaults are optimized for slow networks
+# No env vars needed - defaults prioritize reliability and completeness
+# ticket_cache will take 3-4 hours for 12k tickets but will succeed
 python -m src.charts.inflow
 python -m src.components.ticket_cache
+
+# Estimates with defaults (5 workers, 300s timeout):
+# - 676 tickets: ~5-10 minutes
+# - 12,000 tickets: ~2-4 hours (acceptable for nightly job)
 ```
 
 ### Mac (Fast Network) - Optimize for Speed
@@ -66,6 +76,20 @@ export TICKET_ENRICHMENT_TIMEOUT=90
 
 python -m src.charts.inflow
 python -m src.components.ticket_cache
+
+# Estimates with fast settings:
+# - 12,000 tickets: ~30-45 minutes
+```
+
+### VM Quick Mode - Skip Notes for Testing
+```bash
+# Skip note enrichment for quick testing
+export SKIP_NOTE_ENRICHMENT=true
+
+python -m src.components.ticket_cache
+
+# Estimates:
+# - 12,000 tickets: ~5-10 minutes (no note enrichment)
 ```
 
 ### Very Slow Network - Extra Conservative
@@ -104,14 +128,17 @@ python -m src.charts.inflow
 ### Before Optimization (VM)
 - ❌ Timed out fetching 5000 tickets per page
 - ❌ 25 parallel workers overwhelming network
-- ❌ 60s timeout too short for slow responses
+- ❌ 60-90s timeout too short for slow responses
+- ❌ High failure rate (51.9%) on note enrichment
 - ❌ Script failed to complete
 
 ### After Optimization (VM)
 - ✅ 2000 tickets per page completes in ~40s
-- ✅ 10 parallel workers manageable
-- ✅ 180s timeout accommodates slow network
+- ✅ 5 parallel workers prevents network congestion
+- ✅ 300s timeout allows slow requests to complete
 - ✅ Successfully fetched 15,825 tickets in ~17 minutes
+- ✅ Note enrichment completes slowly but reliably
+- ✅ Expected: 12k tickets with notes in 2-4 hours (acceptable for nightly job)
 
 ### Mac (Fast Network)
 - ✅ Works with both default and optimized settings
@@ -179,6 +206,28 @@ export XSOAR_DNS_SERVER=8.8.8.8
 
 ---
 
+## Nightly Job Strategy (VM)
+
+The ticket_cache is designed to run as a **nightly job** on the VM. The strategy prioritizes **completeness over speed**:
+
+### Expected Performance
+- **12,000 tickets**: 2-4 hours with full note enrichment
+- **Failure tolerance**: Some notes may fail but tickets are still cached
+- **Network-friendly**: 5 workers prevents overwhelming slow VM network
+- **Unattended**: Can run overnight without intervention
+
+### Recommended Cron Schedule
+```bash
+# Run at 2 AM daily (plenty of time before morning)
+0 2 * * * cd /path/to/IR && /path/to/.venv/bin/python -m src.components.ticket_cache >> /var/log/ticket_cache.log 2>&1
+```
+
+### Success Criteria
+- ✅ All tickets fetched and cached
+- ✅ Most tickets have notes (75%+ success rate acceptable)
+- ✅ Completes within 6-hour window
+- ⚠️  Some note fetch failures are expected on slow networks
+
 ## Best Practices
 
 1. **Start Conservative**: Use defaults on new VMs, then optimize if needed
@@ -186,6 +235,7 @@ export XSOAR_DNS_SERVER=8.8.8.8
 3. **Test Incrementally**: Change one variable at a time
 4. **Document Settings**: Add environment variables to deployment scripts
 5. **Regular Testing**: Network conditions can change over time
+6. **Nightly Jobs**: Run heavy jobs overnight when time isn't critical
 
 ---
 
