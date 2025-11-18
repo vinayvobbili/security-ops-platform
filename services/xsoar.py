@@ -314,7 +314,7 @@ class TicketHandler:
                     all_tickets.extend(data)
 
                     # Update progress bar
-                    if pbar:
+                    if pbar is not None:
                         pbar.update(len(data))
                         pbar.set_postfix({"pages": page + 1, "total": len(all_tickets)})
 
@@ -379,14 +379,14 @@ class TicketHandler:
             if page >= max_pages:
                 log.warning(f"Reached max_pages limit ({max_pages}). Total: {len(all_tickets)} tickets - there may be more data")
 
-            if pbar:
+            if pbar is not None:
                 pbar.close()
 
             log.info(f"✓ Fetch complete: {len(all_tickets)} total tickets retrieved")
             return all_tickets
 
         except Exception as e:
-            if pbar:
+            if pbar is not None:
                 pbar.close()
             log.error(f"Error in _fetch_paginated: {str(e)}")
             log.error(f"Query that failed: {query}")
