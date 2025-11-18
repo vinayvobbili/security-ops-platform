@@ -126,6 +126,7 @@ class ResilientBot:
         # These INFO/WARNING-level logs create excessive noise without adding value
         # Suppress all webex_bot warnings (bot-to-bot messages, self-messages, command not found, etc.)
         logging.getLogger('webex_bot').setLevel(logging.ERROR)  # Covers all webex_bot submodules
+        logging.getLogger('webex_bot.websockets.webex_websocket_client').setLevel(logging.WARNING)  # WebSocket client verbose logs
         logging.getLogger('webexpythonsdk').setLevel(logging.ERROR)  # SDK warnings
         logging.getLogger('urllib3').setLevel(logging.ERROR)  # HTTP connection pool warnings
         logging.getLogger('asyncio').setLevel(logging.CRITICAL)  # Async loop warnings
