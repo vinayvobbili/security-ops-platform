@@ -27,20 +27,50 @@ restart_bot() {
     local bot_name=$1
     echo "🔄 Restarting $bot_name..."
 
-    # Kill old process
-    pkill -f "python.*webex_bots/${bot_name}.py" 2>/dev/null
-    sleep 2
+    # Kill ALL old processes (gracefully first, then forcefully)
+    if pgrep -f "python.*webex_bots/${bot_name}.py" > /dev/null; then
+        echo "   🛑 Stopping existing instances..."
+        # Try graceful shutdown first (SIGTERM)
+        pkill -f "python.*webex_bots/${bot_name}.py" 2>/dev/null
+        sleep 3
+
+        # Force kill any remaining processes (SIGKILL)
+        if pgrep -f "python.*webex_bots/${bot_name}.py" > /dev/null; then
+            echo "   ⚠️  Force killing stuck processes..."
+            pkill -9 -f "python.*webex_bots/${bot_name}.py" 2>/dev/null
+            sleep 2
+        fi
+
+        # Final verification - ensure ALL processes are dead
+        local retry=0
+        while pgrep -f "python.*webex_bots/${bot_name}.py" > /dev/null && [ $retry -lt 5 ]; do
+            echo "   ⏳ Waiting for processes to terminate..."
+            sleep 1
+            retry=$((retry + 1))
+        done
+
+        if pgrep -f "python.*webex_bots/${bot_name}.py" > /dev/null; then
+            echo "   ❌ Failed to kill all old instances"
+            return 1
+        fi
+        echo "   ✅ All old instances stopped"
+    fi
 
     # Start new process
     cd "$BOT_DIR" || exit 1
     nohup .venv/bin/python "webex_bots/${bot_name}.py" >> "logs/${bot_name}.log" 2>&1 &
     sleep 3
 
-    # Verify it started
-    if pgrep -f "python.*webex_bots/${bot_name}.py" > /dev/null; then
+    # Verify exactly ONE instance started
+    local process_count
+    process_count=$(pgrep -f "python.*webex_bots/${bot_name}.py" | wc -l)
+    if [ "$process_count" -eq 1 ]; then
         local pid
         pid=$(pgrep -f "python.*webex_bots/${bot_name}.py")
         echo "   ✅ $bot_name started (PID: $pid)"
+    elif [ "$process_count" -gt 1 ]; then
+        echo "   ⚠️  Multiple instances detected ($process_count) - something is wrong!"
+        return 1
     else
         echo "   ❌ $bot_name failed to start"
         return 1
