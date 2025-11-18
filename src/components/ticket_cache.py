@@ -26,10 +26,10 @@ log = logging.getLogger(__name__)
 Ticket = Dict[str, Any]
 LOOKBACK_DAYS = 90
 # Configurable worker count via env var
-# Default: 5 for slow VM networks (prioritizes reliability over speed)
+# Default: 10 for slow VM networks (balanced speed + reliability)
 # Use TICKET_ENRICHMENT_WORKERS=25 for fast networks (local dev)
-# Fewer workers = less network congestion = higher success rate
-MAX_WORKERS = int(os.getenv('TICKET_ENRICHMENT_WORKERS', '5'))
+# Use TICKET_ENRICHMENT_WORKERS=5 for ultra-conservative reliability
+MAX_WORKERS = int(os.getenv('TICKET_ENRICHMENT_WORKERS', '10'))
 
 # Configurable individual ticket timeout
 # Default: 300s (5 min) for slow VM networks to allow completion
