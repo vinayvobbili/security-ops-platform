@@ -437,22 +437,8 @@ def moneyball_initialization(bot_instance=None):
     return False
 
 
-def moneyball_initialization_with_tracking(bot_instance, resilient_runner):
-    """Initialize MoneyBall with message activity tracking for idle detection"""
-    from src.utils.bot_resilience import enable_message_tracking
-
-    if not bot_instance:
-        return False
-
-    # Enable message tracking for idle timeout detection
-    enable_message_tracking(bot_instance, resilient_runner)
-
-    # Run original initialization
-    return moneyball_initialization(bot_instance)
-
-
 def main():
-    """MoneyBall main - always uses resilience framework"""
+    """MoneyBall main - simplified to use basic WebexBot (keepalive handled by peer_ping_keepalive.py)"""
     # Run tests (optional, can be disabled in production)
     if '--skip-tests' not in sys.argv:
         try:
@@ -460,25 +446,18 @@ def main():
         except Exception as e:
             logger.warning(f"Tests failed or skipped: {e}")
 
-    from src.utils.bot_resilience import ResilientBot
+    logger.info("Starting MoneyBall with basic WebexBot")
 
-    logger.info("Starting MoneyBall with standard resilience framework")
+    # Create bot instance
+    bot = moneyball_bot_factory()
 
-    # Get config for peer ping setup
-    config = get_config()
+    # Initialize commands
+    moneyball_initialization(bot)
 
-    resilient_runner = ResilientBot(
-        bot_name="MoneyBall",
-        bot_factory=moneyball_bot_factory,
-        initialization_func=lambda bot: moneyball_initialization_with_tracking(bot, resilient_runner),
-        max_retries=5,
-        initial_retry_delay=30,
-        max_retry_delay=300,
-        keepalive_interval=105,  # Staggered to avoid synchronized API load (60s, 75s, 90s, 105s, 120s)
-        peer_bot_email=None,  # Disabled - using standalone peer_ping_keepalive.py script instead
-        peer_ping_interval_minutes=10,
-    )
-    resilient_runner.run()
+    # Run bot (simple and direct)
+    logger.info("🚀 MoneyBall is up and running...")
+    print("🚀 MoneyBall is up and running...", flush=True)
+    bot.run()
 
 
 if __name__ == '__main__':

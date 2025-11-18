@@ -30,7 +30,6 @@ Usage:
 import logging
 import signal
 import socket
-import sys
 import threading
 import time
 from datetime import datetime

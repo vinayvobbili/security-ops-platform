@@ -648,44 +648,20 @@ def jarvis_initialization(bot):
     return False
 
 
-def jarvis_initialization_with_tracking(bot_instance, resilient_runner):
-    """Initialize the orchestration service with message activity tracking for idle detection"""
-    from src.utils.bot_resilience import enable_message_tracking
-
-    if not bot_instance:
-        return False
-
-    # Enable message tracking for idle timeout detection
-    enable_message_tracking(bot_instance, resilient_runner)
-
-    # Run original initialization
-    return jarvis_initialization(bot_instance)
-
-
 def main():
-    """the orchestration service main with resilience framework"""
-    from src.utils.bot_resilience import ResilientBot
+    """the orchestration service main - simplified to use basic WebexBot (keepalive handled by peer_ping_keepalive.py)"""
+    logger.info("Starting the orchestration service with basic WebexBot")
 
-    resilient_runner = ResilientBot(
-        bot_name="the orchestration service",
-        bot_factory=jarvis_bot_factory,
-        initialization_func=lambda bot: jarvis_initialization_with_tracking(bot, resilient_runner),
-        max_retries=5,
-        initial_retry_delay=30,
-        max_retry_delay=300,
-        # Multi-layered firewall defense:
-        # - TCP keepalive (60s) keeps firewall connection tracking alive (ROOT CAUSE FIX)
-        # - Idle timeout (15min) as safety net - reconnect before typical 30min firewall timeout
-        max_idle_minutes=15,  # Aggressive reconnect for VM behind 2 firewalls
-        peer_bot_email=None,  # Disabled - using standalone peer_ping_keepalive.py script instead
-        peer_ping_interval_minutes=10,
-    )
+    # Create bot instance
+    bot = jarvis_bot_factory()
 
-    # Store resilient_runner globally so commands can update message activity
-    global _resilient_runner
-    _resilient_runner = resilient_runner
+    # Initialize commands
+    jarvis_initialization(bot)
 
-    resilient_runner.run()
+    # Run bot (simple and direct)
+    logger.info("🚀 the orchestration service is up and running...")
+    print("🚀 the orchestration service is up and running...", flush=True)
+    bot.run()
 
 
 if __name__ in ('__main__', '__builtin__', 'builtins'):

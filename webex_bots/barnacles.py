@@ -628,41 +628,20 @@ def barnacles_initialization(bot_instance=None):
     return False
 
 
-def barnacles_initialization_with_tracking(bot_instance, resilient_runner):
-    """Initialize the alert triage service with message activity tracking for idle detection"""
-    from src.utils.bot_resilience import enable_message_tracking
-
-    if not bot_instance:
-        return False
-
-    # Enable message tracking for idle timeout detection
-    enable_message_tracking(bot_instance, resilient_runner)
-
-    # Run original initialization
-    return barnacles_initialization(bot_instance)
-
-
 def main():
-    """the alert triage service main - always uses resilience framework"""
-    from src.utils.bot_resilience import ResilientBot
+    """the alert triage service main - simplified to use basic WebexBot (keepalive handled by peer_ping_keepalive.py)"""
+    logger.info("Starting the alert triage service with basic WebexBot")
 
-    logger.info("Starting the alert triage service with standard resilience framework")
+    # Create bot instance
+    bot = barnacles_bot_factory()
 
-    # Get config for peer ping setup
-    config = get_config()
+    # Initialize commands
+    barnacles_initialization(bot)
 
-    resilient_runner = ResilientBot(
-        bot_name="the alert triage service",
-        bot_factory=barnacles_bot_factory,
-        initialization_func=lambda bot: barnacles_initialization_with_tracking(bot, resilient_runner),
-        max_retries=5,
-        initial_retry_delay=30,
-        max_retry_delay=300,
-        keepalive_interval=90,  # Staggered to avoid synchronized API load (60s, 75s, 90s, 105s, 120s)
-        peer_bot_email=None,  # Disabled - using standalone peer_ping_keepalive.py script instead
-        peer_ping_interval_minutes=10,
-    )
-    resilient_runner.run()
+    # Run bot (simple and direct)
+    logger.info("🚀 the alert triage service is up and running...")
+    print("🚀 the alert triage service is up and running...", flush=True)
+    bot.run()
 
 
 if __name__ == "__main__":
