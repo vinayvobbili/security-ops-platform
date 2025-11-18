@@ -229,7 +229,20 @@ class TicketHandler:
         """
         full_query = query + f' -category:job -type:"{CONFIG.team_name} Ticket QA" -type:"{CONFIG.team_name} SNOW Whitelist Request"'
 
-        log.debug(f"Making API call for query: {query}")
+        log.info(f"get_tickets() called with query: {query[:100]}...")
+        log.info(f"  Paginate: {paginate}, Size: {size}")
+
+        # Quick connectivity test with small query
+        try:
+            log.info(f"  Testing XSOAR API connectivity with small test query...")
+            test_filter = {"query": "id:1", "page": 0, "size": 1}
+            test_search = SearchIncidentsData(filter=test_filter)
+            test_response = self.client.search_incidents(filter=test_search)
+            log.info(f"  ✓ XSOAR API is reachable and responding")
+        except Exception as e:
+            log.error(f"  ✗ XSOAR API connectivity test failed: {e}")
+            log.error(f"  This may indicate network issues, API outage, or authentication problems")
+            raise
 
         if paginate:
             return self._fetch_paginated(full_query, period)
@@ -276,11 +289,14 @@ class TicketHandler:
 
                 # Log at INFO level for better visibility on VMs
                 log.info(f"Fetching page {page} (size: {page_size})...")
+                log.info(f"  Making API call to XSOAR at {datetime.now().strftime('%H:%M:%S')}...")
 
                 try:
                     # Use search_incidents method from demisto-py
                     search_data = SearchIncidentsData(filter=filter_data)
+                    log.info(f"  Sending request to search_incidents endpoint...")
                     response = self.client.search_incidents(filter=search_data)
+                    log.info(f"  ✓ API response received at {datetime.now().strftime('%H:%M:%S')}")
 
                     # Reset error counter on success
                     server_error_retry_count = 0
