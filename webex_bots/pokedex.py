@@ -44,7 +44,14 @@ setup_logging(
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARNING)  # Ensure bot logger also uses WARNING level
 
-# Note: Noisy library logs are suppressed by ResilientBot framework
+# Note: Using vanilla WebexBot without resilience framework for testing
+
+# Suppress noisy library logs manually since not using ResilientBot
+logging.getLogger('webex_bot').setLevel(logging.WARNING)
+logging.getLogger('webex_bot.websockets.webex_websocket_client').setLevel(logging.WARNING)
+logging.getLogger('webexpythonsdk').setLevel(logging.WARNING)
+logging.getLogger('urllib3').setLevel(logging.WARNING)
+logging.getLogger('asyncio').setLevel(logging.CRITICAL)
 
 # Now safe to import modules that use logging
 import csv
@@ -65,11 +72,7 @@ from src.utils.ssl_config import configure_ssl_if_needed
 
 configure_ssl_if_needed(verbose=True)  # Re-enabled due to ZScaler connectivity issues
 
-# Apply enhanced WebSocket client patch for better connection resilience
-# MUST be imported after SSL config but before any WebexBot creation
-from src.utils.enhanced_websocket_client import patch_websocket_client
-
-patch_websocket_client()
+# NOT using enhanced WebSocket client or any resilience features - testing vanilla bot
 
 CONFIG = get_config()
 
@@ -132,15 +135,7 @@ def initialize_bot():
     start_time = datetime.now()
 
     try:
-        # Clean up stale device registrations to avoid 404 WebSocket errors
-        from src.utils.webex_device_manager import cleanup_devices_on_startup
-        import time
-        cleanup_devices_on_startup(WEBEX_ACCESS_TOKEN, "Pokedex")
-
-        # Give Webex API time to process the device deletions
-        time.sleep(2)
-        logger.debug("Waiting for device cleanup to propagate...")
-
+        # NOT cleaning up devices - testing vanilla bot behavior
         logger.info("Initializing streamlined SOC Q&A components...")
 
         if not initialize_model_and_agent():
@@ -161,7 +156,7 @@ def initialize_bot():
             from my_bot.core.state_manager import get_state_manager
             state_manager = get_state_manager()
             model_name = state_manager.model_config.llm_model_name if state_manager and hasattr(state_manager, 'model_config') else "Unknown"
-        except:
+        except (ImportError, AttributeError):
             model_name = "Unknown"
 
         startup_message = f"🚀 Pokedex is up and running (startup in {total_time:.1f}s) using {model_name}..."
@@ -355,9 +350,14 @@ class Bot(WebexBot):
 
 
 def main():
-    """Pokédex main - simplified to use basic WebexBot (keepalive handled by peer_ping_keepalive.py)"""
+    """Pokédex main - VANILLA WebexBot with NO resilience features for testing"""
     bot_name = "Pokedex"
-    logger.info("Starting Pokedex with basic WebexBot")
+    logger.info("Starting Pokedex with VANILLA WebexBot (no resilience, no patches)")
+
+    # Initialize bot components first
+    if not initialize_bot():
+        logger.error("Failed to initialize bot components")
+        return 1
 
     # Create bot instance
     bot = Bot(
@@ -368,13 +368,19 @@ def main():
         bot_name=bot_name
     )
 
-    # Initialize bot
-    initialize_bot()
+    # Run bot (simple and direct - no monitoring, no reconnection, no keepalive)
+    logger.info("🚀 Pokedex is up and running with vanilla WebexBot...")
+    print("🚀 Pokedex is up and running with vanilla WebexBot...", flush=True)
 
-    # Run bot (simple and direct)
-    logger.info("🚀 Pokedex is up and running...")
-    print("🚀 Pokedex is up and running...", flush=True)
-    bot.run()
+    try:
+        bot.run()
+    except KeyboardInterrupt:
+        logger.info("🛑 Pokedex stopped by user (Ctrl+C)")
+    except Exception as e:
+        logger.error(f"❌ Pokedex crashed: {e}", exc_info=True)
+        return 1
+
+    return 0
 
 
 if __name__ == "__main__":

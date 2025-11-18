@@ -1755,7 +1755,7 @@ def add_entry_to_reviews(dict_full, ticket_id, person, date, message):
 
 def announce_new_threat_hunt(ticket_no, ticket_title, incident_url, person_id):
     webex_data = prod_list_handler.get_list_data_by_name('METCIRT Webex')
-    headers = {
+    request_headers = {
         'Content-Type': 'application/json',
         'Authorization': f"Bearer {CONFIG.webex_bot_access_token_toodles}"
     }
@@ -1763,7 +1763,7 @@ def announce_new_threat_hunt(ticket_no, ticket_title, incident_url, person_id):
         'roomId': webex_data.get("channels").get("threat_hunt"),
         'markdown': f"<@personId:{person_id}> created a new Threat Hunt in XSOAR. Ticket: [#{ticket_no}]({incident_url}) - {ticket_title}"
     }
-    requests.post(webex_data.get('api_url'), headers=headers, json=payload_json)
+    requests.post(webex_data.get('api_url'), headers=request_headers, json=payload_json)
 
 
 class Who(Command):
@@ -2013,7 +2013,7 @@ class GetCompanyHolidays(Command):
                             style = 'italic'
                         else:
                             style = None
-                    except Exception:
+                    except ValueError:
                         style = None
                 else:
                     style = None
@@ -2224,8 +2224,8 @@ class ProcessUrlBlockVerdict(Command):
                 table_rows.append([display_url, zs_status, bo_status])
 
             # Create table using tabulate
-            headers = ['URL', 'ZScaler', 'Bloxone']
-            table_str = tabulate(table_rows, headers=headers, tablefmt='simple', colalign=['left', 'center', 'center'])
+            table_headers = ['URL', 'ZScaler', 'Bloxone']
+            table_str = tabulate(table_rows, headers=table_headers, tablefmt='simple', colalign=['left', 'center', 'center'])
 
             # Calculate response time
             response_time = round(time.time() - start_time)
@@ -2287,36 +2287,36 @@ def toodles_bot_factory():
     )
 
 
-def toodles_initialization(bot_instance=None):
+def toodles_initialization(bot=None):
     """Initialize Toodles commands"""
-    if bot_instance:
+    if bot:
         # Add all commands
-        bot_instance.add_command(GetApprovedTestingCard())
-        bot_instance.add_command(GetCurrentApprovedTestingEntries())
-        bot_instance.add_command(AddApprovedTestingEntry())
-        bot_instance.add_command(RemoveApprovedTestingEntry())
-        bot_instance.add_command(Who())
-        bot_instance.add_command(Rotation())
-        bot_instance.add_command(ContainmentStatusCS())
-        # bot_instance.add_command(Review())
-        bot_instance.add_command(GetNewXTicketForm())
-        bot_instance.add_command(CreateXSOARTicket())
-        bot_instance.add_command(IOC())
-        bot_instance.add_command(IOCHunt())
-        bot_instance.add_command(URLs())
-        bot_instance.add_command(ThreatHunt())
-        bot_instance.add_command(CreateThreatHunt())
-        bot_instance.add_command(CreateAZDOWorkItem())
-        bot_instance.add_command(GetAllOptions())
-        bot_instance.add_command(ImportTicket())
-        bot_instance.add_command(CreateTuningRequest())
-        bot_instance.add_command(GetSearchXSOARCard())
-        bot_instance.add_command(FetchXSOARTickets())
-        bot_instance.add_command(GetCompanyHolidays())
-        bot_instance.add_command(GetBotHealth())
-        bot_instance.add_command(Hi())
-        bot_instance.add_command(GetUrlBlockVerdictForm())
-        bot_instance.add_command(ProcessUrlBlockVerdict())
+        bot.add_command(GetApprovedTestingCard())
+        bot.add_command(GetCurrentApprovedTestingEntries())
+        bot.add_command(AddApprovedTestingEntry())
+        bot.add_command(RemoveApprovedTestingEntry())
+        bot.add_command(Who())
+        bot.add_command(Rotation())
+        bot.add_command(ContainmentStatusCS())
+        # bot.add_command(Review())
+        bot.add_command(GetNewXTicketForm())
+        bot.add_command(CreateXSOARTicket())
+        bot.add_command(IOC())
+        bot.add_command(IOCHunt())
+        bot.add_command(URLs())
+        bot.add_command(ThreatHunt())
+        bot.add_command(CreateThreatHunt())
+        bot.add_command(CreateAZDOWorkItem())
+        bot.add_command(GetAllOptions())
+        bot.add_command(ImportTicket())
+        bot.add_command(CreateTuningRequest())
+        bot.add_command(GetSearchXSOARCard())
+        bot.add_command(FetchXSOARTickets())
+        bot.add_command(GetCompanyHolidays())
+        bot.add_command(GetBotHealth())
+        bot.add_command(Hi())
+        bot.add_command(GetUrlBlockVerdictForm())
+        bot.add_command(ProcessUrlBlockVerdict())
         return True
     return False
 
