@@ -355,7 +355,7 @@ class Bot(WebexBot):
 
 
 def main():
-    """the security assistant bot main - simplified to use basic WebexBot (keepalive handled by peer_ping_keepalive.py)"""
+    """Pokédex main - simplified to use basic WebexBot (keepalive handled by peer_ping_keepalive.py)"""
     bot_name = "the security assistant bot"
     logger.info("Starting the security assistant bot with basic WebexBot")
 
