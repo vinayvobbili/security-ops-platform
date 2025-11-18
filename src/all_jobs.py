@@ -88,7 +88,7 @@ def safe_run(*jobs: Callable[[], None], timeout: int = DEFAULT_JOB_TIMEOUT, name
     for i, job in enumerate(jobs):
         # Use provided name, or try to extract function name, or fall back to repr
         if name:
-            job_name = name if len(jobs) == 1 else f"{name}[{i+1}/{len(jobs)}]"
+            job_name = name if len(jobs) == 1 else f"{name}[{i + 1}/{len(jobs)}]"
         else:
             job_name = getattr(job, '__name__', repr(job))
         executor = None
@@ -232,7 +232,7 @@ def main() -> None:
 
     # Host verification
     logger.info("Scheduling host verification every 5 minutes...")
-    schedule.every(5).minutes.do(lambda: safe_run(verify_host_online_status.start, name="host_verification"))
+    schedule.every(5).minutes.do(lambda: safe_run(verify_host_online_status.start, name="host_online_verification"))
 
     # Peer ping keepalive for bot NAT paths
     logger.info("Scheduling peer ping keepalive Hi messages...")
