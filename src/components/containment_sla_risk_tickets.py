@@ -159,7 +159,7 @@ def start(room_id):
     """
     try:
         ticket_handler = TicketHandler(XsoarEnvironment.PROD)
-        query = '-category:job type:METCIRT timetocontain.runStatus:running (timetocontain.slaStatus:risk or timetocontain.slaStatus:2) -hostname:""'
+        query = '-category:job -status:closed type:METCIRT timetocontain.runStatus:running (timetocontain.slaStatus:risk or timetocontain.slaStatus:2) -hostname:""'
         tickets = ticket_handler.get_tickets(query)
 
         if not tickets:
