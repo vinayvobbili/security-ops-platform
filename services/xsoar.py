@@ -230,16 +230,16 @@ class TicketHandler:
         """
         full_query = query + f' -category:job -type:"{CONFIG.team_name} Ticket QA" -type:"{CONFIG.team_name} SNOW Whitelist Request"'
 
-        log.info(f"get_tickets() called with query: {query[:100]}...")
-        log.info(f"  Paginate: {paginate}, Size: {size}")
+        log.debug(f"get_tickets() called with query: {query[:100]}...")
+        log.debug(f"  Paginate: {paginate}, Size: {size}")
 
         # Quick connectivity test with small query
         try:
-            log.info(f"  Testing XSOAR API connectivity with small test query...")
+            log.debug(f"  Testing XSOAR API connectivity with small test query...")
             test_filter = {"query": "id:1", "page": 0, "size": 1}
             test_search = SearchIncidentsData(filter=test_filter)
             test_response = self.client.search_incidents(filter=test_search)
-            log.info(f"  ✓ XSOAR API is reachable and responding: {type(test_response)}")
+            log.debug(f"  ✓ XSOAR API is reachable and responding: {type(test_response)}")
         except Exception as e:
             log.error(f"  ✗ XSOAR API connectivity test failed: {e}")
             log.error(f"  This may indicate network issues, API outage, or authentication problems")
@@ -271,12 +271,20 @@ class TicketHandler:
         # Create progress bar if running interactively (not in a non-TTY environment)
         # Can be forced via FORCE_PROGRESS_BAR=true environment variable for PyCharm
         use_progress_bar = sys.stdout.isatty() or os.getenv('FORCE_PROGRESS_BAR', '').lower() == 'true'
-        pbar = tqdm(desc="Fetching tickets", unit=" tickets", disable=not use_progress_bar) if use_progress_bar else None
+        pbar = tqdm(
+            desc="Fetching tickets",
+            unit=" tickets",
+            disable=not use_progress_bar,
+            position=0,
+            leave=True,
+            dynamic_ncols=True,
+            bar_format='{desc}: {n_fmt} tickets [{elapsed}, {rate_fmt}]'
+        ) if use_progress_bar else None
 
-        # Log start of pagination for visibility
-        log.info(f"Starting paginated fetch with page_size={page_size}, max_pages={max_pages}")
+        # Log start of pagination for visibility (only log when no progress bar to avoid interference)
         if not use_progress_bar:
-            log.info("Running in non-TTY mode (no progress bar), will log each page...")
+            log.debug(f"Starting paginated fetch with page_size={page_size}, max_pages={max_pages}")
+            log.debug("Running in non-TTY mode (no progress bar), will log each page...")
 
         try:
             while page < max_pages:
@@ -289,16 +297,21 @@ class TicketHandler:
                 if period:
                     filter_data["period"] = period
 
-                # Log at INFO level for better visibility on VMs
-                log.info(f"Fetching page {page} (size: {page_size})...")
-                log.info(f"  Making API call to XSOAR at {datetime.now().strftime('%H:%M:%S')}...")
+                # Log at DEBUG level (only when no progress bar)
+                if not use_progress_bar:
+                    log.debug(f"Fetching page {page} (size: {page_size})...")
+                    log.debug(f"  Making API call to XSOAR at {datetime.now().strftime('%H:%M:%S')}...")
+                else:
+                    log.debug(f"Fetching page {page} (size: {page_size})...")
 
                 try:
                     # Use search_incidents method from demisto-py
                     search_data = SearchIncidentsData(filter=filter_data)
-                    log.info(f"  Sending request to search_incidents endpoint...")
+                    if not use_progress_bar:
+                        log.debug(f"  Sending request to search_incidents endpoint...")
                     response = self.client.search_incidents(filter=search_data)
-                    log.info(f"  ✓ API response received at {datetime.now().strftime('%H:%M:%S')}")
+                    if not use_progress_bar:
+                        log.debug(f"  ✓ API response received at {datetime.now().strftime('%H:%M:%S')}")
 
                     # Reset error counter on success
                     server_error_retry_count = 0
@@ -306,7 +319,8 @@ class TicketHandler:
                     # Extract data from response and convert to dicts for backward compatibility
                     raw_data = response.data if hasattr(response, 'data') else []
                     if not raw_data:
-                        log.info("No more data returned, pagination complete")
+                        if not use_progress_bar:
+                            log.debug("No more data returned, pagination complete")
                         break
 
                     # Convert model objects to dictionaries
@@ -320,13 +334,14 @@ class TicketHandler:
 
                     # Show progress - log every page for better VM visibility
                     if not use_progress_bar:
-                        log.info(f"  ✓ Page {page} complete: fetched {len(data)} tickets (total: {len(all_tickets)})")
+                        log.debug(f"  ✓ Page {page} complete: fetched {len(data)} tickets (total: {len(all_tickets)})")
                     else:
                         log.debug(f"Fetched page {page}: {len(data)} tickets (total so far: {len(all_tickets)})")
 
                     # Check if we've reached the end
                     if len(data) < page_size:
-                        log.info(f"Pagination complete: fetched {len(all_tickets)} total tickets across {page + 1} pages")
+                        if not use_progress_bar:
+                            log.debug(f"Pagination complete: fetched {len(all_tickets)} total tickets across {page + 1} pages")
                         break
 
                     # Delay between pages to avoid rate limiting
@@ -382,7 +397,7 @@ class TicketHandler:
             if pbar is not None:
                 pbar.close()
 
-            log.info(f"✓ Fetch complete: {len(all_tickets)} total tickets retrieved")
+            log.debug(f"✓ Fetch complete: {len(all_tickets)} total tickets retrieved")
             return all_tickets
 
         except Exception as e:
@@ -390,7 +405,7 @@ class TicketHandler:
                 pbar.close()
             log.error(f"Error in _fetch_paginated: {str(e)}")
             log.error(f"Query that failed: {query}")
-            log.info(f"Returning {len(all_tickets)} tickets collected before error")
+            log.debug(f"Returning {len(all_tickets)} tickets collected before error")
             return all_tickets  # Return what we have so far
 
     def _fetch_unpaginated(self, query, period, size):
@@ -536,7 +551,7 @@ class TicketHandler:
                 method='POST',
                 body=merged_data
             )
-            log.info(f"Successfully updated incident {ticket_id}")
+            log.debug(f"Successfully updated incident {ticket_id}")
             return _parse_generic_response(response)
         except ApiException as e:
             log.error(f"Error updating incident {ticket_id}: {e}")
@@ -778,10 +793,10 @@ class TicketHandler:
                         log.error(f"Error from XSOAR when completing task '{task_name}': {error_msg}")
                         raise ValueError(f"XSOAR error: {error_msg}")
 
-                log.info(f"Successfully completed task '{task_name}' (ID: {task_id}) in ticket {ticket_id}")
+                log.debug(f"Successfully completed task '{task_name}' (ID: {task_id}) in ticket {ticket_id}")
                 return response_data
             else:
-                log.info(f"Successfully completed task '{task_name}' (ID: {task_id}) in ticket {ticket_id}")
+                log.debug(f"Successfully completed task '{task_name}' (ID: {task_id}) in ticket {ticket_id}")
                 return {}
         except requests.exceptions.RequestException as e:
             log.error(f"Error completing task '{task_name}' in ticket {ticket_id}: {e}")
@@ -1094,7 +1109,7 @@ class TicketHandler:
         """
         log.debug(f"Creating new note in ticket {incident_id}")
         result = self._create_entry(incident_id, entry_data, '/xsoar/entry/note', markdown)
-        log.info(f"Successfully created note in ticket {incident_id}")
+        log.debug(f"Successfully created note in ticket {incident_id}")
         return result
 
     def execute_command_in_war_room(self, incident_id: str, command: str) -> Dict[str, Any]:
@@ -1129,12 +1144,12 @@ class TicketHandler:
 
         Note:
             - Commands are executed in the incident's war room context
-            - Command execution is logged at INFO level for audit purposes
+            - Command execution is logged at DEBUG level
             - Supports all XSOAR automation commands available in the war room
         """
-        log.info(f"Executing war room command in ticket {incident_id}: {command}")
+        log.debug(f"Executing war room command in ticket {incident_id}: {command}")
         result = self._create_entry(incident_id, command, '/xsoar/entry', markdown=False)
-        log.info(f"Successfully executed command '{command}' in ticket {incident_id}")
+        log.debug(f"Successfully executed command '{command}' in ticket {incident_id}")
         return result
 
     def upload_file_to_ticket(self, incident_id: str, file_path: str,
@@ -1240,10 +1255,10 @@ class TicketHandler:
                     log.error(f"Error from XSOAR when uploading file to ticket {incident_id}: {error_msg}")
                     raise ValueError(f"XSOAR error: {error_msg}")
 
-                log.info(f"Successfully uploaded file {file_name} to ticket {incident_id}")
+                log.debug(f"Successfully uploaded file {file_name} to ticket {incident_id}")
                 return response_data
             else:
-                log.info(f"Successfully uploaded file {file_name} to ticket {incident_id}")
+                log.debug(f"Successfully uploaded file {file_name} to ticket {incident_id}")
                 return {}
 
         except requests.exceptions.RequestException as e:
