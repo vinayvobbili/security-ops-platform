@@ -6,11 +6,13 @@ project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
 import logging
+import os
 import time
 
-# Configure logging to see progress updates
+# Configure logging - use DEBUG if DEBUG_LOGS env var is set, otherwise INFO
+log_level = logging.DEBUG if os.getenv('DEBUG_LOGS', '').lower() in ('true', '1', 'yes') else logging.INFO
 logging.basicConfig(
-    level=logging.INFO,
+    level=log_level,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 from dataclasses import dataclass
@@ -996,5 +998,10 @@ def make_chart() -> None:
     generator.generate_all_charts(tickets_12_month=tickets)
 
 
-if __name__ == '__main__':
+def main() -> None:
+    logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     make_chart()
+
+
+if __name__ == '__main__':
+    main()
