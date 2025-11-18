@@ -5,7 +5,7 @@ This module provides a monkey-patch for webex_bot's WebexWebsocketClient
 to add better connection handling, keepalive, and resilience features.
 
 Key improvements:
-1. WebSocket ping/pong keepalive (30s interval, 15s timeout)
+1. WebSocket ping/pong keepalive (10s interval, 5s timeout) - very aggressive to prevent stale connections
 2. Improved backoff retry logic with up to 10 retries per connection attempt
 3. Exponential backoff capped at 30 seconds with jitter to avoid thundering herd
 4. Handles wrapped connection errors (e.g., requests.exceptions.ConnectionError)
@@ -22,9 +22,8 @@ import ssl
 import uuid
 
 import backoff
-import certifi
 import websockets
-from websockets.exceptions import InvalidStatusCode
+from websockets.legacy.exceptions import InvalidStatusCode
 
 # Import requests exceptions for better error handling
 try:
@@ -32,12 +31,21 @@ try:
 except ImportError:
     RequestsConnectionError = ConnectionError
 
+# Import websockets_proxy if available for proxy support
+try:
+    from websockets_proxy import Proxy, proxy_connect  # type: ignore[import-untyped]
+    HAS_WEBSOCKETS_PROXY = True
+except ImportError:
+    Proxy = None  # type: ignore[assignment,misc]
+    proxy_connect = None  # type: ignore[assignment,misc]
+    HAS_WEBSOCKETS_PROXY = False
+
 logger = logging.getLogger(__name__)
 
 # Enhanced configuration
 MAX_BACKOFF_TIME = 600  # Increased from 240s to 600s (10 minutes)
-WEBSOCKET_PING_INTERVAL = 30  # Send ping every 30 seconds (more aggressive)
-WEBSOCKET_PING_TIMEOUT = 15  # Timeout if no pong after 15 seconds
+WEBSOCKET_PING_INTERVAL = 10  # VERY aggressive - ping every 10s to prevent stale connections
+WEBSOCKET_PING_TIMEOUT = 5  # Fail fast if no pong in 5s
 WEBSOCKET_CLOSE_TIMEOUT = 10  # Wait up to 10 seconds for clean close
 
 
@@ -50,15 +58,19 @@ def patch_websocket_client():
     try:
         from webex_bot.websockets.webex_websocket_client import WebexWebsocketClient
 
-        # Store original run method
-        original_run = WebexWebsocketClient.run
-
         def enhanced_run(self):
             """Enhanced run method with better connection resilience"""
             if self.device_info is None:
                 if self._get_device_info(check_existing=False) is None:
                     logger.error('could not get/create device info')
                     raise Exception("No WDM device info")
+
+            # Check for error response (e.g., "excessive device registrations")
+            if 'errors' in self.device_info:
+                error_msg = self.device_info.get('message', 'Unknown error')
+                logger.error(f"Device registration failed: {error_msg}")
+                logger.error("Hint: Clean up stale devices using cleanup_devices_on_startup() before starting bot")
+                raise Exception(f"Device registration error: {error_msg}")
 
             # Pull out URL now so we can log it on failure
             ws_url = self.device_info.get('webSocketUrl')
@@ -70,12 +82,12 @@ def patch_websocket_client():
                     msg = json.loads(message)
                     # Check if event loop is available and not closed before scheduling
                     try:
-                        loop = asyncio.get_event_loop()
+                        event_loop = asyncio.get_event_loop()
                         # Check if loop is closed - this happens during shutdown/reconnection
-                        if loop.is_closed():
+                        if event_loop.is_closed():
                             logger.debug("Event loop is closed, skipping message processing")
                             return
-                        loop.run_in_executor(None, self._process_incoming_websocket_message, msg)
+                        event_loop.run_in_executor(None, self._process_incoming_websocket_message, msg)
                     except RuntimeError as loop_error:
                         # Event loop not available (happens during shutdown)
                         if 'no current event loop' in str(loop_error).lower() or 'no running event loop' in str(loop_error).lower():
@@ -110,9 +122,9 @@ def patch_websocket_client():
                 logger.debug("Refreshing device info before connection attempt...")
                 # Force new device registration (don't check existing) to avoid stale URLs
                 self._get_device_info(check_existing=False)
-                ws_url = self.device_info['webSocketUrl']
+                connection_url = self.device_info['webSocketUrl']
 
-                logger.debug(f"Opening websocket connection to {ws_url}")
+                logger.debug(f"Opening websocket connection to {connection_url}")
 
                 # Create SSL context - unverified for corporate proxy (ZScaler) compatibility
                 ssl_context = ssl._create_unverified_context()
@@ -121,12 +133,12 @@ def patch_websocket_client():
 
                 # Setup connection with VERY aggressive keepalive to prevent stale connections
                 # After long idle periods, some backends stop routing messages even though
-                # the TCP connection appears alive. Use 10-second pings to prevent this.
+                # the TCP connection appears alive. Use aggressive pings to prevent this.
                 connect_kwargs = {
                     'ssl': ssl_context,
-                    'ping_interval': 10,  # VERY aggressive - ping every 10s to prevent stale connections
-                    'ping_timeout': 5,     # Fail fast if no pong in 5s
-                    'close_timeout': WEBSOCKET_CLOSE_TIMEOUT,  # Clean close timeout
+                    'ping_interval': WEBSOCKET_PING_INTERVAL,
+                    'ping_timeout': WEBSOCKET_PING_TIMEOUT,
+                    'close_timeout': WEBSOCKET_CLOSE_TIMEOUT,
                     'max_size': 2**23,  # 8MB max message size
                 }
 
@@ -136,7 +148,7 @@ def patch_websocket_client():
                     from websockets import version as ws_version
                     ws_major_version = int(ws_version.version.split('.')[0])
                     header_param = 'additional_headers' if ws_major_version >= 12 else 'extra_headers'
-                except Exception:
+                except (ImportError, AttributeError, ValueError, IndexError):
                     # Fallback: try using additional_headers first, then extra_headers
                     header_param = 'extra_headers'  # Default to old API
 
@@ -144,25 +156,27 @@ def patch_websocket_client():
 
                 if self.proxies and "wss" in self.proxies:
                     logger.debug(f"Using proxy for websocket connection: {self.proxies['wss']}")
-                    try:
-                        from websockets_proxy import Proxy, proxy_connect
+                    if HAS_WEBSOCKETS_PROXY:
+                        # noinspection PyUnresolvedReferences,PyCallingNonCallable
                         proxy = Proxy.from_url(self.proxies["wss"])
-                        connect = proxy_connect(ws_url, proxy=proxy, **connect_kwargs)
-                    except ImportError:
+                        # noinspection PyCallingNonCallable
+                        connect = proxy_connect(connection_url, proxy=proxy, **connect_kwargs)
+                    else:
                         logger.error("websockets_proxy not available, falling back to direct connection")
-                        connect = websockets.connect(ws_url, **connect_kwargs)
+                        connect = websockets.connect(connection_url, **connect_kwargs)
                 elif self.proxies and "https" in self.proxies:
                     logger.debug(f"Using proxy for websocket connection: {self.proxies['https']}")
-                    try:
-                        from websockets_proxy import Proxy, proxy_connect
+                    if HAS_WEBSOCKETS_PROXY:
+                        # noinspection PyUnresolvedReferences,PyCallingNonCallable
                         proxy = Proxy.from_url(self.proxies["https"])
-                        connect = proxy_connect(ws_url, proxy=proxy, **connect_kwargs)
-                    except ImportError:
+                        # noinspection PyCallingNonCallable
+                        connect = proxy_connect(connection_url, proxy=proxy, **connect_kwargs)
+                    else:
                         logger.error("websockets_proxy not available, falling back to direct connection")
-                        connect = websockets.connect(ws_url, **connect_kwargs)
+                        connect = websockets.connect(connection_url, **connect_kwargs)
                 else:
                     logger.debug(f"Not using proxy for websocket connection.")
-                    connect = websockets.connect(ws_url, **connect_kwargs)
+                    connect = websockets.connect(connection_url, **connect_kwargs)
 
                 async with connect as _websocket:
                     self.websocket = _websocket
@@ -178,13 +192,13 @@ def patch_websocket_client():
                     while True:
                         try:
                             await _websocket_recv()
-                        except websockets.ConnectionClosed as e:
-                            logger.warning(f"WebSocket connection closed: {e.code} {e.reason}")
+                        except websockets.ConnectionClosed as conn_closed:
+                            logger.warning(f"WebSocket connection closed: {conn_closed.rcvd.code} {conn_closed.rcvd.reason}")
                             raise  # Let backoff handle reconnection
                         except (RuntimeError, OSError, ConnectionError) as fatal_error:
                             # Check if this is a shutdown-related error (event loop closed)
-                            error_msg = str(fatal_error).lower()
-                            if "event loop" in error_msg or "loop" in error_msg:
+                            fatal_error_msg = str(fatal_error).lower()
+                            if "event loop" in fatal_error_msg or "loop" in fatal_error_msg:
                                 # Suppress event loop errors during shutdown - these are expected
                                 logger.debug(f"WebSocket shutting down: {fatal_error}")
                             else:
@@ -215,11 +229,11 @@ def patch_websocket_client():
                     consecutive_failures = 0
                     current_404_retries = 0
                     break
-                except InvalidStatusCode as e:
+                except InvalidStatusCode as status_error:
                     consecutive_failures += 1
-                    logger.error(f"WebSocket handshake to {ws_url} failed with status {e.status_code}")
+                    logger.error(f"WebSocket handshake to {ws_url} failed with status {status_error.status_code}")
 
-                    if e.status_code == 404:
+                    if status_error.status_code == 404:
                         current_404_retries += 1
                         if current_404_retries >= max_404_retries:
                             logger.error(f"Reached maximum retries ({max_404_retries}) for 404 errors. Giving up.")
@@ -282,9 +296,17 @@ def patch_websocket_client():
                         raise
 
                     # Check if we can get device info
-                    if self._get_device_info(check_existing=False) is None:
+                    device_result = self._get_device_info(check_existing=False)
+                    if device_result is None:
                         logger.error('could not create device info')
                         raise Exception("No WDM device info")
+
+                    # Check for error response (e.g., "excessive device registrations")
+                    if 'errors' in self.device_info:
+                        error_msg = self.device_info.get('message', 'Unknown error')
+                        logger.error(f"Device registration failed: {error_msg}")
+                        logger.error("Hint: Try cleaning up stale devices using cleanup_devices_on_startup()")
+                        raise Exception(f"Device registration error: {error_msg}")
 
                     # Update the URL in case it changed
                     ws_url = self.device_info.get('webSocketUrl')
@@ -302,9 +324,9 @@ def patch_websocket_client():
 
         # Apply the patch
         WebexWebsocketClient.run = enhanced_run
-        logger.debug("✅ Enhanced WebSocket client patched successfully")
-        logger.debug(f"📡 WebSocket keepalive: ping every {WEBSOCKET_PING_INTERVAL}s, timeout {WEBSOCKET_PING_TIMEOUT}s")
-        logger.debug(f"🔄 Backoff retry window increased to {MAX_BACKOFF_TIME}s")
+        logger.debug("Enhanced WebSocket client patched successfully")
+        logger.debug(f"WebSocket keepalive: ping every {WEBSOCKET_PING_INTERVAL}s, timeout {WEBSOCKET_PING_TIMEOUT}s")
+        logger.debug(f"Backoff retry window increased to {MAX_BACKOFF_TIME}s")
         return True
 
     except ImportError as e:

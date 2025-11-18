@@ -72,7 +72,9 @@ from src.utils.ssl_config import configure_ssl_if_needed
 
 configure_ssl_if_needed(verbose=True)  # Re-enabled due to ZScaler connectivity issues
 
-# NOT using enhanced WebSocket client or any resilience features - testing vanilla bot
+# Enhanced WebSocket client for websockets 14.x compatibility
+from src.utils.enhanced_websocket_client import patch_websocket_client
+patch_websocket_client()
 
 CONFIG = get_config()
 
@@ -135,7 +137,15 @@ def initialize_bot():
     start_time = datetime.now()
 
     try:
-        # NOT cleaning up devices - testing vanilla bot behavior
+        # Clean up stale device registrations before starting
+        from src.utils.webex_device_manager import cleanup_devices_on_startup
+        import time
+        cleanup_devices_on_startup(WEBEX_ACCESS_TOKEN, "Pokedex")
+
+        # Give Webex API time to propagate device deletions (avoid "excessive registrations" error)
+        logger.info("⏳ Waiting 3 seconds for Webex API to sync device deletions...")
+        time.sleep(3)
+
         logger.info("Initializing streamlined SOC Q&A components...")
 
         if not initialize_model_and_agent():
