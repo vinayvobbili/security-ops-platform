@@ -66,7 +66,9 @@ eastern = pytz.timezone('US/Eastern')
 
 # Default per-job timeout (seconds)
 DEFAULT_JOB_TIMEOUT = 1800  # 30 minutes
-TICKET_CACHE_TIMEOUT = 7200  # 120 minutes (2 hours) for ticket enrichment job
+TICKET_CACHE_TIMEOUT = 21600  # 360 minutes (6 hours) for ticket enrichment job on VM
+# Note: VM with slow network takes 2-4 hours for 12k tickets with note enrichment
+# Generous timeout prevents premature termination of this critical nightly job
 
 
 def safe_run(*jobs: Callable[[], None], timeout: int = DEFAULT_JOB_TIMEOUT, name: str = None) -> None:
@@ -224,9 +226,11 @@ def main() -> None:
     for group in CHART_GROUPS:
         schedule_group(group['time'], group['name'], group['jobs'])
 
-    # Ticket cache (unstable, isolated) - uses extended timeout
-    logger.info("Scheduling ticket cache generation at 00:30 ET (may be slow)...")
-    schedule.every().day.at('00:30', eastern).do(
+    # Ticket cache - RUNS LAST to avoid interfering with chart generation
+    # Scheduled after all chart jobs complete (charts finish by ~00:30)
+    # Extended timeout (6 hours) accommodates slow VM network with full note enrichment
+    logger.info("Scheduling ticket cache generation at 01:00 ET (runs last, may take 2-4 hours on VM)...")
+    schedule.every().day.at('01:00', eastern).do(
         lambda: safe_run(TicketCache.generate, timeout=TICKET_CACHE_TIMEOUT, name="ticket_cache")
     )
 
