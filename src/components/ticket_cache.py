@@ -25,9 +25,14 @@ log = logging.getLogger(__name__)
 
 Ticket = Dict[str, Any]
 LOOKBACK_DAYS = 90
-# Configurable worker count via env var (default: 25)
-# Reduced from 100->50->25 to avoid API rate limiting
-MAX_WORKERS = int(os.getenv('TICKET_ENRICHMENT_WORKERS', '25'))
+# Configurable worker count via env var (default: 10 for slow networks, 25 for fast)
+# Reduced from 100->50->25->10 to avoid overwhelming slow VM networks
+# Use TICKET_ENRICHMENT_WORKERS=25 for fast networks (local dev)
+MAX_WORKERS = int(os.getenv('TICKET_ENRICHMENT_WORKERS', '10'))
+
+# Configurable individual ticket timeout (default: 180s for slow networks, 90s for fast)
+# Use TICKET_ENRICHMENT_TIMEOUT=90 for fast networks (local dev)
+TICKET_TIMEOUT = int(os.getenv('TICKET_ENRICHMENT_TIMEOUT', '180'))
 
 
 # Field mappings for ticket extraction
@@ -286,7 +291,8 @@ class TicketCache:
         """Enrich tickets with user notes in parallel.
 
         Uses as_completed() for efficient iteration. No overall timeout.
-        Individual futures timeout after 90s to prevent indefinite hangs.
+        Individual futures timeout after TICKET_TIMEOUT seconds to prevent indefinite hangs.
+        Default: 180s for slow networks, configurable via TICKET_ENRICHMENT_TIMEOUT env var.
         """
         from concurrent.futures import as_completed
 
@@ -294,12 +300,13 @@ class TicketCache:
         log.debug("_enrich_with_notes() ENTRY")
         log.debug("="*60)
         log.debug(f"Starting note enrichment for {len(tickets)} tickets")
-        log.debug(f"Worker count: {MAX_WORKERS}, Individual timeout: 90s")
-        log.debug(f"MAX_WORKERS env var: {os.getenv('TICKET_ENRICHMENT_WORKERS', '25')}")
+        log.debug(f"Worker count: {MAX_WORKERS}, Individual timeout: {TICKET_TIMEOUT}s")
+        log.debug(f"MAX_WORKERS env var: {os.getenv('TICKET_ENRICHMENT_WORKERS', '10')}")
+        log.debug(f"TICKET_TIMEOUT env var: {os.getenv('TICKET_ENRICHMENT_TIMEOUT', '180')}")
 
         start_time = time.time()
         print(f"📝 Enriching {len(tickets)} tickets with notes (workers={MAX_WORKERS})...")
-        print(f"⏱️  Individual ticket timeout: 90s (no overall job timeout)")
+        print(f"⏱️  Individual ticket timeout: {TICKET_TIMEOUT}s (no overall job timeout)")
 
         enriched = []
         failed_count = 0
@@ -330,7 +337,7 @@ class TicketCache:
             log.debug(f"All {len(tickets)} tasks submitted in {submission_time:.2f}s. Waiting for completions...")
 
             # Process with as_completed - no overall timeout, will run until all complete
-            # Individual futures have 90s timeout to prevent indefinite hangs
+            # Individual futures have TICKET_TIMEOUT (default 180s) to prevent indefinite hangs
             completed = set()
             last_straggler_report = time.time()
             processing_start = time.time()
@@ -367,9 +374,9 @@ class TicketCache:
                             last_straggler_report = time.time()
 
                     try:
-                        # Timeout individual futures after 90s to prevent indefinite hangs
+                        # Timeout individual futures to prevent indefinite hangs
                         log.debug(f"Waiting for result from ticket {ticket.get('id', 'unknown')}...")
-                        result = future.result(timeout=90)
+                        result = future.result(timeout=TICKET_TIMEOUT)
                         enriched.append(result)
                         if not result.get('notes'):
                             failed_count += 1
