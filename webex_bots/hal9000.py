@@ -338,39 +338,26 @@ class Bot(WebexBot):
             )
 
 
-def initialize_bot_with_tracking(bot_instance, resilient_runner):
-    """Initialize HAL9000 with message activity tracking for idle detection"""
-    from src.utils.bot_resilience import enable_message_tracking
-
-    if not bot_instance:
-        return False
-
-    # Enable message tracking for idle timeout detection
-    enable_message_tracking(bot_instance, resilient_runner)
-
-    # Run original initialization (doesn't need bot_instance parameter)
-    return initialize_bot()
-
-
 def main():
-    """HAL9000 main with resilience framework"""
-    from src.utils.bot_resilience import ResilientBot
+    """HAL9000 main - simplified to use basic WebexBot (keepalive handled by peer_ping_keepalive.py)"""
+    logger.info("Starting HAL9000 with basic WebexBot")
 
-    resilient_runner = ResilientBot(
-        bot_factory=lambda: Bot(
-            teams_bot_token=WEBEX_ACCESS_TOKEN,
-            approved_domains=[CONFIG.my_web_domain],
-            # approved_rooms disabled - bot lacks spark:memberships_read scope for validation
-            # Security: Only add this bot to authorized rooms to control access
-            bot_name="HAL9000"
-        ),
-        initialization_func=lambda bot: initialize_bot_with_tracking(bot, resilient_runner),
-        bot_name="HAL9000",
-        max_retries=5,
-        initial_retry_delay=30,
-        max_retry_delay=300
+    # Create bot instance
+    bot = Bot(
+        teams_bot_token=WEBEX_ACCESS_TOKEN,
+        approved_domains=[CONFIG.my_web_domain],
+        # approved_rooms disabled - bot lacks spark:memberships_read scope for validation
+        # Security: Only add this bot to authorized rooms to control access
+        bot_name="HAL9000"
     )
-    resilient_runner.run()
+
+    # Initialize bot
+    initialize_bot()
+
+    # Run bot (simple and direct)
+    logger.info("🚀 HAL9000 is up and running...")
+    print("🚀 HAL9000 is up and running...", flush=True)
+    bot.run()
 
 
 if __name__ == "__main__":
