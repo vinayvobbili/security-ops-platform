@@ -25,14 +25,22 @@ log = logging.getLogger(__name__)
 
 Ticket = Dict[str, Any]
 LOOKBACK_DAYS = 90
-# Configurable worker count via env var (default: 10 for slow networks, 25 for fast)
-# Reduced from 100->50->25->10 to avoid overwhelming slow VM networks
+# Configurable worker count via env var
+# Default: 5 for slow VM networks (prioritizes reliability over speed)
 # Use TICKET_ENRICHMENT_WORKERS=25 for fast networks (local dev)
-MAX_WORKERS = int(os.getenv('TICKET_ENRICHMENT_WORKERS', '10'))
+# Fewer workers = less network congestion = higher success rate
+MAX_WORKERS = int(os.getenv('TICKET_ENRICHMENT_WORKERS', '5'))
 
-# Configurable individual ticket timeout (default: 180s for slow networks, 90s for fast)
+# Configurable individual ticket timeout
+# Default: 300s (5 min) for slow VM networks to allow completion
 # Use TICKET_ENRICHMENT_TIMEOUT=90 for fast networks (local dev)
-TICKET_TIMEOUT = int(os.getenv('TICKET_ENRICHMENT_TIMEOUT', '180'))
+# Longer timeout = fewer timeouts = higher success rate
+TICKET_TIMEOUT = int(os.getenv('TICKET_ENRICHMENT_TIMEOUT', '300'))
+
+# Skip note enrichment for performance (default: False - enrichment enabled)
+# Set SKIP_NOTE_ENRICHMENT=true to skip notes for faster processing
+# Note: Enrichment is slow on VMs but will complete if given enough time
+SKIP_NOTE_ENRICHMENT = os.getenv('SKIP_NOTE_ENRICHMENT', 'false').lower() in ('true', '1', 'yes')
 
 
 # Field mappings for ticket extraction
@@ -181,6 +189,8 @@ class TicketCache:
         log.debug("="*80)
         try:
             log.info(f"Starting ticket cache generation (lookback={lookback_days}d)")
+            log.info(f"Configuration: Workers={MAX_WORKERS}, Timeout={TICKET_TIMEOUT}s, "
+                    f"SkipNotes={SKIP_NOTE_ENRICHMENT}")
             log.debug(f"Pipeline will run: fetch -> process -> save")
 
             log.debug("Creating TicketCache instance...")
@@ -280,12 +290,21 @@ class TicketCache:
         log.debug(f"Sample ticket IDs: {[t.get('id', 'NO_ID') for t in tickets[:5]]}")
         log.debug(f"Sample ticket keys (first ticket): {list(tickets[0].keys()) if tickets else 'N/A'}")
 
-        # Parallel notes enrichment
-        log.debug("Calling _enrich_with_notes()...")
-        enriched = self._enrich_with_notes(tickets)
-        log.debug(f"_enrich_with_notes() returned {len(enriched)} tickets")
-        log.debug("_fetch_raw_tickets() EXIT")
-        return enriched
+        # Parallel notes enrichment (optional - can be disabled for performance)
+        if SKIP_NOTE_ENRICHMENT:
+            log.info("⏭️  Skipping note enrichment (SKIP_NOTE_ENRICHMENT=true)")
+            print("⏭️  Skipping note enrichment for faster processing...")
+            # Add empty notes to all tickets
+            for ticket in tickets:
+                ticket['notes'] = []
+            log.debug("_fetch_raw_tickets() EXIT (notes skipped)")
+            return tickets
+        else:
+            log.debug("Calling _enrich_with_notes()...")
+            enriched = self._enrich_with_notes(tickets)
+            log.debug(f"_enrich_with_notes() returned {len(enriched)} tickets")
+            log.debug("_fetch_raw_tickets() EXIT")
+            return enriched
 
     def _enrich_with_notes(self, tickets: List[Ticket]) -> List[Ticket]:
         """Enrich tickets with user notes in parallel.
@@ -301,8 +320,8 @@ class TicketCache:
         log.debug("="*60)
         log.debug(f"Starting note enrichment for {len(tickets)} tickets")
         log.debug(f"Worker count: {MAX_WORKERS}, Individual timeout: {TICKET_TIMEOUT}s")
-        log.debug(f"MAX_WORKERS env var: {os.getenv('TICKET_ENRICHMENT_WORKERS', '10')}")
-        log.debug(f"TICKET_TIMEOUT env var: {os.getenv('TICKET_ENRICHMENT_TIMEOUT', '180')}")
+        log.debug(f"MAX_WORKERS env var: {os.getenv('TICKET_ENRICHMENT_WORKERS', '5')}")
+        log.debug(f"TICKET_TIMEOUT env var: {os.getenv('TICKET_ENRICHMENT_TIMEOUT', '300')}")
 
         start_time = time.time()
         print(f"📝 Enriching {len(tickets)} tickets with notes (workers={MAX_WORKERS})...")
@@ -681,13 +700,28 @@ class TicketCache:
 
 def main():
     """CLI entry point with visual output."""
+    # Allow overriding lookback days via env var
+    lookback = int(os.getenv('LOOKBACK_DAYS', '90'))
+
+    print(f"\n{'='*60}")
+    print("Ticket Cache Configuration")
+    print(f"{'='*60}")
+    print(f"Lookback Days: {lookback}")
+    print(f"Page Size: {TicketHandler.DEFAULT_PAGE_SIZE}")
+    print(f"Read Timeout: {TicketHandler.READ_TIMEOUT}s")
+    print(f"Skip Notes: {SKIP_NOTE_ENRICHMENT}")
+    if not SKIP_NOTE_ENRICHMENT:
+        print(f"Workers: {MAX_WORKERS}")
+        print(f"Note Timeout: {TICKET_TIMEOUT}s")
+    print(f"{'='*60}\n")
+
     log.info("Starting ticket caching process")
-    cache = TicketCache()
-    cache.generate(lookback_days=10)
+    TicketCache.generate(lookback_days=lookback)
 
     # Display sample tickets
     today = datetime.now(ZoneInfo("America/New_York")).strftime('%m-%d-%Y')
-    ui_path = cache.root_directory / 'data' / 'transient' / 'secOps' / today / 'past_90_days_tickets.json'
+    root_directory = Path(__file__).parent.parent.parent
+    ui_path = root_directory / 'data' / 'transient' / 'secOps' / today / 'past_90_days_tickets.json'
 
     if ui_path.exists():
         with open(ui_path, 'r') as f:
