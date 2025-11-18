@@ -49,8 +49,8 @@ from src import peer_ping_keepalive
 # Configure logging with centralized utility
 setup_logging(
     bot_name='all_jobs',
-    log_level=logging.INFO,  # Temporarily set to DEBUG for peer ping debugging
-    info_modules=['__main__', 'src.components.response_sla_risk_tickets', 'services.xsoar']
+    log_level=logging.DEBUG,  # Set to DEBUG to capture ticket_cache debug logs
+    info_modules=['__main__', 'src.components.response_sla_risk_tickets', 'services.xsoar', 'src.components.ticket_cache']
 )
 
 # Set XSOAR logging to INFO (connection issues have been resolved)
