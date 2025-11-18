@@ -1399,11 +1399,11 @@ def main():
         dev_list = ListHandler(XsoarEnvironment.DEV)
     """
     # Example usage (commented out):
-    ticket_id = '1378457'
-    playbook_task_name = 'Does the employee recognize the alerted activity?'
-    dev_ticket_handler = TicketHandler(XsoarEnvironment.DEV)
-    task_id = dev_ticket_handler.get_playbook_task_id(ticket_id, playbook_task_name)
-    print(task_id)
+    # ticket_id = '1378457'
+    # playbook_task_name = 'Does the employee recognize the alerted activity?'
+    # dev_ticket_handler = TicketHandler(XsoarEnvironment.DEV)
+    # task_id = dev_ticket_handler.get_playbook_task_id(ticket_id, playbook_task_name)
+    # print(task_id)
 
     #
     # Example: Get case data with notes
@@ -1422,7 +1422,10 @@ def main():
     # Example: Upload file
     # file_path = "/path/to/file.pdf"
     # print(dev_ticket_handler.upload_file_to_ticket(ticket_id, file_path, "Evidence file"))
-    pass
+
+    prod_list_handler = ListHandler(XsoarEnvironment.PROD)
+    all_lists = prod_list_handler.get_all_lists()
+    print(f"Total lists in dev: {len(all_lists)}")
 
 
 if __name__ == "__main__":
