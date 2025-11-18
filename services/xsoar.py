@@ -233,13 +233,33 @@ class TicketHandler:
         log.debug(f"get_tickets() called with query: {query[:100]}...")
         log.debug(f"  Paginate: {paginate}, Size: {size}")
 
-        # Quick connectivity test with small query
+        # Quick connectivity test with small query and DNS resolution check
         try:
+            # Test DNS resolution first
+            import socket
+            from urllib.parse import urlparse
+
+            log.debug(f"  Testing DNS resolution for XSOAR API...")
+            parsed_url = urlparse(self.base_url)
+            hostname = parsed_url.netloc.split(':')[0]  # Remove port if present
+            try:
+                start_dns = time.time()
+                ip_address = socket.gethostbyname(hostname)
+                dns_time = time.time() - start_dns
+                log.debug(f"  ✓ DNS resolved {hostname} -> {ip_address} in {dns_time:.2f}s")
+            except socket.gaierror as dns_err:
+                log.error(f"  ✗ DNS resolution failed for {hostname}: {dns_err}")
+                log.error(f"  This indicates a DNS configuration problem on this system")
+                raise
+
             log.debug(f"  Testing XSOAR API connectivity with small test query...")
             test_filter = {"query": "id:1", "page": 0, "size": 1}
             test_search = SearchIncidentsData(filter=test_filter)
+
+            start_api = time.time()
             test_response = self.client.search_incidents(filter=test_search)
-            log.debug(f"  ✓ XSOAR API is reachable and responding: {type(test_response)}")
+            api_time = time.time() - start_api
+            log.debug(f"  ✓ XSOAR API is reachable and responding in {api_time:.2f}s: {type(test_response)}")
         except Exception as e:
             log.error(f"  ✗ XSOAR API connectivity test failed: {e}")
             log.error(f"  This may indicate network issues, API outage, or authentication problems")
@@ -309,9 +329,15 @@ class TicketHandler:
                     search_data = SearchIncidentsData(filter=filter_data)
                     if not use_progress_bar:
                         log.debug(f"  Sending request to search_incidents endpoint...")
+
+                    request_start = time.time()
                     response = self.client.search_incidents(filter=search_data)
+                    request_time = time.time() - request_start
+
                     if not use_progress_bar:
-                        log.debug(f"  ✓ API response received at {datetime.now().strftime('%H:%M:%S')}")
+                        log.debug(f"  ✓ API response received in {request_time:.2f}s at {datetime.now().strftime('%H:%M:%S')}")
+                    else:
+                        log.debug(f"Page {page} fetch completed in {request_time:.2f}s")
 
                     # Reset error counter on success
                     server_error_retry_count = 0
