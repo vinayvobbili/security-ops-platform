@@ -23,7 +23,13 @@ import uuid
 
 import backoff
 import websockets
-from websockets.legacy.exceptions import InvalidStatusCode
+
+# Import InvalidStatusCode - location changed in websockets 14.x
+try:
+    from websockets.exceptions import InvalidStatusCode
+except ImportError:
+    # Fallback for older versions (< 14.x)
+    from websockets.legacy.exceptions import InvalidStatusCode  # type: ignore[import-not-found]
 
 # Import requests exceptions for better error handling
 try:
