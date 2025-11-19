@@ -19,6 +19,7 @@ import json
 import logging
 import socket
 import ssl
+import time
 import uuid
 
 import backoff
@@ -81,6 +82,46 @@ def patch_websocket_client():
             # Pull out URL now so we can log it on failure
             ws_url = self.device_info.get('webSocketUrl')
 
+            def _process_message_with_retry(msg):
+                """
+                Wrapper around _process_incoming_websocket_message with retry logic for connection errors.
+
+                This handles transient Webex API connection errors when fetching message details.
+                """
+                max_retries = 3
+                retry_delay = 1  # Start with 1 second
+
+                for attempt in range(1, max_retries + 1):
+                    try:
+                        self._process_incoming_websocket_message(msg)
+                        return  # Success, exit
+                    except RequestsConnectionError as e:
+                        # Handle connection errors from requests library (Webex API calls)
+                        error_msg = str(e)
+                        if 'RemoteDisconnected' in error_msg or 'Connection aborted' in error_msg:
+                            if attempt < max_retries:
+                                logger.warning(
+                                    f"Webex API connection error on attempt {attempt}/{max_retries}: {error_msg}. "
+                                    f"Retrying in {retry_delay}s..."
+                                )
+                                time.sleep(retry_delay)
+                                retry_delay *= 2  # Exponential backoff
+                                continue
+                            else:
+                                logger.error(
+                                    f"Failed to process message after {max_retries} attempts due to connection errors. "
+                                    f"Message will be skipped. Error: {error_msg}"
+                                )
+                                return  # Give up after max retries
+                        else:
+                            # Non-retryable connection error
+                            logger.error(f"Non-retryable connection error processing message: {e}")
+                            raise
+                    except Exception as e:
+                        # Log other exceptions but don't retry
+                        logger.error(f"Error processing websocket message: {e}", exc_info=True)
+                        return  # Don't crash the websocket loop
+
             async def _websocket_recv():
                 message = await self.websocket.recv()
                 logger.debug("WebSocket Received Message(raw): %s\n" % message)
@@ -93,7 +134,8 @@ def patch_websocket_client():
                         if event_loop.is_closed():
                             logger.debug("Event loop is closed, skipping message processing")
                             return
-                        event_loop.run_in_executor(None, self._process_incoming_websocket_message, msg)
+                        # Use wrapper with retry logic instead of calling _process_incoming_websocket_message directly
+                        event_loop.run_in_executor(None, _process_message_with_retry, msg)
                     except RuntimeError as loop_error:
                         # Event loop not available (happens during shutdown)
                         if 'no current event loop' in str(loop_error).lower() or 'no running event loop' in str(loop_error).lower():
