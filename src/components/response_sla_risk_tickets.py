@@ -136,8 +136,8 @@ def build_ticket_message(seconds_remaining, ticket, index, shift_lead, due_date_
             pass
 
     return (
-        f"{index}. [{ticket_id}]({incident_url}) - {ticket_name} \n"
-        f"   {owner_text}, act within the next {time_text} {sla_info}"
+        f"{index}. [{ticket_id}]({incident_url}) - {ticket_name}  \n\n"
+        f"   **{owner_text}**, act within the next **{time_text}** {sla_info}"
     )
 
 
@@ -226,5 +226,4 @@ def start(room_id):
 
 
 if __name__ == "__main__":
-    room_id = CONFIG.webex_room_id_vinay_test_space
-    start(room_id)
+    start(room_id=CONFIG.webex_room_id_vinay_test_space)
