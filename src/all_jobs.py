@@ -67,6 +67,8 @@ eastern = pytz.timezone('US/Eastern')
 # Default per-job timeout (seconds)
 DEFAULT_JOB_TIMEOUT = 1800  # 30 minutes
 TICKET_CACHE_TIMEOUT = 21600  # 360 minutes (6 hours) for ticket enrichment job on VM
+
+
 # Note: VM with slow network takes 2-4 hours for 12k tickets with note enrichment
 # Generous timeout prevents premature termination of this critical nightly job
 
@@ -95,14 +97,14 @@ def safe_run(*jobs: Callable[[], None], timeout: int = DEFAULT_JOB_TIMEOUT, name
             job_name = getattr(job, '__name__', repr(job))
         executor = None
         start_time = time.time()
-        logger.info(f">>> Starting job: {job_name}")
+        logger.debug(f">>> Starting job: {job_name}")
         try:
             executor = ThreadPoolExecutor(max_workers=1)
             future = executor.submit(job)
             try:
                 future.result(timeout=timeout)
                 elapsed = time.time() - start_time
-                logger.info(f"<<< Job completed successfully: {job_name} (took {elapsed:.2f}s)")
+                logger.debug(f"<<< Job completed successfully: {job_name} (took {elapsed:.2f}s)")
             except FuturesTimeoutError:
                 elapsed = time.time() - start_time
                 logger.error(f"Job timed out after {timeout} seconds: {job_name} (elapsed {elapsed:.2f}s)")
