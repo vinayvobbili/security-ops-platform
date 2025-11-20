@@ -715,31 +715,36 @@ def main():
         #     logger.info(f"  Action ID: {action_id}")
 
         # Test searching for computers
-        search_term = "TEST-HOST-001.INTERNAL"
-        instance_name = "Cloud"  # or "Cloud"
-        instance = client.get_instance_by_name(instance_name)
-        url_info = f" (URL: {instance.server_url})" if instance else ""
-        logger.info(f"\nSearching for computers containing '{search_term}' in {instance_name}{url_info}...")
-        matches = client.search_computers(search_term, instance_name, limit=5)
-
-        # Convert Computer objects to dictionaries for JSON serialization
-        matches_dict = [
-            {
-                'name': comp.name,
-                'id': comp.id,
-                'ip': comp.ip,
-                'eidLastSeen': comp.eidLastSeen,
-                'source': comp.source,
-                'os_platform': comp.os_platform,
-                'eid_status': comp.eid_status,
-                'custom_tags': comp.custom_tags
-            }
-            for comp in matches
+        test_computers = [
+            {"name": "TEST-HOST-001.INTERNAL", "instance": "Cloud"},
+            {"name": "TEST-HOST-002.INTERNAL", "instance": "On-Prem"},
         ]
-        print(json.dumps(matches_dict, indent=2))
+        for computer in test_computers:
+            search_term = computer["name"]
+            instance_name = computer["instance"]
+            instance = client.get_instance_by_name(instance_name)
+            url_info = f" (URL: {instance.server_url})" if instance else ""
+            logger.info(f"\nSearching for computers containing '{search_term}' in {instance_name}{url_info}...")
+            matches = client.search_computers(search_term, instance_name, limit=5)
 
-        for comp in matches:
-            logger.info(f" - {comp.name} (ID: {comp.id}, Last Seen: {comp.eidLastSeen}, Tags: {comp.custom_tags})")
+            # Convert Computer objects to dictionaries for JSON serialization
+            matches_dict = [
+                {
+                    'name': comp.name,
+                    'id': comp.id,
+                    'ip': comp.ip,
+                    'eidLastSeen': comp.eidLastSeen,
+                    'source': comp.source,
+                    'os_platform': comp.os_platform,
+                    'eid_status': comp.eid_status,
+                    'custom_tags': comp.custom_tags
+                }
+                for comp in matches
+            ]
+            print(json.dumps(matches_dict, indent=2))
+
+            for comp in matches:
+                logger.info(f" - {comp.name} (ID: {comp.id}, Last Seen: {comp.eidLastSeen}, Tags: {comp.custom_tags})")
 
     except Exception as e:
         logger.error(f"Error during execution: {e}")
