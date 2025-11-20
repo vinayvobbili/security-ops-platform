@@ -61,44 +61,44 @@ def send_peer_pings(access_token: str):
                 toPersonEmail=bot_email,
                 text=f"Hi @ {timestamp}"  # Simple greeting that triggers bot response
             )
-            logger.debug(f'Message sent: {response.id}')
+            logger.debug(f'Message sent to {bot_name}')
 
-    #         # Wait for bot to respond
-    #         time.sleep(5)  # Wait 5 seconds for bot to process and reply
-    #
-    #         # Fetch recent messages from the room to get bot's reply
-    #         room_id = response.roomId
-    #         messages = list(api.messages.list(roomId=room_id, max=10))
-    #
-    #         logger.debug(f"  Found {len(messages)} messages in room")
-    #
-    #         # Debug: print all messages
-    #         # for idx, msg in enumerate(messages):
-    #         #     logger.debug(f"    Msg {idx}: from={msg.personEmail}, created={msg.created}, text={msg.text[:50] if hasattr(msg, 'text') and msg.text else 'N/A'}")
-    #
-    #         # Find the bot's reply (not our own message)
-    #         bot_reply = None
-    #         for msg in messages:
-    #             # Skip our own message
-    #             if msg.id == response.id:
-    #                 continue
-    #             # Check if it's from the bot (newer than our message)
-    #             if msg.personEmail == bot_email and msg.created > response.created:
-    #                 bot_reply = msg
-    #                 break
-    #
-    #         if bot_reply:
-    #             logger.debug(f"  ✅ {bot_name} replied: {bot_reply.text}")
-    #             success_count += 1
-    #             successful_bots.append(bot_name)
-    #         else:
-    #             logger.debug(f"  ⚠️  No reply from {bot_name} yet")
-    #             fail_count += 1
-    #             failed_bots.append(bot_name)
-    #     except Exception as e:
-    #         logger.error(f"  ❌ Failed to ping {bot_name}: {e}")
-    #         fail_count += 1
-    #         failed_bots.append(bot_name)
+        #         # Wait for bot to respond
+        #         time.sleep(5)  # Wait 5 seconds for bot to process and reply
+        #
+        #         # Fetch recent messages from the room to get bot's reply
+        #         room_id = response.roomId
+        #         messages = list(api.messages.list(roomId=room_id, max=10))
+        #
+        #         logger.debug(f"  Found {len(messages)} messages in room")
+        #
+        #         # Debug: print all messages
+        #         # for idx, msg in enumerate(messages):
+        #         #     logger.debug(f"    Msg {idx}: from={msg.personEmail}, created={msg.created}, text={msg.text[:50] if hasattr(msg, 'text') and msg.text else 'N/A'}")
+        #
+        #         # Find the bot's reply (not our own message)
+        #         bot_reply = None
+        #         for msg in messages:
+        #             # Skip our own message
+        #             if msg.id == response.id:
+        #                 continue
+        #             # Check if it's from the bot (newer than our message)
+        #             if msg.personEmail == bot_email and msg.created > response.created:
+        #                 bot_reply = msg
+        #                 break
+        #
+        #         if bot_reply:
+        #             logger.debug(f"  ✅ {bot_name} replied: {bot_reply.text}")
+        #             success_count += 1
+        #             successful_bots.append(bot_name)
+        #         else:
+        #             logger.debug(f"  ⚠️  No reply from {bot_name} yet")
+        #             fail_count += 1
+        #             failed_bots.append(bot_name)
+        except Exception as e:
+            logger.error(f"  ❌ Failed to ping {bot_name}: {e}")
+            # fail_count += 1
+            # failed_bots.append(bot_name)
     #
     # # Build summary message
     # summary = f"✅ Peer ping cycle complete: {success_count} successful, {fail_count} failed"
