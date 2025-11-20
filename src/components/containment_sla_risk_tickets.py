@@ -144,7 +144,7 @@ def build_ticket_message(seconds_remaining, ticket, due_date_str, index):
 
     return (
         f"{index}. [{ticket_id}]({incident_url}) - {ticket_name}  \n\n"
-        f"   **{owner_text}**, act within the next **{time_text}** {sla_info}"
+        f"   {owner_text}, act within the next **{time_text}** {sla_info}"
     )
 
 
