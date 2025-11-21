@@ -503,19 +503,29 @@ class RingTagTaniumHosts(Command):
                     'comments': comments
                 })
 
-            # Process each group with bulk tagging
-            total_groups = len(host_groups)
-            logger.info(f"Grouped {num_to_tag} hosts into {total_groups} bulk tagging operations")
+            # Process each group with bulk tagging (respecting Tanium's 25 endpoint limit per call)
+            TANIUM_BULK_TAG_LIMIT = 25
 
-            with tqdm(total=total_groups, desc="Bulk tagging host groups", unit="group") as pbar:
-                for (source, ring_tag, package_id), hosts in host_groups.items():
+            # Split large groups into batches of 25 or fewer
+            batched_groups = []
+            for (source, ring_tag, package_id), hosts in host_groups.items():
+                # Split hosts into batches of 25
+                for i in range(0, len(hosts), TANIUM_BULK_TAG_LIMIT):
+                    batch = hosts[i:i + TANIUM_BULK_TAG_LIMIT]
+                    batched_groups.append(((source, ring_tag, package_id), batch))
+
+            total_batches = len(batched_groups)
+            logger.info(f"Grouped {num_to_tag} hosts into {len(host_groups)} groups, split into {total_batches} API calls (max 25 hosts per call)")
+
+            with tqdm(total=total_batches, desc="Bulk tagging host batches", unit="batch") as pbar:
+                for (source, ring_tag, package_id), hosts in batched_groups:
                     pbar.set_description(f"Tagging {len(hosts)} hosts in {source} with {ring_tag}")
 
                     try:
                         # Get the appropriate instance
                         instance = tanium_client.get_instance_by_name(source)
                         if not instance:
-                            # All hosts in this group fail
+                            # All hosts in this batch fail
                             for host in hosts:
                                 failed_tags.append({
                                     'name': host['name'],
@@ -530,14 +540,14 @@ class RingTagTaniumHosts(Command):
                             pbar.update(1)
                             continue
 
-                        # Bulk add tags to all hosts in this group
+                        # Bulk add tags to all hosts in this batch (max 25)
                         logger.info(f"Bulk tagging {len(hosts)} hosts in {source} with {ring_tag} using package {package_id}")
                         result = instance.bulk_add_tags(hosts, ring_tag, package_id)
 
                         # Extract action ID from result
                         action_id = result.get('action', {}).get('scheduledAction', {}).get('id', 'N/A')
 
-                        # All hosts in this group get the same action ID
+                        # All hosts in this batch get the same action ID
                         for host in hosts:
                             successful_tags.append({
                                 'name': host['name'],
@@ -555,7 +565,7 @@ class RingTagTaniumHosts(Command):
                         error_msg = str(e)
                         logger.error(f"Failed to bulk tag {len(hosts)} hosts in {source}: {error_msg}")
 
-                        # All hosts in this group fail with the same error
+                        # All hosts in this batch fail with the same error
                         for host in hosts:
                             failed_tags.append({
                                 'name': host['name'],
@@ -651,7 +661,7 @@ class RingTagTaniumHosts(Command):
                 summary_md += f"- 🧪 **Batch mode**: Randomly sampled {num_to_tag:,} hosts (requested: {batch_size:,})\n"
             else:
                 summary_md += f"- Hosts processed: {num_to_tag:,}\n"
-            summary_md += f"- **Bulk operations executed**: {total_groups:,} (grouped by instance and tag)\n"
+            summary_md += f"- **API calls executed**: {total_batches:,} (max 25 hosts per call)\n"
             summary_md += f"- Hosts tagged successfully: {len(successful_tags):,}\n"
             summary_md += f"- Hosts failed to tag: {len(failed_tags):,}\n\n"
             summary_md += f"**Timing:**\n"
@@ -660,7 +670,7 @@ class RingTagTaniumHosts(Command):
             summary_md += f"- Applying tags (bulk): {format_duration(apply_duration)}\n"
             summary_md += f"- Total execution time: {format_duration(total_duration)}\n\n"
             summary_md += f"📊 **Detailed results with Action IDs are attached in the Excel report.**\n"
-            summary_md += f"💡 **Note**: Hosts in the same bulk operation share the same Action ID.\n"
+            summary_md += f"💡 **Note**: Hosts in the same API batch (up to 25) share the same Action ID.\n"
 
             # Send results with retry
             send_message_with_retry(webex_api, room_id=room_id, markdown=summary_md, files=[str(output_filename)])
