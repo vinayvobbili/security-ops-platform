@@ -58,10 +58,20 @@ from my_config import get_config
 from src.charts import threatcon_level
 from src.utils.logging_utils import log_activity
 from src.utils.webex_device_manager import cleanup_devices_on_startup
+from src.utils.webex_pool_config import configure_webex_api_session
 
 config = get_config()
 bot_token = config.webex_bot_access_token_barnacles
-webex_api = WebexTeamsAPI(access_token=bot_token)
+# Configure WebexTeamsAPI with larger connection pool to prevent timeout issues
+webex_api = configure_webex_api_session(
+    WebexTeamsAPI(
+        access_token=bot_token,
+        single_request_timeout=120
+    ),
+    pool_connections=50,
+    pool_maxsize=50,
+    max_retries=3
+)
 
 # Global variables
 bot_instance = None

@@ -54,11 +54,22 @@ from my_config import get_config
 from src.epp import ring_tag_cs_hosts, cs_hosts_without_ring_tag, cs_servers_with_invalid_ring_tags
 from src.utils.logging_utils import log_activity
 from src.utils.webex_device_manager import cleanup_devices_on_startup
+from src.utils.webex_pool_config import configure_webex_api_session
 
 CONFIG = get_config()
 DATA_DIR = ROOT_DIRECTORY / "data" / "transient" / "epp_device_tagging"
 
-webex_api = WebexTeamsAPI(access_token=CONFIG.webex_bot_access_token_jarvis)
+# Configure WebexTeamsAPI with larger connection pool to prevent timeout issues
+# Multiple bots on same VM + concurrent message processing can exhaust default 10-connection pool
+webex_api = configure_webex_api_session(
+    WebexTeamsAPI(
+        access_token=CONFIG.webex_bot_access_token_jarvis,
+        single_request_timeout=120,  # Increased from default 60s to handle VM network latency
+    ),
+    pool_connections=50,  # Increased from default 10
+    pool_maxsize=50,      # Increased from default 10
+    max_retries=3         # Enable automatic retry on transient failures
+)
 
 # Timezone constant for consistent usage
 EASTERN_TZ = ZoneInfo("America/New_York")
