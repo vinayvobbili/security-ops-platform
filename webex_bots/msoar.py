@@ -15,6 +15,7 @@ from my_config import get_config
 from services.xsoar import TicketHandler
 from src.utils import XsoarEnvironment
 from src.utils.logging_utils import setup_logging
+from src.utils.webex_pool_config import configure_webex_bot_session
 
 logger = logging.getLogger(__name__)
 # Suppress noisy INFO messages from webex libraries
@@ -159,7 +160,12 @@ def msoar_bot_factory() -> WebexBot:
         log_level="Warning",
         allow_bot_to_bot=True  # Enable peer ping health checks from other bots
     )
-    logger.info("✓ WebexBot initialized")
+
+    # Configure the bot's internal WebexTeamsAPI session with larger connection pool
+    # This prevents timeout issues when processing WebSocket messages concurrently
+    configure_webex_bot_session(bot, pool_connections=50, pool_maxsize=50, max_retries=3)
+
+    logger.info("✓ WebexBot initialized with enhanced connection pool")
     return bot
 
 

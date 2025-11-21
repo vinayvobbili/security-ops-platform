@@ -84,6 +84,8 @@ BOTS_WITH_FIX=(
     "tars"
     "barnacles"
     "money_ball"
+    "toodles"
+    "msoar"
 )
 
 # Main logic
