@@ -342,8 +342,8 @@ class RingTagTaniumHosts(Command):
         room_id = attachment_actions.roomId
 
         # Extract batch size from the form submission
-        # Default to 10 for safety if user leaves field blank
-        batch_size = 10
+        # Default to 50 for safety if user leaves field blank
+        batch_size = 50
         if hasattr(attachment_actions, 'inputs') and attachment_actions.inputs:
             batch_size_str = attachment_actions.inputs.get('batch_size', '').strip()
             if batch_size_str:
