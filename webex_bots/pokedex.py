@@ -49,6 +49,8 @@ logger.setLevel(logging.WARNING)  # Ensure bot logger also uses WARNING level
 # Suppress noisy library logs manually since not using ResilientBot
 logging.getLogger('webex_bot').setLevel(logging.WARNING)
 logging.getLogger('webex_bot.websockets.webex_websocket_client').setLevel(logging.WARNING)
+logging.getLogger('webex_websocket_client').setLevel(logging.WARNING)
+logging.getLogger('webexteamssdk').setLevel(logging.ERROR)
 logging.getLogger('webexpythonsdk').setLevel(logging.WARNING)
 logging.getLogger('urllib3').setLevel(logging.WARNING)
 logging.getLogger('asyncio').setLevel(logging.CRITICAL)
