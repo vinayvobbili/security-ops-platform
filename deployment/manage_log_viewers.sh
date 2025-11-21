@@ -36,6 +36,9 @@ start_viewers() {
     # Port 8037: All Jobs Scheduler
     nohup /home/vinay/pub/IR/.venv/bin/python deployment/log_viewer.py --port 8037 --title "All Jobs Scheduler" --file /home/vinay/pub/IR/logs/all_jobs.log >> logs/log_viewer_jobs.log 2>&1 &
 
+    # Port 8039: Web Server
+    nohup /home/vinay/pub/IR/.venv/bin/python deployment/log_viewer.py --port 8039 --title "Web Server" --file /home/vinay/pub/IR/logs/web_server.log >> logs/log_viewer_web_server.log 2>&1 &
+
     sleep 2
     echo "All log viewers started"
 }
