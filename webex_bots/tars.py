@@ -58,11 +58,21 @@ from src.utils.excel_formatting import apply_professional_formatting
 from src.utils.logging_utils import log_activity
 from src.utils.webex_device_manager import cleanup_devices_on_startup
 from src.utils.webex_utils import send_message_with_retry, send_card_with_retry
+from src.utils.webex_pool_config import configure_webex_api_session
 
 CONFIG = get_config()
 DATA_DIR = ROOT_DIRECTORY / "data" / "transient" / "epp_device_tagging"
 
-webex_api = WebexTeamsAPI(access_token=CONFIG.webex_bot_access_token_tars)
+# Configure WebexTeamsAPI with larger connection pool to prevent timeout issues
+webex_api = configure_webex_api_session(
+    WebexTeamsAPI(
+        access_token=CONFIG.webex_bot_access_token_tars,
+        single_request_timeout=120
+    ),
+    pool_connections=50,
+    pool_maxsize=50,
+    max_retries=3
+)
 
 # Timezone constant for consistent usage
 EASTERN_TZ = ZoneInfo("America/New_York")

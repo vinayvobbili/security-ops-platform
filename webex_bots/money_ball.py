@@ -61,11 +61,19 @@ from src.utils.webex_messaging import send_message_with_files, safe_send_message
 # Load configuration
 config = get_config()
 
-# Initialize Webex API client with extended timeout for proxy environments
-webex_api = WebexTeamsAPI(
-    access_token=config.webex_bot_access_token_moneyball,
-    single_request_timeout=120,  # Increased from default 60s to 120s for proxy/network stability
-    wait_on_rate_limit=True
+# Import connection pool configuration utility
+from src.utils.webex_pool_config import configure_webex_api_session
+
+# Initialize Webex API client with extended timeout and larger connection pool
+webex_api = configure_webex_api_session(
+    WebexTeamsAPI(
+        access_token=config.webex_bot_access_token_moneyball,
+        single_request_timeout=120,  # Increased from default 60s to 120s for proxy/network stability
+        wait_on_rate_limit=True
+    ),
+    pool_connections=50,  # Increased from default 10
+    pool_maxsize=50,      # Increased from default 10
+    max_retries=3         # Enable automatic retry on transient failures
 )
 
 # Global variables
