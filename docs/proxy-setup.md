@@ -7,8 +7,23 @@ This guide explains how to route network traffic from your Mac through the metci
 ## Current Status
 
 - ✅ SSH SOCKS5 tunnel working on port 8888
+- ✅ Auto-starts on Mac boot via launchd
+- ✅ Auto-restarts if connection drops
 - ✅ Chrome routing through VM successfully
+- ✅ Claude CLI configured to use proxy
 - ⚠️ HTTP proxy on port 8081 has bugs (receives requests but doesn't respond from external IPs)
+
+## Troubleshooting
+
+**If the proxy stops working, run the diagnostic script:**
+
+```bash
+~/debug-proxy.sh
+```
+
+This will check all components and tell you exactly what's wrong and how to fix it.
+
+**For detailed troubleshooting steps, see:** `~/PROXY-TROUBLESHOOTING.md`
 
 ---
 
@@ -43,7 +58,42 @@ This script automatically:
 pkill -f 'ssh.*-D 8888.*metcirt-lab'
 ```
 
+### Automatic Startup (launchd)
+
+The SSH tunnel is managed by a launchd service that:
+- Auto-starts when you log into your Mac
+- Auto-restarts if the connection drops
+- Keeps the connection alive with heartbeats
+
+**Service location:** `~/Library/LaunchAgents/com.user.socks-tunnel.plist`
+
+**Manage the service:**
+
+```bash
+# Check status
+launchctl list | grep socks-tunnel
+ps aux | grep "ssh.*-D 8888" | grep -v grep
+
+# Stop the service
+launchctl unload ~/Library/LaunchAgents/com.user.socks-tunnel.plist
+
+# Start the service
+launchctl load ~/Library/LaunchAgents/com.user.socks-tunnel.plist
+
+# Restart the service
+launchctl unload ~/Library/LaunchAgents/com.user.socks-tunnel.plist
+launchctl load ~/Library/LaunchAgents/com.user.socks-tunnel.plist
+
+# View logs
+tail -f /tmp/socks-tunnel.log
+tail -f /tmp/socks-tunnel.err
+```
+
 ### Claude CLI with Proxy
+
+**Configuration:** Environment variables are set in `~/.zshrc` (lines 39-40)
+
+The proxy is configured automatically for all new terminal sessions.
 
 #### Option 1: Temporary (Single Session)
 
