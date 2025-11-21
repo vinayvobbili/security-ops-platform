@@ -5,7 +5,7 @@ from my_config import get_config
 
 # Load configuration
 config = get_config()
-BOT_ACCESS_TOKEN = config.webex_bot_access_token_jarvis
+BOT_ACCESS_TOKEN = config.webex_bot_access_token_tars
 
 # Initialize Webex API client
 webex_api = WebexTeamsAPI(access_token=BOT_ACCESS_TOKEN)
@@ -122,7 +122,7 @@ def main():
     # pprint(get_webex_bot_rooms(BOT_ACCESS_TOKEN))
     send_file_to_webex_room(
         room_id=config.webex_room_id_epp_tanium_tagging,
-        file_path='/Users/user/PycharmProjects/IR/data/transient/epp_device_tagging/11-12-2025/Tanium_Ring_Tags_Report.xlsx',
+        file_path='/Users/user/PycharmProjects/IR/data/transient/epp_device_tagging/11-21-2025/Tanium_Ring_Tags_Report.xlsx',
         message="Here's the list of Tanium hosts without a Ring Tag. Ring tags have also been generated for your review."
     )
 
