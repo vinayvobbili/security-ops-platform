@@ -33,8 +33,8 @@ start_viewers() {
     # Port 8038: TARS
     nohup /home/vinay/pub/IR/.venv/bin/python deployment/log_viewer.py --port 8038 --title "TARS Bot" --file /home/vinay/pub/IR/logs/tars.log >> logs/log_viewer_tars.log 2>&1 &
 
-    # Port 8037: All Jobs Scheduler (includes peer ping logs)
-    nohup /home/vinay/pub/IR/.venv/bin/python deployment/log_viewer.py --port 8037 --title "All Jobs Scheduler (includes Peer Ping)" --file /home/vinay/pub/IR/logs/all_jobs.log >> logs/log_viewer_jobs.log 2>&1 &
+    # Port 8037: All Jobs Scheduler
+    nohup /home/vinay/pub/IR/.venv/bin/python deployment/log_viewer.py --port 8037 --title "All Jobs Scheduler" --file /home/vinay/pub/IR/logs/all_jobs.log >> logs/log_viewer_jobs.log 2>&1 &
 
     sleep 2
     echo "All log viewers started"
