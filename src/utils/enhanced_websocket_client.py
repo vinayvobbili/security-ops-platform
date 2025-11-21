@@ -35,8 +35,10 @@ except ImportError:
 # Import requests exceptions for better error handling
 try:
     from requests.exceptions import ConnectionError as RequestsConnectionError
+    from requests.exceptions import ReadTimeout as RequestsReadTimeout
 except ImportError:
     RequestsConnectionError = ConnectionError
+    RequestsReadTimeout = TimeoutError  # Fallback to built-in TimeoutError
 
 # Import websockets_proxy if available for proxy support
 try:
@@ -95,6 +97,22 @@ def patch_websocket_client():
                     try:
                         self._process_incoming_websocket_message(msg)
                         return  # Success, exit
+                    except RequestsReadTimeout as e:
+                        # Handle timeout errors from Webex API calls
+                        if attempt < max_retries:
+                            logger.warning(
+                                f"Webex API timeout on attempt {attempt}/{max_retries}. "
+                                f"Retrying in {retry_delay}s..."
+                            )
+                            time.sleep(retry_delay)
+                            retry_delay *= 2  # Exponential backoff
+                            continue
+                        else:
+                            # Only log a single line on final failure, no traceback
+                            logger.warning(
+                                f"Webex API timeout after {max_retries} attempts. Message skipped."
+                            )
+                            return  # Give up after max retries
                     except RequestsConnectionError as e:
                         # Handle connection errors from requests library (Webex API calls)
                         error_msg = str(e)
@@ -119,6 +137,7 @@ def patch_websocket_client():
                             raise
                     except Exception as e:
                         # Log other exceptions but don't retry
+                        # Only include traceback for non-timeout errors
                         logger.error(f"Error processing websocket message: {e}", exc_info=True)
                         return  # Don't crash the websocket loop
 
