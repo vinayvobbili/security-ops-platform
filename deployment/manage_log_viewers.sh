@@ -5,7 +5,7 @@
 # Usage: start_log_service [start|stop|restart|status]
 #        start_log_service (no args) - stops all existing services and starts them
 
-cd /home/vinay/pub/IR
+cd /home/vinay/pub/IR || exit 1
 
 ACTION="${1:-restart}"
 
@@ -63,6 +63,7 @@ case "$ACTION" in
 
     status)
         echo "Log viewer processes:"
+        # shellcheck disable=SC2009
         ps aux | grep "deployment/log_viewer.py" | grep -v grep || echo "No log viewers running"
         ;;
 
