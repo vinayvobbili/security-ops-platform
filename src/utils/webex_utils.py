@@ -11,7 +11,7 @@ from typing import Optional, List, Any
 logger = logging.getLogger(__name__)
 
 
-def send_message_with_retry(webex_api, roomId: str, text: Optional[str] = None,
+def send_message_with_retry(webex_api, room_id: str, text: Optional[str] = None,
                             markdown: Optional[str] = None, files: Optional[List[str]] = None,
                             max_retries: int = 3, **kwargs) -> Optional[Any]:
     """
@@ -19,7 +19,7 @@ def send_message_with_retry(webex_api, roomId: str, text: Optional[str] = None,
 
     Args:
         webex_api: WebexTeamsAPI instance
-        roomId: Webex room ID
+        room_id: Webex room ID
         text: Plain text message
         markdown: Markdown formatted message
         files: List of file paths
@@ -29,19 +29,17 @@ def send_message_with_retry(webex_api, roomId: str, text: Optional[str] = None,
     Returns:
         Message object if successful, None otherwise
     """
-    last_error = None
 
     for attempt in range(1, max_retries + 1):
         try:
             return webex_api.messages.create(
-                roomId=roomId,
+                roomId=room_id,
                 text=text,
                 markdown=markdown,
                 files=files,
                 **kwargs
             )
         except Exception as e:
-            last_error = e
             error_str = str(e).lower()
 
             # Simple check: retry on SSL, timeout, 5xx errors
@@ -55,22 +53,22 @@ def send_message_with_retry(webex_api, roomId: str, text: Optional[str] = None,
                 logger.error(f"Failed to send message: {e}")
                 # Send simple error notification to user
                 try:
-                    webex_api.messages.create(roomId=roomId,
-                        markdown=f"❌ Message delivery failed after {attempt} attempts. Error: {str(e)[:100]}")
-                except:
+                    webex_api.messages.create(roomId=room_id,
+                                              markdown=f"❌ Message delivery failed after {attempt} attempts. Error: {str(e)[:100]}")
+                except (ConnectionError, TimeoutError, RuntimeError):
                     pass  # Best effort
                 return None
 
     return None
 
 
-def send_card_with_retry(webex_api, roomId: str, text: str, attachments: List[Any],
+def send_card_with_retry(webex_api, room_id: str, text: str, attachments: List[Any],
                          max_retries: int = 3, **kwargs) -> Optional[Any]:
     """Send adaptive card with simple retry."""
     for attempt in range(1, max_retries + 1):
         try:
-            return webex_api.messages.create(roomId=roomId, text=text,
-                                            attachments=attachments, **kwargs)
+            return webex_api.messages.create(roomId=room_id, text=text,
+                                             attachments=attachments, **kwargs)
         except Exception as e:
             if attempt < max_retries and any(x in str(e).lower() for x in ['ssl', 'timeout', '503', '502']):
                 time.sleep(2 ** attempt)

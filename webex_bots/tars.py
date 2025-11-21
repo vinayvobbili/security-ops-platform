@@ -154,7 +154,7 @@ def send_report_with_progress(room_id, filename, message, progress_info=None) ->
 
         # Send report with retry (auto-notifies on failure)
         result = send_message_with_retry(
-            webex_api, roomId=room_id, markdown=report_text, files=[str(filepath)]
+            webex_api, room_id=room_id, markdown=report_text, files=[str(filepath)]
         )
         if result:
             logger.info(f"Successfully sent report {filename} with {hosts_count} hosts to room {room_id}")
@@ -162,11 +162,11 @@ def send_report_with_progress(room_id, filename, message, progress_info=None) ->
     except FileNotFoundError:
         error_msg = f"❌ Report file not found at {filepath}"
         logger.error(error_msg)
-        send_message_with_retry(webex_api, roomId=room_id, markdown=error_msg)
+        send_message_with_retry(webex_api, room_id=room_id, markdown=error_msg)
     except Exception as e:
         error_msg = f"❌ Failed to send report: {str(e)}"
         logger.error(error_msg)
-        send_message_with_retry(webex_api, roomId=room_id, markdown=error_msg)
+        send_message_with_retry(webex_api, room_id=room_id, markdown=error_msg)
 
 
 def seek_approval_to_ring_tag_tanium(room_id, total_hosts=None):
@@ -217,18 +217,18 @@ def seek_approval_to_ring_tag_tanium(room_id, total_hosts=None):
     )
 
     # Use resilient messenger to send card with automatic retry
-    result = send_card_with_retry(webex_api, 
-        roomId=room_id,
-        text="Please approve the Tanium tagging action.",
-        attachments=[{"contentType": "application/vnd.microsoft.card.adaptive", "content": card.to_dict()}]
-    )
+    result = send_card_with_retry(webex_api,
+                                  room_id=room_id,
+                                  text="Please approve the Tanium tagging action.",
+                                  attachments=[{"contentType": "application/vnd.microsoft.card.adaptive", "content": card.to_dict()}]
+                                  )
 
     if result is None:
         # All retries failed - send fallback notification
         error_msg = f"❌ **Failed to send approval card**\n\nI couldn't send the approval card after multiple attempts due to network errors.\n\n**What happened:**\n- Report was generated successfully ({total_hosts:,} hosts available)\n- Network error prevented card delivery\n\n**What to do:**\n- Try running the command again\n- Or proceed directly with: `/ring_tag_tanium_hosts`"
 
         try:
-            send_message_with_retry(webex_api, roomId=room_id, markdown=error_msg)
+            send_message_with_retry(webex_api, room_id=room_id, markdown=error_msg)
         except Exception as notify_error:
             logger.error(f"Critical: Failed to send fallback notification: {notify_error}")
             logger.error("⚠️ IMPORTANT: User was NOT notified about approval card failure. Check Webex room manually.")
@@ -246,14 +246,14 @@ class GetTaniumHostsWithoutRingTag(Command):
     def execute(self, message, attachment_actions, activity):
         room_id = attachment_actions.roomId
         loading_msg = get_random_loading_message()
-        send_message_with_retry(webex_api, 
-            roomId=room_id,
-            markdown=(
+        send_message_with_retry(webex_api,
+                                room_id=room_id,
+                                markdown=(
                 f"Hello {activity['actor']['displayName']}! {loading_msg}\n\n"
                 "🔍 **Tanium Hosts Without Ring Tag Report** 🏷️\n"
                 "Estimated completion: ~15 minutes ⏰"
             )
-        )
+                                )
         lock_path = ROOT_DIRECTORY / "src" / "epp" / "all_tanium_hosts.lock"
         filepath = None  # Ensure filepath is always defined
         try:
@@ -263,10 +263,10 @@ class GetTaniumHostsWithoutRingTag(Command):
                 filepath = report_path  # Use the returned report path
         except Exception as e:
             logger.error(f"Error in GetTaniumHostsWithoutRingTag execute: {e}")
-            send_message_with_retry(webex_api, 
-                roomId=room_id,
-                markdown=f"❌ An error occurred while processing your request: {e}"
-            )
+            send_message_with_retry(webex_api,
+                                    room_id=room_id,
+                                    markdown=f"❌ An error occurred while processing your request: {e}"
+                                    )
             filepath = None
         finally:
             if lock_path.exists():
@@ -277,10 +277,10 @@ class GetTaniumHostsWithoutRingTag(Command):
 
         if not filepath or not Path(filepath).exists():
             error_msg = filepath if filepath else "Unknown error occurred during report generation"
-            send_message_with_retry(webex_api, 
-                roomId=room_id,
-                markdown=f"Hello {activity['actor']['displayName']}! ❌ **Error generating Tanium hosts report**: {error_msg}"
-            )
+            send_message_with_retry(webex_api,
+                                    room_id=room_id,
+                                    markdown=f"Hello {activity['actor']['displayName']}! ❌ **Error generating Tanium hosts report**: {error_msg}"
+                                    )
             return
 
         # Count total hosts in report and hosts with successfully generated tags (both Cloud and On-Prem)
@@ -318,7 +318,7 @@ class GetTaniumHostsWithoutRingTag(Command):
         message += f"- Hosts with errors/missing data: {hosts_with_issues:,}"
 
         # Send report with retry
-        result = send_message_with_retry(webex_api, roomId=room_id, markdown=message, files=[str(filepath)])
+        result = send_message_with_retry(webex_api, room_id=room_id, markdown=message, files=[str(filepath)])
 
         if result:
             # Only send approval card if report was delivered successfully
@@ -351,16 +351,16 @@ class RingTagTaniumHosts(Command):
                     try:
                         batch_size = int(batch_size_str)
                         if batch_size <= 0:
-                            send_message_with_retry(webex_api, 
-                                roomId=room_id,
-                                markdown=f"❌ Invalid batch size: {batch_size}. Please enter a positive number or 'all'."
-                            )
+                            send_message_with_retry(webex_api,
+                                                    room_id=room_id,
+                                                    markdown=f"❌ Invalid batch size: {batch_size}. Please enter a positive number or 'all'."
+                                                    )
                             return
                     except ValueError:
-                        send_message_with_retry(webex_api, 
-                            roomId=room_id,
-                            markdown=f"❌ Invalid batch size: '{batch_size_str}'. Please enter a valid number or 'all'."
-                        )
+                        send_message_with_retry(webex_api,
+                                                room_id=room_id,
+                                                markdown=f"❌ Invalid batch size: '{batch_size_str}'. Please enter a valid number or 'all'."
+                                                )
                         return
 
         loading_msg = get_random_loading_message()
@@ -368,10 +368,10 @@ class RingTagTaniumHosts(Command):
             batch_info = " (tagging ALL hosts)"
         else:
             batch_info = f" (batch of {batch_size:,} hosts)"
-        send_message_with_retry(webex_api, 
-            roomId=room_id,
-            markdown=f"Hello {activity['actor']['displayName']}! {loading_msg}\n\n🏷️**Starting ring tagging for Tanium hosts from both Cloud and On-Prem instances{batch_info}...**\nEstimated completion: ~5 minutes ⏰"
-        )
+        send_message_with_retry(webex_api,
+                                room_id=room_id,
+                                markdown=f"Hello {activity['actor']['displayName']}! {loading_msg}\n\n🏷️**Starting ring tagging for Tanium hosts from both Cloud and On-Prem instances{batch_info}...**\nEstimated completion: ~5 minutes ⏰"
+                                )
 
         lock_path = ROOT_DIRECTORY / "src" / "epp" / "ring_tag_tanium_hosts.lock"
         try:
@@ -379,10 +379,10 @@ class RingTagTaniumHosts(Command):
                 self._apply_tags_to_hosts(room_id, batch_size=batch_size)
         except Exception as e:
             logger.error(f"Error in RingTagTaniumHosts execute: {e}")
-            send_message_with_retry(webex_api, 
-                roomId=room_id,
-                markdown=f"❌ An error occurred while processing your request: {e}"
-            )
+            send_message_with_retry(webex_api,
+                                    room_id=room_id,
+                                    markdown=f"❌ An error occurred while processing your request: {e}"
+                                    )
         finally:
             if lock_path.exists():
                 try:
@@ -410,10 +410,10 @@ class RingTagTaniumHosts(Command):
         report_path = report_dir / "Tanium_Ring_Tags_Report.xlsx"
 
         if not report_path.exists():
-            send_message_with_retry(webex_api, 
-                roomId=room_id,
-                markdown=f"❌ **Error**: Ring tags report not found. Please run the 'tanium_hosts_without_ring_tag' command first to generate the report."
-            )
+            send_message_with_retry(webex_api,
+                                    room_id=room_id,
+                                    markdown=f"❌ **Error**: Ring tags report not found. Please run the 'tanium_hosts_without_ring_tag' command first to generate the report."
+                                    )
             return
 
         try:
@@ -436,10 +436,10 @@ class RingTagTaniumHosts(Command):
             filter_duration = time.time() - filter_start
 
             if len(hosts_to_tag) == 0:
-                send_message_with_retry(webex_api, 
-                    roomId=room_id,
-                    markdown=f"❌ **No servers available for tagging**. All servers in the report either have issues that prevent tagging or are workstations (which are filtered out)."
-                )
+                send_message_with_retry(webex_api,
+                                        room_id=room_id,
+                                        markdown=f"❌ **No servers available for tagging**. All servers in the report either have issues that prevent tagging or are workstations (which are filtered out)."
+                                        )
                 return
 
             total_eligible_hosts = len(hosts_to_tag)
@@ -447,24 +447,24 @@ class RingTagTaniumHosts(Command):
             # Apply random sampling if batch size is specified
             if batch_size is not None:
                 if batch_size >= total_eligible_hosts:
-                    send_message_with_retry(webex_api, 
-                        roomId=room_id,
-                        markdown=f"ℹ️ **Note**: Batch size ({batch_size:,}) equals or exceeds available servers ({total_eligible_hosts:,}). Tagging all {total_eligible_hosts:,} servers."
-                    )
+                    send_message_with_retry(webex_api,
+                                            room_id=room_id,
+                                            markdown=f"ℹ️ **Note**: Batch size ({batch_size:,}) equals or exceeds available servers ({total_eligible_hosts:,}). Tagging all {total_eligible_hosts:,} servers."
+                                            )
                 else:
                     # Randomly sample N hosts from the eligible pool
                     hosts_to_tag = hosts_to_tag.sample(n=batch_size, random_state=None)
                     logger.info(f"Randomly sampled {batch_size} servers from {total_eligible_hosts} eligible servers")
-                    send_message_with_retry(webex_api, 
-                        roomId=room_id,
-                        markdown=f"🎲 **Batch mode active**: Randomly selected {batch_size:,} servers from {total_eligible_hosts:,} eligible servers for tagging (workstations excluded)."
-                    )
+                    send_message_with_retry(webex_api,
+                                            room_id=room_id,
+                                            markdown=f"🎲 **Batch mode active**: Randomly selected {batch_size:,} servers from {total_eligible_hosts:,} eligible servers for tagging (workstations excluded)."
+                                            )
             else:
                 # batch_size is None, meaning user entered 'all'
-                send_message_with_retry(webex_api, 
-                    roomId=room_id,
-                    markdown=f"📋 **Full deployment mode**: Tagging ALL {total_eligible_hosts:,} eligible servers from both Cloud and On-Prem instances (workstations excluded)."
-                )
+                send_message_with_retry(webex_api,
+                                        room_id=room_id,
+                                        markdown=f"📋 **Full deployment mode**: Tagging ALL {total_eligible_hosts:,} eligible servers from both Cloud and On-Prem instances (workstations excluded)."
+                                        )
 
             num_to_tag = len(hosts_to_tag)
 
@@ -663,14 +663,14 @@ class RingTagTaniumHosts(Command):
             summary_md += f"💡 **Note**: Hosts in the same bulk operation share the same Action ID.\n"
 
             # Send results with retry
-            send_message_with_retry(webex_api, roomId=room_id, markdown=summary_md, files=[str(output_filename)])
+            send_message_with_retry(webex_api, room_id=room_id, markdown=summary_md, files=[str(output_filename)])
 
         except Exception as e:
             logger.error(f"Error applying Tanium ring tags: {e}")
-            send_message_with_retry(webex_api, 
-                roomId=room_id,
-                markdown=f"❌ Failed to apply ring tags: {str(e)}"
-            )
+            send_message_with_retry(webex_api,
+                                    room_id=room_id,
+                                    markdown=f"❌ Failed to apply ring tags: {str(e)}"
+                                    )
 
 
 class DontRingTagTaniumHosts(Command):
@@ -698,10 +698,10 @@ class GetTaniumUnhealthyHosts(Command):
         room_id = attachment_actions.roomId
         message = f"Hello {activity['actor']['displayName']}! This is still work in progress. Please try again later."
 
-        send_message_with_retry(webex_api, 
-            roomId=room_id,
-            markdown=message,
-        )
+        send_message_with_retry(webex_api,
+                                room_id=room_id,
+                                markdown=message,
+                                )
 
 
 class GetBotHealth(Command):
@@ -753,11 +753,11 @@ class GetBotHealth(Command):
             ]
         )
 
-        send_card_with_retry(webex_api, 
-            roomId=room_id,
-            text="Bot Status Information",
-            attachments=[{"contentType": "application/vnd.microsoft.card.adaptive", "content": status_card.to_dict()}]
-        )
+        send_card_with_retry(webex_api,
+                             room_id=room_id,
+                             text="Bot Status Information",
+                             attachments=[{"contentType": "application/vnd.microsoft.card.adaptive", "content": status_card.to_dict()}]
+                             )
 
 
 class Hi(Command):
