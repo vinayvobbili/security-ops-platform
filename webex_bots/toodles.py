@@ -101,10 +101,19 @@ from src.utils.webex_device_manager import cleanup_devices_on_startup
 # Get robust HTTP session instance
 http_session = get_session()
 
+# Import connection pool configuration utility
+from src.utils.webex_pool_config import configure_webex_api_session
+
 # Increase timeout from default 60s to 180s for unreliable networks
-webex_api = WebexAPI(
-    access_token=CONFIG.webex_bot_access_token_toodles,
-    single_request_timeout=180
+# Configure with larger connection pool to prevent timeout issues
+webex_api = configure_webex_api_session(
+    WebexAPI(
+        access_token=CONFIG.webex_bot_access_token_toodles,
+        single_request_timeout=180
+    ),
+    pool_connections=50,  # Increased from default 10
+    pool_maxsize=50,      # Increased from default 10
+    max_retries=3         # Enable automatic retry on transient failures
 )
 
 # Global variables

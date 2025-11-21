@@ -45,3 +45,31 @@ def configure_webex_api_session(api_instance, pool_connections=50, pool_maxsize=
     session.mount("http://", adapter)
 
     return api_instance
+
+
+def configure_webex_bot_session(bot_instance, pool_connections=50, pool_maxsize=50, max_retries=3):
+    """
+    Configure the internal WebexTeamsAPI session in a WebexBot instance.
+
+    WebexBot creates its own internal WebexTeamsAPI instance (bot.teams) which also
+    needs connection pool configuration to prevent timeouts.
+
+    Args:
+        bot_instance: WebexBot instance to configure
+        pool_connections: Number of connection pools to cache (default: 50, increased from 10)
+        pool_maxsize: Maximum connections per pool (default: 50, increased from 10)
+        max_retries: Number of retry attempts for failed requests (default: 3)
+
+    Returns:
+        The configured bot instance
+    """
+    # WebexBot has a .teams attribute that is a WebexTeamsAPI instance
+    if hasattr(bot_instance, 'teams') and bot_instance.teams:
+        configure_webex_api_session(
+            bot_instance.teams,
+            pool_connections=pool_connections,
+            pool_maxsize=pool_maxsize,
+            max_retries=max_retries
+        )
+
+    return bot_instance
