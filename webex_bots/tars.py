@@ -249,10 +249,10 @@ class GetTaniumHostsWithoutRingTag(Command):
         send_message_with_retry(webex_api,
                                 room_id=room_id,
                                 markdown=(
-                f"Hello {activity['actor']['displayName']}! {loading_msg}\n\n"
-                "🔍 **Tanium Hosts Without Ring Tag Report** 🏷️\n"
-                "Estimated completion: ~15 minutes ⏰"
-            )
+                                    f"Hello {activity['actor']['displayName']}! {loading_msg}\n\n"
+                                    "🔍 **Tanium Hosts Without Ring Tag Report** 🏷️\n"
+                                    "Estimated completion: ~15 minutes ⏰"
+                                )
                                 )
         lock_path = ROOT_DIRECTORY / "src" / "epp" / "all_tanium_hosts.lock"
         filepath = None  # Ensure filepath is always defined
@@ -331,6 +331,7 @@ class RingTagTaniumHosts(Command):
     def __init__(self):
         super().__init__(
             command_keyword="ring_tag_tanium_hosts",
+            help_message="Ring Tag Tanium Hosts 💍🏷️",
             delete_previous_message=True,
         )
 
