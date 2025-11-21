@@ -55,6 +55,7 @@ from src.epp.tanium_hosts_without_ring_tag import create_processor
 from src.utils.excel_formatting import apply_professional_formatting
 from src.utils.logging_utils import log_activity
 from src.utils.webex_device_manager import cleanup_devices_on_startup
+from src.utils.webex_utils import send_message_with_retry, send_card_with_retry
 
 CONFIG = get_config()
 DATA_DIR = ROOT_DIRECTORY / "data" / "transient" / "epp_device_tagging"
@@ -151,33 +152,25 @@ def send_report_with_progress(room_id, filename, message, progress_info=None) ->
         if progress_info:
             report_text += f"⏱️ **Processing Time:** {progress_info.get('duration', 'N/A')}\n"
 
-        webex_api.messages.create(
-            roomId=room_id,
-            markdown=report_text,
-            files=[str(filepath)]
+        # Send report with retry (auto-notifies on failure)
+        result = send_message_with_retry(
+            webex_api, roomId=room_id, markdown=report_text, files=[str(filepath)]
         )
-        logger.info(f"Successfully sent report {filename} with {hosts_count} hosts to room {room_id}")
+        if result:
+            logger.info(f"Successfully sent report {filename} with {hosts_count} hosts to room {room_id}")
 
     except FileNotFoundError:
         error_msg = f"❌ Report file not found at {filepath}"
         logger.error(error_msg)
-        webex_api.messages.create(
-            roomId=room_id,
-            markdown=error_msg
-        )
+        send_message_with_retry(webex_api, roomId=room_id, markdown=error_msg)
     except Exception as e:
         error_msg = f"❌ Failed to send report: {str(e)}"
         logger.error(error_msg)
-        webex_api.messages.create(
-            roomId=room_id,
-            markdown=error_msg
-        )
+        send_message_with_retry(webex_api, roomId=room_id, markdown=error_msg)
 
 
 def seek_approval_to_ring_tag_tanium(room_id, total_hosts=None):
     """Send approval card for Tanium ring tagging with batch size option"""
-    import time
-
     hosts_info = f" ({total_hosts:,} hosts available)" if total_hosts else ""
 
     card = AdaptiveCard(
@@ -223,54 +216,22 @@ def seek_approval_to_ring_tag_tanium(room_id, total_hosts=None):
         ]
     )
 
-    # Retry logic for transient API failures (503, 429, network issues)
-    max_retries = 3
-    retry_delay = 2  # seconds
+    # Use resilient messenger to send card with automatic retry
+    result = send_card_with_retry(webex_api, 
+        roomId=room_id,
+        text="Please approve the Tanium tagging action.",
+        attachments=[{"contentType": "application/vnd.microsoft.card.adaptive", "content": card.to_dict()}]
+    )
 
-    for attempt in range(max_retries):
+    if result is None:
+        # All retries failed - send fallback notification
+        error_msg = f"❌ **Failed to send approval card**\n\nI couldn't send the approval card after multiple attempts due to network errors.\n\n**What happened:**\n- Report was generated successfully ({total_hosts:,} hosts available)\n- Network error prevented card delivery\n\n**What to do:**\n- Try running the command again\n- Or proceed directly with: `/ring_tag_tanium_hosts`"
+
         try:
-            webex_api.messages.create(
-                roomId=room_id,
-                text="Please approve the Tanium tagging action.",
-                attachments=[{"contentType": "application/vnd.microsoft.card.adaptive", "content": card.to_dict()}]
-            )
-            # Success - exit the retry loop
-            return
-        except Exception as e:
-            error_msg = str(e)
-            is_retryable = any(code in error_msg for code in ['503', '429', '502', '504'])
-
-            if is_retryable and attempt < max_retries - 1:
-                # Transient error - retry with exponential backoff
-                wait_time = retry_delay * (2 ** attempt)
-                logger.warning(f"Transient error sending Tanium approval card (attempt {attempt + 1}/{max_retries}): {e}. Retrying in {wait_time}s...")
-                time.sleep(wait_time)
-                continue
-            else:
-                # Non-retryable error or max retries reached
-                logger.error(f"Failed to send Tanium approval card after {attempt + 1} attempts: {e}")
-                # Try to send error notification with its own retry logic
-                for notify_attempt in range(2):  # Try twice to send error notification
-                    try:
-                        if is_retryable:
-                            webex_api.messages.create(
-                                roomId=room_id,
-                                markdown=f"❌ **Error**: Webex API is temporarily unavailable (tried {max_retries} times). Please try your command again in a few minutes.\n\nError: {error_msg}"
-                            )
-                        else:
-                            webex_api.messages.create(
-                                roomId=room_id,
-                                markdown=f"❌ **Error**: Failed to send approval card. Please check the logs or contact support.\n\nError details: {error_msg}"
-                            )
-                        break  # Success, exit retry loop
-                    except Exception as notify_error:
-                        if notify_attempt < 1:  # One more try
-                            logger.warning(f"Failed to send error notification (attempt {notify_attempt + 1}/2): {notify_error}. Retrying...")
-                            time.sleep(3)
-                        else:
-                            logger.error(f"Failed to send error notification after 2 attempts: {notify_error}")
-                            logger.error(f"⚠️ IMPORTANT: User was NOT notified about approval card failure. Check Webex room manually.")
-                return
+            send_message_with_retry(webex_api, roomId=room_id, markdown=error_msg)
+        except Exception as notify_error:
+            logger.error(f"Critical: Failed to send fallback notification: {notify_error}")
+            logger.error("⚠️ IMPORTANT: User was NOT notified about approval card failure. Check Webex room manually.")
 
 
 class GetTaniumHostsWithoutRingTag(Command):
@@ -285,7 +246,7 @@ class GetTaniumHostsWithoutRingTag(Command):
     def execute(self, message, attachment_actions, activity):
         room_id = attachment_actions.roomId
         loading_msg = get_random_loading_message()
-        webex_api.messages.create(
+        send_message_with_retry(webex_api, 
             roomId=room_id,
             markdown=(
                 f"Hello {activity['actor']['displayName']}! {loading_msg}\n\n"
@@ -302,7 +263,7 @@ class GetTaniumHostsWithoutRingTag(Command):
                 filepath = report_path  # Use the returned report path
         except Exception as e:
             logger.error(f"Error in GetTaniumHostsWithoutRingTag execute: {e}")
-            webex_api.messages.create(
+            send_message_with_retry(webex_api, 
                 roomId=room_id,
                 markdown=f"❌ An error occurred while processing your request: {e}"
             )
@@ -316,7 +277,7 @@ class GetTaniumHostsWithoutRingTag(Command):
 
         if not filepath or not Path(filepath).exists():
             error_msg = filepath if filepath else "Unknown error occurred during report generation"
-            webex_api.messages.create(
+            send_message_with_retry(webex_api, 
                 roomId=room_id,
                 markdown=f"Hello {activity['actor']['displayName']}! ❌ **Error generating Tanium hosts report**: {error_msg}"
             )
@@ -356,12 +317,12 @@ class GetTaniumHostsWithoutRingTag(Command):
         message += f"  - On-Prem: {onprem_count:,}\n"
         message += f"- Hosts with errors/missing data: {hosts_with_issues:,}"
 
-        webex_api.messages.create(
-            roomId=room_id,
-            markdown=message,
-            files=[str(filepath)]
-        )
-        seek_approval_to_ring_tag_tanium(room_id, total_hosts=hosts_with_generated_tags_count)
+        # Send report with retry
+        result = send_message_with_retry(webex_api, roomId=room_id, markdown=message, files=[str(filepath)])
+
+        if result:
+            # Only send approval card if report was delivered successfully
+            seek_approval_to_ring_tag_tanium(room_id, total_hosts=hosts_with_generated_tags_count)
 
 
 # Tanium ring tagging commands below
@@ -390,13 +351,13 @@ class RingTagTaniumHosts(Command):
                     try:
                         batch_size = int(batch_size_str)
                         if batch_size <= 0:
-                            webex_api.messages.create(
+                            send_message_with_retry(webex_api, 
                                 roomId=room_id,
                                 markdown=f"❌ Invalid batch size: {batch_size}. Please enter a positive number or 'all'."
                             )
                             return
                     except ValueError:
-                        webex_api.messages.create(
+                        send_message_with_retry(webex_api, 
                             roomId=room_id,
                             markdown=f"❌ Invalid batch size: '{batch_size_str}'. Please enter a valid number or 'all'."
                         )
@@ -407,7 +368,7 @@ class RingTagTaniumHosts(Command):
             batch_info = " (tagging ALL hosts)"
         else:
             batch_info = f" (batch of {batch_size:,} hosts)"
-        webex_api.messages.create(
+        send_message_with_retry(webex_api, 
             roomId=room_id,
             markdown=f"Hello {activity['actor']['displayName']}! {loading_msg}\n\n🏷️**Starting ring tagging for Tanium hosts from both Cloud and On-Prem instances{batch_info}...**\nEstimated completion: ~5 minutes ⏰"
         )
@@ -418,7 +379,7 @@ class RingTagTaniumHosts(Command):
                 self._apply_tags_to_hosts(room_id, batch_size=batch_size)
         except Exception as e:
             logger.error(f"Error in RingTagTaniumHosts execute: {e}")
-            webex_api.messages.create(
+            send_message_with_retry(webex_api, 
                 roomId=room_id,
                 markdown=f"❌ An error occurred while processing your request: {e}"
             )
@@ -449,7 +410,7 @@ class RingTagTaniumHosts(Command):
         report_path = report_dir / "Tanium_Ring_Tags_Report.xlsx"
 
         if not report_path.exists():
-            webex_api.messages.create(
+            send_message_with_retry(webex_api, 
                 roomId=room_id,
                 markdown=f"❌ **Error**: Ring tags report not found. Please run the 'tanium_hosts_without_ring_tag' command first to generate the report."
             )
@@ -475,7 +436,7 @@ class RingTagTaniumHosts(Command):
             filter_duration = time.time() - filter_start
 
             if len(hosts_to_tag) == 0:
-                webex_api.messages.create(
+                send_message_with_retry(webex_api, 
                     roomId=room_id,
                     markdown=f"❌ **No servers available for tagging**. All servers in the report either have issues that prevent tagging or are workstations (which are filtered out)."
                 )
@@ -486,7 +447,7 @@ class RingTagTaniumHosts(Command):
             # Apply random sampling if batch size is specified
             if batch_size is not None:
                 if batch_size >= total_eligible_hosts:
-                    webex_api.messages.create(
+                    send_message_with_retry(webex_api, 
                         roomId=room_id,
                         markdown=f"ℹ️ **Note**: Batch size ({batch_size:,}) equals or exceeds available servers ({total_eligible_hosts:,}). Tagging all {total_eligible_hosts:,} servers."
                     )
@@ -494,13 +455,13 @@ class RingTagTaniumHosts(Command):
                     # Randomly sample N hosts from the eligible pool
                     hosts_to_tag = hosts_to_tag.sample(n=batch_size, random_state=None)
                     logger.info(f"Randomly sampled {batch_size} servers from {total_eligible_hosts} eligible servers")
-                    webex_api.messages.create(
+                    send_message_with_retry(webex_api, 
                         roomId=room_id,
                         markdown=f"🎲 **Batch mode active**: Randomly selected {batch_size:,} servers from {total_eligible_hosts:,} eligible servers for tagging (workstations excluded)."
                     )
             else:
                 # batch_size is None, meaning user entered 'all'
-                webex_api.messages.create(
+                send_message_with_retry(webex_api, 
                     roomId=room_id,
                     markdown=f"📋 **Full deployment mode**: Tagging ALL {total_eligible_hosts:,} eligible servers from both Cloud and On-Prem instances (workstations excluded)."
                 )
@@ -701,15 +662,12 @@ class RingTagTaniumHosts(Command):
             summary_md += f"📊 **Detailed results with Action IDs are attached in the Excel report.**\n"
             summary_md += f"💡 **Note**: Hosts in the same bulk operation share the same Action ID.\n"
 
-            webex_api.messages.create(
-                roomId=room_id,
-                markdown=summary_md,
-                files=[str(output_filename)]
-            )
+            # Send results with retry
+            send_message_with_retry(webex_api, roomId=room_id, markdown=summary_md, files=[str(output_filename)])
 
         except Exception as e:
             logger.error(f"Error applying Tanium ring tags: {e}")
-            webex_api.messages.create(
+            send_message_with_retry(webex_api, 
                 roomId=room_id,
                 markdown=f"❌ Failed to apply ring tags: {str(e)}"
             )
@@ -740,7 +698,7 @@ class GetTaniumUnhealthyHosts(Command):
         room_id = attachment_actions.roomId
         message = f"Hello {activity['actor']['displayName']}! This is still work in progress. Please try again later."
 
-        webex_api.messages.create(
+        send_message_with_retry(webex_api, 
             roomId=room_id,
             markdown=message,
         )
@@ -795,7 +753,7 @@ class GetBotHealth(Command):
             ]
         )
 
-        webex_api.messages.create(
+        send_card_with_retry(webex_api, 
             roomId=room_id,
             text="Bot Status Information",
             attachments=[{"contentType": "application/vnd.microsoft.card.adaptive", "content": status_card.to_dict()}]
