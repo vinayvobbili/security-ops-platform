@@ -8,8 +8,9 @@ while [ -h "$SOURCE" ]; do
   [[ $SOURCE != /* ]] && SOURCE="$DIR/$SOURCE"
 done
 SCRIPT_DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-cd "$SCRIPT_DIR" || exit 1
+cd "$PROJECT_ROOT" || exit 1
 
 # Kill existing jarvis process if running
 echo "Stopping existing Jarvis instances..."
@@ -24,7 +25,7 @@ mkdir -p logs
 
 # Start new jarvis instance in background
 # Python logging handles all output - no need to redirect here
-nohup env PYTHONPATH="$SCRIPT_DIR" .venv/bin/python webex_bots/jarvis.py &
+nohup env PYTHONPATH="$PROJECT_ROOT" .venv/bin/python webex_bots/jarvis.py &
 
 echo "Starting Jarvis bot..."
 echo ""
@@ -50,8 +51,8 @@ if pgrep -f "webex_bots/jarvis" > /dev/null; then
     PID=$(pgrep -f 'webex_bots/jarvis')
     echo "✅ Jarvis is running (PID: $PID)"
     echo ""
-    echo "To view logs: tail -f $SCRIPT_DIR/logs/jarvis.log"
+    echo "To view logs: tail -f $PROJECT_ROOT/logs/jarvis.log"
 else
     echo "❌ Warning: Jarvis process not found"
-    echo "Check logs: tail -20 $SCRIPT_DIR/logs/jarvis.log"
+    echo "Check logs: tail -20 $PROJECT_ROOT/logs/jarvis.log"
 fi
