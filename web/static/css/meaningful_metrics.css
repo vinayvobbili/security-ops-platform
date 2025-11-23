@@ -1986,3 +1986,309 @@ body.dark-mode .notes-icon:hover {
     border-color: rgba(77, 171, 247, 0.4);
     box-shadow: 0 2px 6px rgba(77, 171, 247, 0.2);
 }
+
+/* Export Notes Confirmation Modal */
+.export-confirmation-modal {
+    max-width: 700px;
+    width: 90%;
+}
+
+.export-confirmation-body {
+    padding: 32px 28px;
+    background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+}
+
+.export-options-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    margin-bottom: 24px;
+}
+
+.export-option-card {
+    background: white;
+    border-radius: 12px;
+    padding: 24px 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    border: 2px solid transparent;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    position: relative;
+    overflow: hidden;
+}
+
+.export-option-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, #0046ad, #0369a1);
+    transform: scaleX(0);
+    transition: transform 0.3s ease;
+}
+
+.export-option-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.15);
+}
+
+.export-option-card:hover::before {
+    transform: scaleX(1);
+}
+
+.export-with-notes {
+    border-color: rgba(0, 70, 173, 0.2);
+}
+
+.export-with-notes::before {
+    background: linear-gradient(90deg, #0046ad, #0052cc);
+}
+
+.export-with-notes:hover {
+    border-color: rgba(0, 70, 173, 0.4);
+    background: linear-gradient(135deg, #ffffff 0%, #f0f7ff 100%);
+}
+
+.export-without-notes {
+    border-color: rgba(3, 105, 161, 0.2);
+}
+
+.export-without-notes::before {
+    background: linear-gradient(90deg, #0369a1, #0ea5e9);
+}
+
+.export-without-notes:hover {
+    border-color: rgba(3, 105, 161, 0.4);
+    background: linear-gradient(135deg, #ffffff 0%, #f0f9ff 100%);
+}
+
+.export-card-icon {
+    font-size: 3rem;
+    margin-bottom: 12px;
+    animation: float 3s ease-in-out infinite;
+}
+
+@keyframes float {
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(-8px); }
+}
+
+.export-with-notes .export-card-icon {
+    animation-delay: 0s;
+}
+
+.export-without-notes .export-card-icon {
+    animation-delay: 0.5s;
+}
+
+.export-card-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #0f172a;
+    margin-bottom: 8px;
+}
+
+.export-card-description {
+    font-size: 0.9rem;
+    color: #64748b;
+    margin-bottom: 16px;
+    line-height: 1.5;
+}
+
+.export-card-timing {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
+    border-radius: 20px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #475569;
+}
+
+.export-with-notes .export-card-timing {
+    background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+    color: #0046ad;
+}
+
+.export-without-notes .export-card-timing {
+    background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+    color: #059669;
+}
+
+.timing-icon {
+    font-size: 1rem;
+}
+
+.timing-text {
+    font-weight: 600;
+}
+
+.export-info-banner {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 18px;
+    background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+    border-left: 4px solid #f59e0b;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    color: #92400e;
+    font-weight: 500;
+}
+
+.info-icon {
+    font-size: 1.2rem;
+    flex-shrink: 0;
+}
+
+.export-modal-footer {
+    padding: 20px 28px;
+    border-top: 2px solid #e2e8f0;
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+    background: linear-gradient(135deg, #f8f9fa 0%, #f1f3f5 100%);
+    border-radius: 0 0 16px 16px;
+}
+
+.export-btn {
+    padding: 12px 24px;
+    border: none;
+    border-radius: 10px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+
+.btn-icon {
+    font-size: 1.1rem;
+}
+
+.export-btn-cancel {
+    background: linear-gradient(135deg, #e2e8f0 0%, #cbd5e1 100%);
+    color: #475569;
+}
+
+.export-btn-cancel:hover {
+    background: linear-gradient(135deg, #cbd5e1 0%, #94a3b8 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.export-btn-without {
+    background: linear-gradient(135deg, #0369a1 0%, #0ea5e9 100%);
+    color: white;
+}
+
+.export-btn-without:hover {
+    background: linear-gradient(135deg, #0284c7 0%, #38bdf8 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(3, 105, 161, 0.4);
+}
+
+.export-btn-with {
+    background: linear-gradient(135deg, #0046ad 0%, #0052cc 100%);
+    color: white;
+}
+
+.export-btn-with:hover {
+    background: linear-gradient(135deg, #0052cc 0%, #0066ff 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(0, 70, 173, 0.5);
+}
+
+.export-btn:active {
+    transform: translateY(0) scale(0.98);
+}
+
+/* Dark mode support for export modal */
+body.dark-mode .export-confirmation-body {
+    background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+}
+
+body.dark-mode .export-option-card {
+    background: #334155;
+    border-color: rgba(148, 163, 184, 0.2);
+}
+
+body.dark-mode .export-option-card:hover {
+    background: linear-gradient(135deg, #334155 0%, #475569 100%);
+}
+
+body.dark-mode .export-with-notes:hover {
+    background: linear-gradient(135deg, #334155 0%, #1e3a5f 100%);
+}
+
+body.dark-mode .export-without-notes:hover {
+    background: linear-gradient(135deg, #334155 0%, #164e63 100%);
+}
+
+body.dark-mode .export-card-title {
+    color: #f1f5f9;
+}
+
+body.dark-mode .export-card-description {
+    color: #94a3b8;
+}
+
+body.dark-mode .export-card-timing {
+    background: linear-gradient(135deg, #475569 0%, #334155 100%);
+    color: #cbd5e1;
+}
+
+body.dark-mode .export-with-notes .export-card-timing {
+    background: linear-gradient(135deg, #1e3a5f 0%, #1e40af 100%);
+    color: #93c5fd;
+}
+
+body.dark-mode .export-without-notes .export-card-timing {
+    background: linear-gradient(135deg, #065f46 0%, #047857 100%);
+    color: #6ee7b7;
+}
+
+body.dark-mode .export-info-banner {
+    background: linear-gradient(135deg, #451a03 0%, #78350f 100%);
+    border-left-color: #f59e0b;
+    color: #fde68a;
+}
+
+body.dark-mode .export-modal-footer {
+    background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+    border-top-color: #334155;
+}
+
+body.dark-mode .export-btn-cancel {
+    background: linear-gradient(135deg, #334155 0%, #475569 100%);
+    color: #cbd5e1;
+}
+
+body.dark-mode .export-btn-cancel:hover {
+    background: linear-gradient(135deg, #475569 0%, #64748b 100%);
+}
+
+body.dark-mode .export-btn-without {
+    background: linear-gradient(135deg, #0369a1 0%, #0ea5e9 100%);
+}
+
+body.dark-mode .export-btn-without:hover {
+    background: linear-gradient(135deg, #0284c7 0%, #38bdf8 100%);
+}
+
+body.dark-mode .export-btn-with {
+    background: linear-gradient(135deg, #0046ad 0%, #0052cc 100%);
+}
+
+body.dark-mode .export-btn-with:hover {
+    background: linear-gradient(135deg, #0052cc 0%, #0066ff 100%);
+}
