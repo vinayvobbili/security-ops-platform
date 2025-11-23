@@ -1557,8 +1557,9 @@ function getChartColors() {
                 hideExportNotesModal(null);
             });
 
-            // Close on overlay click
+            // Close on overlay click (but not on modal content)
             exportNotesModal.addEventListener('click', function(e) {
+                // Only close if clicking directly on the overlay, not on the modal or its children
                 if (e.target === exportNotesModal) {
                     hideExportNotesModal(null);
                 }
@@ -1572,11 +1573,18 @@ function getChartColors() {
             });
 
             // Card click handlers (cards are the only way to select)
-            exportNotesModal.querySelector('.export-with-notes').addEventListener('click', function() {
+            const withNotesCard = exportNotesModal.querySelector('.export-with-notes');
+            const withoutNotesCard = exportNotesModal.querySelector('.export-without-notes');
+
+            withNotesCard.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
                 hideExportNotesModal(true);
             });
 
-            exportNotesModal.querySelector('.export-without-notes').addEventListener('click', function() {
+            withoutNotesCard.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
                 hideExportNotesModal(false);
             });
         }
@@ -1588,36 +1596,33 @@ function getChartColors() {
             exportNotesResolve = resolve;
             const modal = createExportNotesModal();
 
-            // Force positioning via inline styles (same as showNotesModal)
+            // Force positioning via inline styles - position at current scroll location
+            const scrollY = window.scrollY;
             modal.style.cssText = `
-                position: fixed !important;
-                top: 0 !important;
+                position: absolute !important;
+                top: ${scrollY}px !important;
                 left: 0 !important;
-                right: 0 !important;
-                bottom: 0 !important;
-                width: 100vw !important;
+                width: 100% !important;
                 height: 100vh !important;
-                z-index: 10000 !important;
+                z-index: 99999 !important;
                 display: flex !important;
                 align-items: center !important;
                 justify-content: center !important;
                 margin: 0 !important;
                 padding: 20px !important;
-                transform: none !important;
+                background: rgba(0, 0, 0, 0.6) !important;
+                backdrop-filter: blur(4px) !important;
             `;
 
             // Show modal
             modal.classList.add('show');
-
-            // Prevent body scroll when modal is open
-            document.body.style.overflow = 'hidden';
         });
     }
 
     function hideExportNotesModal(result) {
         if (exportNotesModal) {
             exportNotesModal.classList.remove('show');
-            document.body.style.overflow = '';
+            exportNotesModal.style.display = 'none';
             if (exportNotesResolve) {
                 exportNotesResolve(result);
                 exportNotesResolve = null;
@@ -1661,9 +1666,11 @@ function getChartColors() {
             const exportBtn = document.getElementById('exportExcelBtn');
             const originalText = exportBtn.textContent;
             if (includeNotes) {
-                exportBtn.textContent = '⏳ Exporting with notes (please wait)...';
+                exportBtn.textContent = '⏳ Exporting with notes (please wait 30-60 seconds)...';
+                exportBtn.style.background = 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)';
             } else {
                 exportBtn.textContent = '⏳ Exporting...';
+                exportBtn.style.background = 'linear-gradient(135deg, #0369a1 0%, #0284c7 100%)';
             }
             exportBtn.disabled = true;
 
@@ -1706,12 +1713,14 @@ function getChartColors() {
             window.URL.revokeObjectURL(url);
 
             exportBtn.textContent = originalText;
+            exportBtn.style.background = '';
             exportBtn.disabled = false;
         } catch (error) {
             console.error('Export error:', error);
             alert('Failed to export: ' + error.message);
             const exportBtn = document.getElementById('exportExcelBtn');
             exportBtn.textContent = '📥 Export to Excel';
+            exportBtn.style.background = '';
             exportBtn.disabled = false;
         }
     }
