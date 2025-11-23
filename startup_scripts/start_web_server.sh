@@ -4,8 +4,26 @@ cd /home/vinay/pub/IR || exit 1
 
 # Kill existing web server process if running
 echo "Stopping existing Web Server instances..."
-pkill -f "web/web_server.py"
-sleep 1
+
+# Try graceful shutdown first (SIGTERM)
+if pgrep -f "web/web_server.py" > /dev/null; then
+    pkill -f "web/web_server.py"
+
+    # Wait up to 5 seconds for graceful shutdown
+    for i in {1..5}; do
+        if ! pgrep -f "web/web_server.py" > /dev/null; then
+            break
+        fi
+        sleep 1
+    done
+
+    # If still running after 5 seconds, force kill (SIGKILL)
+    if pgrep -f "web/web_server.py" > /dev/null; then
+        echo "Process did not terminate gracefully, forcing shutdown..."
+        pkill -9 -f "web/web_server.py"
+        sleep 1
+    fi
+fi
 
 # Ensure logs directory exists
 mkdir -p logs
