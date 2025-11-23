@@ -232,9 +232,17 @@ def main() -> None:
     # Scheduled after all chart jobs complete (charts finish by ~00:30)
     # Extended timeout (6 hours) accommodates slow VM network with full note enrichment
     logger.info("Scheduling ticket cache generation at 01:00 ET (runs last, may take 2-4 hours on VM)...")
-    schedule.every().day.at('01:00', eastern).do(
-        lambda: safe_run(TicketCache.generate, timeout=TICKET_CACHE_TIMEOUT, name="ticket_cache")
-    )
+
+    def ticket_cache_with_logging():
+        logger.info("="*60)
+        logger.info("TICKET CACHE JOB STARTING at 01:00 ET")
+        logger.info("="*60)
+        safe_run(TicketCache.generate, timeout=TICKET_CACHE_TIMEOUT, name="ticket_cache")
+        logger.info("="*60)
+        logger.info("TICKET CACHE JOB COMPLETED")
+        logger.info("="*60)
+
+    schedule.every().day.at('01:00', eastern).do(ticket_cache_with_logging)
 
     # Host verification
     logger.info("Scheduling host verification every 5 minutes...")
