@@ -800,55 +800,85 @@ class TicketHandler:
         # Build full URL using instance variables set during initialization
         url = f'{self.base_url}/inv-playbook/task/complete'
 
-        try:
-            # Use requests_toolbelt for proper multipart encoding
-            from requests_toolbelt.multipart.encoder import MultipartEncoder
+        # Retry logic for server errors
+        max_retries = 5
+        retry_count = 0
 
-            # Build multipart/form-data payload
-            multipart_data = MultipartEncoder(
-                fields={
-                    'investigationId': ticket_id,
-                    'fileName': '',
-                    'fileComment': 'Completing via API',
-                    'taskId': task_id,
-                    'taskInput': task_input
+        while retry_count <= max_retries:
+            try:
+                # Use requests_toolbelt for proper multipart encoding
+                from requests_toolbelt.multipart.encoder import MultipartEncoder
+
+                # Build multipart/form-data payload
+                multipart_data = MultipartEncoder(
+                    fields={
+                        'investigationId': ticket_id,
+                        'fileName': '',
+                        'fileComment': 'Completing via API',
+                        'taskId': task_id,
+                        'taskInput': task_input
+                    }
+                )
+
+                headers = {
+                    'Authorization': self.auth_key,
+                    'x-xdr-auth-id': self.auth_id,
+                    'Content-Type': multipart_data.content_type,
+                    'Accept': 'application/json'
                 }
-            )
 
-            headers = {
-                'Authorization': self.auth_key,
-                'x-xdr-auth-id': self.auth_id,
-                'Content-Type': multipart_data.content_type,
-                'Accept': 'application/json'
-            }
+                response = requests.post(url, data=multipart_data, headers=headers, verify=False, timeout=30)
 
-            response = requests.post(url, data=multipart_data, headers=headers, verify=False, timeout=30)
-            response.raise_for_status()
+                # Check for server errors BEFORE calling raise_for_status()
+                if response.status_code in [500, 502, 503, 504]:
+                    retry_count += 1
+                    if retry_count > max_retries:
+                        log.error(f"Error completing task '{task_name}' in ticket {ticket_id} after {max_retries} retries: {response.status_code} {response.reason}")
+                        response.raise_for_status()  # Raise the error after all retries exhausted
 
-            # Parse response and check for XSOAR-specific errors
-            if response.text:
-                response_data = response.json()
+                    backoff_time = 5 * (2 ** (retry_count - 1))
+                    log.warning(f"Server error {response.status_code} completing task '{task_name}' in ticket {ticket_id}. "
+                                f"Retry {retry_count}/{max_retries}. Backing off for {backoff_time} seconds...")
+                    time.sleep(backoff_time)
+                    continue  # Retry the request
 
-                # Check if response contains an error field
-                if isinstance(response_data, dict) and 'error' in response_data:
-                    error_msg = response_data['error']
+                # For non-server errors, raise immediately
+                response.raise_for_status()
 
-                    # Check for "Task is completed already" error
-                    if 'Task is completed already' in str(error_msg):
-                        log.warning(f"Task '{task_name}' (ID: {task_id}) in ticket {ticket_id} is already completed: {error_msg}")
-                        raise ValueError(f"Task '{task_name}' is already completed: {error_msg}")
-                    else:
-                        log.error(f"Error from XSOAR when completing task '{task_name}': {error_msg}")
-                        raise ValueError(f"XSOAR error: {error_msg}")
+                # Parse response and check for XSOAR-specific errors
+                if response.text:
+                    response_data = response.json()
 
-                log.debug(f"Successfully completed task '{task_name}' (ID: {task_id}) in ticket {ticket_id}")
-                return response_data
-            else:
-                log.debug(f"Successfully completed task '{task_name}' (ID: {task_id}) in ticket {ticket_id}")
-                return {}
-        except requests.exceptions.RequestException as e:
-            log.error(f"Error completing task '{task_name}' in ticket {ticket_id}: {e}")
-            raise
+                    # Check if response contains an error field
+                    if isinstance(response_data, dict) and 'error' in response_data:
+                        error_msg = response_data['error']
+
+                        # Check for "Task is completed already" error
+                        if 'Task is completed already' in str(error_msg):
+                            log.warning(f"Task '{task_name}' (ID: {task_id}) in ticket {ticket_id} is already completed: {error_msg}")
+                            raise ValueError(f"Task '{task_name}' is already completed: {error_msg}")
+                        else:
+                            log.error(f"Error from XSOAR when completing task '{task_name}': {error_msg}")
+                            raise ValueError(f"XSOAR error: {error_msg}")
+
+                    log.debug(f"Successfully completed task '{task_name}' (ID: {task_id}) in ticket {ticket_id}")
+                    return response_data
+                else:
+                    log.debug(f"Successfully completed task '{task_name}' (ID: {task_id}) in ticket {ticket_id}")
+                    return {}
+
+            except requests.exceptions.RequestException as e:
+                # Handle connection errors with retry
+                retry_count += 1
+                if retry_count > max_retries:
+                    log.error(f"Error completing task '{task_name}' in ticket {ticket_id} after {max_retries} retries: {e}")
+                    raise
+
+                backoff_time = 5 * (2 ** (retry_count - 1))
+                log.warning(f"Connection error completing task '{task_name}' in ticket {ticket_id}: {type(e).__name__}: {e}. "
+                            f"Retry {retry_count}/{max_retries}. Backing off for {backoff_time} seconds...")
+                time.sleep(backoff_time)
+                continue
 
     def create_in_dev(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """
