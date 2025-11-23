@@ -798,7 +798,7 @@ class TicketHandler:
             raise ValueError(f"Task '{task_name}' not found in ticket {ticket_id}")
 
         # Build full URL using instance variables set during initialization
-        url = f'{self.base_url}/inv-playbook/task/complete'
+        url = f'{self.base_url}/xsoar/public/v1/inv-playbook/task/complete'
 
         # Retry logic for server errors
         max_retries = 5
@@ -879,6 +879,7 @@ class TicketHandler:
                             f"Retry {retry_count}/{max_retries}. Backing off for {backoff_time} seconds...")
                 time.sleep(backoff_time)
                 continue
+        return None
 
     def create_in_dev(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -1518,7 +1519,7 @@ def main():
         dev_list = ListHandler(XsoarEnvironment.DEV)
     """
     # Example usage (commented out):
-    # ticket_id = '1378457'
+    # ticket_id = '1380362'
     # playbook_task_name = 'Does the employee recognize the alerted activity?'
     # dev_ticket_handler = TicketHandler(XsoarEnvironment.DEV)
     # task_id = dev_ticket_handler.get_playbook_task_id(ticket_id, playbook_task_name)
@@ -1529,8 +1530,7 @@ def main():
     # print(json.dumps(dev_ticket_handler.get_case_data_with_notes(ticket_id), indent=4))
     #
     # Example: Complete a task
-    # task_name = 'Does the employee recognize the alerted activity?'
-    # print(dev_ticket_handler.complete_task(ticket_id, task_name))
+    # print(dev_ticket_handler.complete_task(ticket_id, playbook_task_name, 'Yes'))
     #
     # Example: Create a note
     # print(dev_ticket_handler.create_new_entry_in_existing_ticket(ticket_id, "This is my note"))
@@ -1542,9 +1542,9 @@ def main():
     # file_path = "/path/to/file.pdf"
     # print(dev_ticket_handler.upload_file_to_ticket(ticket_id, file_path, "Evidence file"))
 
-    prod_list_handler = ListHandler(XsoarEnvironment.PROD)
-    all_lists = prod_list_handler.get_all_lists()
-    print(f"Total lists in dev: {len(all_lists)}")
+    # prod_list_handler = ListHandler(XsoarEnvironment.PROD)
+    # all_lists = prod_list_handler.get_all_lists()
+    # print(f"Total lists in dev: {len(all_lists)}")
 
 
 if __name__ == "__main__":
