@@ -1526,9 +1526,21 @@ function getChartColors() {
     async function exportToExcel() {
         // Use server-side export with filter parameters instead of sending full data
         try {
+            // Ask user if they want to include notes (requires fetching from XSOAR API)
+            const includeNotes = confirm(
+                '📝 Include user notes in export?\n\n' +
+                '• YES: Fetch notes from XSOAR API (may take 30-60 seconds depending on ticket count)\n' +
+                '• NO: Export without notes (instant)\n\n' +
+                'Note: Only filtered tickets will be enriched with notes.'
+            );
+
             const exportBtn = document.getElementById('exportExcelBtn');
             const originalText = exportBtn.textContent;
-            exportBtn.textContent = '⏳ Exporting...';
+            if (includeNotes) {
+                exportBtn.textContent = '⏳ Exporting with notes (please wait)...';
+            } else {
+                exportBtn.textContent = '⏳ Exporting...';
+            }
             exportBtn.disabled = true;
 
             // Build column labels mapping
@@ -1548,7 +1560,8 @@ function getChartColors() {
                 body: JSON.stringify({
                     filters: filters,
                     visible_columns: visibleColumns,
-                    column_labels: columnLabels
+                    column_labels: columnLabels,
+                    include_notes: includeNotes
                 })
             });
 
