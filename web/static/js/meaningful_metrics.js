@@ -1674,9 +1674,16 @@ function getChartColors() {
             }
             exportBtn.disabled = true;
 
-            // Build column labels mapping
+            // Build column labels mapping and add notes column if requested
+            const exportColumns = [...visibleColumns];
+
+            // Add notes column if requested and not already present
+            if (includeNotes && !exportColumns.includes('notes')) {
+                exportColumns.push('notes');
+            }
+
             const columnLabels = {};
-            visibleColumns.forEach(colId => {
+            exportColumns.forEach(colId => {
                 columnLabels[colId] = availableColumns[colId]?.label || colId;
             });
 
@@ -1690,7 +1697,7 @@ function getChartColors() {
                 },
                 body: JSON.stringify({
                     filters: filters,
-                    visible_columns: visibleColumns,
+                    visible_columns: exportColumns,
                     column_labels: columnLabels,
                     include_notes: includeNotes
                 })
@@ -1701,12 +1708,25 @@ function getChartColors() {
                 throw new Error(error.error || 'Export failed');
             }
 
-            // Download the file
+            // Download the file with descriptive filename
             const blob = await response.blob();
             const url = window.URL.createObjectURL(blob);
+
+            // Generate timestamp in format: YYYY-MM-DD_HH-MM-SS
+            const now = new Date();
+            const timestamp = now.getFullYear() + '-' +
+                            String(now.getMonth() + 1).padStart(2, '0') + '-' +
+                            String(now.getDate()).padStart(2, '0') + '_' +
+                            String(now.getHours()).padStart(2, '0') + '-' +
+                            String(now.getMinutes()).padStart(2, '0') + '-' +
+                            String(now.getSeconds()).padStart(2, '0');
+
+            const notesPrefix = includeNotes ? 'with_notes' : 'without_notes';
+            const filename = `security_incidents_${notesPrefix}_${timestamp}.xlsx`;
+
             const a = document.createElement('a');
             a.href = url;
-            a.download = 'security_incidents.xlsx';
+            a.download = filename;
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
