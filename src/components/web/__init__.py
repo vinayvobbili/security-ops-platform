@@ -1,0 +1,41 @@
+"""Web component handlers package."""
+
+from . import (
+    slideshow_handler,
+    msoc_form_handler,
+    speak_up_handler,
+    xsoar_import_handler,
+    approved_testing_handler,
+    travel_handler,
+    apt_handler,
+    audio_handler,
+    pokedex_handler,
+    xsoar_dashboard_handler,
+    shift_performance_handler,
+    meaningful_metrics_handler,
+    health_handler,
+    toodles_handler,
+    employee_reach_out_handler,
+    countdown_timer_handler,
+    proxy_server,
+)
+
+__all__ = [
+    'slideshow_handler',
+    'msoc_form_handler',
+    'speak_up_handler',
+    'xsoar_import_handler',
+    'approved_testing_handler',
+    'travel_handler',
+    'apt_handler',
+    'audio_handler',
+    'pokedex_handler',
+    'xsoar_dashboard_handler',
+    'shift_performance_handler',
+    'meaningful_metrics_handler',
+    'health_handler',
+    'toodles_handler',
+    'employee_reach_out_handler',
+    'countdown_timer_handler',
+    'proxy_server',
+]
