@@ -1501,6 +1501,163 @@ function getChartColors() {
         });
     }
 
+    // Export notes confirmation modal
+    let exportNotesModal = null;
+    let exportNotesResolve = null;
+
+    function createExportNotesModal() {
+        if (!exportNotesModal) {
+            exportNotesModal = document.createElement('div');
+            exportNotesModal.className = 'notes-modal-overlay export-notes-modal';
+            exportNotesModal.innerHTML = `
+                <div class="notes-modal export-confirmation-modal">
+                    <div class="notes-modal-header">
+                        <div class="notes-modal-title">📝 Include User Notes in Export?</div>
+                        <button class="notes-modal-close" aria-label="Close">×</button>
+                    </div>
+                    <div class="notes-modal-body export-confirmation-body">
+                        <div class="export-options-grid">
+                            <div class="export-option-card export-with-notes">
+                                <div class="export-card-icon">📝</div>
+                                <div class="export-card-title">With Notes</div>
+                                <div class="export-card-description">
+                                    Fetch enriched notes from XSOAR API
+                                </div>
+                                <div class="export-card-timing">
+                                    <span class="timing-icon">⏱️</span>
+                                    <span class="timing-text">30-60 seconds</span>
+                                </div>
+                            </div>
+                            <div class="export-option-card export-without-notes">
+                                <div class="export-card-icon">⚡</div>
+                                <div class="export-card-title">Without Notes</div>
+                                <div class="export-card-description">
+                                    Quick export with basic ticket data
+                                </div>
+                                <div class="export-card-timing">
+                                    <span class="timing-icon">🚀</span>
+                                    <span class="timing-text">Instant</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="export-info-banner">
+                            <span class="info-icon">ℹ️</span>
+                            <span>Only filtered tickets will be enriched with notes</span>
+                        </div>
+                    </div>
+                    <div class="export-modal-footer">
+                        <button class="export-btn export-btn-cancel">
+                            <span class="btn-icon">✕</span>
+                            <span>Cancel</span>
+                        </button>
+                        <button class="export-btn export-btn-without">
+                            <span class="btn-icon">⚡</span>
+                            <span>Export Without Notes</span>
+                        </button>
+                        <button class="export-btn export-btn-with">
+                            <span class="btn-icon">📝</span>
+                            <span>Export With Notes</span>
+                        </button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(exportNotesModal);
+
+            // Close button handler
+            const closeBtn = exportNotesModal.querySelector('.notes-modal-close');
+            closeBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                hideExportNotesModal(null);
+            });
+
+            // Close on overlay click
+            exportNotesModal.addEventListener('click', function(e) {
+                if (e.target === exportNotesModal) {
+                    hideExportNotesModal(null);
+                }
+            });
+
+            // Close on Escape key
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape' && exportNotesModal.classList.contains('show')) {
+                    hideExportNotesModal(null);
+                }
+            });
+
+            // Button handlers
+            exportNotesModal.querySelector('.export-btn-cancel').addEventListener('click', function() {
+                hideExportNotesModal(null);
+            });
+
+            exportNotesModal.querySelector('.export-btn-without').addEventListener('click', function() {
+                hideExportNotesModal(false);
+            });
+
+            exportNotesModal.querySelector('.export-btn-with').addEventListener('click', function() {
+                hideExportNotesModal(true);
+            });
+
+            // Card click handlers (make cards clickable)
+            exportNotesModal.querySelector('.export-with-notes').addEventListener('click', function() {
+                hideExportNotesModal(true);
+            });
+
+            exportNotesModal.querySelector('.export-without-notes').addEventListener('click', function() {
+                hideExportNotesModal(false);
+            });
+        }
+        return exportNotesModal;
+    }
+
+    function showExportNotesModal() {
+        return new Promise((resolve) => {
+            exportNotesResolve = resolve;
+            const modal = createExportNotesModal();
+
+            // Apply override styling for proper display
+            modal.style.cssText = `
+                position: fixed !important;
+                top: 0 !important;
+                left: 0 !important;
+                right: 0 !important;
+                bottom: 0 !important;
+                z-index: 10000 !important;
+                display: flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+                margin: 0 !important;
+                padding: 20px !important;
+                transform: none !important;
+            `;
+
+            // Show modal
+            modal.classList.add('show');
+
+            // Scroll to top of page so modal is visible
+            window.scrollTo({
+                top: 0,
+                left: 0,
+                behavior: 'smooth'
+            });
+
+            // Prevent body scroll when modal is open
+            document.body.style.overflow = 'hidden';
+        });
+    }
+
+    function hideExportNotesModal(result) {
+        if (exportNotesModal) {
+            exportNotesModal.classList.remove('show');
+            exportNotesModal.style.display = 'none';
+            document.body.style.overflow = '';
+            if (exportNotesResolve) {
+                exportNotesResolve(result);
+                exportNotesResolve = null;
+            }
+        }
+    }
+
     function getCurrentFilters() {
         // Gather all current filter values
         const dateSlider = document.getElementById('dateRangeSlider');
@@ -1527,12 +1684,12 @@ function getChartColors() {
         // Use server-side export with filter parameters instead of sending full data
         try {
             // Ask user if they want to include notes (requires fetching from XSOAR API)
-            const includeNotes = confirm(
-                '📝 Include user notes in export?\n\n' +
-                '• YES: Fetch notes from XSOAR API (may take 30-60 seconds depending on ticket count)\n' +
-                '• NO: Export without notes (instant)\n\n' +
-                'Note: Only filtered tickets will be enriched with notes.'
-            );
+            const includeNotes = await showExportNotesModal();
+
+            // If user clicked Cancel or closed the modal, abort export
+            if (includeNotes === null) {
+                return;
+            }
 
             const exportBtn = document.getElementById('exportExcelBtn');
             const originalText = exportBtn.textContent;
