@@ -1615,8 +1615,25 @@ function getChartColors() {
             exportNotesResolve = resolve;
             const modal = createExportNotesModal();
 
-            // Clear any inline display style and show modal
-            modal.style.display = '';
+            // Force positioning via inline styles (same as showNotesModal)
+            modal.style.cssText = `
+                position: fixed !important;
+                top: 0 !important;
+                left: 0 !important;
+                right: 0 !important;
+                bottom: 0 !important;
+                width: 100vw !important;
+                height: 100vh !important;
+                z-index: 10000 !important;
+                display: flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+                margin: 0 !important;
+                padding: 20px !important;
+                transform: none !important;
+            `;
+
+            // Show modal
             modal.classList.add('show');
 
             // Prevent body scroll when modal is open
