@@ -1634,13 +1634,6 @@ function getChartColors() {
             // Show modal
             modal.classList.add('show');
 
-            // Scroll to top of page so modal is visible
-            window.scrollTo({
-                top: 0,
-                left: 0,
-                behavior: 'smooth'
-            });
-
             // Prevent body scroll when modal is open
             document.body.style.overflow = 'hidden';
         });
