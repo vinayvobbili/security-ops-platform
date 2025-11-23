@@ -2033,6 +2033,8 @@ body.dark-mode .notes-icon:hover {
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
     position: relative;
     overflow: hidden;
+    pointer-events: auto;
+    z-index: 1;
 }
 
 .export-option-card::before {
@@ -2045,6 +2047,7 @@ body.dark-mode .notes-icon:hover {
     background: linear-gradient(90deg, #0046ad, #0369a1);
     transform: scaleX(0);
     transition: transform 0.3s ease;
+    pointer-events: none;
 }
 
 .export-option-card:hover {
@@ -2086,6 +2089,7 @@ body.dark-mode .notes-icon:hover {
     font-size: 3rem;
     margin-bottom: 12px;
     animation: float 3s ease-in-out infinite;
+    pointer-events: none;
 }
 
 @keyframes float {
