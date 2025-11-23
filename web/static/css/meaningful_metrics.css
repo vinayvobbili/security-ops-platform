@@ -1680,9 +1680,19 @@ body.dark-mode .show-all-btn[aria-pressed="true"] {
 
 /* Notes Modal */
 .notes-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 10000;
+    display: none;
+    align-items: center;
+    justify-content: center;
     background: rgba(0, 0, 0, 0.6);
     backdrop-filter: blur(4px);
     animation: fadeIn 0.2s ease;
+    padding: 20px;
 }
 
 .notes-modal-overlay.show {
