@@ -2027,6 +2027,10 @@ def employee_reach_out_form():
 @log_web_activity
 def submit_employee_response():
     """Handle employee reach out form submission"""
+    import tempfile
+    import os
+
+    temp_file_path = None
     try:
         data = request.form.to_dict()
         recognized = data.get('recognized')  # 'yes' or 'no'
@@ -2045,8 +2049,33 @@ def submit_employee_response():
                 comments = data.get('comments', '').strip()
                 if comments:
                     note_content = f"Employee Comments:\n{comments}"
-                    dev_ticket_handler.add_note_to_ticket(ticket_id, note_content)
+                    dev_ticket_handler.create_new_entry_in_existing_ticket(ticket_id, note_content)
                     logger.info(f"Added employee comments to ticket {ticket_id}")
+
+                # Handle file attachment if present
+                if 'file' in request.files:
+                    file = request.files['file']
+                    if file and file.filename:
+                        # Save to temporary file
+                        temp_fd, temp_file_path = tempfile.mkstemp(suffix=f"_{file.filename}")
+                        try:
+                            # Close the file descriptor and write the file
+                            os.close(temp_fd)
+                            file.save(temp_file_path)
+                            logger.info(f"Saved attachment {file.filename} to temporary file {temp_file_path}")
+
+                            # Upload to XSOAR ticket
+                            dev_ticket_handler.upload_file_to_ticket(
+                                ticket_id,
+                                temp_file_path,
+                                comment="Employee provided attachment"
+                            )
+                            logger.info(f"Uploaded attachment {file.filename} to ticket {ticket_id}")
+                        finally:
+                            # Clean up temporary file
+                            if temp_file_path and os.path.exists(temp_file_path):
+                                os.remove(temp_file_path)
+                                logger.debug(f"Cleaned up temporary file {temp_file_path}")
 
                 return jsonify({
                     'status': 'success',

@@ -1275,8 +1275,8 @@ class TicketHandler:
 
         log.debug(f"Uploading file {file_path} to ticket {incident_id}")
 
-        # Build full URL - base_url already includes /xsoar/public/v1
-        url = f'{self.base_url}/entry/upload/{incident_id}'
+        # Build full URL
+        url = f'{self.base_url}/xsoar/public/v1/entry/upload/{incident_id}'
 
         # Get file name from path
         file_name = os.path.basename(file_path)
