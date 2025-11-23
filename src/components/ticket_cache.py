@@ -38,10 +38,10 @@ MAX_WORKERS = int(os.getenv('TICKET_ENRICHMENT_WORKERS', '5'))
 # Longer timeout = fewer timeouts = higher success rate
 TICKET_TIMEOUT = int(os.getenv('TICKET_ENRICHMENT_TIMEOUT', '300'))
 
-# Skip note enrichment for performance (default: False - enrichment enabled)
-# Set SKIP_NOTE_ENRICHMENT=true to skip notes for faster processing
-# Note: Enrichment is slow on VMs but will complete if given enough time
-SKIP_NOTE_ENRICHMENT = os.getenv('SKIP_NOTE_ENRICHMENT', 'false').lower() in ('true', '1', 'yes')
+# Skip note enrichment for performance (default: True - enrichment disabled for nightly job)
+# Set SKIP_NOTE_ENRICHMENT=false to enable notes enrichment during nightly cache generation
+# Note: Enrichment is slow on VMs. Notes are now enriched on-demand at export time instead.
+SKIP_NOTE_ENRICHMENT = os.getenv('SKIP_NOTE_ENRICHMENT', 'true').lower() in ('true', '1', 'yes')
 
 
 # Field mappings for ticket extraction
@@ -291,10 +291,10 @@ class TicketCache:
         log.debug(f"Sample ticket IDs: {[t.get('id', 'NO_ID') for t in tickets[:5]]}")
         log.debug(f"Sample ticket keys (first ticket): {list(tickets[0].keys()) if tickets else 'N/A'}")
 
-        # Parallel notes enrichment (optional - can be disabled for performance)
+        # Parallel notes enrichment (optional - disabled by default for nightly job performance)
         if SKIP_NOTE_ENRICHMENT:
-            log.info("⏭️  Skipping note enrichment (SKIP_NOTE_ENRICHMENT=true)")
-            print("⏭️  Skipping note enrichment for faster processing...")
+            log.info("⏭️  Skipping note enrichment (default behavior - notes will be enriched on-demand at export time)")
+            print("⏭️  Skipping note enrichment (notes will be enriched on-demand at export time)...")
             # Add empty notes to all tickets
             for ticket in tickets:
                 ticket['notes'] = []

@@ -1530,6 +1530,7 @@ def api_meaningful_metrics_export():
         filters = data['filters']
         visible_columns = data.get('visible_columns', [])
         column_labels = data.get('column_labels', {})
+        include_notes = data.get('include_notes', False)
 
         # Load data from cache (same logic as api_meaningful_metrics_data)
         today_date = datetime.now(eastern).strftime('%m-%d-%Y')
@@ -1553,6 +1554,53 @@ def api_meaningful_metrics_export():
 
         if not incidents:
             return jsonify({'success': False, 'error': 'No incidents to export'}), 400
+
+        # Enrich with notes on-demand if requested
+        if include_notes:
+            logger.info(f"Enriching {len(incidents)} filtered tickets with notes (on-demand)...")
+            from services.xsoar import TicketHandler, XsoarEnvironment
+            from concurrent.futures import ThreadPoolExecutor, as_completed
+            import os
+
+            ticket_handler = TicketHandler(XsoarEnvironment.PROD)
+            # Use conservative worker count to avoid rate limiting
+            max_workers = int(os.getenv('EXPORT_NOTE_WORKERS', '5'))
+            timeout_per_ticket = int(os.getenv('EXPORT_NOTE_TIMEOUT', '60'))
+
+            enriched_incidents = []
+            failed_count = 0
+
+            def fetch_notes_for_incident(incident):
+                """Fetch notes for a single incident."""
+                incident_id = incident.get('id')
+                if not incident_id:
+                    incident['notes'] = []
+                    return incident
+                try:
+                    notes = ticket_handler.get_user_notes(incident_id)
+                    incident['notes'] = notes if notes else []
+                except Exception as e:
+                    logger.warning(f"Failed to fetch notes for ticket {incident_id}: {e}")
+                    incident['notes'] = []
+                return incident
+
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                futures = {executor.submit(fetch_notes_for_incident, incident): incident for incident in incidents}
+                for future in as_completed(futures.keys()):
+                    try:
+                        result = future.result(timeout=timeout_per_ticket)
+                        enriched_incidents.append(result)
+                        if not result.get('notes'):
+                            failed_count += 1
+                    except Exception as e:
+                        incident = futures[future]
+                        logger.warning(f"Timeout/error enriching ticket {incident.get('id')}: {e}")
+                        incident['notes'] = []
+                        enriched_incidents.append(incident)
+                        failed_count += 1
+
+            incidents = enriched_incidents
+            logger.info(f"Note enrichment complete: {len(incidents) - failed_count} success, {failed_count} failed")
 
         # Process the data similar to frontend
         severity_map = {0: 'Unknown', 1: 'Low', 2: 'Medium', 3: 'High', 4: 'Critical'}
