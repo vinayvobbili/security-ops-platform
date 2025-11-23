@@ -1615,7 +1615,8 @@ function getChartColors() {
             exportNotesResolve = resolve;
             const modal = createExportNotesModal();
 
-            // Show modal
+            // Clear any inline display style and show modal
+            modal.style.display = '';
             modal.classList.add('show');
 
             // Prevent body scroll when modal is open
@@ -1626,7 +1627,6 @@ function getChartColors() {
     function hideExportNotesModal(result) {
         if (exportNotesModal) {
             exportNotesModal.classList.remove('show');
-            exportNotesModal.style.display = 'none';
             document.body.style.overflow = '';
             if (exportNotesResolve) {
                 exportNotesResolve(result);
