@@ -1753,7 +1753,7 @@ body.dark-mode .show-all-btn[aria-pressed="true"] {
 }
 
 .notes-modal-close {
-    background: rgba(255, 255, 255, 0.2);
+    background: rgba(220, 38, 38, 0.9);
     border: none;
     color: white;
     font-size: 2rem;
@@ -1767,11 +1767,13 @@ body.dark-mode .show-all-btn[aria-pressed="true"] {
     justify-content: center;
     transition: all 0.2s ease;
     font-weight: 300;
+    box-shadow: 0 2px 8px rgba(220, 38, 38, 0.3);
 }
 
 .notes-modal-close:hover {
-    background: rgba(255, 255, 255, 0.3);
+    background: rgba(239, 68, 68, 1);
     transform: scale(1.1);
+    box-shadow: 0 4px 12px rgba(220, 38, 38, 0.5);
 }
 
 .notes-modal-close:active {
@@ -1910,11 +1912,11 @@ body.dark-mode .notes-modal-header {
 }
 
 body.dark-mode .notes-modal-close {
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(220, 38, 38, 0.9);
 }
 
 body.dark-mode .notes-modal-close:hover {
-    background: rgba(255, 255, 255, 0.2);
+    background: rgba(239, 68, 68, 1);
 }
 
 body.dark-mode .notes-table thead {
@@ -2001,11 +2003,16 @@ body.dark-mode .notes-icon:hover {
 .export-confirmation-modal {
     max-width: 700px;
     width: 90%;
+    max-height: 90vh;
+    overflow-y: auto;
+    position: relative;
+    z-index: 10001;
 }
 
 .export-confirmation-body {
     padding: 32px 28px;
     background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+    border-radius: 0 0 16px 16px;
 }
 
 .export-options-grid {
@@ -2156,72 +2163,6 @@ body.dark-mode .notes-icon:hover {
     flex-shrink: 0;
 }
 
-.export-modal-footer {
-    padding: 20px 28px;
-    border-top: 2px solid #e2e8f0;
-    display: flex;
-    gap: 12px;
-    justify-content: flex-end;
-    background: linear-gradient(135deg, #f8f9fa 0%, #f1f3f5 100%);
-    border-radius: 0 0 16px 16px;
-}
-
-.export-btn {
-    padding: 12px 24px;
-    border: none;
-    border-radius: 10px;
-    font-size: 0.95rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    white-space: nowrap;
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
-}
-
-.btn-icon {
-    font-size: 1.1rem;
-}
-
-.export-btn-cancel {
-    background: linear-gradient(135deg, #e2e8f0 0%, #cbd5e1 100%);
-    color: #475569;
-}
-
-.export-btn-cancel:hover {
-    background: linear-gradient(135deg, #cbd5e1 0%, #94a3b8 100%);
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-}
-
-.export-btn-without {
-    background: linear-gradient(135deg, #0369a1 0%, #0ea5e9 100%);
-    color: white;
-}
-
-.export-btn-without:hover {
-    background: linear-gradient(135deg, #0284c7 0%, #38bdf8 100%);
-    transform: translateY(-2px);
-    box-shadow: 0 4px 16px rgba(3, 105, 161, 0.4);
-}
-
-.export-btn-with {
-    background: linear-gradient(135deg, #0046ad 0%, #0052cc 100%);
-    color: white;
-}
-
-.export-btn-with:hover {
-    background: linear-gradient(135deg, #0052cc 0%, #0066ff 100%);
-    transform: translateY(-2px);
-    box-shadow: 0 4px 16px rgba(0, 70, 173, 0.5);
-}
-
-.export-btn:active {
-    transform: translateY(0) scale(0.98);
-}
-
 /* Dark mode support for export modal */
 body.dark-mode .export-confirmation-body {
     background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
@@ -2271,34 +2212,4 @@ body.dark-mode .export-info-banner {
     background: linear-gradient(135deg, #451a03 0%, #78350f 100%);
     border-left-color: #f59e0b;
     color: #fde68a;
-}
-
-body.dark-mode .export-modal-footer {
-    background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
-    border-top-color: #334155;
-}
-
-body.dark-mode .export-btn-cancel {
-    background: linear-gradient(135deg, #334155 0%, #475569 100%);
-    color: #cbd5e1;
-}
-
-body.dark-mode .export-btn-cancel:hover {
-    background: linear-gradient(135deg, #475569 0%, #64748b 100%);
-}
-
-body.dark-mode .export-btn-without {
-    background: linear-gradient(135deg, #0369a1 0%, #0ea5e9 100%);
-}
-
-body.dark-mode .export-btn-without:hover {
-    background: linear-gradient(135deg, #0284c7 0%, #38bdf8 100%);
-}
-
-body.dark-mode .export-btn-with {
-    background: linear-gradient(135deg, #0046ad 0%, #0052cc 100%);
-}
-
-body.dark-mode .export-btn-with:hover {
-    background: linear-gradient(135deg, #0052cc 0%, #0066ff 100%);
 }

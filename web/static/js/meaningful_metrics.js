@@ -1545,20 +1545,6 @@ function getChartColors() {
                             <span>Only filtered tickets will be enriched with notes</span>
                         </div>
                     </div>
-                    <div class="export-modal-footer">
-                        <button class="export-btn export-btn-cancel">
-                            <span class="btn-icon">✕</span>
-                            <span>Cancel</span>
-                        </button>
-                        <button class="export-btn export-btn-without">
-                            <span class="btn-icon">⚡</span>
-                            <span>Export Without Notes</span>
-                        </button>
-                        <button class="export-btn export-btn-with">
-                            <span class="btn-icon">📝</span>
-                            <span>Export With Notes</span>
-                        </button>
-                    </div>
                 </div>
             `;
             document.body.appendChild(exportNotesModal);
@@ -1585,20 +1571,7 @@ function getChartColors() {
                 }
             });
 
-            // Button handlers
-            exportNotesModal.querySelector('.export-btn-cancel').addEventListener('click', function() {
-                hideExportNotesModal(null);
-            });
-
-            exportNotesModal.querySelector('.export-btn-without').addEventListener('click', function() {
-                hideExportNotesModal(false);
-            });
-
-            exportNotesModal.querySelector('.export-btn-with').addEventListener('click', function() {
-                hideExportNotesModal(true);
-            });
-
-            // Card click handlers (make cards clickable)
+            // Card click handlers (cards are the only way to select)
             exportNotesModal.querySelector('.export-with-notes').addEventListener('click', function() {
                 hideExportNotesModal(true);
             });
