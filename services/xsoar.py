@@ -1231,13 +1231,129 @@ class TicketHandler:
         log.debug(f"Successfully executed command '{command}' in ticket {incident_id}")
         return result
 
-    def upload_file_to_ticket(self, incident_id: str, file_path: str,
-                              comment: str = "",
-                              is_note_entry: bool = False,
-                              show_media_files: bool = False,
-                              tags: str = "") -> Dict[str, Any]:
+    def upload_file_to_attachment(self, incident_id: str, file_path: str,
+                                   comment: str = "") -> Dict[str, Any]:
         """
-        Upload a file to the specified ticket's war room.
+        Upload a file to the incident's Attachments field (not war room).
+
+        This method uploads the file to the incident's attachment field which appears
+        in the "ATTACHMENTS" section of the incident UI.
+
+        Args:
+            incident_id: The XSOAR incident ID
+            file_path: Path to the file to upload
+            comment: Optional comment for the file upload
+
+        Returns:
+            Response data from the API
+
+        Raises:
+            ValueError: If incident_id or file_path is empty
+            FileNotFoundError: If the file doesn't exist
+            ApiException: If API call fails
+
+        Example:
+            handler.upload_file_to_attachment("123456", "/path/to/file.txt",
+                                             comment="Investigation evidence")
+
+        Note:
+            This uploads to the Attachments field, NOT the war room.
+            For war room uploads, use upload_file_to_war_room() instead.
+
+        Reference:
+            https://live.paloaltonetworks.com/t5/cortex-xsoar-discussions/upload-a-file-to-the-quot-attachments-quot-section-of-an/td-p/569307
+        """
+        import os
+
+        # Validate inputs
+        if not incident_id:
+            raise ValueError("incident_id cannot be empty")
+        if not file_path:
+            raise ValueError("file_path cannot be empty")
+        if not os.path.exists(file_path):
+            raise FileNotFoundError(f"File not found: {file_path}")
+
+        log.debug(f"Uploading file {file_path} to attachments field of ticket {incident_id}")
+
+        # Build full URL - use /incident/upload/ for attachments field
+        url = f'{self.base_url}/xsoar/public/v1/incident/upload/{incident_id}'
+
+        # Get file name from path
+        file_name = os.path.basename(file_path)
+
+        try:
+            # Use requests_toolbelt for proper multipart encoding
+            from requests_toolbelt.multipart.encoder import MultipartEncoder
+
+            # Prepare multipart form data
+            with open(file_path, 'rb') as f:
+                file_content = f.read()
+
+            file_size = len(file_content)
+            log.debug(f"File size: {file_size} bytes")
+
+            multipart_data = MultipartEncoder(
+                fields={
+                    'file': (file_name, file_content, 'application/octet-stream'),
+                    'fileComment': comment
+                }
+            )
+
+            # Prepare headers with correct Content-Type from encoder
+            headers = {
+                'Authorization': self.auth_key,
+                'x-xdr-auth-id': self.auth_id,
+                'Content-Type': multipart_data.content_type,
+                'Accept': 'application/json'
+            }
+
+            response = requests.post(
+                url,
+                data=multipart_data,
+                headers=headers,
+                verify=False,
+                timeout=60
+            )
+
+            response.raise_for_status()
+
+            # Parse response
+            if response.text:
+                try:
+                    response_data = response.json()
+                except json.JSONDecodeError:
+                    log.warning(f"Could not parse response as JSON: {response.text}")
+                    response_data = {"raw_response": response.text}
+
+                # Check for XSOAR-specific errors
+                if isinstance(response_data, dict) and 'error' in response_data:
+                    error_msg = response_data['error']
+                    log.error(f"Error from XSOAR when uploading file to attachments of ticket {incident_id}: {error_msg}")
+                    raise ValueError(f"XSOAR error: {error_msg}")
+
+                log.debug(f"Successfully uploaded file {file_name} to attachments of ticket {incident_id}")
+                return response_data
+            else:
+                log.debug(f"Successfully uploaded file {file_name} to attachments of ticket {incident_id}")
+                return {}
+
+        except requests.exceptions.RequestException as e:
+            log.error(f"Error uploading file to attachments of ticket {incident_id}: {e}")
+            raise
+        except (IOError, OSError) as e:
+            log.error(f"Error reading file {file_path}: {e}")
+            raise
+
+    def upload_file_to_war_room(self, incident_id: str, file_path: str,
+                                comment: str = "",
+                                is_note_entry: bool = False,
+                                show_media_files: bool = False,
+                                tags: str = "") -> Dict[str, Any]:
+        """
+        Upload a file to the specified ticket's war room (appears in Evidence/Indicators).
+
+        This method uploads files to the war room, which may appear in the Evidence
+        or Indicators section, NOT in the Attachments field.
 
         Args:
             incident_id: The XSOAR incident ID
@@ -1256,9 +1372,13 @@ class TicketHandler:
             ApiException: If API call fails
 
         Example:
-            handler.upload_file_to_ticket("123456", "/path/to/file.txt",
-                                         comment="Investigation evidence",
-                                         tags="evidence,malware")
+            handler.upload_file_to_war_room("123456", "/path/to/file.txt",
+                                           comment="Investigation evidence",
+                                           tags="evidence,malware")
+
+        Note:
+            This uploads to the war room (Evidence/Indicators), NOT the Attachments field.
+            For attachments field uploads, use upload_file_to_attachment() instead.
 
         Reference:
             https://cortex-panw.stoplight.io/docs/cortex-xsoar-8/0csr093bgycdh-upload-content-to-an-incident-war-room-entry
@@ -1275,7 +1395,7 @@ class TicketHandler:
 
         log.debug(f"Uploading file {file_path} to ticket {incident_id}")
 
-        # Build full URL
+        # Build full URL - add /xsoar/public/v1 path
         url = f'{self.base_url}/xsoar/public/v1/entry/upload/{incident_id}'
 
         # Get file name from path
@@ -1346,6 +1466,45 @@ class TicketHandler:
         except (IOError, OSError) as e:
             log.error(f"Error reading file {file_path}: {e}")
             raise
+
+    def upload_file_to_ticket(self, incident_id: str, file_path: str,
+                              comment: str = "",
+                              upload_to: str = "attachment") -> Dict[str, Any]:
+        """
+        Upload a file to a ticket (attachments field or war room).
+
+        Args:
+            incident_id: The XSOAR incident ID
+            file_path: Path to the file to upload
+            comment: Optional comment for the file upload
+            upload_to: Where to upload - "attachment" (default) or "war_room"
+
+        Returns:
+            Response data from the API
+
+        Raises:
+            ValueError: If incident_id, file_path is empty, or upload_to is invalid
+            FileNotFoundError: If the file doesn't exist
+            ApiException: If API call fails
+
+        Example:
+            # Upload to attachments (default)
+            handler.upload_file_to_ticket("123456", "/path/to/file.txt", "Evidence")
+
+            # Upload to war room
+            handler.upload_file_to_ticket("123456", "/path/to/file.txt", "Evidence", upload_to="war_room")
+
+        Note:
+            - "attachment" -> ATTACHMENTS field (visible in Attachments section)
+            - "war_room" -> War room entry (visible in Evidence/Indicators)
+            For more control, use upload_file_to_attachment() or upload_file_to_war_room() directly.
+        """
+        if upload_to == "attachment":
+            return self.upload_file_to_attachment(incident_id, file_path, comment)
+        elif upload_to == "war_room":
+            return self.upload_file_to_war_room(incident_id, file_path, comment)
+        else:
+            raise ValueError(f"Invalid upload_to value: {upload_to}. Must be 'attachment' or 'war_room'")
 
 
 class ListHandler:
@@ -1538,9 +1697,69 @@ def main():
     # Example: Execute war room command
     # print(dev_ticket_handler.execute_command_in_war_room(ticket_id, "!ad-get-user username=user"))
     #
-    # Example: Upload file
+    # Example: Upload file to ATTACHMENTS field (use this for incident attachments)
     # file_path = "/path/to/file.pdf"
-    # print(dev_ticket_handler.upload_file_to_ticket(ticket_id, file_path, "Evidence file"))
+    # print("Uploading to ATTACHMENTS field:")
+    # result = dev_ticket_handler.upload_file_to_attachment(ticket_id, file_path, "Evidence file")
+    # print(f"Result: {result}")
+    #
+    # Example: Upload file to WAR ROOM (appears in Evidence/Indicators)
+    # file_path = "/path/to/file.pdf"
+    # print("Uploading to war room:")
+    # result = dev_ticket_handler.upload_file_to_war_room(ticket_id, file_path, "War room evidence")
+    # print(f"Result: {result}")
+
+    # TEST: Compare the two upload methods
+    ticket_id = '1380362'  # Replace with your test ticket ID
+    test_file_path = "/tmp/test_attachment.txt"
+
+    # Create a test file
+    import os
+    if not os.path.exists(test_file_path):
+        with open(test_file_path, 'w') as f:
+            f.write("This is a test attachment file.\n")
+            f.write(f"Created at: {datetime.now()}\n")
+        print(f"Created test file: {test_file_path}")
+
+    dev_ticket_handler = TicketHandler(XsoarEnvironment.DEV)
+
+    # Test 1: Upload to attachments field
+    print("\n" + "="*60)
+    print("TEST 1: Uploading to ATTACHMENTS field")
+    print(f"Endpoint: /incident/upload/{ticket_id}")
+    print("Expected: File should appear in ATTACHMENTS section")
+    print("="*60)
+    try:
+        result = dev_ticket_handler.upload_file_to_attachment(
+            ticket_id,
+            test_file_path,
+            "Test file uploaded to ATTACHMENTS field"
+        )
+        print(f"✓ Success! Response: {json.dumps(result, indent=2)}")
+    except Exception as e:
+        print(f"✗ Error: {e}")
+
+    # Test 2: Upload to war room
+    print("\n" + "="*60)
+    print("TEST 2: Uploading to WAR ROOM")
+    print(f"Endpoint: /entry/upload/{ticket_id}")
+    print("Expected: File should appear in Evidence/Indicators, NOT in ATTACHMENTS")
+    print("="*60)
+    try:
+        result = dev_ticket_handler.upload_file_to_war_room(
+            ticket_id,
+            test_file_path,
+            "Test file uploaded to war room"
+        )
+        print(f"✓ Success! Response: {json.dumps(result, indent=2)}")
+    except Exception as e:
+        print(f"✗ Error: {e}")
+
+    print("\n" + "="*60)
+    print("CHECK THE XSOAR INCIDENT UI TO VERIFY:")
+    print(f"1. ATTACHMENTS section should have 1 file (from Test 1)")
+    print(f"2. Evidence/Indicators should have 1 file (from Test 2)")
+    print("="*60)
 
     # prod_list_handler = ListHandler(XsoarEnvironment.PROD)
     # all_lists = prod_list_handler.get_all_lists()
