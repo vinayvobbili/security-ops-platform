@@ -1615,22 +1615,6 @@ function getChartColors() {
             exportNotesResolve = resolve;
             const modal = createExportNotesModal();
 
-            // Apply override styling for proper display
-            modal.style.cssText = `
-                position: fixed !important;
-                top: 0 !important;
-                left: 0 !important;
-                right: 0 !important;
-                bottom: 0 !important;
-                z-index: 10000 !important;
-                display: flex !important;
-                align-items: center !important;
-                justify-content: center !important;
-                margin: 0 !important;
-                padding: 20px !important;
-                transform: none !important;
-            `;
-
             // Show modal
             modal.classList.add('show');
 
