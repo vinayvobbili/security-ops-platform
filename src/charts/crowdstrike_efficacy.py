@@ -34,32 +34,34 @@ webex = WebexAPI(access_token=CONFIG.webex_bot_access_token_moneyball)
 
 
 def process_tickets(tickets: List[Dict[str, Any]]) -> pd.DataFrame:
-    """Process tickets to create a DataFrame with technique efficacy data."""
-    technique_counts = {}
+    """Process tickets to create a DataFrame with alert name efficacy data."""
+    alertname_counts = {}
 
     for ticket in tickets:
-        technique = ticket['CustomFields'].get('technique')[0]
+        alertname_field = ticket['CustomFields'].get('alertname', 'Unknown')
+        # Handle if alertname is a list (like technique was)
+        alertname = alertname_field[0] if isinstance(alertname_field, list) and alertname_field else alertname_field
         impact = ticket['CustomFields'].get('impact', 'Unknown')
 
         # Replace blank/empty impact with "Unknown" for clarity
         if not impact or impact.strip() == '':
             impact = 'Unknown'
 
-        if technique not in technique_counts:
-            technique_counts[technique] = {}
+        if alertname not in alertname_counts:
+            alertname_counts[alertname] = {}
 
-        technique_counts[technique][impact] = technique_counts[technique].get(impact, 0) + 1
+        alertname_counts[alertname][impact] = alertname_counts[alertname].get(impact, 0) + 1
 
-    for technique, impacts in technique_counts.items():
+    for alertname, impacts in alertname_counts.items():
         total = sum(impacts.values())
         confirmed = impacts.get('Confirmed', 0)
         testing = impacts.get('Security Testing', 0)
         prevented = impacts.get('Prevented', 0)
         malicious_true_positives = impacts.get('Malicious True Positive', 0)
         noise = round((total - confirmed - testing - prevented - malicious_true_positives) / total * 100) if total > 0 else 0
-        technique_counts[technique]['Noise'] = noise
+        alertname_counts[alertname]['Noise'] = noise
 
-    df = pd.DataFrame.from_dict(technique_counts, orient='index').fillna(0)
+    df = pd.DataFrame.from_dict(alertname_counts, orient='index').fillna(0)
     df['Total'] = df.sum(axis=1)
     df = df.sort_values(by='Total', ascending=False)
     df.index = df.index.astype(str)
@@ -143,7 +145,7 @@ class CrowdstrikeEfficacyChart:
                     colors.append('#CCCCCC')
 
             # Create larger figure with modern styling
-            fig, ax = plt.subplots(figsize=(22, 14), facecolor='#f8f9fa')
+            fig, ax = plt.subplots(figsize=(28, 14), facecolor='#f8f9fa')
             fig.patch.set_facecolor('#f8f9fa')
 
             # Enhanced plotting with better styling
@@ -162,16 +164,14 @@ class CrowdstrikeEfficacyChart:
             ax.grid(False)  # Remove gridlines for cleaner look
             ax.set_axisbelow(True)
 
-            # Calculate totals for each technique
-            technique_totals = plot_df.sum(axis=1)
-            total_all_techniques = int(technique_totals.sum())
+            # Calculate totals for each alert name
+            alertname_totals = plot_df.sum(axis=1)
+            total_all_alertnames = int(alertname_totals.sum())
 
-            # Enhanced y-axis labels with counts
+            # Enhanced y-axis labels
             y_labels = []
-            for i, (idx, total) in enumerate(technique_totals.items()):
-                count = int(total)
-                percentage = (count / total_all_techniques * 100) if total_all_techniques > 0 else 0
-                y_labels.append(f"{idx} ({count} - {percentage:.1f}%)")
+            for i, (idx, total) in enumerate(alertname_totals.items()):
+                y_labels.append(f"{idx}")
 
             ax.set_yticks(range(len(plot_df.index)))
             ax.set_yticklabels(y_labels, fontsize=13, color='#1A237E', fontweight='bold')
@@ -226,14 +226,14 @@ class CrowdstrikeEfficacyChart:
             # Extract subtitle from original title and add total count
             if "(" in title:
                 subtitle_part = title.split("(", 1)[1].rstrip(")")  # Remove trailing parenthesis
-                plt.title(f'{subtitle_part} (Total: {total_all_techniques})',
+                plt.title(f'{subtitle_part} (Total: {total_all_alertnames})',
                           fontsize=16, fontweight='bold', color='#3F51B5', pad=30)
             else:
-                plt.title(f'(Total: {total_all_techniques})',
+                plt.title(f'(Total: {total_all_alertnames})',
                           fontsize=16, fontweight='bold', color='#3F51B5', pad=30)
             plt.xlabel(f'Number of Tickets ({time_period_label})',
                        fontsize=14, labelpad=15, fontweight='bold', color='#1A237E')
-            plt.ylabel('Detection Technique', fontweight='bold',
+            plt.ylabel('Alert Name', fontweight='bold',
                        fontsize=14, color='#1A237E')
 
             # Style the spines
@@ -314,19 +314,19 @@ class CrowdstrikeEfficacyChart:
         chart_configs = [
             {
                 "days": 90,
-                "title": "Crowdstrike Detection Efficacy (Top 20 Techniques by Alert Volume, past Quarter)",
+                "title": "Crowdstrike Detection Efficacy (Top 20 Alert Names by Alert Volume, past Quarter)",
                 "time_period_label": "last 3 months",
                 "output_filename": "CrowdStrike Detection Efficacy-Quarter.png"
             },
             {
                 "days": 30,
-                "title": "Crowdstrike Detection Efficacy (Top 20 Techniques by Alert Volume, past Month)",
+                "title": "Crowdstrike Detection Efficacy (Top 20 Alert Names by Alert Volume, past Month)",
                 "time_period_label": "last 1 month",
                 "output_filename": "CrowdStrike Detection Efficacy-Month.png"
             },
             {
                 "days": 7,
-                "title": "Crowdstrike Detection Efficacy (Top 20 Techniques by Alert Volume, past Week)",
+                "title": "Crowdstrike Detection Efficacy (Top 20 Alert Names by Alert Volume, past Week)",
                 "time_period_label": "last 7 days",
                 "output_filename": "CrowdStrike Detection Efficacy-Week.png"
             }
