@@ -1525,7 +1525,7 @@ function getChartColors() {
                                 </div>
                                 <div class="export-card-timing">
                                     <span class="timing-icon">⏱️</span>
-                                    <span class="timing-text">30-60 seconds</span>
+                                    <span class="timing-text">1-15 minutes (depends on ticket count)</span>
                                 </div>
                             </div>
                             <div class="export-option-card export-without-notes">
@@ -1666,7 +1666,7 @@ function getChartColors() {
             const exportBtn = document.getElementById('exportExcelBtn');
             const originalText = exportBtn.textContent;
             if (includeNotes) {
-                exportBtn.textContent = '⏳ Exporting with notes (please wait 30-60 seconds)...';
+                exportBtn.textContent = '⏳ Exporting with notes (this may take several minutes)...';
                 exportBtn.style.background = 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)';
             } else {
                 exportBtn.textContent = '⏳ Exporting...';
