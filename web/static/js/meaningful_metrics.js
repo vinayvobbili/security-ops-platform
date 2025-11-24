@@ -417,7 +417,7 @@ function getChartColors() {
     }
 
     function formatAgeValue(value) {
-        if (value == 0) return 'All';
+        if (value === 0) return 'All';
         return value;
     }
 
@@ -1704,8 +1704,20 @@ function getChartColors() {
             });
 
             if (!response.ok) {
-                const error = await response.json();
-                throw new Error(error.error || 'Export failed');
+                // Check if response is JSON or HTML
+                const contentType = response.headers.get('content-type');
+                if (contentType && contentType.includes('application/json')) {
+                    const error = await response.json();
+                    throw new Error(error.error || 'Export failed');
+                } else {
+                    // Handle HTML error responses (e.g., NGINX timeouts)
+                    const text = await response.text();
+                    if (response.status === 504 || response.status === 502) {
+                        throw new Error('Export timed out. The request is taking too long - this usually happens when exporting with notes for many tickets. Try exporting without notes, or contact your administrator to increase the server timeout settings.');
+                    } else {
+                        throw new Error(`Server error (${response.status}): ${text.substring(0, 200)}`);
+                    }
+                }
             }
 
             // Download the file with descriptive filename
@@ -1732,9 +1744,19 @@ function getChartColors() {
             document.body.removeChild(a);
             window.URL.revokeObjectURL(url);
 
-            exportBtn.textContent = originalText;
-            exportBtn.style.background = '';
+            // Show success message in button
+            exportBtn.textContent = '✅ Export Complete!';
+            exportBtn.style.background = 'linear-gradient(135deg, #10b981 0%, #059669 100%)';
             exportBtn.disabled = false;
+
+            // Show prominent viewport notification
+            showExportSuccessNotification(filename);
+
+            // Reset button after 4 seconds
+            setTimeout(() => {
+                exportBtn.textContent = originalText;
+                exportBtn.style.background = '';
+            }, 4000);
         } catch (error) {
             console.error('Export error:', error);
             alert('Failed to export: ' + error.message);
@@ -1743,6 +1765,51 @@ function getChartColors() {
             exportBtn.style.background = '';
             exportBtn.disabled = false;
         }
+    }
+
+    function showExportSuccessNotification(filename) {
+        // Create toast notification element
+        const toast = document.createElement('div');
+        toast.style.cssText = `
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white;
+            padding: 20px 30px;
+            border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+            z-index: 10000;
+            font-size: 16px;
+            font-weight: 500;
+            text-align: center;
+            animation: slideDown 0.3s ease-out;
+            max-width: 90%;
+        `;
+
+        toast.innerHTML = `
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <span style="font-size: 24px;">✅</span>
+                <div>
+                    <div style="font-weight: 600; margin-bottom: 4px;">Export Complete!</div>
+                    <div style="font-size: 14px; opacity: 0.9;">Downloaded: ${filename}</div>
+                    <div style="font-size: 13px; opacity: 0.8; margin-top: 4px;">Check your Downloads folder</div>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(toast);
+
+        // Auto-remove after 6 seconds
+        setTimeout(() => {
+            toast.style.animation = 'slideUp 0.3s ease-out';
+            setTimeout(() => {
+                if (toast.parentNode) {
+                    toast.parentNode.removeChild(toast);
+                }
+            }, 300);
+        }, 6000);
     }
 
     function hideLoading() {
@@ -1965,7 +2032,7 @@ function getChartColors() {
                 item.className = 'column-order-item';
                 item.draggable = true;
                 item.dataset.columnId = columnId;
-                item.dataset.index = index;
+                item.dataset.index = String(index);
 
                 item.innerHTML = `
                 <span class="drag-handle">⋮⋮</span>
@@ -2054,7 +2121,6 @@ function getChartColors() {
             }
 
             // Insert at new position
-            const visibleOrderedColumns = columnOrder.filter(col => visibleColumns.includes(col));
             const targetColumnId = this.dataset.columnId;
             const newTargetIndex = columnOrder.indexOf(targetColumnId);
 
@@ -2078,7 +2144,7 @@ function getChartColors() {
         return false;
     }
 
-    function handleDragEnd(e) {
+    function handleDragEnd() {
         this.classList.remove('dragging');
         document.querySelectorAll('.drag-over').forEach(el => {
             el.classList.remove('drag-over');
@@ -2301,8 +2367,7 @@ function getChartColors() {
         Object.keys(typeResolutionData).forEach(type => {
             const times = typeResolutionData[type];
             if (times.length > 0) {
-                const average = times.reduce((sum, time) => sum + time, 0) / times.length;
-                typeAverages[type] = average;
+                typeAverages[type] = times.reduce((sum, time) => sum + time, 0) / times.length;
             }
         });
 
