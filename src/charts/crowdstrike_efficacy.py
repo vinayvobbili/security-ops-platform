@@ -332,8 +332,8 @@ class CrowdstrikeEfficacyChart:
             }
         ]
 
-        for config in chart_configs:
-            self.generate_chart_for_period(**config)
+        for chart_config in chart_configs:
+            self.generate_chart_for_period(**chart_config)
 
 
 def send_charts() -> None:
