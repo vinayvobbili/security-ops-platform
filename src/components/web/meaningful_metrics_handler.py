@@ -618,7 +618,7 @@ def export_meaningful_metrics_async(
 
     # Prepare rows for export
     max_cell_length = 32767
-    rows = _prepare_export_rows(incidents, visible_columns, column_labels, max_cell_length, eastern)
+    rows = _prepare_export_rows(incidents, visible_columns, column_labels, max_cell_length)
 
     # Create DataFrame and export to Excel
     df = pd.DataFrame(rows)
