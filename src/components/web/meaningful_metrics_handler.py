@@ -667,38 +667,62 @@ def _enrich_incidents_with_notes_async(incidents: List[Dict[str, Any]], progress
             incident['notes'] = [{'_fetch_error': True, 'error_message': str(excep)}]
         return incident
 
-    # Simple parallel execution - let ThreadPoolExecutor handle the threading
+    # Parallel execution with timeout protection
     with ThreadPoolExecutor(max_workers=ExportConfig.MAX_WORKERS) as executor:
         futures = {executor.submit(fetch_notes_for_incident, incident): incident for incident in incidents}
         completed = 0
+        remaining_futures = set(futures.keys())
 
-        # Process futures as they complete - simple and clean
-        for future in as_completed(futures.keys()):
-            result = future.result()  # Will never raise since we catch all exceptions inside fetch_notes_for_incident
-            enriched_incidents.append(result)
+        # Process with timeout to prevent infinite hangs
+        while remaining_futures and completed < len(incidents):
+            try:
+                # Wait max 60 seconds for ANY future to complete
+                done_futures = []
+                for future in as_completed(remaining_futures, timeout=60):
+                    result = future.result()
+                    enriched_incidents.append(result)
 
-            # Check if fetch was successful (ignore error markers and empty lists)
-            notes = result.get('notes', [])
-            is_error = (len(notes) == 1 and isinstance(notes[0], dict) and notes[0].get('_fetch_error'))
-            has_notes = notes and not is_error
+                    # Check if fetch was successful
+                    notes = result.get('notes', [])
+                    is_error = (len(notes) == 1 and isinstance(notes[0], dict) and notes[0].get('_fetch_error'))
+                    has_notes = notes and not is_error
 
-            if has_notes:
-                success_count += 1
-            else:
-                failed_count += 1
+                    if has_notes:
+                        success_count += 1
+                    else:
+                        failed_count += 1
 
-            # Update progress
-            completed += 1
-            if progress_callback:
-                progress_callback(completed, len(incidents))
+                    completed += 1
+                    done_futures.append(future)
 
-            # Log progress at intervals
-            if completed % ExportConfig.PROGRESS_LOG_INTERVAL == 0:
-                elapsed = time.time() - processing_start
-                rate = completed / elapsed if elapsed > 0 else 0
-                logger.info(f"Progress: {completed}/{len(incidents)} tickets "
-                           f"({success_count} with notes, {failed_count} without) - "
-                           f"Rate: {rate:.2f} tickets/sec")
+                    if progress_callback:
+                        progress_callback(completed, len(incidents))
+
+                    if completed % ExportConfig.PROGRESS_LOG_INTERVAL == 0:
+                        elapsed = time.time() - processing_start
+                        rate = completed / elapsed if elapsed > 0 else 0
+                        logger.info(f"Progress: {completed}/{len(incidents)} tickets "
+                                   f"({success_count} with notes, {failed_count} without) - "
+                                   f"Rate: {rate:.2f} tickets/sec")
+
+                # Remove completed futures
+                remaining_futures -= set(done_futures)
+
+            except TimeoutError:
+                # No futures completed in 60s - cancel all remaining and exit
+                logger.error(f"Export timeout: {len(remaining_futures)} futures hung for 60+ seconds")
+                for future in remaining_futures:
+                    incident = futures.get(future)
+                    logger.error(f"Cancelling hung ticket: {incident.get('id') if incident else 'Unknown'}")
+                    future.cancel()
+                    if incident:
+                        incident['notes'] = [{'_fetch_error': True, 'error_message': 'Export timeout - ticket hung'}]
+                        enriched_incidents.append(incident)
+                    failed_count += 1
+                    completed += 1
+                    if progress_callback:
+                        progress_callback(completed, len(incidents))
+                break
 
     total_elapsed = time.time() - start_time
     overall_rate = len(enriched_incidents) / total_elapsed if total_elapsed > 0 else 0
