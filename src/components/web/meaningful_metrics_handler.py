@@ -3,6 +3,7 @@
 import json
 import logging
 import tempfile
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
@@ -260,46 +261,158 @@ def export_meaningful_metrics(
     return temp_path
 
 
+class ExportConfig:
+    """Configuration for meaningful metrics export operations.
+
+    Class-level variables control parallel note enrichment during export.
+    Tuned separately from nightly cache generation (ticket_cache.py).
+    """
+
+    # Worker count for parallel note fetching during export
+    # Connection pool in xsoar.py is limited to maxsize=25
+    # API rate limiting occurs above 10-15 concurrent requests
+    # Default: 10 (balanced throughput without overwhelming API)
+    MAX_WORKERS = 10
+
+    # Individual ticket timeout in seconds
+    # Shorter than nightly cache (300s) since exports are interactive
+    # Default: 60s (fail fast for better UX)
+    TIMEOUT_PER_TICKET = 60
+
+    # Log progress every N tickets (for visibility during long exports)
+    PROGRESS_LOG_INTERVAL = 25
+
+
 def _enrich_incidents_with_notes(incidents: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Fetch notes for incidents in parallel."""
-    import os
+    """Fetch notes for incidents in parallel with detailed performance tracking."""
+    start_time = time.time()
+    logger.info(f"Starting note enrichment for {len(incidents)} filtered tickets...")
+    logger.info(f"Configuration: workers={ExportConfig.MAX_WORKERS}, "
+                f"timeout={ExportConfig.TIMEOUT_PER_TICKET}s per ticket")
 
     ticket_handler = TicketHandler(XsoarEnvironment.PROD)
-    max_workers = int(os.getenv('EXPORT_NOTE_WORKERS', '5'))
-    timeout_per_ticket = int(os.getenv('EXPORT_NOTE_TIMEOUT', '60'))
-
     enriched_incidents = []
     failed_count = 0
+    success_count = 0
+
+    # Track timing statistics
+    fetch_times = []
+    future_start_times = {}
 
     def fetch_notes_for_incident(incident):
+        """Fetch notes with timing tracking."""
         incident_id = incident.get('id')
+        fetch_start = time.time()
+
         if not incident_id:
             incident['notes'] = []
-            return incident
+            return incident, 0.0
+
         try:
+            logger.debug(f"Fetching notes for ticket {incident_id}...")
             notes = ticket_handler.get_user_notes(incident_id)
             incident['notes'] = notes if notes else []
-        except Exception as excep:
-            logger.warning(f"Failed to fetch notes for ticket {incident_id}: {excep}")
-            incident['notes'] = []
-        return incident
+            fetch_duration = time.time() - fetch_start
 
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        futures = {executor.submit(fetch_notes_for_incident, incident): incident for incident in incidents}
+            if notes:
+                logger.debug(f"Ticket {incident_id}: fetched {len(notes)} notes in {fetch_duration:.2f}s")
+            else:
+                logger.debug(f"Ticket {incident_id}: no notes returned in {fetch_duration:.2f}s")
+
+            return incident, fetch_duration
+        except Exception as excep:
+            fetch_duration = time.time() - fetch_start
+            error_type = type(excep).__name__
+
+            if '429' in str(excep) or 'rate limit' in str(excep).lower():
+                logger.warning(f"Ticket {incident_id}: Rate limited after {fetch_duration:.2f}s")
+            elif 'timeout' in str(excep).lower():
+                logger.warning(f"Ticket {incident_id}: Timeout after {fetch_duration:.2f}s ({error_type})")
+            else:
+                logger.warning(f"Ticket {incident_id}: {error_type} after {fetch_duration:.2f}s - {str(excep)[:100]}")
+
+            incident['notes'] = []
+            return incident, fetch_duration
+
+    logger.info(f"Submitting {len(incidents)} tasks to {ExportConfig.MAX_WORKERS} workers...")
+
+    with ThreadPoolExecutor(max_workers=ExportConfig.MAX_WORKERS) as executor:
+        # Submit all tasks and track start times
+        futures = {}
+        for incident in incidents:
+            future = executor.submit(fetch_notes_for_incident, incident)
+            futures[future] = incident
+            future_start_times[future] = time.time()
+
+        logger.info("All tasks submitted, waiting for completions...")
+        processing_start = time.time()
+        completed_count = 0
+
+        # Process completions
         for future in as_completed(futures.keys()):
+            completed_count += 1
+            incident = futures[future]
+            incident_id = incident.get('id', 'unknown')
+
             try:
-                result = future.result(timeout=timeout_per_ticket)
+                result, fetch_duration = future.result(timeout=ExportConfig.TIMEOUT_PER_TICKET)
                 enriched_incidents.append(result)
-                if not result.get('notes'):
+                fetch_times.append(fetch_duration)
+
+                if result.get('notes'):
+                    success_count += 1
+                else:
                     failed_count += 1
+
+                # Log progress at intervals
+                if completed_count % ExportConfig.PROGRESS_LOG_INTERVAL == 0:
+                    elapsed = time.time() - processing_start
+                    rate = completed_count / elapsed if elapsed > 0 else 0
+                    logger.info(f"Progress: {completed_count}/{len(incidents)} tickets "
+                               f"({success_count} with notes, {failed_count} without) - "
+                               f"Rate: {rate:.2f} tickets/sec")
+
+            except TimeoutError:
+                elapsed_time = time.time() - future_start_times[future]
+                logger.error(f"Ticket {incident_id}: timed out after {elapsed_time:.1f}s "
+                           f"(limit: {ExportConfig.TIMEOUT_PER_TICKET}s)")
+                incident['notes'] = []
+                enriched_incidents.append(incident)
+                failed_count += 1
+                future.cancel()
+
             except Exception as ex:
-                incident = futures[future]
-                logger.warning(f"Timeout/error enriching ticket {incident.get('id')}: {ex}")
+                elapsed_time = time.time() - future_start_times[future]
+                logger.error(f"Ticket {incident_id}: exception after {elapsed_time:.1f}s - {type(ex).__name__}: {ex}")
                 incident['notes'] = []
                 enriched_incidents.append(incident)
                 failed_count += 1
 
-    logger.info(f"Note enrichment complete: {len(incidents) - failed_count} success, {failed_count} failed")
+    total_elapsed = time.time() - start_time
+
+    # Calculate statistics
+    avg_fetch_time = sum(fetch_times) / len(fetch_times) if fetch_times else 0
+    max_fetch_time = max(fetch_times) if fetch_times else 0
+    min_fetch_time = min(fetch_times) if fetch_times else 0
+    overall_rate = len(enriched_incidents) / total_elapsed if total_elapsed > 0 else 0
+
+    logger.info("="*60)
+    logger.info("Note Enrichment Complete")
+    logger.info("="*60)
+    logger.info(f"Total tickets: {len(enriched_incidents)}")
+    logger.info(f"Success (with notes): {success_count} ({success_count/len(enriched_incidents)*100:.1f}%)")
+    logger.info(f"Failed (no notes): {failed_count} ({failed_count/len(enriched_incidents)*100:.1f}%)")
+    logger.info(f"Total time: {total_elapsed:.1f}s")
+    logger.info(f"Overall rate: {overall_rate:.2f} tickets/sec")
+    logger.info(f"Fetch time - Avg: {avg_fetch_time:.2f}s, Min: {min_fetch_time:.2f}s, Max: {max_fetch_time:.2f}s")
+    logger.info("="*60)
+
+    # Warn if failure rate is high
+    if failed_count > len(enriched_incidents) * 0.3:
+        failure_pct = (failed_count / len(enriched_incidents)) * 100
+        logger.warning(f"HIGH FAILURE RATE: {failure_pct:.1f}% - Consider reducing MAX_WORKERS or increasing TIMEOUT_PER_TICKET")
+        logger.warning(f"Current config: MAX_WORKERS={ExportConfig.MAX_WORKERS}, TIMEOUT_PER_TICKET={ExportConfig.TIMEOUT_PER_TICKET}s")
+
     return enriched_incidents
 
 
@@ -444,3 +557,172 @@ def _add_hyperlinks_and_formatting(temp_path: str) -> None:
 
     wrap_columns = {'notes', 'impact', 'name', 'user notes'}
     apply_professional_formatting(temp_path, column_widths, wrap_columns, date_columns=set())
+
+
+def export_meaningful_metrics_async(
+    base_dir: str,
+    eastern: pytz.tzinfo.BaseTzInfo,
+    filters: Dict[str, Any],
+    visible_columns: List[str],
+    column_labels: Dict[str, str],
+    include_notes: bool = False,
+    progress_callback=None
+) -> str:
+    """Async version of export with progress tracking.
+
+    Args:
+        base_dir: Base directory of the web application
+        eastern: Pytz timezone object for US/Eastern
+        filters: Filter criteria to apply
+        visible_columns: List of column IDs to include
+        column_labels: Map of column IDs to display labels
+        include_notes: Whether to enrich with notes
+        progress_callback: Optional callback(current, total) for progress tracking
+
+    Returns:
+        Path to temporary Excel file
+
+    Raises:
+        FileNotFoundError: If cache file not found
+        ValueError: If no incidents to export
+    """
+    logger.info(f"Async export started with filters: {filters}")
+
+    # Load data from cache
+    today_date = datetime.now(eastern).strftime('%m-%d-%Y')
+    root_directory = Path(base_dir).parent
+    cache_file = root_directory / 'data' / 'transient' / 'secOps' / today_date / 'past_90_days_tickets.json'
+
+    if not cache_file.exists():
+        raise FileNotFoundError('Cache file not found')
+
+    with open(cache_file, 'r') as f:
+        cached_data = json.load(f)
+
+    # Extract incidents data
+    if isinstance(cached_data, dict) and 'data' in cached_data:
+        all_incidents = cached_data['data']
+    else:
+        all_incidents = cached_data
+
+    # Apply filters
+    incidents = apply_filters_to_incidents(all_incidents, filters)
+
+    if not incidents:
+        raise ValueError('No incidents to export')
+
+    # Notify total count
+    if progress_callback:
+        progress_callback(0, len(incidents))
+
+    # Enrich with notes if requested
+    if include_notes:
+        logger.info(f"Enriching {len(incidents)} filtered tickets with notes (async)...")
+        incidents = _enrich_incidents_with_notes_async(incidents, progress_callback)
+
+    # Prepare rows for export
+    max_cell_length = 32767
+    rows = _prepare_export_rows(incidents, visible_columns, column_labels, max_cell_length, eastern)
+
+    # Create DataFrame and export to Excel
+    df = pd.DataFrame(rows)
+
+    # Create temporary file
+    with tempfile.NamedTemporaryFile(mode='wb', suffix='.xlsx', delete=False) as tmp:
+        temp_path = tmp.name
+        df.to_excel(temp_path, index=False, engine='openpyxl')
+
+    # Add hyperlinks and formatting
+    _add_hyperlinks_and_formatting(temp_path)
+
+    logger.info(f"Async export complete: {temp_path}")
+    return temp_path
+
+
+def _enrich_incidents_with_notes_async(incidents: List[Dict[str, Any]], progress_callback=None) -> List[Dict[str, Any]]:
+    """Async version of note enrichment with progress tracking."""
+    start_time = time.time()
+    processing_start = time.time()
+
+    ticket_handler = TicketHandler(XsoarEnvironment.PROD)
+    enriched_incidents = []
+    failed_count = 0
+    success_count = 0
+
+    # Notify start of processing
+    if progress_callback:
+        progress_callback(0, len(incidents))
+
+    def fetch_notes_for_incident(incident):
+        incident_id = incident.get('id')
+        if not incident_id:
+            incident['notes'] = []
+            return incident
+        try:
+            notes = ticket_handler.get_user_notes(incident_id)
+            incident['notes'] = notes if notes else []
+        except Exception as excep:
+            logger.warning(f"Failed to fetch notes for ticket {incident_id}: {excep}")
+            incident['notes'] = []
+        return incident
+
+    with ThreadPoolExecutor(max_workers=ExportConfig.MAX_WORKERS) as executor:
+        futures = {executor.submit(fetch_notes_for_incident, incident): incident for incident in incidents}
+        completed = 0
+
+        for future in as_completed(futures.keys()):
+            try:
+                result = future.result(timeout=ExportConfig.TIMEOUT_PER_TICKET)
+                enriched_incidents.append(result)
+                if result.get('notes'):
+                    success_count += 1
+                else:
+                    failed_count += 1
+
+                # Update progress
+                completed += 1
+                if progress_callback:
+                    progress_callback(completed, len(incidents))
+
+                # Log progress at intervals
+                if completed % ExportConfig.PROGRESS_LOG_INTERVAL == 0:
+                    elapsed = time.time() - processing_start
+                    rate = completed / elapsed if elapsed > 0 else 0
+                    logger.info(f"Progress: {completed}/{len(incidents)} tickets "
+                               f"({success_count} with notes, {failed_count} without) - "
+                               f"Rate: {rate:.2f} tickets/sec")
+
+            except Exception as ex:
+                incident = futures[future]
+                logger.warning(f"Timeout/error enriching ticket {incident.get('id')}: {ex}")
+                incident['notes'] = []
+                enriched_incidents.append(incident)
+                failed_count += 1
+
+                # Update progress even on failure
+                completed += 1
+                if progress_callback:
+                    progress_callback(completed, len(incidents))
+
+                # Log progress at intervals
+                if completed % ExportConfig.PROGRESS_LOG_INTERVAL == 0:
+                    elapsed = time.time() - processing_start
+                    rate = completed / elapsed if elapsed > 0 else 0
+                    logger.info(f"Progress: {completed}/{len(incidents)} tickets "
+                               f"({success_count} with notes, {failed_count} without) - "
+                               f"Rate: {rate:.2f} tickets/sec")
+
+    total_elapsed = time.time() - start_time
+    overall_rate = len(enriched_incidents) / total_elapsed if total_elapsed > 0 else 0
+
+    logger.info("="*60)
+    logger.info("Note Enrichment Complete")
+    logger.info("="*60)
+    logger.info(f"Total tickets: {len(enriched_incidents)}")
+    logger.info(f"Success (with notes): {success_count} ({success_count/len(enriched_incidents)*100:.1f}%)")
+    logger.info(f"Failed (no notes): {failed_count} ({failed_count/len(enriched_incidents)*100:.1f}%)")
+    logger.info(f"Total time: {total_elapsed:.1f}s")
+    logger.info(f"Overall rate: {overall_rate:.2f} tickets/sec")
+    logger.info("="*60)
+
+    return enriched_incidents

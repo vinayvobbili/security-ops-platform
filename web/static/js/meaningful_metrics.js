@@ -1653,7 +1653,7 @@ function getCurrentFilters() {
 }
 
 async function exportToExcel() {
-    // Use server-side export with filter parameters instead of sending full data
+    // Use async server-side export with progress tracking
     try {
         // Ask user if they want to include notes (requires fetching from XSOAR API)
         const includeNotes = await showExportNotesModal();
@@ -1665,19 +1665,9 @@ async function exportToExcel() {
 
         const exportBtn = document.getElementById('exportExcelBtn');
         const originalText = exportBtn.textContent;
-        if (includeNotes) {
-            exportBtn.textContent = '⏳ Exporting with notes (this may take several minutes)...';
-            exportBtn.style.background = 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)';
-        } else {
-            exportBtn.textContent = '⏳ Exporting...';
-            exportBtn.style.background = 'linear-gradient(135deg, #0369a1 0%, #0284c7 100%)';
-        }
-        exportBtn.disabled = true;
 
         // Build column labels mapping and add notes column if requested
         const exportColumns = [...visibleColumns];
-
-        // Add notes column if requested and not already present
         if (includeNotes && !exportColumns.includes('notes')) {
             exportColumns.push('notes');
         }
@@ -1687,14 +1677,16 @@ async function exportToExcel() {
             columnLabels[colId] = availableColumns[colId]?.label || colId;
         });
 
-        // Get current filter parameters instead of sending all filtered data
         const filters = getCurrentFilters();
 
-        const response = await fetch('/api/meaningful-metrics/export', {
+        // Start async export
+        exportBtn.textContent = '⏳ Starting export...';
+        exportBtn.style.background = 'linear-gradient(135deg, #0369a1 0%, #0284c7 100%)';
+        exportBtn.disabled = true;
+
+        const startResponse = await fetch('/api/meaningful-metrics/export-async/start', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
+            headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({
                 filters: filters,
                 visible_columns: exportColumns,
@@ -1703,60 +1695,92 @@ async function exportToExcel() {
             })
         });
 
-        if (!response.ok) {
-            // Check if response is JSON or HTML
-            const contentType = response.headers.get('content-type');
-            if (contentType && contentType.includes('application/json')) {
-                const error = await response.json();
-                throw new Error(error.error || 'Export failed');
-            } else {
-                // Handle HTML error responses (e.g., NGINX timeouts)
-                const text = await response.text();
-                if (response.status === 504 || response.status === 502) {
-                    throw new Error('Export timed out. The request is taking too long - this usually happens when exporting with notes for many tickets. Try exporting without notes, or contact your administrator to increase the server timeout settings.');
+        if (!startResponse.ok) {
+            const error = await startResponse.json();
+            throw new Error(error.error || 'Failed to start export');
+        }
+
+        const {job_id} = await startResponse.json();
+
+        // Poll for progress
+        const pollInterval = 30000; // Poll every 30 seconds
+        let lastProgress = 0;
+
+        while (true) {
+            await new Promise(resolve => setTimeout(resolve, pollInterval));
+
+            const statusResponse = await fetch(`/api/meaningful-metrics/export-async/status/${job_id}`);
+            if (!statusResponse.ok) {
+                throw new Error('Failed to check export status');
+            }
+
+            const status = await statusResponse.json();
+
+            // Update button with progress
+            if (status.status === 'processing') {
+                const progress = status.progress || 0;
+                const total = status.total || 0;
+                const percentage = total > 0 ? Math.round((progress / total) * 100) : 0;
+
+                if (includeNotes) {
+                    exportBtn.textContent = `⏳ Enriching notes: ${progress}/${total} (${percentage}%)`;
+                    exportBtn.style.background = 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)';
                 } else {
-                    throw new Error(`Server error (${response.status}): ${text.substring(0, 200)}`);
+                    exportBtn.textContent = `⏳ Exporting: ${percentage}%`;
                 }
+
+                lastProgress = progress;
+            } else if (status.status === 'complete') {
+                // Download the file
+                exportBtn.textContent = '⬇️ Downloading...';
+
+                const downloadResponse = await fetch(`/api/meaningful-metrics/export-async/download/${job_id}`);
+                if (!downloadResponse.ok) {
+                    throw new Error('Failed to download export file');
+                }
+
+                const blob = await downloadResponse.blob();
+                const url = window.URL.createObjectURL(blob);
+
+                // Generate filename with timestamp
+                const now = new Date();
+                const timestamp = now.getFullYear() + '-' +
+                    String(now.getMonth() + 1).padStart(2, '0') + '-' +
+                    String(now.getDate()).padStart(2, '0') + '_' +
+                    String(now.getHours()).padStart(2, '0') + '-' +
+                    String(now.getMinutes()).padStart(2, '0') + '-' +
+                    String(now.getSeconds()).padStart(2, '0');
+
+                const notesPrefix = includeNotes ? 'with_notes' : 'without_notes';
+                const filename = `security_incidents_${notesPrefix}_${timestamp}.xlsx`;
+
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+
+                // Show success
+                exportBtn.textContent = '✅ Export Complete!';
+                exportBtn.style.background = 'linear-gradient(135deg, #10b981 0%, #059669 100%)';
+                exportBtn.disabled = false;
+
+                showExportSuccessNotification(filename);
+
+                // Reset button after 4 seconds
+                setTimeout(() => {
+                    exportBtn.textContent = originalText;
+                    exportBtn.style.background = '';
+                }, 4000);
+
+                break;
+            } else if (status.status === 'failed') {
+                throw new Error(status.error || 'Export failed');
             }
         }
 
-        // Download the file with descriptive filename
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-
-        // Generate timestamp in format: YYYY-MM-DD_HH-MM-SS
-        const now = new Date();
-        const timestamp = now.getFullYear() + '-' +
-            String(now.getMonth() + 1).padStart(2, '0') + '-' +
-            String(now.getDate()).padStart(2, '0') + '_' +
-            String(now.getHours()).padStart(2, '0') + '-' +
-            String(now.getMinutes()).padStart(2, '0') + '-' +
-            String(now.getSeconds()).padStart(2, '0');
-
-        const notesPrefix = includeNotes ? 'with_notes' : 'without_notes';
-        const filename = `security_incidents_${notesPrefix}_${timestamp}.xlsx`;
-
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        window.URL.revokeObjectURL(url);
-
-        // Show success message in button
-        exportBtn.textContent = '✅ Export Complete!';
-        exportBtn.style.background = 'linear-gradient(135deg, #10b981 0%, #059669 100%)';
-        exportBtn.disabled = false;
-
-        // Show prominent viewport notification
-        showExportSuccessNotification(filename);
-
-        // Reset button after 4 seconds
-        setTimeout(() => {
-            exportBtn.textContent = originalText;
-            exportBtn.style.background = '';
-        }, 4000);
     } catch (error) {
         console.error('Export error:', error);
         alert('Failed to export: ' + error.message);
