@@ -262,22 +262,13 @@ def export_meaningful_metrics(
 
 
 class ExportConfig:
-    """Configuration for meaningful metrics export operations.
-
-    Class-level variables control parallel note enrichment during export.
-    Tuned separately from nightly cache generation (ticket_cache.py).
-    """
+    """Configuration for meaningful metrics export operations."""
 
     # Worker count for parallel note fetching during export
     # Connection pool in xsoar.py is limited to maxsize=25
     # API rate limiting occurs above 10-15 concurrent requests
     # Default: 10 (balanced throughput without overwhelming API)
     MAX_WORKERS = 10
-
-    # Individual ticket timeout in seconds
-    # Shorter than nightly cache (300s) since exports are interactive
-    # Default: 60s (fail fast for better UX)
-    TIMEOUT_PER_TICKET = 60
 
     # Log progress every N tickets (for visibility during long exports)
     PROGRESS_LOG_INTERVAL = 25
@@ -461,6 +452,11 @@ def _format_notes(notes: Any, max_cell_length: int) -> str:
     """Format notes with truncation."""
     if not isinstance(notes, list) or not notes:
         return ''
+
+    # Check if this is an error marker from failed fetch
+    if len(notes) == 1 and isinstance(notes[0], dict) and notes[0].get('_fetch_error'):
+        error_msg = notes[0].get('error_message', 'Unknown error')
+        return f"[ERROR: Unable to fetch notes - {error_msg}]"
 
     truncation_message = '\n\n[... Content truncated due to Excel cell size limit. Please view full notes in the web interface ...]'
     reserved_length = len(truncation_message) + 100
@@ -654,63 +650,55 @@ def _enrich_incidents_with_notes_async(incidents: List[Dict[str, Any]], progress
         progress_callback(0, len(incidents))
 
     def fetch_notes_for_incident(incident):
+        """Fetch notes for a single incident with simple error handling."""
         incident_id = incident.get('id')
         if not incident_id:
             incident['notes'] = []
             return incident
         try:
-            notes = ticket_handler.get_user_notes(incident_id)
+            # max_retries=0: No retries - if API call fails/times out, just skip it
+            # API has 30s timeout configured globally in xsoar.py
+            notes = ticket_handler.get_user_notes(incident_id, max_retries=0)
             incident['notes'] = notes if notes else []
         except Exception as excep:
+            # Mark as failed fetch with a special error marker
+            # This will show up in the Excel export so users know the fetch failed
             logger.warning(f"Failed to fetch notes for ticket {incident_id}: {excep}")
-            incident['notes'] = []
+            incident['notes'] = [{'_fetch_error': True, 'error_message': str(excep)}]
         return incident
 
+    # Simple parallel execution - let ThreadPoolExecutor handle the threading
     with ThreadPoolExecutor(max_workers=ExportConfig.MAX_WORKERS) as executor:
         futures = {executor.submit(fetch_notes_for_incident, incident): incident for incident in incidents}
         completed = 0
 
+        # Process futures as they complete - simple and clean
         for future in as_completed(futures.keys()):
-            try:
-                result = future.result(timeout=ExportConfig.TIMEOUT_PER_TICKET)
-                enriched_incidents.append(result)
-                if result.get('notes'):
-                    success_count += 1
-                else:
-                    failed_count += 1
+            result = future.result()  # Will never raise since we catch all exceptions inside fetch_notes_for_incident
+            enriched_incidents.append(result)
 
-                # Update progress
-                completed += 1
-                if progress_callback:
-                    progress_callback(completed, len(incidents))
+            # Check if fetch was successful (ignore error markers and empty lists)
+            notes = result.get('notes', [])
+            is_error = (len(notes) == 1 and isinstance(notes[0], dict) and notes[0].get('_fetch_error'))
+            has_notes = notes and not is_error
 
-                # Log progress at intervals
-                if completed % ExportConfig.PROGRESS_LOG_INTERVAL == 0:
-                    elapsed = time.time() - processing_start
-                    rate = completed / elapsed if elapsed > 0 else 0
-                    logger.info(f"Progress: {completed}/{len(incidents)} tickets "
-                               f"({success_count} with notes, {failed_count} without) - "
-                               f"Rate: {rate:.2f} tickets/sec")
-
-            except Exception as ex:
-                incident = futures[future]
-                logger.warning(f"Timeout/error enriching ticket {incident.get('id')}: {ex}")
-                incident['notes'] = []
-                enriched_incidents.append(incident)
+            if has_notes:
+                success_count += 1
+            else:
                 failed_count += 1
 
-                # Update progress even on failure
-                completed += 1
-                if progress_callback:
-                    progress_callback(completed, len(incidents))
+            # Update progress
+            completed += 1
+            if progress_callback:
+                progress_callback(completed, len(incidents))
 
-                # Log progress at intervals
-                if completed % ExportConfig.PROGRESS_LOG_INTERVAL == 0:
-                    elapsed = time.time() - processing_start
-                    rate = completed / elapsed if elapsed > 0 else 0
-                    logger.info(f"Progress: {completed}/{len(incidents)} tickets "
-                               f"({success_count} with notes, {failed_count} without) - "
-                               f"Rate: {rate:.2f} tickets/sec")
+            # Log progress at intervals
+            if completed % ExportConfig.PROGRESS_LOG_INTERVAL == 0:
+                elapsed = time.time() - processing_start
+                rate = completed / elapsed if elapsed > 0 else 0
+                logger.info(f"Progress: {completed}/{len(incidents)} tickets "
+                           f"({success_count} with notes, {failed_count} without) - "
+                           f"Rate: {rate:.2f} tickets/sec")
 
     total_elapsed = time.time() - start_time
     overall_rate = len(enriched_incidents) / total_elapsed if total_elapsed > 0 else 0

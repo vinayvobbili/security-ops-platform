@@ -123,15 +123,15 @@ dev_client = demisto_client.configure(
 
 # Configure connection and read timeouts for both clients
 # Connect timeout: 30s (how long to wait to establish connection)
-# Read timeout: 180s (how long to wait for response data after connection established)
-# This prevents indefinite hangs when the API is unresponsive while allowing legitimate slow queries
-# Increased to 180s to handle slow network environments (VMs) where pages can take 100+ seconds
+# Read timeout: 30s (how long to wait for response data after connection established)
+# This prevents indefinite hangs when the API is unresponsive
+# Reduced from 180s to 30s - fail fast instead of blocking exports for minutes
 for client in [prod_client, dev_client]:
     if hasattr(client, 'api_client') and hasattr(client.api_client, 'rest_client'):
         rest_client = client.api_client.rest_client
         # Set timeout: (connect_timeout, read_timeout) in seconds
-        # Can be overridden via XSOAR_READ_TIMEOUT env var
-        read_timeout = int(os.getenv('XSOAR_READ_TIMEOUT', '180'))
+        # Reduced from 180s to 30s - fail fast instead of hanging
+        read_timeout = int(os.getenv('XSOAR_READ_TIMEOUT', '30'))
         rest_client.timeout = (30, read_timeout)
 
 # Configure retry strategy for connection resilience
@@ -153,8 +153,8 @@ for client in [prod_client, dev_client]:
         if hasattr(rest_client, 'pool_manager'):
             # Recreate pool manager with maxsize=25, proper timeout configuration, and retry logic
             # This prevents threads from hanging indefinitely waiting for connections
-            # Read timeout increased to 180s to handle slow network environments (VMs)
-            read_timeout = int(os.getenv('XSOAR_READ_TIMEOUT', '180'))
+            # Reduced timeout from 180s to 30s - fail fast instead of hanging
+            read_timeout = int(os.getenv('XSOAR_READ_TIMEOUT', '30'))
             rest_client.pool_manager = urllib3.PoolManager(
                 num_pools=10,
                 maxsize=25,  # Reduced from 100->50->25 to avoid API rate limiting
@@ -205,8 +205,9 @@ class TicketHandler:
     DEFAULT_PAGE_SIZE = int(os.getenv('XSOAR_PAGE_SIZE', '2000'))
 
     # Read timeout for API requests (seconds)
-    # Increase this for slow network environments where pages take 100+ seconds
-    READ_TIMEOUT = int(os.getenv('XSOAR_READ_TIMEOUT', '180'))
+    # Reduced from 180s to 30s - if an API call takes longer, it should fail
+    # Slow calls will be logged and we move on rather than blocking for minutes
+    READ_TIMEOUT = int(os.getenv('XSOAR_READ_TIMEOUT', '30'))
 
     def __init__(self, environment: XsoarEnvironment = XsoarEnvironment.PROD):
         """
@@ -1043,18 +1044,19 @@ class TicketHandler:
         # Should not reach here, but just in case
         raise ApiException(f"Failed to fetch investigation {incident_id} after {max_retries} retries")
 
-    def get_user_notes(self, incident_id: str) -> List[Dict[str, str]]:
+    def get_user_notes(self, incident_id: str, max_retries: int = 3) -> List[Dict[str, str]]:
         """
         Fetch user notes for a given incident.
 
         Args:
             incident_id: The XSOAR incident ID
+            max_retries: Maximum retry attempts for API calls (default: 3)
 
         Returns:
             List of formatted notes with note_text, author, and created_at fields,
             sorted with latest note first
         """
-        case_data_with_notes = self.get_case_data_with_notes(incident_id)
+        case_data_with_notes = self.get_case_data_with_notes(incident_id, max_retries=max_retries)
         entries = case_data_with_notes.get('entries', [])
         user_notes = [entry for entry in entries if entry.get('note')]
 
