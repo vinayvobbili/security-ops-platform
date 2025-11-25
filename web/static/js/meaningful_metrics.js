@@ -1680,7 +1680,8 @@ async function exportToExcel() {
         const filters = getCurrentFilters();
 
         // Start async export
-        exportBtn.textContent = '⏳ Starting export...';
+        const exportType = includeNotes ? 'with notes' : 'without notes';
+        exportBtn.textContent = `⏳ Starting export ${exportType}...`;
         exportBtn.style.background = 'linear-gradient(135deg, #0369a1 0%, #0284c7 100%)';
         exportBtn.disabled = true;
 
