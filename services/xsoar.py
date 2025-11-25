@@ -97,10 +97,10 @@ _original_pool_manager_init = urllib3.PoolManager.__init__
 @functools.wraps(_original_pool_manager_init)
 def _patched_pool_manager_init(self, *args, **kwargs):
     """Patched PoolManager init with larger default maxsize."""
-    # Set maxsize to 25 if not explicitly provided (matches ticket_cache.py worker count)
-    # Reduced from 100->50->25 to avoid API rate limiting
+    # Set maxsize to 50 if not explicitly provided (exports use 10 workers, need headroom for timeouts)
+    # Increased from 25 to 50 to prevent connection pool exhaustion during exports
     if 'maxsize' not in kwargs:
-        kwargs['maxsize'] = 25
+        kwargs['maxsize'] = 50
     return _original_pool_manager_init(self, *args, **kwargs)
 
 
@@ -151,13 +151,13 @@ for client in [prod_client, dev_client]:
     if hasattr(client, 'api_client') and hasattr(client.api_client, 'rest_client'):
         rest_client = client.api_client.rest_client
         if hasattr(rest_client, 'pool_manager'):
-            # Recreate pool manager with maxsize=25, proper timeout configuration, and retry logic
+            # Recreate pool manager with maxsize=50, proper timeout configuration, and retry logic
             # This prevents threads from hanging indefinitely waiting for connections
             # Reduced timeout from 180s to 30s - fail fast instead of hanging
             read_timeout = int(os.getenv('XSOAR_READ_TIMEOUT', '30'))
             rest_client.pool_manager = urllib3.PoolManager(
                 num_pools=10,
-                maxsize=25,  # Reduced from 100->50->25 to avoid API rate limiting
+                maxsize=50,  # Increased from 25 to 50 to prevent connection pool exhaustion during exports
                 timeout=urllib3.Timeout(connect=30.0, read=float(read_timeout)),
                 retries=retry_strategy,  # Add retry logic for transient network issues
                 cert_reqs='CERT_NONE' if not client.api_client.configuration.verify_ssl else 'CERT_REQUIRED'
