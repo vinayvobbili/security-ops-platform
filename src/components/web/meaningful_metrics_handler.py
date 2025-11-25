@@ -3,6 +3,7 @@
 import json
 import logging
 import tempfile
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, List
@@ -14,7 +15,6 @@ from openpyxl.styles import Font
 
 from services.xsoar import TicketHandler, XsoarEnvironment
 from src.utils.excel_formatting import apply_professional_formatting
-from concurrent.futures import ThreadPoolExecutor, as_completed
 
 logger = logging.getLogger(__name__)
 
@@ -187,12 +187,12 @@ def apply_filters_to_incidents(incidents: List[Dict[str, Any]], filters: Dict[st
 
 
 def export_meaningful_metrics(
-    base_dir: str,
-    eastern: pytz.tzinfo.BaseTzInfo,
-    filters: Dict[str, Any],
-    visible_columns: List[str],
-    column_labels: Dict[str, str],
-    include_notes: bool = False
+        base_dir: str,
+        eastern: pytz.tzinfo.BaseTzInfo,
+        filters: Dict[str, Any],
+        visible_columns: List[str],
+        column_labels: Dict[str, str],
+        include_notes: bool = False
 ) -> str:
     """Server-side Excel export with professional formatting.
 
@@ -243,7 +243,7 @@ def export_meaningful_metrics(
 
     # Prepare rows for export
     max_cell_length = 32767
-    rows = _prepare_export_rows(incidents, visible_columns, column_labels, max_cell_length, eastern)
+    rows = _prepare_export_rows(incidents, visible_columns, column_labels, max_cell_length)
 
     # Create DataFrame and export to Excel
     df = pd.DataFrame(rows)
@@ -304,11 +304,10 @@ def _enrich_incidents_with_notes(incidents: List[Dict[str, Any]]) -> List[Dict[s
 
 
 def _prepare_export_rows(
-    incidents: List[Dict[str, Any]],
-    visible_columns: List[str],
-    column_labels: Dict[str, str],
-    max_cell_length: int,
-    eastern: pytz.tzinfo.BaseTzInfo
+        incidents: List[Dict[str, Any]],
+        visible_columns: List[str],
+        column_labels: Dict[str, str],
+        max_cell_length: int
 ) -> List[Dict[str, Any]]:
     """Prepare incident rows for Excel export."""
     severity_map = {0: 'Unknown', 1: 'Low', 2: 'Medium', 3: 'High', 4: 'Critical'}
@@ -329,7 +328,7 @@ def _prepare_export_rows(
             elif col_id == 'status':
                 value = status_map.get(value, 'Unknown')
             elif col_id in ['created', 'modified', 'closed', 'updated'] and value:
-                value = _format_date(value, eastern)
+                value = _format_date(value)
             elif isinstance(value, list):
                 value = ', '.join(str(v) for v in value)
 
@@ -378,7 +377,7 @@ def _format_notes(notes: Any, max_cell_length: int) -> str:
     return notes_text
 
 
-def _format_date(value: Any, eastern: pytz.tzinfo.BaseTzInfo) -> str:
+def _format_date(value: Any) -> str:
     """Format date as MM/DD/YYYY HH:MM AM ET."""
     try:
         if isinstance(value, str):
