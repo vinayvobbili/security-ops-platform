@@ -667,18 +667,28 @@ def _enrich_incidents_with_notes_async(incidents: List[Dict[str, Any]], progress
             incident['notes'] = [{'_fetch_error': True, 'error_message': str(excep)}]
         return incident
 
-    # Parallel execution with timeout protection
-    with ThreadPoolExecutor(max_workers=ExportConfig.MAX_WORKERS) as executor:
-        futures = {executor.submit(fetch_notes_for_incident, incident): incident for incident in incidents}
-        completed = 0
-        remaining_futures = set(futures.keys())
+    # Parallel execution with bounded queue - only MAX_WORKERS futures in flight at once
+    from collections import deque
 
-        # Process with timeout to prevent infinite hangs
-        while remaining_futures and completed < len(incidents):
+    with ThreadPoolExecutor(max_workers=ExportConfig.MAX_WORKERS) as executor:
+        pending = deque(incidents)
+        futures = {}
+
+        # Submit initial batch (up to MAX_WORKERS)
+        for _ in range(min(ExportConfig.MAX_WORKERS, len(pending))):
+            incident = pending.popleft()
+            future = executor.submit(fetch_notes_for_incident, incident)
+            futures[future] = incident
+
+        completed = 0
+        last_progress_time = time.time()
+
+        # Process futures as they complete, submitting new ones to keep queue full
+        while futures:
             try:
                 # Wait max 60 seconds for ANY future to complete
                 done_futures = []
-                for future in as_completed(remaining_futures, timeout=60):
+                for future in as_completed(futures.keys(), timeout=60):
                     result = future.result()
                     enriched_incidents.append(result)
 
@@ -694,6 +704,7 @@ def _enrich_incidents_with_notes_async(incidents: List[Dict[str, Any]], progress
 
                     completed += 1
                     done_futures.append(future)
+                    last_progress_time = time.time()
 
                     if progress_callback:
                         progress_callback(completed, len(incidents))
@@ -705,13 +716,19 @@ def _enrich_incidents_with_notes_async(incidents: List[Dict[str, Any]], progress
                                    f"({success_count} with notes, {failed_count} without) - "
                                    f"Rate: {rate:.2f} tickets/sec")
 
-                # Remove completed futures
-                remaining_futures -= set(done_futures)
+                # Remove completed futures and submit new ones
+                for future in done_futures:
+                    del futures[future]
+                    # Submit next incident if any remain
+                    if pending:
+                        incident = pending.popleft()
+                        new_future = executor.submit(fetch_notes_for_incident, incident)
+                        futures[new_future] = incident
 
             except TimeoutError:
                 # No futures completed in 60s - cancel all remaining and exit
-                logger.error(f"Export timeout: {len(remaining_futures)} futures hung for 60+ seconds")
-                for future in remaining_futures:
+                logger.error(f"Export timeout: {len(futures)} active futures + {len(pending)} pending hung for 60+ seconds")
+                for future in list(futures.keys()):
                     incident = futures.get(future)
                     logger.error(f"Cancelling hung ticket: {incident.get('id') if incident else 'Unknown'}")
                     future.cancel()
@@ -720,8 +737,16 @@ def _enrich_incidents_with_notes_async(incidents: List[Dict[str, Any]], progress
                         enriched_incidents.append(incident)
                     failed_count += 1
                     completed += 1
-                    if progress_callback:
-                        progress_callback(completed, len(incidents))
+
+                # Mark all pending as failed too
+                for incident in pending:
+                    incident['notes'] = [{'_fetch_error': True, 'error_message': 'Export timeout - not processed'}]
+                    enriched_incidents.append(incident)
+                    failed_count += 1
+                    completed += 1
+
+                if progress_callback:
+                    progress_callback(completed, len(incidents))
                 break
 
     total_elapsed = time.time() - start_time
