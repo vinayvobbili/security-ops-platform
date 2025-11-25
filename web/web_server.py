@@ -60,6 +60,7 @@ from src.components.web import (
     countdown_timer_handler,
     proxy_server,
 )
+from src.components.web.async_export_manager import get_export_manager
 
 CONFIG = get_config()
 
@@ -74,7 +75,7 @@ COMPANY_EMAIL_DOMAIN = '@' + CONFIG.my_web_domain
 setup_logging(
     bot_name='web_server',
     log_level=logging.WARNING,
-    info_modules=['__main__']
+    info_modules=['__main__', 'src.components.web.meaningful_metrics_handler']
 )
 
 logging.getLogger('werkzeug').setLevel(logging.WARNING)
@@ -647,6 +648,100 @@ def api_meaningful_metrics_export():
         return jsonify({'success': False, 'error': str(val_err)}), 400
     except Exception as exc:
         logger.error(f"Error exporting meaningful metrics: {exc}", exc_info=True)
+        return jsonify({'success': False, 'error': str(exc)}), 500
+
+
+@app.route('/api/meaningful-metrics/export-async/start', methods=['POST'])
+@log_web_activity
+def api_meaningful_metrics_export_async_start():
+    """Start an async export job and return job ID immediately."""
+    try:
+        data = request.get_json()
+        if not data or 'filters' not in data:
+            return jsonify({'success': False, 'error': 'No filters provided'}), 400
+
+        # Create export job
+        export_manager = get_export_manager()
+        job_id = export_manager.create_job()
+
+        # Start export in background thread
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+
+        def export_wrapper(progress_callback):
+            """Wrapper to call export_meaningful_metrics with progress."""
+            return meaningful_metrics_handler.export_meaningful_metrics_async(
+                base_dir,
+                eastern,
+                data['filters'],
+                data.get('visible_columns', []),
+                data.get('column_labels', {}),
+                data.get('include_notes', False),
+                progress_callback=progress_callback
+            )
+
+        export_manager.start_export_thread(
+            job_id,
+            export_wrapper
+        )
+
+        return jsonify({
+            'success': True,
+            'job_id': job_id,
+            'status': 'queued'
+        })
+
+    except Exception as exc:
+        logger.error(f"Error starting async export: {exc}", exc_info=True)
+        return jsonify({'success': False, 'error': str(exc)}), 500
+
+
+@app.route('/api/meaningful-metrics/export-async/status/<job_id>', methods=['GET'])
+@log_web_activity
+def api_meaningful_metrics_export_async_status(job_id):
+    """Get status of an async export job."""
+    try:
+        export_manager = get_export_manager()
+        job = export_manager.get_job(job_id)
+
+        if not job:
+            return jsonify({'success': False, 'error': 'Job not found'}), 404
+
+        return jsonify({
+            'success': True,
+            **job.to_dict()
+        })
+
+    except Exception as exc:
+        logger.error(f"Error getting export status: {exc}", exc_info=True)
+        return jsonify({'success': False, 'error': str(exc)}), 500
+
+
+@app.route('/api/meaningful-metrics/export-async/download/<job_id>', methods=['GET'])
+@log_web_activity
+def api_meaningful_metrics_export_async_download(job_id):
+    """Download completed export file."""
+    try:
+        export_manager = get_export_manager()
+        job = export_manager.get_job(job_id)
+
+        if not job:
+            return jsonify({'success': False, 'error': 'Job not found'}), 404
+
+        if job.status != 'complete':
+            return jsonify({'success': False, 'error': f'Job status is {job.status}, not complete'}), 400
+
+        if not job.file_path or not os.path.exists(job.file_path):
+            return jsonify({'success': False, 'error': 'Export file not found'}), 404
+
+        return send_file(
+            job.file_path,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            as_attachment=True,
+            download_name='security_incidents.xlsx'
+        )
+
+    except Exception as exc:
+        logger.error(f"Error downloading export: {exc}", exc_info=True)
         return jsonify({'success': False, 'error': str(exc)}), 500
 
 
