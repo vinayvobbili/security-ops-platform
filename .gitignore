@@ -47,3 +47,4 @@ nohup.out
 
 # Additional cert paths
 data/certs/
+package-lock.json
