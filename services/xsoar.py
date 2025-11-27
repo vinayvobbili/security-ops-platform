@@ -212,7 +212,7 @@ class TicketHandler:
 
     # Read timeout for API requests (seconds)
     # Reduced from 180s to 30s - if an API call takes longer, it should fail
-    # Slow calls will be logged and we move on rather than blocking for minutes
+    # Slow calls will be logged, and we move on rather than blocking for minutes
     READ_TIMEOUT = int(os.getenv('XSOAR_READ_TIMEOUT', '30'))
 
     def __init__(self, environment: XsoarEnvironment = XsoarEnvironment.PROD):
@@ -1240,7 +1240,7 @@ class TicketHandler:
         return result
 
     def upload_file_to_attachment(self, incident_id: str, file_path: str,
-                                   comment: str = "") -> Dict[str, Any]:
+                                  comment: str = "") -> Dict[str, Any]:
         """
         Upload a file to the incident's Attachments field (not war room).
 
@@ -1732,11 +1732,11 @@ def main():
     dev_ticket_handler = TicketHandler(XsoarEnvironment.DEV)
 
     # Test 1: Upload to attachments field
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("TEST 1: Uploading to ATTACHMENTS field")
     print(f"Endpoint: /incident/upload/{ticket_id}")
     print("Expected: File should appear in ATTACHMENTS section")
-    print("="*60)
+    print("=" * 60)
     try:
         result = dev_ticket_handler.upload_file_to_attachment(
             ticket_id,
@@ -1748,11 +1748,11 @@ def main():
         print(f"✗ Error: {e}")
 
     # Test 2: Upload to war room
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("TEST 2: Uploading to WAR ROOM")
     print(f"Endpoint: /entry/upload/{ticket_id}")
     print("Expected: File should appear in Evidence/Indicators, NOT in ATTACHMENTS")
-    print("="*60)
+    print("=" * 60)
     try:
         result = dev_ticket_handler.upload_file_to_war_room(
             ticket_id,
@@ -1763,11 +1763,11 @@ def main():
     except Exception as e:
         print(f"✗ Error: {e}")
 
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("CHECK THE XSOAR INCIDENT UI TO VERIFY:")
     print(f"1. ATTACHMENTS section should have 1 file (from Test 1)")
     print(f"2. Evidence/Indicators should have 1 file (from Test 2)")
-    print("="*60)
+    print("=" * 60)
 
     # prod_list_handler = ListHandler(XsoarEnvironment.PROD)
     # all_lists = prod_list_handler.get_all_lists()
