@@ -116,7 +116,7 @@ ssh lab-vm "grep -E '(Triggering.*reconnection|Bot instance cleared|up and runni
 ## Current Status
 
 - **Fix deployed:** 2025-11-05 08:47:44
-- **Bot PID:** 59079 (on metcirt-lab)
+- **Bot PID:** 59079 (on lab-vm)
 - **Current uptime:** See monitoring script
 - **Next proactive reconnection:** Every 600 seconds (10 minutes)
 

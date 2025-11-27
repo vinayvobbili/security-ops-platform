@@ -1,11 +1,11 @@
 #!/bin/bash
-# Infrastructure fixes for metcirt-lab VM
+# Infrastructure fixes for lab-vm VM
 # Run this script with: sudo bash vm_infrastructure_fixes.sh
 
 set -e  # Exit on error
 
 echo "================================================"
-echo "IR Infrastructure Fixes for metcirt-lab VM"
+echo "IR Infrastructure Fixes for lab-vm VM"
 echo "================================================"
 echo ""
 

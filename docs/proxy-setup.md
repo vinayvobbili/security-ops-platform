@@ -2,7 +2,7 @@
 
 ## Overview
 
-This guide explains how to route network traffic from your Mac through the metcirt-lab VM using an SSH SOCKS5 tunnel.
+This guide explains how to route network traffic from your Mac through the lab-vm VM using an SSH SOCKS5 tunnel.
 
 ## Current Status
 
@@ -44,7 +44,7 @@ The easiest way to use the proxy is through the SSH SOCKS5 tunnel on port 8888.
 This script automatically:
 
 - Kills any existing SSH tunnel on port 8888
-- Creates a new SSH SOCKS5 tunnel to metcirt-lab
+- Creates a new SSH SOCKS5 tunnel to lab-vm
 - Launches Chrome with a separate profile using the proxy
 
 **Verify it's working:**
@@ -55,7 +55,7 @@ This script automatically:
 **Stop the tunnel:**
 
 ```bash
-pkill -f 'ssh.*-D 8888.*metcirt-lab'
+pkill -f 'ssh.*-D 8888.*lab-vm'
 ```
 
 ### Automatic Startup (launchd)
@@ -108,7 +108,7 @@ claude
 Add to `~/.zshrc`:
 
 ```bash
-# Proxy for Claude CLI via SSH tunnel to metcirt-lab
+# Proxy for Claude CLI via SSH tunnel to lab-vm
 export ALL_PROXY="socks5://localhost:8888"
 export all_proxy="socks5://localhost:8888"
 ```
@@ -134,7 +134,7 @@ claude --version
 **Start tunnel manually:**
 
 ```bash
-ssh -D 8888 -N -f metcirt-lab
+ssh -D 8888 -N -f lab-vm
 ```
 
 **Check if tunnel is running:**
@@ -146,13 +146,13 @@ ps aux | grep "ssh.*-D 8888" | grep -v grep
 **Stop tunnel:**
 
 ```bash
-pkill -f 'ssh.*-D 8888.*metcirt-lab'
+pkill -f 'ssh.*-D 8888.*lab-vm'
 ```
 
 **Restart tunnel:**
 
 ```bash
-pkill -f 'ssh.*-D 8888.*metcirt-lab' && ssh -D 8888 -N -f metcirt-lab
+pkill -f 'ssh.*-D 8888.*lab-vm' && ssh -D 8888 -N -f lab-vm
 ```
 
 ### Test Proxy Connection
@@ -259,13 +259,13 @@ Location: `~/chrome-with-proxy.sh`
 # This script creates an SSH tunnel and launches Chrome through it
 #
 # The SSH tunnel (SOCKS5 proxy) is created on local port 8888
-# and forwards traffic through metcirt-lab VM
+# and forwards traffic through lab-vm VM
 
 # Kill any existing SSH tunnel on port 8888
-pkill -f "ssh.*-D 8888.*metcirt-lab" 2>/dev/null
+pkill -f "ssh.*-D 8888.*lab-vm" 2>/dev/null
 
 # Create SSH SOCKS tunnel in background
-ssh -D 8888 -N -f metcirt-lab
+ssh -D 8888 -N -f lab-vm
 
 # Wait a moment for tunnel to establish
 sleep 1
@@ -276,8 +276,8 @@ sleep 1
   --proxy-server="socks5://localhost:8888" \
   &
 
-echo "Chrome launched with SOCKS5 proxy through metcirt-lab VM"
-echo "To close the tunnel: pkill -f 'ssh.*-D 8888.*metcirt-lab'"
+echo "Chrome launched with SOCKS5 proxy through lab-vm VM"
+echo "To close the tunnel: pkill -f 'ssh.*-D 8888.*lab-vm'"
 ```
 
 ### Web Server Proxy Code
@@ -294,5 +294,5 @@ VM location: `/home/vinay/pub/IR/web/web_server.py`
 
 - The SOCKS5 tunnel is more reliable and secure than the HTTP proxy
 - Chrome uses a separate profile (`~/chrome-proxy-profile`) to avoid affecting your normal browsing
-- The tunnel requires an active SSH connection to metcirt-lab
+- The tunnel requires an active SSH connection to lab-vm
 - If the VM restarts, you'll need to restart the tunnel

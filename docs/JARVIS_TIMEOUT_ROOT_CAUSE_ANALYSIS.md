@@ -22,7 +22,7 @@ The Jarvis bot (and other bots on the VM) were experiencing **1,338+ timeout err
 - 1,338 total timeout errors across all bot logs
 
 ### Environment
-- **VM**: inr106 (metcirt-lab)
+- **VM**: inr106 (lab-vm)
 - **OS**: Ubuntu Linux 6.8.0-87-generic
 - **Running Bots**: 6 simultaneous bots
   1. jarvis.py (PID 291824) - 474MB RAM
@@ -157,13 +157,13 @@ API call successful in 1.61s
 
 ### 1. Applied to Jarvis (COMPLETED)
 ```bash
-scp src/utils/webex_pool_config.py vinay@metcirt-lab:/home/vinay/pub/IR/src/utils/
-scp webex_bots/jarvis.py vinay@metcirt-lab:/home/vinay/pub/IR/webex_bots/
+scp src/utils/webex_pool_config.py vinay@lab-vm:/home/vinay/pub/IR/src/utils/
+scp webex_bots/jarvis.py vinay@lab-vm:/home/vinay/pub/IR/webex_bots/
 ```
 
 ### 2. Restart Jarvis Bot
 ```bash
-ssh vinay@metcirt-lab
+ssh vinay@lab-vm
 cd /home/vinay/pub/IR
 pkill -f "python.*jarvis.py"  # Stop old version
 nohup .venv/bin/python webex_bots/jarvis.py > /dev/null 2>&1 &  # Start with new config
@@ -197,7 +197,7 @@ webex_api = configure_webex_api_session(
 
 ### Check for Timeout Errors
 ```bash
-ssh vinay@metcirt-lab
+ssh vinay@lab-vm
 cd /home/vinay/pub/IR/logs
 grep -c "Read timed out" jarvis.log  # Should stop increasing after fix
 tail -f jarvis.log | grep -i timeout  # Watch for new timeouts

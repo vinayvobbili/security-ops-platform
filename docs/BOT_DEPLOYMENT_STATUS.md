@@ -1,7 +1,7 @@
 # Bot Deployment Status - Connection Pool Fix
 
 **Date**: 2025-11-21
-**VM**: metcirt-lab (inr106)
+**VM**: lab-vm (inr106)
 **Issue**: WebexTeamsAPI timeout errors due to connection pool exhaustion
 **Status**: ✅ All 6 bots deployed with fix
 
@@ -64,16 +64,16 @@ misc_scripts/monitor_bot_timeouts.sh    [NEW] - Monitoring script
 ### Immediate (First 24 hours)
 ```bash
 # Watch for new timeouts (should be minimal)
-ssh vinay@metcirt-lab "cd /home/vinay/pub/IR/logs && tail -f *.log | grep -i timeout"
+ssh vinay@lab-vm "cd /home/vinay/pub/IR/logs && tail -f *.log | grep -i timeout"
 
 # Count timeouts since restart
-ssh vinay@metcirt-lab "cd /home/vinay/pub/IR/logs && grep '2025-11-21 1[56]:' *.log | grep -c 'Read timed out'"
+ssh vinay@lab-vm "cd /home/vinay/pub/IR/logs && grep '2025-11-21 1[56]:' *.log | grep -c 'Read timed out'"
 ```
 
 ### Automated Monitoring
 ```bash
 # Run 24-hour monitoring
-ssh vinay@metcirt-lab "cd /home/vinay/pub/IR && nohup bash misc_scripts/monitor_bot_timeouts.sh 24 > /tmp/timeout_monitor.log 2>&1 &"
+ssh vinay@lab-vm "cd /home/vinay/pub/IR && nohup bash misc_scripts/monitor_bot_timeouts.sh 24 > /tmp/timeout_monitor.log 2>&1 &"
 ```
 
 ### Success Criteria
