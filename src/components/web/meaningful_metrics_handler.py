@@ -15,6 +15,7 @@ from openpyxl import load_workbook
 from openpyxl.styles import Font
 
 from services.xsoar import TicketHandler, XsoarEnvironment
+from src.config import XsoarConfig
 from src.utils.excel_formatting import apply_professional_formatting
 
 logger = logging.getLogger(__name__)
@@ -262,13 +263,11 @@ def export_meaningful_metrics(
 
 
 class ExportConfig:
-    """Configuration for meaningful metrics export operations."""
+    """Configuration for meaningful metrics export operations.
 
-    # Worker count for parallel note fetching during export
-    # Connection pool in xsoar.py is limited to maxsize=25
-    # API rate limiting occurs above 10-15 concurrent requests
-    # Default: 10 (balanced throughput without overwhelming API)
-    MAX_WORKERS = 10
+    Note: Worker count (MAX_WORKERS) is inherited from XsoarConfig.
+    To change worker count and connection pool size, update XsoarConfig.MAX_WORKERS.
+    """
 
     # Log progress every N tickets (for visibility during long exports)
     PROGRESS_LOG_INTERVAL = 25
@@ -283,7 +282,7 @@ def _enrich_incidents_with_notes(incidents: List[Dict[str, Any]]) -> List[Dict[s
     """Fetch notes for incidents in parallel with detailed performance tracking."""
     start_time = time.time()
     logger.info(f"Starting note enrichment for {len(incidents)} filtered tickets...")
-    logger.info(f"Configuration: workers={ExportConfig.MAX_WORKERS}, "
+    logger.info(f"Configuration: workers={XsoarConfig.MAX_WORKERS}, "
                 f"timeout={ExportConfig.TIMEOUT_PER_TICKET}s per ticket")
 
     ticket_handler = TicketHandler(XsoarEnvironment.PROD)
@@ -330,9 +329,9 @@ def _enrich_incidents_with_notes(incidents: List[Dict[str, Any]]) -> List[Dict[s
             incident['notes'] = []
             return incident, fetch_duration
 
-    logger.info(f"Submitting {len(incidents)} tasks to {ExportConfig.MAX_WORKERS} workers...")
+    logger.info(f"Submitting {len(incidents)} tasks to {XsoarConfig.MAX_WORKERS} workers...")
 
-    with ThreadPoolExecutor(max_workers=ExportConfig.MAX_WORKERS) as executor:
+    with ThreadPoolExecutor(max_workers=XsoarConfig.MAX_WORKERS) as executor:
         # Submit all tasks and track start times
         futures = {}
         for incident in incidents:
@@ -407,7 +406,7 @@ def _enrich_incidents_with_notes(incidents: List[Dict[str, Any]]) -> List[Dict[s
     if failed_count > len(enriched_incidents) * 0.3:
         failure_pct = (failed_count / len(enriched_incidents)) * 100
         logger.warning(f"HIGH FAILURE RATE: {failure_pct:.1f}% - Consider reducing MAX_WORKERS or increasing TIMEOUT_PER_TICKET")
-        logger.warning(f"Current config: MAX_WORKERS={ExportConfig.MAX_WORKERS}, TIMEOUT_PER_TICKET={ExportConfig.TIMEOUT_PER_TICKET}s")
+        logger.warning(f"Current config: MAX_WORKERS={XsoarConfig.MAX_WORKERS}, TIMEOUT_PER_TICKET={ExportConfig.TIMEOUT_PER_TICKET}s")
 
     return enriched_incidents
 
@@ -675,12 +674,12 @@ def _enrich_incidents_with_notes_async(incidents: List[Dict[str, Any]], progress
     # Parallel execution with bounded queue - only MAX_WORKERS futures in flight at once
     from collections import deque
 
-    with ThreadPoolExecutor(max_workers=ExportConfig.MAX_WORKERS) as executor:
+    with ThreadPoolExecutor(max_workers=XsoarConfig.MAX_WORKERS) as executor:
         pending = deque(incidents)
         futures = {}
 
         # Submit initial batch (up to MAX_WORKERS)
-        for _ in range(min(ExportConfig.MAX_WORKERS, len(pending))):
+        for _ in range(min(XsoarConfig.MAX_WORKERS, len(pending))):
             incident = pending.popleft()
             future = executor.submit(fetch_notes_for_incident, incident)
             futures[future] = incident
