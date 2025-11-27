@@ -236,7 +236,18 @@ class Host:
                 self.status_message += f" Country guessed from os-domain=pmli in SNOW: {self.country}."
             self.life_cycle_status = snow_host_details.get('lifecycleStatus', '')
 
-            if not self.country and (self.name.lower().startswith('vmvdi') or self.name.lower().startswith(config.team_name.lower())):
+            name_lower = self.name.lower()
+            if not self.country and (name_lower.startswith('metlap') or name_lower.startswith('pmdesk') or 'pmli' in name_lower):
+                self.country = 'India PMLI'
+                self.was_country_guessed = True
+                self.status_message += f" Country guessed from METLAP/PMDESK/PMLI pattern in hostname: {self.country}."
+
+            if not self.country and name_lower.startswith('iaz'):
+                self.country = 'US'
+                self.was_country_guessed = True
+                self.status_message += f" Country guessed from IAZ prefix in hostname: {self.country}."
+
+            if not self.country and (name_lower.startswith('vmvdi') or name_lower.startswith(config.team_name.lower())):
                 self.country = 'United States'
                 self.was_country_guessed = True
                 self.status_message += f" Country guessed from VMVDI/{config.team_name} in the hostname: {self.country}."
