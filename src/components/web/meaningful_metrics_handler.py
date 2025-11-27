@@ -273,6 +273,11 @@ class ExportConfig:
     # Log progress every N tickets (for visibility during long exports)
     PROGRESS_LOG_INTERVAL = 25
 
+    # Timeout per ticket when fetching notes (seconds)
+    # API has 30s timeout globally, add buffer for processing
+    # Default: 45 (allows for API timeout + processing overhead)
+    TIMEOUT_PER_TICKET = 45
+
 
 def _enrich_incidents_with_notes(incidents: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """Fetch notes for incidents in parallel with detailed performance tracking."""
@@ -360,13 +365,13 @@ def _enrich_incidents_with_notes(incidents: List[Dict[str, Any]]) -> List[Dict[s
                     elapsed = time.time() - processing_start
                     rate = completed_count / elapsed if elapsed > 0 else 0
                     logger.info(f"Progress: {completed_count}/{len(incidents)} tickets "
-                               f"({success_count} with notes, {failed_count} without) - "
-                               f"Rate: {rate:.2f} tickets/sec")
+                                f"({success_count} with notes, {failed_count} without) - "
+                                f"Rate: {rate:.2f} tickets/sec")
 
             except TimeoutError:
                 elapsed_time = time.time() - future_start_times[future]
                 logger.error(f"Ticket {incident_id}: timed out after {elapsed_time:.1f}s "
-                           f"(limit: {ExportConfig.TIMEOUT_PER_TICKET}s)")
+                             f"(limit: {ExportConfig.TIMEOUT_PER_TICKET}s)")
                 incident['notes'] = []
                 enriched_incidents.append(incident)
                 failed_count += 1
@@ -387,16 +392,16 @@ def _enrich_incidents_with_notes(incidents: List[Dict[str, Any]]) -> List[Dict[s
     min_fetch_time = min(fetch_times) if fetch_times else 0
     overall_rate = len(enriched_incidents) / total_elapsed if total_elapsed > 0 else 0
 
-    logger.info("="*60)
+    logger.info("=" * 60)
     logger.info("Note Enrichment Complete")
-    logger.info("="*60)
+    logger.info("=" * 60)
     logger.info(f"Total tickets: {len(enriched_incidents)}")
-    logger.info(f"Success (with notes): {success_count} ({success_count/len(enriched_incidents)*100:.1f}%)")
-    logger.info(f"Failed (no notes): {failed_count} ({failed_count/len(enriched_incidents)*100:.1f}%)")
+    logger.info(f"Success (with notes): {success_count} ({success_count / len(enriched_incidents) * 100:.1f}%)")
+    logger.info(f"Failed (no notes): {failed_count} ({failed_count / len(enriched_incidents) * 100:.1f}%)")
     logger.info(f"Total time: {total_elapsed:.1f}s")
     logger.info(f"Overall rate: {overall_rate:.2f} tickets/sec")
     logger.info(f"Fetch time - Avg: {avg_fetch_time:.2f}s, Min: {min_fetch_time:.2f}s, Max: {max_fetch_time:.2f}s")
-    logger.info("="*60)
+    logger.info("=" * 60)
 
     # Warn if failure rate is high
     if failed_count > len(enriched_incidents) * 0.3:
@@ -556,13 +561,13 @@ def _add_hyperlinks_and_formatting(temp_path: str) -> None:
 
 
 def export_meaningful_metrics_async(
-    base_dir: str,
-    eastern: pytz.tzinfo.BaseTzInfo,
-    filters: Dict[str, Any],
-    visible_columns: List[str],
-    column_labels: Dict[str, str],
-    include_notes: bool = False,
-    progress_callback=None
+        base_dir: str,
+        eastern: pytz.tzinfo.BaseTzInfo,
+        filters: Dict[str, Any],
+        visible_columns: List[str],
+        column_labels: Dict[str, str],
+        include_notes: bool = False,
+        progress_callback=None
 ) -> str:
     """Async version of export with progress tracking.
 
@@ -681,7 +686,6 @@ def _enrich_incidents_with_notes_async(incidents: List[Dict[str, Any]], progress
             futures[future] = incident
 
         completed = 0
-        last_progress_time = time.time()
 
         # Process futures as they complete, submitting new ones to keep queue full
         while futures:
@@ -704,7 +708,6 @@ def _enrich_incidents_with_notes_async(incidents: List[Dict[str, Any]], progress
 
                     completed += 1
                     done_futures.append(future)
-                    last_progress_time = time.time()
 
                     if progress_callback:
                         progress_callback(completed, len(incidents))
@@ -713,8 +716,8 @@ def _enrich_incidents_with_notes_async(incidents: List[Dict[str, Any]], progress
                         elapsed = time.time() - processing_start
                         rate = completed / elapsed if elapsed > 0 else 0
                         logger.info(f"Progress: {completed}/{len(incidents)} tickets "
-                                   f"({success_count} with notes, {failed_count} without) - "
-                                   f"Rate: {rate:.2f} tickets/sec")
+                                    f"({success_count} with notes, {failed_count} without) - "
+                                    f"Rate: {rate:.2f} tickets/sec")
 
                 # Remove completed futures and submit new ones
                 for future in done_futures:
@@ -752,14 +755,14 @@ def _enrich_incidents_with_notes_async(incidents: List[Dict[str, Any]], progress
     total_elapsed = time.time() - start_time
     overall_rate = len(enriched_incidents) / total_elapsed if total_elapsed > 0 else 0
 
-    logger.info("="*60)
+    logger.info("=" * 60)
     logger.info("Note Enrichment Complete")
-    logger.info("="*60)
+    logger.info("=" * 60)
     logger.info(f"Total tickets: {len(enriched_incidents)}")
-    logger.info(f"Success (with notes): {success_count} ({success_count/len(enriched_incidents)*100:.1f}%)")
-    logger.info(f"Failed (no notes): {failed_count} ({failed_count/len(enriched_incidents)*100:.1f}%)")
+    logger.info(f"Success (with notes): {success_count} ({success_count / len(enriched_incidents) * 100:.1f}%)")
+    logger.info(f"Failed (no notes): {failed_count} ({failed_count / len(enriched_incidents) * 100:.1f}%)")
     logger.info(f"Total time: {total_elapsed:.1f}s")
     logger.info(f"Overall rate: {overall_rate:.2f} tickets/sec")
-    logger.info("="*60)
+    logger.info("=" * 60)
 
     return enriched_incidents
