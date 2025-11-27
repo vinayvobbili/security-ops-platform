@@ -67,8 +67,8 @@ webex_api = configure_webex_api_session(
         single_request_timeout=120,  # Increased from default 60s to handle VM network latency
     ),
     pool_connections=50,  # Increased from default 10
-    pool_maxsize=50,      # Increased from default 10
-    max_retries=3         # Enable automatic retry on transient failures
+    pool_maxsize=50,  # Increased from default 10
+    max_retries=3  # Enable automatic retry on transient failures
 )
 
 # Timezone constant for consistent usage
