@@ -24,12 +24,15 @@ def configure_webex_api_session(api_instance, pool_connections=50, pool_maxsize=
     # Access the internal requests session
     session = api_instance._session._req_session
 
-    # Configure retry strategy
+    # Configure retry strategy with comprehensive error handling
     retry_strategy = Retry(
         total=max_retries,
         backoff_factor=1,  # Wait 1s, 2s, 4s between retries
         status_forcelist=[429, 500, 502, 503, 504],  # Retry on these HTTP status codes
-        allowed_methods=["GET", "POST", "PUT", "DELETE"]  # Retry on all methods
+        allowed_methods=["GET", "POST", "PUT", "DELETE"],  # Retry on all methods
+        raise_on_status=False,  # Don't raise on retryable status codes
+        # Retry on connection errors and timeouts (not just HTTP status codes)
+        # This helps with intermittent network issues on the lab-vm
     )
 
     # Create new adapter with larger pool

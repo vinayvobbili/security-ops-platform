@@ -140,15 +140,23 @@ def send_report(room_id, filename, message) -> None:
 
 
 def send_report_with_progress(room_id, filename, message, progress_info=None) -> None:
-    """Enhanced report sending with progress information and better formatting."""
+    """Enhanced report sending with progress information, better formatting, and robust error handling."""
+    import time
+    import os
+    from src.utils.webex_utils import send_message_with_retry
+
     today_date = datetime.now(EASTERN_TZ).strftime('%m-%d-%Y')
     filepath = DATA_DIR / today_date / filename
 
     try:
         if not filepath.exists():
-            raise FileNotFoundError(f"Report file not found at {filepath}")
+            error_msg = f"❌ Report file not found at {filepath}"
+            logger.error(error_msg)
+            send_message_with_retry(webex_api, room_id, markdown=error_msg)
+            return
 
         hosts_count = len(pd.read_excel(filepath))
+        file_size_mb = os.path.getsize(filepath) / (1024 * 1024)
 
         # Create rich message with emojis and formatting - use Eastern time for user display
         current_time_eastern = datetime.now(EASTERN_TZ)
@@ -157,35 +165,36 @@ def send_report_with_progress(room_id, filename, message, progress_info=None) ->
         report_text = f"📊 **{message}**\n\n"
         report_text += f"📈 **Count:** {hosts_count:,} hosts\n"
         report_text += f"📅 **Generated:** {current_time_eastern.strftime(f'%Y-%m-%d %H:%M:%S {tz_name}')}\n"
+        report_text += f"📦 **File Size:** {file_size_mb:.2f} MB\n"
 
         if progress_info:
             report_text += f"⏱️ **Processing Time:** {progress_info.get('duration', 'N/A')}\n"
 
-        webex_api.messages.create(
-            roomId=room_id,
+        # Use centralized retry utility with built-in error handling
+        upload_start = time.time()
+        result = send_message_with_retry(
+            webex_api,
+            room_id,
             markdown=report_text,
-            files=[str(filepath)]
+            files=[str(filepath)],
+            max_retries=3
         )
-        logger.info(f"Successfully sent report {filename} with {hosts_count} hosts to room {room_id}")
 
-    except FileNotFoundError:
-        error_msg = f"❌ Report file not found at {filepath}"
-        logger.error(error_msg)
-        webex_api.messages.create(
-            roomId=room_id,
-            markdown=error_msg
-        )
+        if result:
+            upload_duration = time.time() - upload_start
+            upload_speed = file_size_mb / upload_duration if upload_duration > 0 else 0
+            logger.info(f"Successfully sent report {filename} ({file_size_mb:.2f} MB) in {upload_duration:.1f}s ({upload_speed:.2f} MB/s) to room {room_id}")
+        else:
+            logger.error(f"Failed to send report {filename} after retries")
+
     except Exception as e:
-        error_msg = f"❌ Failed to send report: {str(e)}"
+        error_msg = f"❌ Failed to process report: {str(e)}"
         logger.error(error_msg)
-        webex_api.messages.create(
-            roomId=room_id,
-            markdown=error_msg
-        )
+        send_message_with_retry(webex_api, room_id, markdown=error_msg)
 
 
 def seek_approval_to_ring_tag(room_id):
-    import time
+    from src.utils.webex_utils import send_card_with_retry
 
     card = AdaptiveCard(
         body=[
@@ -215,55 +224,21 @@ def seek_approval_to_ring_tag(room_id):
         ]
     )
 
-    # Retry logic for transient API failures
-    max_retries = 3
-    retry_delay = 2
+    # Use centralized retry utility
+    result = send_card_with_retry(
+        webex_api,
+        room_id,
+        text="Please approve the tagging action.",
+        attachments=[{"contentType": "application/vnd.microsoft.card.adaptive", "content": card.to_dict()}],
+        max_retries=3
+    )
 
-    for attempt in range(max_retries):
-        try:
-            webex_api.messages.create(
-                roomId=room_id,
-                text="Please approve the tagging action.",
-                attachments=[{"contentType": "application/vnd.microsoft.card.adaptive", "content": card.to_dict()}]
-            )
-            return
-        except Exception as e:
-            error_msg = str(e)
-            is_retryable = any(code in error_msg for code in ['503', '429', '502', '504'])
-
-            if is_retryable and attempt < max_retries - 1:
-                wait_time = retry_delay * (2 ** attempt)
-                logger.warning(f"Transient error sending CS approval card (attempt {attempt + 1}/{max_retries}): {e}. Retrying in {wait_time}s...")
-                time.sleep(wait_time)
-                continue
-            else:
-                logger.error(f"Failed to send CS approval card after {attempt + 1} attempts: {e}")
-                # Try to send error notification with its own retry logic
-                for notify_attempt in range(2):  # Try twice to send error notification
-                    try:
-                        if is_retryable:
-                            webex_api.messages.create(
-                                roomId=room_id,
-                                markdown=f"❌ **Error**: Webex API is temporarily unavailable (tried {max_retries} times). Please try your command again in a few minutes.\n\nError: {error_msg}"
-                            )
-                        else:
-                            webex_api.messages.create(
-                                roomId=room_id,
-                                markdown=f"❌ **Error**: Failed to send approval card. Please check the logs or contact support.\n\nError details: {error_msg}"
-                            )
-                        break  # Success, exit retry loop
-                    except Exception as notify_error:
-                        if notify_attempt < 1:  # One more try
-                            logger.warning(f"Failed to send error notification (attempt {notify_attempt + 1}/2): {notify_error}. Retrying...")
-                            time.sleep(3)
-                        else:
-                            logger.error(f"Failed to send error notification after 2 attempts: {notify_error}")
-                            logger.error(f"⚠️ IMPORTANT: User was NOT notified about approval card failure. Check Webex room manually.")
-                return
+    if not result:
+        logger.error("⚠️ Failed to send CS approval card after retries. User may not see the approval request.")
 
 
 def seek_approval_to_delete_invalid_ring_tags(room_id):
-    import time
+    from src.utils.webex_utils import send_card_with_retry
 
     card = AdaptiveCard(
         body=[
@@ -293,51 +268,17 @@ def seek_approval_to_delete_invalid_ring_tags(room_id):
         ]
     )
 
-    # Retry logic for transient API failures
-    max_retries = 3
-    retry_delay = 2
+    # Use centralized retry utility
+    result = send_card_with_retry(
+        webex_api,
+        room_id,
+        text="Please approve the tagging action.",
+        attachments=[{"contentType": "application/vnd.microsoft.card.adaptive", "content": card.to_dict()}],
+        max_retries=3
+    )
 
-    for attempt in range(max_retries):
-        try:
-            webex_api.messages.create(
-                roomId=room_id,
-                text="Please approve the tagging action.",
-                attachments=[{"contentType": "application/vnd.microsoft.card.adaptive", "content": card.to_dict()}]
-            )
-            return
-        except Exception as e:
-            error_msg = str(e)
-            is_retryable = any(code in error_msg for code in ['503', '429', '502', '504'])
-
-            if is_retryable and attempt < max_retries - 1:
-                wait_time = retry_delay * (2 ** attempt)
-                logger.warning(f"Transient error sending invalid ring tags approval card (attempt {attempt + 1}/{max_retries}): {e}. Retrying in {wait_time}s...")
-                time.sleep(wait_time)
-                continue
-            else:
-                logger.error(f"Failed to send invalid ring tags approval card after {attempt + 1} attempts: {e}")
-                # Try to send error notification with its own retry logic
-                for notify_attempt in range(2):  # Try twice to send error notification
-                    try:
-                        if is_retryable:
-                            webex_api.messages.create(
-                                roomId=room_id,
-                                markdown=f"❌ **Error**: Webex API is temporarily unavailable (tried {max_retries} times). Please try your command again in a few minutes.\n\nError: {error_msg}"
-                            )
-                        else:
-                            webex_api.messages.create(
-                                roomId=room_id,
-                                markdown=f"❌ **Error**: Failed to send approval card. Please check the logs or contact support.\n\nError details: {error_msg}"
-                            )
-                        break  # Success, exit retry loop
-                    except Exception as notify_error:
-                        if notify_attempt < 1:  # One more try
-                            logger.warning(f"Failed to send error notification (attempt {notify_attempt + 1}/2): {notify_error}. Retrying...")
-                            time.sleep(3)
-                        else:
-                            logger.error(f"Failed to send error notification after 2 attempts: {notify_error}")
-                            logger.error(f"⚠️ IMPORTANT: User was NOT notified about approval card failure. Check Webex room manually.")
-                return
+    if not result:
+        logger.error("⚠️ Failed to send invalid ring tags approval card after retries. User may not see the approval request.")
 
 
 class GetCSHostsWithoutRingTag(Command):
@@ -440,10 +381,11 @@ class GetCSHostsWithInvalidRingTags(Command):
     def execute(self, message, attachment_actions, activity):
         today_date = datetime.now(EASTERN_TZ).strftime('%m-%d-%Y')
         room_id = attachment_actions.roomId
-        message = 'Unique CS servers with Invalid Ring tags'
-        filename = DATA_DIR / today_date / "cs_servers_with_invalid_ring_tags_only.xlsx"
-        if filename.exists():
-            send_report(room_id, filename, message)
+        report_message = 'CS Servers with Invalid Ring Tags Report'
+        filename = "cs_servers_with_invalid_ring_tags_only.xlsx"  # Just the filename, not full path
+        report_path = DATA_DIR / today_date / filename
+        if report_path.exists():
+            send_report_with_progress(room_id, filename, report_message)
             seek_approval_to_delete_invalid_ring_tags(room_id)
             return
 
@@ -455,14 +397,14 @@ class GetCSHostsWithInvalidRingTags(Command):
         try:
             with fasteners.InterProcessLock(lock_path):
                 cs_servers_with_invalid_ring_tags.generate_report()
-                send_report(room_id, filename, message)
+                send_report_with_progress(room_id, filename, report_message)
                 seek_approval_to_delete_invalid_ring_tags(room_id)
         except Exception as e:
             logger.error(f"Error in CSHostsWithInvalidRingTags execute: {e}")
             try:
                 webex_api.messages.create(
                     roomId=room_id,
-                    markdown=f"Sorry, an error occurred while generating the report: {str(e)}"
+                    markdown=f"❌ Sorry, an error occurred while generating the report: {str(e)}"
                 )
             except Exception as msg_error:
                 logger.error(f"Failed to send error message: {msg_error}")
