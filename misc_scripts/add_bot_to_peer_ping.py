@@ -135,7 +135,7 @@ def main():
     print()
     print("=" * 60)
     print("✅ After making these changes:")
-    print("   1. Copy .env to VM: scp .env metcirt-lab:~/pub/IR/")
+    print("   1. Copy .env to VM: scp .env lab-vm:~/pub/IR/")
     print("   2. Commit and push changes")
     print("   3. Run: restart_all_bots")
     print()
