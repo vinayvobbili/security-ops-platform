@@ -413,8 +413,8 @@ class SmartCountryResolver:
 
         name = computer.name.strip().lower()
 
-        # Priority 1.1: Set the country to India PMLI for all METLAP*, PMDesk* and PMLI* hosts
-        if name.lower().startswith('metlap') or name.lower().startswith('pmdesk') or name.lower().startswith('pmli'):
+        # Priority 1.1: Set the country to India PMLI for all METLAP*, PMDesk* and *PMLI* hosts
+        if name.startswith('metlap') or name.startswith('pmdesk') or 'pmli' in name:
             # print("Matched METLAP/PMDESK prefix -> India PMLI")
             country = 'India PMLI'
             was_country_guessed = False
