@@ -55,7 +55,7 @@ There is **NO 2:00 PM ET scheduled job** in the code. The configured times are:
 
 ### Quick Start (Manual)
 ```bash
-ssh lab-lab
+ssh lab-vm
 cd /home/vinay/pub/IR
 ./deployment/start_all_jobs.sh
 ```

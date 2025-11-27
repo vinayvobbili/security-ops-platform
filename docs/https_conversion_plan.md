@@ -28,7 +28,7 @@ nginx:80 (HTTP redirect)
 ### 1. Install nginx
 
 ```bash
-ssh lab-lab "sudo apt update && sudo apt install -y nginx"
+ssh lab-vm "sudo apt update && sudo apt install -y nginx"
 ```
 
 ### 2. Obtain Certificate from Venafi
@@ -45,7 +45,7 @@ ssh lab-lab "sudo apt update && sudo apt install -y nginx"
 
 ```bash
 # Create SSL directory
-ssh lab-lab "sudo mkdir -p /etc/nginx/ssl"
+ssh lab-vm "sudo mkdir -p /etc/nginx/ssl"
 
 # Copy certificate files (run from your local machine)
 scp lab-lab.crt lab-lab:/tmp/
@@ -53,7 +53,7 @@ scp lab-lab.key lab-lab:/tmp/
 scp chain.crt lab-lab:/tmp/  # if applicable
 
 # Move to proper location with correct permissions
-ssh lab-lab "sudo mv /tmp/lab-lab.crt /etc/nginx/ssl/ && \
+ssh lab-vm "sudo mv /tmp/lab-lab.crt /etc/nginx/ssl/ && \
   sudo mv /tmp/lab-lab.key /etc/nginx/ssl/ && \
   sudo mv /tmp/chain.crt /etc/nginx/ssl/ && \
   sudo chmod 600 /etc/nginx/ssl/lab-lab.key && \
@@ -122,7 +122,7 @@ server {
 ### 5. Enable Configuration
 
 ```bash
-ssh lab-lab "sudo ln -s /etc/nginx/sites-available/lab-lab /etc/nginx/sites-enabled/ && \
+ssh lab-vm "sudo ln -s /etc/nginx/sites-available/lab-lab /etc/nginx/sites-enabled/ && \
   sudo rm -f /etc/nginx/sites-enabled/default"
 ```
 
@@ -130,13 +130,13 @@ ssh lab-lab "sudo ln -s /etc/nginx/sites-available/lab-lab /etc/nginx/sites-enab
 
 ```bash
 # Stop current web server
-ssh lab-lab "sudo pkill -f web_server.py"
+ssh lab-vm "sudo pkill -f web_server.py"
 
 # Start nginx
-ssh lab-lab "sudo systemctl enable nginx && sudo systemctl restart nginx"
+ssh lab-vm "sudo systemctl enable nginx && sudo systemctl restart nginx"
 
 # Start web server on new port (5000)
-ssh lab-lab "cd /home/vinay/pub/IR && \
+ssh lab-vm "cd /home/vinay/pub/IR && \
   sudo nohup /home/vinay/pub/IR/.venv/bin/python web/web_server.py > /tmp/web_server.log 2>&1 &"
 ```
 
@@ -144,10 +144,10 @@ ssh lab-lab "cd /home/vinay/pub/IR && \
 
 ```bash
 # Check nginx status
-ssh lab-lab "sudo systemctl status nginx"
+ssh lab-vm "sudo systemctl status nginx"
 
 # Check ports
-ssh lab-lab "sudo ss -tlnp | grep -E ':(80|443|8080|8081)'"
+ssh lab-vm "sudo ss -tlnp | grep -E ':(80|443|8080|8081)'"
 
 # Test HTTPS
 curl https://lab-vm1.internal.company.com
