@@ -47,7 +47,7 @@ logger.setLevel(logging.WARNING)  # Ensure bot logger also uses WARNING level
 # Note: Using vanilla WebexBot without resilience framework for testing
 
 # Suppress noisy library logs manually since not using ResilientBot
-logging.getLogger('webex_bot').setLevel(logging.WARNING)
+logging.getLogger('webex_bot').setLevel(logging.ERROR)  # Suppress bot-to-bot and self-message warnings
 logging.getLogger('webex_bot.websockets.webex_websocket_client').setLevel(logging.WARNING)
 logging.getLogger('webex_websocket_client').setLevel(logging.WARNING)
 logging.getLogger('webexteamssdk').setLevel(logging.ERROR)

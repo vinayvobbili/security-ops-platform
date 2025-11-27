@@ -21,8 +21,8 @@ setup_logging(
 )
 
 logger = logging.getLogger(__name__)
-# Suppress noisy INFO messages from webex libraries
-logging.getLogger('webex_bot').setLevel(logging.WARNING)
+# Suppress noisy messages from webex libraries
+logging.getLogger('webex_bot').setLevel(logging.ERROR)  # Suppress bot-to-bot and self-message warnings
 logging.getLogger('webexteamssdk').setLevel(logging.ERROR)
 logging.getLogger('webex_websocket_client').setLevel(logging.WARNING)
 
