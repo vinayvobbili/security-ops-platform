@@ -113,6 +113,7 @@ class EnrichedComputer:
     region: str = ""
     environment: str = ""
     category: str = ""
+    os_domain: str = ""
     was_country_guessed: bool = False
     status: str = ""
     ring_tag: Optional[str] = None
@@ -161,7 +162,7 @@ class ComputerEnricher(Protocol):
 class CountryResolver(Protocol):
     """Interface for resolving countries"""
 
-    def resolve_country(self, computer: Computer, snow_country: str) -> Tuple[str, bool]:
+    def resolve_country(self, computer: Computer, snow_country: str, snow_os_domain: str = "") -> Tuple[str, bool]:
         ...
 
 
@@ -365,6 +366,7 @@ class ServiceNowComputerEnricher:
                         region="",
                         environment=self._clean_value(row.get('SNOW_environment', '')),
                         category=self._clean_value(row.get('SNOW_category', '')),
+                        os_domain=self._clean_value(row.get('SNOW_osDomain', '')),
                         was_country_guessed=False,
                         status=self._clean_value(row.get('SNOW_comments', '')),
                         ring_tag='',
@@ -396,13 +398,14 @@ class SmartCountryResolver:
         self.config = config
         self.logger = logging.getLogger(__name__)
 
-    def resolve_country(self, computer: Computer, snow_country: str) -> Tuple[str, bool]:
+    def resolve_country(self, computer: Computer, snow_country: str, snow_os_domain: str = "") -> Tuple[str, bool]:
         """Resolve country with fallback strategies
-        
+
         Args:
             computer: Computer object with hostname and other metadata
             snow_country: Country value from ServiceNow (maybe empty/invalid)
-            
+            snow_os_domain: OS Domain value from ServiceNow (maybe empty)
+
         Returns:
             Tuple[str, bool]: (resolved_country, country_was_guessed) where:
                 - resolved_country: The country name or empty string if none found
@@ -413,12 +416,17 @@ class SmartCountryResolver:
 
         name = computer.name.strip().lower()
 
-        # Priority 1.1: Set the country to India PMLI for all METLAP*, PMDesk* and *PMLI* hosts
-        if name.startswith('metlap') or name.startswith('pmdesk') or 'pmli' in name:
+        # Priority 1.1: Check if osDomain from ServiceNow contains 'pmli'
+        if 'pmli' in snow_os_domain.lower():
+            country = 'India PMLI'
+            was_country_guessed = False
+            self.logger.debug(f'  Country set from SNOW osDomain containing "pmli": {country}')
+        # Priority 1.2: Set the country to India PMLI for all METLAP*, PMDesk* and *PMLI* hosts
+        elif name.startswith('metlap') or name.startswith('pmdesk') or 'pmli' in name:
             # print("Matched METLAP/PMDESK prefix -> India PMLI")
             country = 'India PMLI'
             was_country_guessed = False
-        # Priority 1.2: Set the country to US for all IAZ* hosts
+        # Priority 1.3: Set the country to US for all IAZ* hosts
         elif name.lower().startswith('iaz'):
             # print("Matched IAZ prefix -> US")
             country = 'US'
@@ -566,6 +574,7 @@ class SmartRingTagGenerator:
                             region=computer.region,
                             environment=computer.environment,
                             category=computer.category,
+                            os_domain=computer.os_domain,
                             was_country_guessed=computer.was_country_guessed,
                             status=computer.status,
                             ring_tag=f"EPP_ECMTag_{region}_Wks_Ring{ring}",
@@ -613,6 +622,7 @@ class SmartRingTagGenerator:
                 region=server.region,
                 environment=server.environment,
                 category=server.category,
+                os_domain=server.os_domain,
                 was_country_guessed=server.was_country_guessed,
                 status=server.status,
                 ring_tag=f"EPP_ECMTag_{server.region}_SRV_Ring{ring}",
@@ -779,7 +789,8 @@ class TaniumRingTagProcessor:
                 # Resolve country
                 resolved_country, was_country_guessed = self.country_resolver.resolve_country(
                     comp.computer,
-                    comp.country  # This would be from SNOW
+                    comp.country,  # This would be from SNOW
+                    comp.os_domain  # OS Domain from SNOW
                 )
 
                 # Resolve region
@@ -792,6 +803,7 @@ class TaniumRingTagProcessor:
                     region=region,
                     environment=comp.environment,
                     category=comp.category,
+                    os_domain=comp.os_domain,
                     was_country_guessed=was_country_guessed,
                     status=comp.status,
                     ring_tag='',
