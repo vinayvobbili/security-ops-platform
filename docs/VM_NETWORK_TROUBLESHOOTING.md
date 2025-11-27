@@ -144,7 +144,7 @@ The bot now has 6 layers of protection:
 
 **Deployment**:
 ```bash
-ssh metcirt-lab
+ssh lab-vm
 cd ~/pub/IR
 git pull
 # Restart all bots to pick up changes
@@ -397,7 +397,7 @@ Best regards,
 
 ```bash
 # SSH to VM
-ssh metcirt-lab
+ssh lab-vm
 
 # Check bot logs for patch confirmation
 cd ~/pub/IR/logs

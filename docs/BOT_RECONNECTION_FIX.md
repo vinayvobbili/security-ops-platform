@@ -96,7 +96,7 @@ Use the monitoring script:
 
 Or manually check logs:
 ```bash
-ssh metcirt-lab "grep -E '(Triggering.*reconnection|Bot instance cleared|up and running)' ~/pub/IR/logs/toodles.log | tail -20"
+ssh lab-vm "grep -E '(Triggering.*reconnection|Bot instance cleared|up and running)' ~/pub/IR/logs/toodles.log | tail -20"
 ```
 
 ### What to Look For
@@ -144,8 +144,8 @@ The bot will proactively reconnect every 10 minutes to prevent proxy timeouts. E
 If the fix causes issues:
 
 ```bash
-ssh metcirt-lab "cd ~/pub/IR && git checkout cc772c6e src/utils/bot_resilience.py"
-ssh metcirt-lab "cd ~/pub/IR && pkill -f 'python.*toodles' && nohup .venv/bin/python webex_bots/toodles.py >> logs/toodles.log 2>&1 &"
+ssh lab-vm "cd ~/pub/IR && git checkout cc772c6e src/utils/bot_resilience.py"
+ssh lab-vm "cd ~/pub/IR && pkill -f 'python.*toodles' && nohup .venv/bin/python webex_bots/toodles.py >> logs/toodles.log 2>&1 &"
 ```
 
 (This reverts to the previous version before the threading fix)

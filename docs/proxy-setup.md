@@ -215,7 +215,7 @@ If we need to fix the HTTP proxy:
 
 ```bash
 # Check SSH connectivity
-ssh metcirt-lab "echo 'Connection OK'"
+ssh lab-vm "echo 'Connection OK'"
 
 # Verify port 8888 is not in use
 lsof -i :8888

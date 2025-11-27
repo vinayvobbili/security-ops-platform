@@ -6,9 +6,9 @@ echo "===================================="
 echo ""
 
 # Check if bot is running
-if ssh metcirt-lab "pgrep -f 'python.*webex_bots/toodles.py'" > /dev/null; then
-    PID=$(ssh metcirt-lab "pgrep -f 'python.*webex_bots/toodles.py'")
-    UPTIME=$(ssh metcirt-lab "ps -p $PID -o etime=" | tr -d ' ')
+if ssh lab-vm "pgrep -f 'python.*webex_bots/toodles.py'" > /dev/null; then
+    PID=$(ssh lab-vm "pgrep -f 'python.*webex_bots/toodles.py'")
+    UPTIME=$(ssh lab-vm "ps -p $PID -o etime=" | tr -d ' ')
     echo "✅ Bot Status: RUNNING"
     echo "   PID: $PID"
     echo "   Uptime: $UPTIME"
@@ -20,17 +20,17 @@ fi
 echo ""
 echo "📈 Recent Activity (last 20 lines):"
 echo "------------------------------------"
-ssh metcirt-lab "tail -20 ~/pub/IR/logs/toodles.log" | grep -v "WARNING.*deprecated"
+ssh lab-vm "tail -20 ~/pub/IR/logs/toodles.log" | grep -v "WARNING.*deprecated"
 
 echo ""
 echo "🔄 Reconnection Events (last 10):"
 echo "----------------------------------"
-ssh metcirt-lab "grep -E '(Triggering.*reconnection|Bot instance cleared|Bot thread|Reconnection requested|up and running)' ~/pub/IR/logs/toodles.log | tail -15"
+ssh lab-vm "grep -E '(Triggering.*reconnection|Bot instance cleared|Bot thread|Reconnection requested|up and running)' ~/pub/IR/logs/toodles.log | tail -15"
 
 echo ""
 echo "⚠️  Connection Errors (last 5):"
 echo "--------------------------------"
-ssh metcirt-lab "grep -E '(Connection.*error|timed out|Connection aborted|Remote.*closed)' ~/pub/IR/logs/toodles.log | tail -5"
+ssh lab-vm "grep -E '(Connection.*error|timed out|Connection aborted|Remote.*closed)' ~/pub/IR/logs/toodles.log | tail -5"
 
 echo ""
 echo "✅ Expected behavior with fix:"

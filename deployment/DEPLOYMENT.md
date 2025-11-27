@@ -4,7 +4,7 @@
 
 1. **Pull latest code on VM:**
    ```bash
-   ssh metcirt-lab
+   ssh lab-vm
    cd /home/vinay/pub/IR
    git pull
    ```
