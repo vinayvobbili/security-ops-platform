@@ -1,6 +1,6 @@
-# VM Infrastructure Fixes for lab-lab
+# VM Infrastructure Fixes for lab-vm
 
-This document describes infrastructure improvements made to the lab-lab VM to address reliability and performance issues.
+This document describes infrastructure improvements made to the lab-vm VM to address reliability and performance issues.
 
 ## Problems Identified
 

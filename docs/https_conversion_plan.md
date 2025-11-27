@@ -1,4 +1,4 @@
-# HTTPS Conversion Plan for lab-lab
+# HTTPS Conversion Plan for lab-vm
 
 ## Current State
 
@@ -33,12 +33,12 @@ ssh lab-vm "sudo apt update && sudo apt install -y nginx"
 
 ### 2. Obtain Certificate from Venafi
 
-**Request certificate for:** `lab-vm1.internal.company.com`
+**Request certificate for:** `lab-vm-12.internal.company.com`
 
 1. Submit certificate request through Venafi portal/API
 2. Download certificate files:
-    - `lab-lab.crt` (server certificate)
-    - `lab-lab.key` (private key)
+    - `lab-vm.crt` (server certificate)
+    - `lab-vm.key` (private key)
     - `chain.crt` (intermediate CA chain - if provided)
 
 3. Copy certificates to server:
@@ -48,16 +48,16 @@ ssh lab-vm "sudo apt update && sudo apt install -y nginx"
 ssh lab-vm "sudo mkdir -p /etc/nginx/ssl"
 
 # Copy certificate files (run from your local machine)
-scp lab-lab.crt lab-lab:/tmp/
-scp lab-lab.key lab-lab:/tmp/
-scp chain.crt lab-lab:/tmp/  # if applicable
+scp lab-vm.crt lab-vm:/tmp/
+scp lab-vm.key lab-vm:/tmp/
+scp chain.crt lab-vm:/tmp/  # if applicable
 
 # Move to proper location with correct permissions
-ssh lab-vm "sudo mv /tmp/lab-lab.crt /etc/nginx/ssl/ && \
-  sudo mv /tmp/lab-lab.key /etc/nginx/ssl/ && \
+ssh lab-vm "sudo mv /tmp/lab-vm.crt /etc/nginx/ssl/ && \
+  sudo mv /tmp/lab-vm.key /etc/nginx/ssl/ && \
   sudo mv /tmp/chain.crt /etc/nginx/ssl/ && \
-  sudo chmod 600 /etc/nginx/ssl/lab-lab.key && \
-  sudo chmod 644 /etc/nginx/ssl/lab-lab.crt"
+  sudo chmod 600 /etc/nginx/ssl/lab-vm.key && \
+  sudo chmod 644 /etc/nginx/ssl/lab-vm.crt"
 ```
 
 ### 3. Update Configuration
@@ -74,23 +74,23 @@ PROXY_PORT = 8081
 
 ### 4. Create nginx Configuration
 
-File: `/etc/nginx/sites-available/lab-lab`
+File: `/etc/nginx/sites-available/lab-vm`
 
 ```nginx
 # Redirect HTTP to HTTPS
 server {
     listen 80;
-    server_name lab-vm1.internal.company.com;
+    server_name lab-vm-12.internal.company.com;
     return 301 https://$server_name$request_uri;
 }
 
 # HTTPS server
 server {
     listen 443 ssl http2;
-    server_name lab-vm1.internal.company.com;
+    server_name lab-vm-12.internal.company.com;
 
-    ssl_certificate /etc/nginx/ssl/lab-lab.crt;
-    ssl_certificate_key /etc/nginx/ssl/lab-lab.key;
+    ssl_certificate /etc/nginx/ssl/lab-vm.crt;
+    ssl_certificate_key /etc/nginx/ssl/lab-vm.key;
     ssl_trusted_certificate /etc/nginx/ssl/chain.crt;  # if chain provided
 
     # Modern SSL configuration
@@ -122,7 +122,7 @@ server {
 ### 5. Enable Configuration
 
 ```bash
-ssh lab-vm "sudo ln -s /etc/nginx/sites-available/lab-lab /etc/nginx/sites-enabled/ && \
+ssh lab-vm "sudo ln -s /etc/nginx/sites-available/lab-vm /etc/nginx/sites-enabled/ && \
   sudo rm -f /etc/nginx/sites-enabled/default"
 ```
 
@@ -150,7 +150,7 @@ ssh lab-vm "sudo systemctl status nginx"
 ssh lab-vm "sudo ss -tlnp | grep -E ':(80|443|8080|8081)'"
 
 # Test HTTPS
-curl https://lab-vm1.internal.company.com
+curl https://lab-vm-12.internal.company.com
 ```
 
 ## Port Summary
