@@ -13,7 +13,7 @@ from flask import request
 from pytz import timezone
 
 from my_config import get_config
-from services.webex import get_room_name
+from webex_utils import get_room_name
 
 eastern = timezone('US/Eastern')
 config = get_config()
