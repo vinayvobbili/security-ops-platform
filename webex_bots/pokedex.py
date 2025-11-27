@@ -67,7 +67,7 @@ from webex_bot.webex_bot import WebexBot
 from my_config import get_config
 from my_bot.core.my_model import ask, initialize_model_and_agent
 from my_bot.core.session_manager import get_session_manager
-from services.webex import get_room_name
+from src.utils.webex_utils import get_room_name
 from src.utils.bot_messages import THINKING_MESSAGES, DONE_MESSAGES
 
 from src.utils.ssl_config import configure_ssl_if_needed
@@ -76,6 +76,7 @@ configure_ssl_if_needed(verbose=True)  # Re-enabled due to ZScaler connectivity 
 
 # Enhanced WebSocket client for websockets 14.x compatibility
 from src.utils.enhanced_websocket_client import patch_websocket_client
+
 patch_websocket_client()
 
 CONFIG = get_config()
