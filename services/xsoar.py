@@ -86,21 +86,27 @@ log = logging.getLogger(__name__)
 urllib3_logger = logging.getLogger("urllib3.connectionpool")
 urllib3_logger.setLevel(logging.WARNING)
 
-# Configure connection pool size to match parallel workers (25)
-# This prevents "Connection pool is full" warnings when using ThreadPoolExecutor with 25 workers
-# Patch urllib3.PoolManager to use larger default maxsize before creating clients
+# Configure connection pool size to match parallel workers
+# This prevents "Connection pool is full" warnings when using ThreadPoolExecutor
+# Pool size is dynamically calculated from src.config.XsoarConfig
+# To change worker count and pool size, update XsoarConfig.MAX_WORKERS
 import functools
+
+from src.config import XsoarConfig
+
+CONNECTION_POOL_SIZE = XsoarConfig.get_pool_size()
+
+log.debug(f"XSOAR connection pool configuration: MAX_WORKERS={XsoarConfig.MAX_WORKERS}, POOL_SIZE={CONNECTION_POOL_SIZE}")
 
 _original_pool_manager_init = urllib3.PoolManager.__init__
 
 
 @functools.wraps(_original_pool_manager_init)
 def _patched_pool_manager_init(self, *args, **kwargs):
-    """Patched PoolManager init with larger default maxsize."""
-    # Set maxsize to 15 if not explicitly provided (10 workers + 5 buffer for cleanup/timeouts)
-    # With bounded queue pattern, we only have 10 concurrent requests max
+    """Patched PoolManager init with dynamic maxsize based on worker count."""
+    # Set maxsize based on XsoarConfig.MAX_WORKERS if not explicitly provided
     if 'maxsize' not in kwargs:
-        kwargs['maxsize'] = 15
+        kwargs['maxsize'] = CONNECTION_POOL_SIZE
     return _original_pool_manager_init(self, *args, **kwargs)
 
 
@@ -151,13 +157,13 @@ for client in [prod_client, dev_client]:
     if hasattr(client, 'api_client') and hasattr(client.api_client, 'rest_client'):
         rest_client = client.api_client.rest_client
         if hasattr(rest_client, 'pool_manager'):
-            # Recreate pool manager with maxsize=15, proper timeout configuration, and retry logic
+            # Recreate pool manager with dynamic maxsize based on worker count
             # This prevents threads from hanging indefinitely waiting for connections
             # Reduced timeout from 180s to 30s - fail fast instead of hanging
             read_timeout = int(os.getenv('XSOAR_READ_TIMEOUT', '30'))
             rest_client.pool_manager = urllib3.PoolManager(
                 num_pools=10,
-                maxsize=15,  # 10 workers + 5 buffer (bounded queue pattern keeps max 10 concurrent)
+                maxsize=CONNECTION_POOL_SIZE,  # Dynamic: MAX_WORKERS + 5 buffer
                 timeout=urllib3.Timeout(connect=30.0, read=float(read_timeout)),
                 retries=retry_strategy,  # Add retry logic for transient network issues
                 cert_reqs='CERT_NONE' if not client.api_client.configuration.verify_ssl else 'CERT_REQUIRED'
