@@ -10,7 +10,7 @@ if pgrep -f "web/web_server.py" > /dev/null; then
     pkill -f "web/web_server.py"
 
     # Wait up to 5 seconds for graceful shutdown
-    for i in {1..5}; do
+    for _ in {1..5}; do
         if ! pgrep -f "web/web_server.py" > /dev/null; then
             break
         fi
@@ -23,6 +23,14 @@ if pgrep -f "web/web_server.py" > /dev/null; then
         pkill -9 -f "web/web_server.py"
         sleep 1
     fi
+fi
+
+# Also kill any process using the proxy port (8081) to ensure clean startup
+PROXY_PORT=8081
+if lsof -ti:$PROXY_PORT > /dev/null 2>&1; then
+    echo "Cleaning up process using proxy port $PROXY_PORT..."
+    lsof -ti:$PROXY_PORT | xargs kill -9 2>/dev/null || true
+    sleep 1
 fi
 
 # Ensure logs directory exists
