@@ -398,7 +398,19 @@ def start_proxy_server(proxy_port: int):
     try:
         # Enable address reuse to avoid "address already in use" errors
         socketserver.TCPServer.allow_reuse_address = True
-        with socketserver.ThreadingTCPServer(("", proxy_port), handler) as httpd:
-            httpd.serve_forever()
+        httpd = socketserver.ThreadingTCPServer(("", proxy_port), handler)
+
+        # Ensure socket options are set on the instance as well
+        httpd.allow_reuse_address = True
+        httpd.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+
+        logger.info(f"Proxy server successfully bound to port {proxy_port}")
+        httpd.serve_forever()
+    except OSError as exc:
+        if exc.errno in (48, 98):  # Address already in use
+            logger.error(f"Failed to start proxy on port {proxy_port}: Address already in use. "
+                        f"Another process may be using this port. Check with: lsof -i:{proxy_port}")
+        else:
+            logger.error(f"Failed to start proxy on port {proxy_port}: {exc}")
     except Exception as exc:
         logger.error(f"Failed to start proxy: {exc}")
