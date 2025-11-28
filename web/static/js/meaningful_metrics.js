@@ -45,8 +45,8 @@ const availableColumns = {
     'category': {label: 'Category', category: 'Classification', path: 'category', type: 'string'},
     'sourceInstance': {label: 'Source Instance', category: 'Technical', path: 'sourceInstance', type: 'string'},
     'openDuration': {label: 'Open Duration', category: 'Metrics', path: 'openDuration', type: 'number'},
-    'timetorespond': {label: 'TTR', category: 'Metrics', path: 'time_to_respond_secs', type: 'duration'},
-    'timetocontain': {label: 'TTC', category: 'Metrics', path: 'time_to_contain_secs', type: 'duration'},
+    'timetorespond': {label: 'Time to Respond', category: 'Metrics', path: 'time_to_respond_secs', type: 'duration'},
+    'timetocontain': {label: 'Time to Contain', category: 'Metrics', path: 'time_to_contain_secs', type: 'duration'},
     'notes': {label: 'User Notes', category: 'Investigation', path: 'notes', type: 'array'}
 };
 
