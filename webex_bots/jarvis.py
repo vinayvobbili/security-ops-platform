@@ -384,14 +384,10 @@ class GetCSHostsWithInvalidRingTags(Command):
         report_message = 'CS Servers with Invalid Ring Tags Report'
         filename = "cs_servers_with_invalid_ring_tags_only.xlsx"  # Just the filename, not full path
         report_path = DATA_DIR / today_date / filename
-        if report_path.exists():
-            send_report_with_progress(room_id, filename, report_message)
-            seek_approval_to_delete_invalid_ring_tags(room_id)
-            return
 
         webex_api.messages.create(
             roomId=room_id,
-            markdown=f"Hello {activity['actor']['displayName']}! I've started the report generation process for CS Servers with Invalid Ring Tags. It is running in the background and will complete in about 15 mins."
+            markdown=f"Hello {activity['actor']['displayName']}! I've started the report generation process for CS hosts with Invalid Ring Tags. It is running in the background and will complete in about 15 mins."
         )
         lock_path = ROOT_DIRECTORY / "src" / "epp" / "cs_servers_with_invalid_ring_tags.lock"
         try:
