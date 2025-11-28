@@ -1293,7 +1293,6 @@ function updateTable() {
                             }
                             break;
                         case 'duration':
-                            td.style.textAlign = 'right';
                             td.classList.add('duration-column');
                             if (value && value > 0) {
                                 const minutes = Math.floor(value / 60);
@@ -1317,7 +1316,6 @@ function updateTable() {
                                 td.innerHTML = `<span class="notes-icon" data-notes='${notesData.replace(/'/g, '&#39;')}'>
                                                         📝 ${value.length}
                                                     </span>`;
-                                td.style.textAlign = 'center';
                             } else if (Array.isArray(value) && value.length > 0) {
                                 td.textContent = `${value.length} items`;
                             } else {
@@ -1336,7 +1334,6 @@ function updateTable() {
                                 const status = statusMap[value] || 'Unknown';
                                 td.innerHTML = `<span class="status-${status.toLowerCase()}">${status}</span>`;
                             } else if (columnId === 'currently_aging_days') {
-                                td.style.textAlign = 'center';
                                 if (value === null || value === undefined) {
                                     td.textContent = '--';
                                     td.style.color = '#6c757d';
@@ -2230,7 +2227,6 @@ function buildTableHeaders() {
             th.innerHTML = `${column.label} <span class="sort-indicator"></span>`;
             th.style.cursor = 'pointer';
             if (column.type === 'duration') {
-                th.style.textAlign = 'right';
                 th.classList.add('duration-column');
                 th.title = 'mins:secs';
                 th.innerHTML = `${column.label} ℹ️ <span class="sort-indicator"></span>`;
