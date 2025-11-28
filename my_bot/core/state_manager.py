@@ -212,7 +212,10 @@ class SecurityBotStateManager:
                 'content': str,
                 'input_tokens': int,
                 'output_tokens': int,
-                'total_tokens': int
+                'total_tokens': int,
+                'prompt_time': float,      # seconds spent processing prompt
+                'generation_time': float,  # seconds spent generating response
+                'tokens_per_sec': float    # output tokens per second
             }
         """
         try:
@@ -221,14 +224,16 @@ class SecurityBotStateManager:
                 {"role": "user", "content": query}
             ]
 
-            # Track cumulative token usage
+            # Track cumulative token usage and timing
             total_input_tokens = 0
             total_output_tokens = 0
+            total_prompt_time = 0.0
+            total_generation_time = 0.0
 
             # Get initial response (may contain tool calls)
             response = self.llm_with_tools.invoke(messages)
 
-            # Extract token usage from response metadata
+            # Extract token usage and timing from response metadata
             # Try usage_metadata first (Ollama format), fallback to usage (OpenAI format)
             if hasattr(response, 'usage_metadata') and response.usage_metadata:
                 total_input_tokens += response.usage_metadata.get('input_tokens', 0)
@@ -238,6 +243,15 @@ class SecurityBotStateManager:
                 metadata = response.response_metadata
                 total_input_tokens += metadata.get('prompt_eval_count', 0)
                 total_output_tokens += metadata.get('eval_count', 0)
+
+            # Extract timing data from Ollama's response_metadata
+            if hasattr(response, 'response_metadata'):
+                metadata = response.response_metadata
+                # Convert nanoseconds to seconds
+                if 'prompt_eval_duration' in metadata:
+                    total_prompt_time += metadata['prompt_eval_duration'] / 1e9
+                if 'eval_duration' in metadata:
+                    total_generation_time += metadata['eval_duration'] / 1e9
 
             # If there are tool calls, execute them and get final response
             if hasattr(response, 'tool_calls') and response.tool_calls:
@@ -275,19 +289,40 @@ class SecurityBotStateManager:
                     total_input_tokens += metadata.get('prompt_eval_count', 0)
                     total_output_tokens += metadata.get('eval_count', 0)
 
+                # Extract timing data from final response
+                if hasattr(final_response, 'response_metadata'):
+                    metadata = final_response.response_metadata
+                    # Convert nanoseconds to seconds
+                    if 'prompt_eval_duration' in metadata:
+                        total_prompt_time += metadata['prompt_eval_duration'] / 1e9
+                    if 'eval_duration' in metadata:
+                        total_generation_time += metadata['eval_duration'] / 1e9
+
+                # Calculate tokens per second
+                tokens_per_sec = total_output_tokens / total_generation_time if total_generation_time > 0 else 0.0
+
                 return {
                     'content': final_response.content,
                     'input_tokens': total_input_tokens,
                     'output_tokens': total_output_tokens,
-                    'total_tokens': total_input_tokens + total_output_tokens
+                    'total_tokens': total_input_tokens + total_output_tokens,
+                    'prompt_time': total_prompt_time,
+                    'generation_time': total_generation_time,
+                    'tokens_per_sec': tokens_per_sec
                 }
             else:
                 # No tool calls, return direct response
+                # Calculate tokens per second
+                tokens_per_sec = total_output_tokens / total_generation_time if total_generation_time > 0 else 0.0
+
                 return {
                     'content': response.content,
                     'input_tokens': total_input_tokens,
                     'output_tokens': total_output_tokens,
-                    'total_tokens': total_input_tokens + total_output_tokens
+                    'total_tokens': total_input_tokens + total_output_tokens,
+                    'prompt_time': total_prompt_time,
+                    'generation_time': total_generation_time,
+                    'tokens_per_sec': tokens_per_sec
                 }
 
         except Exception as e:
@@ -295,7 +330,10 @@ class SecurityBotStateManager:
                 'content': f"Error: {str(e)}",
                 'input_tokens': 0,
                 'output_tokens': 0,
-                'total_tokens': 0
+                'total_tokens': 0,
+                'prompt_time': 0.0,
+                'generation_time': 0.0,
+                'tokens_per_sec': 0.0
             }
 
     def execute_query_stream(self, query: str):

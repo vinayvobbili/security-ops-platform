@@ -124,10 +124,13 @@ def ask(user_message: str, user_id: str = "default", room_id: str = "default") -
 
     Returns:
         dict: {
-            'content': str,           # The response text
-            'input_tokens': int,      # Number of input tokens
-            'output_tokens': int,     # Number of output tokens
-            'total_tokens': int       # Total tokens used
+            'content': str,             # The response text
+            'input_tokens': int,        # Number of input tokens
+            'output_tokens': int,       # Number of output tokens
+            'total_tokens': int,        # Total tokens used
+            'prompt_time': float,       # Seconds spent processing prompt
+            'generation_time': float,   # Seconds spent generating response
+            'tokens_per_sec': float     # Output tokens per second
         }
     """
 
@@ -140,7 +143,10 @@ def ask(user_message: str, user_id: str = "default", room_id: str = "default") -
                 'content': "Please ask me a question!",
                 'input_tokens': 0,
                 'output_tokens': 0,
-                'total_tokens': 0
+                'total_tokens': 0,
+                'prompt_time': 0.0,
+                'generation_time': 0.0,
+                'tokens_per_sec': 0.0
             }
 
         import re
@@ -181,7 +187,10 @@ def ask(user_message: str, user_id: str = "default", room_id: str = "default") -
                 'content': "❌ Bot not ready. Please try again in a moment.",
                 'input_tokens': 0,
                 'output_tokens': 0,
-                'total_tokens': 0
+                'total_tokens': 0,
+                'prompt_time': 0.0,
+                'generation_time': 0.0,
+                'tokens_per_sec': 0.0
             }
 
         # Get session manager for persistent sessions
@@ -209,7 +218,10 @@ def ask(user_message: str, user_id: str = "default", room_id: str = "default") -
                 'content': final_response,
                 'input_tokens': 0,
                 'output_tokens': 0,
-                'total_tokens': 0
+                'total_tokens': 0,
+                'prompt_time': 0.0,
+                'generation_time': 0.0,
+                'tokens_per_sec': 0.0
             }
 
         # STEP 1: For complex queries, pass to LLM agent - let it decide everything
@@ -230,12 +242,15 @@ def ask(user_message: str, user_id: str = "default", room_id: str = "default") -
             from src.utils.tool_logging import set_logging_context
             set_logging_context(session_key)
 
-            # execute_query now returns a dict with content and token counts
+            # execute_query now returns a dict with content, token counts, and timing data
             result = state_manager.execute_query(agent_input)
             final_response = result['content']
             input_tokens = result['input_tokens']
             output_tokens = result['output_tokens']
             total_tokens = result['total_tokens']
+            prompt_time = result['prompt_time']
+            generation_time = result['generation_time']
+            tokens_per_sec = result['tokens_per_sec']
 
         except Exception as e:
             logging.error(f"Failed to invoke agent: {e}")
@@ -243,6 +258,9 @@ def ask(user_message: str, user_id: str = "default", room_id: str = "default") -
             input_tokens = 0
             output_tokens = 0
             total_tokens = 0
+            prompt_time = 0.0
+            generation_time = 0.0
+            tokens_per_sec = 0.0
 
         # Store user message and bot response in session
         session_manager.add_message(session_key, "user", query)
@@ -256,7 +274,10 @@ def ask(user_message: str, user_id: str = "default", room_id: str = "default") -
             'content': final_response,
             'input_tokens': input_tokens,
             'output_tokens': output_tokens,
-            'total_tokens': total_tokens
+            'total_tokens': total_tokens,
+            'prompt_time': prompt_time,
+            'generation_time': generation_time,
+            'tokens_per_sec': tokens_per_sec
         }
 
     except Exception as e:
@@ -265,7 +286,10 @@ def ask(user_message: str, user_id: str = "default", room_id: str = "default") -
             'content': "❌ An error occurred. Please try again or contact support.",
             'input_tokens': 0,
             'output_tokens': 0,
-            'total_tokens': 0
+            'total_tokens': 0,
+            'prompt_time': 0.0,
+            'generation_time': 0.0,
+            'tokens_per_sec': 0.0
         }
 
 

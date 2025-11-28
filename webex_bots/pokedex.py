@@ -286,7 +286,7 @@ class Bot(WebexBot):
 
             # Process query through LLM agent
             try:
-                # ask() now returns a dict with content and token counts
+                # ask() now returns a dict with content, token counts, and timing data
                 result = ask(
                     raw_message,
                     user_id=teams_message.personId,
@@ -296,12 +296,18 @@ class Bot(WebexBot):
                 input_tokens = result['input_tokens']
                 output_tokens = result['output_tokens']
                 total_tokens = result['total_tokens']
+                prompt_time = result['prompt_time']
+                generation_time = result['generation_time']
+                tokens_per_sec = result['tokens_per_sec']
             except Exception as e:
                 logger.error(f"Error in LLM agent processing: {e}")
                 response_text = "❌ I encountered an error processing your message. Please try again."
                 input_tokens = 0
                 output_tokens = 0
                 total_tokens = 0
+                prompt_time = 0.0
+                generation_time = 0.0
+                tokens_per_sec = 0.0
 
             # Format for Webex
             if len(response_text) > 7000:
@@ -321,9 +327,9 @@ class Bot(WebexBot):
                 # Update the final thinking message to show "Done!"
                 if thinking_msg:
                     done_prefix = random.choice(DONE_MESSAGES)
-                    # Include token counts in the done message
-                    if total_tokens > 0:
-                        done_message = f"{done_prefix} ⚡ Response time: **{response_time:.1f}s** | Tokens-> Input: {input_tokens} → Output: {output_tokens}; Total: ({total_tokens})"
+                    # Include enhanced metrics: time breakdown, tokens, and speed
+                    if total_tokens > 0 and generation_time > 0:
+                        done_message = f"{done_prefix} ⚡ Time: **{response_time:.1f}s** ({prompt_time:.1f}s prompt + {generation_time:.1f}s gen) | Tokens: {input_tokens}→{output_tokens} | Speed: {tokens_per_sec:.1f} tok/s"
                     else:
                         done_message = f"{done_prefix} ⚡ Response time: **{response_time:.1f}s**"
                     try:
