@@ -2,52 +2,75 @@
 
 cd /home/vinay/pub/IR || exit 1
 
-# Kill existing web server process if running
-echo "Stopping existing Web Server instances..."
+# Kill ALL existing web server processes if running
+echo "Stopping ALL existing Web Server instances..."
 
-# Try graceful shutdown first (SIGTERM)
-if pgrep -f "web/web_server.py" > /dev/null; then
-    pkill -f "web/web_server.py"
+# Find all web_server.py processes
+WEB_PIDS=$(pgrep -f "web_server.py")
 
-    # Wait up to 5 seconds for graceful shutdown
-    for _ in {1..5}; do
-        if ! pgrep -f "web/web_server.py" > /dev/null; then
-            break
-        fi
-        sleep 1
-    done
+if [ -n "$WEB_PIDS" ]; then
+    echo "Found web_server.py processes: $WEB_PIDS"
 
-    # If still running after 5 seconds, force kill (SIGKILL)
-    if pgrep -f "web/web_server.py" > /dev/null; then
-        echo "Process did not terminate gracefully, forcing shutdown..."
-        pkill -9 -f "web/web_server.py"
+    # Force kill ALL of them immediately (don't wait for graceful shutdown)
+    echo "$WEB_PIDS" | xargs kill -9 2>/dev/null || true
+
+    # Wait and verify they're all dead
+    sleep 2
+
+    # Double-check and kill any stragglers
+    REMAINING=$(pgrep -f "web_server.py")
+    if [ -n "$REMAINING" ]; then
+        echo "Killing remaining processes: $REMAINING"
+        echo "$REMAINING" | xargs kill -9 2>/dev/null || true
         sleep 1
     fi
+else
+    echo "No existing web_server.py processes found"
 fi
 
-# Also kill any process using the proxy port (8081) to ensure clean startup
+# Force kill any process using ports 8080 and 8081
 PROXY_PORT=8081
 WEB_PORT=8080
 
-echo "Checking for processes using ports..."
+echo "Force killing any processes on ports $WEB_PORT and $PROXY_PORT..."
 
-# Kill process on proxy port
-if lsof -ti:$PROXY_PORT > /dev/null 2>&1; then
-    echo "Cleaning up process using proxy port $PROXY_PORT..."
-    lsof -ti:$PROXY_PORT | xargs kill -9 2>/dev/null || true
-    sleep 1
-fi
+# Kill anything on proxy port 8081 - multiple attempts to be sure
+for attempt in 1 2 3; do
+    PROXY_PID=$(lsof -ti:$PROXY_PORT 2>/dev/null)
+    if [ -n "$PROXY_PID" ]; then
+        echo "  Killing PID $PROXY_PID using port $PROXY_PORT (attempt $attempt)"
+        kill -9 "$PROXY_PID" 2>/dev/null || true
+        sleep 1
+    else
+        break
+    fi
+done
 
-# Kill process on web server port
-if lsof -ti:$WEB_PORT > /dev/null 2>&1; then
-    echo "Cleaning up process using web server port $WEB_PORT..."
-    lsof -ti:$WEB_PORT | xargs kill -9 2>/dev/null || true
-    sleep 1
-fi
+# Kill anything on web server port 8080
+for attempt in 1 2 3; do
+    WEB_PID=$(lsof -ti:$WEB_PORT 2>/dev/null)
+    if [ -n "$WEB_PID" ]; then
+        echo "  Killing PID $WEB_PID using port $WEB_PORT (attempt $attempt)"
+        kill -9 "$WEB_PID" 2>/dev/null || true
+        sleep 1
+    else
+        break
+    fi
+done
 
-# Wait for sockets to be fully released (TIME_WAIT state can take a moment)
-echo "Waiting for sockets to be released..."
+# Give processes time to fully die and sockets to be released
+echo "Waiting for sockets to be fully released..."
 sleep 3
+
+# Final verification
+if lsof -i:$PROXY_PORT > /dev/null 2>&1; then
+    echo "WARNING: Port $PROXY_PORT still in use after cleanup!"
+    lsof -i:$PROXY_PORT
+fi
+if lsof -i:$WEB_PORT > /dev/null 2>&1; then
+    echo "WARNING: Port $WEB_PORT still in use after cleanup!"
+    lsof -i:$WEB_PORT
+fi
 
 # Ensure logs directory exists
 mkdir -p logs
