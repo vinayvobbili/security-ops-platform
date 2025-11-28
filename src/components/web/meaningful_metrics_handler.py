@@ -691,7 +691,7 @@ def _enrich_incidents_with_notes_async(incidents: List[Dict[str, Any]], progress
             try:
                 # Wait max 60 seconds for ANY future to complete
                 done_futures = []
-                for future in as_completed(futures.keys(), timeout=60):
+                for future in as_completed(list(futures.keys()), timeout=60):
                     result = future.result()
                     enriched_incidents.append(result)
 
