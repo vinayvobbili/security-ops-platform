@@ -286,14 +286,22 @@ class Bot(WebexBot):
 
             # Process query through LLM agent
             try:
-                response_text = ask(
+                # ask() now returns a dict with content and token counts
+                result = ask(
                     raw_message,
                     user_id=teams_message.personId,
                     room_id=teams_message.roomId
                 )
+                response_text = result['content']
+                input_tokens = result['input_tokens']
+                output_tokens = result['output_tokens']
+                total_tokens = result['total_tokens']
             except Exception as e:
                 logger.error(f"Error in LLM agent processing: {e}")
                 response_text = "❌ I encountered an error processing your message. Please try again."
+                input_tokens = 0
+                output_tokens = 0
+                total_tokens = 0
 
             # Format for Webex
             if len(response_text) > 7000:
@@ -313,7 +321,11 @@ class Bot(WebexBot):
                 # Update the final thinking message to show "Done!"
                 if thinking_msg:
                     done_prefix = random.choice(DONE_MESSAGES)
-                    done_message = f"{done_prefix} ⚡ Response time: **{response_time:.1f}s**"
+                    # Include token counts in the done message
+                    if total_tokens > 0:
+                        done_message = f"{done_prefix} ⚡ Response time: **{response_time:.1f}s** | Tokens-> Input: {input_tokens} → Output: {output_tokens}; Total: ({total_tokens})"
+                    else:
+                        done_message = f"{done_prefix} ⚡ Response time: **{response_time:.1f}s**"
                     try:
                         # Update the thinking message to show completion (using markdown)
                         import requests

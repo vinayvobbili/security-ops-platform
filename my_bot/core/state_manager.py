@@ -204,16 +204,40 @@ class SecurityBotStateManager:
             return False
 
 
-    def execute_query(self, query: str) -> str:
-        """Execute query using native tool calling"""
+    def execute_query(self, query: str) -> dict:
+        """Execute query using native tool calling
+
+        Returns:
+            dict: {
+                'content': str,
+                'input_tokens': int,
+                'output_tokens': int,
+                'total_tokens': int
+            }
+        """
         try:
             messages = [
                 {"role": "system", "content": "You are a security operations assistant. Your responses will be sent as Webex messages, so you can use Webex markdown formatting."},
                 {"role": "user", "content": query}
             ]
 
+            # Track cumulative token usage
+            total_input_tokens = 0
+            total_output_tokens = 0
+
             # Get initial response (may contain tool calls)
             response = self.llm_with_tools.invoke(messages)
+
+            # Extract token usage from response metadata
+            # Try usage_metadata first (Ollama format), fallback to usage (OpenAI format)
+            if hasattr(response, 'usage_metadata') and response.usage_metadata:
+                total_input_tokens += response.usage_metadata.get('input_tokens', 0)
+                total_output_tokens += response.usage_metadata.get('output_tokens', 0)
+            elif hasattr(response, 'response_metadata'):
+                # Fallback: try Ollama's alternative format in response_metadata
+                metadata = response.response_metadata
+                total_input_tokens += metadata.get('prompt_eval_count', 0)
+                total_output_tokens += metadata.get('eval_count', 0)
 
             # If there are tool calls, execute them and get final response
             if hasattr(response, 'tool_calls') and response.tool_calls:
@@ -239,13 +263,40 @@ class SecurityBotStateManager:
 
                 # Get final response with tool results
                 final_response = self.llm_with_tools.invoke(messages)
-                return final_response.content
+
+                # Extract token usage from final response
+                # Try usage_metadata first (Ollama format), fallback to usage (OpenAI format)
+                if hasattr(final_response, 'usage_metadata') and final_response.usage_metadata:
+                    total_input_tokens += final_response.usage_metadata.get('input_tokens', 0)
+                    total_output_tokens += final_response.usage_metadata.get('output_tokens', 0)
+                elif hasattr(final_response, 'response_metadata'):
+                    # Fallback: try Ollama's alternative format in response_metadata
+                    metadata = final_response.response_metadata
+                    total_input_tokens += metadata.get('prompt_eval_count', 0)
+                    total_output_tokens += metadata.get('eval_count', 0)
+
+                return {
+                    'content': final_response.content,
+                    'input_tokens': total_input_tokens,
+                    'output_tokens': total_output_tokens,
+                    'total_tokens': total_input_tokens + total_output_tokens
+                }
             else:
                 # No tool calls, return direct response
-                return response.content
+                return {
+                    'content': response.content,
+                    'input_tokens': total_input_tokens,
+                    'output_tokens': total_output_tokens,
+                    'total_tokens': total_input_tokens + total_output_tokens
+                }
 
         except Exception as e:
-            return f"Error: {str(e)}"
+            return {
+                'content': f"Error: {str(e)}",
+                'input_tokens': 0,
+                'output_tokens': 0,
+                'total_tokens': 0
+            }
 
     def execute_query_stream(self, query: str):
         """Execute query using native tool calling with streaming support
