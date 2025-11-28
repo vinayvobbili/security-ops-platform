@@ -27,11 +27,27 @@ fi
 
 # Also kill any process using the proxy port (8081) to ensure clean startup
 PROXY_PORT=8081
+WEB_PORT=8080
+
+echo "Checking for processes using ports..."
+
+# Kill process on proxy port
 if lsof -ti:$PROXY_PORT > /dev/null 2>&1; then
     echo "Cleaning up process using proxy port $PROXY_PORT..."
     lsof -ti:$PROXY_PORT | xargs kill -9 2>/dev/null || true
     sleep 1
 fi
+
+# Kill process on web server port
+if lsof -ti:$WEB_PORT > /dev/null 2>&1; then
+    echo "Cleaning up process using web server port $WEB_PORT..."
+    lsof -ti:$WEB_PORT | xargs kill -9 2>/dev/null || true
+    sleep 1
+fi
+
+# Wait for sockets to be fully released (TIME_WAIT state can take a moment)
+echo "Waiting for sockets to be released..."
+sleep 3
 
 # Ensure logs directory exists
 mkdir -p logs
