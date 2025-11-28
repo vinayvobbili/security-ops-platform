@@ -420,12 +420,21 @@ def _prepare_export_rows(
     """Prepare incident rows for Excel export."""
     severity_map = {0: 'Unknown', 1: 'Low', 2: 'Medium', 3: 'High', 4: 'Critical'}
     status_map = {0: 'Pending', 1: 'Active', 2: 'Closed'}
+
+    # Map column IDs to actual data field paths (matches JavaScript availableColumns)
+    column_path_map = {
+        'timetorespond': 'time_to_respond_secs',
+        'timetocontain': 'time_to_contain_secs',
+    }
+
     rows = []
 
     for incident in incidents:
         row = {}
         for col_id in visible_columns:
-            value = incident.get(col_id)
+            # Use path mapping if available, otherwise use col_id directly
+            data_field = column_path_map.get(col_id, col_id)
+            value = incident.get(data_field)
             col_label = column_labels.get(col_id, col_id)
 
             # Handle special formatting
@@ -435,6 +444,9 @@ def _prepare_export_rows(
                 value = severity_map.get(value, 'Unknown')
             elif col_id == 'status':
                 value = status_map.get(value, 'Unknown')
+            elif col_id in ['timetorespond', 'timetocontain']:
+                # Format duration in seconds as MM:SS
+                value = _format_duration(value)
             elif col_id in ['created', 'modified', 'closed', 'updated'] and value:
                 value = _format_date(value)
             elif isinstance(value, list):
@@ -488,6 +500,20 @@ def _format_notes(notes: Any, max_cell_length: int) -> str:
         notes_text += truncation_message
 
     return notes_text
+
+
+def _format_duration(seconds: Any) -> str:
+    """Format duration in seconds as MM:SS."""
+    if seconds is None or seconds == 0:
+        return ''
+
+    try:
+        total_seconds = int(float(seconds))
+        minutes = total_seconds // 60
+        secs = total_seconds % 60
+        return f"{minutes}:{secs:02d}"
+    except (ValueError, TypeError):
+        return ''
 
 
 def _format_date(value: Any) -> str:
