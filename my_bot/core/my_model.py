@@ -99,7 +99,7 @@ def initialize_model_and_agent():
     return success
 
 
-def ask(user_message: str, user_id: str = "default", room_id: str = "default") -> str:
+def ask(user_message: str, user_id: str = "default", room_id: str = "default") -> dict:
     """
     SOC Q&A function with persistent sessions and enhanced error recovery:
 
@@ -108,13 +108,14 @@ def ask(user_message: str, user_id: str = "default", room_id: str = "default") -
     3. Agent decides what tools/documents are needed with retry logic
     4. Gracefully handles tool failures with context-aware fallbacks
     5. Stores conversation in persistent session for future context
-    6. Returns complete response with proper attribution
+    6. Returns complete response with proper attribution and token counts
 
     Features:
     - Persistent conversation context across bot restarts
     - Enhanced error recovery with intelligent fallbacks
     - Automatic session cleanup and health monitoring
     - Fast responses for simple queries (health, greetings)
+    - Token usage tracking for performance monitoring
 
     Args:
         user_message: The user's question or request
@@ -122,7 +123,12 @@ def ask(user_message: str, user_id: str = "default", room_id: str = "default") -
         room_id: Unique identifier for the chat room (default: "default")
 
     Returns:
-        str: Complete response from the SOC assistant
+        dict: {
+            'content': str,           # The response text
+            'input_tokens': int,      # Number of input tokens
+            'output_tokens': int,     # Number of output tokens
+            'total_tokens': int       # Total tokens used
+        }
     """
 
     start_time = time.time()
@@ -130,7 +136,12 @@ def ask(user_message: str, user_id: str = "default", room_id: str = "default") -
     try:
         # Basic validation
         if not user_message or not user_message.strip():
-            return "Please ask me a question!"
+            return {
+                'content': "Please ask me a question!",
+                'input_tokens': 0,
+                'output_tokens': 0,
+                'total_tokens': 0
+            }
 
         import re
 
@@ -166,7 +177,12 @@ def ask(user_message: str, user_id: str = "default", room_id: str = "default") -
         state_manager = get_state_manager()
         if state_manager and not state_manager.is_initialized:
             logging.error("State manager not initialized. Bot must be initialized before use.")
-            return "❌ Bot not ready. Please try again in a moment."
+            return {
+                'content': "❌ Bot not ready. Please try again in a moment.",
+                'input_tokens': 0,
+                'output_tokens': 0,
+                'total_tokens': 0
+            }
 
         # Get session manager for persistent sessions
         session_manager = get_session_manager()
@@ -189,7 +205,12 @@ def ask(user_message: str, user_id: str = "default", room_id: str = "default") -
             elapsed = time.time() - start_time
             if elapsed > 25:
                 logging.warning(f"Response took {elapsed:.1f}s")
-            return final_response
+            return {
+                'content': final_response,
+                'input_tokens': 0,
+                'output_tokens': 0,
+                'total_tokens': 0
+            }
 
         # STEP 1: For complex queries, pass to LLM agent - let it decide everything
         try:
@@ -209,11 +230,19 @@ def ask(user_message: str, user_id: str = "default", room_id: str = "default") -
             from src.utils.tool_logging import set_logging_context
             set_logging_context(session_key)
 
-            final_response = state_manager.execute_query(agent_input)
+            # execute_query now returns a dict with content and token counts
+            result = state_manager.execute_query(agent_input)
+            final_response = result['content']
+            input_tokens = result['input_tokens']
+            output_tokens = result['output_tokens']
+            total_tokens = result['total_tokens']
 
         except Exception as e:
             logging.error(f"Failed to invoke agent: {e}")
             final_response = "❌ An error occurred. Please try again or contact support."
+            input_tokens = 0
+            output_tokens = 0
+            total_tokens = 0
 
         # Store user message and bot response in session
         session_manager.add_message(session_key, "user", query)
@@ -223,11 +252,21 @@ def ask(user_message: str, user_id: str = "default", room_id: str = "default") -
         if elapsed > 25:
             logging.warning(f"Response took {elapsed:.1f}s")
 
-        return final_response
+        return {
+            'content': final_response,
+            'input_tokens': input_tokens,
+            'output_tokens': output_tokens,
+            'total_tokens': total_tokens
+        }
 
     except Exception as e:
         logging.error(f"Ask function failed: {e}")
-        return "❌ An error occurred. Please try again or contact support."
+        return {
+            'content': "❌ An error occurred. Please try again or contact support.",
+            'input_tokens': 0,
+            'output_tokens': 0,
+            'total_tokens': 0
+        }
 
 
 def ask_stream(user_message: str, user_id: str = "default", room_id: str = "default"):
