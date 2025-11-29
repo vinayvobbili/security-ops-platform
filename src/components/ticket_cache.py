@@ -43,7 +43,6 @@ TICKET_TIMEOUT = int(os.getenv('TICKET_ENRICHMENT_TIMEOUT', '300'))
 # Note: Enrichment is slow on VMs. Notes are now enriched on-demand at export time instead.
 SKIP_NOTE_ENRICHMENT = os.getenv('SKIP_NOTE_ENRICHMENT', 'true').lower() in ('true', '1', 'yes')
 
-
 # Field mappings for ticket extraction
 SYSTEM_FIELDS = {
     'id': 'id',
@@ -185,13 +184,13 @@ class TicketCache:
     @classmethod
     def generate(cls, lookback_days: int = 90) -> None:
         """Run complete ticket caching pipeline."""
-        log.debug("="*80)
+        log.debug("=" * 80)
         log.debug(f"TicketCache.generate() ENTRY - lookback_days={lookback_days}")
-        log.debug("="*80)
+        log.debug("=" * 80)
         try:
             log.info(f"Starting ticket cache generation (lookback={lookback_days}d)")
             log.info(f"Configuration: Workers={MAX_WORKERS}, Timeout={TICKET_TIMEOUT}s, "
-                    f"SkipNotes={SKIP_NOTE_ENRICHMENT}")
+                     f"SkipNotes={SKIP_NOTE_ENRICHMENT}")
             log.debug(f"Pipeline will run: fetch -> process -> save")
 
             log.debug("Creating TicketCache instance...")
@@ -199,27 +198,27 @@ class TicketCache:
             log.debug(f"TicketCache instance created: {instance}")
 
             # Three-step pipeline
-            log.debug("="*60)
+            log.debug("=" * 60)
             log.debug("STEP 1/3: Fetching raw tickets from XSOAR...")
-            log.debug("="*60)
+            log.debug("=" * 60)
             step1_start = time.time()
             raw_tickets = instance._fetch_raw_tickets(lookback_days)
             step1_duration = time.time() - step1_start
             log.debug(f"STEP 1/3 Complete: Fetched {len(raw_tickets)} raw tickets in {step1_duration:.2f}s")
             log.debug(f"Raw tickets type: {type(raw_tickets)}, len: {len(raw_tickets)}")
 
-            log.debug("="*60)
+            log.debug("=" * 60)
             log.debug("STEP 2/3: Processing tickets for UI...")
-            log.debug("="*60)
+            log.debug("=" * 60)
             step2_start = time.time()
             ui_tickets = instance._process_for_ui(raw_tickets)
             step2_duration = time.time() - step2_start
             log.debug(f"STEP 2/3 Complete: Processed {len(ui_tickets)} UI tickets in {step2_duration:.2f}s")
             log.debug(f"UI tickets type: {type(ui_tickets)}, len: {len(ui_tickets)}")
 
-            log.debug("="*60)
+            log.debug("=" * 60)
             log.debug("STEP 3/3: Saving tickets to disk...")
-            log.debug("="*60)
+            log.debug("=" * 60)
             step3_start = time.time()
             instance._save_tickets(raw_tickets, ui_tickets)
             step3_duration = time.time() - step3_start
@@ -235,9 +234,9 @@ class TicketCache:
             log.debug(f"Exception __dict__: {e.__dict__ if hasattr(e, '__dict__') else 'N/A'}")
             raise
         finally:
-            log.debug("="*80)
+            log.debug("=" * 80)
             log.debug("TicketCache.generate() EXIT")
-            log.debug("="*80)
+            log.debug("=" * 80)
 
     def _fetch_raw_tickets(self, lookback_days: int) -> List[Ticket]:
         """Fetch tickets from XSOAR and enrich with notes in parallel."""
@@ -316,9 +315,9 @@ class TicketCache:
         """
         from concurrent.futures import as_completed
 
-        log.debug("="*60)
+        log.debug("=" * 60)
         log.debug("_enrich_with_notes() ENTRY")
-        log.debug("="*60)
+        log.debug("=" * 60)
         log.debug(f"Starting note enrichment for {len(tickets)} tickets")
         log.debug(f"Worker count: {MAX_WORKERS}, Individual timeout: {TICKET_TIMEOUT}s")
         log.debug(f"MAX_WORKERS env var: {os.getenv('TICKET_ENRICHMENT_WORKERS', '5')}")
@@ -369,7 +368,7 @@ class TicketCache:
             try:
                 log.debug("Creating as_completed() iterator...")
                 for future in tqdm(as_completed(futures.keys()),
-                                  total=len(tickets), desc="Fetching notes", unit="ticket", disable=not sys.stdout.isatty()):
+                                   total=len(tickets), desc="Fetching notes", unit="ticket", disable=not sys.stdout.isatty()):
                     completed.add(future)
                     ticket = futures[future]
                     elapsed_time = time.time() - future_start_times[future]
@@ -445,20 +444,20 @@ class TicketCache:
         processing_time = time.time() - processing_start
         success_count = len(enriched) - failed_count
         log.info(f"Enriched {len(enriched)} tickets in {elapsed:.1f}s "
-                f"({success_count} success, {failed_count} failed)")
+                 f"({success_count} success, {failed_count} failed)")
         log.debug(f"Time breakdown - Submission: {submission_time:.2f}s, Processing: {processing_time:.2f}s")
         log.debug(f"Overall rate: {len(enriched) / elapsed:.2f} tickets/sec")
 
         if failed_count > len(enriched) * 0.1:
             failure_pct = (failed_count / len(enriched)) * 100
             log.error(f"HIGH FAILURE RATE: {failure_pct:.1f}% ({failed_count}/{len(enriched)}) "
-                     f"- Check API rate limits or network issues")
+                      f"- Check API rate limits or network issues")
             log.debug(f"Failure threshold: {len(enriched) * 0.1:.1f} tickets (10%)")
 
         log.debug(f"Returning {len(enriched)} enriched tickets")
-        log.debug("="*60)
+        log.debug("=" * 60)
         log.debug("_enrich_with_notes() EXIT")
-        log.debug("="*60)
+        log.debug("=" * 60)
         return enriched
 
     def _fetch_notes_for_ticket(self, ticket: Ticket) -> Ticket:
@@ -702,11 +701,11 @@ class TicketCache:
 def main():
     """CLI entry point with visual output."""
     # Allow overriding lookback days via env var
-    lookback = int(os.getenv('LOOKBACK_DAYS', '90'))
+    lookback = int(os.getenv('LOOKBACK_DAYS', '9'))
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("Ticket Cache Configuration")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     print(f"Lookback Days: {lookback}")
     print(f"Page Size: {TicketHandler.DEFAULT_PAGE_SIZE}")
     print(f"Read Timeout: {TicketHandler.READ_TIMEOUT}s")
@@ -714,7 +713,7 @@ def main():
     if not SKIP_NOTE_ENRICHMENT:
         print(f"Workers: {MAX_WORKERS}")
         print(f"Note Timeout: {TICKET_TIMEOUT}s")
-    print(f"{'='*60}\n")
+    print(f"{'=' * 60}\n")
 
     log.info("Starting ticket caching process")
     TicketCache.generate(lookback_days=lookback)
