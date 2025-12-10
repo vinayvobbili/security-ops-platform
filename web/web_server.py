@@ -241,7 +241,12 @@ def xsoar_ticket_import_form():
 @log_web_activity
 def import_xsoar_ticket():
     source_ticket_number = request.form.get('source_ticket_number')
-    destination_ticket_number, destination_ticket_link = xsoar_import_handler.import_ticket(source_ticket_number)
+    file_data = request.files.get('file')
+    destination_ticket_number, destination_ticket_link = xsoar_import_handler.import_ticket(
+        source_ticket_number,
+        file_data,
+        dev_ticket_handler
+    )
     return jsonify({
         'source_ticket_number': source_ticket_number,
         'destination_ticket_number': destination_ticket_number,

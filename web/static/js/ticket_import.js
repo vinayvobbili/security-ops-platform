@@ -6,6 +6,22 @@ document.addEventListener("DOMContentLoaded", function () {
 document.getElementById('xsoarTicketImportForm').addEventListener('submit', function (event) {
     event.preventDefault(); // Prevent the default form submission
 
+    // Validate file size before submission
+    const fileUpload = document.getElementById('fileUpload');
+    const fileError = document.getElementById('fileError');
+    const maxSize = 10 * 1024 * 1024; // 10MB in bytes
+
+    if (fileUpload.files.length > 0) {
+        const file = fileUpload.files[0];
+        if (file.size > maxSize) {
+            fileError.textContent = `File size (${(file.size / 1024 / 1024).toFixed(2)}MB) exceeds the maximum limit of 10MB. Please select a smaller file.`;
+            fileError.style.display = 'block';
+            return; // Stop submission
+        } else {
+            fileError.style.display = 'none';
+        }
+    }
+
     // Show loading indicator
     document.getElementById('loading').style.display = 'block';
 

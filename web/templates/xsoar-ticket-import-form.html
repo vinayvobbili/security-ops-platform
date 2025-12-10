@@ -16,10 +16,16 @@
                 </h2>
             </div>
             <div class="card-body">
-                <form id="xsoarTicketImportForm" method="POST" action="/import-xsoar-ticket">
+                <form id="xsoarTicketImportForm" method="POST" action="/import-xsoar-ticket" enctype="multipart/form-data">
                     <div class="form-group">
                         <label for="source_ticket_number">Source Ticket Number</label>
-                        <input type="text" class="form-control" id="source_ticket_number" name="source_ticket_number" placeholder="Enter ticket number">
+                        <input type="text" class="form-control" id="source_ticket_number" name="source_ticket_number" placeholder="Enter ticket number" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="fileUpload">Attach File (Optional)</label>
+                        <input type="file" class="form-control" id="fileUpload" name="file" accept="image/*,.pdf,.doc,.docx,.txt">
+                        <small class="form-text text-muted">Supported formats: Images, PDF, Word documents, Text files (Max size: 10MB)</small>
+                        <p id="fileError" class="text-danger" style="display: none; margin-top: 5px;"></p>
                     </div>
                     <button type="submit" class="btn btn-primary btn-block">Import Ticket</button>
                 </form>
