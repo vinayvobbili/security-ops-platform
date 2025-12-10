@@ -917,7 +917,7 @@ class TicketHandler:
             incident_id: The XSOAR incident ID
             entry_data: The entry content (note text or command)
             endpoint: API endpoint ('/xsoar/entry/note' or '/xsoar/entry')
-            markdown: Whether to render the entry as markdown
+            markdown: Whether to render the entry as Markdown
             max_retries: Maximum number of retry attempts for rate limiting/server errors
 
         Returns:
@@ -997,7 +997,7 @@ class TicketHandler:
         Args:
             incident_id: The XSOAR incident ID
             entry_data: The entry content (note text)
-            markdown: Whether to render the entry as markdown (default: True)
+            markdown: Whether to render the entry as Markdown (default: True)
 
         Returns:
             Response data from the API
@@ -1279,3 +1279,11 @@ class TicketHandler:
             return self.upload_file_to_war_room(incident_id, file_path, comment)
         else:
             raise ValueError(f"Invalid upload_to value: {upload_to}. Must be 'attachment' or 'war_room'")
+
+
+if __name__ == "__main__":
+    # Example usage
+    xsoar_handler = TicketHandler(XsoarEnvironment.PROD)
+    incident_id = "929947"
+    note_response = xsoar_handler.get_user_notes(incident_id)
+    print(f"Note Response: {note_response}")

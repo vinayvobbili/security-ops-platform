@@ -33,10 +33,14 @@ def get_last_entry_date(incident_id):
     # user_notes is already sorted with the latest note first by get_user_notes
     latest_note = user_notes[0]
     # Convert the 'created_at' string (e.g., '12/10/2025 03:30 PM ET') to a datetime object
-    created_at_str = latest_note.get("created_at", "").replace(' ET', '')
-    if created_at_str:
-        return pd.to_datetime(created_at_str, format='%m/%d/%Y %I:%M %p')
-    return None
+    created_at_str = latest_note["created_at"]
+    try:
+        last_entry_date = datetime.strptime(created_at_str, '%m/%d/%Y %I:%M %p ET')
+        last_entry_date = eastern.localize(last_entry_date)
+        return last_entry_date
+    except ValueError as e:
+        logger.error(f"Error parsing date '{created_at_str}' for incident {incident_id}: {e}")
+        return None
 
 
 def generate_daily_summary(tickets) -> str | None:
