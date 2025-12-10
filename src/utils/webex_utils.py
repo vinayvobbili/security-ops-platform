@@ -182,7 +182,7 @@ def send_file_to_webex_room(room_id, file_path, message=None):
         if message is None:
             message = "Here's the file you requested."
 
-        bot_access_token = config.webex_bot_access_token_tars
+        bot_access_token = config.webex_bot_access_token_soar
 
         # Initialize Webex API client
         webex_api = WebexTeamsAPI(access_token=bot_access_token)
@@ -200,12 +200,12 @@ def send_file_to_webex_room(room_id, file_path, message=None):
 
 # Usage example
 def main():
-    # pprint(get_webex_bot_rooms(BOT_ACCESS_TOKEN))
-    send_file_to_webex_room(
-        room_id=config.webex_room_id_epp_tanium_tagging,
-        file_path='/Users/user/PycharmProjects/IR/data/transient/epp_device_tagging/11-21-2025/Tanium_Ring_Tags_Report.xlsx',
-        message="Here's the list of Tanium hosts without a Ring Tag. Ring tags have also been generated for your review."
-    )
+    print(get_webex_bot_rooms(bot_access_token = config.webex_bot_access_token_soar))
+    # send_file_to_webex_room(
+    #     room_id=config.webex_room_id_epp_tanium_tagging,
+    #     file_path='/Users/user/PycharmProjects/IR/data/transient/epp_device_tagging/11-21-2025/Tanium_Ring_Tags_Report.xlsx',
+    #     message="Here's the list of Tanium hosts without a Ring Tag. Ring tags have also been generated for your review."
+    # )
 
 
 if __name__ == "__main__":

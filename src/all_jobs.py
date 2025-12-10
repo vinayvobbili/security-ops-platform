@@ -40,7 +40,7 @@ from src.charts import (
 )
 from src.components import (
     oncall, approved_security_testing, thithi, response_sla_risk_tickets,
-    containment_sla_risk_tickets, incident_declaration_sla_risk
+    containment_sla_risk_tickets, incident_declaration_sla_risk, abandoned_tickets
 )
 from src.utils.fs_utils import make_dir_for_todays_charts
 from src.utils.logging_utils import setup_logging
@@ -234,13 +234,13 @@ def main() -> None:
     logger.info("Scheduling ticket cache generation at 01:00 ET (runs last, may take 2-4 hours on VM)...")
 
     def ticket_cache_with_logging():
-        logger.info("="*60)
+        logger.info("=" * 60)
         logger.info("TICKET CACHE JOB STARTING at 01:00 ET")
-        logger.info("="*60)
+        logger.info("=" * 60)
         safe_run(TicketCache.generate, timeout=TICKET_CACHE_TIMEOUT, name="ticket_cache")
-        logger.info("="*60)
+        logger.info("=" * 60)
         logger.info("TICKET CACHE JOB COMPLETED")
-        logger.info("="*60)
+        logger.info("=" * 60)
 
     schedule.every().day.at('01:00', eastern).do(ticket_cache_with_logging)
 
@@ -278,6 +278,7 @@ def main() -> None:
     logger.info("Scheduling daily maintenance tasks...")
     schedule_daily('17:00', approved_security_testing.removed_expired_entries)
     schedule_daily('07:00', thithi.main)
+    schedule_daily('08:00', abandoned_tickets.send_report(config.webex_room_id_abandoned_tickets))
 
     # SLA risk monitoring
     logger.info("Scheduling SLA risk monitoring jobs...")
