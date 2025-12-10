@@ -14,10 +14,6 @@ config = get_config()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-webex_headers = {
-    'Content-Type': 'application/json',
-    'Authorization': f"Bearer {config.webex_bot_access_token_moneyball}"
-}
 eastern = pytz.timezone('US/Eastern')  # Define the Eastern time zone
 NOTE_MAX_LENGTH = 50  # Maximum length for note text in summary table
 
@@ -114,7 +110,7 @@ def send_report(room_id=config.webex_room_id_vinay_test_space):
 
 
 def main():
-    send_report()
+    send_report(room_id=config.webex_room_id_vinay_test_space)
 
 
 if __name__ == "__main__":
