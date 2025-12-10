@@ -73,6 +73,7 @@ def get_config():
         webex_room_id_containment_sla_risk=os.environ.get("WEBEX_ROOM_ID_CONTAINMENT_SLA_RISK"),
         webex_room_id_qa_tickets=os.environ.get("WEBEX_ROOM_ID_QA_TICKETS"),
         webex_room_id_new_ticket_notifications=os.environ.get("WEBEX_ROOM_ID_NEW_TICKET_NOTIFICATIONS"),
+        webex_room_id_abandoned_ticktes=os.environ.get("WEBEX_ROOM_ID_ABANDONED_TICKETS"),
         xsoar_prod_api_base_url=os.environ.get("XSOAR_PROD_API_BASE_URL"),
         xsoar_prod_ui_base_url=os.environ.get("XSOAR_PROD_UI_BASE_URL"),
         xsoar_dev_api_base_url=os.environ.get("XSOAR_DEV_API_BASE_URL"),
@@ -193,6 +194,7 @@ class Config:
     webex_room_id_containment_sla_risk: Optional[str] = None
     webex_room_id_qa_tickets: Optional[str] = None
     webex_room_id_new_ticket_notifications: Optional[str] = None
+    webex_room_id_abandoned_ticktes: Optional[str] = None
     xsoar_prod_api_base_url: Optional[str] = None
     xsoar_prod_ui_base_url: Optional[str] = None
     xsoar_dev_api_base_url: Optional[str] = None

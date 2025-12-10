@@ -19,34 +19,36 @@ webex_headers = {
     'Authorization': f"Bearer {config.webex_bot_access_token_moneyball}"
 }
 eastern = pytz.timezone('US/Eastern')  # Define the Eastern time zone
+NOTE_MAX_LENGTH = 50  # Maximum length for note text in summary table
 
 
-def get_last_entry_date(incident_id):
-    """Fetch the last touched date (last entry date) of an incident."""
+def get_last_entry_details(incident_id):
+    """Fetch the last touched date (last entry date) and note content of an incident."""
     incident_fetcher = TicketHandler(XsoarEnvironment.PROD)
     user_notes = incident_fetcher.get_user_notes(incident_id)
     logger.debug(f'User entries: {user_notes}')
 
     if not user_notes:
-        return None  # No entries found
+        return None, None  # No entries found
 
     # user_notes is already sorted with the latest note first by get_user_notes
     latest_note = user_notes[0]
     # Convert the 'created_at' string (e.g., '12/10/2025 03:30 PM ET') to a datetime object
     created_at_str = latest_note["created_at"]
+    note_content = latest_note.get("note_text", "")
     try:
         last_entry_date = datetime.strptime(created_at_str, '%m/%d/%Y %I:%M %p ET')
         last_entry_date = eastern.localize(last_entry_date)
-        return last_entry_date
+        return last_entry_date, note_content
     except ValueError as e:
         logger.error(f"Error parsing date '{created_at_str}' for incident {incident_id}: {e}")
-        return None
+        return None, None
 
 
 def generate_daily_summary(tickets) -> str | None:
     try:
         if not tickets:  # Check for empty list
-            return pd.DataFrame(columns=['id', 'created', 'modified', 'owner']).to_markdown(index=False)
+            return pd.DataFrame(columns=['id', 'created', 'last note', 'owner', 'note']).to_markdown(index=False)
 
         df = pd.DataFrame(tickets)
 
@@ -56,12 +58,17 @@ def generate_daily_summary(tickets) -> str | None:
             df['owner'] = 'Unassigned'
 
         df['created'] = pd.to_datetime(df['created'], format='mixed')
-        df['modified'] = pd.to_datetime(df['modified'], format='mixed')
+        df['last_entry_date'] = pd.to_datetime(df['last_entry_date'], format='mixed')
         df['created'] = df['created'].dt.strftime('%m/%d/%Y')
-        df['modified'] = df['modified'].dt.strftime('%m/%d/%Y')
+        df['last_entry_date'] = df['last_entry_date'].dt.strftime('%m/%d/%Y')
 
-        df = df[['id', 'created', 'modified', 'owner']]
-        df = df.sort_values(by='modified', ascending=True)
+        # Remove newline characters and truncate note to maximum length
+        df['note'] = df['note'].fillna('').astype(str).str.replace('\n', ' ').str.replace('\r', ' ').apply(lambda x: x[:NOTE_MAX_LENGTH] + '...' if len(x) > NOTE_MAX_LENGTH else x)
+
+        # Rename column for display to save space
+        df = df[['id', 'created', 'last_entry_date', 'owner', 'note']]
+        df = df.rename(columns={'last_entry_date': 'last note'})
+        df = df.sort_values(by='last note', ascending=True)
 
         return df.to_markdown(index=False)
 
@@ -89,8 +96,10 @@ def send_report(room_id=config.webex_room_id_vinay_test_space):
     # Filter incidents where last entry was more than 7 days ago
     abandoned_tickets = []
     for ticket in tickets:
-        last_entry_date = get_last_entry_date(ticket["id"])
+        last_entry_date, note_content = get_last_entry_details(ticket["id"])
         if last_entry_date and last_entry_date < today_minus_7:
+            ticket["last_entry_date"] = last_entry_date
+            ticket["note"] = note_content or ""
             abandoned_tickets.append(ticket)
     logger.info(f'Number of abandoned tickets found: {len(abandoned_tickets)}')
 
