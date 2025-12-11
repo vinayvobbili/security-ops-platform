@@ -3,17 +3,13 @@
 Metrics Tools
 
 This module provides bot performance and system metrics tools for the security operations bot.
-Integrates with the existing metrics functionality from src/pokedx/get_metrics.py
+Integrates with the existing metrics functionality from src/Pokédex/get_metrics.py
 """
 
 import logging
-import json
-from datetime import datetime
-from langchain_core.tools import tool
 from typing import Dict, Any
 
 
-@tool
 def get_bot_metrics() -> str:
     """Get comprehensive bot performance metrics."""
     try:
@@ -21,51 +17,51 @@ def get_bot_metrics() -> str:
         import psutil
         from datetime import datetime, timedelta
         from pathlib import Path
-        
+
         # Load conversation data
         csv_path = Path(__file__).parent.parent.parent / "data/transient/logs/pokedex_conversations.csv"
         if not csv_path.exists():
             return "❌ **Conversation log not found** - No metrics data available"
-        
+
         df = pd.read_csv(csv_path)
-        
+
         # Convert timestamp with proper timezone handling
         # Format: "08/28/2025 10:56:59 AM EDT"
-        df['Message Time'] = pd.to_datetime(df['Message Time'].str.replace(' EDT', '').str.replace(' EST', ''), 
-                                  format='%m/%d/%Y %I:%M:%S %p', errors='coerce')
-        
+        df['Message Time'] = pd.to_datetime(df['Message Time'].str.replace(' EDT', '').str.replace(' EST', ''),
+                                            format='%m/%d/%Y %I:%M:%S %p', errors='coerce')
+
         # Drop rows where timestamp parsing failed
         df = df.dropna(subset=['Message Time'])
-        
+
         if len(df) == 0:
             return "❌ **No valid timestamp data found** - Cannot calculate metrics"
-        
+
         current_time = datetime.now()
-        
+
         # Calculate metrics
         unique_users = df['Person'].nunique()
         total_queries = len(df)
-        
+
         # Calculate average response time and length (handle missing values)
         avg_response_time = df['Response Time (s)'].fillna(0).mean()
         avg_response_length = df['Response Length'].fillna(0).mean()
-        
+
         # Users in last 24 hours
         last_24h = current_time - timedelta(hours=24)
         recent_df = df[df['Message Time'] >= last_24h]
         queries_24h = len(recent_df)
         active_users_24h = recent_df['Person'].nunique()
-        
+
         # Top users in past week
         last_week = current_time - timedelta(days=7)
         week_df = df[df['Message Time'] >= last_week]
         top_users_week = week_df['Person'].value_counts().head(3)
-        
+
         # Current hour activity (proxy for concurrent users)
         last_hour = current_time - timedelta(hours=1)
         current_hour_df = df[df['Message Time'] >= last_hour]
         concurrent_users = current_hour_df['Person'].nunique()
-        
+
         # Peak concurrent users (highest in any hour)
         if len(df) > 0:
             df['Hour'] = df['Message Time'].dt.floor('H')
@@ -73,11 +69,11 @@ def get_bot_metrics() -> str:
             peak_concurrent = hourly_users.max() if len(hourly_users) > 0 else 0
         else:
             peak_concurrent = 0
-        
+
         # Get system stats
         memory = psutil.virtual_memory()
         cpu_percent = psutil.cpu_percent(interval=1)
-        
+
         # Create real stats structure
         perf_stats = {
             'concurrent_users': concurrent_users,
@@ -88,9 +84,9 @@ def get_bot_metrics() -> str:
             'total_lifetime_queries': total_queries,
             'system': {
                 'memory_percent': memory.percent,
-                'memory_available_gb': round(memory.available / (1024**3), 2),
+                'memory_available_gb': round(memory.available / (1024 ** 3), 2),
                 'cpu_percent': cpu_percent,
-                'process_memory_mb': round(psutil.Process().memory_info().rss / (1024**2), 1)
+                'process_memory_mb': round(psutil.Process().memory_info().rss / (1024 ** 2), 1)
             },
             'top_users_week': top_users_week.to_dict() if len(top_users_week) > 0 else {},
             'cache_hit_rate': 85,  # Mock value
@@ -100,13 +96,13 @@ def get_bot_metrics() -> str:
             'total_uptime_hours': 24.7,  # Mock value
             'query_types': {}  # Could be analyzed from prompts
         }
-        
+
         session_stats = {
             'active_users': concurrent_users,
             'total_users_ever': unique_users,
             'total_interactions': total_queries
         }
-        
+
         capacity_warning = None
         if memory.percent > 85:
             capacity_warning = f"High memory usage: {memory.percent}%"
@@ -114,10 +110,10 @@ def get_bot_metrics() -> str:
             capacity_warning = f"High CPU usage: {cpu_percent}%"
         elif concurrent_users > 20:
             capacity_warning = f"High user activity: {concurrent_users} active users"
-        
+
         # Format as readable table for Webex
         timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        
+
         result = [
             "📊 **BOT PERFORMANCE METRICS**",
             f"🕐 **Timestamp:** {timestamp}",
@@ -146,7 +142,7 @@ def get_bot_metrics() -> str:
             f"• Active Interactions: **{session_stats['total_interactions']}**",
             ""
         ]
-        
+
         # Add top users from past week
         if perf_stats.get('top_users_week'):
             result.append("**🏆 Top Users (Past Week):**")
@@ -156,14 +152,14 @@ def get_bot_metrics() -> str:
                 display_name = name_parts[1] if len(name_parts) > 1 else user
                 result.append(f"• **#{i}** {display_name}: **{count}** queries")
             result.append("")
-        
+
         # Add query types breakdown if available
         if perf_stats.get('query_types'):
             result.append("**📊 Query Types:**")
             for query_type, count in perf_stats['query_types'].items():
                 result.append(f"• {query_type.title()}: **{count}**")
             result.append("")
-        
+
         # Add capacity warnings if any
         if capacity_warning:
             result.extend([
@@ -177,19 +173,17 @@ def get_bot_metrics() -> str:
                 "• No capacity warnings - all systems operating normally",
                 ""
             ])
-        
+
         return "\n".join(result)
-        
+
     except ImportError as e:
         logging.error(f"Could not import performance monitor: {e}")
         return f"❌ **Metrics unavailable:** Performance monitoring not initialized - {str(e)}"
     except Exception as e:
         logging.error(f"Error getting bot metrics: {e}")
         return f"❌ **Error retrieving metrics:** {str(e)}"
-    
 
 
-@tool  
 def get_bot_metrics_summary() -> str:
     """Get a brief summary of bot metrics."""
     try:
@@ -197,38 +191,38 @@ def get_bot_metrics_summary() -> str:
         import psutil
         from datetime import datetime, timedelta
         from pathlib import Path
-        
+
         # Load conversation data  
         csv_path = Path(__file__).parent.parent.parent / "data/transient/logs/pokedex_conversations.csv"
         if not csv_path.exists():
             return "❌ **Metrics unavailable** - Conversation log not found"
-        
+
         df = pd.read_csv(csv_path)
-        df['Message Time'] = pd.to_datetime(df['Message Time'].str.replace(' EDT', '').str.replace(' EST', ''), 
-                                  format='%m/%d/%Y %I:%M:%S %p', errors='coerce')
+        df['Message Time'] = pd.to_datetime(df['Message Time'].str.replace(' EDT', '').str.replace(' EST', ''),
+                                            format='%m/%d/%Y %I:%M:%S %p', errors='coerce')
         current_time = datetime.now()
-        
+
         # Calculate key metrics
         unique_users = df['Person'].nunique()
         total_queries = len(df)
         avg_response_time = df['Response Time (s)'].mean()
-        
+
         # Recent activity
         last_hour = current_time - timedelta(hours=1)
         concurrent_users = df[df['Message Time'] >= last_hour]['Person'].nunique()
-        
+
         last_24h = current_time - timedelta(hours=24)
         queries_24h = len(df[df['Message Time'] >= last_24h])
-        
+
         # System stats
         memory = psutil.virtual_memory()
-        
+
         capacity_warning = None
         if memory.percent > 85:
             capacity_warning = f"High memory usage: {memory.percent}%"
         elif concurrent_users > 15:
             capacity_warning = f"High user activity: {concurrent_users} active users"
-        
+
         perf_stats = {
             'concurrent_users': concurrent_users,
             'avg_response_time_seconds': round(avg_response_time, 2),
@@ -237,10 +231,10 @@ def get_bot_metrics_summary() -> str:
                 'memory_percent': memory.percent
             }
         }
-        
+
         warning_emoji = " ⚠️" if capacity_warning else " ✅"
         warning_text = f" - {capacity_warning}" if capacity_warning else ""
-        
+
         summary = (
             f"🤖 **Bot Status Summary** ({datetime.now().strftime('%H:%M:%S')})\n"
             f"👥 Users: **{perf_stats['concurrent_users']}** | "
@@ -248,9 +242,9 @@ def get_bot_metrics_summary() -> str:
             f"📊 24h Queries: **{perf_stats['total_queries_24h']}** | "
             f"💾 Memory: **{perf_stats['system']['memory_percent']}%**{warning_emoji}{warning_text}"
         )
-        
+
         return summary
-        
+
     except ImportError as e:
         logging.error(f"Could not import performance monitor: {e}")
         return f"❌ **Metrics summary unavailable:** {str(e)}"
@@ -265,22 +259,22 @@ def _fetch_raw_metrics() -> Dict[str, Any]:
         import pandas as pd
         from datetime import datetime, timedelta
         from pathlib import Path
-        
+
         # Load conversation data
         csv_path = Path(__file__).parent.parent.parent / "data/transient/logs/pokedex_conversations.csv"
         if not csv_path.exists():
             return {'error': 'Conversation log not found'}
-        
+
         df = pd.read_csv(csv_path)
         df['Message Time'] = pd.to_datetime(df['Message Time'])
-        
+
         # Calculate comprehensive stats
         perf_stats = {
             'unique_users': df['Person'].nunique(),
             'total_queries': len(df),
             'avg_response_time': df['Response Time (s)'].mean()
         }
-        
+
         session_stats = {
             'total_interactions': len(df),
             'unique_users': df['Person'].nunique()

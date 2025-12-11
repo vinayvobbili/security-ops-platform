@@ -689,6 +689,7 @@ class ExcelReportExporter:
             "Was Country Guessed",
             "Current Tags",
             "Generated Tag",
+            "Last Seen",
             "Comments"
         ]
         ws.append(headers)
@@ -718,6 +719,7 @@ class ExcelReportExporter:
                 "Yes" if computer.was_country_guessed else "No",
                 current_tags,
                 computer.ring_tag or "",
+                computer.computer.eidLastSeen,
                 computer.status
             ])
 
@@ -740,6 +742,7 @@ class ExcelReportExporter:
             'was country guessed': 20,
             'current tags': 50,
             'generated tag': 35,
+            'last seen': 20,
             'comments': 80
         }
         wrap_columns = {'current tags', 'comments', 'generated tag'}
