@@ -278,7 +278,7 @@ def main() -> None:
     logger.info("Scheduling daily maintenance tasks...")
     schedule_daily('17:00', approved_security_testing.removed_expired_entries)
     schedule_daily('07:00', thithi.main)
-    schedule_daily('08:00', abandoned_tickets.send_report(config.webex_room_id_abandoned_tickets))
+    schedule_daily('08:00', lambda: abandoned_tickets.send_report(config.webex_room_id_abandoned_tickets))
 
     # SLA risk monitoring
     logger.info("Scheduling SLA risk monitoring jobs...")
