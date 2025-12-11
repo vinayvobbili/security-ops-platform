@@ -36,7 +36,7 @@ from src.utils.enhanced_websocket_client import patch_websocket_client
 patch_websocket_client()
 
 import random
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from zoneinfo import ZoneInfo
 
 import fasteners
@@ -451,6 +451,41 @@ class RingTagTaniumHosts(Command):
                                         markdown=f"❌ **No hosts available for tagging**. All hosts in the report are missing generated tags."
                                         )
                 return
+
+            # Filter for hosts seen within the last 15 minutes (currently online)
+            # This improves our chances of selecting online hosts since Tanium can only apply tags if the host is online
+            hosts_before_online_filter = len(hosts_to_tag)
+            current_time = datetime.now(timezone.utc)
+            fifteen_minutes_ago = current_time - timedelta(minutes=15)
+
+            def is_recently_online(last_seen_str):
+                """Check if a host was seen within the last 15 minutes"""
+                if pd.isna(last_seen_str) or not last_seen_str:
+                    return False
+                try:
+                    # Parse ISO format timestamp from Tanium
+                    last_seen = datetime.fromisoformat(str(last_seen_str).replace('Z', '+00:00'))
+                    return last_seen >= fifteen_minutes_ago
+                except (ValueError, AttributeError):
+                    return False
+
+            if 'Last Seen' in hosts_to_tag.columns:
+                hosts_to_tag = hosts_to_tag[hosts_to_tag['Last Seen'].apply(is_recently_online)]
+                hosts_after_online_filter = len(hosts_to_tag)
+
+                if hosts_after_online_filter == 0:
+                    send_message_with_retry(webex_api,
+                                            room_id=room_id,
+                                            markdown=f"❌ **No currently online hosts available for tagging**. Found {hosts_before_online_filter:,} eligible hosts, but none were seen within the last 15 minutes."
+                                            )
+                    return
+
+                logger.info(f"Filtered to {hosts_after_online_filter} online hosts from {hosts_before_online_filter} eligible hosts (seen within last 15 minutes)")
+                if hosts_after_online_filter < hosts_before_online_filter:
+                    send_message_with_retry(webex_api,
+                                            room_id=room_id,
+                                            markdown=f"ℹ️ **Online host filter**: Selected {hosts_after_online_filter:,} hosts seen within the last 15 minutes from {hosts_before_online_filter:,} eligible hosts."
+                                            )
 
             total_eligible_hosts = len(hosts_to_tag)
 
