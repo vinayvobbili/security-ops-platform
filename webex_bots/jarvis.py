@@ -17,7 +17,7 @@ setup_logging(
     bot_name='jarvis',
     log_level=logging.WARNING,
     log_dir=str(ROOT_DIRECTORY / "logs"),
-    info_modules=['__main__', 'src.utils.bot_resilience', 'src.utils.webex_device_manager']
+    info_modules=['__main__', 'src.utils.bot_resilience', 'src.utils.webex_device_manager', 'src.epp.cs_hosts_with_invalid_ring_tags']
 )
 
 logger = logging.getLogger(__name__)
@@ -383,7 +383,6 @@ class GetCSHostsWithInvalidRingTags(Command):
         room_id = attachment_actions.roomId
         report_message = 'CS Hosts with Invalid Ring Tags Report (Environment + Country Validation)'
         filename = "cs_hosts_with_invalid_ring_tags_only.xlsx"  # Just the filename, not full path
-        report_path = DATA_DIR / today_date / filename
 
         webex_api.messages.create(
             roomId=room_id,
