@@ -3,7 +3,7 @@ CS Host Invalid Ring Tag Analyzer
 
 Identifies CrowdStrike hosts that have incorrect ring tags based on:
 
-1. Environment validation (servers only):
+1. Environment validation (all host types):
    - Ring 1: dev, poc, lab, integration, development environments
    - Ring 2: qa, test environments
    - Ring 3: dr (disaster recovery) environments
@@ -293,21 +293,15 @@ def generate_report():
         logger.info("Unique hosts file not found. Generating it now...")
         crowdstrike.update_unique_hosts_from_cs()
 
-    # Read and filter data
+    # Read data
     unique_cs_hosts_df = pd.read_excel(input_file_path, engine="openpyxl")
     logger.info(f"Read {len(unique_cs_hosts_df)} records from {input_file_path}")
 
-    # Filter for servers only
-    servers = unique_cs_hosts_df[
-        unique_cs_hosts_df['cs_host_category'].str.lower().isin(['server', 'domain controller'])
+    # Filter hosts with ring tags (all categories)
+    servers_with_ring_tags = unique_cs_hosts_df[
+        unique_cs_hosts_df["current_tags"].str.contains("FalconGroupingTags/.*SrvRing", regex=True, case=False, na=False)
     ]
-    logger.info(f"Found {len(servers)} servers")
-
-    # Filter servers with ring tags
-    servers_with_ring_tags = servers[
-        servers["current_tags"].str.contains("FalconGroupingTags/.*SrvRing", regex=True, case=False, na=False)
-    ]
-    logger.info(f"Found {len(servers_with_ring_tags)} servers with ring tags")
+    logger.info(f"Found {len(servers_with_ring_tags)} hosts with ring tags")
 
     # Save servers with ring tags
     servers_with_ring_tags_file_path = output_dir / "cs_hosts_with_ring_tags.xlsx"
