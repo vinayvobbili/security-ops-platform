@@ -41,11 +41,56 @@ class ColoredFormatter(logging.Formatter):
             return log_message
 
 
+def _rotate_log_on_startup(log_file_path: str, keep_count: int = 10) -> None:
+    """
+    Rotate existing log file on bot startup by renaming it with a timestamp.
+
+    This ensures each bot restart begins with a fresh log file, making it easier
+    to debug recent issues without sifting through old logs.
+
+    Args:
+        log_file_path: Full path to the log file
+        keep_count: Number of startup-rotated logs to keep (default: 10)
+    """
+    log_path = Path(log_file_path)
+
+    # Only rotate if the log file exists and has content
+    if not log_path.exists() or log_path.stat().st_size == 0:
+        return
+
+    # Create timestamp for the archived log
+    timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+    archived_name = f"{log_path.stem}.{timestamp}{log_path.suffix}"
+    archived_path = log_path.parent / archived_name
+
+    try:
+        # Rename existing log file
+        log_path.rename(archived_path)
+
+        # Clean up old startup-rotated logs (keep only the most recent)
+        # Pattern: {bot_name}.YYYY-MM-DD_HH-MM-SS.log
+        pattern = f"{log_path.stem}.[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]_*{log_path.suffix}"
+        rotated_logs = sorted(log_path.parent.glob(pattern), key=lambda p: p.stat().st_mtime, reverse=True)
+
+        # Remove old rotated logs beyond keep_count
+        for old_log in rotated_logs[keep_count:]:
+            try:
+                old_log.unlink()
+            except Exception as e:
+                # Don't fail startup if cleanup fails
+                logger.warning(f"Could not remove old rotated log {old_log.name}: {e}")
+
+    except Exception as e:
+        # Don't fail bot startup if rotation fails - just log the error
+        logger.error(f"Failed to rotate log file {log_file_path}: {e}")
+
+
 def setup_logging(
         bot_name: str,
         log_level=logging.INFO,
         log_dir: str = 'logs',
-        info_modules: list[str] = None
+        info_modules: list[str] = None,
+        rotate_on_startup: bool = True
 ):
     """
     Configure standardized logging for bots with rotation.
@@ -55,12 +100,14 @@ def setup_logging(
     - Console handler with colored output (by default)
     - Local timezone formatting
     - Consistent format across all bots
+    - Optional log rotation on startup (default: enabled)
 
     Args:
         bot_name: Name of the bot (e.g., 'msoar', 'hal9000')
         log_level: Logging level for root logger (default: logging.INFO)
         log_dir: Directory for log files (default: 'logs')
         info_modules: List of module names to set to INFO level (useful when root is WARNING)
+        rotate_on_startup: If True, rotate existing log file on startup (default: True)
 
     Returns:
         logging.Logger: Root logger instance (configured)
@@ -68,6 +115,10 @@ def setup_logging(
     # Create log directory if it doesn't exist
     os.makedirs(log_dir, exist_ok=True)
     log_file = os.path.join(log_dir, f'{bot_name}.log')
+
+    # Rotate existing log file if requested
+    if rotate_on_startup:
+        _rotate_log_on_startup(log_file)
 
     # Create rotating file handler (10MB max, 5 backups = ~50MB total)
     file_handler = RotatingFileHandler(
