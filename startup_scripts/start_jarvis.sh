@@ -12,17 +12,6 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 cd "$PROJECT_ROOT" || exit 1
 
-# Rotate nohup.out to avoid confusion with old logs
-if [ -f nohup.out ]; then
-    TIMESTAMP=$(date +%Y-%m-%d_%H-%M-%S)
-    mv nohup.out "nohup.out.$TIMESTAMP"
-    echo "Rotated old nohup.out to nohup.out.$TIMESTAMP"
-
-    # Keep only the last 5 rotated nohup files
-    find . -maxdepth 1 -name "nohup.out.*" -type f -printf '%T@ %p\n' 2>/dev/null | \
-        sort -rn | tail -n +6 | cut -d' ' -f2- | xargs rm -f 2>/dev/null || true
-fi
-
 # Kill existing jarvis process if running
 echo "Stopping existing Jarvis instances..."
 pkill -f "webex_bots/jarvis"
@@ -35,8 +24,8 @@ mkdir -p logs
 # Use log rotation instead of wiping logs on restart
 
 # Start new jarvis instance in background
-# Python logging handles all output - no need to redirect here
-nohup env PYTHONPATH="$PROJECT_ROOT" .venv/bin/python webex_bots/jarvis.py &
+# Python logging handles all output - redirect nohup output to /dev/null
+nohup env PYTHONPATH="$PROJECT_ROOT" .venv/bin/python webex_bots/jarvis.py > /dev/null 2>&1 &
 
 echo "Starting Jarvis bot..."
 echo ""
