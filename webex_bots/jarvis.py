@@ -51,7 +51,7 @@ from webexpythonsdk.models.cards.actions import Submit
 from webexteamssdk import WebexTeamsAPI
 
 from my_config import get_config
-from src.epp import ring_tag_cs_hosts, cs_hosts_without_ring_tag, cs_servers_with_invalid_ring_tags
+from src.epp import ring_tag_cs_hosts, cs_hosts_without_ring_tag, cs_hosts_with_invalid_ring_tags
 from src.utils.logging_utils import log_activity
 from src.utils.webex_device_manager import cleanup_devices_on_startup
 from src.utils.webex_pool_config import configure_webex_api_session
@@ -373,7 +373,7 @@ class GetCSHostsWithInvalidRingTags(Command):
     def __init__(self):
         super().__init__(
             command_keyword="cs_invalid_ring_tag",
-            help_message="Get CS Servers with Invalid Ring Tags 🛡️❌💍",
+            help_message="Get CS Hosts with Invalid Ring Tags 🛡️❌💍🌍",
             delete_previous_message=True,
         )
 
@@ -381,18 +381,18 @@ class GetCSHostsWithInvalidRingTags(Command):
     def execute(self, message, attachment_actions, activity):
         today_date = datetime.now(EASTERN_TZ).strftime('%m-%d-%Y')
         room_id = attachment_actions.roomId
-        report_message = 'CS Servers with Invalid Ring Tags Report'
-        filename = "cs_servers_with_invalid_ring_tags_only.xlsx"  # Just the filename, not full path
+        report_message = 'CS Hosts with Invalid Ring Tags Report (Environment + Country Validation)'
+        filename = "cs_hosts_with_invalid_ring_tags_only.xlsx"  # Just the filename, not full path
         report_path = DATA_DIR / today_date / filename
 
         webex_api.messages.create(
             roomId=room_id,
-            markdown=f"Hello {activity['actor']['displayName']}! I've started the report generation process for CS hosts with Invalid Ring Tags. It is running in the background and will complete in about 15 mins."
+            markdown=f"Hello {activity['actor']['displayName']}! I've started the report generation process for CS hosts with Invalid Ring Tags (environment + country validation). It is running in the background and will complete in about 15 mins."
         )
-        lock_path = ROOT_DIRECTORY / "src" / "epp" / "cs_servers_with_invalid_ring_tags.lock"
+        lock_path = ROOT_DIRECTORY / "src" / "epp" / "cs_hosts_with_invalid_ring_tags.lock"
         try:
             with fasteners.InterProcessLock(lock_path):
-                cs_servers_with_invalid_ring_tags.generate_report()
+                cs_hosts_with_invalid_ring_tags.generate_report()
                 send_report_with_progress(room_id, filename, report_message)
                 seek_approval_to_delete_invalid_ring_tags(room_id)
         except Exception as e:
@@ -435,7 +435,7 @@ class RemoveInvalidRings(Command):
     def execute(self, message, attachment_actions, activity):
         room_id = attachment_actions.roomId
         today_date = datetime.now(EASTERN_TZ).strftime('%m-%d-%Y')
-        report_path = DATA_DIR / today_date / "cs_servers_with_invalid_ring_tags_only.xlsx"
+        report_path = DATA_DIR / today_date / "cs_hosts_with_invalid_ring_tags_only.xlsx"
         webex_api.messages.create(
             roomId=room_id,
             markdown=f"Hello {activity['actor']['displayName']}! Starting removal of invalid ring tags. This may take a few minutes."
