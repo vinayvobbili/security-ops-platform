@@ -454,14 +454,15 @@ class RingTagTaniumHosts(Command):
 
             # Filter for hosts seen within the last 15 minutes (currently online)
             # This improves our chances of selecting online hosts since Tanium can only apply tags if the host is online
+            # Use the report file time as reference (when data was fetched) instead of current time
             hosts_before_online_filter = len(hosts_to_tag)
-            current_time = datetime.now(timezone.utc)
-            fifteen_minutes_ago = current_time - timedelta(minutes=15)
+            report_file_time = datetime.fromtimestamp(report_path.stat().st_mtime, tz=timezone.utc)
+            fifteen_minutes_before_report = report_file_time - timedelta(minutes=15)
 
             # Debug: Log available columns and time window
             logger.info(f"DEBUG: Available columns in report: {list(hosts_to_tag.columns)}")
-            logger.info(f"DEBUG: Current UTC time: {current_time}")
-            logger.info(f"DEBUG: 15 minutes ago threshold: {fifteen_minutes_ago}")
+            logger.info(f"DEBUG: Report file time (data fetch reference): {report_file_time}")
+            logger.info(f"DEBUG: 15 minutes before report threshold: {fifteen_minutes_before_report}")
 
             # Debug: Show sample Last Seen values if column exists
             if 'Last Seen' in hosts_to_tag.columns:
@@ -471,13 +472,13 @@ class RingTagTaniumHosts(Command):
                 logger.warning(f"DEBUG: 'Last Seen' column NOT FOUND in report!")
 
             def is_recently_online(last_seen_str):
-                """Check if a host was seen within the last 15 minutes"""
+                """Check if a host was seen within the last 15 minutes of when the report was generated"""
                 if pd.isna(last_seen_str) or not last_seen_str:
                     return False
                 try:
                     # Parse ISO format timestamp from Tanium
                     last_seen = datetime.fromisoformat(str(last_seen_str).replace('Z', '+00:00'))
-                    return last_seen >= fifteen_minutes_ago
+                    return last_seen >= fifteen_minutes_before_report
                 except (ValueError, AttributeError) as e:
                     logger.debug(f"DEBUG: Failed to parse timestamp '{last_seen_str}': {e}")
                     return False
@@ -498,15 +499,15 @@ class RingTagTaniumHosts(Command):
 
                     send_message_with_retry(webex_api,
                                             room_id=room_id,
-                                            markdown=f"❌ **No currently online hosts available for tagging**. Found {hosts_before_online_filter:,} eligible hosts, but none were seen within the last 15 minutes."
+                                            markdown=f"❌ **No currently online hosts available for tagging**. Found {hosts_before_online_filter:,} eligible hosts, but none were seen within 15 minutes of when the report was generated."
                                             )
                     return
 
-                logger.info(f"Filtered to {hosts_after_online_filter} online hosts from {hosts_before_online_filter} eligible hosts (seen within last 15 minutes)")
+                logger.info(f"Filtered to {hosts_after_online_filter} online hosts from {hosts_before_online_filter} eligible hosts (seen within 15 minutes of report generation)")
                 if hosts_after_online_filter < hosts_before_online_filter:
                     send_message_with_retry(webex_api,
                                             room_id=room_id,
-                                            markdown=f"ℹ️ **Online host filter**: Selected {hosts_after_online_filter:,} hosts seen within the last 15 minutes from {hosts_before_online_filter:,} eligible hosts."
+                                            markdown=f"ℹ️ **Online host filter**: Selected {hosts_after_online_filter:,} hosts seen within 15 minutes of report generation from {hosts_before_online_filter:,} eligible hosts."
                                             )
             else:
                 logger.warning(f"DEBUG: Skipping online filter - 'Last Seen' column not found in report")
@@ -904,7 +905,7 @@ def tars_initialization(bot):
     if bot:
         # Add Tanium commands to the bot
         bot.add_command(GetTaniumHostsWithoutRingTag())
-        bot.add_command(RingTagTaniumHosts())
+        # bot.add_command(RingTagTaniumHosts())
         bot.add_command(DontRingTagTaniumHosts())
         bot.add_command(GetTaniumUnhealthyHosts())
         bot.add_command(GetBotHealth())
