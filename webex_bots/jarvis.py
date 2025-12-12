@@ -414,7 +414,7 @@ class GetCSHostsWithInvalidRingTags(Command):
 class DontRemoveInvalidRings(Command):
     def __init__(self):
         super().__init__(
-            command_keyword="dont_drop_invalid_ring_tag_cs_hosts",
+            command_keyword="dont_drop_invalid_ring_tags",
             delete_previous_message=True,
         )
 
