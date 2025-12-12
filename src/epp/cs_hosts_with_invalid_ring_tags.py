@@ -34,7 +34,6 @@ from src.epp.cs_hosts_without_ring_tag import get_dated_path
 from src.utils.excel_formatting import apply_professional_formatting
 
 # Setup logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 ROOT_DIRECTORY = Path(__file__).parent.parent.parent
@@ -376,4 +375,17 @@ def main():
 
 
 if __name__ in ('__main__', '__builtin__', 'builtins'):
+    # Configure logging for standalone execution
+    # (when called from jarvis, logging is already configured)
+    LOG_FILE = ROOT_DIRECTORY / "logs" / "invalid_ring_tags.log"
+    LOG_FILE.parent.mkdir(exist_ok=True)
+
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.FileHandler(LOG_FILE),
+            logging.StreamHandler()
+        ]
+    )
     main()
