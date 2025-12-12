@@ -343,7 +343,7 @@ class RingTagTaniumHosts(Command):
     def __init__(self):
         super().__init__(
             command_keyword="ring_tag_tanium_hosts",
-            help_message="Ring Tag Tanium Hosts 💍🏷️",
+            # help_message="Ring Tag Tanium Hosts 💍🏷️",
             delete_previous_message=True,
         )
 
@@ -905,7 +905,7 @@ def tars_initialization(bot):
     if bot:
         # Add Tanium commands to the bot
         bot.add_command(GetTaniumHostsWithoutRingTag())
-        # bot.add_command(RingTagTaniumHosts())
+        bot.add_command(RingTagTaniumHosts())
         bot.add_command(DontRingTagTaniumHosts())
         bot.add_command(GetTaniumUnhealthyHosts())
         bot.add_command(GetBotHealth())
