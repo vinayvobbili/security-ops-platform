@@ -593,7 +593,12 @@ class RingTagTaniumHosts(Command):
             total_batches = len(batched_groups)
             logger.info(f"Grouped {num_to_tag} hosts into {len(host_groups)} groups, split into {total_batches} API calls (max 25 hosts per call)")
 
-            with tqdm(total=total_batches, desc="Bulk tagging host batches", unit="batch") as pbar:
+            # Disable tqdm in non-interactive contexts (e.g., when running as a bot/service)
+            # to prevent broken pipe errors
+            import sys
+            disable_tqdm = not sys.stdout.isatty()
+
+            with tqdm(total=total_batches, desc="Bulk tagging host batches", unit="batch", disable=disable_tqdm) as pbar:
                 for (source, ring_tag, package_id), hosts in batched_groups:
                     pbar.set_description(f"Tagging {len(hosts)} hosts in {source} with {ring_tag}")
 

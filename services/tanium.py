@@ -15,6 +15,8 @@ from typing import List, Optional, Dict, Any, Iterator
 
 import pandas as pd
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 import tqdm
 import urllib3
 from urllib3.exceptions import InsecureRequestWarning
@@ -203,7 +205,33 @@ class TaniumInstance:
         self.headers = {'session': self.token}
         self.graphql_url = f"{self.server_url}/plugin/products/gateway/graphql"
         self.verify_ssl = verify_ssl
-        logger.info(f"Initialized Tanium instance: {self.name} (URL: {self.server_url})")
+
+        # Create a persistent session with retry logic to prevent broken pipe errors
+        self.session = requests.Session()
+
+        # Configure retry strategy for connection errors, timeouts, and server errors
+        retry_strategy = Retry(
+            total=3,  # Total number of retries
+            backoff_factor=1,  # Wait 1s, 2s, 4s between retries
+            status_forcelist=[429, 500, 502, 503, 504],  # Retry on these HTTP status codes
+            allowed_methods=["POST"],  # Retry POST requests (GraphQL uses POST)
+            raise_on_status=False  # Don't raise exception on max retries, let us handle it
+        )
+
+        # Mount the retry adapter for both http and https
+        adapter = HTTPAdapter(
+            max_retries=retry_strategy,
+            pool_connections=10,  # Number of connection pools to cache
+            pool_maxsize=20,  # Max connections to save in the pool
+            pool_block=False  # Don't block when pool is full, create new connection
+        )
+        self.session.mount("http://", adapter)
+        self.session.mount("https://", adapter)
+
+        # Set default headers on the session
+        self.session.headers.update(self.headers)
+
+        logger.info(f"Initialized Tanium instance: {self.name} (URL: {self.server_url}) with retry logic")
 
     def get_package_id_for_device_type(self, device_type: str) -> str:
         """Get the appropriate Tanium package ID for the given device type and instance.
@@ -227,7 +255,7 @@ class TaniumInstance:
         }
 
     def query(self, gql: str, variables: Dict[str, Any] = None) -> Dict[str, Any]:
-        """Execute a GraphQL query"""
+        """Execute a GraphQL query using persistent session with retry logic"""
         payload: Dict[str, Any] = {'query': gql}
         if variables:
             payload['variables'] = variables
@@ -236,15 +264,15 @@ class TaniumInstance:
         logger.debug(f"GraphQL payload: {payload}")
 
         try:
-            headers = self.headers.copy()
-            headers['Content-Type'] = 'application/json'
+            headers = {'Content-Type': 'application/json'}
 
+            # Use persistent session with retry logic (configured in __init__)
             # Note: verify parameter intentionally omitted to use SSL config defaults
-            response = requests.post(
+            response = self.session.post(
                 self.graphql_url,
                 json=payload,
                 headers=headers,
-                timeout=30
+                timeout=60  # Increased from 30s to 60s for bulk operations
             )
             response.raise_for_status()
 
@@ -371,11 +399,11 @@ class TaniumInstance:
             except Exception as ip_error:
                 logger.warning(f"Could not determine public IP: {ip_error}")
 
+            # Use persistent session with retry logic
             # Note: verify parameter intentionally omitted to use SSL config defaults
-            response = requests.post(
+            response = self.session.post(
                 f"{self.server_url}/api/v2/session/validate",
                 json={'session': self.token},
-                headers=self.headers,
                 timeout=10
             )
             if response.status_code == 200:
