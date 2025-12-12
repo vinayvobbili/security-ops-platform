@@ -17,7 +17,7 @@ setup_logging(
     bot_name='jarvis',
     log_level=logging.WARNING,
     log_dir=str(ROOT_DIRECTORY / "logs"),
-    info_modules=['__main__', 'src.utils.bot_resilience', 'src.utils.webex_device_manager', 'src.epp.cs_hosts_with_invalid_ring_tags']
+    info_modules=['__main__', 'src.utils.bot_resilience', 'src.utils.webex_device_manager', 'src.epp.cs_hosts_with_invalid_ring_tags', 'services.service_now']
 )
 
 logger = logging.getLogger(__name__)
