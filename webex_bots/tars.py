@@ -458,6 +458,18 @@ class RingTagTaniumHosts(Command):
             current_time = datetime.now(timezone.utc)
             fifteen_minutes_ago = current_time - timedelta(minutes=15)
 
+            # Debug: Log available columns and time window
+            logger.info(f"DEBUG: Available columns in report: {list(hosts_to_tag.columns)}")
+            logger.info(f"DEBUG: Current UTC time: {current_time}")
+            logger.info(f"DEBUG: 15 minutes ago threshold: {fifteen_minutes_ago}")
+
+            # Debug: Show sample Last Seen values if column exists
+            if 'Last Seen' in hosts_to_tag.columns:
+                sample_timestamps = hosts_to_tag['Last Seen'].dropna().head(5).tolist()
+                logger.info(f"DEBUG: Sample 'Last Seen' timestamps: {sample_timestamps}")
+            else:
+                logger.warning(f"DEBUG: 'Last Seen' column NOT FOUND in report!")
+
             def is_recently_online(last_seen_str):
                 """Check if a host was seen within the last 15 minutes"""
                 if pd.isna(last_seen_str) or not last_seen_str:
@@ -466,14 +478,24 @@ class RingTagTaniumHosts(Command):
                     # Parse ISO format timestamp from Tanium
                     last_seen = datetime.fromisoformat(str(last_seen_str).replace('Z', '+00:00'))
                     return last_seen >= fifteen_minutes_ago
-                except (ValueError, AttributeError):
+                except (ValueError, AttributeError) as e:
+                    logger.debug(f"DEBUG: Failed to parse timestamp '{last_seen_str}': {e}")
                     return False
 
             if 'Last Seen' in hosts_to_tag.columns:
                 hosts_to_tag = hosts_to_tag[hosts_to_tag['Last Seen'].apply(is_recently_online)]
                 hosts_after_online_filter = len(hosts_to_tag)
 
+                logger.info(f"DEBUG: After filtering - {hosts_after_online_filter} hosts out of {hosts_before_online_filter} passed the 15-minute filter")
+
                 if hosts_after_online_filter == 0:
+                    # Show some timestamps of filtered-out hosts for debugging
+                    logger.warning(f"DEBUG: All hosts filtered out! Showing recent timestamps from original data:")
+                    df_temp = pd.read_excel(report_path)
+                    if 'Last Seen' in df_temp.columns:
+                        recent_samples = df_temp['Last Seen'].dropna().tail(10).tolist()
+                        logger.warning(f"DEBUG: Last 10 'Last Seen' values: {recent_samples}")
+
                     send_message_with_retry(webex_api,
                                             room_id=room_id,
                                             markdown=f"❌ **No currently online hosts available for tagging**. Found {hosts_before_online_filter:,} eligible hosts, but none were seen within the last 15 minutes."
@@ -486,6 +508,8 @@ class RingTagTaniumHosts(Command):
                                             room_id=room_id,
                                             markdown=f"ℹ️ **Online host filter**: Selected {hosts_after_online_filter:,} hosts seen within the last 15 minutes from {hosts_before_online_filter:,} eligible hosts."
                                             )
+            else:
+                logger.warning(f"DEBUG: Skipping online filter - 'Last Seen' column not found in report")
 
             total_eligible_hosts = len(hosts_to_tag)
 
