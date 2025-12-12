@@ -548,7 +548,7 @@ class RingTagTaniumHosts(Command):
                     'comments': comments
                 })
 
-            # Process each group with bulk tagging (respecting Tanium's 25 endpoint limit per call)
+            # Process each group with bulk tagging (respecting Titanium's 25 endpoint limit per call)
             TANIUM_BULK_TAG_LIMIT = 25
 
             # Split large groups into batches of 25 or fewer

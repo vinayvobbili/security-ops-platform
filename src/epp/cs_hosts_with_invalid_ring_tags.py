@@ -1,17 +1,24 @@
 """
 CS Host Invalid Ring Tag Analyzer
 
-Identifies CrowdStrike servers that have incorrect ring tags based on their environment:
-- Ring 1: dev, poc, lab, integration, development environments
-- Ring 2: qa, test environments
-- Ring 3: dr (disaster recovery) environments
-- Ring 4: production or unknown environments
+Identifies CrowdStrike hosts that have incorrect ring tags based on:
+
+1. Environment validation (servers only):
+   - Ring 1: dev, poc, lab, integration, development environments
+   - Ring 2: qa, test environments
+   - Ring 3: dr (disaster recovery) environments
+   - Ring 4: production or unknown environments
+
+2. Country/Region validation (all hosts):
+   - Validates ring tag region matches expected region for host's current country
+   - Example: A host in France (EMEA region) should not have USASRVRing tags
 
 Creates two reports:
-- Complete dataset of all servers with ring tags
-- Filtered report showing only servers with invalid ring tags
+- Complete dataset of all hosts with ring tags
+- Filtered report showing only hosts with invalid ring tags
 """
 
+import json
 import logging
 import re
 from datetime import datetime
@@ -41,8 +48,12 @@ RING_1_ENVS = {"dev", "poc", "lab", "integration", "development"}
 RING_2_ENVS = {"qa", "test"}
 RING_3_ENVS = {"dr", "qa/dr"}
 
-
 # Ring 4 is for production or unknown environments
+
+# Load region mappings from JSON file for country-based validation
+REGIONS_FILE = ROOT_DIRECTORY / "data" / "regions_by_country.json"
+with open(REGIONS_FILE, 'r') as f:
+    REGIONS_BY_COUNTRY = json.load(f)
 
 
 def get_expected_ring(env):
@@ -54,6 +65,38 @@ def get_expected_ring(env):
     if env in RING_3_ENVS:
         return 3
     return 4
+
+
+def extract_region_from_ring_tag(ring_tag):
+    """Extract region code from a ring tag.
+
+    Examples:
+        'FalconGroupingTags/USASRVRing1' -> 'USA'
+        'FalconGroupingTags/EMEASRVRing2' -> 'EMEA'
+        'FalconGroupingTags/JPSRVRing4' -> 'JP'
+
+    Returns the region code or None if pattern doesn't match.
+    """
+    match = re.search(r'FalconGroupingTags/([A-Z]+)SRVRing\d+', ring_tag, re.IGNORECASE)
+    if match:
+        return match.group(1).upper()
+    return None
+
+
+def normalize_region_code(region):
+    """Normalize region codes to match ring tag format.
+
+    The REGIONS_BY_COUNTRY mapping returns codes like 'US', 'EMEA', 'APAC', etc.
+    Ring tags use 'USA' instead of 'US', so we need to normalize.
+
+    Mappings:
+        'US' -> 'USA'
+        'Korea' -> 'Korea' (keep as-is)
+        All others -> keep as-is (EMEA, APAC, JP, LATAM, CHINA)
+    """
+    if region == 'US':
+        return 'USA'
+    return region
 
 
 def adjust_column_widths(file_path):
@@ -72,6 +115,7 @@ def adjust_column_widths(file_path):
             'status': 15,
             'cs_host_category': 20,
             'SNOW_environment': 15,
+            'SNOW_country': 20,
             'SNOW_lifecycleStatus': 20,
             'comment': 50,
             'environment': 15,
@@ -200,6 +244,47 @@ def analyze_ring_tags(servers_df):
             servers_df.loc[index, 'comment'] = f'{env} server should not be in Ring {ring_numbers}, expected Ring {expected_ring}'
             logger.info(f"Invalid ring tag found for host {server.get('hostname', 'Unknown')}: Ring {ring_numbers}, expected Ring {expected_ring}")
 
+        # Country-based validation (additive to environment validation)
+        # This checks if the region in the ring tag matches the expected region for the host's country
+        country = str(server.get('SNOW_country', '')).strip()
+
+        if country and country in REGIONS_BY_COUNTRY:
+            expected_region = REGIONS_BY_COUNTRY[country]
+            expected_region_normalized = normalize_region_code(expected_region)
+
+            # Extract region from the current ring tag
+            complete_ring_tag_matches = re.findall(r'(FalconGroupingTags/[^,]*?SRVRing\d+)', current_tags, re.IGNORECASE)
+
+            for ring_tag in complete_ring_tag_matches:
+                # Skip Citrix rings
+                if 'citrix' in ring_tag.lower():
+                    continue
+
+                # Skip Ring 0 (exempt from all validation)
+                ring_num_match = re.search(r'SRVRing(\d+)', ring_tag, re.IGNORECASE)
+                if ring_num_match and int(ring_num_match.group(1)) == 0:
+                    continue
+
+                # Extract region from the ring tag
+                actual_region = extract_region_from_ring_tag(ring_tag)
+
+                if actual_region and actual_region != expected_region_normalized:
+                    # Region mismatch detected
+                    servers_df.loc[index, 'has_invalid_ring_tag'] = True
+
+                    # Append to comment (may already have environment-based comment)
+                    existing_comment = servers_df.loc[index, 'comment']
+                    country_comment = f"host in country '{country}' (region {expected_region_normalized}) has ring tag for region {actual_region}"
+
+                    if existing_comment:
+                        servers_df.loc[index, 'comment'] = f"{existing_comment}; {country_comment}"
+                    else:
+                        servers_df.loc[index, 'comment'] = country_comment
+
+                    logger.info(f"Country-based invalid ring tag for host {server.get('hostname', 'Unknown')}: "
+                               f"Expected region {expected_region_normalized} (from country '{country}'), "
+                               f"but has ring tag for region {actual_region}")
+
 
 def generate_report():
     """Generate the complete invalid ring tag analysis report."""
@@ -230,7 +315,7 @@ def generate_report():
     logger.info(f"Found {len(servers_with_ring_tags)} servers with ring tags")
 
     # Save servers with ring tags
-    servers_with_ring_tags_file_path = output_dir / "cs_servers_with_ring_tags.xlsx"
+    servers_with_ring_tags_file_path = output_dir / "cs_hosts_with_ring_tags.xlsx"
     servers_with_ring_tags.to_excel(servers_with_ring_tags_file_path, index=False, engine="openpyxl")
     apply_professional_formatting(servers_with_ring_tags_file_path)
 
@@ -242,7 +327,7 @@ def generate_report():
     analyze_ring_tags(enriched_servers)
 
     # Save complete report
-    complete_report_path = output_dir / "cs_servers_last_seen_with_invalid_ring_tags.xlsx"
+    complete_report_path = output_dir / "cs_hosts_last_seen_with_invalid_ring_tags.xlsx"
     enriched_servers.to_excel(complete_report_path, index=False, engine="openpyxl")
     apply_professional_formatting(complete_report_path)
 
@@ -273,10 +358,11 @@ def generate_report():
             'status',
             'cs_host_category',
             'SNOW_environment',
+            'SNOW_country',
             'SNOW_lifecycleStatus',
             'comment',
         ]
-        filtered_report_path = output_dir / "cs_servers_with_invalid_ring_tags_only.xlsx"
+        filtered_report_path = output_dir / "cs_hosts_with_invalid_ring_tags_only.xlsx"
         invalid_servers[columns_to_keep].to_excel(filtered_report_path, index=False, engine="openpyxl")
         apply_professional_formatting(filtered_report_path)
         logger.info(f"Found {len(invalid_servers)} hosts with invalid ring tags")
