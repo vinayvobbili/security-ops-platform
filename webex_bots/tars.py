@@ -535,6 +535,9 @@ class RingTagTaniumHosts(Command):
                 package_id = str(row['Package ID'])
                 current_tags = str(row.get('Current Tags', ''))
                 comments = str(row.get('Comments', ''))
+                country = str(row.get('Country', ''))
+                region = str(row.get('Region', ''))
+                environment = str(row.get('Environment', ''))
 
                 # Group by (source/instance, tag, package_id)
                 group_key = (source, ring_tag, package_id)
@@ -545,7 +548,10 @@ class RingTagTaniumHosts(Command):
                     'source': source,
                     'package_id': package_id,
                     'current_tags': current_tags,
-                    'comments': comments
+                    'comments': comments,
+                    'country': country,
+                    'region': region,
+                    'environment': environment
                 })
 
             # Process each group with bulk tagging (respecting Titanium's 25 endpoint limit per call)
@@ -634,11 +640,13 @@ class RingTagTaniumHosts(Command):
                     'Computer Name': host['name'],
                     'Tanium ID': host['tanium_id'],
                     'Source': host['source'],
+                    'Country': host['country'],
+                    'Region': host['region'],
+                    'Environment': host['environment'],
                     'Ring Tag': host['tag'],
                     'Package ID': host['package_id'],
                     'Action ID': host['action_id'],
                     'Current Tags': host['current_tags'],
-                    'Comments': host['comments'],
                     'Status': 'Successfully Tagged'
                 })
             for host in failed_tags:
@@ -646,11 +654,13 @@ class RingTagTaniumHosts(Command):
                     'Computer Name': host['name'],
                     'Tanium ID': host['tanium_id'],
                     'Source': host['source'],
+                    'Country': host['country'],
+                    'Region': host['region'],
+                    'Environment': host['environment'],
                     'Ring Tag': host['tag'],
                     'Package ID': host['package_id'],
                     'Action ID': 'N/A',
                     'Current Tags': host['current_tags'],
-                    'Comments': host['comments'],
                     'Status': f"Failed: {host['error']}"
                 })
 
@@ -668,14 +678,16 @@ class RingTagTaniumHosts(Command):
                 'computer name': 35,
                 'tanium id': 25,
                 'source': 15,
+                'country': 22,
+                'region': 18,
+                'environment': 22,
                 'ring tag': 35,
                 'package id': 12,
                 'action id': 15,
                 'current tags': 50,
-                'comments': 60,
                 'status': 40
             }
-            wrap_columns = {'current tags', 'comments', 'status'}
+            wrap_columns = {'current tags', 'status'}
             apply_professional_formatting(output_filename, column_widths=column_widths, wrap_columns=wrap_columns)
 
             # Calculate total duration
