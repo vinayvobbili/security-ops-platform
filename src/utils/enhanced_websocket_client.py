@@ -135,6 +135,16 @@ def patch_websocket_client():
                             # Non-retryable connection error
                             logger.error(f"Non-retryable connection error processing message: {e}")
                             raise
+                    except KeyError as e:
+                        # Handle missing fields in Webex messages gracefully
+                        if 'malwareQuarantineState' in str(e):
+                            # This is a known issue - Webex sometimes sends messages without malwareQuarantineState
+                            logger.debug(f"Received message without malwareQuarantineState field - skipping")
+                            return
+                        else:
+                            # Other KeyErrors should be logged with full traceback
+                            logger.error(f"KeyError processing websocket message: {e}", exc_info=True)
+                            return
                     except Exception as e:
                         # Log other exceptions but don't retry
                         # Only include traceback for non-timeout errors
