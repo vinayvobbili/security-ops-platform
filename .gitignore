@@ -43,7 +43,7 @@ node_modules
 .logdy_password
 
 # Process output files
-nohup.out
+nohup.out*
 
 # Additional cert paths
 data/certs/
