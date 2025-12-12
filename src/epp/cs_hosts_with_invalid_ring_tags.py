@@ -71,7 +71,7 @@ def extract_region_from_ring_tag(ring_tag):
     """Extract region code from a ring tag.
 
     Examples:
-        'FalconGroupingTags/USASRVRing1' -> 'USA'
+        'FalconGroupingTags/USSRVRing1' -> 'US'
         'FalconGroupingTags/EMEASRVRing2' -> 'EMEA'
         'FalconGroupingTags/JPSRVRing4' -> 'JP'
 
@@ -81,22 +81,6 @@ def extract_region_from_ring_tag(ring_tag):
     if match:
         return match.group(1).upper()
     return None
-
-
-def normalize_region_code(region):
-    """Normalize region codes to match ring tag format.
-
-    The REGIONS_BY_COUNTRY mapping returns codes like 'US', 'EMEA', 'APAC', etc.
-    Ring tags use 'USA' instead of 'US', so we need to normalize.
-
-    Mappings:
-        'US' -> 'USA'
-        'Korea' -> 'Korea' (keep as-is)
-        All others -> keep as-is (EMEA, APAC, JP, LATAM, CHINA)
-    """
-    if region == 'US':
-        return 'USA'
-    return region
 
 
 def adjust_column_widths(file_path):
@@ -258,7 +242,6 @@ def analyze_ring_tags(servers_df):
 
         if country and country in REGIONS_BY_COUNTRY:
             expected_region = REGIONS_BY_COUNTRY[country]
-            expected_region_normalized = normalize_region_code(expected_region)
 
             # Extract region from the current ring tag
             complete_ring_tag_matches = re.findall(r'(FalconGroupingTags/[^,]*?SRVRing\d+)', current_tags, re.IGNORECASE)
@@ -276,13 +259,13 @@ def analyze_ring_tags(servers_df):
                 # Extract region from the ring tag
                 actual_region = extract_region_from_ring_tag(ring_tag)
 
-                if actual_region and actual_region != expected_region_normalized:
+                if actual_region and actual_region != expected_region:
                     # Region mismatch detected
                     servers_df.loc[index, 'has_invalid_ring_tag'] = True
 
                     # Append to comment (may already have environment-based comment)
                     existing_comment = servers_df.loc[index, 'comment']
-                    country_comment = f"host in country '{country}' (region {expected_region_normalized}) has ring tag for region {actual_region}"
+                    country_comment = f"host in country '{country}' (region {expected_region}) has ring tag for region {actual_region}"
 
                     if existing_comment:
                         servers_df.loc[index, 'comment'] = f"{existing_comment}; {country_comment}"
@@ -290,7 +273,7 @@ def analyze_ring_tags(servers_df):
                         servers_df.loc[index, 'comment'] = country_comment
 
                     logger.info(f"Country-based invalid ring tag for host {server.get('hostname', 'Unknown')}: "
-                               f"Expected region {expected_region_normalized} (from country '{country}'), "
+                               f"Expected region {expected_region} (from country '{country}'), "
                                f"but has ring tag for region {actual_region}")
 
     # Log completion
