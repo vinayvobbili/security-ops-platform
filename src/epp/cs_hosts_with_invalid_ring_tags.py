@@ -205,7 +205,15 @@ def analyze_ring_tags(servers_df):
     servers_df['has_invalid_ring_tag'] = False
     servers_df['comment'] = ''
 
-    for index, server in servers_df.iterrows():
+    total_servers = len(servers_df)
+    logger.info(f"Starting ring tag analysis for {total_servers} servers")
+
+    for idx, (index, server) in enumerate(servers_df.iterrows(), 1):
+        # Log progress every 500 rows
+        if idx % 500 == 0:
+            percent_complete = (idx / total_servers) * 100
+            logger.info(f"Progress: {idx}/{total_servers} servers analyzed ({percent_complete:.1f}%)")
+
         env = str(server.get('SNOW_environment', '')).lower()
         current_tags = server.get('current_tags', '')
 
@@ -285,6 +293,10 @@ def analyze_ring_tags(servers_df):
                                f"Expected region {expected_region_normalized} (from country '{country}'), "
                                f"but has ring tag for region {actual_region}")
 
+    # Log completion
+    invalid_count = servers_df['has_invalid_ring_tag'].sum()
+    logger.info(f"Completed ring tag analysis: {total_servers} servers processed, {invalid_count} with invalid tags")
+
 
 def generate_report():
     """Generate the complete invalid ring tag analysis report."""
@@ -320,7 +332,9 @@ def generate_report():
     apply_professional_formatting(servers_with_ring_tags_file_path)
 
     # Enrich with ServiceNow data
+    logger.info(f"Starting ServiceNow enrichment for {len(servers_with_ring_tags)} servers")
     enriched_file_path = service_now.enrich_host_report(servers_with_ring_tags_file_path)
+    logger.info("ServiceNow enrichment completed")
     enriched_servers = pd.read_excel(enriched_file_path, engine="openpyxl")
 
     # Analyze ring tags
