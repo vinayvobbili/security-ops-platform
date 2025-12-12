@@ -353,28 +353,28 @@ class RingTagTaniumHosts(Command):
 
         # Extract batch size from the form submission
         # Default to 50 for safety if user leaves field blank
-        batch_size = 50
-        if hasattr(attachment_actions, 'inputs') and attachment_actions.inputs:
-            batch_size_str = attachment_actions.inputs.get('batch_size', '').strip()
-            if batch_size_str:
-                # Allow 'all' to tag all hosts
-                if batch_size_str.lower() == 'all':
-                    batch_size = None
-                else:
-                    try:
-                        batch_size = int(batch_size_str)
-                        if batch_size <= 0:
-                            send_message_with_retry(webex_api,
-                                                    room_id=room_id,
-                                                    markdown=f"❌ Invalid batch size: {batch_size}. Please enter a positive number or 'all'."
-                                                    )
-                            return
-                    except ValueError:
-                        send_message_with_retry(webex_api,
-                                                room_id=room_id,
-                                                markdown=f"❌ Invalid batch size: '{batch_size_str}'. Please enter a valid number or 'all'."
-                                                )
-                        return
+        batch_size = 100
+        # if hasattr(attachment_actions, 'inputs') and attachment_actions.inputs:
+        #     batch_size_str = attachment_actions.inputs.get('batch_size', '').strip()
+        #     if batch_size_str:
+        #         # Allow 'all' to tag all hosts
+        #         if batch_size_str.lower() == 'all':
+        #             batch_size = None
+        #         else:
+        #             try:
+        #                 batch_size = int(batch_size_str)
+        #                 if batch_size <= 0:
+        #                     send_message_with_retry(webex_api,
+        #                                             room_id=room_id,
+        #                                             markdown=f"❌ Invalid batch size: {batch_size}. Please enter a positive number or 'all'."
+        #                                             )
+        #                     return
+        #             except ValueError:
+        #                 send_message_with_retry(webex_api,
+        #                                         room_id=room_id,
+        #                                         markdown=f"❌ Invalid batch size: '{batch_size_str}'. Please enter a valid number or 'all'."
+        #                                         )
+        #                 return
 
         loading_msg = get_random_loading_message()
         if batch_size is None:
