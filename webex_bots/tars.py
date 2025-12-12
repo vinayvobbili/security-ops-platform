@@ -452,17 +452,17 @@ class RingTagTaniumHosts(Command):
                                         )
                 return
 
-            # Filter for hosts seen within the last 15 minutes (currently online)
+            # Filter for hosts seen within the last 2 hours (currently online)
             # This improves our chances of selecting online hosts since Tanium can only apply tags if the host is online
             # Use the report file time as reference (when data was fetched) instead of current time
             hosts_before_online_filter = len(hosts_to_tag)
             report_file_time = datetime.fromtimestamp(report_path.stat().st_mtime, tz=timezone.utc)
-            fifteen_minutes_before_report = report_file_time - timedelta(minutes=15)
+            fifteen_minutes_before_report = report_file_time - timedelta(hours=2)
 
             # Debug: Log available columns and time window
             logger.info(f"DEBUG: Available columns in report: {list(hosts_to_tag.columns)}")
             logger.info(f"DEBUG: Report file time (data fetch reference): {report_file_time}")
-            logger.info(f"DEBUG: 15 minutes before report threshold: {fifteen_minutes_before_report}")
+            logger.info(f"DEBUG: 2 hours before report threshold: {fifteen_minutes_before_report}")
 
             # Debug: Show sample Last Seen values if column exists
             if 'Last Seen' in hosts_to_tag.columns:
@@ -472,7 +472,7 @@ class RingTagTaniumHosts(Command):
                 logger.warning(f"DEBUG: 'Last Seen' column NOT FOUND in report!")
 
             def is_recently_online(last_seen_str):
-                """Check if a host was seen within the last 15 minutes of when the report was generated"""
+                """Check if a host was seen within the last 2 hours of when the report was generated"""
                 if pd.isna(last_seen_str) or not last_seen_str:
                     return False
                 try:
@@ -499,15 +499,15 @@ class RingTagTaniumHosts(Command):
 
                     send_message_with_retry(webex_api,
                                             room_id=room_id,
-                                            markdown=f"❌ **No currently online hosts available for tagging**. Found {hosts_before_online_filter:,} eligible hosts, but none were seen within 15 minutes of when the report was generated."
+                                            markdown=f"❌ **No currently online hosts available for tagging**. Found {hosts_before_online_filter:,} eligible hosts, but none were seen within 2 hours of when the report was generated."
                                             )
                     return
 
-                logger.info(f"Filtered to {hosts_after_online_filter} online hosts from {hosts_before_online_filter} eligible hosts (seen within 15 minutes of report generation)")
+                logger.info(f"Filtered to {hosts_after_online_filter} online hosts from {hosts_before_online_filter} eligible hosts (seen within 2 hours of report generation)")
                 if hosts_after_online_filter < hosts_before_online_filter:
                     send_message_with_retry(webex_api,
                                             room_id=room_id,
-                                            markdown=f"ℹ️ **Online host filter**: Selected {hosts_after_online_filter:,} hosts seen within 15 minutes of report generation from {hosts_before_online_filter:,} eligible hosts."
+                                            markdown=f"ℹ️ **Online host filter**: Selected {hosts_after_online_filter:,} hosts seen within 2 hours of report generation from {hosts_before_online_filter:,} eligible hosts."
                                             )
             else:
                 logger.warning(f"DEBUG: Skipping online filter - 'Last Seen' column not found in report")
@@ -611,6 +611,9 @@ class RingTagTaniumHosts(Command):
                                     'package_id': host['package_id'],
                                     'current_tags': host['current_tags'],
                                     'comments': host['comments'],
+                                    'country': host['country'],
+                                    'region': host['region'],
+                                    'environment': host['environment'],
                                     'error': f"Instance '{source}' not found"
                                 })
                             pbar.update(1)
@@ -633,6 +636,9 @@ class RingTagTaniumHosts(Command):
                                 'package_id': host['package_id'],
                                 'current_tags': host['current_tags'],
                                 'comments': host['comments'],
+                                'country': host['country'],
+                                'region': host['region'],
+                                'environment': host['environment'],
                                 'action_id': action_id
                             })
 
@@ -651,6 +657,9 @@ class RingTagTaniumHosts(Command):
                                 'package_id': host['package_id'],
                                 'current_tags': host['current_tags'],
                                 'comments': host['comments'],
+                                'country': host['country'],
+                                'region': host['region'],
+                                'environment': host['environment'],
                                 'error': error_msg
                             })
 
