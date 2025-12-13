@@ -67,16 +67,17 @@ from src.utils.enhanced_websocket_client import patch_websocket_client
 
 patch_websocket_client()
 
-# Log clear startup marker for visual separation in logs
-logger.warning("=" * 100)
-logger.warning(f"🚀 TOODLES BOT STARTED - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-logger.warning("=" * 100)
-
+# Import datetime before using it
+from datetime import datetime, timedelta
 import ipaddress
 import re
 import signal
 import atexit
-from datetime import datetime, timedelta
+
+# Log clear startup marker for visual separation in logs
+logger.warning("=" * 100)
+logger.warning(f"🚀 TOODLES BOT STARTED - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+logger.warning("=" * 100)
 from urllib.parse import quote
 from zoneinfo import ZoneInfo
 

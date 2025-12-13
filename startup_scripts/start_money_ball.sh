@@ -7,6 +7,9 @@ echo "Stopping existing the metrics service instances..."
 pkill -f "webex_bots/money_ball"
 sleep 1
 
+# Restart log viewer to ensure it shows latest logs
+/home/vinay/pub/IR/deployment/restart_log_viewer.sh 8034 "MoneyBall Bot" /home/vinay/pub/IR/logs/money_ball.log
+
 # Ensure logs directory exists
 mkdir -p logs
 
