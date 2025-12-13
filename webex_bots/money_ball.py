@@ -37,17 +37,18 @@ from src.utils.enhanced_websocket_client import patch_websocket_client
 
 patch_websocket_client()
 
-# Log clear startup marker for visual separation in logs
-logger.warning("=" * 100)
-logger.warning(f"🚀 MONEY_BALL BOT STARTED - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-logger.warning("=" * 100)
-
+# Import datetime before using it
+from datetime import datetime
 import os
 import random
 import signal
 import atexit
 import unittest
-from datetime import datetime
+
+# Log clear startup marker for visual separation in logs
+logger.warning("=" * 100)
+logger.warning(f"🚀 MONEY_BALL BOT STARTED - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+logger.warning("=" * 100)
 from zoneinfo import ZoneInfo
 
 from tabulate import tabulate

@@ -7,6 +7,9 @@ echo "Stopping existing Toodles instances..."
 pkill -f "webex_bots/toodles"
 sleep 1
 
+# Restart log viewer to ensure it shows latest logs
+/home/vinay/pub/IR/deployment/restart_log_viewer.sh 8032 "Toodles Bot" /home/vinay/pub/IR/logs/toodles.log
+
 # Ensure logs directory exists
 mkdir -p logs
 

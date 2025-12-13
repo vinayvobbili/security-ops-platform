@@ -18,6 +18,9 @@ echo "Stopping existing TARS instances..."
 pkill -f "webex_bots/tars"
 sleep 1
 
+# Restart log viewer to ensure it shows latest logs
+"$PROJECT_DIR/deployment/restart_log_viewer.sh" 8038 "TARS Bot" "$PROJECT_DIR/logs/tars.log"
+
 # Ensure logs directory exists
 mkdir -p logs
 

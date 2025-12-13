@@ -17,6 +17,9 @@ echo "Stopping existing Jarvis instances..."
 pkill -f "webex_bots/jarvis"
 sleep 1
 
+# Restart log viewer to ensure it shows latest logs
+"$PROJECT_ROOT/deployment/restart_log_viewer.sh" 8035 "Jarvis Bot" "$PROJECT_ROOT/logs/jarvis.log"
+
 # Ensure logs directory exists
 mkdir -p logs
 
