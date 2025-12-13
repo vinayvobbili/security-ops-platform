@@ -161,7 +161,21 @@ class Host:
             # Create hosts first
             host_objects = [Host(hostname) for hostname in hostnames]
             # Initialize in parallel with progress tracking
-            for host in tqdm(executor.map(lambda host_element: host_element.initialize() or host_element, host_objects), total=len(host_objects), desc="Initializing hosts", disable=not sys.stdout.isatty()):
+            total_hosts = len(host_objects)
+            logger.info(f"Initializing {total_hosts} hosts...")
+
+            # Use tqdm for interactive sessions (shows progress bar), logger for VM
+            initialized_count = 0
+            for host in tqdm(
+                executor.map(lambda host_element: host_element.initialize() or host_element, host_objects),
+                total=total_hosts,
+                desc="Initializing hosts",
+                disable=not sys.stdout.isatty()
+            ):
+                initialized_count += 1
+                # Log progress for non-interactive (VM) sessions every 100 hosts
+                if initialized_count % 100 == 0 or initialized_count == total_hosts:
+                    logger.info(f"Initialized {initialized_count}/{total_hosts} hosts ({initialized_count*100/total_hosts:.1f}%)")
                 yield host
 
     def initialize(self) -> None:
@@ -431,9 +445,15 @@ class TagManager:
             - 'device_id': str
             - 'tags': List[str] (tags to remove)
         """
-        from tqdm import tqdm
         total = len(hosts_with_tags_to_remove)
-        for i in tqdm(range(0, total, batch_size), desc="Removing tags from hosts", disable=not sys.stdout.isatty()):
+        total_batches = math.ceil(total / batch_size)
+        logger.info(f"Removing tags from {total} hosts in batches of {batch_size}...")
+
+        # Use tqdm for interactive (shows progress bar), logger for VM
+        for i in tqdm(range(0, total, batch_size), desc="Removing tags", disable=not sys.stdout.isatty()):
+            batch_num = (i // batch_size) + 1
+            # Log for non-interactive (VM) sessions
+            logger.info(f"Processing batch {batch_num}/{total_batches} (hosts {i+1}-{min(i+batch_size, total)})")
             batch = hosts_with_tags_to_remove[i:i + batch_size]
             device_ids = [item['device_id'] for item in batch]
             tags_to_remove = list({tag for item in batch for tag in item['tags']})
@@ -445,7 +465,7 @@ class TagManager:
                 tags=tags_to_remove
             )
             if response.get("status_code") != 200:
-                print(f"Failed to remove tags for batch {i // batch_size + 1}: {response.get('errors', ['Unknown error'])}")
+                logger.error(f"Failed to remove tags for batch {i // batch_size + 1}: {response.get('errors', ['Unknown error'])}")
 
 
 class FileHandler:
@@ -545,9 +565,9 @@ class FileHandler:
             wrap_columns = {'current cs tags', 'generated cs tag', 'status', 'environment'}
             apply_professional_formatting(output_file, column_widths=column_widths, wrap_columns=wrap_columns)
 
-            print(f"Results written to new file: {output_file}")
+            logger.info(f"Results written to new file: {output_file}")
         except Exception as e:
-            print(f"An error occurred while saving the workbook: {e}")
+            logger.error(f"An error occurred while saving the workbook: {e}")
             return ""
 
         return str(output_file)
@@ -603,7 +623,7 @@ Timing:
             )
             return bool(response)
         except Exception as e:
-            print(f"Error sending report: {e}")
+            logger.error(f"Error sending report: {e}")
             return False
 
 
@@ -637,7 +657,7 @@ def run_workflow(room_id):
     hostnames = FileHandler.get_hostnames()
 
     if not hostnames:
-        print("No hostnames found in input file. Exiting.")
+        logger.warning("No hostnames found in input file. Exiting.")
         return
 
     # Use parallel initialization
@@ -667,7 +687,7 @@ def run_workflow(room_id):
     successfully_tagged_hosts = TagManager.apply_tags(hosts)
     apply_tag_end = time.time()
     timings['apply_tag_duration'] = apply_tag_end - apply_tag_start
-    print(f'Successfully tagged {len(successfully_tagged_hosts)} hosts')
+    logger.info(f'Successfully tagged {len(successfully_tagged_hosts)} hosts')
 
     # Generate a timing report
     timings['total_duration'] = time.time() - fetch_start
@@ -675,9 +695,9 @@ def run_workflow(room_id):
 
     send_report_success = ReportHandler.send_report(output_filename, time_report, room_id)
     if send_report_success:
-        print(f"Report successfully sent to Webex")
+        logger.info(f"Report successfully sent to Webex")
     else:
-        print("Failed to send report to Webex")
+        logger.error("Failed to send report to Webex")
 
     # Delete the input file after tagging hosts
     today_date = datetime.now().strftime('%m-%d-%Y')
@@ -701,7 +721,7 @@ def run_workflow(room_id):
 def main() -> None:
     """Main execution function with profiling options."""
     try:
-        print("Starting EPP Device Tagging")
+        logger.info("Starting EPP Device Tagging")
         hosts = list(Host.initialize_hosts_parallel(['Y54G91YXRY']))
         # Assign a test tag for verification
         test_tag = "FalconGroupingTags/TestTokenActive1"
@@ -713,12 +733,12 @@ def main() -> None:
             refreshed_details = crowdstrike.get_device_details(host.device_id)
             tags = refreshed_details.get('tags', [])
             if test_tag in tags:
-                print(f"Test tag successfully applied to {host.name}. Tag is present in CrowdStrike.")
+                logger.info(f"Test tag successfully applied to {host.name}. Tag is present in CrowdStrike.")
             else:
-                print(f"Failed to apply test tag to {host.name}. Tag not found in CrowdStrike. Check API token and permissions.")
-        print("Completed EPP Device Tagging")
+                logger.error(f"Failed to apply test tag to {host.name}. Tag not found in CrowdStrike. Check API token and permissions.")
+        logger.info("Completed EPP Device Tagging")
     except Exception as e:
-        print(f"Error in main workflow: {e}")
+        logger.error(f"Error in main workflow: {e}")
 
 
 if __name__ in ('__main__', '__builtin__', 'builtins'):

@@ -33,13 +33,13 @@ from src.utils.logging_utils import setup_logging
 # Configure logging with centralized utility (colors enabled by default)
 setup_logging(
     bot_name='hal9000',
-    log_level=logging.WARNING,
+    log_level=logging.INFO,
     log_dir=str(PROJECT_ROOT / "logs"),
-    info_modules=['__main__', 'src.utils.bot_resilience', 'src.utils.webex_device_manager']
+    info_modules=['__main__', 'src.utils.bot_resilience', 'src.utils.webex_device_manager'],
+    rotate_on_startup=False  # Keep logs continuous, rely on RotatingFileHandler for size-based rotation
 )
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.WARNING)  # Ensure bot logger also uses WARNING level
 # Suppress noisy messages from webex libraries
 logging.getLogger('webex_bot').setLevel(logging.ERROR)  # Suppress bot-to-bot and self-message warnings
 logging.getLogger('webexteamssdk').setLevel(logging.ERROR)
@@ -48,6 +48,8 @@ logging.getLogger('webex_websocket_client').setLevel(logging.WARNING)
 # Now safe to import modules that use logging
 import csv
 import random
+import signal
+import atexit
 from datetime import datetime
 
 from pytz import timezone
@@ -66,6 +68,11 @@ configure_ssl_if_needed(verbose=True)  # Re-enabled due to ZScaler connectivity 
 # Apply enhanced WebSocket client patch for better connection resilience
 from src.utils.enhanced_websocket_client import patch_websocket_client
 patch_websocket_client()
+
+# Log clear startup marker for visual separation in logs
+logger.warning("=" * 100)
+logger.warning(f"🚀 HAL9000 BOT STARTED - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+logger.warning("=" * 100)
 
 CONFIG = get_config()
 
@@ -340,9 +347,21 @@ class Bot(WebexBot):
             )
 
 
+def _shutdown_handler(signum=None, frame=None):
+    """Log shutdown marker before exit"""
+    logger.warning("=" * 100)
+    logger.warning(f"🛑 HAL9000 BOT STOPPED - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    logger.warning("=" * 100)
+
+
 def main():
     """HAL9000 main - simplified to use basic WebexBot (keepalive handled by peer_ping_keepalive.py)"""
     logger.info("Starting HAL9000 with basic WebexBot")
+
+    # Register shutdown handlers for graceful logging
+    atexit.register(_shutdown_handler)
+    signal.signal(signal.SIGTERM, _shutdown_handler)
+    signal.signal(signal.SIGINT, _shutdown_handler)
 
     # Create bot instance
     bot = Bot(

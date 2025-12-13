@@ -439,7 +439,7 @@ def main():
         if not os.path.exists(args.file):
             logger.error(f"Log file does not exist: {args.file}")
             sys.exit(1)
-        log_source_cmd = ['tail', '-f', '-n', '100', args.file]
+        log_source_cmd = ['tail', '-F', '-n', '100', args.file]
         logger.info(f"Tailing log file: {args.file}")
 
     elif args.journalctl:

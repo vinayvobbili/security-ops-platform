@@ -74,12 +74,23 @@ COMPANY_EMAIL_DOMAIN = '@' + CONFIG.my_web_domain
 # Configure logging
 setup_logging(
     bot_name='web_server',
-    log_level=logging.WARNING,
-    info_modules=['__main__', 'src.components.web.meaningful_metrics_handler']
+    log_level=logging.INFO,
+    info_modules=['__main__', 'src.components.web.meaningful_metrics_handler'],
+    rotate_on_startup=False  # Keep logs continuous, rely on RotatingFileHandler for size-based rotation
 )
 
 logging.getLogger('werkzeug').setLevel(logging.WARNING)
 logging.getLogger('waitress').setLevel(logging.WARNING)
+
+# Initialize logger before startup marker
+logger = logging.getLogger(__name__)
+
+# Log clear startup marker for visual separation in logs
+import signal
+import atexit
+logger.warning("=" * 100)
+logger.warning(f"🚀 WEB SERVER STARTED - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+logger.warning("=" * 100)
 
 app = Flask(__name__, static_folder='static', static_url_path='/static', template_folder='templates')
 app.secret_key = CONFIG.flask_secret_key if hasattr(CONFIG, 'flask_secret_key') else 'your-secret-key-change-this'
@@ -998,8 +1009,20 @@ def countdown_timer():
         return send_file(error_buffer, mimetype='image/gif', as_attachment=False)
 
 
+def _shutdown_handler(signum=None, frame=None):
+    """Log shutdown marker before exit"""
+    logger.warning("=" * 100)
+    logger.warning(f"🛑 WEB SERVER STOPPED - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    logger.warning("=" * 100)
+
+
 def main():
     """Entry point for launching the web server."""
+
+    # Register shutdown handlers for graceful logging
+    atexit.register(_shutdown_handler)
+    signal.signal(signal.SIGTERM, _shutdown_handler)
+    signal.signal(signal.SIGINT, _shutdown_handler)
 
     # Initialize Pokédex bot components
     try:

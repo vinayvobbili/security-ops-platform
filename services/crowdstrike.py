@@ -4,6 +4,7 @@ from urllib3.exceptions import InsecureRequestWarning
 urllib3.disable_warnings(InsecureRequestWarning)
 
 import concurrent.futures
+import logging
 import sys
 import time
 from datetime import datetime
@@ -17,6 +18,9 @@ import tqdm
 from falconpy import Hosts, OAuth2
 from my_config import get_config
 from src.utils.http_utils import get_session
+
+# Setup logger
+logger = logging.getLogger(__name__)
 
 DATA_DIR = Path(__file__).parent.parent / "data" / "transient" / "epp_device_tagging"
 SHOULD_USE_PROXY = False
@@ -34,9 +38,9 @@ class CrowdStrikeClient:
         self.base_url = "api.us-2.crowdstrike.com"
         self.proxies = self._setup_proxy()
         if self.proxies:
-            print(f"[CrowdStrikeClient] Proxy enabled: {self.proxies}")
+            logger.info(f"[CrowdStrikeClient] Proxy enabled: {self.proxies}")
         else:
-            print("[CrowdStrikeClient] Proxy not enabled.")
+            logger.info("[CrowdStrikeClient] Proxy not enabled.")
         self.use_host_write_creds = use_host_write_creds
         self.auth = self._create_auth()
         self.hosts_client = Hosts(auth_object=self.auth, timeout=30)
@@ -198,13 +202,19 @@ class CrowdStrikeClient:
                 # Process in batches of 1000
                 host_id_batches = [host_ids[i:i + 1000] for i in range(0, len(host_ids), 1000)]
 
+                # Log for VM/non-interactive sessions
+                logger.info(f"Processing batch {batch_count + 1}: {len(host_ids)} host IDs in {len(host_id_batches)} sub-batches")
+
+                # Process with tqdm (shows progress bar locally, silent on VM)
                 futures = [
                     executor.submit(process_host_details, id_batch)
-                    for id_batch in tqdm.tqdm(host_id_batches, desc="Processing host batches", disable=not sys.stdout.isatty())
+                    for id_batch in tqdm.tqdm(host_id_batches, desc=f"Batch {batch_count + 1}", disable=not sys.stdout.isatty())
                 ]
                 concurrent.futures.wait(futures)
 
                 batch_count += 1
+                # Log completion for VM/non-interactive sessions
+                logger.info(f"Completed batch {batch_count}, total hosts fetched so far: {len(all_host_data)}")
                 offset = response["body"].get("meta", {}).get("pagination", {}).get("offset")
                 if not offset:
                     break
@@ -281,21 +291,21 @@ def main() -> None:
     # Test token
     token = client.get_access_token()
     if not token:
-        print("Failed to obtain access token")
+        logger.error("Failed to obtain access token")
         return
 
     # Test API
     host_name_cs = 'uscku1metu03c7l'
     device_id = client.get_device_id(host_name_cs)
     if device_id:
-        print(f"Device ID: {device_id}")
-        print(client.get_device_details(device_id))
+        logger.info(f"Device ID: {device_id}")
+        logger.info(client.get_device_details(device_id))
 
     containment_status = client.get_device_containment_status(host_name_cs)
-    print(f"Containment status: {containment_status}")
+    logger.info(f"Containment status: {containment_status}")
 
     online_status = client.get_device_online_state(host_name_cs)
-    print(f"Online status: {online_status}")
+    logger.info(f"Online status: {online_status}")
 
 
 if __name__ == "__main__":
