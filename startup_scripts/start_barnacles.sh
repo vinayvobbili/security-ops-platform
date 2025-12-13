@@ -7,6 +7,9 @@ echo "Stopping existing Barnacles instances..."
 pkill -f "webex_bots/barnacles"
 sleep 1
 
+# Restart log viewer to ensure it shows latest logs
+/home/vinay/pub/IR/deployment/restart_log_viewer.sh 8036 "Barnacles Bot" /home/vinay/pub/IR/logs/barnacles.log
+
 # Ensure logs directory exists
 mkdir -p logs
 

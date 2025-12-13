@@ -36,15 +36,16 @@ from src.utils.enhanced_websocket_client import patch_websocket_client
 
 patch_websocket_client()
 
+# Import datetime before using it
+from datetime import datetime, timezone, timedelta
+import random
+import signal
+import atexit
+
 # Log clear startup marker for visual separation in logs
 logger.warning("=" * 100)
 logger.warning(f"🚀 TARS BOT STARTED - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 logger.warning("=" * 100)
-
-import random
-import signal
-import atexit
-from datetime import datetime, timezone, timedelta
 from zoneinfo import ZoneInfo
 
 import fasteners

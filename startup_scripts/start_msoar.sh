@@ -22,6 +22,9 @@ if pgrep -f "webex_bots/msoar" > /dev/null; then
     exit 1
 fi
 
+# Restart log viewer to ensure it shows latest logs
+/home/vinay/pub/IR/deployment/restart_log_viewer.sh 8033 "MSOAR Bot" /home/vinay/pub/IR/logs/msoar.log
+
 # Ensure logs directory exists
 mkdir -p logs
 

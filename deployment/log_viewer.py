@@ -27,7 +27,7 @@ app = Flask(__name__)
 
 # Global variables
 log_queue: queue.Queue = queue.Queue(maxsize=1000)
-recent_lines: deque = deque(maxlen=200)  # Buffer of last 200 lines for new connections
+recent_lines: deque = deque(maxlen=300)  # Buffer of last 300 lines for new connections
 recent_lines_lock = threading.Lock()  # Protect the recent_lines buffer
 log_source_cmd: Optional[list[str]] = None
 auth_password: str = "metcirt"
@@ -439,7 +439,8 @@ def main():
         if not os.path.exists(args.file):
             logger.error(f"Log file does not exist: {args.file}")
             sys.exit(1)
-        log_source_cmd = ['tail', '-F', '-n', '100', args.file]
+        # Use -F to follow file even if it's recreated/truncated, increased buffer to 200
+        log_source_cmd = ['tail', '-F', '-n', '200', args.file]
         logger.info(f"Tailing log file: {args.file}")
 
     elif args.journalctl:
