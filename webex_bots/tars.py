@@ -642,7 +642,6 @@ class RingTagTaniumHosts(Command):
                             continue
 
                         # Bulk add tags to all hosts in this batch (max 25)
-                        logger.info(f"Bulk tagging {len(hosts)} hosts in {source} with {ring_tag} using package {package_id}")
                         result = instance.bulk_add_tags(hosts, ring_tag, package_id)
 
                         # Extract action ID from result
