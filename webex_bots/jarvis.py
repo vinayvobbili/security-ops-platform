@@ -23,6 +23,10 @@ setup_logging(
 
 logger = logging.getLogger(__name__)
 
+# Import datetime early for startup logging
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
 # Log clear startup marker for visual separation in logs
 logger.warning("=" * 100)
 logger.warning(f"🚀 JARVIS BOT STARTED - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
@@ -45,8 +49,6 @@ patch_websocket_client()
 import random
 import signal
 import atexit
-from datetime import datetime
-from zoneinfo import ZoneInfo
 
 import fasteners
 import pandas as pd
