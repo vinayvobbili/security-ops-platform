@@ -36,13 +36,13 @@ from src.utils.logging_utils import setup_logging
 # Configure logging with centralized utility (colors enabled by default)
 setup_logging(
     bot_name='pokedex',
-    log_level=logging.WARNING,
+    log_level=logging.INFO,
     log_dir=str(PROJECT_ROOT / "logs"),
-    info_modules=['__main__', 'src.utils.bot_resilience', 'src.utils.webex_device_manager']
+    info_modules=['__main__', 'src.utils.bot_resilience', 'src.utils.webex_device_manager'],
+    rotate_on_startup=False  # Keep logs continuous, rely on RotatingFileHandler for size-based rotation
 )
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.WARNING)  # Ensure bot logger also uses WARNING level
 
 # Note: Using vanilla WebexBot without resilience framework for testing
 
@@ -59,6 +59,8 @@ logging.getLogger('asyncio').setLevel(logging.CRITICAL)
 import csv
 import os
 import random
+import signal
+import atexit
 from datetime import datetime
 
 from pytz import timezone
@@ -78,6 +80,11 @@ configure_ssl_if_needed(verbose=True)  # Re-enabled due to ZScaler connectivity 
 from src.utils.enhanced_websocket_client import patch_websocket_client
 
 patch_websocket_client()
+
+# Log clear startup marker for visual separation in logs
+logger.warning("=" * 100)
+logger.warning(f"🚀 POKEDEX BOT STARTED - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+logger.warning("=" * 100)
 
 CONFIG = get_config()
 
@@ -380,10 +387,22 @@ class Bot(WebexBot):
             )
 
 
+def _shutdown_handler(signum=None, frame=None):
+    """Log shutdown marker before exit"""
+    logger.warning("=" * 100)
+    logger.warning(f"🛑 POKEDEX BOT STOPPED - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    logger.warning("=" * 100)
+
+
 def main():
     """Pokédex main - VANILLA WebexBot with NO resilience features for testing"""
     bot_name = "Pokedex"
     logger.info("Starting Pokedex with VANILLA WebexBot (no resilience, no patches)")
+
+    # Register shutdown handlers for graceful logging
+    atexit.register(_shutdown_handler)
+    signal.signal(signal.SIGTERM, _shutdown_handler)
+    signal.signal(signal.SIGINT, _shutdown_handler)
 
     # Initialize bot components first
     if not initialize_bot():

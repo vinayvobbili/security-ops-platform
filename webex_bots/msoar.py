@@ -5,6 +5,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import logging
+import signal
+import atexit
+from datetime import datetime
 from typing import Any, Dict, Optional
 
 import requests
@@ -191,6 +194,13 @@ def msoar_initialization(bot_instance: Optional[WebexBot] = None) -> bool:
         return False
 
 
+def _shutdown_handler(signum=None, frame=None):
+    """Log shutdown marker before exit"""
+    logger.warning("=" * 100)
+    logger.warning(f"🛑 MSOAR BOT STOPPED - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    logger.warning("=" * 100)
+
+
 def main():
     """MSOAR main - uses resilience framework for automatic reconnection and firewall handling"""
 
@@ -198,8 +208,19 @@ def main():
     setup_logging(
         bot_name='msoar',
         log_level=logging.INFO,
-        info_modules=['__main__', 'src.utils.bot_resilience', 'src.utils.webex_device_manager']
+        info_modules=['__main__', 'src.utils.bot_resilience', 'src.utils.webex_device_manager'],
+        rotate_on_startup=False  # Keep logs continuous, rely on RotatingFileHandler for size-based rotation
     )
+
+    # Log clear startup marker for visual separation in logs
+    logger.warning("=" * 100)
+    logger.warning(f"🚀 MSOAR BOT STARTED - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    logger.warning("=" * 100)
+
+    # Register shutdown handlers for graceful logging
+    atexit.register(_shutdown_handler)
+    signal.signal(signal.SIGTERM, _shutdown_handler)
+    signal.signal(signal.SIGINT, _shutdown_handler)
 
     logger.info("🚀 Starting METCIRT SOAR bot")
 

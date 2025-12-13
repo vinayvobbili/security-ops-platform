@@ -50,7 +50,8 @@ from src import peer_ping_keepalive
 setup_logging(
     bot_name='all_jobs',
     log_level=logging.INFO,  # Default level for most modules
-    info_modules=['__main__', 'src.components.response_sla_risk_tickets', 'services.xsoar']
+    info_modules=['__main__', 'src.components.response_sla_risk_tickets', 'services.xsoar'],
+    rotate_on_startup=False  # Keep logs continuous, rely on RotatingFileHandler for size-based rotation
 )
 
 # Set XSOAR logging to INFO (connection issues have been resolved)
@@ -60,6 +61,14 @@ logging.getLogger("services.xsoar").setLevel(logging.INFO)
 logging.getLogger("src.components.ticket_cache").setLevel(logging.DEBUG)
 
 logger = logging.getLogger(__name__)
+
+# Log clear startup marker for visual separation in logs
+import signal
+import atexit
+from datetime import datetime
+logger.warning("=" * 100)
+logger.warning(f"🚀 ALL_JOBS SCHEDULER STARTED - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+logger.warning("=" * 100)
 
 config = get_config()
 eastern = pytz.timezone('US/Eastern')
@@ -215,10 +224,22 @@ CHART_GROUPS: List[dict] = [
 ]
 
 
+def _shutdown_handler(signum=None, frame=None):
+    """Log shutdown marker before exit"""
+    logger.warning("=" * 100)
+    logger.warning(f"🛑 ALL_JOBS SCHEDULER STOPPED - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    logger.warning("=" * 100)
+
+
 def main() -> None:
     """Configure and start the job scheduler."""
     print("Starting crash-proof job scheduler...")
     logger.info("Initializing security operations scheduler")
+
+    # Register shutdown handlers for graceful logging
+    atexit.register(_shutdown_handler)
+    signal.signal(signal.SIGTERM, _shutdown_handler)
+    signal.signal(signal.SIGINT, _shutdown_handler)
 
     # Directory preparation (first, fast)
     logger.info("Scheduling daily chart directory preparation...")

@@ -205,7 +205,7 @@ class TaniumDataLoader:
         output_dir.mkdir(parents=True, exist_ok=True)
 
         client = TaniumClient()
-        print("\n🔄 Fetching fresh data from Tanium (cache disabled)...")
+        self.logger.info("🔄 Fetching fresh data from Tanium (cache disabled)...")
         all_hosts_filename = client.get_and_export_all_computers()
 
         if not all_hosts_filename:
@@ -220,13 +220,13 @@ class TaniumDataLoader:
         # the line below may be used for testing code changes on small subsets of data
         # filtered_computers = [c for c in filtered_computers if c.name.startswith("MININT")]
 
-        print(f"\n📊 Total hosts found: {total_computers}")
-        print(f"✅ Hosts with existing Ring/PowerMode tags: {computers_with_tags}")
-        print(f"🔄 Hosts without Ring tags (to be processed): {len(filtered_computers)}")
+        self.logger.info(f"📊 Total hosts found: {total_computers}")
+        self.logger.info(f"✅ Hosts with existing Ring/PowerMode tags: {computers_with_tags}")
+        self.logger.info(f"🔄 Hosts without Ring tags (to be processed): {len(filtered_computers)}")
 
         if test_limit is not None and test_limit > 0:
             filtered_computers = filtered_computers[:test_limit]
-            print(f"🧪 Test mode: limiting to {test_limit} hosts")
+            self.logger.info(f"🧪 Test mode: limiting to {test_limit} hosts")
         return filtered_computers
 
     def _parse_excel_file(self, filename: str) -> List[Computer]:
@@ -308,7 +308,7 @@ class ServiceNowComputerEnricher:
 
     def enrich_computers(self, computers: List[Computer]) -> List[EnrichedComputer]:
         """Enrich computers with ServiceNow data"""
-        print(f"🔍 Enriching {len(computers)} hosts with ServiceNow data to generate Ring tags...")
+        self.logger.info(f"🔍 Enriching {len(computers)} hosts with ServiceNow data to generate Ring tags...")
 
         # Export computers to Excel for ServiceNow enrichment
         client = TaniumClient()
@@ -329,7 +329,10 @@ class ServiceNowComputerEnricher:
             self.logger.info(f"Sample row data: {df.iloc[0].to_dict()}")
 
         enriched_computers = []
-        for idx, row in df.iterrows():
+        total_rows = len(df)
+        self.logger.info(f"Processing {total_rows} enriched computer records...")
+
+        for computer_count, (idx, row) in enumerate(df.iterrows(), 1):
             # Find original computer
             tanium_id = str(row.get('ID', '')).strip()
             original_computer = next((c for c in computers if c.id == tanium_id), None)
@@ -375,6 +378,10 @@ class ServiceNowComputerEnricher:
                         online_status=original_computer.eid_status
                     )
                 )
+
+            # Log progress every 100 computers for VM/service logs
+            if computer_count % 100 == 0 or computer_count == total_rows:
+                self.logger.info(f"Processed {computer_count}/{total_rows} enriched records ({computer_count*100/total_rows:.1f}%)")
 
         # Summary logging
         computers_with_snow_country = sum(1 for c in enriched_computers if c.country)
@@ -885,7 +892,7 @@ def main():
     try:
         processor = create_processor()
         report_path = processor.process_hosts_without_ring_tags(test_limit=100)
-        print(f"Processing completed successfully: {report_path}")
+        logging.info(f"Processing completed successfully: {report_path}")
     except Exception as e:
         logging.error(f"Processing failed: {e}")
         raise

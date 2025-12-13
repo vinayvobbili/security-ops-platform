@@ -39,9 +39,10 @@ from src.utils.logging_utils import setup_logging
 # Configure logging with centralized utility
 setup_logging(
     bot_name='toodles',
-    log_level=logging.WARNING,
+    log_level=logging.INFO,
     log_dir=str(ROOT_DIRECTORY / "logs"),
-    info_modules=['__main__', 'src.utils.bot_resilience', 'src.utils.webex_device_manager', 'src.utils.connection_health']
+    info_modules=['__main__', 'src.utils.bot_resilience', 'src.utils.webex_device_manager', 'src.utils.connection_health'],
+    rotate_on_startup=False  # Keep logs continuous, rely on RotatingFileHandler for size-based rotation
 )
 
 logger = logging.getLogger(__name__)
@@ -66,8 +67,15 @@ from src.utils.enhanced_websocket_client import patch_websocket_client
 
 patch_websocket_client()
 
+# Log clear startup marker for visual separation in logs
+logger.warning("=" * 100)
+logger.warning(f"🚀 TOODLES BOT STARTED - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+logger.warning("=" * 100)
+
 import ipaddress
 import re
+import signal
+import atexit
 from datetime import datetime, timedelta
 from urllib.parse import quote
 from zoneinfo import ZoneInfo
@@ -2331,9 +2339,21 @@ def toodles_initialization(bot=None):
     return False
 
 
+def _shutdown_handler(signum=None, frame=None):
+    """Log shutdown marker before exit"""
+    logger.warning("=" * 100)
+    logger.warning(f"🛑 TOODLES BOT STOPPED - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    logger.warning("=" * 100)
+
+
 def main():
     """Toodles main - simplified to use basic WebexBot (keepalive handled by peer_ping_keepalive.py)"""
     logger.info("Starting Toodles with basic WebexBot")
+
+    # Register shutdown handlers for graceful logging
+    atexit.register(_shutdown_handler)
+    signal.signal(signal.SIGTERM, _shutdown_handler)
+    signal.signal(signal.SIGINT, _shutdown_handler)
 
     # Create bot instance
     bot = toodles_bot_factory()

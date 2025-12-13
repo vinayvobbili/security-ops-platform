@@ -15,9 +15,10 @@ from src.utils.logging_utils import setup_logging
 # Configure logging with centralized utility
 setup_logging(
     bot_name='tars',
-    log_level=logging.WARNING,
+    log_level=logging.INFO,
     log_dir=str(ROOT_DIRECTORY / "logs"),
-    info_modules=['__main__', 'src.utils.bot_resilience', 'src.utils.webex_device_manager']
+    info_modules=['__main__', 'src.utils.bot_resilience', 'src.utils.webex_device_manager'],
+    rotate_on_startup=False  # Keep logs continuous, rely on RotatingFileHandler for size-based rotation
 )
 
 logger = logging.getLogger(__name__)
@@ -35,7 +36,14 @@ from src.utils.enhanced_websocket_client import patch_websocket_client
 
 patch_websocket_client()
 
+# Log clear startup marker for visual separation in logs
+logger.warning("=" * 100)
+logger.warning(f"🚀 TARS BOT STARTED - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+logger.warning("=" * 100)
+
 import random
+import signal
+import atexit
 from datetime import datetime, timezone, timedelta
 from zoneinfo import ZoneInfo
 
@@ -552,7 +560,10 @@ class RingTagTaniumHosts(Command):
             from collections import defaultdict
             host_groups = defaultdict(list)
 
-            for idx, row in hosts_to_tag.iterrows():
+            total_hosts_to_group = len(hosts_to_tag)
+            logger.info(f"Grouping {total_hosts_to_group} hosts by instance/tag/package for bulk operations...")
+
+            for host_count, (idx, row) in enumerate(hosts_to_tag.iterrows(), 1):
                 computer_name = str(row['Computer Name'])
                 tanium_id = str(row['Tanium ID'])
                 source = str(row['Source'])
@@ -579,6 +590,10 @@ class RingTagTaniumHosts(Command):
                     'environment': environment
                 })
 
+                # Log progress every 100 hosts for VM/service logs
+                if host_count % 100 == 0 or host_count == total_hosts_to_group:
+                    logger.info(f"Grouped {host_count}/{total_hosts_to_group} hosts ({host_count*100/total_hosts_to_group:.1f}%)")
+
             # Process each group with bulk tagging (respecting Titanium's 25 endpoint limit per call)
             TANIUM_BULK_TAG_LIMIT = 25
 
@@ -598,8 +613,10 @@ class RingTagTaniumHosts(Command):
             import sys
             disable_tqdm = not sys.stdout.isatty()
 
+            batch_counter = 0
             with tqdm(total=total_batches, desc="Bulk tagging host batches", unit="batch", disable=disable_tqdm) as pbar:
                 for (source, ring_tag, package_id), hosts in batched_groups:
+                    batch_counter += 1
                     pbar.set_description(f"Tagging {len(hosts)} hosts in {source} with {ring_tag}")
 
                     try:
@@ -667,6 +684,10 @@ class RingTagTaniumHosts(Command):
                                 'environment': host['environment'],
                                 'error': error_msg
                             })
+
+                    # Log progress every 10 batches for VM/non-interactive sessions
+                    if batch_counter % 10 == 0 or batch_counter == total_batches:
+                        logger.info(f"Processed batch {batch_counter}/{total_batches} ({batch_counter*100/total_batches:.1f}%) - {len(successful_tags)} successful, {len(failed_tags)} failed")
 
                     pbar.update(1)
 
@@ -928,9 +949,21 @@ def tars_initialization(bot):
     return False
 
 
+def _shutdown_handler(signum=None, frame=None):
+    """Log shutdown marker before exit"""
+    logger.warning("=" * 100)
+    logger.warning(f"🛑 TARS BOT STOPPED - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    logger.warning("=" * 100)
+
+
 def main():
     """TARS main - simplified to use basic WebexBot (keepalive handled by peer_ping_keepalive.py)"""
     logger.info("Starting TARS with basic WebexBot")
+
+    # Register shutdown handlers for graceful logging
+    atexit.register(_shutdown_handler)
+    signal.signal(signal.SIGTERM, _shutdown_handler)
+    signal.signal(signal.SIGINT, _shutdown_handler)
 
     # Create bot instance
     bot = tars_bot_factory()

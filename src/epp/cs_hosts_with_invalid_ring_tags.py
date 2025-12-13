@@ -226,14 +226,14 @@ def analyze_ring_tags(servers_df):
         if len(ring_numbers) > 1:
             servers_df.loc[index, 'has_invalid_ring_tag'] = True
             servers_df.loc[index, 'comment'] = 'multiple ring tags found'
-            logger.info(f"Multiple non-Citrix ring tags found for host {server.get('hostname', 'Unknown')}: {ring_numbers}")
+            logger.debug(f"Multiple non-Citrix ring tags found for host {server.get('hostname', 'Unknown')}: {ring_numbers}")
             continue
 
         expected_ring = get_expected_ring(env)
         if any(num != expected_ring for num in ring_numbers):
             servers_df.loc[index, 'has_invalid_ring_tag'] = True
             servers_df.loc[index, 'comment'] = f'{env} server should not be in Ring {ring_numbers}, expected Ring {expected_ring}'
-            logger.info(f"Invalid ring tag found for host {server.get('hostname', 'Unknown')}: Ring {ring_numbers}, expected Ring {expected_ring}")
+            logger.debug(f"Invalid ring tag found for host {server.get('hostname', 'Unknown')}: Ring {ring_numbers}, expected Ring {expected_ring}")
 
         # Country-based validation (additive to environment validation)
         # This checks if the region in the ring tag matches the expected region for the host's country
@@ -271,9 +271,9 @@ def analyze_ring_tags(servers_df):
                     else:
                         servers_df.loc[index, 'comment'] = country_comment
 
-                    logger.info(f"Country-based invalid ring tag for host {server.get('hostname', 'Unknown')}: "
-                               f"Expected region {expected_region} (from country '{country}'), "
-                               f"but has ring tag for region {actual_region}")
+                    logger.debug(f"Country-based invalid ring tag for host {server.get('hostname', 'Unknown')}: "
+                                f"Expected region {expected_region} (from country '{country}'), "
+                                f"but has ring tag for region {actual_region}")
 
     # Log completion
     invalid_count = servers_df['has_invalid_ring_tag'].sum()

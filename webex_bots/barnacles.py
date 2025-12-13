@@ -14,9 +14,10 @@ from src.utils.logging_utils import setup_logging
 # Configure logging with centralized utility
 setup_logging(
     bot_name='barnacles',
-    log_level=logging.WARNING,
+    log_level=logging.INFO,
     log_dir=str(ROOT_DIRECTORY / "logs"),
-    info_modules=['__main__', 'src.utils.bot_resilience', 'src.utils.webex_device_manager']
+    info_modules=['__main__', 'src.utils.bot_resilience', 'src.utils.webex_device_manager'],
+    rotate_on_startup=False  # Keep logs continuous, rely on RotatingFileHandler for size-based rotation
 )
 
 # Note: Noisy library logs are suppressed by ResilientBot framework
@@ -37,8 +38,18 @@ configure_ssl_if_needed(verbose=True)
 from src.utils.enhanced_websocket_client import patch_websocket_client
 patch_websocket_client()
 
+# Import datetime for startup marker
+from datetime import datetime as dt_for_marker
+
+# Log clear startup marker for visual separation in logs
+logger.warning("=" * 100)
+logger.warning(f"🚀 BARNACLES BOT STARTED - {dt_for_marker.now().strftime('%Y-%m-%d %H:%M:%S')}")
+logger.warning("=" * 100)
+
 import json
 import random
+import signal
+import atexit
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
@@ -640,9 +651,21 @@ def barnacles_initialization(bot_instance=None):
     return False
 
 
+def _shutdown_handler(signum=None, frame=None):
+    """Log shutdown marker before exit"""
+    logger.warning("=" * 100)
+    logger.warning(f"🛑 BARNACLES BOT STOPPED - {dt_for_marker.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    logger.warning("=" * 100)
+
+
 def main():
     """Barnacles main - simplified to use basic WebexBot (keepalive handled by peer_ping_keepalive.py)"""
     logger.info("Starting Barnacles with basic WebexBot")
+
+    # Register shutdown handlers for graceful logging
+    atexit.register(_shutdown_handler)
+    signal.signal(signal.SIGTERM, _shutdown_handler)
+    signal.signal(signal.SIGINT, _shutdown_handler)
 
     # Create bot instance
     bot = barnacles_bot_factory()
