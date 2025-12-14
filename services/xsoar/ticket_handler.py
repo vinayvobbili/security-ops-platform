@@ -38,6 +38,38 @@ log = logging.getLogger(__name__)
 CONFIG = get_config()
 
 
+def _truncate_error_message(error: Exception, max_length: int = 500) -> str:
+    """
+    Truncate error messages containing HTML/SVG content to prevent log pollution.
+
+    Args:
+        error: The exception object
+        max_length: Maximum length of error message (default: 500 chars)
+
+    Returns:
+        Truncated error message suitable for logging
+    """
+    error_str = str(error)
+
+    # If error contains HTML tags, heavily truncate it
+    if '<html>' in error_str.lower() or '<svg' in error_str.lower():
+        # Extract just the HTTP status code and reason if present
+        lines = error_str.split('\n')
+        first_line = lines[0] if lines else error_str
+
+        # Truncate to first line + indication of HTML content
+        if len(first_line) > 200:
+            first_line = first_line[:200]
+
+        return f"{first_line} [HTML response body truncated to prevent log pollution]"
+
+    # For non-HTML errors, still apply reasonable truncation
+    if len(error_str) > max_length:
+        return error_str[:max_length] + "... [truncated]"
+
+    return error_str
+
+
 class TicketHandler:
     """Handler for XSOAR ticket operations including search, create, update, and link."""
 
@@ -112,7 +144,7 @@ class TicketHandler:
             api_time = time.time() - start_api
             log.debug(f"  ✓ XSOAR API is reachable and responding in {api_time:.2f}s: {type(test_response)}")
         except Exception as e:
-            log.error(f"  ✗ XSOAR API connectivity test failed: {e}")
+            log.error(f"  ✗ XSOAR API connectivity test failed: {_truncate_error_message(e)}")
             log.error(f"  This may indicate network issues, API outage, or authentication problems")
             raise
 
@@ -267,7 +299,7 @@ class TicketHandler:
 
                     else:
                         # Other errors - log and break
-                        log.error(f"API error on page {page}: {e}")
+                        log.error(f"API error on page {page}: {_truncate_error_message(e)}")
                         break
 
             if page >= max_pages:
@@ -335,7 +367,7 @@ class TicketHandler:
                         continue
 
                     else:
-                        log.error(f"API error: {e}")
+                        log.error(f"API error: {_truncate_error_message(e)}")
                         return []
 
         except Exception as e:
@@ -364,7 +396,7 @@ class TicketHandler:
             data = json.loads(response[0]) if response else {}
             return data.get('data', [])
         except ApiException as e:
-            log.error(f"Error fetching entries for incident {incident_id}: {e}")
+            log.error(f"Error fetching entries for incident {incident_id}: {_truncate_error_message(e)}")
             raise
 
     def create(self, payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -385,7 +417,7 @@ class TicketHandler:
             response = self.client.create_incident(create_incident_request=payload)
             return response.to_dict() if hasattr(response, 'to_dict') else response
         except ApiException as e:
-            log.error(f"Error creating incident: {e}")
+            log.error(f"Error creating incident: {_truncate_error_message(e)}")
             raise
 
     def update_incident(self, ticket_id: str, update_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -432,7 +464,7 @@ class TicketHandler:
             log.debug(f"Successfully updated incident {ticket_id}")
             return _parse_generic_response(response)
         except ApiException as e:
-            log.error(f"Error updating incident {ticket_id}: {e}")
+            log.error(f"Error updating incident {ticket_id}: {_truncate_error_message(e)}")
             raise
 
     def assign_owner(self, ticket_id: str, owner_email_address: str) -> Dict[str, Any]:
@@ -478,7 +510,7 @@ class TicketHandler:
             )
             return _parse_generic_response(response)
         except ApiException as e:
-            log.error(f"Error linking tickets: {e}")
+            log.error(f"Error linking tickets: {_truncate_error_message(e)}")
             return None
 
     def add_participant(self, ticket_id: str, participant_email_address: str) -> Optional[Dict[str, Any]]:
@@ -515,7 +547,7 @@ class TicketHandler:
             )
             return _parse_generic_response(response)
         except ApiException as e:
-            log.error(f"Error adding participant: {e}")
+            log.error(f"Error adding participant: {_truncate_error_message(e)}")
             return None
 
     def get_participants(self, incident_id: str) -> List[Dict[str, Any]]:
@@ -552,7 +584,7 @@ class TicketHandler:
                 log.warning(f"Investigation {incident_id} not found")
                 raise ValueError(f"Investigation {incident_id} not found")
             else:
-                log.error(f"API error {e.status}: {e}")
+                log.error(f"API error {e.status}: {_truncate_error_message(e)}")
                 raise
 
     def get_playbook_task_id(self, ticket_id, target_task_name):
@@ -572,7 +604,7 @@ class TicketHandler:
                 method='GET'
             )
         except ApiException as e:
-            log.error(f"Error fetching workplan for ticket {ticket_id}: {e}")
+            log.error(f"Error fetching workplan for ticket {ticket_id}: {_truncate_error_message(e)}")
             return None
 
         data = _parse_generic_response(response)
@@ -745,7 +777,7 @@ class TicketHandler:
             response = self.client.create_incident(create_incident_request=payload)
             return response.to_dict() if hasattr(response, 'to_dict') else response
         except ApiException as e:
-            log.error(f"Error creating incident in dev: {e}")
+            log.error(f"Error creating incident in dev: {_truncate_error_message(e)}")
             return {"error": str(e)}
 
     def get_case_data(self, incident_id: str, max_retries: int = 3) -> Dict[str, Any]:
@@ -802,7 +834,7 @@ class TicketHandler:
 
                 # For other errors, log and raise immediately
                 else:
-                    log.error(f"Error fetching incident {incident_id}: {e}")
+                    log.error(f"Error fetching incident {incident_id}: {_truncate_error_message(e)}")
                     raise
 
         # Should not reach here, but just in case
@@ -863,7 +895,7 @@ class TicketHandler:
 
                 # For other errors, log and raise immediately
                 else:
-                    log.error(f"Error fetching investigation {incident_id}: {e}")
+                    log.error(f"Error fetching investigation {incident_id}: {_truncate_error_message(e)}")
                     raise
 
         # Should not reach here, but just in case
@@ -983,7 +1015,7 @@ class TicketHandler:
 
                 # For other errors, log and raise immediately
                 else:
-                    log.error(f"Error calling {endpoint} for incident {incident_id}: {e}")
+                    log.error(f"Error calling {endpoint} for incident {incident_id}: {_truncate_error_message(e)}")
                     raise
 
         # Should not reach here, but just in case
