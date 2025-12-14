@@ -40,7 +40,8 @@ from src.charts import (
 )
 from src.components import (
     oncall, approved_security_testing, thithi, response_sla_risk_tickets,
-    containment_sla_risk_tickets, incident_declaration_sla_risk, abandoned_tickets
+    containment_sla_risk_tickets, incident_declaration_sla_risk, abandoned_tickets,
+    orphaned_tickets
 )
 from src.utils.fs_utils import make_dir_for_todays_charts
 from src.utils.logging_utils import setup_logging
@@ -66,6 +67,7 @@ logger = logging.getLogger(__name__)
 import signal
 import atexit
 from datetime import datetime
+
 logger.warning("=" * 100)
 logger.warning(f"🚀 ALL_JOBS SCHEDULER STARTED - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 logger.warning("=" * 100)
@@ -299,7 +301,10 @@ def main() -> None:
     logger.info("Scheduling daily maintenance tasks...")
     schedule_daily('17:00', approved_security_testing.removed_expired_entries)
     schedule_daily('07:00', thithi.main)
-    schedule_daily('08:00', lambda: abandoned_tickets.send_report(config.webex_room_id_abandoned_tickets))
+    schedule_daily('08:00',
+                   lambda: abandoned_tickets.send_report(config.webex_room_id_abandoned_tickets),
+                   lambda: orphaned_tickets.send_report(config.webex_room_id_abandoned_tickets)
+                   )
 
     # SLA risk monitoring
     logger.info("Scheduling SLA risk monitoring jobs...")
