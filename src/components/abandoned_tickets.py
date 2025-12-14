@@ -105,7 +105,7 @@ def send_report(room_id=config.webex_room_id_vinay_test_space):
         webex_api.messages.create(
             roomId=room_id,
             text="Abandoned Tickets Summary!",
-            markdown=f'Abandoned Tickets Summary (Type=METCIRT - TP, Last Touched=7+ days ago)\n ``` \n {daily_summary}'
+            markdown=f'**Abandoned Tickets Summary** (Type=METCIRT - TP, Last Touched=7+ days ago)\n ``` \n {daily_summary}'
         )
 
 

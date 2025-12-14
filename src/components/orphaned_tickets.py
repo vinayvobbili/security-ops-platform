@@ -88,7 +88,7 @@ def send_report(room_id):
         headers = ['ID', 'Name', 'Type', 'Severity', 'Status', 'Created']
 
         # Build table string with description above code block
-        table_str = f"Orphaned tickets ({query})\n\n" + '````\n' + tabulate(display_rows, headers, tablefmt='github') + '\n````'
+        table_str = f"**Orphaned tickets** ({query})\n\n" + '````\n' + tabulate(display_rows, headers, tablefmt='github') + '\n````'
 
         # Add summary if there are more tickets
         if total_tickets > 10:
