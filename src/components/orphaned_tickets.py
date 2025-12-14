@@ -1,9 +1,11 @@
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
+from tabulate import tabulate
 from webexpythonsdk import WebexAPI
 
 from my_config import get_config
 from services.xsoar import TicketHandler, XsoarEnvironment
-from datetime import datetime
-from tabulate import tabulate
 
 CONFIG = get_config()
 webex_api = WebexAPI(access_token=CONFIG.webex_bot_access_token_soar)
@@ -23,11 +25,19 @@ def send_report(room_id):
             created = t.get('created', '')
             if created:
                 try:
-                    created_dt = datetime.fromisoformat(created.replace('Z', '+00:00'))
-                    created_str = created_dt.strftime('%m/%d/%Y')
+                    # Handle both string and datetime objects
+                    if isinstance(created, str):
+                        # Parse the ISO format string
+                        created_dt = datetime.fromisoformat(created.replace('Z', '+00:00'))
+                    else:
+                        created_dt = created
+                    # Convert to Eastern Time
+                    created_et = created_dt.astimezone(ZoneInfo('America/New_York'))
+                    # Format as MM/DD/YYYY HH:MM AM/PM ET
+                    created_str = created_et.strftime('%m/%d/%Y %I:%M %p ET')
                 except Exception:
                     created_dt = None
-                    created_str = created
+                    created_str = str(created)
             else:
                 created_dt = None
                 created_str = ''
