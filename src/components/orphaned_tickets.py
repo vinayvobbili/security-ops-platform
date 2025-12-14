@@ -11,6 +11,31 @@ CONFIG = get_config()
 webex_api = WebexAPI(access_token=CONFIG.webex_bot_access_token_soar)
 
 
+def severity_to_name(severity):
+    """Convert severity number to severity name."""
+    # Handle both int and float severity values
+    try:
+        sev = float(severity) if severity else 0
+    except (ValueError, TypeError):
+        return 'Unknown'
+
+    match sev:
+        case 0:
+            return 'Unknown'
+        case 0.5:
+            return 'Informational'
+        case 1:
+            return 'Low'
+        case 2:
+            return 'Medium'
+        case 3:
+            return 'High'
+        case 4:
+            return 'Critical'
+        case _:
+            return 'Unknown'
+
+
 def send_report(room_id):
     try:
         ticket_handler = TicketHandler(XsoarEnvironment.PROD)
@@ -42,10 +67,14 @@ def send_report(room_id):
                 created_dt = None
                 created_str = ''
             ticket_type = t.get('type', '').replace('METCIRT', '').strip()
+            severity = severity_to_name(t.get('severity', 0))
+            status = t.get('status', '')
             row = {
                 'ID': t.get('id', ''),
                 'Name': truncate_text(t.get('name', ''), 50),
                 'Type': ticket_type,
+                'Severity': severity,
+                'Status': status,
                 'Created': created_str,
                 'created_dt': created_dt
             }
@@ -55,8 +84,8 @@ def send_report(room_id):
 
         total_tickets = len(rows)
         # Show only first 10 tickets
-        display_rows = [[r['ID'], r['Name'], r['Type'], r['Created']] for r in rows[:10]]
-        headers = ['ID', 'Name', 'Type', 'Created']
+        display_rows = [[r['ID'], r['Name'], r['Type'], r['Severity'], r['Status'], r['Created']] for r in rows[:10]]
+        headers = ['ID', 'Name', 'Type', 'Severity', 'Status', 'Created']
 
         # Build table string with description above code block
         table_str = f"Orphaned tickets ({query})\n\n" + '````\n' + tabulate(display_rows, headers, tablefmt='github') + '\n````'
