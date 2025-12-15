@@ -125,17 +125,28 @@ def resolution_bucket(days: Optional[int], is_open: bool) -> str:
 
 
 def clean_owner_name(owner: str) -> str:
-    """Remove @company.com domain from owner email."""
+    """Remove company email domain from owner email."""
     if not owner or owner == 'Unknown':
         return owner
-    return owner.replace('@company.com', '')
+    # Get config to access domain
+    from my_config import get_config
+    cfg = get_config()
+    if cfg.my_web_domain:
+        return owner.replace(f'@{cfg.my_web_domain}', '')
+    return owner
 
 
 def clean_type_name(ticket_type: str) -> str:
-    """Remove METCIRT prefix from ticket types."""
+    """Remove team name prefix from ticket types."""
     if not ticket_type or ticket_type == 'Unknown':
         return ticket_type
-    return re.sub(r'^METCIRT[_\-\s]*', '', ticket_type, flags=re.IGNORECASE).strip()
+    # Get config to access team name
+    from my_config import get_config
+    cfg = get_config()
+    if cfg.team_name:
+        pattern = rf'^{re.escape(cfg.team_name)}[_\-\s]*'
+        return re.sub(pattern, '', ticket_type, flags=re.IGNORECASE).strip()
+    return ticket_type
 
 
 def format_date_display(date_obj: Optional[Union[str, datetime]]) -> str:

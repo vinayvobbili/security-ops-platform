@@ -169,7 +169,7 @@ def main():
     all_scripts = falcon_rtr_admin.get_scripts(all_script_ids)
     print(f"All scripts: {all_scripts}", flush=True, end="\n\n")
 
-    # upload_script("METCIRT_RMM_Tool_Removal")
+    # upload_script(f"{config.team_name}_RMM_Tool_Removal")
 
     # update_script("RMM_Tool_Removal", '7cc64c3cf9f911ef86e712648f985aff_25596f2a3c164ed28d8de6670a89b442')
 
@@ -186,7 +186,7 @@ def main():
         for command in test_commands:
             execute_command(device_id, command)
 
-        cloud_script_name = 'METCIRT_RMM_Tool_Removal'
+        cloud_script_name = f'{config.team_name}_RMM_Tool_Removal'
         print(f'Running the script {cloud_script_name} on {hostname}')
         execute_script([hostname], cloud_script_name)
 

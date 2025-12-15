@@ -16,6 +16,9 @@ import pytz
 import services.xsoar as xsoar_old
 import services.xsoar_new as xsoar_new
 
+from my_config import get_config
+CONFIG = get_config()
+
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 log = logging.getLogger(__name__)
 
@@ -26,7 +29,7 @@ def test_ticket_search():
     print("TEST 1: Basic Ticket Search")
     print("="*80)
 
-    query = 'type:METCIRT -owner:"" -status:closed'
+    query = f'type:{CONFIG.team_name} -owner:"" -status:closed'
 
     try:
         print("\n[OLD] Fetching tickets with old implementation...")
@@ -64,7 +67,7 @@ def test_paginated_search():
     start_date = end_date - timedelta(days=7)
     start_str = start_date.strftime('%Y-%m-%dT%H:%M:%SZ')
 
-    query = f'type:METCIRT -owner:"" created:>{start_str}'
+    query = ff'type:{CONFIG.team_name} -owner:"" created:>{start_str}'
 
     try:
         print("\n[NEW] Fetching tickets with pagination...")
@@ -129,7 +132,7 @@ def test_incident_details():
         # First, get a recent incident ID
         print("\n[NEW] Fetching recent incident for testing...")
         handler = xsoar_new.TicketHandler()
-        tickets = handler.get_tickets('type:METCIRT -owner:""', paginate=False, size=1)
+        tickets = handler.get_tickets(f'type:{CONFIG.team_name} -owner:""', paginate=False, size=1)
 
         if not tickets:
             print("⚠️  No tickets found for testing, skipping test")

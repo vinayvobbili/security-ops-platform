@@ -37,6 +37,14 @@ except EncryptionError as e:
 
 
 def get_config():
+    # Derive company_name from MY_WEB_DOMAIN if COMPANY_NAME is not set
+    company_name = os.environ.get("COMPANY_NAME")
+    if not company_name:
+        web_domain = os.environ.get("MY_WEB_DOMAIN", "")
+        if web_domain:
+            # Extract company name from domain (e.g., company.com -> Acme)
+            company_name = web_domain.split('.')[0].title()
+
     return Config(
         webex_bot_access_token_moneyball=os.environ.get("WEBEX_BOT_ACCESS_TOKEN_MONEYBALL"),
         webex_bot_access_token_soar=os.environ.get("WEBEX_BOT_ACCESS_TOKEN_SOAR"),
@@ -85,6 +93,7 @@ def get_config():
         xsoar_lists_filename=os.environ.get("XSOAR_LISTS_FILENAME"),
         barnacles_approved_users=os.environ.get("BARNACLES_APPROVED_USERS"),
         team_name=os.environ.get("TEAM_NAME"),
+        company_name=company_name,  # Derived from MY_WEB_DOMAIN if not explicitly set
         ollama_llm_model=os.environ.get("OLLAMA_LLM_MODEL"),
         ollama_embedding_model=os.environ.get("OLLAMA_EMBEDDING_MODEL", "nomic-embed-text"),
         azdo_org=os.environ.get("AZDO_ORGANIZATION"),
@@ -205,6 +214,7 @@ class Config:
     xsoar_dev_auth_id: Optional[str] = None
     xsoar_lists_filename: Optional[str] = None
     team_name: Optional[str] = None
+    company_name: Optional[str] = None
     ollama_llm_model: Optional[str] = None
     ollama_embedding_model: Optional[str] = "nomic-embed-text"
     barnacles_approved_users: Optional[str] = None

@@ -49,7 +49,7 @@ def generate_daily_summary(tickets) -> str | None:
         df = pd.DataFrame(tickets)
 
         if 'owner' in df.columns:
-            df['owner'] = df['owner'].fillna('Unassigned').astype(str).str.replace('@company.com', '', regex=False)
+            df['owner'] = df['owner'].fillna('Unassigned').astype(str).str.replace(f'@{config.my_web_domain}', '', regex=False)
         else:
             df['owner'] = 'Unassigned'
 
@@ -105,7 +105,7 @@ def send_report(room_id=config.webex_room_id_vinay_test_space):
         webex_api.messages.create(
             roomId=room_id,
             text="Abandoned Tickets Summary!",
-            markdown=f'**Abandoned Tickets Summary** (Type=METCIRT - TP, Last Touched=7+ days ago)\n ``` \n {daily_summary}'
+            markdown=f'**Abandoned Tickets Summary** (Type={config.team_name} - TP, Last Touched=7+ days ago)\n ``` \n {daily_summary}'
         )
 
 

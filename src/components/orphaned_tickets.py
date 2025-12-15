@@ -39,7 +39,7 @@ def severity_to_name(severity):
 def send_report(room_id):
     try:
         ticket_handler = TicketHandler(XsoarEnvironment.PROD)
-        query = '-status:closed -category:job type:METCIRT owner:""'
+        query = f'-status:closed -category:job type:{CONFIG.team_name} owner:""'
         tickets = ticket_handler.get_tickets(query)
         if not tickets:
             return
@@ -66,7 +66,7 @@ def send_report(room_id):
             else:
                 created_dt = None
                 created_str = ''
-            ticket_type = t.get('type', '').replace('METCIRT', '').strip()
+            ticket_type = t.get('type', '').replace(CONFIG.team_name, '').strip()
             severity = severity_to_name(t.get('severity', 0))
             status = t.get('status', '')
             row = {

@@ -19,8 +19,12 @@ Example usage in XSOAR playbook:
 import json
 import uuid
 
-USER_REACH_OUT_FORMS_LIST_NAME = "METCIRT User Reach Out Forms"
-USER_REACH_OUT_FORMS_HISTORY_LIST_NAME = "METCIRT User Reach Out Forms History"
+# These should be configurable via environment, but for XSOAR scripts we keep them dynamic
+from my_config import get_config
+CONFIG = get_config()
+
+USER_REACH_OUT_FORMS_LIST_NAME = f"{CONFIG.team_name} User Reach Out Forms"
+USER_REACH_OUT_FORMS_HISTORY_LIST_NAME = f"{CONFIG.team_name} User Reach Out Forms History"
 TASK_NAME = "Does the user recognize the alert?"
 
 
