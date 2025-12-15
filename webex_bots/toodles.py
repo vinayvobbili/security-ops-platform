@@ -1217,16 +1217,16 @@ all_options_card = {
 
 def get_url_card():
     """
-    Get URL card with METCIRT URLs from XSOAR.
+    Get URL card with {CONFIG.team_name} URLs from XSOAR.
     Returns a card with error message if XSOAR is not configured or list is unavailable.
     """
     try:
-        metcirt_urls = prod_list_handler.get_list_data_by_name('METCIRT URLs')
+        metcirt_urls = prod_list_handler.get_list_data_by_name('{CONFIG.team_name} URLs')
         actions = []
 
         # Handle case where list is not found or XSOAR is not configured
         if metcirt_urls is None:
-            logger.warning("⚠️ METCIRT URLs list not available from XSOAR")
+            logger.warning("⚠️ {CONFIG.team_name} URLs list not available from XSOAR")
             actions = [{
                 "type": "Action.Submit",
                 "title": "URLs unavailable (XSOAR not configured)",
@@ -1398,7 +1398,7 @@ class IOCHunt(Command):
         incident = {
             'name': attachment_actions.inputs['ioc_hunt_title'].strip(),
             'details': attachment_actions.inputs['ioc_hunt_iocs'].strip(),
-            'type': "METCIRT IOC Hunt",
+            'type': f'{CONFIG.team_name} IOC Hunt',
             'CustomFields': {
                 'huntsource': 'Other'
             }
@@ -1773,7 +1773,7 @@ def add_entry_to_reviews(dict_full, ticket_id, person, date, message):
 
 
 def announce_new_threat_hunt(ticket_no, ticket_title, incident_url, person_id):
-    webex_data = prod_list_handler.get_list_data_by_name('METCIRT Webex')
+    webex_data = prod_list_handler.get_list_data_by_name('{CONFIG.team_name} Webex')
     request_headers = {
         'Content-Type': 'application/json',
         'Authorization': f"Bearer {CONFIG.webex_bot_access_token_toodles}"

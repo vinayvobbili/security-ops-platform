@@ -1,10 +1,10 @@
 """
 qa_tickets.py
 
-This module automates the creation of QA (Quality Assurance) tickets for closed METCIRT tickets in XSOAR and notifies designated QA leads via Webex.
+This module automates the creation of QA (Quality Assurance) tickets for closed security incident tickets in XSOAR and notifies designated QA leads via Webex.
 
 Main Features:
-- Fetches recently closed METCIRT tickets (excluding job category and those with owners).
+- Fetches recently closed security incident tickets (excluding job category and those with owners).
 - Groups tickets by their impact level.
 - Randomly selects a ticket from each impact group and assigns it to a QA lead in a round-robin fashion.
 - QA leads are loaded from and rotated in a JSON file (data/qa_leads.json) to ensure fair distribution.
@@ -74,11 +74,11 @@ def generate(room_id):
         week_start = today - timedelta(days=7)  # Go back 7 days to get previous Monday
         week_start_str = week_start.strftime('%Y-%m-%dT00:00:00 -0400')
 
-        query = f'status:closed -category:job type:METCIRT -owner:"" -type:"METCIRT IOC Hunt" closed:>="{week_start_str}"'
+        query = f'status:closed -category:job type:{CONFIG.team_name} -owner:"" -type:"{CONFIG.team_name} IOC Hunt" closed:>="{week_start_str}"'
 
         tickets = ticket_handler.get_tickets(query)
         if not tickets:
-            print("No METCIRT tickets were closed this week. Not creating QA tickets this week...")
+            print(f"No {CONFIG.team_name} tickets were closed this week. Not creating QA tickets this week...")
             return
         # --- Summary logic ---
         summary = summarize_tickets_by_impact(tickets)
@@ -103,7 +103,7 @@ def generate(room_id):
             if not detectionsource:
                 detectionsource = 'Unknown'
             new_ticket_payload = {
-                'type': 'METCIRT Ticket QA',
+                'type': f'{CONFIG.team_name} Ticket QA',
                 'owner': owner,
                 'name': 'QA ticket for --> ' + source_ticket.get('name'),
                 'details': source_ticket.get('details'),

@@ -154,7 +154,7 @@ def start(room_id):
     logger.debug(f"[SCHEDULER DEBUG] incident_declaration_sla_risk.start() called with room_id={room_id}")
     try:
         ticket_handler = TicketHandler(XsoarEnvironment.PROD)
-        query = '-status:closed -category:job type:METCIRT metcirtincidentnotificationsla.runStatus:running metcirtincidentnotificationsla.slaStatus:2'
+        query = f'-status:closed -category:job type:{CONFIG.team_name} metcirtincidentnotificationsla.runStatus:running metcirtincidentnotificationsla.slaStatus:2'
         tickets = ticket_handler.get_tickets(query)
 
         if not tickets:

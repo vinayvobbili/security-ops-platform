@@ -5,6 +5,9 @@ from typing import Dict, Any, Tuple
 
 from services.xsoar import TicketHandler
 
+from my_config import get_config
+CONFIG = get_config()
+
 logger = logging.getLogger(__name__)
 
 
@@ -107,7 +110,7 @@ def create_ioc_hunt(
     incident = {
         'name': ioc_title,
         'details': details,
-        'type': "METCIRT IOC Hunt",
+        'type': f'{CONFIG.team_name} IOC Hunt',
         'CustomFields': {
             'huntsource': 'Other'
         }

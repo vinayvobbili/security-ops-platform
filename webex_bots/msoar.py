@@ -159,7 +159,7 @@ def msoar_bot_factory() -> WebexBot:
         approved_users=approved_bot_emails,  # Allow other bots for peer ping
         # approved_rooms disabled - bot lacks spark:memberships_read scope for validation
         # Security: Only add this bot to authorized rooms to control access
-        bot_name="METCIRT SOAR",
+        bot_name=f"{CONFIG.team_name} SOAR",
         log_level="Warning",
         allow_bot_to_bot=True  # Enable peer ping health checks from other bots
     )
@@ -222,7 +222,7 @@ def main():
     signal.signal(signal.SIGTERM, _shutdown_handler)
     signal.signal(signal.SIGINT, _shutdown_handler)
 
-    logger.info("🚀 Starting METCIRT SOAR bot")
+    logger.info(f"🚀 Starting {CONFIG.team_name} SOAR bot")
 
     # Basic config validation before proceeding
     if not BOT_ACCESS_TOKEN:
@@ -235,12 +235,12 @@ def main():
     # Get and display bot information
     bot_info = get_bot_info(BOT_ACCESS_TOKEN)
     if bot_info:
-        logger.info(f"🤖 Bot name: {bot_info.get('displayName', 'METCIRT SOAR')}")
+        logger.info(f"🤖 Bot name: {bot_info.get('displayName', f'{CONFIG.team_name} SOAR')}")
         emails = bot_info.get('emails') or []
         if emails:
             logger.info(f"📧 Bot email: {emails[0]}")
     else:
-        logger.info("🤖 Bot name: METCIRT SOAR (fallback)")
+        logger.info(f"🤖 Bot name: {CONFIG.team_name} SOAR (fallback)")
 
     logger.info(f"📍 Notification room ID: {NOTIFICATION_ROOM_ID}")
 
