@@ -219,13 +219,13 @@ def seek_approval_to_ring_tag_tanium(room_id, total_hosts=None):
                 separator=True
             ),
             TextBlock(
-                text="Enter number of servers to randomly tag. Default is 10 for safety. Use higher numbers (100, 1000, etc.) after successful testing, or enter 'all' to tag all hosts.",
+                text="Enter number of servers to randomly tag. Default is 500. Use higher numbers (1000, 5000, etc.) for larger deployments, or enter 'all' to tag all hosts.",
                 wrap=True,
                 isSubtle=True
             ),
             TextInput(
                 id="batch_size",
-                placeholder="Default: 10 (or enter 100, 1000, 'all')",
+                placeholder="Default: 500 (or enter 1000, 5000, 'all')",
                 isRequired=False
             )
         ],
@@ -361,8 +361,8 @@ class RingTagTaniumHosts(Command):
         room_id = attachment_actions.roomId
 
         # Extract batch size from the form submission
-        # Default to 50 for safety if user leaves field blank
-        batch_size = 100
+        # Default to 500 if user leaves field blank
+        batch_size = 500
         # if hasattr(attachment_actions, 'inputs') and attachment_actions.inputs:
         #     batch_size_str = attachment_actions.inputs.get('batch_size', '').strip()
         #     if batch_size_str:
