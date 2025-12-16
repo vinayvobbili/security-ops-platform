@@ -1221,11 +1221,11 @@ def get_url_card():
     Returns a card with error message if XSOAR is not configured or list is unavailable.
     """
     try:
-        metcirt_urls = prod_list_handler.get_list_data_by_name('{CONFIG.team_name} URLs')
+        team_urls = prod_list_handler.get_list_data_by_name('{CONFIG.team_name} URLs')
         actions = []
 
         # Handle case where list is not found or XSOAR is not configured
-        if metcirt_urls is None:
+        if team_urls is None:
             logger.warning("⚠️ {CONFIG.team_name} URLs list not available from XSOAR")
             actions = [{
                 "type": "Action.Submit",
@@ -1234,7 +1234,7 @@ def get_url_card():
             }]
         else:
             # Iterate through the list of URLs and create button actions
-            for item in metcirt_urls:
+            for item in team_urls:
                 if "url" in item:  # Handle URL buttons with Action.OpenUrl
                     url = item['url']
                     # Ensure URL has a protocol (add https:// if missing)
@@ -1840,7 +1840,7 @@ class ContainmentStatusCS(Command):
         else:
             host_name_cs = attachment_actions.inputs['host_name_cs'].strip()
 
-        host_name_cs = host_name_cs.replace("METCIRT_Toodles status", "").strip()
+        host_name_cs = host_name_cs.replace(f"{CONFIG.team_name}_Toodles status", "").strip()
         if host_name_cs is None or host_name_cs == "":
             return "Please enter a host name and try again"
 

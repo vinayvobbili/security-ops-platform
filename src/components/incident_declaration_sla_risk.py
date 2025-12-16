@@ -66,7 +66,7 @@ def calculate_seconds_remaining(due_date_utc):
 def process_ticket(ticket):
     """Process a single ticket and return urgency data."""
     ticket_id = ticket.get('id')
-    incident_sla = ticket.get('CustomFields', {}).get('metcirtincidentnotificationsla', {})
+    incident_sla = ticket.get('CustomFields', {}).get('sirtincidentnotificationsla', {})
     due_date_str = incident_sla.get('dueDate')
 
     # Check if SLA is already breached
@@ -154,7 +154,7 @@ def start(room_id):
     logger.debug(f"[SCHEDULER DEBUG] incident_declaration_sla_risk.start() called with room_id={room_id}")
     try:
         ticket_handler = TicketHandler(XsoarEnvironment.PROD)
-        query = f'-status:closed -category:job type:{CONFIG.team_name} metcirtincidentnotificationsla.runStatus:running metcirtincidentnotificationsla.slaStatus:2'
+        query = f'-status:closed -category:job type:{CONFIG.team_name} sirtincidentnotificationsla.runStatus:running sirtincidentnotificationsla.slaStatus:2'
         tickets = ticket_handler.get_tickets(query)
 
         if not tickets:
@@ -166,7 +166,7 @@ def start(room_id):
             seconds_remaining, ticket_data, due_date_str = process_ticket(ticket)
 
             # Only include tickets that are at risk, not already breached
-            incident_sla = ticket_data.get('CustomFields', {}).get('metcirtincidentnotificationsla', {})
+            incident_sla = ticket_data.get('CustomFields', {}).get('sirtincidentnotificationsla', {})
             breach_triggered = incident_sla.get('breachTriggered', False)
             run_status = incident_sla.get('runStatus', '')
 

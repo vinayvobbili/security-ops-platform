@@ -30,7 +30,7 @@ log_queue: queue.Queue = queue.Queue(maxsize=1000)
 recent_lines: deque = deque(maxlen=300)  # Buffer of last 300 lines for new connections
 recent_lines_lock = threading.Lock()  # Protect the recent_lines buffer
 log_source_cmd: Optional[list[str]] = None
-auth_password: str = "metcirt"
+auth_password: str = "sirt"
 viewer_title: str = "Log Viewer"
 
 # HTML template with inline CSS
@@ -265,7 +265,7 @@ HTML_TEMPLATE = """
 
 def check_auth(username, password):
     """Check if username/password combination is valid."""
-    return username == "metcirt" and password == auth_password
+    return username == "sirt" and password == auth_password
 
 
 def authenticate():
@@ -402,8 +402,8 @@ def parse_args():
     parser.add_argument(
         '--password',
         type=str,
-        default='metcirt',
-        help='Password for HTTP Basic Auth (default: metcirt)'
+        default='sirt',
+        help='Password for HTTP Basic Auth (default: sirt)'
     )
 
     # Log source options - must specify one
@@ -461,7 +461,7 @@ def main():
     # Start Flask app
     logger.info(f"Starting log viewer on http://0.0.0.0:{args.port}")
     logger.info(f"Title: {viewer_title}")
-    logger.info(f"Auth: username=metcirt, password={auth_password}")
+    logger.info(f"Auth: username=sirt, password={auth_password}")
 
     try:
         # Use Flask's built-in server (fine for internal use with 7 viewers)

@@ -1,7 +1,9 @@
 #!/bin/bash
 # Start MacBook Sleep Monitor for Pokedex Bot
 
-PROJECT_DIR="/Users/user@company.com/PycharmProjects/IR"
+# Get project directory (3 levels up from this script)
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 SCRIPT_PATH="$PROJECT_DIR/src/pokedex/macbook_sleep_monitor.py"
 LOCK_FILE="/tmp/pokedex_macbook_sleep_monitor.lock"
 LOG_FILE="$PROJECT_DIR/logs/macbook_sleep_monitor.log"

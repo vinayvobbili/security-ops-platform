@@ -67,8 +67,8 @@ if __name__ == "__main__":
     tenant_id = "YOUR_TENANT_ID"
     scope = "https://outlook.office365.com/.default"
 
-    sender = "user@company.com"
-    recipient = "user@company.com"
+    sender = "sender@company.com"
+    recipient = "recipient@company.com"
     email_subject = "Test Email"
     email_body = "This is a test email sent from Python using Office 365 OAuth2!"
     cc_list = ["cc1@company.com", "cc2@company.com"]

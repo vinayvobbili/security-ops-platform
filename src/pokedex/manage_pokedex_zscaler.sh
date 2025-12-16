@@ -1,9 +1,12 @@
 #!/bin/bash
 # Pokedex ZScaler Monitor Management Script - Pokedex-specific only
 
-PLIST_FILE="/Users/user@company.com/Library/LaunchAgents/com.pokedex.zscaler.monitor.plist"
+# Get project directory (3 levels up from this script)
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
+
+PLIST_FILE="$HOME/Library/LaunchAgents/com.pokedex.zscaler.monitor.plist"
 SERVICE_NAME="com.pokedex.zscaler.monitor"
-PROJECT_DIR="/Users/user@company.com/PycharmProjects/IR"
 
 show_status() {
     echo "🔍 Pokedex ZScaler Monitor Status:"

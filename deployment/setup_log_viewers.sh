@@ -24,10 +24,10 @@ echo ""
 
 # Create htpasswd file for basic auth
 echo "Setting up password protection..."
-echo -n "metcirt" | sudo htpasswd -i -c /home/vinay/pub/IR/.htpasswd metcirt
+echo -n "sirt" | sudo htpasswd -i -c /home/vinay/pub/IR/.htpasswd sirt
 sudo chown vinay:vinay /home/vinay/pub/IR/.htpasswd
 sudo chmod 644 /home/vinay/pub/IR/.htpasswd
-echo "  ✓ Password configured (username: metcirt, password: metcirt)"
+echo "  ✓ Password configured (username: sirt, password: sirt)"
 echo ""
 
 # Ensure home directory is accessible for nginx
@@ -90,19 +90,19 @@ echo "✅ Log Viewers Setup Complete!"
 echo "================================================"
 echo ""
 echo "Landing page:"
-echo "  http://lab-vm-12.internal.company.com:8030"
-echo "  (Username: metcirt, Password: metcirt)"
+echo "  http://lab-vm-12.internal.example.com:8030"
+echo "  (Username: sirt, Password: sirt)"
 echo ""
 echo "Direct access URLs:"
-echo "  http://lab-vm-12.internal.company.com:8031 - All Services (journalctl)"
-echo "  http://lab-vm-12.internal.company.com:8032 - Toodles"
-echo "  http://lab-vm-12.internal.company.com:8033 - MSOAR"
-echo "  http://lab-vm-12.internal.company.com:8034 - MoneyBall"
-echo "  http://lab-vm-12.internal.company.com:8035 - Jarvis"
-echo "  http://lab-vm-12.internal.company.com:8036 - Barnacles"
-echo "  http://lab-vm-12.internal.company.com:8038 - TARS"
-echo "  http://lab-vm-12.internal.company.com:8037 - All Jobs"
-echo "  (Each protected with username: metcirt, password: metcirt)"
+echo "  http://lab-vm-12.internal.example.com:8031 - All Services (journalctl)"
+echo "  http://lab-vm-12.internal.example.com:8032 - Toodles"
+echo "  http://lab-vm-12.internal.example.com:8033 - MSOAR"
+echo "  http://lab-vm-12.internal.example.com:8034 - MoneyBall"
+echo "  http://lab-vm-12.internal.example.com:8035 - Jarvis"
+echo "  http://lab-vm-12.internal.example.com:8036 - Barnacles"
+echo "  http://lab-vm-12.internal.example.com:8038 - TARS"
+echo "  http://lab-vm-12.internal.example.com:8037 - All Jobs"
+echo "  (Each protected with username: sirt, password: sirt)"
 echo ""
 echo "Features:"
 echo "  ✓ Full log streaming (like tail -f)"

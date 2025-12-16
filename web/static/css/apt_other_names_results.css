@@ -44,7 +44,7 @@ body {
     position: relative;
     overflow: hidden;
     animation: fadeIn 1.2s cubic-bezier(.4, 0, .2, 1);
-    /* Add Acme branded background pattern */
+    /* Add branded background pattern */
     background: radial-gradient(circle at 20% 80%, rgba(0, 70, 173, 0.05) 0%, transparent 50%),
     radial-gradient(circle at 80% 20%, rgba(0, 166, 81, 0.05) 0%, transparent 50%);
 }

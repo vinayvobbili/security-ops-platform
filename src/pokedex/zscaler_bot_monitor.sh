@@ -10,7 +10,9 @@ BOT_RESTART_SCRIPT="restart_pokedex.sh"  # Restart script name
 BOT_DISPLAY_NAME="Pokedex"            # Display name for logs
 
 # Derived paths - these auto-adjust based on bot name
-PROJECT_DIR="/Users/user@company.com/PycharmProjects/IR"
+# Get project directory (3 levels up from this script)
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 LOG_FILE="$PROJECT_DIR/logs/$BOT_LOG_FILE"
 RESTART_SCRIPT="$PROJECT_DIR/src/$BOT_NAME/$BOT_RESTART_SCRIPT"
 MONITOR_LOG="$PROJECT_DIR/logs/${BOT_NAME}_zscaler_monitor.log"
