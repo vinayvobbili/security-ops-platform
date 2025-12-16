@@ -214,12 +214,20 @@ class ServiceNowClient:
         host_details = self._search_endpoint(self.workstation_url, hostname)
         if host_details:
             host_details['category'] = 'workstation'
+            # Override CI class for VMVDI hosts (always workstations regardless of SNOW data)
+            if hostname.upper().startswith('VMVDI'):
+                host_details['ciClass'] = 'Workstation'
             return host_details
 
         # Try servers first
         host_details = self._search_endpoint(self.server_url, hostname)
         if host_details:
             host_details['category'] = 'server'
+            # Override for VMVDI hosts - always treat as workstations regardless of SNOW classification
+            if hostname.upper().startswith('VMVDI'):
+                host_details['category'] = 'workstation'
+                host_details['ciClass'] = 'Workstation'
+                logger.debug(f"Overriding SNOW category for VMVDI host {hostname}: server → workstation")
             return host_details
 
         return {"name": hostname, "status": "Not Found"}
@@ -331,11 +339,18 @@ class AsyncServiceNowClient:
         result = await self._search_endpoint(session, self.server_url, hostname_short)
         if result:
             result['category'] = 'server'
+            # Override for VMVDI hosts - always treat as workstations regardless of SNOW classification
+            if hostname_short.upper().startswith('VMVDI'):
+                result['category'] = 'workstation'
+                result['ciClass'] = 'Workstation'
             return result
         # Try workstations
         result = await self._search_endpoint(session, self.workstation_url, hostname_short)
         if result:
             result['category'] = 'workstation'
+            # Override CI class for VMVDI hosts (always workstations regardless of SNOW data)
+            if hostname_short.upper().startswith('VMVDI'):
+                result['ciClass'] = 'Workstation'
             return result
         return {"name": hostname_short, "status": "Not Found"}
 
