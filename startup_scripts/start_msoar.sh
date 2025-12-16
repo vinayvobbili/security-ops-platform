@@ -4,23 +4,9 @@ cd /home/vinay/pub/IR || exit 1
 
 # Kill existing msoar process if running
 echo "Stopping existing MSOAR instances..."
-pkill -f "webex_bots/msoar"
-sleep 2
-
-# Force kill any remaining processes
-if pgrep -f "webex_bots/msoar" > /dev/null; then
-    echo "Force killing stubborn processes..."
-    pkill -9 -f "webex_bots/msoar"
-    sleep 1
-fi
-
-# Verify all processes are gone
-if pgrep -f "webex_bots/msoar" > /dev/null; then
-    echo "⚠️  Warning: Some MSOAR processes are still running:"
-    pgrep -f "webex_bots/msoar"
-    echo "Manual intervention required"
-    exit 1
-fi
+source /home/vinay/pub/IR/deployment/kill_process.sh
+kill_process_gracefully "webex_bots/msoar" "MSOAR" || exit 1
+sleep 1
 
 # Restart log viewer to ensure it shows latest logs
 /home/vinay/pub/IR/deployment/restart_log_viewer.sh 8033 "MSOAR Bot" /home/vinay/pub/IR/logs/msoar.log

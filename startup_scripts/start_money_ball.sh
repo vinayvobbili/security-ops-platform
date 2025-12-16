@@ -4,28 +4,8 @@ cd /home/vinay/pub/IR || exit 1
 
 # Kill existing money_ball process if running
 echo "Stopping existing Money Ball instances..."
-if pgrep -f "webex_bots/money_ball" > /dev/null; then
-    pkill -f "webex_bots/money_ball"
-    for i in {1..5}; do
-        if ! pgrep -f "webex_bots/money_ball" > /dev/null; then
-            echo "✅ Money Ball stopped gracefully"
-            break
-        fi
-        sleep 1
-    done
-    if pgrep -f "webex_bots/money_ball" > /dev/null; then
-        echo "⚠️  Graceful shutdown failed, force killing..."
-        pkill -9 -f "webex_bots/money_ball"
-        sleep 1
-        if pgrep -f "webex_bots/money_ball" > /dev/null; then
-            echo "❌ Error: Could not stop Money Ball process"
-            exit 1
-        fi
-        echo "✅ Money Ball force stopped"
-    fi
-else
-    echo "No existing Money Ball instances found"
-fi
+source /home/vinay/pub/IR/deployment/kill_process.sh
+kill_process_gracefully "webex_bots/money_ball" "Money Ball" || exit 1
 sleep 1
 
 # Restart log viewer to ensure it shows latest logs
