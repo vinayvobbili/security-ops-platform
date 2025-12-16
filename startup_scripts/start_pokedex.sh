@@ -4,7 +4,28 @@ cd /Users/user/PycharmProjects/IR || exit 1
 
 # Kill existing pokedex process if running
 echo "Stopping existing Pokedex instances..."
-pkill -f "webex_bots/pokedex"
+if pgrep -f "webex_bots/pokedex" > /dev/null; then
+    pkill -f "webex_bots/pokedex"
+    for i in {1..5}; do
+        if ! pgrep -f "webex_bots/pokedex" > /dev/null; then
+            echo "✅ Pokedex stopped gracefully"
+            break
+        fi
+        sleep 1
+    done
+    if pgrep -f "webex_bots/pokedex" > /dev/null; then
+        echo "⚠️  Graceful shutdown failed, force killing..."
+        pkill -9 -f "webex_bots/pokedex"
+        sleep 1
+        if pgrep -f "webex_bots/pokedex" > /dev/null; then
+            echo "❌ Error: Could not stop Pokedex process"
+            exit 1
+        fi
+        echo "✅ Pokedex force stopped"
+    fi
+else
+    echo "No existing Pokedex instances found"
+fi
 sleep 1
 
 # Note: Log file preserved for historical troubleshooting
