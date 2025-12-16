@@ -15,34 +15,8 @@ cd "$PROJECT_DIR" || exit 1
 
 # Kill existing TARS process if running
 echo "Stopping existing TARS instances..."
-if pgrep -f "webex_bots/tars" > /dev/null; then
-    # Try graceful shutdown first
-    pkill -f "webex_bots/tars"
-
-    # Wait up to 5 seconds for graceful shutdown
-    for i in {1..5}; do
-        if ! pgrep -f "webex_bots/tars" > /dev/null; then
-            echo "✅ TARS stopped gracefully"
-            break
-        fi
-        sleep 1
-    done
-
-    # If still running, force kill
-    if pgrep -f "webex_bots/tars" > /dev/null; then
-        echo "⚠️  Graceful shutdown failed, force killing..."
-        pkill -9 -f "webex_bots/tars"
-        sleep 1
-
-        if pgrep -f "webex_bots/tars" > /dev/null; then
-            echo "❌ Error: Could not stop TARS process"
-            exit 1
-        fi
-        echo "✅ TARS force stopped"
-    fi
-else
-    echo "No existing TARS instances found"
-fi
+source "$PROJECT_DIR/deployment/kill_process.sh"
+kill_process_gracefully "webex_bots/tars" "TARS" || exit 1
 sleep 1
 
 # Restart log viewer to ensure it shows latest logs

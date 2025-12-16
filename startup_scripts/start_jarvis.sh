@@ -14,28 +14,8 @@ cd "$PROJECT_ROOT" || exit 1
 
 # Kill existing jarvis process if running
 echo "Stopping existing Jarvis instances..."
-if pgrep -f "webex_bots/jarvis" > /dev/null; then
-    pkill -f "webex_bots/jarvis"
-    for i in {1..5}; do
-        if ! pgrep -f "webex_bots/jarvis" > /dev/null; then
-            echo "✅ Jarvis stopped gracefully"
-            break
-        fi
-        sleep 1
-    done
-    if pgrep -f "webex_bots/jarvis" > /dev/null; then
-        echo "⚠️  Graceful shutdown failed, force killing..."
-        pkill -9 -f "webex_bots/jarvis"
-        sleep 1
-        if pgrep -f "webex_bots/jarvis" > /dev/null; then
-            echo "❌ Error: Could not stop Jarvis process"
-            exit 1
-        fi
-        echo "✅ Jarvis force stopped"
-    fi
-else
-    echo "No existing Jarvis instances found"
-fi
+source "$PROJECT_ROOT/deployment/kill_process.sh"
+kill_process_gracefully "webex_bots/jarvis" "Jarvis" || exit 1
 sleep 1
 
 # Restart log viewer to ensure it shows latest logs
