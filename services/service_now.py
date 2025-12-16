@@ -512,11 +512,15 @@ if __name__ == "__main__":
         print(f"Name: {details.get('name')}")
         print(f"IP: {details.get('ipAddress')}")
         print(f"Category: {details.get('category')}")
+        print(f"CI Class: {details.get('ciClass')}")
         print(f"OS: {details.get('operatingSystem')}")
         print(f"Country: {details.get('country')}")
+        print(f"Supported Country: {details.get('supportedCountry')}")
         print(f"Status: {details.get('state')}")
+        print(f"Lifecycle Status: {details.get('lifecycleStatus')}")
         print(f"Domain: {details.get('osDomain')}")
         print(f"Environment: {details.get('environment')}")
+        print(f"ID: {details.get('id')}")
         if 'status' in details:
             print(f"SNOW Status: {details.get('status')}")
         if 'error' in details:
