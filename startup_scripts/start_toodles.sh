@@ -4,7 +4,28 @@ cd /home/vinay/pub/IR || exit 1
 
 # Kill existing toodles process if running
 echo "Stopping existing the notification service instances..."
-pkill -f "webex_bots/toodles"
+if pgrep -f "webex_bots/toodles" > /dev/null; then
+    pkill -f "webex_bots/toodles"
+    for i in {1..5}; do
+        if ! pgrep -f "webex_bots/toodles" > /dev/null; then
+            echo "✅ the notification service stopped gracefully"
+            break
+        fi
+        sleep 1
+    done
+    if pgrep -f "webex_bots/toodles" > /dev/null; then
+        echo "⚠️  Graceful shutdown failed, force killing..."
+        pkill -9 -f "webex_bots/toodles"
+        sleep 1
+        if pgrep -f "webex_bots/toodles" > /dev/null; then
+            echo "❌ Error: Could not stop the notification service process"
+            exit 1
+        fi
+        echo "✅ the notification service force stopped"
+    fi
+else
+    echo "No existing the notification service instances found"
+fi
 sleep 1
 
 # Restart log viewer to ensure it shows latest logs

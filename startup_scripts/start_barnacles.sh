@@ -4,7 +4,28 @@ cd /home/vinay/pub/IR || exit 1
 
 # Kill existing barnacles process if running
 echo "Stopping existing the alert triage service instances..."
-pkill -f "webex_bots/barnacles"
+if pgrep -f "webex_bots/barnacles" > /dev/null; then
+    pkill -f "webex_bots/barnacles"
+    for i in {1..5}; do
+        if ! pgrep -f "webex_bots/barnacles" > /dev/null; then
+            echo "✅ the alert triage service stopped gracefully"
+            break
+        fi
+        sleep 1
+    done
+    if pgrep -f "webex_bots/barnacles" > /dev/null; then
+        echo "⚠️  Graceful shutdown failed, force killing..."
+        pkill -9 -f "webex_bots/barnacles"
+        sleep 1
+        if pgrep -f "webex_bots/barnacles" > /dev/null; then
+            echo "❌ Error: Could not stop the alert triage service process"
+            exit 1
+        fi
+        echo "✅ the alert triage service force stopped"
+    fi
+else
+    echo "No existing the alert triage service instances found"
+fi
 sleep 1
 
 # Restart log viewer to ensure it shows latest logs

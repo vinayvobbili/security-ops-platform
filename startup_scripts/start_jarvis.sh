@@ -14,7 +14,28 @@ cd "$PROJECT_ROOT" || exit 1
 
 # Kill existing jarvis process if running
 echo "Stopping existing the orchestration service instances..."
-pkill -f "webex_bots/jarvis"
+if pgrep -f "webex_bots/jarvis" > /dev/null; then
+    pkill -f "webex_bots/jarvis"
+    for i in {1..5}; do
+        if ! pgrep -f "webex_bots/jarvis" > /dev/null; then
+            echo "✅ the orchestration service stopped gracefully"
+            break
+        fi
+        sleep 1
+    done
+    if pgrep -f "webex_bots/jarvis" > /dev/null; then
+        echo "⚠️  Graceful shutdown failed, force killing..."
+        pkill -9 -f "webex_bots/jarvis"
+        sleep 1
+        if pgrep -f "webex_bots/jarvis" > /dev/null; then
+            echo "❌ Error: Could not stop the orchestration service process"
+            exit 1
+        fi
+        echo "✅ the orchestration service force stopped"
+    fi
+else
+    echo "No existing the orchestration service instances found"
+fi
 sleep 1
 
 # Restart log viewer to ensure it shows latest logs
