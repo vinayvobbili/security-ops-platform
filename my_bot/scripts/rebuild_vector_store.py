@@ -28,10 +28,10 @@ def restart_preloader():
         if platform.system() == "Darwin":  # macOS
             print("🔄 Restarting macOS preloader service...")
             # Stop the service
-            subprocess.run(["launchctl", "stop", "com.acme.soc-bot-preloader"],
+            subprocess.run(["launchctl", "stop", "com.company.soc-bot-preloader"],
                            check=False, capture_output=True)
             # Start the service
-            subprocess.run(["launchctl", "start", "com.acme.soc-bot-preloader"],
+            subprocess.run(["launchctl", "start", "com.company.soc-bot-preloader"],
                            check=True, capture_output=True, text=True)
             print("✅ Preloader service restarted successfully!")
             print("🔥 Updated documents are now available for search!")
@@ -50,7 +50,7 @@ def restart_preloader():
     except subprocess.CalledProcessError as e:
         print(f"⚠️  Could not restart preloader service: {e}")
         print("   You may need to manually restart it:")
-        print("   macOS: launchctl stop/start com.acme.soc-bot-preloader")
+        print("   macOS: launchctl stop/start com.company.soc-bot-preloader")
         print("   Linux: sudo systemctl restart soc-bot-preloader")
     except Exception as e:
         print(f"⚠️  Error restarting preloader: {e}")

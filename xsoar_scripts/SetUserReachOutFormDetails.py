@@ -2,13 +2,13 @@
 XSOAR Script: Set User Reach Out Form Details
 
 Generates a unique form ID and saves user reach out form details to the
-"METCIRT User Reach Out Forms" list for tracking user verification workflows.
+"{CONFIG.team_name} User Reach Out Forms" list for tracking user verification workflows.
 
 Workflow:
 - Generates unique form ID from UUID
 - Retrieves current incident ID
 - Finds in-progress task ID by name ("Does the user recognize the alert?")
-- Appends form details to "METCIRT User Reach Out Forms" list using setList command
+- Appends form details to "{CONFIG.team_name} User Reach Out Forms" list using setList command
 
 Arguments:
 - None

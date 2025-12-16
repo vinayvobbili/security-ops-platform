@@ -42,7 +42,7 @@ def get_config():
     if not company_name:
         web_domain = os.environ.get("MY_WEB_DOMAIN", "")
         if web_domain:
-            # Extract company name from domain (e.g., company.com -> Acme)
+            # Extract company name from domain (e.g., company.com -> Company)
             company_name = web_domain.split('.')[0].title()
 
     return Config(

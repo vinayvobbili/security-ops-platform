@@ -42,13 +42,13 @@ elif [[ "$OSTYPE" == "darwin"* ]]; then
     echo "Using Python: $PYTHON_PATH"
     
     # Create LaunchAgent plist
-    cat > ~/Library/LaunchAgents/com.acme.soc-bot-preloader.plist << EOF
+    cat > ~/Library/LaunchAgents/com.company.soc-bot-preloader.plist << EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.acme.soc-bot-preloader</string>
+    <string>com.company.soc-bot-preloader</string>
     
     <key>ProgramArguments</key>
     <array>
@@ -81,12 +81,12 @@ elif [[ "$OSTYPE" == "darwin"* ]]; then
 EOF
     
     # Load the service
-    launchctl load ~/Library/LaunchAgents/com.acme.soc-bot-preloader.plist
+    launchctl load ~/Library/LaunchAgents/com.company.soc-bot-preloader.plist
     
     echo "✅ Service installed and loaded!"
     echo "📋 Available commands:"
-    echo "   • Start:   launchctl start com.acme.soc-bot-preloader"
-    echo "   • Stop:    launchctl stop com.acme.soc-bot-preloader"
+    echo "   • Start:   launchctl start com.company.soc-bot-preloader"
+    echo "   • Stop:    launchctl stop com.company.soc-bot-preloader"
     echo "   • Status:  launchctl list | grep soc-bot-preloader"
     echo "   • Logs:    tail -f /tmp/soc-bot-preloader.log"
     

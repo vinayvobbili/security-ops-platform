@@ -104,7 +104,7 @@ def test_list_operations():
 
         # Test getting specific list
         if new_lists:
-            list_name = new_lists[0].get('id', 'METCIRT Blocked Domains')
+            list_name = new_lists[0].get('id', f'{CONFIG.team_name} Blocked Domains')
             print(f"\n[NEW] Testing get_list_data_by_name('{list_name}')...")
             list_data = new_handler.get_list_data_by_name(list_name)
             if list_data is not None:

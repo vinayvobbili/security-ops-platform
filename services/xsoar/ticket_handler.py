@@ -1066,7 +1066,7 @@ class TicketHandler:
             ApiException: If API call fails after retries
 
         Example:
-            handler.execute_command_in_war_room("123456", "!ad-get-user username=user")
+            handler.execute_command_in_war_room("123456", "!ad-get-user username=jsmith")
         """
         log.debug(f"Executing war room command in ticket {incident_id}: {command}")
         result = self._create_entry(incident_id, command, '/xsoar/entry', markdown=False)

@@ -157,7 +157,7 @@ body {
     opacity: 0.3;
 }
 
-/* Enhanced Navigation Dots with Acme styling - repositioned below chart */
+/* Enhanced Navigation Dots with brand styling - repositioned below chart */
 .nav-buttons {
     position: relative; /* no longer fixed overlay */
     bottom: auto;
@@ -209,7 +209,7 @@ body {
     font-weight: 700;
 }
 
-/* Enhanced Control Buttons with Acme branding - Updated positioning */
+/* Enhanced Control Buttons with brand branding - Updated positioning */
 #reloadButton, #pausePlayButton {
     position: fixed;
     width: 45px;
@@ -432,7 +432,7 @@ body {
     }
 }
 
-/* Loading animation with Acme colors */
+/* Loading animation with brand colors */
 .loading-overlay {
     position: fixed;
     top: 0;

@@ -357,7 +357,7 @@ def handle_red_team_testing_form_submission():
 @app.route('/favicon.ico')
 def favicon():
     """Serve the favicon icon."""
-    return app.send_static_file('icons/acme-fav-icon.png')
+    return app.send_static_file('icons/company-fav-icon.png')
 
 
 @app.route("/api/apt-names", methods=["GET"])

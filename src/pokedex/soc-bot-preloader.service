@@ -5,7 +5,7 @@ Wants=network.target
 
 [Service]
 Type=simple
-User=user
+User=vvobbilichetty
 Group=staff
 WorkingDirectory=/Users/<redacted-email>/PycharmProjects/IR
 Environment=PATH=/usr/local/bin:/usr/bin:/bin

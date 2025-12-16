@@ -2,7 +2,9 @@
 # the security assistant bot ZScaler Monitor - MacBook sleep/wake resilience for the security assistant bot bot only
 # Monitors for ZScaler connection kills and automatically restarts the security assistant bot
 
-PROJECT_DIR="/Users/<redacted-email>/PycharmProjects/IR"
+# Get project directory (3 levels up from this script)
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 LOG_FILE="$PROJECT_DIR/logs/pokedex.log"
 RESTART_SCRIPT="$PROJECT_DIR/src/pokedex/restart_pokedex.sh"
 MONITOR_LOG="$PROJECT_DIR/logs/pokedex_zscaler_monitor.log"

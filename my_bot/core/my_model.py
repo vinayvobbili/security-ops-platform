@@ -17,7 +17,7 @@ Features:
 - Automatic session cleanup and health monitoring
 - 4K character context window with token limits
 
-Created for Acme Security Operations
+Created for Security Operations
 """
 import logging
 import time

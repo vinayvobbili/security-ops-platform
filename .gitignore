@@ -26,6 +26,10 @@ Thumbs.db
 logs/
 *.log
 
+# Backup files
+*.bak
+*.backup
+
 # Generated data and indexes
 faiss_index_ollama/
 performance_data.json
@@ -48,3 +52,4 @@ nohup.out*
 # Additional cert paths
 data/certs/
 package-lock.json
+..bfg-report/

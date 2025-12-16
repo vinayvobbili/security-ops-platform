@@ -305,8 +305,8 @@ class ServiceNowClient:
     def get_process_changes(self, params=None):
         """Get process changes from ServiceNow custom endpoint."""
         base_url = config.snow_base_url.rstrip('/')
-        endpoint = f"{base_url}/api/x_metli_acme_it/process/changes"
-        # endpoint = 'https://acmeprod.service-now.com/api/x_metli_acme_it/process/changes'
+        endpoint = f"{base_url}/api/x_company_it/process/changes"
+        # endpoint = 'https://company-prod.service-now.com/api/x_company_it/process/changes'
         headers = self.token_manager.get_auth_headers()
         try:
             response = self.session.get(endpoint, headers=headers, params=params, timeout=10, verify=False)
@@ -519,7 +519,7 @@ def enrich_host_report(input_file):
 if __name__ == "__main__":
     client = ServiceNowClient()
 
-    hostname = "USHZK3C64.internal.company.com"
+    hostname = "USHZK3C64.internal.example.com"
     logger.info(f"Looking up in SNOW: {hostname}...")
 
     details = client.get_host_details(hostname)

@@ -118,7 +118,7 @@
     transform: translateY(-50%) rotate(180deg) scale(1.1);
 }
 
-/* Enhanced form with Acme styling and visual interest */
+/* Enhanced form with brand styling and visual interest */
 form {
     background: rgba(255, 255, 255, 0.95);
     padding: 25px;
@@ -163,7 +163,7 @@ form::after {
     animation: rotate 20s linear infinite;
 }
 
-/* Acme branded loading spinner */
+/* brand branded loading spinner */
 .spinner {
     width: 20px;
     height: 20px;
@@ -184,7 +184,7 @@ form::after {
     }
 }
 
-/* Enhanced nav music button with Acme colors */
+/* Enhanced nav music button with brand colors */
 .nav-music button:hover {
     transform: scale(1.1);
     transition: transform 0.2s ease;
@@ -264,7 +264,7 @@ form::after {
     box-shadow: 0 0 15px rgba(0, 166, 81, 0.3);
 }
 
-/* Style the metadata slider area with Acme colors */
+/* Style the metadata slider area with brand colors */
 .metadata-slider-container {
     display: flex;
     align-items: center;
@@ -342,7 +342,7 @@ form::after {
     margin-left: auto; /* Push button to the right */
 }
 
-/* Acme branded title */
+/* brand branded title */
 h1 {
     color: var(--brand-primary);
     text-align: center;

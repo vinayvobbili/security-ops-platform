@@ -16,7 +16,7 @@
 
     To increase timeout in XSOAR:
     1. Go to Settings > Automations & Scripts
-    2. Find "METCIRT_Qradar_IOC_Hunt" (or this script name)
+    2. Find "{CONFIG.team_name}_Qradar_IOC_Hunt" (or this script name)
     3. Click Edit > Advanced Settings
     4. Set "Timeout" to 3600 seconds (60 minutes) or higher
     5. Save
@@ -37,6 +37,9 @@
 '''
 
 import json
+
+from my_config import get_config
+CONFIG = get_config()
 
 QRADAR_INSTANCE = "QRadar_v3_instance_1"
 XSOAR_TICKET_ID = demisto.incidents()[0].get("id")
@@ -321,7 +324,7 @@ def hunt_dispatcher(TYPE, IOCS):
                 # Get IOC verdict
                 ioc_value = event.get('IOC', 'UNKNOWN')
                 print(f"[DEBUG] hunt_dispatcher() Getting verdict for IOC: {ioc_value}")
-                Verdict = demisto.executeCommand("METCIRT_Get_IOC_Verdict", {'IOC': ioc_value})[0]['Contents']
+                Verdict = demisto.executeCommand(f"{CONFIG.team_name}_Get_IOC_Verdict", {'IOC': ioc_value})[0]['Contents']
                 event['Verdict'] = Verdict
                 print(f"[DEBUG] hunt_dispatcher() Verdict for {ioc_value}: {Verdict}")
 

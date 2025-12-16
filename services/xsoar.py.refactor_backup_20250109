@@ -1285,7 +1285,7 @@ class TicketHandler:
 
         Example:
             # Safe: Query Active Directory user information
-            handler.execute_command_in_war_room("123456", "!ad-get-user username=user")
+            handler.execute_command_in_war_room("123456", "!ad-get-user username=vvobbilichetty")
 
             # Safe: Get incident context
             handler.execute_command_in_war_room("123456", "!Print value=${incident}")
@@ -1767,7 +1767,7 @@ def main():
     # print(dev_ticket_handler.create_new_entry_in_existing_ticket(ticket_id, "This is my note"))
     #
     # Example: Execute war room command
-    # print(dev_ticket_handler.execute_command_in_war_room(ticket_id, "!ad-get-user username=user"))
+    # print(dev_ticket_handler.execute_command_in_war_room(ticket_id, "!ad-get-user username=vvobbilichetty"))
     #
     # Example: Upload file to ATTACHMENTS field (use this for incident attachments)
     # file_path = "/path/to/file.pdf"

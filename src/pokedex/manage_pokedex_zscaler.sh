@@ -1,9 +1,12 @@
 #!/bin/bash
 # the security assistant bot ZScaler Monitor Management Script - the security assistant bot-specific only
 
-PLIST_FILE="/Users/<redacted-email>/Library/LaunchAgents/com.pokedex.zscaler.monitor.plist"
+# Get project directory (3 levels up from this script)
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
+
+PLIST_FILE="$HOME/Library/LaunchAgents/com.pokedex.zscaler.monitor.plist"
 SERVICE_NAME="com.pokedex.zscaler.monitor"
-PROJECT_DIR="/Users/<redacted-email>/PycharmProjects/IR"
 
 show_status() {
     echo "🔍 the security assistant bot ZScaler Monitor Status:"

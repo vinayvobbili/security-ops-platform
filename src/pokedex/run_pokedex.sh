@@ -4,8 +4,12 @@
 # Save current directory
 ORIGINAL_DIR=$(pwd)
 
+# Get project directory (3 levels up from this script)
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
+
 # Change to project directory
-cd /Users/<redacted-email>/PycharmProjects/IR || exit 1
+cd "$PROJECT_DIR" || exit 1
 
 echo "🚀 Starting the security assistant bot SOC Bot..."
 
@@ -28,7 +32,7 @@ fi
 # Activate virtual environment and run bot
 echo "🤖 Starting the security assistant bot bot..."
 source .venv/bin/activate
-export PYTHONPATH="/Users/<redacted-email>/PycharmProjects/IR:$PYTHONPATH"
+export PYTHONPATH="$PROJECT_DIR:$PYTHONPATH"
 python webex_bots/pokedex.py
 
 # Return to original directory
