@@ -11,6 +11,13 @@ from datetime import datetime
 from typing import Any, Dict, Optional
 
 import requests
+
+# CRITICAL: Apply WebSocket patch BEFORE importing webex_bot
+# This must come before any webex_bot imports to properly monkey-patch the WebSocket client
+from src.utils.enhanced_websocket_client import patch_websocket_client
+patch_websocket_client()
+
+# Now import webex_bot (after patch is applied)
 from webex_bot.models.command import Command
 from webex_bot.webex_bot import WebexBot
 
