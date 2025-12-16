@@ -1,10 +1,10 @@
-/* Acme Brand Colors */
+/* Brand Colors - Configurable for different organizations */
 :root {
-    --acme-blue: #0046AD;
-    --acme-green: #00A651;
-    --acme-light-blue: #4A8BC2;
-    --acme-dark-blue: #003875;
-    --acme-gray: #F5F5F5;
+    --brand-primary: #0046AD;       /* Primary brand color */
+    --brand-accent: #00A651;        /* Accent/highlight color */
+    --brand-light: #4A8BC2;         /* Lighter primary */
+    --brand-dark: #003875;          /* Darker primary */
+    --brand-gray: #F5F5F5;          /* Background gray */
 }
 
 body {
@@ -13,7 +13,7 @@ body {
     margin: 2rem auto;
     padding: 0 1rem 2rem 1rem;
     min-height: auto;
-    background: linear-gradient(135deg, var(--acme-blue) 0%, var(--acme-light-blue) 50%, var(--acme-green) 100%);
+    background: linear-gradient(135deg, var(--brand-primary) 0%, var(--brand-light) 50%, var(--brand-accent) 100%);
     position: relative;
     overflow-x: hidden; /* Only hide horizontal overflow */
     padding-top: 56px;
@@ -202,7 +202,7 @@ input:checked + .slider:before {
     gap: 1rem;
 }
 .submit-btn .primary-btn, .primary-btn {
-    background: linear-gradient(135deg, var(--acme-blue), var(--acme-light-blue));
+    background: linear-gradient(135deg, var(--brand-primary), var(--brand-light));
     color: #fff;
     border: none;
     border-radius: 8px;
@@ -218,13 +218,13 @@ input:checked + .slider:before {
     transform: translateY(0);
 }
 .submit-btn .primary-btn:hover, .primary-btn:hover {
-    background: linear-gradient(135deg, var(--acme-green), var(--acme-blue));
+    background: linear-gradient(135deg, var(--brand-accent), var(--brand-primary));
     box-shadow: 0 6px 20px rgba(0,166,81,0.4);
     transform: translateY(-2px);
 }
 
 .secondary-btn {
-    background: linear-gradient(135deg, var(--acme-green), var(--acme-light-blue));
+    background: linear-gradient(135deg, var(--brand-accent), var(--brand-light));
     color: #fff;
     border: none;
     border-radius: 8px;
@@ -241,7 +241,7 @@ input:checked + .slider:before {
 }
 
 .secondary-btn:hover {
-    background: linear-gradient(135deg, var(--acme-blue), var(--acme-green));
+    background: linear-gradient(135deg, var(--brand-primary), var(--brand-accent));
     box-shadow: 0 6px 20px rgba(0,70,173,0.4);
     transform: translateY(-2px);
 }

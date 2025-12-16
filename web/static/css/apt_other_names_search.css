@@ -1,10 +1,10 @@
-/* APT Other Names Search Page Styles - Acme Branded */
+/* APT Other Names Search Page Styles */
 :root {
-    --acme-blue: #0046AD;
-    --acme-green: #00A651;
-    --acme-light-blue: #4A8BC2;
-    --acme-dark-blue: #003875;
-    --acme-gray: #F5F5F5;
+    --brand-primary: #0046AD;       /* Primary brand color */
+    --brand-accent: #00A651;        /* Accent/highlight color */
+    --brand-light: #4A8BC2;         /* Lighter primary */
+    --brand-dark: #003875;          /* Darker primary */
+    --brand-gray: #F5F5F5;          /* Background gray */
 }
 
 .autocomplete-container {
@@ -19,7 +19,7 @@
     left: 0;
     right: 0;
     background: white;
-    border: 1px solid var(--acme-green);
+    border: 1px solid var(--brand-accent);
     border-top: none;
     max-height: 400px;
     overflow-y: auto;
@@ -32,7 +32,7 @@
 .autocomplete-item {
     padding: 12px 16px;
     cursor: pointer;
-    border-bottom: 1px solid var(--acme-gray);
+    border-bottom: 1px solid var(--brand-gray);
     font-size: 14px;
     transition: all 0.2s ease;
     position: relative;
@@ -40,10 +40,10 @@
 
 .autocomplete-item:hover,
 .autocomplete-item.highlighted {
-    background: linear-gradient(135deg, var(--acme-blue) 0%, var(--acme-green) 100%);
+    background: linear-gradient(135deg, var(--brand-primary) 0%, var(--brand-accent) 100%);
     color: white;
     transform: translateX(4px);
-    border-left: 3px solid var(--acme-green);
+    border-left: 3px solid var(--brand-accent);
 }
 
 .autocomplete-item:last-child {
@@ -63,11 +63,11 @@
     padding: 12px 16px;
     padding-right: 40px;
     position: relative;
-    border: 2px solid var(--acme-light-blue);
+    border: 2px solid var(--brand-light);
     border-radius: 8px;
     font-size: 16px;
     transition: all 0.3s ease;
-    background: linear-gradient(145deg, #ffffff, var(--acme-gray));
+    background: linear-gradient(145deg, #ffffff, var(--brand-gray));
     position: relative;
     z-index: 1;
 }
@@ -91,7 +91,7 @@
 }
 
 #common_name:focus {
-    border-color: var(--acme-blue);
+    border-color: var(--brand-primary);
     box-shadow: 0 0 20px rgba(0, 70, 173, 0.3);
     outline: none;
     transform: translateY(-2px);
@@ -102,7 +102,7 @@
     right: 12px;
     top: 50%;
     transform: translateY(-50%);
-    color: var(--acme-light-blue);
+    color: var(--brand-light);
     pointer-events: auto;
     font-size: 14px;
     transition: all 0.3s ease;
@@ -114,7 +114,7 @@
 }
 
 .dropdown-indicator:hover {
-    color: var(--acme-green);
+    color: var(--brand-accent);
     transform: translateY(-50%) rotate(180deg) scale(1.1);
 }
 
@@ -167,8 +167,8 @@ form::after {
 .spinner {
     width: 20px;
     height: 20px;
-    border: 2px solid var(--acme-gray);
-    border-top: 2px solid var(--acme-green);
+    border: 2px solid var(--brand-gray);
+    border-top: 2px solid var(--brand-accent);
     border-radius: 50%;
     animation: spin 0.8s linear infinite;
     display: inline-block;
@@ -202,7 +202,7 @@ form::after {
 
 .response-format-label {
     font-weight: 500;
-    color: var(--acme-dark-blue);
+    color: var(--brand-dark);
     font-size: 14px;
     white-space: nowrap;
     line-height: 30px;
@@ -217,14 +217,14 @@ form::after {
 
 .slider-option {
     font-weight: 500;
-    color: var(--acme-dark-blue);
+    color: var(--brand-dark);
     font-size: 14px;
     transition: all 0.3s ease;
     cursor: pointer;
 }
 
 .slider-option.active {
-    color: var(--acme-green);
+    color: var(--brand-accent);
     font-weight: 700;
 }
 
@@ -232,9 +232,9 @@ form::after {
     position: relative;
     width: 60px;
     height: 30px;
-    background: var(--acme-gray);
+    background: var(--brand-gray);
     border-radius: 15px;
-    border: 2px solid var(--acme-light-blue);
+    border: 2px solid var(--brand-light);
     cursor: pointer;
     transition: all 0.3s ease;
     box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
@@ -248,7 +248,7 @@ form::after {
     left: 2px;
     width: 22px;
     height: 22px;
-    background: linear-gradient(135deg, var(--acme-blue), var(--acme-green));
+    background: linear-gradient(135deg, var(--brand-primary), var(--brand-accent));
     border-radius: 50%;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     box-shadow: 0 2px 6px rgba(0, 70, 173, 0.3);
@@ -256,11 +256,11 @@ form::after {
 
 .response-format-slider.json::before {
     transform: translateX(30px);
-    background: linear-gradient(135deg, var(--acme-green), var(--acme-dark-blue));
+    background: linear-gradient(135deg, var(--brand-accent), var(--brand-dark));
 }
 
 .response-format-slider:hover {
-    border-color: var(--acme-green);
+    border-color: var(--brand-accent);
     box-shadow: 0 0 15px rgba(0, 166, 81, 0.3);
 }
 
@@ -274,7 +274,7 @@ form::after {
 
 .metadata-slider-label {
     font-weight: 500;
-    color: var(--acme-dark-blue);
+    color: var(--brand-dark);
     font-size: 14px;
     white-space: nowrap;
     line-height: 30px;
@@ -283,14 +283,14 @@ form::after {
 
 .metadata-slider-option {
     font-weight: 500;
-    color: var(--acme-dark-blue);
+    color: var(--brand-dark);
     font-size: 14px;
     transition: all 0.3s ease;
     cursor: pointer;
 }
 
 .metadata-slider-option.active {
-    color: var(--acme-green);
+    color: var(--brand-accent);
     font-weight: 700;
 }
 
@@ -298,9 +298,9 @@ form::after {
     position: relative;
     width: 60px;
     height: 30px;
-    background: var(--acme-gray);
+    background: var(--brand-gray);
     border-radius: 15px;
-    border: 2px solid var(--acme-light-blue);
+    border: 2px solid var(--brand-light);
     cursor: pointer;
     transition: all 0.3s ease;
     box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
@@ -314,7 +314,7 @@ form::after {
     left: 2px;
     width: 22px;
     height: 22px;
-    background: linear-gradient(135deg, var(--acme-blue), var(--acme-green));
+    background: linear-gradient(135deg, var(--brand-primary), var(--brand-accent));
     border-radius: 50%;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     box-shadow: 0 2px 6px rgba(0, 70, 173, 0.3);
@@ -322,16 +322,16 @@ form::after {
 
 .metadata-slider.yes::before {
     transform: translateX(30px);
-    background: linear-gradient(135deg, var(--acme-green), var(--acme-dark-blue));
+    background: linear-gradient(135deg, var(--brand-accent), var(--brand-dark));
 }
 
 .metadata-slider.no::before {
     transform: translateX(0px);
-    background: linear-gradient(135deg, var(--acme-blue), var(--acme-green));
+    background: linear-gradient(135deg, var(--brand-primary), var(--brand-accent));
 }
 
 .metadata-slider:hover {
-    border-color: var(--acme-green);
+    border-color: var(--brand-accent);
     box-shadow: 0 0 15px rgba(0, 166, 81, 0.3);
 }
 
@@ -344,7 +344,7 @@ form::after {
 
 /* Acme branded title */
 h1 {
-    color: var(--acme-blue);
+    color: var(--brand-primary);
     text-align: center;
     margin-bottom: 25px;
     font-size: 2.2em;
@@ -361,7 +361,7 @@ h1::before {
     left: -5px;
     right: -5px;
     bottom: -5px;
-    background: linear-gradient(45deg, var(--acme-blue), var(--acme-green), var(--acme-blue));
+    background: linear-gradient(45deg, var(--brand-primary), var(--brand-accent), var(--brand-primary));
     border-radius: 8px;
     z-index: -1;
     opacity: 0;
@@ -371,13 +371,13 @@ h1::before {
 /* Enhanced help text with pulse animation */
 .help-text {
     font-size: 12px;
-    color: var(--acme-dark-blue);
+    color: var(--brand-dark);
     margin-top: 6px;
     font-style: italic;
     padding: 8px 12px;
-    background: linear-gradient(135deg, var(--acme-gray), #e8f4fd);
+    background: linear-gradient(135deg, var(--brand-gray), #e8f4fd);
     border-radius: 6px;
-    border-left: 3px solid var(--acme-green);
+    border-left: 3px solid var(--brand-accent);
     animation: fadeIn 0.5s ease-in, subtlePulse 4s ease-in-out infinite;
     position: relative;
     overflow: hidden;
@@ -423,7 +423,7 @@ h1::before {
 
 /* Enhanced button with more dramatic effects */
 button[type="submit"] {
-    background: linear-gradient(135deg, var(--acme-blue), var(--acme-green));
+    background: linear-gradient(135deg, var(--brand-primary), var(--brand-accent));
     color: white;
     border: none;
     padding: 12px 24px;
@@ -587,7 +587,7 @@ button[type="submit"]:hover::before {
 
 /* Page-specific styling using class to avoid overriding common.css */
 .apt-search-page {
-    background: linear-gradient(135deg, var(--acme-blue) 0%, var(--acme-light-blue) 50%, var(--acme-green) 100%);
+    background: linear-gradient(135deg, var(--brand-primary) 0%, var(--brand-light) 50%, var(--brand-accent) 100%);
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     min-height: 100vh;
 }
@@ -629,7 +629,7 @@ button[type="submit"]:hover::before {
 
 label {
     font-weight: 600;
-    color: var(--acme-dark-blue);
+    color: var(--brand-dark);
     margin-bottom: 8px;
     display: block;
 }
