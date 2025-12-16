@@ -43,10 +43,10 @@
         <div class="form-group inline-field-container">
             <label for="email_local" class="inline-label">Your email address:</label>
             <input type="text" id="email_local" name="email_local" class="email-input" placeholder="username" required>
-            <span class="field-suffix">@company.com</span>
+            <span class="field-suffix">@{{ config.email_domain }}</span>
         </div>
         <div style="display: flex; flex-direction: row; gap: 1rem; align-items: center; justify-content: space-between;">
-            <button type="button" class="current-entries-btn" onclick="window.open('http://gdnr.company.com/get-approved-testing-entries', '_blank')">Current Entries</button>
+            <button type="button" class="current-entries-btn" onclick="window.open('/get-approved-testing-entries', '_blank')">Current Entries</button>
             <button type="submit">Submit</button>
         </div>
     </form>

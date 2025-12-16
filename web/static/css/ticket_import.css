@@ -1,10 +1,10 @@
-/* MetLife Brand Colors */
+/* Brand Colors - Configurable for different organizations */
 :root {
-    --metlife-blue: #0046AD;
-    --metlife-green: #00A651;
-    --metlife-light-blue: #4A8BC2;
-    --metlife-dark-blue: #003875;
-    --metlife-gray: #F5F5F5;
+    --brand-primary: #0046AD;       /* Primary brand color */
+    --brand-accent: #00A651;        /* Accent/highlight color */
+    --brand-light: #4A8BC2;         /* Lighter primary */
+    --brand-dark: #003875;          /* Darker primary */
+    --brand-gray: #F5F5F5;          /* Background gray */
     --primary: #4a6cf7;
     --primary-dark: #3b5cde;
     --secondary: #6c4af7;
@@ -16,7 +16,7 @@
 
 body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    background: linear-gradient(135deg, var(--metlife-blue) 0%, var(--metlife-light-blue) 50%, var(--metlife-green) 100%);
+    background: linear-gradient(135deg, var(--brand-primary) 0%, var(--brand-light) 50%, var(--brand-accent) 100%);
     margin: 0;
     padding: 0;
     display: flex;

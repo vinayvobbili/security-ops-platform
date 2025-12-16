@@ -1,10 +1,10 @@
-/* MetLife Brand Colors */
+/* Brand Colors - Configurable for different organizations */
 :root {
-    --metlife-blue: #0046AD;
-    --metlife-green: #00A651;
-    --metlife-light-blue: #4A8BC2;
-    --metlife-dark-blue: #003875;
-    --metlife-gray: #F5F5F5;
+    --brand-primary: #0046AD;       /* Primary brand color */
+    --brand-accent: #00A651;        /* Accent/highlight color */
+    --brand-light: #4A8BC2;         /* Lighter primary */
+    --brand-dark: #003875;          /* Darker primary */
+    --brand-gray: #F5F5F5;          /* Background gray */
 }
 
 /* Page-specific layout (scoped to avoid overriding common nav) */
@@ -110,7 +110,7 @@ textarea {
 }
 
 button[type="submit"] {
-    background: linear-gradient(135deg, var(--metlife-blue), var(--metlife-light-blue));
+    background: linear-gradient(135deg, var(--brand-primary), var(--brand-light));
     color: #fff;
     padding: 0.8rem 2.5rem;
     border: none;
@@ -126,13 +126,13 @@ button[type="submit"] {
 }
 
 button[type="submit"]:hover {
-    background: linear-gradient(135deg, var(--metlife-green), var(--metlife-blue));
+    background: linear-gradient(135deg, var(--brand-accent), var(--brand-primary));
     box-shadow: 0 6px 20px rgba(0,166,81,0.4);
     transform: translateY(-2px);
 }
 
 .current-entries-btn {
-    background: linear-gradient(135deg, var(--metlife-green), var(--metlife-light-blue));
+    background: linear-gradient(135deg, var(--brand-accent), var(--brand-light));
     color: #fff;
     padding: 0.8rem 2rem;
     border: none;
@@ -148,7 +148,7 @@ button[type="submit"]:hover {
 }
 
 .current-entries-btn:hover {
-    background: linear-gradient(135deg, var(--metlife-blue), var(--metlife-green));
+    background: linear-gradient(135deg, var(--brand-primary), var(--brand-accent));
     box-shadow: 0 6px 20px rgba(0,70,173,0.4);
     transform: translateY(-2px);
 }
@@ -193,7 +193,7 @@ button[type="submit"]:hover {
 }
 
 .keep-until-date:focus {
-    border-color: var(--metlife-blue);
+    border-color: var(--brand-primary);
     outline: none;
     box-shadow: 0 0 0 3px rgba(0, 70, 173, 0.1);
     background-color: #f8faff;
@@ -211,7 +211,7 @@ button[type="submit"]:hover {
 }
 
 .email-input:focus {
-    border-color: var(--metlife-blue);
+    border-color: var(--brand-primary);
     outline: none;
     box-shadow: 0 0 0 3px rgba(0, 70, 173, 0.1);
     background-color: #f8faff;

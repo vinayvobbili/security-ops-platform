@@ -1,25 +1,25 @@
-/* Visually rich, modern, and engaging style for APT Other Names Search & Results - MetLife Branded */
+/* Visually rich, modern, and engaging style for APT Other Names Search & Results */
 :root {
-    --metlife-blue: #0046AD;
-    --metlife-green: #00A651;
-    --metlife-light-blue: #4A8BC2;
-    --metlife-dark-blue: #003875;
-    --metlife-gray: #F5F5F5;
-    --primary-color: var(--metlife-blue);
-    --secondary-color: var(--metlife-light-blue);
-    --accent-color: var(--metlife-green);
+    --brand-primary: #0046AD;       /* Primary brand color */
+    --brand-accent: #00A651;        /* Accent/highlight color */
+    --brand-light: #4A8BC2;         /* Lighter primary */
+    --brand-dark: #003875;          /* Darker primary */
+    --brand-gray: #F5F5F5;          /* Background gray */
+    --primary-color: var(--brand-primary);
+    --secondary-color: var(--brand-light);
+    --accent-color: var(--brand-accent);
     --success-color: #43e97b;
     --danger-color: #e74c3c;
-    --bg-gradient: linear-gradient(135deg, var(--metlife-blue) 0%, var(--metlife-light-blue) 50%, var(--metlife-green) 100%);
+    --bg-gradient: linear-gradient(135deg, var(--brand-primary) 0%, var(--brand-light) 50%, var(--brand-accent) 100%);
     --card-bg: #fff;
     --card-shadow: 0 8px 32px 0 rgba(0, 70, 173, 0.15);
     --border-radius: 18px;
     --input-bg: #f4f7fa;
     --input-border: #d1d8e0;
-    --input-focus: var(--metlife-blue);
-    --table-header-bg: linear-gradient(90deg, var(--metlife-blue) 0%, var(--metlife-green) 100%);
+    --input-focus: var(--brand-primary);
+    --table-header-bg: linear-gradient(90deg, var(--brand-primary) 0%, var(--brand-accent) 100%);
     --table-header-text: #fff;
-    --table-row-alt: var(--metlife-gray);
+    --table-row-alt: var(--brand-gray);
     --table-row-hover: #e3e8f0;
 }
 
@@ -62,7 +62,7 @@ body {
 
 h1 {
     text-align: center;
-    color: var(--metlife-blue);
+    color: var(--brand-primary);
     font-size: 2.2em;
     font-weight: 700;
     text-shadow: 2px 2px 4px rgba(0, 70, 173, 0.1);
@@ -78,7 +78,7 @@ h1:after {
     width: 80px;
     height: 4px;
     border-radius: 2px;
-    background: var(--metlife-green);
+    background: var(--brand-accent);
 }
 
 form {
@@ -123,7 +123,7 @@ form input[type="checkbox"] {
 }
 
 button[type="submit"] {
-    background: linear-gradient(135deg, var(--metlife-blue), var(--metlife-green));
+    background: linear-gradient(135deg, var(--brand-primary), var(--brand-accent));
     color: white;
     border: none;
     border-radius: 8px;
@@ -138,7 +138,7 @@ button[type="submit"] {
 button[type="submit"]:hover {
     transform: translateY(-2px);
     box-shadow: 0 8px 25px rgba(0, 166, 81, 0.4);
-    background: linear-gradient(135deg, var(--metlife-green), var(--metlife-dark-blue));
+    background: linear-gradient(135deg, var(--brand-accent), var(--brand-dark));
 }
 
 button[type="submit"]:active {
@@ -283,7 +283,7 @@ table tr:hover td {
 /* Back to Search button style */
 .back-to-search-btn {
     display: inline-block;
-    background: linear-gradient(135deg, var(--metlife-blue), var(--metlife-green));
+    background: linear-gradient(135deg, var(--brand-primary), var(--brand-accent));
     color: #fff;
     font-weight: 700;
     font-size: 1.15em;
@@ -316,7 +316,7 @@ table tr:hover td {
 }
 
 .back-to-search-btn:hover, .back-to-search-btn:focus {
-    background: linear-gradient(135deg, var(--metlife-green), var(--metlife-dark-blue));
+    background: linear-gradient(135deg, var(--brand-accent), var(--brand-dark));
     color: #fff;
     transform: translateY(-2px) scale(1.06);
     box-shadow: 0 8px 32px rgba(0, 166, 81, 0.18);

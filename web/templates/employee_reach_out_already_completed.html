@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Task Already Completed - MetLife Security</title>
+    <title>Task Already Completed - {{ config.company_name }} Security</title>
     <link rel="stylesheet" href="/static/css/employee_reach_out.css">
 </head>
 <body>
@@ -12,7 +12,7 @@
         <div class="header">
             <div class="header-content">
                 <div class="logo-section">
-                    <img alt="MetLife" src="/static/images/MetLife logo dark.webp" style="background: transparent;"/>
+                    <img alt="{{ config.company_name }}" src="/static/images/Company Logo.png" style="background: transparent;"/>
                 </div>
                 <div class="header-text">
                     <h1>Verification Complete</h1>
@@ -70,11 +70,11 @@
 
         <div class="footer">
             <p>For questions or concerns, contact the Security Operations Center:<br>
-                <a href="mailto:security@company.com">📧 security@company.com</a>
+                <a href="mailto:{{ config.security_email }}">📧 {{ config.security_email }}</a>
             </p>
             <div class="footer-divider">
-                <p class="footer-copyright"><strong>MetLife Cyber Incident Response</strong></p>
-                <p class="footer-legal">&copy; 2025 MetLife. All rights reserved. | Confidential & Proprietary</p>
+                <p class="footer-copyright"><strong>{{ config.company_name }} Cyber Incident Response</strong></p>
+                <p class="footer-legal">&copy; 2025 {{ config.company_name }}. All rights reserved. | Confidential & Proprietary</p>
             </div>
         </div>
     </div>

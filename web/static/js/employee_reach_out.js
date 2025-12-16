@@ -1,4 +1,20 @@
-function submitVerification(response) {
+// Config loaded from server
+let appConfig = null;
+
+// Load config from server
+async function loadConfig() {
+    if (appConfig) return appConfig;
+    try {
+        const response = await fetch('/api/config');
+        appConfig = await response.json();
+    } catch (error) {
+        console.error('Failed to load config:', error);
+        appConfig = { company_name: 'Company', security_email: 'security@example.com' };
+    }
+    return appConfig;
+}
+
+async function submitVerification(response) {
     // Validate file size before submission
     const fileUpload = document.getElementById('fileUpload');
     const fileError = document.getElementById('fileError');
@@ -55,9 +71,14 @@ function submitVerification(response) {
         body: formData
     })
         .then(response => response.json())
-        .then(data => {
+        .then(async data => {
             spinner.style.display = 'none';
             if (data.status === 'success') {
+                // Load config for branding
+                const config = await loadConfig();
+                const companyName = config.company_name || 'Company';
+                const securityEmail = config.security_email || 'security@example.com';
+
                 // Replace entire page with Thank You message
                 document.body.innerHTML = `
                     <div class="container">
@@ -65,7 +86,7 @@ function submitVerification(response) {
                             <div class="header">
                                 <div class="header-content">
                                     <div class="logo-section">
-                                        <img alt="MetLife" src="/static/images/MetLife logo dark.webp" style="background: transparent;"/>
+                                        <img alt="${companyName}" src="/static/images/Company Logo.png" style="background: transparent;"/>
                                     </div>
                                     <div class="header-text">
                                         <h1>Thank You!</h1>
@@ -92,11 +113,11 @@ function submitVerification(response) {
 
                             <div class="footer">
                                 <p>For questions or concerns, contact the Security Operations Center:<br>
-                                    <a href="mailto:security@company.com">📧 security@company.com</a>
+                                    <a href="mailto:${securityEmail}">📧 ${securityEmail}</a>
                                 </p>
                                 <div class="footer-divider">
-                                    <p class="footer-copyright"><strong>MetLife Cyber Incident Response</strong></p>
-                                    <p class="footer-legal">&copy; 2025 MetLife. All rights reserved. | Confidential & Proprietary</p>
+                                    <p class="footer-copyright"><strong>${companyName} Cyber Incident Response</strong></p>
+                                    <p class="footer-legal">&copy; 2025 ${companyName}. All rights reserved. | Confidential & Proprietary</p>
                                 </div>
                             </div>
                         </div>

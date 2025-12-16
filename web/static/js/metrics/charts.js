@@ -3,8 +3,21 @@
  */
 
 import {state} from './state.js';
-import {COLOR_SCHEMES, PLOTLY_CONFIG} from './config.js';
+import {COLOR_SCHEMES, PLOTLY_CONFIG, appConfig} from './config.js';
 import {commonLayout, getChartColors} from './theme.js';
+
+// Helper function to strip team name prefix from ticket types
+function stripTeamPrefix(ticketType) {
+    const teamName = appConfig.team_name || 'TEAM';
+    const regex = new RegExp(`^${teamName}[_\\-\\s]*`, 'i');
+    return ticketType.startsWith(teamName) ? ticketType.replace(regex, '') : ticketType;
+}
+
+// Helper function to strip email domain from owner
+function stripEmailDomain(owner) {
+    const emailDomain = appConfig.email_domain || 'example.com';
+    return owner.endsWith('@' + emailDomain) ? owner.replace('@' + emailDomain, '') : owner;
+}
 
 // Plotly is loaded from CDN
 /* global Plotly */
@@ -149,9 +162,7 @@ export function createTicketTypeChart() {
 
     const sortedEntries = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 8);
     const trace = {
-        labels: sortedEntries.map(([ticketType]) =>
-            ticketType.startsWith('METCIRT') ? ticketType.replace(/^METCIRT[_\-\s]*/i, '') : ticketType
-        ),
+        labels: sortedEntries.map(([ticketType]) => stripTeamPrefix(ticketType)),
         values: sortedEntries.map(([, c]) => c),
         type: 'pie',
         hole: 0.6,
@@ -169,8 +180,7 @@ export function createOwnerChart() {
     const counts = {};
     state.filteredData.forEach(item => {
         if (item.owner && item.owner.trim() !== '') {
-            let owner = item.owner;
-            if (owner.endsWith('@company.com')) owner = owner.replace('@company.com', '');
+            let owner = stripEmailDomain(item.owner);
             counts[owner] = (counts[owner] || 0) + 1;
         }
     });
@@ -333,7 +343,7 @@ export function createResolutionTimeChart() {
     const sortedEntries = Object.entries(avgByType).sort((a, b) => b[1] - a[1]);
     const trace = {
         x: sortedEntries.map(([, avg]) => avg.toFixed(1)).reverse(),
-        y: sortedEntries.map(([type]) => type.startsWith('METCIRT') ? type.replace(/^METCIRT[_\-\s]*/i, '') : type).reverse(),
+        y: sortedEntries.map(([type]) => stripTeamPrefix(type)).reverse(),
         type: 'bar',
         orientation: 'h',
         text: sortedEntries.map(([, avg]) => avg.toFixed(1) + ' days').reverse(),

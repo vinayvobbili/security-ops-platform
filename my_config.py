@@ -162,6 +162,7 @@ def get_config():
         toodles_password=os.environ.get("TOODLES_PASSWORD"),
         flask_secret_key=os.environ.get("FLASK_SECRET_KEY"),
         abnormal_security_api_key=os.environ.get("ABNORMAL_SECURITY_API_KEY"),
+        logs_viewer_url=os.environ.get("LOGS_VIEWER_URL"),
     )
 
 
@@ -284,3 +285,4 @@ class Config:
     toodles_password: Optional[str] = None
     flask_secret_key: Optional[str] = None
     abnormal_security_api_key: Optional[str] = None
+    logs_viewer_url: Optional[str] = None

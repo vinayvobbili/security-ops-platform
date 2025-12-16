@@ -1,36 +1,33 @@
 # CONFIG Refactoring Progress Report
 
 **Date:** 2025-12-15
-**Status:** ✅ Phase 1 Complete - Python Backend Refactored & Tested
-**Test Status:** All 5/5 tests passing
-**Git Status:** Ready to commit (17 modified, 5 new files)
+**Status:** ✅ Phase 2 Complete - Frontend Refactored
+**Phase 1:** ✅ Python Backend Refactored & Tested (committed)
+**Phase 2:** ✅ Frontend Refactored (HTML, JavaScript, CSS)
+**Git Status:** Ready to commit Phase 2 changes
 
 ---
 
 ## 🔄 TO RESUME THIS SESSION
 
 **Current State:**
-- ✅ Python backend refactoring complete (17 files)
-- ✅ All tests passing (5/5)
-- ✅ Documentation complete
-- ⏸️ Changes NOT yet committed
+- ✅ Phase 1 (Python backend): COMPLETE and committed
+- ✅ Phase 2 (Frontend): COMPLETE - HTML, JavaScript, CSS refactored
+- ⏸️ Phase 2 changes NOT yet committed
 
 **Next Steps When Resuming:**
 1. **Review the changes** - Check git diff to verify all modifications
-2. **Commit Phase 1** - Commit the Python backend refactoring
+2. **Commit Phase 2** - Commit the frontend refactoring
    ```bash
    git add .
-   git commit -m "refactor: Replace hardcoded company/team names with CONFIG variables"
+   git commit -m "refactor: Genericize frontend templates, JavaScript, and CSS for reusability"
    ```
-3. **Start Phase 2** - Begin frontend refactoring (HTML templates first)
+3. **Test the application** - Run the web server and verify UI still works correctly
 
 **Quick Start Command for Next Session:**
 ```bash
 # Show what was changed
 git diff --stat
-
-# Review test results
-.venv/bin/python test_config_refactoring.py
 
 # When ready, commit
 git add . && git commit
@@ -38,7 +35,59 @@ git add . && git commit
 
 ---
 
-## What Was Accomplished
+## Phase 2: Frontend Refactoring (COMPLETE)
+
+### What Was Done:
+
+#### 1. Flask Template Integration ✅
+- Added Flask context processor to inject config values into all templates
+- Created `/api/config` endpoint for JavaScript clients
+- Added `PUBLIC_CONFIG` dictionary with non-sensitive branding values
+
+#### 2. HTML Templates Refactored ✅
+- `employee_reach_out_form.html` - Company name, security email, logo
+- `employee_reach_out_already_completed.html` - Same as above
+- `toodles_chat.html` - Email domain in input field
+- `burger_menu.html` - Configurable logs viewer URL
+- `red_team_testing_form.html` - Email domain and relative URL
+
+#### 3. JavaScript Files Refactored ✅
+- `toodles_chat.js` - Fetches config for email domain
+- `employee_reach_out.js` - Uses config for success message branding
+- `metrics/config.js` - Exports `loadAppConfig()` for metrics dashboard
+- `metrics/charts.js` - Uses config for team prefix and email domain stripping
+- `metrics/filters.js` - Uses config for filter display values
+- `metrics/main.js` - Loads config at startup
+
+#### 4. CSS Variables Genericized ✅
+All 10 CSS files updated to use generic brand variables:
+- `--metlife-blue` → `--brand-primary`
+- `--metlife-green` → `--brand-accent`
+- `--metlife-light-blue` → `--brand-light`
+- `--metlife-dark-blue` → `--brand-dark`
+- `--metlife-gray` → `--brand-gray`
+
+Files updated:
+- `slide-show.css`
+- `employee_reach_out.css`
+- `red_team_testing_form.css`
+- `apt_other_names_search.css`
+- `apt_other_names_results.css`
+- `speak_up.css`
+- `msoc.css`
+- `ticket_import.css`
+- `xsoar_dashboard.css`
+- `upcoming_travel_notification_form.css`
+
+#### 5. Configuration Added ✅
+- Added `LOGS_VIEWER_URL` config option
+- Updated `.env.sample` with documentation for new options
+
+---
+
+## Phase 1: Python Backend (COMPLETE - Previously Committed)
+
+### What Was Accomplished
 
 ### 1. Configuration Infrastructure ✅
 - **Added `COMPANY_NAME` to `my_config.py`**
@@ -130,62 +179,20 @@ AZDO_DE_PROJECT=Detection-Engineering
 
 ## Remaining Work
 
-### Phase 2: Frontend Refactoring (TODO)
+### Phase 3: Final Testing & Cleanup (TODO)
 
-#### HTML Templates (Priority: HIGH)
-Files that need refactoring:
-- `email_templates/employee_reach_out.html` - Company branding, email addresses
-- `web/templates/employee_reach_out_form.html` - Branding, logos
-- `web/templates/employee_reach_out_already_completed.html`
-- `web/templates/red_team_testing_form.html` - Domain, internal URLs
-- `web/templates/toodles_chat.html` - Email domain
-- `web/templates/burger_menu.html` - Internal URLs
+1. **End-to-End Testing**
+   - Test web server with current config values
+   - Verify all UI pages display correctly
+   - Test with different TEAM_NAME/COMPANY_NAME values if desired
 
-**Approach:**
-- Use Flask template variables: `{{ config.company_name }}`
-- Pass CONFIG to templates via context
-- Replace hardcoded values with template variables
+2. **Email Template** (Optional)
+   - `email_templates/employee_reach_out.html` - Uses XSOAR templating
+   - May need XSOAR-side updates for full configurability
 
-#### JavaScript Files (Priority: HIGH)
-Files that need refactoring:
-- `web/static/js/employee_reach_out.js` - Company branding
-- `web/static/js/toodles_chat.js` - Email construction
-- `web/static/js/metrics/charts.js` - Email/type cleaning
-- `web/static/js/meaningful_metrics.js.bak` - Email processing
-
-**Approach:**
-- Create API endpoint: `/api/config` that returns public config values
-- JavaScript fetches config on page load
-- Use config values in JS logic
-
-#### CSS Branding (Priority: MEDIUM)
-Files with company branding:
-- `web/static/css/slide-show.css` - MetLife brand colors
-- `web/static/css/employee_reach_out.css` - Brand colors
-- `web/static/css/apt_other_names_results.css` - Brand colors
-- `web/static/css/red_team_testing_form.css`
-- `web/static/css/msoc.css`
-- And 4 more CSS files...
-
-**Approach:**
-- Option A: Remove branding, use generic colors
-- Option B: Make CSS variables configurable
-- Recommendation: Option A (simpler, cleaner)
-
-### Phase 3: Documentation & Testing (TODO)
-
-1. **Update .env.sample**
-   - Add COMPANY_NAME documentation
-   - Add examples
-
-2. **Update README.md**
-   - Document configuration approach
-   - Add section on customization
-
-3. **End-to-End Testing**
-   - Test with different TEAM_NAME values
-   - Test with different COMPANY_NAME values
-   - Verify all features still work
+3. **Image Assets** (Optional)
+   - `Company Logo.png` is used by templates
+   - Replace with your organization's logo
 
 ---
 
@@ -326,24 +333,29 @@ Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>
 ## 📊 Session Summary
 
 **What We Accomplished:**
+
+### Phase 1 (Previously Committed):
 1. ✅ Added COMPANY_NAME configuration with auto-derivation
 2. ✅ Refactored 17 Python files to use CONFIG variables
 3. ✅ Created automated refactoring script (refactor_to_config.py)
 4. ✅ Created comprehensive test suite (5/5 tests passing)
 5. ✅ Documented security audit findings
-6. ✅ Documented refactoring progress
+
+### Phase 2 (Current Session):
+1. ✅ Added Flask context processor for template config injection
+2. ✅ Created `/api/config` endpoint for JavaScript
+3. ✅ Refactored 5 HTML templates to use config variables
+4. ✅ Refactored 6 JavaScript files to fetch and use config
+5. ✅ Genericized 10 CSS files (renamed brand variables)
+6. ✅ Updated `.env.sample` with documentation
+7. ✅ Updated REFACTORING_PROGRESS.md
 
 **What's Next:**
-- Phase 2: Frontend refactoring (HTML, JavaScript, CSS)
-- Phase 3: Documentation updates and final testing
-- Commit and prepare for public release
-
-**Time Investment:**
-- Phase 1 (Python Backend): Complete ✅
-- Phase 2 (Frontend): ~2 hours estimated
-- Phase 3 (Documentation): ~15 minutes estimated
+- Commit Phase 2 changes
+- End-to-end testing to verify UI works correctly
+- (Optional) Update email templates and image assets
 
 ---
 
-**Last Updated:** 2025-12-15 (Phase 1 Complete)
-**Next Review:** When resuming for Phase 2 (Frontend refactoring)
+**Last Updated:** 2025-12-15 (Phase 2 Complete)
+**Next Review:** Commit and test

@@ -2,6 +2,25 @@
  * Configuration and constants for meaningful metrics dashboard
  */
 
+// App config loaded from server (team name, email domain, etc.)
+export let appConfig = {
+    team_name: 'TEAM',
+    email_domain: 'example.com',
+    company_name: 'Company'
+};
+
+// Load app config from server
+export async function loadAppConfig() {
+    try {
+        const response = await fetch('/api/config');
+        const config = await response.json();
+        appConfig = {...appConfig, ...config};
+    } catch (error) {
+        console.warn('Failed to load app config, using defaults:', error);
+    }
+    return appConfig;
+}
+
 // Feature flags
 export const FEATURE_FLAGS = {
     showCardTooltips: false,
