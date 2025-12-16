@@ -10,6 +10,7 @@ import {updateCharts} from './charts.js';
 import {updateTable, setupColumnSelector, sortTable, rebuildTable} from './table.js';
 import {setupSliderTooltip, formatMttrValue, formatMttcValue, formatAgeValue, hideLoading, showError, showDashboard} from './ui.js';
 import {exportToExcel} from './export.js';
+import {loadAppConfig} from './config.js';
 
 /**
  * Load data from API
@@ -86,8 +87,9 @@ function setupEventListeners() {
 /**
  * Initialize the application
  */
-function init() {
+async function init() {
     initThemeListener();
+    await loadAppConfig(); // Load app config first (team name, email domain, etc.)
     loadData();
     setupEventListeners();
 }

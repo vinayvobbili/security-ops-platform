@@ -13,7 +13,7 @@
         <a href="/">🏠 Home</a>
         <a href="/meaningful-metrics">💹 Analytics</a>
         <a href="/shift-performance">⚖️ Shift Performance</a>
-        <a href="http://lab-vm1.internal.company.com:8030/" target="_blank" rel="noopener noreferrer">🪵 Logs</a>
+        {% if config.logs_viewer_url %}<a href="{{ config.logs_viewer_url }}" target="_blank" rel="noopener noreferrer">🪵 Logs</a>{% endif %}
         <a href="/msoc-form">📋️ MSOC Form</a>
         <a href="/speak-up-form">📣 Speak Up Form</a>
         <a href="/xsoar-ticket-import-form">📥 XSOAR Ticket Import</a>

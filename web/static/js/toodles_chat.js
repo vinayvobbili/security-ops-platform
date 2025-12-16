@@ -6,6 +6,20 @@ let userEmailLocal = '';
 let userFullEmail = '';
 let userName = '';
 
+// Config loaded from server
+let appConfig = null;
+
+// Load config from server
+async function loadConfig() {
+    try {
+        const response = await fetch('/api/config');
+        appConfig = await response.json();
+    } catch (error) {
+        console.error('Failed to load config:', error);
+        appConfig = { email_domain: 'example.com' }; // fallback
+    }
+}
+
 // Available commands
 const commands = [
     { id: 'create_x_ticket', label: '🎫 Create X Ticket', icon: '🎫' },
@@ -38,6 +52,10 @@ async function submitAuth(event) {
     authError.style.display = 'none';
 
     try {
+        // Ensure config is loaded
+        if (!appConfig) await loadConfig();
+        const emailDomain = appConfig.email_domain || 'example.com';
+
         // Send authentication request to backend
         const response = await fetch('/api/toodles/login', {
             method: 'POST',
@@ -45,7 +63,7 @@ async function submitAuth(event) {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                email: emailLocal + '@company.com',
+                email: emailLocal + '@' + emailDomain,
                 password: password
             })
         });
@@ -55,7 +73,7 @@ async function submitAuth(event) {
         if (response.ok && data.success) {
             // Store user info
             userEmailLocal = emailLocal;
-            userFullEmail = emailLocal + '@company.com';
+            userFullEmail = emailLocal + '@' + emailDomain;
 
             // Store email in localStorage for future sessions
             localStorage.setItem('toodlesUserEmail', userFullEmail);
@@ -82,7 +100,10 @@ async function submitAuth(event) {
 }
 
 // Initialize chat - don't show welcome until authenticated
-window.addEventListener('DOMContentLoaded', () => {
+window.addEventListener('DOMContentLoaded', async () => {
+    // Load config first
+    await loadConfig();
+
     // Check if auth modal is visible (user not authenticated)
     const authModal = document.getElementById('authModal');
     if (authModal && authModal.style.display !== 'none') {

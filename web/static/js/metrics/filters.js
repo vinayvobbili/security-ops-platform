@@ -3,6 +3,14 @@
  */
 
 import {state} from './state.js';
+import {appConfig} from './config.js';
+
+// Helper function to strip team name prefix from ticket types
+function stripTeamPrefix(ticketType) {
+    const teamName = appConfig.team_name || 'TEAM';
+    const regex = new RegExp(`^${teamName}[_\\-\\s]*`, 'i');
+    return ticketType.startsWith(teamName) ? ticketType.replace(regex, '') : ticketType;
+}
 
 export function populateFilterOptions() {
     const countries = [...new Set(state.allData.map(item => item.affected_country))].filter(c => c && c !== 'Unknown').sort();
@@ -21,7 +29,7 @@ function populateCheckboxFilter(filterId, options) {
     if (!container) return;
 
     container.innerHTML = options.map(option => {
-        const displayValue = option.startsWith('METCIRT') ? option.replace(/^METCIRT[_\-\s]*/i, '') : option;
+        const displayValue = stripTeamPrefix(option);
         return `<label><input type="checkbox" value="${option}"> ${displayValue}</label>`;
     }).join('');
 }
@@ -181,7 +189,7 @@ function updateFilterSummary(dateRange, mttrFilter, mttcFilter, ageFilter, count
 
     if (ticketTypes.length > 0) {
         ticketTypes.forEach(type => {
-            const displayType = type.startsWith('METCIRT') ? type.replace(/^METCIRT[_\-\s]*/i, '') : type;
+            const displayType = stripTeamPrefix(type);
             container.innerHTML += `<span class="filter-tag">Type: ${displayType} <button class="remove-filter-btn" onclick="window.metricsApp.removeFilter('ticketType', '${type}')">×</button></span>`;
         });
     }

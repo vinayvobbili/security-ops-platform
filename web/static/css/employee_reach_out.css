@@ -1,10 +1,10 @@
-/* Acme Brand Palette */
+/* Brand Colors - Configurable for different organizations */
 :root {
-    --acme-blue: #0046AD;
-    --acme-green: #00A651;
-    --acme-light-blue: #4A8BC2;
-    --acme-dark-blue: #003875;
-    --acme-gray: #F5F5F5;
+    --brand-primary: #0046AD;       /* Primary brand color */
+    --brand-accent: #00A651;        /* Accent/highlight color */
+    --brand-light: #4A8BC2;         /* Lighter primary */
+    --brand-dark: #003875;          /* Darker primary */
+    --brand-gray: #F5F5F5;          /* Background gray */
 }
 
 * {
@@ -23,7 +23,7 @@ body {
 .container {
     max-width: 960px;
     margin: 0 auto;
-    background-color: var(--acme-blue);
+    background-color: var(--brand-primary);
     padding: 4px;
     border-radius: 36px;
     box-shadow: 0 4px 20px rgba(0, 70, 173, 0.2);
@@ -37,10 +37,10 @@ body {
 }
 
 .header {
-    background-color: var(--acme-dark-blue);
+    background-color: var(--brand-dark);
     color: #ffffff;
     padding: 40px 52px 36px 52px;
-    border-bottom: 4px solid var(--acme-light-blue);
+    border-bottom: 4px solid var(--brand-light);
 }
 
 .header-content {
@@ -76,7 +76,7 @@ body {
 .header-underline {
     width: 170px;
     height: 8px;
-    background-color: var(--acme-green);
+    background-color: var(--brand-accent);
     border-radius: 4px;
     margin: 0 0 18px 0;
 }
@@ -91,12 +91,12 @@ body {
 
 .separator {
     height: 6px;
-    background-color: var(--acme-blue);
+    background-color: var(--brand-primary);
 }
 
 .content {
     padding: 52px 72px 40px 72px;
-    background-color: var(--acme-gray);
+    background-color: var(--brand-gray);
 }
 
 .alert-box {
@@ -115,7 +115,7 @@ body {
 }
 
 .alert-box .title {
-    color: var(--acme-dark-blue);
+    color: var(--brand-dark);
     font-size: 19px;
     font-weight: bold;
     margin: 0 0 8px 0;
@@ -131,7 +131,7 @@ body {
 
 .success-box {
     background-color: #E8F8F0;
-    border: 3px solid var(--acme-green);
+    border: 3px solid var(--brand-accent);
     border-radius: 16px;
     padding: 48px 36px;
     margin: 40px 0;
@@ -140,7 +140,7 @@ body {
 }
 
 .success-box h2 {
-    color: var(--acme-dark-blue);
+    color: var(--brand-dark);
     font-size: 32px;
     font-weight: bold;
     margin: 0 0 16px 0;
@@ -163,9 +163,9 @@ body {
 }
 
 .command-details-header {
-    background-color: var(--acme-dark-blue);
+    background-color: var(--brand-dark);
     padding: 18px 34px;
-    border-bottom: 3px solid var(--acme-light-blue);
+    border-bottom: 3px solid var(--brand-light);
 }
 
 .command-details-header h3 {
@@ -190,7 +190,7 @@ body {
 
 .detail-label {
     font-weight: bold;
-    color: var(--acme-dark-blue);
+    color: var(--brand-dark);
     font-size: 15px;
     margin-bottom: 8px;
     display: block;
@@ -203,7 +203,7 @@ body {
     background-color: #F8F9FA;
     padding: 22px 24px;
     border-radius: 12px;
-    border-left: 6px solid var(--acme-green);
+    border-left: 6px solid var(--brand-accent);
     box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.05);
     font-size: 15px;
     line-height: 1.5;
@@ -230,7 +230,7 @@ body {
 }
 
 .metadata-item strong {
-    color: var(--acme-dark-blue);
+    color: var(--brand-dark);
 }
 
 .question-section {
@@ -239,7 +239,7 @@ body {
 }
 
 .question-section h2 {
-    color: var(--acme-dark-blue);
+    color: var(--brand-dark);
     font-size: 28px;
     margin-bottom: 16px;
     font-weight: bold;
@@ -271,7 +271,7 @@ body {
 .field-group label {
     display: block;
     font-weight: 600;
-    color: var(--acme-dark-blue);
+    color: var(--brand-dark);
     font-size: 16px;
     margin-bottom: 10px;
     text-align: left;
@@ -291,7 +291,7 @@ body {
 
 .field-group textarea:focus {
     outline: none;
-    border-color: var(--acme-blue);
+    border-color: var(--brand-primary);
     box-shadow: 0 0 0 3px rgba(0, 70, 173, 0.1);
 }
 
@@ -311,13 +311,13 @@ body {
 }
 
 .field-group input[type="file"]:hover {
-    border-color: var(--acme-blue);
+    border-color: var(--brand-primary);
     background-color: #F5FAFF;
 }
 
 .field-group input[type="file"]:focus {
     outline: none;
-    border-color: var(--acme-blue);
+    border-color: var(--brand-primary);
     box-shadow: 0 0 0 3px rgba(0, 70, 173, 0.1);
 }
 
@@ -374,7 +374,7 @@ body {
 }
 
 .btn-yes {
-    background-color: var(--acme-green);
+    background-color: var(--brand-accent);
     color: #ffffff;
     border-color: #008a43;
 }
@@ -388,7 +388,7 @@ body {
 .footer {
     background-color: #F8F9FA;
     padding: 48px 52px;
-    border-top: 4px solid var(--acme-blue);
+    border-top: 4px solid var(--brand-primary);
     text-align: center;
 }
 
@@ -397,13 +397,13 @@ body {
     padding: 14px 24px;
     background-color: #ffffff;
     border-radius: 30px;
-    border: 2px solid var(--acme-blue);
+    border: 2px solid var(--brand-primary);
     box-shadow: 0 2px 6px rgba(0, 70, 173, 0.1);
     margin-bottom: 28px;
 }
 
 .security-badge span {
-    color: var(--acme-blue);
+    color: var(--brand-primary);
     font-size: 12px;
     font-weight: bold;
     letter-spacing: 1px;
@@ -421,7 +421,7 @@ body {
 }
 
 .footer a {
-    color: var(--acme-blue);
+    color: var(--brand-primary);
     text-decoration: none;
     font-weight: bold;
 }
@@ -472,7 +472,7 @@ body {
 }
 
 .modal-content h3 {
-    color: var(--acme-dark-blue);
+    color: var(--brand-dark);
     margin-bottom: 15px;
     font-size: 24px;
     font-weight: bold;
@@ -486,7 +486,7 @@ body {
 
 .spinner {
     border: 4px solid #f3f3f3;
-    border-top: 4px solid var(--acme-blue);
+    border-top: 4px solid var(--brand-primary);
     border-radius: 50%;
     width: 40px;
     height: 40px;

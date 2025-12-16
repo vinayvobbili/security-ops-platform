@@ -71,6 +71,16 @@ PROXY_PORT = 8081
 WEB_SERVER_PORT = CONFIG.web_server_port
 COMPANY_EMAIL_DOMAIN = '@' + CONFIG.my_web_domain
 
+# Public config values that can be exposed to templates and JavaScript
+# These are non-sensitive values that help with branding/customization
+PUBLIC_CONFIG = {
+    'company_name': CONFIG.company_name,
+    'team_name': CONFIG.team_name,
+    'email_domain': CONFIG.my_web_domain,
+    'security_email': f"security@{CONFIG.my_web_domain}",
+    'logs_viewer_url': CONFIG.logs_viewer_url,
+}
+
 # Configure logging
 setup_logging(
     bot_name='web_server',
@@ -95,6 +105,12 @@ logger.warning("=" * 100)
 app = Flask(__name__, static_folder='static', static_url_path='/static', template_folder='templates')
 app.secret_key = CONFIG.flask_secret_key if hasattr(CONFIG, 'flask_secret_key') else 'your-secret-key-change-this'
 eastern = pytz.timezone('US/Eastern')
+
+
+@app.context_processor
+def inject_public_config():
+    """Inject public config values into all templates for branding/customization."""
+    return {'config': PUBLIC_CONFIG}
 
 # Store server start time
 SERVER_START_TIME = datetime.now(eastern)
@@ -775,6 +791,12 @@ def healthz():
         return jsonify(health), 200
     except Exception as exc:
         return jsonify({"status": "error", "error": str(exc)}), 500
+
+
+@app.route("/api/config")
+def api_public_config():
+    """Return public config values for JavaScript clients."""
+    return jsonify(PUBLIC_CONFIG)
 
 
 @app.route('/toodles')
