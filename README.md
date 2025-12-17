@@ -243,6 +243,8 @@ Contributions are welcome! Please feel free to submit issues and pull requests.
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
+**TL;DR:** You can use, modify, and distribute this code freely. Just keep the copyright notice.
+
 ## 🙏 Acknowledgments
 
 Built with modern Python best practices and enterprise-grade reliability in mind. Designed to scale from small teams to large security operations centers.
