@@ -1617,7 +1617,7 @@ class GetCurrentApprovedTestingEntries(Command):
         if len(result) > max_length:
             logger.warning(f"Reply from GetCurrentApprovedTestingEntries exceeded max length: {len(result)}")
             return (f"{activity['actor']['displayName']}, the current list is too long to be displayed here. "
-                    "You may find the same list at http://gdnr.company.com/get-approved-testing-entries")
+                    "You may find the same list at http://secops.example.com/get-approved-testing-entries")
         return result
 
 
