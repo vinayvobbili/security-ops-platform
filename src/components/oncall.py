@@ -128,7 +128,7 @@ def alert_change():
         # List of rooms to notify
         room_ids = [
             CONFIG.webex_room_id_response_engineering,
-            CONFIG.webex_room_id_vinay_test_space,
+            CONFIG.webex_room_id_test_space,
             # Add other relevant room IDs here
         ]
 
@@ -248,7 +248,7 @@ if __name__ == "__main__":
 
     # Uncomment to actually send messages (use with caution)
     # log.info("Announcing current on-call...")
-    # announce_change(room_id=CONFIG.webex_room_id_vinay_test_space)
+    # announce_change(room_id=CONFIG.webex_room_id_test_space)
     # log.info("Alerting about next week's on-call...")
     alert_change()
 

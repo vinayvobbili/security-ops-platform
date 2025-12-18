@@ -1002,7 +1002,7 @@ def send_daily_operational_report_charts(room_id=config.webex_room_id_metrics):
 
 def main():
     """Main function to run the scheduled jobs."""
-    room_id = config.webex_room_id_vinay_test_space
+    room_id = config.webex_room_id_test_space
     # announce_shift_change('morning', room_id, sleep_time=0)
     # print(get_staffing_data())
     send_daily_operational_report_charts(room_id)

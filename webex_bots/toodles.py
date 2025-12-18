@@ -641,7 +641,7 @@ AZDO_CARD = {
                                     "value": "de"
                                 },
                                 {
-                                    "title": "Global Detection and Response Shared",
+                                    "title": "Security Operations Shared",
                                     "value": "gdr"
                                 }
                             ],
@@ -1693,7 +1693,7 @@ def announce_new_approved_testing_entry(new_item) -> None:
         ]
     }
     webex_api.messages.create(
-        roomId=CONFIG.webex_room_id_gosc_t2,
+        roomId=CONFIG.webex_room_id_soc_t2,
         text="New Approved Testing!",
         attachments=[{"contentType": "application/vnd.microsoft.card.adaptive", "content": payload}]
     )
