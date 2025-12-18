@@ -496,7 +496,7 @@ def make_chart() -> None:
 
 def main() -> None:
     """Main entry point for testing."""
-    # room_id = config.webex_room_id_vinay_test_space
+    # room_id = config.webex_room_id_test_space
     # send_report(room_id)
     make_chart()
 
