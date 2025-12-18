@@ -210,5 +210,5 @@ def start(room_id):
 
 
 if __name__ == "__main__":
-    room_id = CONFIG.webex_room_id_vinay_test_space
+    room_id = CONFIG.webex_room_id_test_space
     start(room_id)

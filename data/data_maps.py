@@ -34,7 +34,7 @@ azdo_projects = {
     'rea': CONFIG.azdo_re_project or 'Cyber-Security',  # Response Engineering Automation
     'reo': CONFIG.azdo_re_project or 'Cyber-Security',  # Response Engineering Operations
     'de': CONFIG.azdo_de_project or 'Detection-Engineering',
-    'gdr': 'Global Detection and Response Shared'
+    'gdr': 'Security Operations Shared'
 }
 
 azdo_orgs = {
