@@ -337,3 +337,69 @@ export function announceTableStatus(message) {
         liveRegion.textContent = message;
     }
 }
+
+/**
+ * Slider label update functions - manage active state on slider labels
+ */
+export function updateDateSliderLabels(value) {
+    updateSliderTooltip('dateRangeSlider', 'dateRangeTooltip', value);
+
+    const dateContainer = document.getElementById('dateRangeSlider')?.parentElement;
+    if (!dateContainer) return;
+
+    // Remove active class from all preset labels
+    dateContainer.querySelectorAll('.slider-labels .range-preset').forEach(span => {
+        span.classList.remove('active');
+    });
+
+    // Add active class to the matching label
+    const targetSpan = dateContainer.querySelector(`.slider-labels .range-preset[data-value="${value}"]`);
+    if (targetSpan) targetSpan.classList.add('active');
+}
+
+export function updateMttrSliderLabels(value) {
+    const mttrContainer = document.getElementById('mttrRangeSlider')?.parentElement;
+    if (!mttrContainer) return;
+
+    mttrContainer.querySelectorAll('.slider-labels span').forEach(span => {
+        span.classList.remove('active');
+    });
+    const targetSpan = mttrContainer.querySelector(`.slider-labels span[data-value="${value}"]`);
+    if (targetSpan) targetSpan.classList.add('active');
+}
+
+export function updateMttcSliderLabels(value) {
+    const mttcContainer = document.getElementById('mttcRangeSlider')?.parentElement;
+    if (!mttcContainer) return;
+
+    mttcContainer.querySelectorAll('.slider-labels span').forEach(span => {
+        span.classList.remove('active');
+    });
+    const targetSpan = mttcContainer.querySelector(`.slider-labels span[data-value="${value}"]`);
+    if (targetSpan) targetSpan.classList.add('active');
+}
+
+export function updateAgeSliderLabels(value) {
+    const ageContainer = document.getElementById('ageRangeSlider')?.parentElement;
+    if (!ageContainer) return;
+
+    // Remove active class from all labels
+    ageContainer.querySelectorAll('.slider-labels .range-preset').forEach(span => {
+        span.classList.remove('active');
+    });
+
+    // Add active class based on value
+    if (value == 0) {
+        const allLabel = ageContainer.querySelector('.slider-labels .range-preset[data-value="0"]');
+        if (allLabel) allLabel.classList.add('active');
+    } else if (value > 0 && value <= 7) {
+        const sevenLabel = ageContainer.querySelector('.slider-labels .range-preset[data-value="7"]');
+        if (sevenLabel) sevenLabel.classList.add('active');
+    } else if (value > 7 && value <= 30) {
+        const thirtyLabel = ageContainer.querySelector('.slider-labels .range-preset[data-value="30"]');
+        if (thirtyLabel) thirtyLabel.classList.add('active');
+    } else {
+        const thirtyLabel = ageContainer.querySelector('.slider-labels .range-preset[data-value="30"]');
+        if (thirtyLabel) thirtyLabel.classList.add('active');
+    }
+}
