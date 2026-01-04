@@ -1,6 +1,6 @@
 # AGENTS.md
 
-This file provides guidance to AI CLI agents (Claude Code, Gemini, etc.) when working with code in this repository.
+This file provides guidance to AI CLI agents when working with code in this repository.
 
 ### My style and conventions
 
@@ -14,11 +14,11 @@ This file provides guidance to AI CLI agents (Claude Code, Gemini, etc.) when wo
 
 ### Zscaler/Enterprise Proxy Blocking
 
-**Issue**: Claude Code's WebFetch tool may fail with "Unable to verify if domain is safe to fetch" errors due to enterprise security policies.
+**Issue**: AI agent WebFetch tools may fail with "Unable to verify if domain is safe to fetch" errors due to enterprise security policies.
 
 **Root Cause**:
 
-- Zscaler (or similar enterprise proxies/firewalls) intercepts outbound requests from `claude.ai`
+- Zscaler (or similar enterprise proxies/firewalls) intercepts outbound requests from AI services
 - Corporate policies often block AI services from accessing external content
 - Less common domains (e.g., `jobright.ai`, newer sites) are frequently blocked by default
 - Well-known domains (e.g., `github.com`, `stackoverflow.com`) are usually whitelisted
@@ -34,13 +34,13 @@ This file provides guidance to AI CLI agents (Claude Code, Gemini, etc.) when wo
 
 2. **Copy/paste content** directly into the conversation instead of providing URLs
 
-3. **Request IT exceptions** for specific domains you need Claude to access regularly
+3. **Request IT exceptions** for specific domains you need the AI agent to access regularly
 
 **When This Happens**:
 
 - If WebFetch fails, immediately suggest using local curl as an alternative
 - Don't retry WebFetch multiple times - it won't work if blocked by enterprise policy
-- Inform user that this is likely a Zscaler/proxy issue, not a Claude Code bug
+- Inform user that this is likely a Zscaler/proxy issue, not an AI agent bug
 
 ## Common Development Commands
 
