@@ -1,15 +1,15 @@
 #!/bin/bash
 
-cd /home/vinay/pub/IR || exit 1
+cd /opt/incident-response || exit 1
 
 # Kill existing toodles process if running
 echo "Stopping existing Toodles instances..."
-source /home/vinay/pub/IR/deployment/kill_process.sh
+source /opt/incident-response/deployment/kill_process.sh
 kill_process_gracefully "webex_bots/toodles" "Toodles" || exit 1
 sleep 1
 
 # Restart log viewer to ensure it shows latest logs
-/home/vinay/pub/IR/deployment/restart_log_viewer.sh 8032 "Toodles Bot" /home/vinay/pub/IR/logs/toodles.log
+/opt/incident-response/deployment/restart_log_viewer.sh 8032 "Toodles Bot" /opt/incident-response/logs/toodles.log
 
 # Ensure logs directory exists
 mkdir -p logs
@@ -19,7 +19,7 @@ mkdir -p logs
 
 # Start new toodles instance in background
 # Python logging handles all output - redirect nohup output to /dev/null
-nohup env PYTHONPATH=/home/vinay/pub/IR .venv/bin/python webex_bots/toodles.py > /dev/null 2>&1 &
+nohup env PYTHONPATH=/opt/incident-response .venv/bin/python webex_bots/toodles.py > /dev/null 2>&1 &
 
 echo "Starting Toodles bot..."
 echo ""
@@ -45,8 +45,8 @@ if pgrep -f "webex_bots/toodles" > /dev/null; then
     PID=$(pgrep -f 'webex_bots/toodles')
     echo "✅ Toodles is running (PID: $PID)"
     echo ""
-    echo "To view logs: tail -f /home/vinay/pub/IR/logs/toodles.log"
+    echo "To view logs: tail -f /opt/incident-response/logs/toodles.log"
 else
     echo "❌ Warning: Toodles process not found"
-    echo "Check logs: tail -20 /home/vinay/pub/IR/logs/toodles.log"
+    echo "Check logs: tail -20 /opt/incident-response/logs/toodles.log"
 fi

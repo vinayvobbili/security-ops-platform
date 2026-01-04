@@ -7,9 +7,9 @@ Wants=network-online.target
 Type=simple
 User=vinay
 Group=vinay
-WorkingDirectory=/home/vinay/pub/IR
-Environment="PYTHONPATH=/home/vinay/pub/IR"
-ExecStart=/home/vinay/pub/IR/.venv/bin/python webex_bots/money_ball.py
+WorkingDirectory=/opt/incident-response
+Environment="PYTHONPATH=/opt/incident-response"
+ExecStart=/opt/incident-response/.venv/bin/python webex_bots/money_ball.py
 
 # Restart on failure
 Restart=on-failure
