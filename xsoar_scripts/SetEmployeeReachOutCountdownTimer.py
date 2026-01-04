@@ -27,7 +27,7 @@ from urllib.parse import quote
 import pytz
 
 # Configuration
-WEB_SERVER_BASE_URL = "http://sirt-lab-12.internal.example.com"  # Update this to your web server URL
+WEB_SERVER_BASE_URL = os.getenv("WEB_SERVER_BASE_URL", "http://localhost:8080")
 RESPONSE_WINDOW_HOURS = 4  # Number of hours for employee to respond
 TIMER_TITLE = "Time to Respond"
 
