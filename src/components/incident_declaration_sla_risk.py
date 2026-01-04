@@ -104,10 +104,11 @@ def build_ticket_message(seconds_remaining, ticket, index, due_date_str=None):
     ticket_name = ticket.get('name') or ticket.get('title') or 'No Title'
     incident_url = CONFIG.xsoar_prod_ui_base_url + '/Custom/caseinfoid/' + ticket_id
 
-    # Get ticket owner and format as Webex mention
+    # Get ticket owner - display without mention to avoid "user not in room" errors
     owner_email = ticket.get('owner')
     if owner_email and '@' in owner_email:
-        owner_text = f"<@personEmail:{owner_email}|{owner_email.split('@')[0]}>"
+        # Just display username without @mention (since user may not be in the room)
+        owner_text = f"**{owner_email.split('@')[0]}**"
     else:
         owner_text = owner_email or 'Unassigned'
 
@@ -206,5 +207,5 @@ def start(room_id):
 
 
 if __name__ == "__main__":
-    room_id = CONFIG.webex_room_id_test_space
+    room_id = CONFIG.webex_room_id_vinay_test_space
     start(room_id)

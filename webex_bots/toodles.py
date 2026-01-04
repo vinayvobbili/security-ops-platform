@@ -641,7 +641,7 @@ AZDO_CARD = {
                                     "value": "de"
                                 },
                                 {
-                                    "title": "Security Operations Shared",
+                                    "title": "Global Detection and Response Shared",
                                     "value": "gdr"
                                 }
                             ],
@@ -1221,12 +1221,12 @@ def get_url_card():
     Returns a card with error message if XSOAR is not configured or list is unavailable.
     """
     try:
-        team_urls = prod_list_handler.get_list_data_by_name('{CONFIG.team_name} URLs')
+        team_urls = prod_list_handler.get_list_data_by_name(f'{CONFIG.team_name} URLs')
         actions = []
 
         # Handle case where list is not found or XSOAR is not configured
         if team_urls is None:
-            logger.warning("⚠️ {CONFIG.team_name} URLs list not available from XSOAR")
+            logger.warning(f"⚠️ {CONFIG.team_name} URLs list not available from XSOAR")
             actions = [{
                 "type": "Action.Submit",
                 "title": "URLs unavailable (XSOAR not configured)",
@@ -1617,7 +1617,7 @@ class GetCurrentApprovedTestingEntries(Command):
         if len(result) > max_length:
             logger.warning(f"Reply from GetCurrentApprovedTestingEntries exceeded max length: {len(result)}")
             return (f"{activity['actor']['displayName']}, the current list is too long to be displayed here. "
-                    "You may find the same list at http://secops.example.com/get-approved-testing-entries")
+                    "You may find the same list at http://gdnr.company.com/get-approved-testing-entries")
         return result
 
 
@@ -1693,7 +1693,7 @@ def announce_new_approved_testing_entry(new_item) -> None:
         ]
     }
     webex_api.messages.create(
-        roomId=CONFIG.webex_room_id_soc_t2,
+        roomId=CONFIG.webex_room_id_gosc_t2,
         text="New Approved Testing!",
         attachments=[{"contentType": "application/vnd.microsoft.card.adaptive", "content": payload}]
     )
@@ -1773,7 +1773,7 @@ def add_entry_to_reviews(dict_full, ticket_id, person, date, message):
 
 
 def announce_new_threat_hunt(ticket_no, ticket_title, incident_url, person_id):
-    webex_data = prod_list_handler.get_list_data_by_name('{CONFIG.team_name} Webex')
+    webex_data = prod_list_handler.get_list_data_by_name(f'{CONFIG.team_name} Webex')
     request_headers = {
         'Content-Type': 'application/json',
         'Authorization': f"Bearer {CONFIG.webex_bot_access_token_toodles}"

@@ -11,8 +11,13 @@ if [ -z "$PORT" ] || [ -z "$TITLE" ] || [ -z "$LOG_FILE" ]; then
     exit 1
 fi
 
-PROJECT_DIR="/home/vinay/pub/IR"
+PROJECT_DIR="/opt/incident-response"
 cd "$PROJECT_DIR" || exit 1
+
+# Load environment variables from .env
+if [ -f .env ]; then
+    export $(grep -v '^#' .env | xargs)
+fi
 
 # Kill existing log viewer on this port
 pkill -f "log_viewer.py.*--port $PORT" 2>/dev/null
