@@ -124,7 +124,13 @@ export function createTimelineChart() {
         legend: {x: 0.5, y: -0.2, xanchor: 'center', orientation: 'h'},
         margin: {l: 50, r: 10, t: 30, b: 40},
         yaxis: {title: 'Number of Cases', gridcolor: getChartColors().grid},
-        xaxis: {gridcolor: getChartColors().grid, tickangle: 90, tickformat: '%m/%d', dtick: 86400000 * 2}
+        xaxis: {
+            type: 'date',
+            gridcolor: getChartColors().grid,
+            tickangle: 90,
+            tickformat: '%m/%d',
+            dtick: 86400000 * 2
+        }
     });
 
     safePlot('timelineChart', traces, layout);
