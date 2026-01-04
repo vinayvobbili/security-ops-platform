@@ -5,12 +5,13 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=vinay
-Group=vinay
-WorkingDirectory=/home/vinay/pub/IR
+User=iruser
+Group=iruser
+WorkingDirectory=/opt/incident-response
+EnvironmentFile=/opt/incident-response/.env
 
 # Start log viewer for TARS bot
-ExecStart=/home/vinay/pub/IR/.venv/bin/python deployment/log_viewer.py --port 8038 --title "TARS Bot" --file /home/vinay/pub/IR/logs/tars.log
+ExecStart=/opt/incident-response/.venv/bin/python deployment/log_viewer.py --port 8038 --title "TARS Bot" --file /opt/incident-response/logs/tars.log
 
 Restart=on-failure
 RestartSec=10

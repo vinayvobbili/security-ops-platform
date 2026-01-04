@@ -5,12 +5,13 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=vinay
-Group=vinay
-WorkingDirectory=/home/vinay/pub/IR
+User=iruser
+Group=iruser
+WorkingDirectory=/opt/incident-response
+EnvironmentFile=/opt/incident-response/.env
 
 # Start log viewer for Jarvis bot
-ExecStart=/home/vinay/pub/IR/.venv/bin/python deployment/log_viewer.py --port 8035 --title "Jarvis Bot" --file /home/vinay/pub/IR/logs/jarvis.log
+ExecStart=/opt/incident-response/.venv/bin/python deployment/log_viewer.py --port 8035 --title "Jarvis Bot" --file /opt/incident-response/logs/jarvis.log
 
 Restart=on-failure
 RestartSec=10

@@ -30,6 +30,7 @@ log_queue: queue.Queue = queue.Queue(maxsize=1000)
 recent_lines: deque = deque(maxlen=300)  # Buffer of last 300 lines for new connections
 recent_lines_lock = threading.Lock()  # Protect the recent_lines buffer
 log_source_cmd: Optional[list[str]] = None
+auth_username: str = "sirt"
 auth_password: str = "sirt"
 viewer_title: str = "Log Viewer"
 
@@ -265,7 +266,7 @@ HTML_TEMPLATE = """
 
 def check_auth(username, password):
     """Check if username/password combination is valid."""
-    return username == "sirt" and password == auth_password
+    return username == auth_username and password == auth_password
 
 
 def authenticate():
@@ -400,10 +401,17 @@ def parse_args():
     )
 
     parser.add_argument(
+        '--username',
+        type=str,
+        default=os.getenv('LOG_VIEWER_USERNAME', 'sirt'),
+        help='Username for HTTP Basic Auth (default: from LOG_VIEWER_USERNAME env var or "sirt")'
+    )
+
+    parser.add_argument(
         '--password',
         type=str,
-        default='sirt',
-        help='Password for HTTP Basic Auth (default: sirt)'
+        default=os.getenv('LOG_VIEWER_PASSWORD', 'sirt'),
+        help='Password for HTTP Basic Auth (default: from LOG_VIEWER_PASSWORD env var or "sirt")'
     )
 
     # Log source options - must specify one
@@ -426,11 +434,12 @@ def parse_args():
 
 def main():
     """Main entry point."""
-    global log_source_cmd, auth_password, viewer_title
+    global log_source_cmd, auth_username, auth_password, viewer_title
 
     args = parse_args()
 
     # Set global config
+    auth_username = args.username
     auth_password = args.password
     viewer_title = args.title
 
@@ -461,7 +470,7 @@ def main():
     # Start Flask app
     logger.info(f"Starting log viewer on http://0.0.0.0:{args.port}")
     logger.info(f"Title: {viewer_title}")
-    logger.info(f"Auth: username=sirt, password={auth_password}")
+    logger.info(f"Auth: username={auth_username}, password={auth_password}")
 
     try:
         # Use Flask's built-in server (fine for internal use with 7 viewers)
