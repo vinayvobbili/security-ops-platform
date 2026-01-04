@@ -1,6 +1,6 @@
 #!/bin/bash
 
-cd /home/vinay/pub/IR || exit 1
+cd /opt/incident-response || exit 1
 
 # Kill ALL existing web server processes if running
 echo "Stopping ALL existing Web Server instances..."
@@ -80,7 +80,7 @@ mkdir -p logs
 
 # Start new web server instance in background
 # Python logging handles all output - redirect nohup output to /dev/null
-nohup env PYTHONPATH=/home/vinay/pub/IR .venv/bin/python web/web_server.py > /dev/null 2>&1 &
+nohup env PYTHONPATH=/opt/incident-response .venv/bin/python web/web_server.py > /dev/null 2>&1 &
 
 echo "Starting Web Server..."
 echo ""
@@ -107,8 +107,8 @@ if pgrep -f "web/web_server.py" > /dev/null; then
     PID=$(pgrep -f 'web/web_server.py')
     echo "✅ Web Server is running (PID: $PID)"
     echo ""
-    echo "To view logs: tail -f /home/vinay/pub/IR/logs/web_server.log"
+    echo "To view logs: tail -f /opt/incident-response/logs/web_server.log"
 else
     echo "❌ Warning: Web Server process not found"
-    echo "Check logs: tail -20 /home/vinay/pub/IR/logs/web_server.log"
+    echo "Check logs: tail -20 /opt/incident-response/logs/web_server.log"
 fi
