@@ -5,6 +5,19 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+# Load environment variables from .env
+if [ -f "$PROJECT_ROOT/.env" ]; then
+    export $(grep -v '^#' "$PROJECT_ROOT/.env" | grep -v '^$' | xargs)
+fi
+
+# Use LOG_VIEWER settings from .env or defaults
+LOG_VIEWER_BASE_URL="${LOG_VIEWER_BASE_URL:-http://localhost}"
+LOG_VIEWER_USERNAME="${LOG_VIEWER_USERNAME:-sirt}"
+LOG_VIEWER_PASSWORD="${LOG_VIEWER_PASSWORD:-sirt}"
+# Extract hostname from URL for nginx server_name
+LOG_VIEWER_HOSTNAME=$(echo "$LOG_VIEWER_BASE_URL" | sed -E 's|https?://([^:/]+).*|\1|')
 
 echo "================================================"
 echo "Setting up Log Viewers with nginx Landing Page"
@@ -24,24 +37,240 @@ echo ""
 
 # Create htpasswd file for basic auth
 echo "Setting up password protection..."
-echo -n "sirt" | sudo htpasswd -i -c /home/vinay/pub/IR/.htpasswd sirt
-sudo chown vinay:vinay /home/vinay/pub/IR/.htpasswd
-sudo chmod 644 /home/vinay/pub/IR/.htpasswd
-echo "  ✓ Password configured (username: sirt, password: sirt)"
+echo -n "$LOG_VIEWER_PASSWORD" | sudo htpasswd -i -c /opt/incident-response/.htpasswd "$LOG_VIEWER_USERNAME"
+sudo chown iruser:iruser /opt/incident-response/.htpasswd
+sudo chmod 644 /opt/incident-response/.htpasswd
+echo "  ✓ Password configured (username: $LOG_VIEWER_USERNAME, password: $LOG_VIEWER_PASSWORD)"
 echo ""
 
 # Ensure home directory is accessible for nginx
 echo "Configuring directory permissions..."
-chmod 751 /home/vinay
+chmod 751 /home/iruser
 echo "  ✓ Directory permissions set"
 echo ""
 
-# Install nginx configuration
-echo "Installing nginx configuration..."
-sudo cp "$SCRIPT_DIR/nginx-log-viewer.conf" /etc/nginx/sites-available/ir-log-viewer.conf
+# Generate nginx configuration from template
+echo "Generating nginx configuration..."
+cat > /tmp/ir-log-viewer.conf <<EOF
+server {
+    listen 8030;
+    server_name $LOG_VIEWER_HOSTNAME;
+
+    root /opt/incident-response/deployment;
+    index log-viewer-index.html;
+
+    # Basic auth
+    auth_basic "IR Logs";
+    auth_basic_user_file /opt/incident-response/.htpasswd;
+
+    location / {
+        try_files \$uri \$uri/ =404;
+    }
+}
+EOF
+sudo mv /tmp/ir-log-viewer.conf /etc/nginx/sites-available/ir-log-viewer.conf
 sudo ln -sf /etc/nginx/sites-available/ir-log-viewer.conf /etc/nginx/sites-enabled/ir-log-viewer.conf
 sudo nginx -t
-echo "  ✓ nginx configuration installed"
+echo "  ✓ nginx configuration installed with server_name: $LOG_VIEWER_HOSTNAME"
+echo ""
+
+# Generate HTML landing page from environment variables
+echo "Generating HTML landing page..."
+cat > "$SCRIPT_DIR/log-viewer-index.html" <<'HTMLEOF'
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IR Log Viewer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 800px;
+            width: 100%;
+            padding: 40px;
+        }
+
+        h1 {
+            color: #2d3748;
+            margin-bottom: 10px;
+            font-size: 2em;
+        }
+
+        .subtitle {
+            color: #718096;
+            margin-bottom: 30px;
+            font-size: 1.1em;
+        }
+
+        .log-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 16px;
+            margin-bottom: 30px;
+        }
+
+        .log-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 12px;
+            padding: 24px;
+            text-decoration: none;
+            color: white;
+            transition: transform 0.2s, box-shadow 0.2s;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .log-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 12px rgba(0, 0, 0, 0.2);
+        }
+
+        .log-card.featured {
+            grid-column: 1 / -1;
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        }
+
+        .log-card h3 {
+            font-size: 1.3em;
+            margin-bottom: 8px;
+        }
+
+        .log-card p {
+            opacity: 0.9;
+            font-size: 0.9em;
+        }
+
+        .features {
+            background: #f7fafc;
+            border-radius: 12px;
+            padding: 20px;
+            margin-top: 30px;
+        }
+
+        .features h3 {
+            color: #2d3748;
+            margin-bottom: 12px;
+        }
+
+        .features ul {
+            list-style: none;
+            color: #4a5568;
+        }
+
+        .features li {
+            padding: 8px 0;
+            padding-left: 24px;
+            position: relative;
+        }
+
+        .features li:before {
+            content: "✓";
+            position: absolute;
+            left: 0;
+            color: #48bb78;
+            font-weight: bold;
+        }
+
+        .footer {
+            text-align: center;
+            margin-top: 30px;
+            color: #a0aec0;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>🔍 IR Log Viewer</h1>
+    <p class="subtitle">Real-time log monitoring for all IR services</p>
+
+    <div class="log-grid">
+        <a href="LOG_VIEWER_BASE_URL_PLACEHOLDER:8031" class="log-card featured" target="_blank">
+            <h3>📊 All Services</h3>
+            <p>Combined view of all IR services using journalctl</p>
+        </a>
+
+        <a href="LOG_VIEWER_BASE_URL_PLACEHOLDER:8032" class="log-card" target="_blank">
+            <h3>🎯 Toodles</h3>
+            <p>Toodles bot logs</p>
+        </a>
+
+        <a href="LOG_VIEWER_BASE_URL_PLACEHOLDER:8033" class="log-card" target="_blank">
+            <h3>🤖 MSOAR</h3>
+            <p>MSOAR bot logs</p>
+        </a>
+
+        <a href="LOG_VIEWER_BASE_URL_PLACEHOLDER:8034" class="log-card" target="_blank">
+            <h3>💰 MoneyBall</h3>
+            <p>MoneyBall bot logs</p>
+        </a>
+
+        <a href="LOG_VIEWER_BASE_URL_PLACEHOLDER:8035" class="log-card" target="_blank">
+            <h3>🛡️ Jarvis</h3>
+            <p>Jarvis bot logs</p>
+        </a>
+
+        <a href="LOG_VIEWER_BASE_URL_PLACEHOLDER:8036" class="log-card" target="_blank">
+            <h3>⚓ Barnacles</h3>
+            <p>Barnacles bot logs</p>
+        </a>
+
+        <a href="LOG_VIEWER_BASE_URL_PLACEHOLDER:8038" class="log-card" target="_blank">
+            <h3>🤖 TARS</h3>
+            <p>TARS bot logs</p>
+        </a>
+
+        <a href="LOG_VIEWER_BASE_URL_PLACEHOLDER:8037" class="log-card" target="_blank">
+            <h3>⏰ All Jobs</h3>
+            <p>Scheduler logs</p>
+        </a>
+
+        <a href="LOG_VIEWER_BASE_URL_PLACEHOLDER:8039" class="log-card" target="_blank">
+            <h3>🌐 Web Server</h3>
+            <p>Web server logs</p>
+        </a>
+    </div>
+
+    <div class="features">
+        <h3>Features</h3>
+        <ul>
+            <li>Real-time log streaming</li>
+            <li>Color-coded log levels (ERROR, WARNING, INFO)</li>
+            <li>Full-text search across logs</li>
+            <li>Filter by log level and timestamp</li>
+            <li>No SSH access required</li>
+        </ul>
+    </div>
+
+    <div class="footer">
+        Security Operations Team
+    </div>
+</div>
+</body>
+</html>
+HTMLEOF
+
+# Replace placeholder with actual URL
+sed -i "s|LOG_VIEWER_BASE_URL_PLACEHOLDER|$LOG_VIEWER_BASE_URL|g" "$SCRIPT_DIR/log-viewer-index.html"
+echo "  ✓ HTML landing page generated"
 echo ""
 
 # Install Python log viewer systemd services
@@ -66,7 +295,7 @@ echo ""
 # Create symlink in ~/bin for easy management
 echo "Creating management symlink..."
 mkdir -p ~/bin
-ln -sf /home/vinay/pub/IR/deployment/manage_log_viewers.sh ~/bin/start_log_service
+ln -sf /opt/incident-response/deployment/manage_log_viewers.sh ~/bin/start_log_service
 echo "  ✓ Symlink created: ~/bin/start_log_service"
 echo ""
 
@@ -90,19 +319,19 @@ echo "✅ Log Viewers Setup Complete!"
 echo "================================================"
 echo ""
 echo "Landing page:"
-echo "  http://lab-vm-12.internal.example.com:8030"
-echo "  (Username: sirt, Password: sirt)"
+echo "  ${LOG_VIEWER_BASE_URL}:8030"
+echo "  (Username: $LOG_VIEWER_USERNAME, Password: $LOG_VIEWER_PASSWORD)"
 echo ""
 echo "Direct access URLs:"
-echo "  http://lab-vm-12.internal.example.com:8031 - All Services (journalctl)"
-echo "  http://lab-vm-12.internal.example.com:8032 - Toodles"
-echo "  http://lab-vm-12.internal.example.com:8033 - MSOAR"
-echo "  http://lab-vm-12.internal.example.com:8034 - MoneyBall"
-echo "  http://lab-vm-12.internal.example.com:8035 - Jarvis"
-echo "  http://lab-vm-12.internal.example.com:8036 - Barnacles"
-echo "  http://lab-vm-12.internal.example.com:8038 - TARS"
-echo "  http://lab-vm-12.internal.example.com:8037 - All Jobs"
-echo "  (Each protected with username: sirt, password: sirt)"
+echo "  ${LOG_VIEWER_BASE_URL}:8031 - All Services (journalctl)"
+echo "  ${LOG_VIEWER_BASE_URL}:8032 - Toodles"
+echo "  ${LOG_VIEWER_BASE_URL}:8033 - MSOAR"
+echo "  ${LOG_VIEWER_BASE_URL}:8034 - MoneyBall"
+echo "  ${LOG_VIEWER_BASE_URL}:8035 - Jarvis"
+echo "  ${LOG_VIEWER_BASE_URL}:8036 - Barnacles"
+echo "  ${LOG_VIEWER_BASE_URL}:8038 - TARS"
+echo "  ${LOG_VIEWER_BASE_URL}:8037 - All Jobs"
+echo "  (Each protected with username: $LOG_VIEWER_USERNAME, password: $LOG_VIEWER_PASSWORD)"
 echo ""
 echo "Features:"
 echo "  ✓ Full log streaming (like tail -f)"
