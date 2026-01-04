@@ -187,7 +187,7 @@ SHIFT_CHANGE_MESSAGES = [
     "🏆 Championship roster taking the field!",
 ]
 
-# Ouch messages for missing charts
+# Ouch, messages for missing charts
 CHART_NOT_FOUND_MESSAGES = [
     "🤕 Ouch! That chart went missing...",
     "💥 Ouch! Chart file is playing hide and seek...",
@@ -880,7 +880,7 @@ class ShiftChangeFormatter:
 
 
 def _create_shift_change_message(shift_name, shift_data):
-    """Create the markdown message for shift change announcement."""
+    """Create the Markdown message for shift change announcement."""
     try:
         # hosts_text = '\n'.join(shift_data['hosts_in_containment']) if shift_data['hosts_in_containment'] else ''
 
@@ -1002,7 +1002,7 @@ def send_daily_operational_report_charts(room_id=config.webex_room_id_metrics):
 
 def main():
     """Main function to run the scheduled jobs."""
-    room_id = config.webex_room_id_test_space
+    room_id = config.webex_room_id_vinay_test_space
     # announce_shift_change('morning', room_id, sleep_time=0)
     # print(get_staffing_data())
     send_daily_operational_report_charts(room_id)
