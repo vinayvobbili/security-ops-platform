@@ -1,15 +1,15 @@
 #!/bin/bash
 
-cd /home/vinay/pub/IR || exit 1
+cd /opt/incident-response || exit 1
 
 # Kill existing barnacles process if running
 echo "Stopping existing the alert triage service instances..."
-source /home/vinay/pub/IR/deployment/kill_process.sh
+source /opt/incident-response/deployment/kill_process.sh
 kill_process_gracefully "webex_bots/barnacles" "the alert triage service" || exit 1
 sleep 1
 
 # Restart log viewer to ensure it shows latest logs
-/home/vinay/pub/IR/deployment/restart_log_viewer.sh 8036 "the alert triage service Bot" /home/vinay/pub/IR/logs/barnacles.log
+/opt/incident-response/deployment/restart_log_viewer.sh 8036 "the alert triage service Bot" /opt/incident-response/logs/barnacles.log
 
 # Ensure logs directory exists
 mkdir -p logs
@@ -19,7 +19,7 @@ mkdir -p logs
 
 # Start new barnacles instance in background
 # Python logging handles all output - redirect nohup output to /dev/null
-nohup env PYTHONPATH=/home/vinay/pub/IR .venv/bin/python webex_bots/barnacles.py > /dev/null 2>&1 &
+nohup env PYTHONPATH=/opt/incident-response .venv/bin/python webex_bots/barnacles.py > /dev/null 2>&1 &
 
 echo "Starting the alert triage service bot..."
 echo ""
@@ -45,8 +45,8 @@ if pgrep -f "webex_bots/barnacles" > /dev/null; then
     PID=$(pgrep -f 'webex_bots/barnacles')
     echo "✅ the alert triage service is running (PID: $PID)"
     echo ""
-    echo "To view logs: tail -f /home/vinay/pub/IR/logs/barnacles.log"
+    echo "To view logs: tail -f /opt/incident-response/logs/barnacles.log"
 else
     echo "❌ Warning: the alert triage service process not found"
-    echo "Check logs: tail -20 /home/vinay/pub/IR/logs/barnacles.log"
+    echo "Check logs: tail -20 /opt/incident-response/logs/barnacles.log"
 fi

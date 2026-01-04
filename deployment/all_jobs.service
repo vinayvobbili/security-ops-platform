@@ -8,10 +8,10 @@ Type=simple
 Restart=always
 RestartSec=10
 User=vinay
-WorkingDirectory=/home/vinay/pub/IR
-ExecStart=/home/vinay/pub/IR/.venv/bin/python /home/vinay/pub/IR/src/all_jobs.py
-StandardOutput=append:/home/vinay/pub/IR/logs/all_jobs.log
-StandardError=append:/home/vinay/pub/IR/logs/all_jobs.log
+WorkingDirectory=/opt/incident-response
+ExecStart=/opt/incident-response/.venv/bin/python /opt/incident-response/src/all_jobs.py
+StandardOutput=append:/opt/incident-response/logs/all_jobs.log
+StandardError=append:/opt/incident-response/logs/all_jobs.log
 
 # Resource limits
 MemoryMax=2G

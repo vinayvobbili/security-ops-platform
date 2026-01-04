@@ -1,6 +1,6 @@
 #!/bin/bash
 
-cd /home/vinay/pub/IR || exit 1
+cd /opt/incident-response || exit 1
 
 # Kill existing all_jobs process if running
 echo "Stopping existing All Jobs instances..."
@@ -11,7 +11,7 @@ sleep 1
 # Use log rotation instead of wiping logs on restart
 
 # Start new all_jobs instance in background
-nohup env PYTHONPATH=/home/vinay/pub/IR .venv/bin/python src/all_jobs.py >> logs/all_jobs.log 2>&1 &
+nohup env PYTHONPATH=/opt/incident-response .venv/bin/python src/all_jobs.py >> logs/all_jobs.log 2>&1 &
 
 echo "Starting All Jobs..."
 echo ""
@@ -29,8 +29,8 @@ if pgrep -f "src/all_jobs" > /dev/null; then
     PID=$(pgrep -f 'src/all_jobs')
     echo "✅ All Jobs is running (PID: $PID)"
     echo ""
-    echo "To view logs: tail -f /home/vinay/pub/IR/logs/all_jobs.log"
+    echo "To view logs: tail -f /opt/incident-response/logs/all_jobs.log"
 else
     echo "❌ Warning: All Jobs process not found"
-    echo "Check logs: tail -20 /home/vinay/pub/IR/logs/all_jobs.log"
+    echo "Check logs: tail -20 /opt/incident-response/logs/all_jobs.log"
 fi
