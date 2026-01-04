@@ -6,27 +6,78 @@ This module provides centralized state management for the security operations bo
 minimizing global variables and providing a clean interface for component access.
 """
 
-import os
-import logging
 import atexit
+import logging
+import os
 import signal
 from typing import Optional
 
 from langchain_ollama import ChatOllama, OllamaEmbeddings
 
-from my_config import get_config
-from my_bot.utils.enhanced_config import ModelConfig
 from my_bot.document.document_processor import DocumentProcessor
 from my_bot.tools.crowdstrike_tools import get_device_containment_status, get_device_online_status, get_device_details_cs
-from my_bot.tools.weather_tools import get_weather_info
 from my_bot.tools.staffing_tools import get_current_shift_info, get_current_staffing
-from my_bot.tools.metrics_tools import get_bot_metrics, get_bot_metrics_summary
+# from my_bot.tools.metrics_tools import get_bot_metrics, get_bot_metrics_summary  # Commented out to reduce context
 from my_bot.tools.test_tools import run_tests, simple_live_message_test
-from my_bot.tools.network_monitoring_tools import get_network_activity, get_network_summary_tool
+from my_bot.tools.weather_tools import get_weather_info
+from my_bot.tools.xsoar_summary_tools import generate_executive_summary
+from my_bot.utils.enhanced_config import ModelConfig
+from my_config import get_config
+
+
+# from my_bot.tools.network_monitoring_tools import get_network_activity, get_network_summary_tool  # Commented out to reduce context
 
 
 class SecurityBotStateManager:
     """Centralized state management for the security operations bot"""
+
+    # System prompt for the security operations assistant
+    SYSTEM_PROMPT = """You are an expert security operations assistant. Your PRIMARY mission is to provide COMPREHENSIVE, DETAILED operational guidance by searching local security documents first, then providing expert knowledge.
+
+CRITICAL EXECUTION RULES - FOLLOW THESE EXACTLY:
+1. ALWAYS start by using the search_local_documents tool with the user's main keywords
+2. If the first search yields limited results, try ONE additional search with related terms
+3. After maximum 2 tool searches, you MUST provide a comprehensive answer based on available information
+4. DO NOT continue searching indefinitely - provide your best response after 2 search attempts
+5. If documents are found, extract ALL relevant details and quote specific procedures
+6. If no relevant documents are found, provide expert security guidance based on best practices
+
+RESPONSE CONSTRUCTION REQUIREMENTS:
+When documents are found:
+- Start with: "Based on [Document Name]..."
+- Include complete step-by-step procedures with numbered steps
+- Quote important warnings, requirements, and contact information
+- Include ALL tools, URLs, teams, and technical details mentioned
+- Add quality control steps and verification procedures
+- Include timeline requirements and escalation procedures
+
+When documents are not found or limited:
+- Start with: "Based on security best practices..."
+- Provide comprehensive procedural guidance using industry standards
+- Include general security tools and methodologies
+- Provide clear step-by-step instructions
+- Include common verification steps and quality controls
+- Add relevant warnings and considerations
+
+SEARCH STRATEGY (Maximum 2 attempts):
+- First search: Use main keywords from user question
+- Second search (if needed): Use 2-3 related technical terms
+- Then STOP searching and provide comprehensive response
+
+FORMATTING FOR WEBEX (Your responses will be sent as Webex messages):
+- Use Webex markdown formatting for clarity
+- Use clear headers (##) for major sections
+- Use bullet points (•) for lists and requirements
+- Use numbered lists (1., 2., 3.) for sequential procedures
+- Bold important warnings, tools, and key information with **text**
+- Include specific technical details and configurations
+- Provide complete operational context
+
+TOOL USAGE:
+- Use available tools to gather accurate, real-time information
+- Call tools with precise parameters based on user queries
+- Integrate tool results seamlessly into your comprehensive responses
+- If a tool fails, acknowledge it and provide alternative guidance"""
 
     def __init__(self):
         # Configuration
@@ -160,24 +211,27 @@ class SecurityBotStateManager:
             all_tools = [
                 # Weather tools
                 get_weather_info,
-                
+
                 # CrowdStrike tools
                 get_device_containment_status,
-                get_device_online_status, 
+                get_device_online_status,
                 get_device_details_cs,
-                
+
                 # Staffing tools
                 get_current_shift_info,
                 get_current_staffing,
-                
-                # Metrics tools
-                get_bot_metrics,
-                get_bot_metrics_summary,
-                
-                # Network monitoring tools
-                get_network_activity,
-                get_network_summary_tool,
-                
+
+                # XSOAR tools
+                generate_executive_summary,
+
+                # Metrics tools - commented out to reduce context
+                # get_bot_metrics,
+                # get_bot_metrics_summary,
+
+                # Network monitoring tools - commented out to reduce context
+                # get_network_activity,
+                # get_network_summary_tool,
+
                 # Test tools
                 run_tests,
                 simple_live_message_test
@@ -203,7 +257,6 @@ class SecurityBotStateManager:
             logging.error(f"Failed to initialize agent: {e}")
             return False
 
-
     def execute_query(self, query: str) -> dict:
         """Execute query using native tool calling
 
@@ -220,7 +273,7 @@ class SecurityBotStateManager:
         """
         try:
             messages = [
-                {"role": "system", "content": "You are a security operations assistant. Your responses will be sent as Webex messages, so you can use Webex markdown formatting."},
+                {"role": "system", "content": self.SYSTEM_PROMPT},
                 {"role": "user", "content": query}
             ]
 
@@ -343,7 +396,7 @@ class SecurityBotStateManager:
         """
         try:
             messages = [
-                {"role": "system", "content": "You are a security operations assistant. Provide clear, helpful responses."},
+                {"role": "system", "content": self.SYSTEM_PROMPT},
                 {"role": "user", "content": query}
             ]
 
@@ -385,14 +438,13 @@ class SecurityBotStateManager:
         except Exception as e:
             yield f"Error: {str(e)}"
 
-
     def _shutdown_handler(self):
         """Handle graceful shutdown"""
         try:
             # Clear references to force cleanup
             self.llm = None
             self.embeddings = None
-    
+
         except Exception as e:
             logging.error(f"Error during shutdown: {e}")
 
@@ -404,7 +456,6 @@ class SecurityBotStateManager:
     def get_embeddings(self) -> Optional[OllamaEmbeddings]:
         """Get embeddings instance"""
         return self.embeddings
-
 
     def get_document_processor(self) -> Optional[DocumentProcessor]:
         """Get document processor instance"""
