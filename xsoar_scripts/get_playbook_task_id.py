@@ -35,7 +35,7 @@ def search_tasks(tasks_dict, target_task_name, depth=0, ):
 
 
 def get_task_id(investigation_id, task_name):
-    url = f'https://api-msoardev.crtx.us.paloaltonetworks.com/xsoar/investigation/{investigation_id}/workplan'
+    url = f'https://api-name.crtx.us.paloaltonetworks.com/xsoar/investigation/{investigation_id}/workplan'
     dev_headers = {
         'Authorization': CONFIG.xsoar_dev_auth_key,
         'x-xdr-auth-id': CONFIG.xsoar_dev_auth_id,
