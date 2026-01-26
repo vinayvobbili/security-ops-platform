@@ -1,5 +1,5 @@
-# Security Operations Platform - Docker Image
-# Multi-stage build for optimized production image
+# Multi-stage Dockerfile for IR Platform
+# Demonstrates containerization best practices
 
 # =============================================================================
 # Stage 1: Builder
@@ -11,65 +11,51 @@ WORKDIR /app
 # Install build dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
+    curl \
     git \
     && rm -rf /var/lib/apt/lists/*
 
-# Create virtual environment
-RUN python -m venv /opt/venv
-ENV PATH="/opt/venv/bin:$PATH"
-
-# Install Python dependencies
+# Copy requirements first for better caching
 COPY requirements.txt .
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
+RUN pip wheel --no-cache-dir --wheel-dir /app/wheels -r requirements.txt
 
 # =============================================================================
 # Stage 2: Production
 # =============================================================================
 FROM python:3.11-slim as production
 
-# Labels for container metadata
-LABEL maintainer="Vinay Vobbilichetty"
-LABEL description="Security Operations Automation Platform"
-LABEL version="1.0.0"
-
-# Security: Run as non-root user
-RUN groupadd -r iruser && useradd -r -g iruser iruser
-
 WORKDIR /app
 
-# Copy virtual environment from builder
-COPY --from=builder /opt/venv /opt/venv
-ENV PATH="/opt/venv/bin:$PATH"
+# Create non-root user
+RUN groupadd -r iruser && useradd -r -g iruser iruser
+
+# Install runtime dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy wheels from builder
+COPY --from=builder /app/wheels /wheels
+RUN pip install --no-cache-dir /wheels/* && rm -rf /wheels
 
 # Copy application code
 COPY --chown=iruser:iruser . .
-
-# Create necessary directories
-RUN mkdir -p /app/logs /app/data/transient && \
-    chown -R iruser:iruser /app/logs /app/data
-
-# Environment configuration
-ENV PYTHONPATH=/app \
-    PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    LOG_LEVEL=INFO
 
 # Switch to non-root user
 USER iruser
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD python -c "import requests; requests.get('http://localhost:5000/health', timeout=5)" || exit 1
+    CMD curl -f http://localhost:8000/health || exit 1
 
-# Default port for web server
-EXPOSE 5000
+# Expose port
+EXPOSE 8000
 
-# Default command: start web server
-CMD ["python", "web/web_server.py"]
+# Default command
+CMD ["python", "-m", "web.app"]
 
 # =============================================================================
-# Stage 3: Development (optional)
+# Stage 3: Development
 # =============================================================================
 FROM production as development
 

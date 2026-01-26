@@ -41,7 +41,7 @@ def get_current_upcoming_travel_records(list_handler: ListHandler) -> List[Dict[
     """
     logger.info("Fetching upcoming travel records")
     return [
-        record for record in list_handler.get_list_data_by_name('IR_Upcoming_Travel')
+        record for record in list_handler.get_list_data_by_name('DnR_Upcoming_Travel')
         if parse_date(record['vacation_end_date']) >= datetime.now()
     ]
 
@@ -65,7 +65,7 @@ def submit_travel_form(
     """
     logger.info("Processing travel form submission")
 
-    return list_handler.add_item_to_list('IR_Upcoming_Travel', {
+    return list_handler.add_item_to_list('DnR_Upcoming_Travel', {
         "traveller_email_address": form_data.get('traveller_email_address'),
         "work_location": form_data.get('work_location'),
         "vacation_location": form_data.get('vacation_location'),
