@@ -1,0 +1,193 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "security-ops-platform"
+version = "2.0.0"
+description = "Enterprise-grade security operations automation platform with LLM-powered assistants"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.8"
+authors = [
+    {name = "Vinay Vobbilichetty", email = "vinay@example.com"}
+]
+keywords = [
+    "security",
+    "automation",
+    "soar",
+    "siem",
+    "incident-response",
+    "llm",
+    "langchain",
+    "crowdstrike",
+    "tanium",
+    "qradar",
+    "xsoar",
+    "webex-bot",
+]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Environment :: Console",
+    "Environment :: Web Environment",
+    "Framework :: Flask",
+    "Intended Audience :: Information Technology",
+    "Intended Audience :: System Administrators",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Security",
+    "Topic :: System :: Monitoring",
+    "Topic :: System :: Systems Administration",
+    "Typing :: Typed",
+]
+
+dependencies = [
+    "python-dotenv",
+    "pandas>=2.0.0",
+    "numpy>=1.24.0",
+    "pytz",
+    "python-dateutil",
+    "requests",
+    "aiohttp",
+    "Flask",
+    "waitress",
+    "PyJWT",
+    "cryptography",
+    "certifi",
+    "beautifulsoup4",
+    "tabulate",
+    "schedule",
+    "tqdm",
+    "tenacity",
+    "filelock",
+    "langchain>=0.1.0",
+    "langchain-community>=0.0.10",
+    "chromadb>=0.4.0",
+    "sentence-transformers>=2.2.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-mock>=3.10.0",
+    "black>=23.0.0",
+    "isort>=5.12.0",
+    "flake8>=6.0.0",
+    "mypy>=1.0.0",
+    "bandit>=1.7.0",
+    "pre-commit>=3.0.0",
+]
+
+webex = [
+    "webexpythonsdk==2.0.4",
+    "webex_bot==1.0.8",
+    "websockets>=11.0.3,<15.0",
+]
+
+crowdstrike = [
+    "crowdstrike-falconpy",
+]
+
+xsoar = [
+    "demisto-py>=3.2.21",
+]
+
+all = [
+    "security-ops-platform[dev,webex,crowdstrike,xsoar]",
+]
+
+[project.urls]
+Homepage = "https://github.com/vinayvobbili/My_Whole_Truth"
+Documentation = "https://github.com/vinayvobbili/My_Whole_Truth#readme"
+Repository = "https://github.com/vinayvobbili/My_Whole_Truth.git"
+Issues = "https://github.com/vinayvobbili/My_Whole_Truth/issues"
+
+[project.scripts]
+secops-web = "web.web_server:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["services*", "my_bot*", "src*", "web*", "webex_bots*"]
+
+[tool.black]
+line-length = 120
+target-version = ['py38', 'py39', 'py310', 'py311', 'py312']
+include = '\.pyi?$'
+exclude = '''
+/(
+    \.git
+    | \.venv
+    | venv
+    | build
+    | dist
+    | \.eggs
+    | data
+)/
+'''
+
+[tool.isort]
+profile = "black"
+line_length = 120
+skip_gitignore = true
+skip = [".venv", "venv", "build", "dist", "data"]
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true
+exclude = [
+    "venv",
+    ".venv",
+    "build",
+    "dist",
+    "data",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"
+asyncio_mode = "auto"
+markers = [
+    "unit: Unit tests (fast, no external dependencies)",
+    "integration: Integration tests (may require services)",
+    "slow: Slow tests (skip with -m 'not slow')",
+]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::PendingDeprecationWarning",
+]
+
+[tool.coverage.run]
+source = ["services", "my_bot", "src", "web"]
+omit = [
+    "*/tests/*",
+    "*/__pycache__/*",
+    "*/venv/*",
+    "*/.venv/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+]
+
+[tool.bandit]
+exclude_dirs = ["tests", "venv", ".venv"]
+skips = ["B101"]  # assert_used - OK in tests

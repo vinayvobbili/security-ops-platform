@@ -5,6 +5,9 @@ A comprehensive, enterprise-grade security operations automation platform featur
 [![CI Pipeline](https://github.com/vinayvobbili/My_Whole_Truth/actions/workflows/ci.yml/badge.svg)](https://github.com/vinayvobbili/My_Whole_Truth/actions/workflows/ci.yml)
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+[![Security: bandit](https://img.shields.io/badge/security-bandit-yellow.svg)](https://github.com/PyCQA/bandit)
+[![Imports: isort](https://img.shields.io/badge/imports-isort-1674b1.svg)](https://pycqa.github.io/isort/)
 
 ---
 
@@ -94,32 +97,70 @@ Flask-based web application with interactive visualizations:
 
 ## Architecture
 
+```mermaid
+flowchart TB
+    subgraph UI["User Interface Layer"]
+        WEB[Web Dashboard<br/>Flask + Waitress]
+        BOTS[Webex Bots<br/>10 Production Bots]
+    end
+
+    subgraph AI["AI/ML Layer"]
+        LLM[LLM Orchestration<br/>LangChain + Ollama]
+        RAG[RAG Pipeline<br/>ChromaDB + Embeddings]
+        TOOLS[22 Security Tools<br/>Investigation Toolkit]
+    end
+
+    subgraph CORE["Core Services"]
+        CACHE[Ticket Cache<br/>Thread-Safe Storage]
+        METRICS[Metrics Engine<br/>MTTR/MTTC Analytics]
+        SCHEDULER[Job Scheduler<br/>Automated Tasks]
+    end
+
+    subgraph INT["Integration Layer - 30+ Services"]
+        direction LR
+        EDR[EDR/XDR<br/>CrowdStrike, Tanium, Vectra]
+        SIEM[SIEM/SOAR<br/>QRadar, XSOAR]
+        INTEL[Threat Intel<br/>Recorded Future, VirusTotal]
+        ITSM[ITSM<br/>ServiceNow]
+    end
+
+    WEB --> LLM
+    BOTS --> LLM
+    LLM --> RAG
+    LLM --> TOOLS
+    TOOLS --> CORE
+    CORE --> INT
+
+    classDef ui fill:#4a90d9,stroke:#2c5aa0,color:#fff
+    classDef ai fill:#50c878,stroke:#228b22,color:#fff
+    classDef core fill:#ffa500,stroke:#cc8400,color:#fff
+    classDef int fill:#9370db,stroke:#6a0dad,color:#fff
+
+    class WEB,BOTS ui
+    class LLM,RAG,TOOLS ai
+    class CACHE,METRICS,SCHEDULER core
+    class EDR,SIEM,INTEL,ITSM int
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                       Web Dashboard (Flask)                      │
-│   Metrics │ Tickets │ Assets │ Reports │ EPP Tagging │ Chat    │
-└─────────────────────────────────────────────────────────────────┘
-                                │
-┌─────────────────────────────────────────────────────────────────┐
-│                    LLM Security Assistant                        │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐             │
-│  │ LangChain   │  │ ChromaDB    │  │ 22 Security │             │
-│  │ + Ollama    │  │ Vector DB   │  │ Tools       │             │
-│  └─────────────┘  └─────────────┘  └─────────────┘             │
-└─────────────────────────────────────────────────────────────────┘
-                                │
-┌─────────────────────────────────────────────────────────────────┐
-│                    Webex Bot Framework                           │
-│  pokedex │ hal9000 │ toodles │ jarvis │ msoar │ + 5 more       │
-│  ─────────────────────────────────────────────────────          │
-│  Self-healing │ Connection Pooling │ Retry Logic │ Health Checks│
-└─────────────────────────────────────────────────────────────────┘
-                                │
-┌─────────────────────────────────────────────────────────────────┐
-│                  Service Integration Layer (30+)                 │
-│  CrowdStrike │ Tanium │ QRadar │ ServiceNow │ Recorded Future   │
-│  VirusTotal │ Vectra │ Abnormal │ Zscaler │ Azure DevOps │ ...  │
-└─────────────────────────────────────────────────────────────────┘
+
+### Data Flow
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Bot as Webex Bot
+    participant LLM as LangChain Agent
+    participant Tools as Security Tools
+    participant APIs as External APIs
+
+    User->>Bot: Security question
+    Bot->>LLM: Process query
+    LLM->>LLM: RAG context retrieval
+    LLM->>Tools: Select appropriate tool
+    Tools->>APIs: API call (with retry)
+    APIs-->>Tools: Response
+    Tools-->>LLM: Enriched data
+    LLM-->>Bot: Formatted response
+    Bot-->>User: Answer with context
 ```
 
 ---
@@ -286,7 +327,21 @@ GitHub Actions workflow (`.github/workflows/ci.yml`) includes:
 ## Documentation
 
 - [CONTRIBUTING.md](CONTRIBUTING.md) - Development guidelines
+- [SECURITY.md](SECURITY.md) - Security policy and best practices
 - [docs/AGENTS.md](docs/AGENTS.md) - AI assistant configuration
+
+## Development
+
+```bash
+# Using Makefile (recommended)
+make help              # Show all available commands
+make install-dev       # Install with dev dependencies
+make test              # Run tests
+make lint              # Run linters
+make format            # Format code
+make security          # Run security scans
+make check             # Run all checks
+```
 
 ---
 
