@@ -5,12 +5,12 @@ Wants=network.target
 
 [Service]
 Type=simple
-User=iruser
+User=your-username
 Group=staff
-WorkingDirectory=/opt/incident-response
+WorkingDirectory=/path/to/IR
 Environment=PATH=/usr/local/bin:/usr/bin:/bin
-Environment=PYTHONPATH=/opt/incident-response
-ExecStart=/usr/bin/python3 /opt/incident-response/preload_soc_bot.py
+Environment=PYTHONPATH=/path/to/IR
+ExecStart=/usr/bin/python3 /path/to/IR/preload_soc_bot.py
 Restart=always
 RestartSec=10
 StandardOutput=journal

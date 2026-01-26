@@ -501,7 +501,7 @@ def ask(user_message: str, user_id: str = "default", room_id: str = "default") -
         original_query = query
 
         # Remove bot name mentions from anywhere in the message (common in group chats)
-        bot_names = ['IR_the security assistant bot', 'the security assistant bot', 'pokedex', 'dnr_pokedex',
+        bot_names = ['DnR_the security assistant bot', 'the security assistant bot', 'pokedex', 'dnr_pokedex',
                      'HAL9000', 'hal9000', 'the orchestration service', 'jarvis',
                      'the notification service', 'toodles', 'the alert triage service', 'barnacles']
 
@@ -725,7 +725,7 @@ def ask_stream(user_message: str, user_id: str = "default", room_id: str = "defa
         query = user_message.strip()
 
         # Remove bot name mentions
-        bot_names = ['IR_the security assistant bot', 'the security assistant bot', 'pokedex', 'dnr_pokedex',
+        bot_names = ['DnR_the security assistant bot', 'the security assistant bot', 'pokedex', 'dnr_pokedex',
                      'HAL9000', 'hal9000', 'the orchestration service', 'jarvis',
                      'the notification service', 'toodles', 'the alert triage service', 'barnacles']
 

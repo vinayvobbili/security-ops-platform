@@ -295,7 +295,7 @@ class Bot(WebexBot):
             # Strip bot name mentions for command detection
             import re
             cleaned_message = raw_message
-            bot_names = ['IR_the security assistant bot', 'the security assistant bot', 'pokedex', 'dnr_pokedex']
+            bot_names = ['DnR_the security assistant bot', 'the security assistant bot', 'pokedex', 'dnr_pokedex']
             for bot_name in bot_names:
                 pattern = re.compile(re.escape(bot_name), re.IGNORECASE)
                 cleaned_message = pattern.sub('', cleaned_message)

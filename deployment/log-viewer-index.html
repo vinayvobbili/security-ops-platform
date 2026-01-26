@@ -770,7 +770,7 @@
 </div>
 
 <script>
-    const API_BASE = 'http://sirt-lab-12.internal.example.com:8040/api';
+    const API_BASE = `http://${window.location.hostname}:8040/api`;
 
     // Cached auth credentials (only needed for control actions)
     let cachedAuth = null;
@@ -839,7 +839,7 @@
                     <div><span>Status:</span><span>Checking...</span></div>
                 </div>
                 <div class="card-actions">
-                    <button class="btn-card" onclick="window.open('http://sirt-lab-12.internal.example.com:${bot.port}', '_blank')">View Logs</button>
+                    <button class="btn-card" onclick="window.open('http://' + window.location.hostname + ':${bot.port}', '_blank')">View Logs</button>
                     <button class="btn-card btn-start" id="start-${bot.key}" onclick="controlBot('${bot.key}', 'start')" disabled>Start</button>
                     <button class="btn-card" id="restart-${bot.key}" onclick="controlBot('${bot.key}', 'restart')" disabled>Restart</button>
                     <button class="btn-card btn-stop" id="stop-${bot.key}" onclick="controlBot('${bot.key}', 'stop')" disabled>Stop</button>
