@@ -105,10 +105,10 @@ all = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/vinayvobbili/My_Whole_Truth"
-Documentation = "https://github.com/vinayvobbili/My_Whole_Truth#readme"
-Repository = "https://github.com/vinayvobbili/My_Whole_Truth.git"
-Issues = "https://github.com/vinayvobbili/My_Whole_Truth/issues"
+Homepage = "https://github.com/vinayvobbili/security-ops-platform"
+Documentation = "https://github.com/vinayvobbili/security-ops-platform#readme"
+Repository = "https://github.com/vinayvobbili/security-ops-platform.git"
+Issues = "https://github.com/vinayvobbili/security-ops-platform/issues"
 
 [project.scripts]
 secops-web = "web.web_server:main"
