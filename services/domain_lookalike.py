@@ -215,7 +215,7 @@ def detect_defensive_registration(
     """Detect if a lookalike domain is a defensive registration owned by the company.
 
     Uses multiple signals to determine ownership:
-    1. Nameserver matching - NS contains monitored domain (e.g., ns.company.com for company.com)
+    1. Nameserver matching - NS contains monitored domain (e.g., ns.example.com for example.com)
     2. Brand protection registrar - MarkMonitor, CSC, Safenames, etc.
     3. Manual allowlist - Explicitly confirmed defensive domains
 
@@ -235,14 +235,14 @@ def detect_defensive_registration(
         return True
 
     # Extract base name from monitored domain for NS matching
-    # e.g., "company.com" -> "company", "mycompany.co.uk" -> "mycompany"
+    # e.g., "example.com" -> "example", "mycompany.co.uk" -> "mycompany"
     monitored_base = monitored_domain.split('.')[0].lower()
 
     # Check nameservers contain monitored domain
     if ns_records:
         for ns in ns_records:
             ns_lower = ns.lower().rstrip('.')
-            # Check if NS is under the monitored domain (e.g., ns.company.com)
+            # Check if NS is under the monitored domain (e.g., ns.example.com)
             if monitored_base in ns_lower:
                 logger.debug(f"{domain}: Defensive (NS {ns} contains {monitored_base})")
                 return True

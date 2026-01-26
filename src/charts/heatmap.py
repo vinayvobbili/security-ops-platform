@@ -192,7 +192,7 @@ def create_choropleth_map():
                        edgecolor='#1A237E', linewidth=1.5),
              transform=trans)
 
-    # Add GS-IR branding - closer to bottom
+    # Add GS-DnR branding - closer to bottom
     fig.text(0.98, 0.005, 'GS-DnR', ha='right', va='bottom', fontsize=10,
              alpha=0.7, color='#3F51B5', style='italic', fontweight='bold',
              transform=trans)

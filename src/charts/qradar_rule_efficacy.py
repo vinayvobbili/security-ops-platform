@@ -275,7 +275,7 @@ class QRadarEfficacyChart:
         )
         fig.patches.append(fancy_box)
 
-        # Add GS-IR watermark
+        # Add GS-DnR watermark
         fig.text(0.99, 0.01, 'GS-DnR',
                  ha='right', va='bottom', fontsize=10,
                  alpha=0.7, color='#3F51B5', style='italic', fontweight='bold')

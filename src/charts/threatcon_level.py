@@ -228,7 +228,7 @@ def create_definitions_table(plt):
 
 def add_fancy_title(ax):
     """
-    Add an enhanced title with modern styling and GS-IR branding.
+    Add an enhanced title with modern styling and GS-DnR branding.
     """
     current_date = datetime.today().strftime("%m/%d/%Y")
     title_text = f'Threatcon Level - {current_date}'
@@ -247,7 +247,7 @@ def add_fancy_title(ax):
             ),
             zorder=10)
 
-    # Add GS-IR watermark in top right
+    # Add GS-DnR watermark in top right
     ax.text(1.1, 1.25, 'GS-DnR',
             ha='right', va='center',
             fontsize=10, style='italic', fontweight='bold',

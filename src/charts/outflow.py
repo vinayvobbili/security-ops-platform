@@ -383,7 +383,7 @@ def create_graph(tickets, period_label="Yesterday"):
              bbox=dict(boxstyle="round,pad=0.4", facecolor='white', alpha=0.9,
                        edgecolor='#1A237E', linewidth=1.5))
 
-    # Add GS-IR watermark
+    # Add GS-DnR watermark
     fig.text(0.99, 0.01, 'GS-DnR',
              ha='right', va='bottom', fontsize=10,
              alpha=0.7, color='#3F51B5', style='italic', fontweight='bold')

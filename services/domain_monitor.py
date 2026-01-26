@@ -34,9 +34,9 @@ def _load_monitoring_config() -> Dict[str, Any]:
 
     Config file format:
     {
-        "monitored_domains": ["company.com"],
+        "monitored_domains": ["example.com"],
         "defensive_domains": {
-            "company.com": ["mycompany.com", "company-secure.com"]
+            "example.com": ["myexample.com", "example-secure.com"]
         }
     }
     """

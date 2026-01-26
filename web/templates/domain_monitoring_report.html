@@ -44,6 +44,9 @@
 
         <div class="summary-cards" id="summaryCards"></div>
 
+        <!-- Priority Summary: Critical findings requiring immediate action -->
+        <div id="prioritySummary"></div>
+
         <div class="tabs">
             <button class="tab active" onclick="showTab('lookalikes')">Lookalike Domains</button>
             <button class="tab" onclick="showTab('darkweb')">Public Leaks (GitHub/Paste)</button>
@@ -224,6 +227,9 @@ function renderReport(results) {
 
     document.getElementById('summaryCards').innerHTML = cardsHtml;
 
+    // Priority Summary - critical findings with recommended actions
+    renderPrioritySummary(results);
+
     // Lookalikes tab
     renderLookalikes(results.domains);
 
@@ -250,6 +256,335 @@ function renderReport(results) {
 
     // AbuseIPDB tab
     renderAbuseIPDB(results.domains);
+}
+
+// Priority Summary - Aggregate critical findings with recommended actions
+function renderPrioritySummary(results) {
+    const domains = results.domains || {};
+
+    // Collect critical findings (investigate immediately)
+    const critical = [];
+    // Collect warning findings (review today)
+    const warnings = [];
+
+    Object.entries(domains).forEach(([domain, data]) => {
+        // Active lookalikes - CRITICAL
+        const becameActive = data.lookalikes?.became_active || [];
+        becameActive.filter(d => !d.is_defensive).forEach(d => {
+            critical.push({
+                type: 'active_lookalike',
+                domain: d.domain,
+                parentDomain: domain,
+                ip: d.dns_a?.join(', ') || 'Unknown',
+                details: d.is_parked === false ? 'Hosting active content' : 'Recently activated',
+                actions: [
+                    { label: 'Block Domain', icon: '🚫', action: `copyToClipboard('${d.domain}')`, title: 'Copy domain to add to blocklist' },
+                    { label: 'Submit Takedown', icon: '📝', action: `openTakedown('${d.domain}', '${d.registrar || ''}')`, title: 'Open takedown request template' },
+                    { label: 'VirusTotal', icon: '🔍', action: `window.open('https://www.virustotal.com/gui/domain/${d.domain}', '_blank')`, title: 'Check on VirusTotal' }
+                ]
+            });
+        });
+
+        // Dark web mentions - CRITICAL
+        const darkweb = data.intelx?.darkweb_findings || [];
+        darkweb.forEach(f => {
+            critical.push({
+                type: 'darkweb',
+                domain: domain,
+                source: f.name || 'Unknown source',
+                date: f.date?.substring(0, 10) || 'Unknown',
+                details: `Found on ${f.media_type || 'dark web'}`,
+                actions: [
+                    { label: 'View on IntelX', icon: '🕵️', action: `window.open('${f.intelx_url || 'https://intelx.io'}', '_blank')`, title: 'View full finding' },
+                    { label: 'Create Incident', icon: '🎫', action: `createIncident('darkweb', '${domain}', '${f.name || ''}')`, title: 'Create incident ticket' }
+                ]
+            });
+        });
+
+        // CVEs detected - CRITICAL
+        const vulns = data.shodan?.vulnerabilities || [];
+        vulns.forEach(v => {
+            critical.push({
+                type: 'cve',
+                domain: domain,
+                ip: v.ip,
+                cve: v.cve,
+                details: 'Vulnerability detected on infrastructure',
+                actions: [
+                    { label: 'View CVE', icon: '📋', action: `window.open('https://nvd.nist.gov/vuln/detail/${v.cve}', '_blank')`, title: 'View CVE details' },
+                    { label: 'View on Shodan', icon: '🔍', action: `window.open('https://www.shodan.io/host/${v.ip}', '_blank')`, title: 'View host on Shodan' },
+                    { label: 'Create Ticket', icon: '🎫', action: `createIncident('cve', '${v.ip}', '${v.cve}')`, title: 'Create patch ticket' }
+                ]
+            });
+        });
+
+        // Malware/C2 - CRITICAL
+        const malware = data.abusech?.malicious_domains || [];
+        malware.forEach(m => {
+            critical.push({
+                type: 'malware',
+                domain: m.domain || domain,
+                details: m.threat_type || 'Malware associated',
+                source: 'abuse.ch',
+                actions: [
+                    { label: 'Block Domain', icon: '🚫', action: `copyToClipboard('${m.domain || domain}')`, title: 'Copy to add to blocklist' },
+                    { label: 'Check URLhaus', icon: '🔍', action: `window.open('https://urlhaus.abuse.ch/browse.php?search=${m.domain || domain}', '_blank')`, title: 'View on URLhaus' }
+                ]
+            });
+        });
+
+        // New lookalikes (non-defensive) - WARNING
+        const newDomains = data.lookalikes?.new_domains || [];
+        newDomains.filter(d => !d.is_defensive && d.risk_level !== 'parked').forEach(d => {
+            warnings.push({
+                type: 'new_lookalike',
+                domain: d.domain,
+                parentDomain: domain,
+                riskLevel: d.risk_level,
+                registrar: d.registrar || 'Unknown',
+                details: d.risk_level === 'high_risk' ? 'High risk indicators' : 'Suspicious activity',
+                actions: [
+                    { label: 'Investigate', icon: '🔍', action: `window.open('https://www.virustotal.com/gui/domain/${d.domain}', '_blank')`, title: 'Check on VirusTotal' },
+                    { label: 'Monitor', icon: '👁️', action: `addToWatchlist('${d.domain}')`, title: 'Add to watchlist' }
+                ]
+            });
+        });
+
+        // Breached emails - WARNING
+        const breachedEmails = data.hibp?.breached_emails || [];
+        breachedEmails.forEach(item => {
+            const breachNames = (item.breaches || []).slice(0, 2).map(b => typeof b === 'object' ? b.Name : b).join(', ');
+            warnings.push({
+                type: 'breach',
+                domain: domain,
+                email: item.email,
+                breachCount: item.breach_count,
+                details: `Found in: ${breachNames}${item.breaches?.length > 2 ? ` +${item.breaches.length - 2} more` : ''}`,
+                actions: [
+                    { label: 'Reset Password', icon: '🔑', action: `createIncident('password_reset', '${item.email}', '')`, title: 'Create password reset ticket' },
+                    { label: 'View HIBP', icon: '🔍', action: `window.open('https://haveibeenpwned.com/account/${encodeURIComponent(item.email)}', '_blank')`, title: 'View on HIBP' }
+                ]
+            });
+        });
+
+        // Risky exposed services - WARNING
+        const exposedServices = data.shodan?.exposed_services || [];
+        exposedServices.forEach(svc => {
+            warnings.push({
+                type: 'exposed_service',
+                domain: domain,
+                ip: svc.ip,
+                port: svc.port,
+                service: svc.product || 'Unknown',
+                details: svc.risk_reason || 'Risky service exposed',
+                actions: [
+                    { label: 'Review Firewall', icon: '🛡️', action: `createIncident('firewall', '${svc.ip}', 'Port ${svc.port}')`, title: 'Create firewall review ticket' },
+                    { label: 'View Shodan', icon: '🔍', action: `window.open('https://www.shodan.io/host/${svc.ip}', '_blank')`, title: 'View on Shodan' }
+                ]
+            });
+        });
+
+        // SSL certs on lookalikes - WARNING
+        const ctFindings = data.ct_logs?.high_risk_domains || [];
+        ctFindings.forEach(item => {
+            warnings.push({
+                type: 'ssl_cert',
+                domain: item.domain,
+                parentDomain: domain,
+                issuer: item.issuer || 'Unknown CA',
+                details: 'SSL certificate issued for lookalike',
+                actions: [
+                    { label: 'View Cert', icon: '🔐', action: `window.open('https://crt.sh/?q=${item.domain}', '_blank')`, title: 'View on crt.sh' },
+                    { label: 'Block Domain', icon: '🚫', action: `copyToClipboard('${item.domain}')`, title: 'Copy to add to blocklist' }
+                ]
+            });
+        });
+    });
+
+    // Don't show section if nothing to report
+    if (critical.length === 0 && warnings.length === 0) {
+        document.getElementById('prioritySummary').innerHTML = `
+            <div style="background:linear-gradient(135deg, rgba(34,197,94,0.2) 0%, rgba(22,163,74,0.15) 100%);border:1px solid rgba(34,197,94,0.4);border-radius:12px;padding:20px;margin-bottom:20px;text-align:center;">
+                <div style="font-size:2em;margin-bottom:10px;">✅</div>
+                <div style="color:#22c55e;font-size:1.1em;font-weight:600;">All Clear - No Critical Findings</div>
+                <div style="color:#94a3b8;font-size:0.9em;margin-top:5px;">Review tabs below for detailed monitoring data</div>
+            </div>
+        `;
+        return;
+    }
+
+    let html = '';
+
+    // Critical section
+    if (critical.length > 0) {
+        html += `
+        <div style="background:linear-gradient(135deg, rgba(220,38,38,0.2) 0%, rgba(185,28,28,0.15) 100%);border:1px solid rgba(220,38,38,0.4);border-radius:12px;padding:20px;margin-bottom:20px;">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:15px;">
+                <span style="font-size:1.5em;">🔴</span>
+                <span style="color:#fca5a5;font-size:1.1em;font-weight:600;">CRITICAL - Investigate Immediately (${critical.length})</span>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:12px;">
+        `;
+
+        critical.forEach(item => {
+            html += renderPriorityItem(item, 'critical');
+        });
+
+        html += `</div></div>`;
+    }
+
+    // Warning section
+    if (warnings.length > 0) {
+        html += `
+        <div style="background:linear-gradient(135deg, rgba(245,158,11,0.2) 0%, rgba(217,119,6,0.15) 100%);border:1px solid rgba(245,158,11,0.4);border-radius:12px;padding:20px;margin-bottom:20px;">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:15px;">
+                <span style="font-size:1.5em;">🟡</span>
+                <span style="color:#fcd34d;font-size:1.1em;font-weight:600;">WARNING - Review Today (${warnings.length})</span>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:12px;">
+        `;
+
+        // Limit warnings shown (show first 10, collapse rest)
+        const showWarnings = warnings.slice(0, 10);
+        const hiddenWarnings = warnings.slice(10);
+
+        showWarnings.forEach(item => {
+            html += renderPriorityItem(item, 'warning');
+        });
+
+        if (hiddenWarnings.length > 0) {
+            html += `
+                <div style="text-align:center;padding:10px;">
+                    <button onclick="document.getElementById('hiddenWarnings').style.display='block';this.style.display='none';"
+                            style="background:rgba(245,158,11,0.3);border:1px solid rgba(245,158,11,0.5);color:#fcd34d;padding:8px 16px;border-radius:6px;cursor:pointer;">
+                        Show ${hiddenWarnings.length} more warnings
+                    </button>
+                </div>
+                <div id="hiddenWarnings" style="display:none;display:flex;flex-direction:column;gap:12px;">
+            `;
+            hiddenWarnings.forEach(item => {
+                html += renderPriorityItem(item, 'warning');
+            });
+            html += `</div>`;
+        }
+
+        html += `</div></div>`;
+    }
+
+    document.getElementById('prioritySummary').innerHTML = html;
+}
+
+function renderPriorityItem(item, severity) {
+    const bgColor = severity === 'critical' ? 'rgba(220,38,38,0.1)' : 'rgba(245,158,11,0.1)';
+    const borderColor = severity === 'critical' ? 'rgba(220,38,38,0.3)' : 'rgba(245,158,11,0.3)';
+
+    let icon, title, subtitle;
+
+    switch(item.type) {
+        case 'active_lookalike':
+            icon = '🎭'; title = item.domain; subtitle = `Active lookalike of ${item.parentDomain} → ${item.ip}`;
+            break;
+        case 'darkweb':
+            icon = '🌑'; title = item.domain; subtitle = `Dark web: ${item.source} (${item.date})`;
+            break;
+        case 'cve':
+            icon = '🔓'; title = item.cve; subtitle = `${item.ip} (${item.domain})`;
+            break;
+        case 'malware':
+            icon = '☠️'; title = item.domain; subtitle = item.details;
+            break;
+        case 'new_lookalike':
+            icon = '📡'; title = item.domain; subtitle = `New ${item.riskLevel} lookalike of ${item.parentDomain}`;
+            break;
+        case 'breach':
+            icon = '🔑'; title = item.email; subtitle = `${item.breachCount} breaches - ${item.details}`;
+            break;
+        case 'exposed_service':
+            icon = '⚠️'; title = `${item.ip}:${item.port}`; subtitle = `${item.service} - ${item.details}`;
+            break;
+        case 'ssl_cert':
+            icon = '🔐'; title = item.domain; subtitle = `SSL cert from ${item.issuer}`;
+            break;
+        default:
+            icon = '❓'; title = 'Unknown'; subtitle = '';
+    }
+
+    const actionsHtml = (item.actions || []).map(a =>
+        `<button onclick="${a.action}" title="${a.title}" style="background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);color:#e2e8f0;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:0.8em;display:flex;align-items:center;gap:4px;">
+            <span>${a.icon}</span><span>${a.label}</span>
+        </button>`
+    ).join('');
+
+    return `
+        <div style="background:${bgColor};border:1px solid ${borderColor};border-radius:8px;padding:12px 15px;">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;">
+                <div style="display:flex;align-items:flex-start;gap:10px;flex:1;min-width:250px;">
+                    <span style="font-size:1.3em;">${icon}</span>
+                    <div>
+                        <div style="font-weight:600;color:#f1f5f9;font-family:monospace;">${title}</div>
+                        <div style="font-size:0.85em;color:#94a3b8;margin-top:2px;">${subtitle}</div>
+                    </div>
+                </div>
+                <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                    ${actionsHtml}
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+// Helper functions for actions
+function copyToClipboard(text) {
+    navigator.clipboard.writeText(text).then(() => {
+        showToast(`Copied: ${text}`);
+    });
+}
+
+function showToast(message) {
+    const toast = document.createElement('div');
+    toast.textContent = message;
+    toast.style.cssText = 'position:fixed;bottom:20px;right:20px;background:#22c55e;color:white;padding:12px 20px;border-radius:8px;z-index:9999;animation:fadeIn 0.3s;';
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 3000);
+}
+
+function openTakedown(domain, registrar) {
+    const subject = encodeURIComponent(`Takedown Request: ${domain}`);
+    const body = encodeURIComponent(`Domain: ${domain}\nRegistrar: ${registrar || 'Unknown'}\n\nThis domain is being used for malicious purposes (phishing/impersonation).\n\nPlease take action to suspend this domain.`);
+
+    // Try to detect common registrar abuse contacts
+    let abuseEmail = 'abuse@registrar.com';
+    if (registrar) {
+        const r = registrar.toLowerCase();
+        if (r.includes('godaddy')) abuseEmail = 'abuse@godaddy.com';
+        else if (r.includes('namecheap')) abuseEmail = 'abuse@namecheap.com';
+        else if (r.includes('cloudflare')) abuseEmail = 'registrar-abuse@cloudflare.com';
+        else if (r.includes('google')) abuseEmail = 'registrar-abuse@google.com';
+        else if (r.includes('tucows') || r.includes('enom')) abuseEmail = 'domainabuse@tucows.com';
+    }
+
+    window.open(`mailto:${abuseEmail}?subject=${subject}&body=${body}`, '_blank');
+    showToast('Opening email client for takedown request');
+}
+
+function createIncident(type, entity, details) {
+    // This can be customized to integrate with ticketing systems
+    const incidents = {
+        'darkweb': `Dark Web Mention Detected\nDomain: ${entity}\nSource: ${details}\n\nInvestigate potential data exposure or brand abuse.`,
+        'cve': `Vulnerability Detected\nIP: ${entity}\nCVE: ${details}\n\nPatch or mitigate this vulnerability immediately.`,
+        'password_reset': `Password Reset Required\nEmail: ${entity}\n\nUser credentials found in data breach. Force password reset and enable MFA.`,
+        'firewall': `Firewall Review Required\nIP: ${entity}\n${details}\n\nReview and restrict access to this service.`
+    };
+
+    const text = incidents[type] || `Incident: ${type}\n${entity}\n${details}`;
+    copyToClipboard(text);
+    showToast('Incident details copied to clipboard');
+}
+
+function addToWatchlist(domain) {
+    // Placeholder - could integrate with a watchlist API
+    copyToClipboard(domain);
+    showToast(`${domain} copied - add to your monitoring watchlist`);
 }
 
 // Track risk filter state

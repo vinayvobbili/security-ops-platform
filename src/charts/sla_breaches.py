@@ -261,7 +261,7 @@ def save_sla_breaches_chart(ticket_slas_by_periods, period_label="Yesterday"):
                      fontsize=12, color='white', fontweight='bold',
                      bbox=dict(boxstyle="circle,pad=0.2", facecolor='black', alpha=0.8, edgecolor='white', linewidth=1))
 
-    # Add GS-IR watermark
+    # Add GS-DnR watermark
     fig.text(0.99, 0.01, 'GS-DnR',
              ha='right', va='bottom', fontsize=10,
              alpha=0.7, color='#3F51B5', style='italic', fontweight='bold')

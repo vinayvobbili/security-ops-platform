@@ -127,7 +127,7 @@ class ColorSchemes:
 
 
 def add_watermark(fig):
-    """Add GS-IR watermark to bottom right."""
+    """Add GS-DnR watermark to bottom right."""
     fig.text(0.99, 0.01, 'GS-DnR', ha='right', va='bottom',
              fontsize=10, alpha=0.7, color='#3F51B5',
              style='italic', fontweight='bold')

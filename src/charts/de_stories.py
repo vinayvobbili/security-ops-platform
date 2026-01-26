@@ -174,7 +174,7 @@ def make_chart():
                            edgecolor='#1A237E', linewidth=1.5),
                  transform=trans)
 
-        # Add GS-IR branding
+        # Add GS-DnR branding
         fig.text(0.98, 0.02, 'GS-DnR', ha='right', va='bottom', fontsize=10,
                  alpha=0.7, color='#3F51B5', style='italic', fontweight='bold',
                  transform=trans)
