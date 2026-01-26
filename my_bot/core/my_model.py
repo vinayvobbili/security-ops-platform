@@ -28,6 +28,352 @@ from my_bot.core.state_manager import get_state_manager
 logging.basicConfig(level=logging.ERROR)
 
 
+def is_help_command(query_text: str) -> bool:
+    """
+    Detect if user is asking for help with using the bot.
+
+    Args:
+        query_text: The user's query string
+
+    Returns:
+        bool: True if the query is a help command, False otherwise
+    """
+    query_lower = query_text.lower().strip()
+
+    # Direct help commands
+    help_phrases = [
+        'help', 'help me', 'how do i use', 'how to use',
+        'what can you do', 'what do you do', 'show commands',
+        'list commands', 'available commands', 'usage',
+        'how does this work', 'instructions'
+    ]
+
+    return any(phrase == query_lower or query_lower.startswith(phrase + ' ') or query_lower.endswith(' ' + phrase) for phrase in help_phrases)
+
+
+def get_help_response() -> str:
+    """
+    Return formatted help text with sample prompts for each tool category.
+
+    Returns:
+        str: Formatted help message for Webex
+    """
+    return """## 📟 Pokedex
+
+### ⚡ Commands
+
+- `help` - Show this help message
+- `tipper 12345` - Analyze threat tipper & post to AZDO
+- `contacts EMEA` - Look up escalation contacts
+- `execsum 929947` - Generate XSOAR ticket executive summary
+- `clear my session` - Reset conversation memory
+
+---
+
+### 💬 Sample Prompts
+
+> *Tip: Explicitly name the tool for best results*
+
+🎫 **XSOAR**
+`Use suggest remediation for XSOAR ticket 929947`
+`Use generate executive summary for 929947`
+
+🦠 **VirusTotal**
+`Check IP 8.8.8.8 on VirusTotal`
+`Look up domain evil.com on VirusTotal`
+
+🚨 **AbuseIPDB**
+`Check IP 192.168.1.1 on AbuseIPDB`
+`Has 10.0.0.1 been reported for abuse?`
+
+🔍 **URLScan**
+`Search URLScan for example.com`
+`Scan this URL on URLScan: https://suspicious.com`
+
+🌐 **Shodan**
+`Check 8.8.8.8 on Shodan`
+`Look up example.com infrastructure on Shodan`
+
+🔓 **HaveIBeenPwned**
+`Has user@example.com been breached?`
+`Check example.com for breached emails`
+
+🌑 **IntelligenceX**
+`Search IntelX for example.com`
+`Check dark web for mentions of my-company.com`
+
+🦠 **abuse.ch**
+`Check if evil-domain.com is in abuse.ch`
+`Is 192.168.1.1 a botnet C2 server?`
+
+📊 **QRadar**
+`Search QRadar for IP 10.0.0.1`
+`Get QRadar offense 12345`
+
+🔮 **Vectra**
+`Show recent Vectra detections`
+`Find Vectra entity for SERVER01`
+
+🔮 **Recorded Future**
+`Look up IP 8.8.8.8 on Recorded Future`
+`Search for APT28 threat actor`
+
+🦅 **CrowdStrike**
+`Is HOST123 contained in CrowdStrike?`
+`Get CrowdStrike details for HOST123`
+
+🏢 **ServiceNow**
+`Get ServiceNow details for HOST123`
+`Look up HOST123 in ServiceNow CMDB`
+
+💻 **Tanium**
+`Look up WORKSTATION-001 in Tanium`
+`Search Tanium for endpoints matching NYC-PC`
+
+🛡️ **Detection Rules**
+`rules emotet`
+`rules search cobalt strike`
+`detection rules for APT29`
+
+📚 **Docs & Staffing**
+`Who's on shift?`
+`Search docs for phishing`"""
+
+
+def is_tipper_command(query_text: str) -> tuple:
+    """
+    Detect if user is requesting tipper analysis with a simple command.
+
+    Supports patterns like:
+    - "tipper 12345"
+    - "tipper #12345"
+    - "analyze tipper 12345"
+
+    Args:
+        query_text: The user's query string
+
+    Returns:
+        tuple: (is_tipper_command: bool, tipper_id: str or None)
+    """
+    import re
+    query_lower = query_text.lower().strip()
+
+    # Pattern: "tipper <id>" or "tipper #<id>" or "analyze tipper <id>"
+    patterns = [
+        r'^(?:analyze\s+)?tipper\s+#?(\d+)$',  # tipper 12345, tipper #12345, analyze tipper 12345
+    ]
+
+    for pattern in patterns:
+        match = re.match(pattern, query_lower)
+        if match:
+            tipper_id = match.group(1)
+            return (True, tipper_id)
+
+    return (False, None)
+
+
+def handle_tipper_command_with_metrics(tipper_id: str, room_id: str = None) -> dict:
+    """
+    Handle the tipper analysis command with token metrics.
+
+    Delegates to analyze_and_post_to_azdo in tipper_analysis_tools for the full flow.
+
+    Args:
+        tipper_id: The AZDO tipper work item ID
+        room_id: Optional Webex room ID for context
+
+    Returns:
+        dict with 'content' and token metrics
+    """
+    import logging
+    import re
+    logger = logging.getLogger(__name__)
+
+    # Default metrics for error cases
+    default_metrics = {
+        'content': '',
+        'input_tokens': 0,
+        'output_tokens': 0,
+        'total_tokens': 0,
+        'prompt_time': 0.0,
+        'generation_time': 0.0,
+        'tokens_per_sec': 0.0
+    }
+
+    try:
+        from src.components.tipper_analyzer import TipperAnalyzer
+        from my_config import get_config
+
+        logger.info(f"Running tipper analysis for #{tipper_id} via command")
+
+        # Run the full analysis flow (analyze + post analysis + IOC hunt + post hunt results)
+        analyzer = TipperAnalyzer()
+        result = analyzer.analyze_and_post(tipper_id, source="command", room_id=room_id)
+
+        # Linkify work item references for Webex markdown
+        config = get_config()
+
+        def linkify_markdown(text: str) -> str:
+            def replace_match(match):
+                work_item_id = match.group(1)
+                url = f"https://dev.azure.com/{config.azdo_org}/{config.azdo_de_project}/_workitems/edit/{work_item_id}"
+                return f'[#{work_item_id}]({url})'
+            return re.sub(r'#(\d+)', replace_match, text)
+
+        result['content'] = linkify_markdown(result['content'])
+        return result
+
+    except ValueError as e:
+        logger.error(f"Tipper command error: {e}")
+        default_metrics['content'] = f"❌ **Tipper Analysis Failed**\n\n{str(e)}"
+        return default_metrics
+    except Exception as e:
+        logger.error(f"Tipper command error: {e}", exc_info=True)
+        default_metrics['content'] = f"❌ **Tipper Analysis Failed**\n\nAn error occurred while analyzing tipper #{tipper_id}. Please try again."
+        return default_metrics
+
+
+def handle_tipper_command(tipper_id: str, room_id: str = None) -> str:
+    """
+    Handle the tipper analysis command.
+
+    Runs analysis, posts to AZDO, and returns Webex-formatted output.
+
+    Args:
+        tipper_id: The AZDO tipper work item ID
+        room_id: Optional Webex room ID for context
+
+    Returns:
+        str: Formatted analysis for Webex display
+    """
+    result = handle_tipper_command_with_metrics(tipper_id, room_id)
+    return result['content']
+
+
+def is_rules_command(query_text: str) -> tuple:
+    """
+    Detect if user is requesting detection rules search.
+
+    Supports patterns like:
+    - "rules emotet"
+    - "rules search APT29"
+    - "detection rules for qakbot"
+    - "search rules cobalt strike"
+
+    Args:
+        query_text: The user's query string
+
+    Returns:
+        tuple: (is_rules_command: bool, search_query: str or None)
+    """
+    import re
+    query_lower = query_text.lower().strip()
+
+    patterns = [
+        r'^rules?\s+(?:search\s+)?(.+)$',                    # rules emotet, rule search emotet
+        r'^(?:search\s+)?(?:detection\s+)?rules?\s+(?:for\s+)?(.+)$',  # detection rules for emotet
+        r'^search\s+rules?\s+(.+)$',                          # search rules cobalt strike
+    ]
+
+    for pattern in patterns:
+        match = re.match(pattern, query_lower)
+        if match:
+            search_query = match.group(1).strip()
+            # Don't match if query is just "sync" or "stats" (those are CLI-only)
+            if search_query in ("sync", "stats", "--sync", "--stats"):
+                return (False, None)
+            return (True, search_query)
+
+    return (False, None)
+
+
+def handle_rules_command(query: str) -> dict:
+    """
+    Handle the detection rules search command.
+
+    Args:
+        query: The search query
+
+    Returns:
+        dict with 'content' and token metrics (all zeros since no LLM used)
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+
+    default_metrics = {
+        'content': '',
+        'input_tokens': 0,
+        'output_tokens': 0,
+        'total_tokens': 0,
+        'prompt_time': 0.0,
+        'generation_time': 0.0,
+        'tokens_per_sec': 0.0
+    }
+
+    try:
+        from src.components.tipper_analyzer.rules import search_rules
+        from src.components.tipper_analyzer.rules.formatters import format_rules_for_display
+
+        logger.info(f"Searching detection rules for: {query}")
+        result = search_rules(query, k=10)
+        default_metrics['content'] = format_rules_for_display(result)
+        return default_metrics
+
+    except Exception as e:
+        logger.error(f"Rules command error: {e}", exc_info=True)
+        default_metrics['content'] = f"Failed to search detection rules: {e}"
+        return default_metrics
+
+
+def _is_clear_session_command(query_text: str) -> bool:
+    """
+    Detect if user wants to clear the bot's session context (memory) using flexible keyword matching.
+
+    This clears the bot's memory of the conversation, NOT the Webex chat history.
+
+    Handles variations like:
+    - "clear session context"
+    - "start fresh" / "start afresh"
+    - "new session"
+    - "reset conversation"
+    - "forget our conversation"
+    - etc.
+
+    Args:
+        query_text: The user's query string
+
+    Returns:
+        bool: True if the query is a session context clear command, False otherwise
+    """
+    query_lower = query_text.lower().strip()
+
+    # Action keywords that indicate clearing/resetting/starting fresh
+    # Note: 'start' and 'new' handled via fresh_phrases to avoid false positives
+    action_keywords = ['clear', 'reset', 'delete', 'forget', 'erase', 'remove']
+
+    # Target keywords that indicate what to clear (session context, not Webex chat)
+    target_keywords = ['conversation', 'chat', 'history', 'session', 'context', 'messages', 'memory', 'talked']
+
+    # Special phrases that indicate starting fresh (check with substring matching)
+    fresh_phrases = [
+        'start fresh', 'start afresh',
+        'start a new session', 'start a new conversation',
+        'new conversation', 'new session',
+        'start over', 'begin again',
+        'forget what we talked'
+    ]
+
+    # Check fresh phrases with substring matching (handles "let's start afresh")
+    if any(phrase in query_lower for phrase in fresh_phrases):
+        return True
+
+    # Check if query contains both an action and a target keyword
+    has_action = any(action in query_lower for action in action_keywords)
+    has_target = any(target in query_lower for target in target_keywords)
+
+    return has_action and has_target
+
+
 def run_health_tests_command() -> str:
     """Execute health tests and return formatted results"""
     try:
@@ -155,7 +501,7 @@ def ask(user_message: str, user_id: str = "default", room_id: str = "default") -
         original_query = query
 
         # Remove bot name mentions from anywhere in the message (common in group chats)
-        bot_names = ['DnR_Pokedex', 'Pokedex', 'pokedex', 'dnr_pokedex',
+        bot_names = ['IR_Pokedex', 'Pokedex', 'pokedex', 'dnr_pokedex',
                      'HAL9000', 'hal9000', 'Jarvis', 'jarvis',
                      'Toodles', 'toodles', 'Barnacles', 'barnacles']
 
@@ -202,6 +548,58 @@ def ask(user_message: str, user_id: str = "default", room_id: str = "default") -
         # Get conversation context from session history
         conversation_context = session_manager.get_conversation_context(session_key)
 
+        # Check for session context clear command using flexible keyword matching
+        # This handles variations like "clear session context", "start fresh", "new session", etc.
+        if _is_clear_session_command(query):
+            # Clear the user's session context (bot's memory, not Webex chat history)
+            deleted = session_manager.delete_session(session_key)
+            if deleted:
+                final_response = "✅ Session context cleared! Starting fresh with no memory of our previous conversation."
+            else:
+                final_response = "✅ Starting a new session! (No previous context found)"
+
+            elapsed = time.time() - start_time
+            return {
+                'content': final_response,
+                'input_tokens': 0,
+                'output_tokens': 0,
+                'total_tokens': 0,
+                'prompt_time': 0.0,
+                'generation_time': 0.0,
+                'tokens_per_sec': 0.0
+            }
+
+        # Check for help command
+        if is_help_command(query):
+            return {
+                'content': get_help_response(),
+                'input_tokens': 0,
+                'output_tokens': 0,
+                'total_tokens': 0,
+                'prompt_time': 0.0,
+                'generation_time': 0.0,
+                'tokens_per_sec': 0.0
+            }
+
+        # Check for tipper command (e.g., "tipper 12345")
+        is_tipper, tipper_id = is_tipper_command(query)
+        if is_tipper:
+            response = handle_tipper_command(tipper_id, room_id)
+            return {
+                'content': response,
+                'input_tokens': 0,
+                'output_tokens': 0,
+                'total_tokens': 0,
+                'prompt_time': 0.0,
+                'generation_time': 0.0,
+                'tokens_per_sec': 0.0
+            }
+
+        # Check for rules command (e.g., "rules emotet")
+        is_rules, rules_query = is_rules_command(query)
+        if is_rules:
+            return handle_rules_command(rules_query)
+
         # Quick responses for simple queries (performance optimization)
         simple_query = query.lower().strip()
         if simple_query in ['hi', 'status', 'health', 'are you working']:
@@ -232,8 +630,16 @@ def ask(user_message: str, user_id: str = "default", room_id: str = "default") -
             # Prepare input with conversation context
             agent_input = query
             if conversation_context:
+                context_chars = len(conversation_context)
+                query_chars = len(query)
+                total_chars = context_chars + query_chars + 1  # +1 for space
+                # Rough estimate: ~4 chars per token for English text
+                estimated_context_tokens = context_chars // 4
+                logging.info(
+                    f"📝 Session context: {context_chars} chars (~{estimated_context_tokens} tokens) + "
+                    f"{query_chars} char query = {total_chars} total chars"
+                )
                 agent_input = conversation_context + " " + query
-                logging.debug(f"Added conversation context to query")
 
             # Let the 70B model handle everything directly - no agent framework
             logging.info(f"Passing query to direct LLM: {query[:100]}...")
@@ -319,7 +725,7 @@ def ask_stream(user_message: str, user_id: str = "default", room_id: str = "defa
         query = user_message.strip()
 
         # Remove bot name mentions
-        bot_names = ['DnR_Pokedex', 'Pokedex', 'pokedex', 'dnr_pokedex',
+        bot_names = ['IR_Pokedex', 'Pokedex', 'pokedex', 'dnr_pokedex',
                      'HAL9000', 'hal9000', 'Jarvis', 'jarvis',
                      'Toodles', 'toodles', 'Barnacles', 'barnacles']
 
@@ -348,6 +754,22 @@ def ask_stream(user_message: str, user_id: str = "default", room_id: str = "defa
 
         # Get conversation context
         conversation_context = session_manager.get_conversation_context(session_key)
+
+        # Check for session context clear command using flexible keyword matching
+        if _is_clear_session_command(query):
+            # Clear the user's session context (bot's memory, not Webex chat history)
+            deleted = session_manager.delete_session(session_key)
+            if deleted:
+                response = "✅ Session context cleared! Starting fresh with no memory of our previous conversation."
+            else:
+                response = "✅ Starting a new session! (No previous context found)"
+            yield response
+            return
+
+        # Check for help command
+        if is_help_command(query):
+            yield get_help_response()
+            return
 
         # Quick responses for simple queries
         simple_query = query.lower().strip()

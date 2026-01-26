@@ -1,0 +1,1185 @@
+{% extends 'base_layout.html' %}
+{% set page_title_text = 'EPP Device Tagging Metrics' %}
+{% set page_title_left_icon = '🏷️' %}
+{% set page_title_right_icon = '📊' %}
+{% block head_scripts %}
+    <script src="https://cdn.plot.ly/plotly-2.26.0.min.js"></script>
+{% endblock %}
+{% block extra_css %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/epp_tagging_metrics.css') }}">
+{% endblock %}
+{% block content %}
+    <!-- Dark Mode Toggle -->
+    <div class="theme-toggle" id="themeToggleWrapper">
+        <button id="themeToggleBtn" aria-label="Toggle dark mode" title="Toggle dark mode">🌙</button>
+    </div>
+
+    <div class="dashboard-container">
+        <!-- Loading Overlay -->
+        <div id="loadingOverlay" class="loading-overlay">
+            <div class="loading-spinner"></div>
+            <div class="loading-text">Loading metrics...</div>
+        </div>
+
+        <!-- Filters Section -->
+        <div class="filters-section" id="filterBar">
+            <div class="filters-header">
+                <div class="header-left">🎛️ Filter Controls</div>
+                <div class="header-right">
+                    <div class="slider-field">
+                        <label class="slider-label">📅<br>Date Range</label>
+                        <div class="date-inputs-compact">
+                            <input type="date" id="startDate" class="date-input" title="Start Date">
+                            <span class="date-sep">→</span>
+                            <input type="date" id="endDate" class="date-input" title="End Date">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="filters-grid">
+                <!-- Location Filter with Tabs -->
+                <div class="filter-group">
+                    <div class="location-filter-tabs">
+                        <div class="tab-buttons">
+                            <button class="tab-button" data-tab="country">🏳️ Country</button>
+                            <button class="tab-button active" data-tab="region">🌍 Region</button>
+                        </div>
+                        <div class="tab-content">
+                            <div id="countryTab" class="tab-pane">
+                                <div id="countryFilter" class="checkbox-filter"></div>
+                            </div>
+                            <div id="regionTab" class="tab-pane active">
+                                <div id="regionFilter" class="checkbox-filter"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Platform Filter -->
+                <div class="filter-group">
+                    <label class="filter-label">🎯 Platform</label>
+                    <div id="platformFilter" class="checkbox-filter"></div>
+                </div>
+
+                <!-- Category Filter -->
+                <div class="filter-group">
+                    <label class="filter-label">💻 Category</label>
+                    <div id="categoryFilter" class="checkbox-filter"></div>
+                </div>
+
+                <!-- Ring Filter -->
+                <div class="filter-group">
+                    <label class="filter-label">🔔 Ring</label>
+                    <div id="ringFilter" class="checkbox-filter"></div>
+                </div>
+
+                <!-- Run By Filter -->
+                <div class="filter-group">
+                    <label class="filter-label">👤 Run By</label>
+                    <div id="runByFilter" class="checkbox-filter"></div>
+                </div>
+            </div>
+
+            <!-- Filter Summary -->
+            <div class="filter-summary" id="filterSummary">
+                <div class="filter-summary-content">
+                    <strong>Active Filters:</strong>
+                    <span class="active-filters-container" id="filterTags">
+                        <span class="filter-tag">All Data</span>
+                    </span>
+                </div>
+                <button class="reset-btn" id="clearFilters">Reset</button>
+            </div>
+        </div>
+
+        <!-- Summary Cards -->
+        <div class="summary-section">
+            <div class="summary-card total-devices">
+                <div class="card-icon">🖥️</div>
+                <div class="card-content">
+                    <div class="card-value" id="totalDevices">-</div>
+                    <div class="card-label">Total Devices Processed</div>
+                </div>
+            </div>
+            <div class="summary-card success-rate">
+                <div class="card-icon">✅</div>
+                <div class="card-content">
+                    <div class="card-value" id="successRate">-</div>
+                    <div class="card-label">Success Rate</div>
+                </div>
+            </div>
+            <div class="summary-card crowdstrike">
+                <div class="card-icon">🦅</div>
+                <div class="card-content">
+                    <div class="card-value" id="crowdstrikeDevices">-</div>
+                    <div class="card-label">CrowdStrike Devices</div>
+                </div>
+            </div>
+            <div class="summary-card tanium-cloud">
+                <div class="card-icon">☁️</div>
+                <div class="card-content">
+                    <div class="card-value" id="taniumCloudDevices">-</div>
+                    <div class="card-label">Tanium Cloud</div>
+                </div>
+            </div>
+            <div class="summary-card tanium-onprem">
+                <div class="card-icon">🏢</div>
+                <div class="card-content">
+                    <div class="card-value" id="taniumOnpremDevices">-</div>
+                    <div class="card-label">Tanium On-Prem</div>
+                </div>
+            </div>
+            <div class="summary-card runs">
+                <div class="card-icon">🔄</div>
+                <div class="card-content">
+                    <div class="card-value" id="totalRuns">-</div>
+                    <div class="card-label">Automation Runs</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts Section -->
+        <div class="charts-section">
+            <!-- Row 1: Platform + Category -->
+            <div class="chart-row">
+                <div class="chart-card half">
+                    <h3 class="chart-title">🎯 Platform Distribution</h3>
+                    <div id="platformChart" class="chart-container"></div>
+                </div>
+                <div class="chart-card half">
+                    <h3 class="chart-title">💻 Category Distribution</h3>
+                    <div id="categoryChart" class="chart-container"></div>
+                </div>
+            </div>
+
+            <!-- Row 2: Monthly Trend -->
+            <div class="chart-row">
+                <div class="chart-card full">
+                    <h3 class="chart-title">📈 Monthly Tagging Trend</h3>
+                    <div id="monthlyChart" class="chart-container"></div>
+                </div>
+            </div>
+
+            <!-- Row 3: Region + Country Distribution -->
+            <div class="chart-row">
+                <div class="chart-card half">
+                    <h3 class="chart-title">🗺️ Region Distribution</h3>
+                    <div id="regionChart" class="chart-container"></div>
+                </div>
+                <div class="chart-card half">
+                    <h3 class="chart-title">🌍 Top 10 Countries</h3>
+                    <div id="countryChart" class="chart-container"></div>
+                </div>
+            </div>
+
+            <!-- Row 3: Ring Tags + Environment -->
+            <div class="chart-row">
+                <div class="chart-card half">
+                    <h3 class="chart-title">🔔 Ring Tag Distribution</h3>
+                    <div id="ringTagChart" class="chart-container"></div>
+                </div>
+                <div class="chart-card half">
+                    <h3 class="chart-title">🏢 Environment Distribution</h3>
+                    <div id="envChart" class="chart-container"></div>
+                </div>
+            </div>
+
+            <!-- Row 4: Hosts Without Ring Tags Over Time -->
+            <div class="chart-row">
+                <div class="chart-card full">
+                    <h3 class="chart-title">🚫 Hosts Without Ring Tags Over Time</h3>
+                    <div id="untaggedChart" class="chart-container"></div>
+                </div>
+            </div>
+
+            <!-- Row 5: Untagged Hosts Breakdown by Reason -->
+            <div class="chart-row">
+                <div class="chart-card full">
+                    <h3 class="chart-title">🔍 Untagged Hosts Breakdown by Reason</h3>
+                    <div id="untaggedBreakdownChart" class="chart-container"></div>
+                </div>
+            </div>
+
+            <!-- Row 6: Daily Timeline -->
+            <div class="chart-row">
+                <div class="chart-card full">
+                    <h3 class="chart-title">📊 Daily Tagging Activity (Last 90 Days)</h3>
+                    <div id="dailyChart" class="chart-container"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Runs Table -->
+        <div class="recent-runs-section">
+            <h3 class="section-title">🕒 Recent Tagging Runs</h3>
+            <div class="table-container">
+                <table class="runs-table" id="recentRunsTable">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Time</th>
+                            <th>Platform</th>
+                            <th>Devices</th>
+                            <th>Success</th>
+                            <th>Failed</th>
+                            <th>Run By</th>
+                        </tr>
+                    </thead>
+                    <tbody id="recentRunsBody">
+                        <tr><td colspan="7" class="loading-cell">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="dashboard-footer">
+            <span>Data last updated: <span id="lastUpdated">-</span></span>
+            <span class="separator">|</span>
+            <span>Powered by EPP Tagging Automation</span>
+        </div>
+    </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Theme management
+const themeBtn = document.getElementById('themeToggleBtn');
+const savedTheme = localStorage.getItem('epp-metrics-theme');
+
+if (savedTheme === 'dark' || (!savedTheme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+    document.body.classList.add('dark-mode');
+    themeBtn.textContent = '☀️';
+}
+
+themeBtn.addEventListener('click', () => {
+    document.body.classList.toggle('dark-mode');
+    const isDark = document.body.classList.contains('dark-mode');
+    themeBtn.textContent = isDark ? '☀️' : '🌙';
+    localStorage.setItem('epp-metrics-theme', isDark ? 'dark' : 'light');
+    // Re-render charts with new theme
+    if (window.dashboardData) renderCharts(window.dashboardData);
+});
+
+// Chart colors based on theme
+function getChartColors() {
+    const isDark = document.body.classList.contains('dark-mode');
+    return {
+        primary: isDark ? '#60a5fa' : '#0046ad',
+        secondary: isDark ? '#34d399' : '#00a651',
+        crowdstrike: isDark ? '#f97316' : '#e65100',
+        tanium: isDark ? '#a78bfa' : '#6a1b9a',
+        taniumCloud: isDark ? '#38bdf8' : '#0284c7',      // Sky blue for Cloud
+        taniumOnprem: isDark ? '#a78bfa' : '#7c3aed',     // Purple for On-Prem
+        background: isDark ? '#1e293b' : '#ffffff',
+        text: isDark ? '#e2e8f0' : '#333333',
+        grid: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)',
+        paper: isDark ? '#0f172a' : '#ffffff'
+    };
+}
+
+// Common Plotly layout
+function getBaseLayout(title = '') {
+    const colors = getChartColors();
+    return {
+        paper_bgcolor: 'transparent',
+        plot_bgcolor: 'transparent',
+        font: { color: colors.text, family: 'system-ui, -apple-system, sans-serif' },
+        margin: { t: 30, r: 20, b: 40, l: 60 },
+        xaxis: { gridcolor: colors.grid, zerolinecolor: colors.grid },
+        yaxis: { gridcolor: colors.grid, zerolinecolor: colors.grid },
+        showlegend: true,
+        legend: { orientation: 'h', y: -0.15 }
+    };
+}
+
+// Plotly config
+const plotlyConfig = {
+    responsive: true,
+    displayModeBar: true,
+    displaylogo: false,
+    modeBarButtonsToRemove: ['lasso2d', 'select2d']
+};
+
+// Current filter state
+const filters = {
+    platform: 'all',
+    runBy: 'all',
+    category: 'all',
+    rings: ['all'],
+    environments: ['all'],
+    regions: ['all'],
+    countries: ['all'],
+    startDate: null,
+    endDate: null
+};
+
+
+// Store raw data for filtering
+let rawData = null;
+let originalDateRange = { min: null, max: null };
+
+// Initialize filter controls
+function initFilters(filterOptions) {
+    // Populate platform checkboxes
+    populateCheckboxFilter('platformFilter', [
+        { value: 'all', label: 'All' },
+        { value: 'CrowdStrike', label: 'CrowdStrike' },
+        { value: 'Tanium Cloud', label: 'Tanium Cloud' },
+        { value: 'Tanium On-Prem', label: 'Tanium On-Prem' }
+    ]);
+
+    // Populate category checkboxes
+    populateCheckboxFilter('categoryFilter', [
+        { value: 'all', label: 'All' },
+        { value: 'Workstation', label: 'Workstation' },
+        { value: 'Server', label: 'Server' }
+    ]);
+
+    // Populate ring checkboxes
+    populateCheckboxFilter('ringFilter', [
+        { value: 'all', label: 'All' },
+        { value: 'Ring1', label: 'Ring 1' },
+        { value: 'Ring2', label: 'Ring 2' },
+        { value: 'Ring3', label: 'Ring 3' },
+        { value: 'Ring4', label: 'Ring 4' }
+    ]);
+
+    // Populate run by checkboxes
+    populateCheckboxFilter('runByFilter', [
+        { value: 'all', label: 'All' },
+        { value: 'scheduled job', label: 'Automated' },
+        { value: 'human', label: 'Manual' }
+    ]);
+
+    // Populate region checkboxes
+    const regionOptions = [{ value: 'all', label: 'All' }];
+    filterOptions.regions.forEach(r => regionOptions.push({ value: r, label: r }));
+    populateCheckboxFilter('regionFilter', regionOptions);
+
+    // Populate country checkboxes (all countries, sorted alphabetically)
+    const countryOptions = [{ value: 'all', label: 'All' }];
+    filterOptions.countries.sort().forEach(c => countryOptions.push({ value: c, label: c }));
+    populateCheckboxFilter('countryFilter', countryOptions);
+
+    // Set date range limits and default values
+    if (filterOptions.date_range) {
+        const startInput = document.getElementById('startDate');
+        const endInput = document.getElementById('endDate');
+
+        // Store original date range for reset
+        originalDateRange.min = filterOptions.date_range.min;
+        originalDateRange.max = filterOptions.date_range.max;
+
+        startInput.min = filterOptions.date_range.min;
+        startInput.max = filterOptions.date_range.max;
+        endInput.min = filterOptions.date_range.min;
+        endInput.max = filterOptions.date_range.max;
+
+        // Set initial values to the full date range
+        startInput.value = filterOptions.date_range.min;
+        endInput.value = filterOptions.date_range.max;
+
+        // Update filter state
+        filters.startDate = filterOptions.date_range.min;
+        filters.endDate = filterOptions.date_range.max;
+    }
+
+    // Setup checkbox change handlers
+    setupCheckboxFilter('platformFilter', 'platform', false);
+    setupCheckboxFilter('categoryFilter', 'category', false);
+    setupCheckboxFilter('ringFilter', 'rings', true);
+    setupCheckboxFilter('runByFilter', 'runBy', false);
+    setupCheckboxFilter('regionFilter', 'regions', true);
+    setupCheckboxFilter('countryFilter', 'countries', true);
+
+    // Setup tab switching for location
+    document.querySelectorAll('.tab-button').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const tab = btn.dataset.tab;
+            document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+            btn.classList.add('active');
+            document.getElementById(tab + 'Tab').classList.add('active');
+        });
+    });
+
+    // Setup date handlers
+    document.getElementById('startDate').addEventListener('change', (e) => {
+        filters.startDate = e.target.value || null;
+        applyFilters();
+    });
+
+    document.getElementById('endDate').addEventListener('change', (e) => {
+        filters.endDate = e.target.value || null;
+        applyFilters();
+    });
+
+    // Clear filters button
+    document.getElementById('clearFilters').addEventListener('click', clearAllFilters);
+}
+
+function populateCheckboxFilter(containerId, options) {
+    const container = document.getElementById(containerId);
+    container.innerHTML = options.map(opt => `
+        <label class="checkbox-label">
+            <input type="checkbox" value="${opt.value}" ${opt.value === 'all' ? 'checked' : ''}> ${opt.label}
+        </label>
+    `).join('');
+}
+
+function setupCheckboxFilter(containerId, filterKey, isMulti) {
+    const container = document.getElementById(containerId);
+    container.addEventListener('change', (e) => {
+        if (e.target.type !== 'checkbox') return;
+
+        const allCheckbox = container.querySelector('input[value="all"]');
+        const otherCheckboxes = container.querySelectorAll('input:not([value="all"])');
+
+        if (e.target.value === 'all') {
+            // Clicked "All" - uncheck others
+            otherCheckboxes.forEach(cb => cb.checked = false);
+            allCheckbox.checked = true;
+            filters[filterKey] = isMulti ? ['all'] : 'all';
+        } else {
+            // Clicked specific option
+            allCheckbox.checked = false;
+
+            if (isMulti) {
+                const checked = Array.from(otherCheckboxes).filter(cb => cb.checked).map(cb => cb.value);
+                if (checked.length === 0) {
+                    allCheckbox.checked = true;
+                    filters[filterKey] = ['all'];
+                } else {
+                    filters[filterKey] = checked;
+                }
+            } else {
+                // Single select - uncheck others
+                otherCheckboxes.forEach(cb => {
+                    if (cb !== e.target) cb.checked = false;
+                });
+                if (e.target.checked) {
+                    filters[filterKey] = e.target.value;
+                } else {
+                    allCheckbox.checked = true;
+                    filters[filterKey] = 'all';
+                }
+            }
+        }
+        applyFilters();
+    });
+}
+
+function clearAllFilters() {
+    // Reset filter state
+    filters.platform = 'all';
+    filters.runBy = 'all';
+    filters.category = 'all';
+    filters.rings = ['all'];
+    filters.environments = ['all'];
+    filters.regions = ['all'];
+    filters.countries = ['all'];
+    filters.startDate = originalDateRange.min;
+    filters.endDate = originalDateRange.max;
+
+    // Reset UI - all checkbox filters
+    document.querySelectorAll('.checkbox-filter').forEach(container => {
+        container.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+            cb.checked = (cb.value === 'all');
+        });
+    });
+
+    // Reset date inputs to original range
+    document.getElementById('startDate').value = originalDateRange.min || '';
+    document.getElementById('endDate').value = originalDateRange.max || '';
+
+    applyFilters();
+}
+
+function applyFilters() {
+    if (!rawData) return;
+
+    const filtered = filterData(rawData);
+    updateSummaryCards(filtered);
+    renderCharts(filtered);
+    renderRecentRunsTable(filtered);
+    updateActiveFiltersDisplay();
+}
+
+function filterData(data) {
+    // Filter recent_runs (main data source for runs)
+    let filteredRuns = [...data.recent_runs];
+
+    // Platform filter
+    if (filters.platform !== 'all') {
+        filteredRuns = filteredRuns.filter(r => r.platform === filters.platform);
+    }
+
+    // Run by filter
+    if (filters.runBy !== 'all') {
+        if (filters.runBy === 'human') {
+            filteredRuns = filteredRuns.filter(r => r.run_by && r.run_by !== 'scheduled job');
+        } else {
+            filteredRuns = filteredRuns.filter(r => r.run_by === filters.runBy);
+        }
+    }
+
+    // Date filters
+    if (filters.startDate) {
+        filteredRuns = filteredRuns.filter(r => r.run_date >= filters.startDate);
+    }
+    if (filters.endDate) {
+        filteredRuns = filteredRuns.filter(r => r.run_date <= filters.endDate);
+    }
+
+    // Filter other datasets
+    let filteredDaily = [...data.daily];
+    let filteredMonthly = [...data.monthly];
+    let filteredByCountry = [...data.by_country];
+    let filteredByRegion = [...data.by_region];
+    let filteredByCategory = [...data.by_category];
+    let filteredByEnvironment = [...(data.by_environment || [])];
+    let filteredByRingTag = [...data.by_ring_tag];
+
+    // Platform filter on aggregated data
+    if (filters.platform !== 'all') {
+        filteredDaily = filteredDaily.filter(d => d.platform === filters.platform);
+        filteredMonthly = filteredMonthly.filter(m => m.platform === filters.platform);
+    }
+
+    // Date filter on daily data
+    if (filters.startDate) {
+        filteredDaily = filteredDaily.filter(d => d.run_date >= filters.startDate);
+    }
+    if (filters.endDate) {
+        filteredDaily = filteredDaily.filter(d => d.run_date <= filters.endDate);
+    }
+
+    // Region filter
+    if (!filters.regions.includes('all')) {
+        filteredByRegion = filteredByRegion.filter(r => filters.regions.includes(r.region));
+        filteredByCountry = filteredByCountry.filter(c => {
+            // Try to match countries to regions (approximate)
+            return filters.regions.some(region =>
+                c.country === region ||
+                (data.by_region.find(r => r.region === region))
+            );
+        });
+    }
+
+    // Country filter
+    if (!filters.countries.includes('all')) {
+        filteredByCountry = filteredByCountry.filter(c => filters.countries.includes(c.country));
+    }
+
+    // Category filter
+    if (filters.category !== 'all') {
+        filteredByCategory = filteredByCategory.filter(c => c.category === filters.category);
+    }
+
+    // Environment filter
+    if (!filters.environments.includes('all')) {
+        filteredByEnvironment = filteredByEnvironment.filter(e =>
+            filters.environments.includes(e.environment)
+        );
+    }
+
+    // Ring filter
+    if (!filters.rings.includes('all')) {
+        filteredByRingTag = filteredByRingTag.filter(r =>
+            filters.rings.some(ring => r.ring_tag && r.ring_tag.includes(ring))
+        );
+    }
+
+    // Recalculate summary from filtered data
+    const totalDevices = filteredDaily.reduce((sum, d) => sum + (d.total_devices || 0), 0);
+    const totalTagged = filteredDaily.reduce((sum, d) => sum + (d.successfully_tagged || 0), 0);
+
+    const byPlatform = {};
+    ['CrowdStrike', 'Tanium Cloud', 'Tanium On-Prem'].forEach(platform => {
+        const platformData = filteredDaily.filter(d => d.platform === platform);
+        if (platformData.length > 0 || filters.platform === 'all' || filters.platform === platform) {
+            byPlatform[platform] = {
+                devices: platformData.reduce((sum, d) => sum + (d.total_devices || 0), 0),
+                tagged: platformData.reduce((sum, d) => sum + (d.successfully_tagged || 0), 0),
+                runs: platformData.length
+            };
+        }
+    });
+    // Also support legacy 'Tanium' platform for backward compatibility
+    const legacyTaniumData = filteredDaily.filter(d => d.platform === 'Tanium');
+    if (legacyTaniumData.length > 0) {
+        byPlatform['Tanium (Legacy)'] = {
+            devices: legacyTaniumData.reduce((sum, d) => sum + (d.total_devices || 0), 0),
+            tagged: legacyTaniumData.reduce((sum, d) => sum + (d.successfully_tagged || 0), 0),
+            runs: legacyTaniumData.length
+        };
+    }
+
+    const dates = filteredDaily.map(d => d.run_date).filter(Boolean);
+
+    // Filter untagged breakdown by date and platform
+    let filteredBreakdown = [...(data.untagged_breakdown || [])];
+    if (filters.platform !== 'all') {
+        filteredBreakdown = filteredBreakdown.filter(b => b.platform === filters.platform);
+    }
+    if (filters.startDate) {
+        filteredBreakdown = filteredBreakdown.filter(b => b.run_date >= filters.startDate);
+    }
+    if (filters.endDate) {
+        filteredBreakdown = filteredBreakdown.filter(b => b.run_date <= filters.endDate);
+    }
+
+    return {
+        ...data,
+        summary: {
+            total_runs: filteredRuns.length || filteredDaily.length,
+            total_devices: totalDevices,
+            total_tagged: totalTagged,
+            earliest_date: dates.length ? dates.sort()[0] : null,
+            latest_date: dates.length ? dates.sort().reverse()[0] : null,
+            by_platform: byPlatform
+        },
+        formatted_summary: {
+            total_devices: totalDevices.toLocaleString(),
+            total_tagged: totalTagged.toLocaleString(),
+            success_rate: totalDevices > 0 ? `${(totalTagged / totalDevices * 100).toFixed(1)}%` : '0%',
+            total_runs: filteredRuns.length || new Set(filteredDaily.map(d => d.run_date)).size,
+            date_range: dates.length ? `${dates.sort()[0]} to ${dates.sort().reverse()[0]}` : '-',
+            crowdstrike_devices: (byPlatform.CrowdStrike?.devices || 0).toLocaleString(),
+            tanium_devices: ((byPlatform['Tanium Cloud']?.devices || 0) + (byPlatform['Tanium On-Prem']?.devices || 0) + (byPlatform['Tanium (Legacy)']?.devices || 0)).toLocaleString(),
+            tanium_cloud_devices: (byPlatform['Tanium Cloud']?.devices || 0).toLocaleString(),
+            tanium_onprem_devices: (byPlatform['Tanium On-Prem']?.devices || 0).toLocaleString()
+        },
+        daily: filteredDaily,
+        monthly: filteredMonthly,
+        by_country: filteredByCountry,
+        by_region: filteredByRegion,
+        by_category: filteredByCategory,
+        by_environment: filteredByEnvironment,
+        by_ring_tag: filteredByRingTag,
+        recent_runs: filteredRuns,
+        untagged_breakdown: filteredBreakdown
+    };
+}
+
+function updateActiveFiltersDisplay() {
+    const tagsDiv = document.getElementById('filterTags');
+    const activeTags = [];
+
+    if (filters.platform !== 'all') activeTags.push(`Platform: ${filters.platform}`);
+    if (filters.runBy !== 'all') activeTags.push(`Run By: ${filters.runBy === 'human' ? 'Manual' : 'Automated'}`);
+    if (filters.category !== 'all') activeTags.push(`Category: ${filters.category}`);
+    if (!filters.rings.includes('all')) activeTags.push(`Rings: ${filters.rings.join(', ')}`);
+    if (!filters.regions.includes('all')) activeTags.push(`Regions: ${filters.regions.join(', ')}`);
+    if (!filters.countries.includes('all')) activeTags.push(`Countries: ${filters.countries.length} selected`);
+    // Only show date filters if changed from defaults
+    if (filters.startDate && filters.startDate !== originalDateRange.min) {
+        activeTags.push(`From: ${filters.startDate}`);
+    }
+    if (filters.endDate && filters.endDate !== originalDateRange.max) {
+        activeTags.push(`To: ${filters.endDate}`);
+    }
+
+    if (activeTags.length > 0) {
+        tagsDiv.innerHTML = activeTags.map(tag => `<span class="filter-tag">${tag}</span>`).join('');
+    } else {
+        tagsDiv.innerHTML = '<span class="filter-tag">All Data</span>';
+    }
+}
+
+// Fetch data and render
+async function loadDashboard() {
+    try {
+        const response = await fetch('/api/epp-tagging/data');
+        const data = await response.json();
+
+        if (!data.success) {
+            throw new Error(data.error || 'Failed to load data');
+        }
+
+        rawData = data;
+        window.dashboardData = data;
+
+        // Initialize filters with options from server
+        if (data.filter_options) {
+            initFilters(data.filter_options);
+        }
+
+        updateSummaryCards(data);
+        renderCharts(data);
+        renderRecentRunsTable(data);
+
+        document.getElementById('loadingOverlay').style.display = 'none';
+        document.getElementById('lastUpdated').textContent = new Date().toLocaleString();
+
+    } catch (error) {
+        console.error('Error loading dashboard:', error);
+        document.getElementById('loadingOverlay').innerHTML = `
+            <div class="loading-text error">Error loading data: ${error.message}</div>
+        `;
+    }
+}
+
+function updateSummaryCards(data) {
+    const summary = data.formatted_summary;
+    document.getElementById('totalDevices').textContent = summary.total_devices;
+    document.getElementById('successRate').textContent = summary.success_rate;
+    document.getElementById('crowdstrikeDevices').textContent = summary.crowdstrike_devices;
+    document.getElementById('taniumCloudDevices').textContent = summary.tanium_cloud_devices || '0';
+    document.getElementById('taniumOnpremDevices').textContent = summary.tanium_onprem_devices || '0';
+    document.getElementById('totalRuns').textContent = summary.total_runs;
+}
+
+function renderCharts(data) {
+    const colors = getChartColors();
+
+    // Platform Pie Chart
+    const platformData = data.summary.by_platform;
+    const platformLabels = Object.keys(platformData);
+    const platformValues = Object.values(platformData).map(p => p.tagged);
+    // Map colors based on platform name
+    const platformColorMap = {
+        'CrowdStrike': colors.crowdstrike,
+        'Tanium': colors.tanium,
+        'Tanium Cloud': colors.taniumCloud,
+        'Tanium On-Prem': colors.taniumOnprem,
+        'Tanium (Legacy)': colors.tanium
+    };
+    const platformColors = platformLabels.map(p => platformColorMap[p] || colors.secondary);
+
+    Plotly.react('platformChart', [{
+        type: 'pie',
+        labels: platformLabels,
+        values: platformValues,
+        marker: { colors: platformColors },
+        textinfo: 'label+percent',
+        textposition: 'outside',
+        hole: 0.4
+    }], {
+        ...getBaseLayout(),
+        showlegend: false,
+        margin: { t: 20, r: 20, b: 20, l: 20 }
+    }, plotlyConfig);
+
+    // Category Pie Chart (Workstation vs Server)
+    const categoryData = data.by_category || [];
+    if (categoryData.length > 0) {
+        const catLabels = categoryData.map(c => c.category);
+        const catValues = categoryData.map(c => c.successfully_tagged);
+        const catColors = {
+            'Workstation': '#3b82f6',  // Blue
+            'Server': '#8b5cf6'         // Purple
+        };
+
+        Plotly.react('categoryChart', [{
+            type: 'pie',
+            labels: catLabels,
+            values: catValues,
+            marker: { colors: catLabels.map(l => catColors[l] || '#6b7280') },
+            textinfo: 'label+percent',
+            textposition: 'outside',
+            hole: 0.4,
+            hovertemplate: '<b>%{label}</b><br>Devices: %{value:,}<br>%{percent}<extra></extra>'
+        }], {
+            ...getBaseLayout(),
+            showlegend: false,
+            margin: { t: 20, r: 20, b: 20, l: 20 }
+        }, plotlyConfig);
+    } else {
+        Plotly.react('categoryChart', [{
+            type: 'pie',
+            labels: ['No Data'],
+            values: [1],
+            marker: { colors: ['#e5e7eb'] },
+            textinfo: 'label',
+            hoverinfo: 'none'
+        }], {
+            ...getBaseLayout(),
+            showlegend: false,
+            margin: { t: 20, r: 20, b: 20, l: 20 }
+        }, plotlyConfig);
+    }
+
+    // Monthly Stacked Bar Chart - Show Cloud and On-Prem separately
+    const monthly = data.monthly;
+    const months = [...new Set(monthly.map(m => m.month))].sort();
+    const csMonthly = months.map(m => {
+        const found = monthly.find(x => x.month === m && x.platform === 'CrowdStrike');
+        return found ? found.successfully_tagged : 0;
+    });
+    const tnCloudMonthly = months.map(m => {
+        const found = monthly.find(x => x.month === m && x.platform === 'Tanium Cloud');
+        return found ? found.successfully_tagged : 0;
+    });
+    const tnOnpremMonthly = months.map(m => {
+        const found = monthly.find(x => x.month === m && x.platform === 'Tanium On-Prem');
+        return found ? found.successfully_tagged : 0;
+    });
+    // Legacy Tanium data (for backward compatibility)
+    const tnLegacyMonthly = months.map(m => {
+        const found = monthly.find(x => x.month === m && x.platform === 'Tanium');
+        return found ? found.successfully_tagged : 0;
+    });
+
+    const monthlyTraces = [
+        { x: months, y: csMonthly, name: 'CrowdStrike', type: 'bar', marker: { color: colors.crowdstrike } }
+    ];
+    // Only add traces if they have data
+    if (tnCloudMonthly.some(v => v > 0)) {
+        monthlyTraces.push({ x: months, y: tnCloudMonthly, name: 'Tanium Cloud', type: 'bar', marker: { color: colors.taniumCloud } });
+    }
+    if (tnOnpremMonthly.some(v => v > 0)) {
+        monthlyTraces.push({ x: months, y: tnOnpremMonthly, name: 'Tanium On-Prem', type: 'bar', marker: { color: colors.taniumOnprem } });
+    }
+    if (tnLegacyMonthly.some(v => v > 0)) {
+        monthlyTraces.push({ x: months, y: tnLegacyMonthly, name: 'Tanium (Legacy)', type: 'bar', marker: { color: colors.tanium } });
+    }
+
+    Plotly.react('monthlyChart', monthlyTraces, {
+        ...getBaseLayout(),
+        barmode: 'stack',
+        xaxis: { ...getBaseLayout().xaxis, tickangle: -45 },
+        yaxis: { ...getBaseLayout().yaxis, title: 'Devices Tagged' }
+    }, plotlyConfig);
+
+    // Region Distribution Chart
+    const regionData = data.by_region || [];
+    if (regionData.length > 0) {
+        const sortedRegions = [...regionData].sort((a, b) => b.successfully_tagged - a.successfully_tagged);
+        const regionLabels = sortedRegions.map(r => r.region);
+        const regionValues = sortedRegions.map(r => r.successfully_tagged);
+
+        const regionColors = {
+            'US': '#3b82f6',
+            'United States': '#3b82f6',
+            'EMEA': '#22c55e',
+            'APAC': '#f59e0b',
+            'LATAM': '#ef4444',
+            'JAPAN': '#8b5cf6',
+            'Japan': '#8b5cf6',
+            'JP': '#8b5cf6',
+            'CHINA': '#ec4899',
+            'Korea': '#06b6d4'
+        };
+
+        Plotly.react('regionChart', [{
+            type: 'pie',
+            labels: regionLabels,
+            values: regionValues,
+            marker: { colors: regionLabels.map(l => regionColors[l] || '#6b7280') },
+            textinfo: 'label+percent',
+            textposition: 'inside',
+            hole: 0.3,
+            hovertemplate: '<b>%{label}</b><br>Devices: %{value:,}<br>%{percent}<extra></extra>'
+        }], {
+            ...getBaseLayout(),
+            showlegend: false,
+            margin: { t: 20, r: 20, b: 20, l: 20 }
+        }, plotlyConfig);
+    } else {
+        Plotly.react('regionChart', [{
+            type: 'pie',
+            labels: ['No Data'],
+            values: [1],
+            marker: { colors: ['#e5e7eb'] },
+            textinfo: 'label',
+            hoverinfo: 'none'
+        }], {
+            ...getBaseLayout(),
+            showlegend: false,
+            margin: { t: 20, r: 20, b: 20, l: 20 }
+        }, plotlyConfig);
+    }
+
+    // Country Bar Chart (Top 10)
+    const countries = data.by_country.slice(0, 10);
+    Plotly.react('countryChart', [{
+        type: 'bar',
+        x: countries.map(c => c.successfully_tagged),
+        y: countries.map(c => c.country),
+        orientation: 'h',
+        marker: {
+            color: countries.map((_, i) => {
+                const gradient = i / countries.length;
+                return `rgba(${Math.round(0 + gradient * 100)}, ${Math.round(70 + gradient * 100)}, ${Math.round(173 - gradient * 50)}, 0.85)`;
+            })
+        },
+        text: countries.map(c => c.successfully_tagged.toLocaleString()),
+        textposition: 'outside',
+        hovertemplate: '<b>%{y}</b><br>Devices: %{x:,}<extra></extra>'
+    }], {
+        ...getBaseLayout(),
+        showlegend: false,
+        margin: { t: 20, r: 60, b: 40, l: 100 },
+        xaxis: { ...getBaseLayout().xaxis, title: 'Devices Tagged' },
+        yaxis: { ...getBaseLayout().yaxis, autorange: 'reversed' }
+    }, plotlyConfig);
+
+    // Ring Tag Distribution
+    const ringGroups = { Ring1: 0, Ring2: 0, Ring3: 0, Ring4: 0, Other: 0 };
+    data.by_ring_tag.forEach(tag => {
+        const ringTag = tag.ring_tag || '';
+        let matched = false;
+        for (const ring of ['Ring1', 'Ring2', 'Ring3', 'Ring4']) {
+            if (ringTag.includes(ring)) {
+                ringGroups[ring] += tag.successfully_tagged;
+                matched = true;
+                break;
+            }
+        }
+        if (!matched) ringGroups['Other'] += tag.successfully_tagged;
+    });
+    const ringLabels = Object.keys(ringGroups).filter(k => ringGroups[k] > 0);
+    const ringValues = ringLabels.map(k => ringGroups[k]);
+
+    Plotly.react('ringTagChart', [{
+        type: 'pie',
+        labels: ringLabels,
+        values: ringValues,
+        marker: { colors: ['#22c55e', '#3b82f6', '#f59e0b', '#ef4444', '#6b7280'] },
+        textinfo: 'label+percent',
+        hole: 0.3
+    }], {
+        ...getBaseLayout(),
+        showlegend: false,
+        margin: { t: 20, r: 20, b: 20, l: 20 }
+    }, plotlyConfig);
+
+    // Environment Distribution Chart
+    const envData = data.by_environment || [];
+    if (envData.length > 0) {
+        // Sort by tagged count and take top environments
+        const sortedEnv = [...envData].sort((a, b) => b.successfully_tagged - a.successfully_tagged);
+        const envLabels = sortedEnv.map(e => e.environment);
+        const envValues = sortedEnv.map(e => e.successfully_tagged);
+
+        // Color palette for environments
+        const envColors = [
+            '#ef4444',  // Production - red (critical)
+            '#22c55e',  // Development - green
+            '#3b82f6',  // QA - blue
+            '#f59e0b',  // Test - amber
+            '#8b5cf6',  // Lab - purple
+            '#ec4899',  // DR - pink
+            '#06b6d4',  // Integration - cyan
+            '#84cc16',  // POC - lime
+            '#6b7280',  // Other - gray
+            '#f97316'   // Extra - orange
+        ];
+
+        Plotly.react('envChart', [{
+            type: 'pie',
+            labels: envLabels,
+            values: envValues,
+            marker: { colors: envColors.slice(0, envLabels.length) },
+            textinfo: 'label+percent',
+            textposition: 'inside',
+            hole: 0.3,
+            hovertemplate: '<b>%{label}</b><br>Devices: %{value:,}<br>%{percent}<extra></extra>'
+        }], {
+            ...getBaseLayout(),
+            showlegend: false,
+            margin: { t: 20, r: 20, b: 20, l: 20 }
+        }, plotlyConfig);
+    } else {
+        // Show empty state
+        Plotly.react('envChart', [{
+            type: 'pie',
+            labels: ['No Data'],
+            values: [1],
+            marker: { colors: ['#e5e7eb'] },
+            textinfo: 'label',
+            hoverinfo: 'none'
+        }], {
+            ...getBaseLayout(),
+            showlegend: false,
+            margin: { t: 20, r: 20, b: 20, l: 20 }
+        }, plotlyConfig);
+    }
+
+    // Hosts Without Ring Tags Over Time
+    // total_devices per run = hosts found without ring tags at that point
+    const untaggedDaily = data.daily;
+    const untaggedDates = [...new Set(untaggedDaily.map(d => d.run_date))].sort();
+    const csUntagged = untaggedDates.map(d => {
+        return untaggedDaily.filter(x => x.run_date === d && x.platform === 'CrowdStrike')
+            .reduce((sum, x) => sum + (x.total_devices || 0), 0);
+    });
+    const tnCloudUntagged = untaggedDates.map(d => {
+        return untaggedDaily.filter(x => x.run_date === d && x.platform === 'Tanium Cloud')
+            .reduce((sum, x) => sum + (x.total_devices || 0), 0);
+    });
+    const tnOnpremUntagged = untaggedDates.map(d => {
+        return untaggedDaily.filter(x => x.run_date === d && x.platform === 'Tanium On-Prem')
+            .reduce((sum, x) => sum + (x.total_devices || 0), 0);
+    });
+    const tnLegacyUntagged = untaggedDates.map(d => {
+        return untaggedDaily.filter(x => x.run_date === d && x.platform === 'Tanium')
+            .reduce((sum, x) => sum + (x.total_devices || 0), 0);
+    });
+
+    const untaggedTraces = [];
+    if (csUntagged.some(v => v > 0)) {
+        untaggedTraces.push({ x: untaggedDates, y: csUntagged, name: 'CrowdStrike', type: 'scatter',
+            mode: 'lines+markers', fill: 'tozeroy', line: { color: colors.crowdstrike, width: 2 }, marker: { size: 4 } });
+    }
+    if (tnCloudUntagged.some(v => v > 0)) {
+        untaggedTraces.push({ x: untaggedDates, y: tnCloudUntagged, name: 'Tanium Cloud', type: 'scatter',
+            mode: 'lines+markers', fill: 'tonexty', line: { color: colors.taniumCloud, width: 2 }, marker: { size: 4 } });
+    }
+    if (tnOnpremUntagged.some(v => v > 0)) {
+        untaggedTraces.push({ x: untaggedDates, y: tnOnpremUntagged, name: 'Tanium On-Prem', type: 'scatter',
+            mode: 'lines+markers', fill: 'tonexty', line: { color: colors.taniumOnprem, width: 2 }, marker: { size: 4 } });
+    }
+    if (tnLegacyUntagged.some(v => v > 0)) {
+        untaggedTraces.push({ x: untaggedDates, y: tnLegacyUntagged, name: 'Tanium (Legacy)', type: 'scatter',
+            mode: 'lines+markers', fill: 'tonexty', line: { color: colors.tanium, width: 2 }, marker: { size: 4 } });
+    }
+
+    if (untaggedTraces.length > 0) {
+        Plotly.react('untaggedChart', untaggedTraces, {
+            ...getBaseLayout(),
+            xaxis: { ...getBaseLayout().xaxis, tickangle: -45 },
+            yaxis: { ...getBaseLayout().yaxis, title: 'Hosts Without Ring Tags' }
+        }, plotlyConfig);
+    } else {
+        Plotly.react('untaggedChart', [{
+            type: 'scatter', x: [], y: [], mode: 'lines'
+        }], {
+            ...getBaseLayout(),
+            xaxis: { ...getBaseLayout().xaxis },
+            yaxis: { ...getBaseLayout().yaxis, title: 'Hosts Without Ring Tags' },
+            annotations: [{ text: 'No data available', showarrow: false, font: { size: 16, color: colors.text } }]
+        }, plotlyConfig);
+    }
+
+    // Untagged Hosts Breakdown by Reason (stacked bar)
+    const breakdown = data.untagged_breakdown || [];
+    if (breakdown.length > 0) {
+        const breakdownDates = breakdown.map(b => b.run_date);
+        const missingSnowData = breakdown.map(b => b.untagged_missing_snow_data || 0);
+        const noSnowEntry = breakdown.map(b => b.untagged_no_snow_entry || 0);
+        const errorCounts = breakdown.map(b => b.untagged_error || 0);
+
+        Plotly.react('untaggedBreakdownChart', [
+            { x: breakdownDates, y: missingSnowData, name: 'Missing Snow Data', type: 'bar',
+              marker: { color: '#f59e0b' }, hovertemplate: '<b>%{x}</b><br>Missing Snow Data: %{y}<extra></extra>' },
+            { x: breakdownDates, y: noSnowEntry, name: 'No Snow Entry', type: 'bar',
+              marker: { color: '#ef4444' }, hovertemplate: '<b>%{x}</b><br>No Snow Entry: %{y}<extra></extra>' },
+            { x: breakdownDates, y: errorCounts, name: 'API Error', type: 'bar',
+              marker: { color: '#6b7280' }, hovertemplate: '<b>%{x}</b><br>API Error: %{y}<extra></extra>' }
+        ], {
+            ...getBaseLayout(),
+            barmode: 'stack',
+            xaxis: { ...getBaseLayout().xaxis, type: 'date', tickformat: '%b %d', tickmode: 'array', tickvals: breakdownDates, tickangle: -45 },
+            yaxis: { ...getBaseLayout().yaxis, title: 'Untagged Hosts' }
+        }, plotlyConfig);
+    } else {
+        Plotly.react('untaggedBreakdownChart', [{
+            type: 'scatter', x: [], y: [], mode: 'lines'
+        }], {
+            ...getBaseLayout(),
+            xaxis: { ...getBaseLayout().xaxis },
+            yaxis: { ...getBaseLayout().yaxis, title: 'Untagged Hosts' },
+            annotations: [{ text: 'Breakdown data not yet available', showarrow: false, font: { size: 16, color: colors.text } }]
+        }, plotlyConfig);
+    }
+
+    // Daily Timeline - Show Cloud and On-Prem separately
+    const daily = data.daily;
+    const dates = [...new Set(daily.map(d => d.run_date))].sort();
+    const csDaily = dates.map(d => {
+        return daily.filter(x => x.run_date === d && x.platform === 'CrowdStrike')
+            .reduce((sum, x) => sum + x.successfully_tagged, 0);
+    });
+    const tnCloudDaily = dates.map(d => {
+        return daily.filter(x => x.run_date === d && x.platform === 'Tanium Cloud')
+            .reduce((sum, x) => sum + x.successfully_tagged, 0);
+    });
+    const tnOnpremDaily = dates.map(d => {
+        return daily.filter(x => x.run_date === d && x.platform === 'Tanium On-Prem')
+            .reduce((sum, x) => sum + x.successfully_tagged, 0);
+    });
+    // Legacy Tanium data
+    const tnLegacyDaily = dates.map(d => {
+        return daily.filter(x => x.run_date === d && x.platform === 'Tanium')
+            .reduce((sum, x) => sum + x.successfully_tagged, 0);
+    });
+
+    const dailyTraces = [
+        { x: dates, y: csDaily, name: 'CrowdStrike', type: 'scatter', mode: 'lines+markers',
+          line: { color: colors.crowdstrike, width: 2 }, marker: { size: 4 } }
+    ];
+    // Only add traces if they have data
+    if (tnCloudDaily.some(v => v > 0)) {
+        dailyTraces.push({ x: dates, y: tnCloudDaily, name: 'Tanium Cloud', type: 'scatter', mode: 'lines+markers',
+          line: { color: colors.taniumCloud, width: 2 }, marker: { size: 4 } });
+    }
+    if (tnOnpremDaily.some(v => v > 0)) {
+        dailyTraces.push({ x: dates, y: tnOnpremDaily, name: 'Tanium On-Prem', type: 'scatter', mode: 'lines+markers',
+          line: { color: colors.taniumOnprem, width: 2 }, marker: { size: 4 } });
+    }
+    if (tnLegacyDaily.some(v => v > 0)) {
+        dailyTraces.push({ x: dates, y: tnLegacyDaily, name: 'Tanium (Legacy)', type: 'scatter', mode: 'lines+markers',
+          line: { color: colors.tanium, width: 2 }, marker: { size: 4 } });
+    }
+
+    Plotly.react('dailyChart', dailyTraces, {
+        ...getBaseLayout(),
+        xaxis: { ...getBaseLayout().xaxis, tickangle: -45 },
+        yaxis: { ...getBaseLayout().yaxis, title: 'Devices Tagged' }
+    }, plotlyConfig);
+}
+
+function renderRecentRunsTable(data) {
+    const tbody = document.getElementById('recentRunsBody');
+    const runs = data.recent_runs || [];
+
+    if (runs.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="empty-cell">No recent runs found</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = runs.map(run => {
+        const date = run.run_date || '-';
+        const timestamp = run.run_timestamp;
+        let time = '-';
+        if (timestamp) {
+            try {
+                const dt = new Date(timestamp);
+                time = dt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+            } catch (e) {
+                time = timestamp.split(' ')[1] || '-';
+            }
+        }
+        const platform = run.platform || '-';
+        let platformClass = 'platform-tanium';
+        if (platform.toLowerCase() === 'crowdstrike') platformClass = 'platform-cs';
+        else if (platform === 'Tanium Cloud') platformClass = 'platform-tanium-cloud';
+        else if (platform === 'Tanium On-Prem') platformClass = 'platform-tanium-onprem';
+        const devices = (run.total_devices || 0).toLocaleString();
+        const success = (run.successfully_tagged || 0).toLocaleString();
+        const failed = (run.failed || 0).toLocaleString();
+        const runBy = run.run_by || 'unknown';
+        const runByClass = runBy === 'scheduled job' ? 'run-by-scheduled' : 'run-by-user';
+
+        return `
+            <tr>
+                <td>${date}</td>
+                <td>${time}</td>
+                <td><span class="platform-badge ${platformClass}">${platform}</span></td>
+                <td class="number-cell">${devices}</td>
+                <td class="number-cell success-cell">${success}</td>
+                <td class="number-cell ${parseInt(run.failed) > 0 ? 'failed-cell' : ''}">${failed}</td>
+                <td><span class="run-by-badge ${runByClass}">${runBy}</span></td>
+            </tr>
+        `;
+    }).join('');
+}
+
+// Initialize
+document.addEventListener('DOMContentLoaded', loadDashboard);
+</script>
+{% endblock %}

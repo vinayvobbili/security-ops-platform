@@ -190,7 +190,7 @@ class URLChecker:
         zscaler_patterns = [
             'zscaler', 'blocked by policy', 'access denied', 'category blocked', 'security policy',
             'website blocked', 'not allowed', 'permission to visit', 'social network site',
-            'your organization has selected zscaler', '1-800-ask-met2', 'streaming/media site',
+            'your organization has selected zscaler', 'streaming/media site',
             'streaming site', 'media site'
         ]
 

@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>IR Log Viewer</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='0.9em' font-size='90'>🔍</text></svg>">
     <style>
         * {
             margin: 0;
@@ -91,6 +92,43 @@
             opacity: 0.9;
         }
 
+        .reload-btn {
+            background: rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-size: 0.9em;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .reload-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            border-color: rgba(255, 255, 255, 0.5);
+        }
+
+        .reload-btn:active {
+            transform: scale(0.95);
+        }
+
+        .reload-btn.loading {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .reload-icon {
+            display: inline-block;
+            transition: transform 0.3s ease;
+        }
+
+        .reload-btn.loading .reload-icon {
+            animation: spin 1s linear infinite;
+        }
+
         .expand-icon {
             transition: transform 0.3s ease;
         }
@@ -167,14 +205,14 @@
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             border-radius: 12px;
             padding: 24px;
-            padding-bottom: 140px;
+            padding-bottom: 165px;
             text-decoration: none;
             color: white;
             transition: transform 0.2s, box-shadow 0.2s;
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
             position: relative;
             overflow: hidden;
-            min-height: 220px;
+            min-height: 240px;
             display: flex;
             flex-direction: column;
         }
@@ -269,21 +307,48 @@
             right: 0;
             background: rgba(0, 0, 0, 0.35);
             backdrop-filter: blur(10px);
-            padding: 14px 20px;
+            padding: 16px 20px;
             opacity: 1;
             border-top: 1px solid rgba(255, 255, 255, 0.1);
         }
 
         .card-overlay-content {
             font-size: 0.82em;
-            margin-bottom: 10px;
-            line-height: 1.5;
+            margin-bottom: 12px;
+            line-height: 1.6;
         }
 
         .card-overlay-content div {
             display: flex;
-            justify-content: space-between;
-            margin-bottom: 4px;
+            align-items: center;
+            margin-bottom: 6px;
+        }
+
+        .card-overlay-content .metric-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 6px;
+            line-height: 1;
+        }
+
+        .card-overlay-content .metric-label {
+            width: 60px;
+            flex-shrink: 0;
+            text-align: left;
+        }
+
+        .card-overlay-content .metric-value {
+            width: 110px;
+            flex-shrink: 0;
+            text-align: right;
+        }
+
+        .card-overlay-content .progress-bar {
+            flex: 1;
+            margin-top: 0;
+            margin-left: 8px;
+            align-self: center;
         }
 
         .card-actions {
@@ -438,6 +503,186 @@
                 transform: rotate(360deg);
             }
         }
+
+        /* Status Change Animations */
+        @keyframes statusChange {
+            0% {
+                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            }
+            50% {
+                box-shadow: 0 0 30px rgba(72, 187, 120, 0.6), 0 8px 12px rgba(0, 0, 0, 0.2);
+                transform: translateY(-6px) scale(1.02);
+            }
+            100% {
+                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            }
+        }
+
+        @keyframes statusChangeDown {
+            0% {
+                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            }
+            50% {
+                box-shadow: 0 0 30px rgba(245, 101, 101, 0.6), 0 8px 12px rgba(0, 0, 0, 0.2);
+                transform: translateY(-6px) scale(1.02);
+            }
+            100% {
+                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            }
+        }
+
+        .log-card.status-change-up {
+            animation: statusChange 1.5s ease-out;
+        }
+
+        .log-card.status-change-down {
+            animation: statusChangeDown 1.5s ease-out;
+        }
+
+        /* Progress Bar Styles */
+        .progress-bar {
+            width: 100%;
+            height: 6px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 3px;
+            overflow: hidden;
+            margin-top: 4px;
+            display: flex;
+            align-items: stretch;
+        }
+
+        .progress-fill {
+            height: 6px;
+            display: block;
+            line-height: 1;
+            font-size: 0;
+            overflow: hidden;
+            transition: width 0.5s ease, background-color 0.3s ease;
+        }
+
+        .progress-fill.low {
+            background: #48bb78;
+        }
+
+        .progress-fill.medium {
+            background: #ecc94b;
+        }
+
+        .progress-fill.high {
+            background: #f56565;
+        }
+
+        /* Uptime Badge */
+        .uptime-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.75em;
+            font-weight: 600;
+            background: rgba(255, 255, 255, 0.25);
+            margin-left: 6px;
+        }
+
+        .uptime-badge.excellent {
+            background: rgba(72, 187, 120, 0.3);
+            border: 1px solid rgba(72, 187, 120, 0.5);
+        }
+
+        .uptime-badge.good {
+            background: rgba(236, 201, 75, 0.3);
+            border: 1px solid rgba(236, 201, 75, 0.5);
+        }
+
+        .uptime-badge.poor {
+            background: rgba(245, 101, 101, 0.3);
+            border: 1px solid rgba(245, 101, 101, 0.5);
+        }
+
+        /* Quick Actions Toolbar */
+        .quick-actions {
+            background: #f7fafc;
+            border-radius: 12px;
+            padding: 16px 20px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .quick-actions-title {
+            color: #2d3748;
+            font-weight: 600;
+            font-size: 1em;
+        }
+
+        .quick-actions-buttons {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .btn-action {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 0.9em;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-weight: 500;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .btn-action:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        .btn-action:active {
+            transform: translateY(0);
+        }
+
+        .btn-action:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-action.btn-success {
+            background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
+        }
+
+        .btn-action.btn-danger {
+            background: linear-gradient(135deg, #f56565 0%, #e53e3e 100%);
+        }
+
+        .btn-action.btn-warning {
+            background: linear-gradient(135deg, #ed8936 0%, #dd6b20 100%);
+        }
+
+        /* Trend Indicators */
+        .trend-indicator {
+            display: inline-block;
+            margin-left: 4px;
+            font-size: 0.9em;
+        }
+
+        .trend-up {
+            color: #f56565;
+        }
+
+        .trend-down {
+            color: #48bb78;
+        }
+
+        .trend-stable {
+            color: #cbd5e0;
+        }
     </style>
 </head>
 <body>
@@ -446,7 +691,7 @@
     <p class="subtitle">Real-time log monitoring for all IR services</p>
 
     <!-- Status Bar -->
-    <div class="status-bar" id="statusBar" onclick="toggleStatusDetails()">
+    <div class="status-bar" id="statusBar">
         <div class="status-summary">
             <div class="status-left">
                 <span class="status-indicator" id="statusIndicator">⏳</span>
@@ -457,23 +702,46 @@
             </div>
             <div class="status-right">
                 <span id="lastUpdate">Just now</span>
-                <span class="expand-icon">▼</span>
+                <button class="reload-btn" id="pauseBtn" onclick="togglePause()" title="Pause auto-refresh">
+                    <span id="pauseIcon">⏸️</span>
+                </button>
+                <button class="reload-btn" id="reloadBtn" onclick="manualRefresh()">
+                    <span class="reload-icon">🔄</span>
+                </button>
             </div>
         </div>
-        <div class="status-details" id="statusDetails">
-            <!-- Will be populated by JavaScript -->
+    </div>
+
+    <!-- Quick Actions Toolbar -->
+    <div class="quick-actions">
+        <div class="quick-actions-title">Quick Actions</div>
+        <div class="quick-actions-buttons">
+            <button class="btn-action btn-success" onclick="controlAllBots('start')" id="startAllBtn">
+                Start All Stopped
+            </button>
+            <button class="btn-action btn-warning" onclick="controlAllBots('restart')" id="restartAllBtn">
+                Restart All Running
+            </button>
+            <button class="btn-action btn-danger" onclick="controlAllBots('stop')" id="stopAllBtn">
+                Stop All Running
+            </button>
+            <button class="btn-action" onclick="restartLogViewers()" id="restartLogViewersBtn">
+                🔄 Restart Log Viewers
+            </button>
+            <button class="btn-action" onclick="restartSelf()" id="restartSelfBtn">
+                🔧 Restart This Service
+            </button>
+            <button class="btn-action" onclick="showSystemStatus()" id="systemStatusBtn">
+                📊 System Status
+            </button>
+            <button class="btn-action" onclick="gitPull()" id="gitPullBtn">
+                📥
+            </button>
         </div>
     </div>
 
     <!-- Log Cards Grid -->
     <div class="log-grid" id="logGrid">
-        <a href="http://localhost:8031" class="log-card featured" target="_blank">
-            <div class="card-header">
-                <h3>📊 All Services</h3>
-            </div>
-            <p>Combined view of all IR services using journalctl</p>
-        </a>
-
         <!-- Bot cards will be populated by JavaScript -->
     </div>
 
@@ -485,7 +753,7 @@
             <li>Live log streaming with color-coded levels</li>
             <li>Full-text search across logs (Ctrl+F)</li>
             <li>Resource usage monitoring (CPU, Memory, Uptime)</li>
-            <li>Auto-refresh every 10 seconds</li>
+            <li>Auto-refresh every minute</li>
             <li>No SSH access required</li>
         </ul>
     </div>
@@ -502,11 +770,26 @@
 </div>
 
 <script>
-    const API_BASE = 'http://localhost:8040/api';
-    const API_AUTH = btoa('admin:admin'); // Basic auth
+    const API_BASE = 'http://sirt-lab-12.internal.example.com:8040/api';
+
+    // Cached auth credentials (only needed for control actions)
+    let cachedAuth = null;
+
+    function getAuthHeader() {
+        if (cachedAuth) return cachedAuth;
+        const username = prompt('Username:');
+        if (!username) return null;
+        const password = prompt('Password:');
+        if (!password) return null;
+        cachedAuth = 'Basic ' + btoa(username + ':' + password);
+        return cachedAuth;
+    }
 
     let lastStatusData = null;
+    let previousStatusData = null;
     let refreshInterval = null;
+    let botsUnderControl = new Map(); // Track bots being controlled and what action (start/stop/restart)
+    let isPaused = false; // Track pause state
 
     // Bot configuration
     const BOTS = [
@@ -515,7 +798,8 @@
         { key: 'moneyball', name: 'MoneyBall', emoji: '💰', port: 8034 },
         { key: 'jarvis', name: 'Jarvis', emoji: '🛡️', port: 8035 },
         { key: 'barnacles', name: 'Barnacles', emoji: '⚓', port: 8036 },
-        { key: 'tars', name: 'TARS', emoji: '🤖', port: 8038 },
+        { key: 'tars', name: 'TARS', emoji: '☁️', port: 8038 },
+        { key: 'case', name: 'CASE', emoji: '🏢', port: 8041 },
         { key: 'jobs', name: 'All Jobs', emoji: '⏰', port: 8037 },
         { key: 'webserver', name: 'Web Server', emoji: '🌐', port: 8039 }
     ];
@@ -555,7 +839,7 @@
                     <div><span>Status:</span><span>Checking...</span></div>
                 </div>
                 <div class="card-actions">
-                    <button class="btn-card" onclick="window.open('http://localhost:${bot.port}', '_blank')">View Logs</button>
+                    <button class="btn-card" onclick="window.open('http://sirt-lab-12.internal.example.com:${bot.port}', '_blank')">View Logs</button>
                     <button class="btn-card btn-start" id="start-${bot.key}" onclick="controlBot('${bot.key}', 'start')" disabled>Start</button>
                     <button class="btn-card" id="restart-${bot.key}" onclick="controlBot('${bot.key}', 'restart')" disabled>Restart</button>
                     <button class="btn-card btn-stop" id="stop-${bot.key}" onclick="controlBot('${bot.key}', 'stop')" disabled>Stop</button>
@@ -567,19 +851,16 @@
 
     async function fetchStatus() {
         try {
-            const response = await fetch(`${API_BASE}/status`, {
-                headers: {
-                    'Authorization': `Basic ${API_AUTH}`
-                }
-            });
+            const response = await fetch(`${API_BASE}/status`);
 
             if (!response.ok) {
                 throw new Error('Failed to fetch status');
             }
 
             const data = await response.json();
+            updateUI(data, lastStatusData);
+            previousStatusData = lastStatusData;
             lastStatusData = data;
-            updateUI(data);
             updateLastUpdateTime();
 
         } catch (error) {
@@ -588,13 +869,13 @@
         }
     }
 
-    function updateUI(data) {
+    function updateUI(data, previousData) {
         updateStatusBar(data);
-        updateBotCards(data);
+        updateBotCards(data, previousData);
     }
 
     function updateStatusBar(data) {
-        const { summary, bots } = data;
+        const { summary } = data;
         const running = summary.running;
         const total = summary.total;
 
@@ -614,25 +895,6 @@
         }
 
         statusCount.textContent = `${running} of ${total} bots running`;
-
-        // Update details panel
-        const statusDetails = document.getElementById('statusDetails');
-        statusDetails.innerHTML = Object.values(bots).map(bot => `
-            <div class="bot-status-item">
-                <div class="bot-status-name">
-                    <span>${bot.emoji} ${bot.name}</span>
-                    <span class="status-dot ${bot.status}" style="width: 8px; height: 8px;"></span>
-                    <span style="font-size: 0.85em; opacity: 0.9;">${bot.status}</span>
-                </div>
-                <div class="bot-status-controls">
-                    ${bot.status === 'running'
-                        ? `<button class="btn-small" onclick="controlBot('${bot.key}', 'restart')">Restart</button>
-                           <button class="btn-small" onclick="controlBot('${bot.key}', 'stop')">Stop</button>`
-                        : `<button class="btn-small" onclick="controlBot('${bot.key}', 'start')">Start</button>`
-                    }
-                </div>
-            </div>
-        `).join('');
     }
 
     function formatUptime(uptime) {
@@ -670,8 +932,92 @@
         }
     }
 
-    function updateBotCards(data) {
+    function getProgressBarClass(value) {
+        if (value < 50) return 'low';
+        if (value < 80) return 'medium';
+        return 'high';
+    }
+
+    function getUptimeBadge(uptime) {
+        if (!uptime) return '';
+
+        const hours = getUptimeHours(uptime);
+
+        if (hours >= 168) { // 7 days
+            return '<span class="uptime-badge excellent">🏆 Excellent</span>';
+        } else if (hours >= 24) { // 1 day
+            return '<span class="uptime-badge good">✨ Good</span>';
+        } else if (hours >= 4) { // 4 hours
+            return '<span class="uptime-badge good">👍 Stable</span>';
+        } else {
+            return '<span class="uptime-badge poor">🔄 Recent Restart</span>';
+        }
+    }
+
+    function getUptimeDays(uptime) {
+        if (!uptime) return 0;
+        const parts = uptime.split('-');
+        if (parts.length === 2) {
+            return parseInt(parts[0]);
+        }
+        return 0;
+    }
+
+    function getUptimeHours(uptime) {
+        if (!uptime) return 0;
+
+        // Format: "20-06:12:53" = 20 days, 6 hours, 12 minutes, 53 seconds
+        // or "06:12:53" = 6 hours, 12 minutes, 53 seconds
+        // or "12:53" = 12 minutes, 53 seconds
+
+        const parts = uptime.split('-');
+        let days = 0;
+        let timeStr = uptime;
+
+        if (parts.length === 2) {
+            days = parseInt(parts[0]);
+            timeStr = parts[1];
+        }
+
+        const timeParts = timeStr.split(':');
+        let hours = 0;
+        let minutes = 0;
+
+        if (timeParts.length === 3) {
+            // HH:MM:SS format
+            hours = parseInt(timeParts[0]);
+            minutes = parseInt(timeParts[1]);
+        } else if (timeParts.length === 2) {
+            // MM:SS format (less than an hour)
+            minutes = parseInt(timeParts[0]);
+        }
+
+        return days * 24 + hours + (minutes / 60);
+    }
+
+    function getTrendIndicator(current, previous, inverse = false) {
+        if (!previous || previous === 0 || current === 0) return '';
+        const diff = current - previous;
+        const threshold = 5; // 5% change threshold
+
+        if (Math.abs(diff) < threshold) {
+            return '<span class="trend-indicator trend-stable">—</span>';
+        }
+
+        if (inverse) {
+            // For metrics where lower is better (CPU, memory)
+            if (diff > 0) return '<span class="trend-indicator trend-up">↑</span>';
+            return '<span class="trend-indicator trend-down">↓</span>';
+        } else {
+            // For metrics where higher is better
+            if (diff > 0) return '<span class="trend-indicator trend-down">↑</span>';
+            return '<span class="trend-indicator trend-up">↓</span>';
+        }
+    }
+
+    function updateBotCards(data, previousData) {
         const { bots } = data;
+        const previousBots = previousData?.bots || {};
 
         Object.values(bots).forEach(bot => {
             const card = document.getElementById(`card-${bot.key}`);
@@ -683,53 +1029,167 @@
             const restartBtn = document.getElementById(`restart-${bot.key}`);
             const stopBtn = document.getElementById(`stop-${bot.key}`);
 
-            // Update status dot
-            dot.className = `status-dot ${bot.status}`;
+            const previousBot = previousBots[bot.key];
+            const controlAction = botsUnderControl.get(bot.key); // Get the action being performed
+            const isUnderControl = controlAction !== undefined;
 
-            // Update status text
-            if (bot.status === 'running') {
+            // Detect status change and trigger animation
+            if (previousBot && previousBot.status !== bot.status) {
+                card.classList.remove('status-change-up', 'status-change-down');
+                if (bot.status === 'running') {
+                    setTimeout(() => card.classList.add('status-change-up'), 10);
+                    showToast('Bot Started', `${bot.name} is now running`, 'success');
+                    // Remove from control tracking when it successfully starts
+                    botsUnderControl.delete(bot.key);
+                } else if (bot.status === 'stopped') {
+                    setTimeout(() => card.classList.add('status-change-down'), 10);
+                    showToast('Bot Stopped', `${bot.name} has stopped`, 'info');
+                }
+                // Remove animation class after animation completes
+                setTimeout(() => {
+                    card.classList.remove('status-change-up', 'status-change-down');
+                }, 1500);
+            }
+
+            // Update status dot (add pending state for bots under control)
+            if (isUnderControl) {
+                dot.className = 'status-dot error'; // Use error (orange) for pending
+            } else {
+                dot.className = `status-dot ${bot.status}`;
+            }
+
+            // Update status text based on control action
+            if (isUnderControl) {
+                if (controlAction === 'stop') {
+                    status.textContent = 'Stopping...';
+                } else if (controlAction === 'start') {
+                    status.textContent = 'Starting...';
+                } else if (controlAction === 'restart') {
+                    status.textContent = 'Restarting...';
+                }
+            } else if (bot.status === 'running') {
                 status.textContent = 'Live';
-                desc.textContent = `Running • PID ${bot.pid}`;
+
+                // Show all PIDs if multiple processes are running
+                if (bot.pid_count > 1) {
+                    const pidList = bot.pids.join(', ');
+                    desc.innerHTML = `<span style="color: #f56565; font-weight: 600;">⚠️ ${bot.pid_count} processes running!</span> • PIDs: ${pidList}`;
+                } else {
+                    desc.innerHTML = `Running • PID ${bot.pid}`;
+                }
                 card.classList.remove('status-down');
 
-                // Update info overlay
+                // Get previous values for trend indicators
+                const prevCpu = previousBot?.cpu_percent || 0;
+                const prevMem = previousBot?.memory_percent || 0;
+
+                // Update info overlay with progress bars and trends
+                const uptimeBadge = getUptimeBadge(bot.uptime);
                 info.innerHTML = `
-                    <div><span>Uptime:</span><span>${formatUptime(bot.uptime)}</span></div>
-                    <div><span>Memory:</span><span>${bot.memory_mb}MB (${bot.memory_percent.toFixed(1)}%)</span></div>
-                    <div><span>CPU:</span><span>${bot.cpu_percent.toFixed(1)}%</span></div>
+                    <div class="metric-row">
+                        <span class="metric-label">Uptime:</span>
+                        <span class="metric-value">${formatUptime(bot.uptime)}</span>
+                        <div style="flex: 1; margin-left: 8px;">${uptimeBadge}</div>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Memory:</span>
+                        <span class="metric-value">${bot.memory_mb}MB (${bot.memory_percent.toFixed(1)}%)${getTrendIndicator(bot.memory_percent, prevMem, true)}</span>
+                        <div class="progress-bar">
+                            <div class="progress-fill ${getProgressBarClass(bot.memory_percent)}" style="width: ${bot.memory_percent}%"></div>
+                        </div>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">CPU:</span>
+                        <span class="metric-value">${bot.cpu_percent.toFixed(1)}%${getTrendIndicator(bot.cpu_percent, prevCpu, true)}</span>
+                        <div class="progress-bar">
+                            <div class="progress-fill ${getProgressBarClass(bot.cpu_percent)}" style="width: ${Math.min(bot.cpu_percent, 100)}%"></div>
+                        </div>
+                    </div>
                 `;
 
-                // Enable/disable buttons
-                startBtn.disabled = true;
-                restartBtn.disabled = false;
-                stopBtn.disabled = false;
+                // Enable/disable buttons and show spinners if under control
+                if (isUnderControl) {
+                    startBtn.disabled = true;
+                    restartBtn.disabled = true;
+                    stopBtn.disabled = true;
+                    startBtn.innerHTML = '<span class="spinner"></span>';
+                    restartBtn.innerHTML = '<span class="spinner"></span>';
+                    stopBtn.innerHTML = '<span class="spinner"></span>';
+                } else {
+                    startBtn.disabled = true;
+                    startBtn.innerHTML = 'Start';
+                    restartBtn.disabled = false;
+                    restartBtn.innerHTML = 'Restart';
+                    stopBtn.disabled = false;
+                    stopBtn.innerHTML = 'Stop';
+                }
 
             } else if (bot.status === 'stopped') {
                 status.textContent = 'Down';
                 desc.textContent = 'Not running';
                 card.classList.add('status-down');
 
-                info.innerHTML = `<div><span>Status:</span><span>Stopped</span></div>`;
+                info.innerHTML = `
+                    <div class="metric-row">
+                        <span class="metric-label">Status:</span>
+                        <span class="metric-value">🔴 Stopped</span>
+                    </div>
+                `;
 
-                startBtn.disabled = false;
-                restartBtn.disabled = true;
-                stopBtn.disabled = true;
+                if (isUnderControl) {
+                    startBtn.disabled = true;
+                    restartBtn.disabled = true;
+                    stopBtn.disabled = true;
+                    startBtn.innerHTML = '<span class="spinner"></span>';
+                    restartBtn.innerHTML = '<span class="spinner"></span>';
+                    stopBtn.innerHTML = '<span class="spinner"></span>';
+                } else {
+                    startBtn.disabled = false;
+                    startBtn.innerHTML = 'Start';
+                    restartBtn.disabled = true;
+                    restartBtn.innerHTML = 'Restart';
+                    stopBtn.disabled = true;
+                    stopBtn.innerHTML = 'Stop';
+                }
 
             } else {
                 status.textContent = 'Error';
                 desc.textContent = 'Status unknown';
 
-                info.innerHTML = `<div><span>Status:</span><span>Error</span></div>`;
+                info.innerHTML = `
+                    <div class="metric-row">
+                        <span class="metric-label">Status:</span>
+                        <span class="metric-value">⚠️ Error</span>
+                    </div>
+                `;
 
-                startBtn.disabled = false;
-                restartBtn.disabled = false;
-                stopBtn.disabled = false;
+                if (isUnderControl) {
+                    startBtn.disabled = true;
+                    restartBtn.disabled = true;
+                    stopBtn.disabled = true;
+                    startBtn.innerHTML = '<span class="spinner"></span>';
+                    restartBtn.innerHTML = '<span class="spinner"></span>';
+                    stopBtn.innerHTML = '<span class="spinner"></span>';
+                } else {
+                    startBtn.disabled = false;
+                    startBtn.innerHTML = 'Start';
+                    restartBtn.disabled = false;
+                    restartBtn.innerHTML = 'Restart';
+                    stopBtn.disabled = false;
+                    stopBtn.innerHTML = 'Stop';
+                }
             }
         });
     }
 
     async function controlBot(botKey, action) {
+        const auth = getAuthHeader();
+        if (!auth) return;
+
         const actionText = action.charAt(0).toUpperCase() + action.slice(1);
+
+        // Mark bot as under control and track which action
+        botsUnderControl.set(botKey, action);
 
         // Disable all buttons for this bot
         ['start', 'restart', 'stop'].forEach(a => {
@@ -740,37 +1200,302 @@
             }
         });
 
+        // Update UI immediately to show pending state
+        fetchStatus();
+
         try {
             const response = await fetch(`${API_BASE}/control/${botKey}/${action}`, {
                 method: 'POST',
-                headers: {
-                    'Authorization': `Basic ${API_AUTH}`
-                }
+                headers: { 'Authorization': auth }
             });
+
+            if (response.status === 401) {
+                cachedAuth = null;
+                showToast('Error', 'Invalid credentials', 'error');
+                botsUnderControl.delete(botKey);
+                fetchStatus();
+                return;
+            }
 
             const data = await response.json();
 
             if (data.success) {
                 showToast('Success', data.message, 'success');
-                // Refresh status after 2 seconds to allow bot to start/stop
-                setTimeout(fetchStatus, 2000);
+
+                // Poll more frequently for 6 seconds to catch status changes
+                let pollCount = 0;
+                const pollInterval = setInterval(() => {
+                    fetchStatus();
+                    pollCount++;
+                    if (pollCount >= 12) { // 12 polls x 500ms = 6 seconds
+                        clearInterval(pollInterval);
+                        botsUnderControl.delete(botKey); // Stop tracking after polling
+                        fetchStatus(); // Final refresh
+                    }
+                }, 500);
+
             } else {
                 showToast('Error', data.message || `Failed to ${action} bot`, 'error');
-                // Re-enable buttons
+                botsUnderControl.delete(botKey);
                 fetchStatus();
             }
 
         } catch (error) {
             console.error(`Error ${action}ing bot:`, error);
             showToast('Error', `Failed to ${action} bot`, 'error');
-            // Re-enable buttons
+            botsUnderControl.delete(botKey);
             fetchStatus();
         }
     }
 
-    function toggleStatusDetails() {
-        const statusBar = document.getElementById('statusBar');
-        statusBar.classList.toggle('expanded');
+    async function restartLogViewers() {
+        const auth = getAuthHeader();
+        if (!auth) return;
+
+        const btn = document.getElementById('restartLogViewersBtn');
+        const originalText = btn.innerHTML;
+
+        // Disable button and show loading state
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner"></span> Restarting...';
+
+        showToast('Processing', 'Restarting log viewer services...', 'info');
+
+        try {
+            const response = await fetch(`${API_BASE}/log-viewers/restart`, {
+                method: 'POST',
+                headers: { 'Authorization': auth }
+            });
+
+            if (response.status === 401) {
+                cachedAuth = null;
+                showToast('Error', 'Invalid credentials', 'error');
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+                return;
+            }
+
+            const data = await response.json();
+
+            if (data.success) {
+                showToast('Success', data.message, 'success');
+            } else {
+                showToast('Error', data.message || 'Failed to restart log viewers', 'error');
+            }
+
+        } catch (error) {
+            console.error('Error restarting log viewers:', error);
+            showToast('Error', 'Failed to restart log viewers', 'error');
+        } finally {
+            // Re-enable button after a delay
+            setTimeout(() => {
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+            }, 3000);
+        }
+    }
+
+    async function restartSelf() {
+        const auth = getAuthHeader();
+        if (!auth) return;
+
+        const btn = document.getElementById('restartSelfBtn');
+        const originalText = btn.innerHTML;
+
+        // Disable button and show loading state
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner"></span> Restarting...';
+
+        showToast('Processing', 'Restarting this service...', 'info');
+
+        try {
+            const response = await fetch(`${API_BASE}/self-restart`, {
+                method: 'POST',
+                headers: { 'Authorization': auth }
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                showToast('Success', 'Service restarting. Refresh the page in a few seconds.', 'success');
+                // Auto-refresh after 5 seconds
+                setTimeout(() => {
+                    window.location.reload();
+                }, 5000);
+            } else {
+                showToast('Error', data.message || 'Failed to restart service', 'error');
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+            }
+
+        } catch (error) {
+            // This error is expected if the service restarts before responding
+            console.log('Service restart initiated (connection lost as expected)');
+            showToast('Success', 'Service restarting. Refresh the page in a few seconds.', 'success');
+            // Auto-refresh after 5 seconds
+            setTimeout(() => {
+                window.location.reload();
+            }, 5000);
+        }
+    }
+
+    async function gitPull() {
+        const auth = getAuthHeader();
+        if (!auth) return;
+
+        const btn = document.getElementById('gitPullBtn');
+        const originalText = btn.innerHTML;
+
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner"></span> Pulling...';
+
+        showToast('Processing', 'Pulling latest changes from git...', 'info');
+
+        try {
+            const response = await fetch(`${API_BASE}/git-pull`, {
+                method: 'POST',
+                headers: { 'Authorization': auth }
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                showToast('Git Pull', data.message, 'success');
+            } else {
+                showToast('Git Pull Failed', data.message || 'Failed to pull', 'error');
+            }
+
+        } catch (error) {
+            console.error('Error during git pull:', error);
+            showToast('Error', 'Failed to pull from git', 'error');
+        } finally {
+            setTimeout(() => {
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+            }, 2000);
+        }
+    }
+
+    async function showSystemStatus() {
+        const btn = document.getElementById('systemStatusBtn');
+        const originalText = btn.innerHTML;
+
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner"></span> Loading...';
+
+        try {
+            const response = await fetch(`${API_BASE}/system-status`);
+
+            const data = await response.json();
+
+            if (data.success) {
+                const msg = `
+📦 Disk: ${data.disk.used}/${data.disk.size} (${data.disk.percent})
+💾 Memory: ${data.memory.used}/${data.memory.total} (avail: ${data.memory.available})
+⚡ Load: ${data.load['1min']} / ${data.load['5min']} / ${data.load['15min']}
+⏱️ ${data.uptime}
+                `.trim();
+
+                alert(msg);
+            } else {
+                showToast('Error', 'Failed to get system status', 'error');
+            }
+
+        } catch (error) {
+            console.error('Error getting system status:', error);
+            showToast('Error', 'Failed to get system status', 'error');
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+        }
+    }
+
+    async function controlAllBots(action) {
+        const auth = getAuthHeader();
+        if (!auth) return;
+        if (!lastStatusData) return;
+
+        const { bots } = lastStatusData;
+        let targetBots = [];
+
+        // Determine which bots to target based on action
+        if (action === 'start') {
+            targetBots = Object.values(bots).filter(bot => bot.status === 'stopped');
+        } else if (action === 'stop' || action === 'restart') {
+            targetBots = Object.values(bots).filter(bot => bot.status === 'running');
+        }
+
+        if (targetBots.length === 0) {
+            showToast('Info', `No bots to ${action}`, 'info');
+            return;
+        }
+
+        // Mark all target bots as under control and track which action
+        targetBots.forEach(bot => botsUnderControl.set(bot.key, action));
+
+        // Disable all quick action buttons
+        ['startAllBtn', 'restartAllBtn', 'stopAllBtn'].forEach(btnId => {
+            const btn = document.getElementById(btnId);
+            if (btn) btn.disabled = true;
+        });
+
+        showToast('Processing', `${action === 'start' ? 'Starting' : action === 'stop' ? 'Stopping' : 'Restarting'} ${targetBots.length} bot(s)...`, 'info');
+
+        // Update UI immediately to show pending state
+        fetchStatus();
+
+        // Execute action for all target bots
+        const promises = targetBots.map(bot =>
+            fetch(`${API_BASE}/control/${bot.key}/${action}`, {
+                method: 'POST',
+                headers: { 'Authorization': auth }
+            }).then(res => {
+                if (res.status === 401) {
+                    cachedAuth = null;
+                    throw new Error('Invalid credentials');
+                }
+                return res.json();
+            })
+        );
+
+        try {
+            const results = await Promise.all(promises);
+            const successCount = results.filter(r => r.success).length;
+            const failCount = results.length - successCount;
+
+            if (failCount === 0) {
+                showToast('Success', `All ${targetBots.length} bot(s) ${action}ed successfully`, 'success');
+            } else {
+                showToast('Partial Success', `${successCount} succeeded, ${failCount} failed`, 'error');
+            }
+
+            // Poll more frequently for 8 seconds to catch all status changes
+            let pollCount = 0;
+            const pollInterval = setInterval(() => {
+                fetchStatus();
+                pollCount++;
+                if (pollCount >= 16) { // 16 polls x 500ms = 8 seconds
+                    clearInterval(pollInterval);
+                    // Clear all bots from tracking
+                    targetBots.forEach(bot => botsUnderControl.delete(bot.key));
+                    fetchStatus(); // Final refresh
+                }
+            }, 500);
+
+        } catch (error) {
+            console.error(`Error in bulk ${action}:`, error);
+            showToast('Error', `Failed to ${action} bots`, 'error');
+            targetBots.forEach(bot => botsUnderControl.delete(bot.key));
+            fetchStatus();
+        } finally {
+            // Re-enable quick action buttons after 8 seconds
+            setTimeout(() => {
+                ['startAllBtn', 'restartAllBtn', 'stopAllBtn'].forEach(btnId => {
+                    const btn = document.getElementById(btnId);
+                    if (btn) btn.disabled = false;
+                });
+            }, 8000);
+        }
     }
 
     function updateLastUpdateTime() {
@@ -778,10 +1503,73 @@
         lastUpdate.textContent = 'Just now';
     }
 
+    async function manualRefresh() {
+        const reloadBtn = document.getElementById('reloadBtn');
+
+        // Prevent multiple clicks while loading
+        if (reloadBtn.classList.contains('loading')) {
+            return;
+        }
+
+        // Add loading state
+        reloadBtn.classList.add('loading');
+
+        try {
+            await fetchStatus();
+        } finally {
+            // Remove loading state after a minimum of 300ms for visual feedback
+            setTimeout(() => {
+                reloadBtn.classList.remove('loading');
+            }, 300);
+        }
+    }
+
     function startAutoRefresh() {
-        refreshInterval = setInterval(() => {
+        if (!isPaused) {
+            refreshInterval = setInterval(() => {
+                if (!isPaused) {
+                    fetchStatus();
+                }
+            }, 60000); // Refresh every 60 seconds
+        }
+    }
+
+    function togglePause() {
+        isPaused = !isPaused;
+        const pauseBtn = document.getElementById('pauseBtn');
+        const pauseIcon = document.getElementById('pauseIcon');
+        const lastUpdate = document.getElementById('lastUpdate');
+
+        if (isPaused) {
+            // Paused state
+            pauseIcon.textContent = '▶️';
+            pauseBtn.title = 'Resume auto-refresh';
+            pauseBtn.style.background = 'rgba(237, 137, 54, 0.3)';
+            lastUpdate.textContent = 'Paused';
+            lastUpdate.style.color = '#ed8936';
+
+            // Clear the refresh interval
+            if (refreshInterval) {
+                clearInterval(refreshInterval);
+                refreshInterval = null;
+            }
+
+            showToast('Auto-refresh Paused', 'You can now inspect elements', 'info');
+        } else {
+            // Resumed state
+            pauseIcon.textContent = '⏸️';
+            pauseBtn.title = 'Pause auto-refresh';
+            pauseBtn.style.background = '';
+            lastUpdate.style.color = '';
+
+            // Restart auto-refresh
+            startAutoRefresh();
+
+            // Fetch status immediately
             fetchStatus();
-        }, 10000); // Refresh every 10 seconds
+
+            showToast('Auto-refresh Resumed', 'Updates will continue every 60 seconds', 'success');
+        }
     }
 
     function showToast(title, message, type = 'info') {

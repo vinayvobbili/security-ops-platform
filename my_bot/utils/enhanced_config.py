@@ -37,13 +37,13 @@ class PathConfig:
     """Configuration for file paths"""
     base_dir: str = field(default_factory=lambda: os.path.dirname(os.path.dirname(__file__)))
     pdf_directory: str = field(init=False)
-    faiss_index_path: str = field(init=False)
+    chroma_documents_path: str = field(init=False)
     performance_data_path: str = field(init=False)
     logs_directory: str = field(init=False)
 
     def __post_init__(self):
         self.pdf_directory = os.path.join(self.base_dir, "local_pdfs_docs")
-        self.faiss_index_path = os.path.join(self.base_dir, "faiss_index_ollama")
+        self.chroma_documents_path = os.path.join(self.base_dir, "chroma_documents")
         self.logs_directory = os.path.join(self.base_dir, "logs")
 
 
@@ -160,8 +160,8 @@ class ConfigManager:
         # Path configuration
         if os.getenv('PDF_DIRECTORY'):
             env_config.setdefault('paths', {})['pdf_directory'] = os.getenv('PDF_DIRECTORY')
-        if os.getenv('FAISS_INDEX_PATH'):
-            env_config.setdefault('paths', {})['faiss_index_path'] = os.getenv('FAISS_INDEX_PATH')
+        if os.getenv('CHROMA_DOCUMENTS_PATH'):
+            env_config.setdefault('paths', {})['chroma_documents_path'] = os.getenv('CHROMA_DOCUMENTS_PATH')
         if os.getenv('LOGS_DIRECTORY'):
             env_config.setdefault('paths', {})['logs_directory'] = os.getenv('LOGS_DIRECTORY')
 
@@ -243,7 +243,7 @@ class ConfigManager:
         directories = [
             self._config.paths.pdf_directory,
             self._config.paths.logs_directory,
-            os.path.dirname(self._config.paths.faiss_index_path)
+            self._config.paths.chroma_documents_path
         ]
 
         for directory in directories:

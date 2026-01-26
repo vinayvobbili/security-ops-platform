@@ -1,4 +1,6 @@
-# HAL9000 SOC Bot - LLM Agent Architecture
+#!/usr/bin/python3
+
+# Pokedex SOC Bot - LLM Agent Architecture
 """
 HIGH LEVEL REQUIREMENTS:
 ========================
@@ -22,6 +24,7 @@ ARCHITECTURE APPROACH:
 # Configure SSL for corporate proxy environments (Zscaler, etc.) - MUST BE FIRST
 import sys
 from pathlib import Path
+
 PROJECT_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
@@ -32,7 +35,7 @@ from src.utils.logging_utils import setup_logging
 
 # Configure logging with centralized utility (colors enabled by default)
 setup_logging(
-    bot_name='hal9000',
+    bot_name='pokedex',
     log_level=logging.INFO,
     log_dir=str(PROJECT_ROOT / "logs"),
     info_modules=['__main__', 'src.utils.bot_resilience', 'src.utils.webex_device_manager'],
@@ -40,13 +43,21 @@ setup_logging(
 )
 
 logger = logging.getLogger(__name__)
-# Suppress noisy messages from webex libraries
+
+# Note: Using vanilla WebexBot without resilience framework for testing
+
+# Suppress noisy library logs manually since not using ResilientBot
 logging.getLogger('webex_bot').setLevel(logging.ERROR)  # Suppress bot-to-bot and self-message warnings
-logging.getLogger('webexteamssdk').setLevel(logging.ERROR)
+logging.getLogger('webex_bot.websockets.webex_websocket_client').setLevel(logging.WARNING)
 logging.getLogger('webex_websocket_client').setLevel(logging.WARNING)
+logging.getLogger('webexteamssdk').setLevel(logging.ERROR)
+logging.getLogger('webexpythonsdk').setLevel(logging.WARNING)
+logging.getLogger('urllib3').setLevel(logging.WARNING)
+logging.getLogger('asyncio').setLevel(logging.CRITICAL)
 
 # Now safe to import modules that use logging
 import csv
+import os
 import random
 import signal
 import atexit
@@ -56,29 +67,36 @@ from pytz import timezone
 from webex_bot.webex_bot import WebexBot
 
 from my_config import get_config
-
-from my_bot.core.my_model import ask, initialize_model_and_agent
+from my_bot.core.my_model import (
+    ask, initialize_model_and_agent,
+    is_help_command, get_help_response,
+    is_tipper_command, handle_tipper_command_with_metrics,
+    is_rules_command, handle_rules_command
+)
 from my_bot.core.session_manager import get_session_manager
-from services.bot_rooms import get_room_name
+from src.utils.webex_utils import get_room_name
 from src.utils.bot_messages import THINKING_MESSAGES, DONE_MESSAGES
+from webex_bot.models.command import Command
 
 from src.utils.ssl_config import configure_ssl_if_needed
+
 configure_ssl_if_needed(verbose=True)  # Re-enabled due to ZScaler connectivity issues
 
-# Apply enhanced WebSocket client patch for better connection resilience
+# Enhanced WebSocket client for websockets 14.x compatibility
 from src.utils.enhanced_websocket_client import patch_websocket_client
+
 patch_websocket_client()
 
 # Log clear startup marker for visual separation in logs
 logger.warning("=" * 100)
-logger.warning(f"🚀 HAL9000 BOT STARTED - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+logger.warning(f"🚀 POKEDEX BOT STARTED - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 logger.warning("=" * 100)
 
 CONFIG = get_config()
 
 # Configuration
 WEBEX_ACCESS_TOKEN = CONFIG.webex_bot_access_token_hal9000
-WEBEX_BOT_EMAIL = CONFIG.webex_bot_email_hal9000
+WEBEX_BOT_EMAIL = CONFIG.webex_bot_email_pokedex
 
 # Network logging configuration - set to False to improve performance
 SHOULD_LOG_NETWORK_TRAFFIC = False  # Change to False to disable network logging
@@ -93,20 +111,27 @@ if not WEBEX_ACCESS_TOKEN:
 eastern = timezone('US/Eastern')
 LOG_FILE_DIR = Path(__file__).parent.parent / 'data' / 'transient' / 'logs'
 
+# Contacts lookup using vector store + LLM
+from src.components.contacts_lookup import search_contacts_with_llm_with_metrics
+
+# XSOAR executive summary tool
+from my_bot.tools.xsoar_summary_tools import generate_executive_summary_with_metrics
+
 
 def log_conversation(user_name: str, user_prompt: str, bot_response: str, response_time: float, room_name: str):
     """Log complete conversation to CSV file for analytics"""
     try:
-        log_file = LOG_FILE_DIR / "hal9000_conversations.csv"
+        log_file = LOG_FILE_DIR / "pokedex_conversations.csv"
         now_eastern = datetime.now(eastern).strftime('%m/%d/%Y %I:%M:%S %p %Z')
 
         # Create header if file doesn't exist
         if not log_file.exists():
+            os.makedirs(LOG_FILE_DIR, exist_ok=True)
             with open(log_file, "w", newline="") as f:
-                writer = csv.writer(f, quoting=csv.QUOTE_MINIMAL)
+                writer = csv.writer(f, quoting=csv.QUOTE_MINIMAL)  # type: ignore[arg-type]
                 writer.writerow([
-                    "timestamp", "user_name", "user_message", "bot_response",
-                    "response_time_seconds", "room_name"
+                    "Person", "User Prompt", "Bot Response", "Response Length",
+                    "Response Time (s)", "Webex Room", "Message Time"
                 ])
 
         # Sanitize data for CSV
@@ -117,10 +142,10 @@ def log_conversation(user_name: str, user_prompt: str, bot_response: str, respon
 
         # Append conversation
         with open(log_file, "a", newline="") as f:
-            writer = csv.writer(f, quoting=csv.QUOTE_MINIMAL)
+            writer = csv.writer(f, quoting=csv.QUOTE_MINIMAL)  # type: ignore[arg-type]
             writer.writerow([
-                now_eastern, user_name, sanitized_prompt, sanitized_response,
-                response_time_rounded, room_name
+                user_name, sanitized_prompt, sanitized_response, response_length,
+                response_time_rounded, room_name, now_eastern
             ])
 
     except Exception as e:
@@ -134,6 +159,15 @@ def initialize_bot():
     start_time = datetime.now()
 
     try:
+        # Clean up stale device registrations before starting
+        from src.utils.webex_device_manager import cleanup_devices_on_startup
+        import time
+        cleanup_devices_on_startup(WEBEX_ACCESS_TOKEN, "Pokedex")
+
+        # Give Webex API time to propagate device deletions (avoid "excessive registrations" error)
+        logger.info("⏳ Waiting 3 seconds for Webex API to sync device deletions...")
+        time.sleep(3)
+
         logger.info("Initializing streamlined SOC Q&A components...")
 
         if not initialize_model_and_agent():
@@ -154,10 +188,10 @@ def initialize_bot():
             from my_bot.core.state_manager import get_state_manager
             state_manager = get_state_manager()
             model_name = state_manager.model_config.llm_model_name if state_manager and hasattr(state_manager, 'model_config') else "Unknown"
-        except:
+        except (ImportError, AttributeError):
             model_name = "Unknown"
 
-        startup_message = f"🚀 HAL9000 is up and running (startup in {total_time:.1f}s) using {model_name}..."
+        startup_message = f"🚀 Pokedex is up and running (startup in {total_time:.1f}s) using {model_name}..."
         logger.info(startup_message)
         print(startup_message)
 
@@ -168,32 +202,104 @@ def initialize_bot():
         return False
 
 
+class WriteTipperNoteCommand(Command):
+    """Callback command handler for the 'Write Note' button on tipper analysis cards."""
+
+    def __init__(self):
+        super().__init__(
+            command_keyword="write_tipper_note",
+            help_message="Write tipper analysis to AZDO",
+            card_callback_keyword="write_tipper_note"
+        )
+
+    def execute(self, message, attachment_actions, activity):
+        """Execute the write note action when user clicks the button."""
+        try:
+            from my_bot.tools.tipper_analysis_tools import write_analysis_to_azdo
+            from webexpythonsdk import WebexAPI
+
+            # Get the data from the card action (tipper_id and HTML_comment)
+            inputs = getattr(attachment_actions, 'inputs', {}) or {}
+            tipper_id = inputs.get('tipper_id')
+            html_comment = inputs.get('html_comment')
+
+            # Fallback to JSON_data if inputs doesn't have the data
+            if not tipper_id or not html_comment:
+                action_data = getattr(attachment_actions, 'json_data', {}) or {}
+                tipper_id = tipper_id or action_data.get('tipper_id')
+                html_comment = html_comment or action_data.get('html_comment')
+
+            if not tipper_id:
+                return "⚠️ Could not determine tipper ID. Please run the analysis again."
+
+            if not html_comment:
+                return "⚠️ No analysis data found. Please run the analysis again."
+
+            # Get the person who clicked the button
+            clicker_email = getattr(attachment_actions, 'personEmail', None)
+            logger.info(f"WriteTipperNoteCommand: Writing analysis for tipper #{tipper_id} (clicked by {clicker_email})")
+
+            # Write the analysis to AZDO using the HTML_comment from the card data
+            result = write_analysis_to_azdo(tipper_id, html_comment)
+
+            # Add mention of the person who clicked
+            if clicker_email:
+                result = f"<@personEmail:{clicker_email}> {result}"
+
+            # Send confirmation message back to the room where the button was clicked
+            room_id = attachment_actions.roomId
+            webex_api = WebexAPI(access_token=CONFIG.webex_bot_access_token_pokedex)
+            webex_api.messages.create(roomId=room_id, markdown=result)
+            logger.info(f"Sent confirmation message for tipper #{tipper_id} to room")
+
+            # Delete the card message to prevent duplicate clicks
+            try:
+                card_message_id = attachment_actions.messageId
+                if card_message_id:
+                    webex_api.messages.delete(card_message_id)
+                    logger.info(f"Deleted card message {card_message_id}")
+            except Exception as del_err:
+                logger.warning(f"Could not delete card message: {del_err}")
+
+            return None  # Don't return anything since we sent the message explicitly
+
+        except Exception as e:
+            logger.error(f"Error in WriteTipperNoteCommand: {e}", exc_info=True)
+            return f"❌ Error writing note: {str(e)}"
+
+
 class Bot(WebexBot):
     """LLM Agent-powered SOC bot for Webex"""
 
     def process_incoming_message(self, teams_message, activity):
         """Process incoming messages"""
-        logger.info(f"Processing message: {getattr(teams_message, 'text', 'NO TEXT')[:50]}... | Activity verb: {activity.get('verb')} | Message ID: {getattr(teams_message, 'id', 'None')}")
-
         # Basic filtering - ignore bot messages and non-person actors
         bot_email = WEBEX_BOT_EMAIL  # Use the actual bot email from config
         if (hasattr(teams_message, 'personEmail') and
                 teams_message.personEmail == bot_email):
-            logger.info(f"Ignoring bot's own message from {bot_email}")
-            return
+            return  # Silently ignore bot's own messages (thinking indicators, etc.)
 
         if activity.get('actor', {}).get('type') != 'PERSON':
-            logger.info("Ignoring non-person actor")
-            return
+            return  # Silently ignore non-person actors
 
         # Only process 'post' verbs (new messages), ignore 'edit', 'acknowledge', etc.
         if activity.get('verb') != 'post':
-            logger.info(f"Ignoring non-post activity verb: {activity.get('verb')}")
-            return
+            return  # Silently ignore non-post activities
+
+        logger.info(f"Processing message: {getattr(teams_message, 'text', 'NO TEXT')[:50]}... | Activity verb: {activity.get('verb')}")
 
         try:
             # Clean message
             raw_message = teams_message.text or ""
+
+            # Strip bot name mentions for command detection
+            import re
+            cleaned_message = raw_message
+            bot_names = ['IR_Pokedex', 'Pokedex', 'pokedex', 'dnr_pokedex']
+            for bot_name in bot_names:
+                pattern = re.compile(re.escape(bot_name), re.IGNORECASE)
+                cleaned_message = pattern.sub('', cleaned_message)
+            cleaned_message = re.sub(r'\s+', ' ', cleaned_message).strip()
 
             # Process message with LLM agent
             user_name = activity.get('actor', {}).get('displayName', 'Unknown')
@@ -222,7 +328,7 @@ class Bot(WebexBot):
                 thinking_msg = self.teams.messages.create(
                     roomId=teams_message.roomId,
                     parentId=parent_id,  # Use original parent to avoid "reply to reply"
-                    markdown=thinking_message
+                    text=thinking_message
                 )
 
                 # Start background thread to update thinking message every 5 seconds
@@ -231,8 +337,9 @@ class Bot(WebexBot):
 
                 def update_thinking_message():
                     counter = 1
-                    while thinking_active.is_set():
-                        time.sleep(10)
+                    MAX_EDITS = 9  # Limit to 9 edits to reserve the 10th for the final message
+                    while thinking_active.is_set() and counter <= MAX_EDITS:
+                        time.sleep(15)
                         if thinking_active.is_set():  # Check again after sleep
                             try:
                                 new_message = random.choice(THINKING_MESSAGES)
@@ -245,7 +352,7 @@ class Bot(WebexBot):
                                 }
                                 payload = {
                                     'roomId': teams_message.roomId,
-                                    'markdown': f"{new_message} ({counter * 10}s)"
+                                    'text': f"{new_message} ({counter * 15}s)"
                                 }
 
                                 response = requests.put(update_url, headers=update_headers, json=payload)
@@ -269,16 +376,93 @@ class Bot(WebexBot):
                 logger.warning(f"Failed to send thinking message: {e}")
                 thinking_msg = None
 
-            # Process query through LLM agent
-            try:
-                response_text = ask(
-                    raw_message,
-                    user_id=teams_message.personId,
-                    room_id=teams_message.roomId
-                )
-            except Exception as e:
-                logger.error(f"Error in LLM agent processing: {e}")
-                response_text = "❌ I encountered an error processing your message. Please try again."
+            # Check for help command - bypass LLM entirely (no tokens to track)
+            if is_help_command(cleaned_message):
+                response_text = get_help_response()
+                input_tokens = 0
+                output_tokens = 0
+                total_tokens = 0
+                prompt_time = 0.0
+                generation_time = 0.0
+                tokens_per_sec = 0.0
+            # Check for tipper command - runs LLM analysis
+            elif is_tipper_command(cleaned_message)[0]:
+                _, tipper_id = is_tipper_command(cleaned_message)
+                result = handle_tipper_command_with_metrics(tipper_id, teams_message.roomId)
+                response_text = result['content']
+                input_tokens = result['input_tokens']
+                output_tokens = result['output_tokens']
+                total_tokens = result['total_tokens']
+                prompt_time = result['prompt_time']
+                generation_time = result['generation_time']
+                tokens_per_sec = result['tokens_per_sec']
+            # Check for rules command - detection rules catalog search
+            elif is_rules_command(cleaned_message)[0]:
+                _, rules_query = is_rules_command(cleaned_message)
+                result = handle_rules_command(rules_query)
+                response_text = result['content']
+                input_tokens = result['input_tokens']
+                output_tokens = result['output_tokens']
+                total_tokens = result['total_tokens']
+                prompt_time = result['prompt_time']
+                generation_time = result['generation_time']
+                tokens_per_sec = result['tokens_per_sec']
+            # Check for contacts command - vector store + LLM lookup
+            elif cleaned_message.lower().startswith('contacts '):
+                contacts_query = cleaned_message[9:]  # Remove "contacts " prefix
+                result = search_contacts_with_llm_with_metrics(contacts_query)
+                response_text = result['content']
+                input_tokens = result['input_tokens']
+                output_tokens = result['output_tokens']
+                total_tokens = result['total_tokens']
+                prompt_time = result['prompt_time']
+                generation_time = result['generation_time']
+                tokens_per_sec = result['tokens_per_sec']
+            # Check for execsum command - XSOAR executive summary
+            elif cleaned_message.lower().startswith('execsum '):
+                ticket_id = cleaned_message[8:].strip()  # Remove "execsum " prefix
+                if ticket_id:
+                    result = generate_executive_summary_with_metrics(ticket_id, "prod")
+                    response_text = result['content']
+                    input_tokens = result['input_tokens']
+                    output_tokens = result['output_tokens']
+                    total_tokens = result['total_tokens']
+                    prompt_time = result['prompt_time']
+                    generation_time = result['generation_time']
+                    tokens_per_sec = result['tokens_per_sec']
+                else:
+                    response_text = "❌ Usage: `execsum <ticket_id>`\n\nExample: `execsum 929947`"
+                    input_tokens = 0
+                    output_tokens = 0
+                    total_tokens = 0
+                    prompt_time = 0.0
+                    generation_time = 0.0
+                    tokens_per_sec = 0.0
+            else:
+                # Process query through LLM agent
+                try:
+                    # ask() now returns a dict with content, token counts, and timing data
+                    result = ask(
+                        raw_message,
+                        user_id=teams_message.personId,
+                        room_id=teams_message.roomId
+                    )
+                    response_text = result['content']
+                    input_tokens = result['input_tokens']
+                    output_tokens = result['output_tokens']
+                    total_tokens = result['total_tokens']
+                    prompt_time = result['prompt_time']
+                    generation_time = result['generation_time']
+                    tokens_per_sec = result['tokens_per_sec']
+                except Exception as e:
+                    logger.error(f"Error in LLM agent processing: {e}")
+                    response_text = "❌ I encountered an error processing your message. Please try again."
+                    input_tokens = 0
+                    output_tokens = 0
+                    total_tokens = 0
+                    prompt_time = 0.0
+                    generation_time = 0.0
+                    tokens_per_sec = 0.0
 
             # Format for Webex
             if len(response_text) > 7000:
@@ -286,24 +470,31 @@ class Bot(WebexBot):
 
             logger.info(f"Sending response to {teams_message.personEmail}: {len(response_text)} chars")
 
-            # Done message logic - moved inside the else block where response_text is set
-            if response_text:
-                end_time = datetime.now()
-                response_time = (end_time - start_time).total_seconds()
+            # Calculate response time
+            end_time = datetime.now()
+            response_time = (end_time - start_time).total_seconds()
 
-                # Stop thinking message updates and update to "Done!" message
-                if thinking_active:
-                    thinking_active.clear()
+            # ALWAYS stop thinking message updates (even if response is empty)
+            if thinking_active:
+                thinking_active.clear()
+
+            # Done message logic - handle both success and empty response cases
+            if response_text:
+                # Success path - update thinking message to show completion
 
                 # Update the final thinking message to show "Done!"
                 if thinking_msg:
                     done_prefix = random.choice(DONE_MESSAGES)
-                    done_message = f"{done_prefix} ⚡ Response time: **{response_time:.1f}s**"
+                    # Include enhanced metrics: time breakdown, tokens, and speed
+                    if total_tokens > 0 and generation_time > 0:
+                        done_message = f"{done_prefix} ⚡ Time: **{response_time:.1f}s** ({prompt_time:.1f}s prompt + {generation_time:.1f}s gen) | Tokens: {input_tokens}→{output_tokens} | Speed: {tokens_per_sec:.1f} tok/s"
+                    else:
+                        done_message = f"{done_prefix} ⚡ Response time: **{response_time:.1f}s**"
                     try:
-                        # Update the thinking message to show completion
+                        # Update the thinking message to show completion (using Markdown)
                         import requests
                         edit_url = f'https://webexapis.com/v1/messages/{thinking_msg.id}'
-                        headers = {'Authorization': f'Bearer {CONFIG.webex_bot_access_token_hal9000}', 'Content-Type': 'application/json'}
+                        headers = {'Authorization': f'Bearer {CONFIG.webex_bot_access_token_pokedex}', 'Content-Type': 'application/json'}
                         edit_data = {
                             'roomId': teams_message.roomId,
                             'markdown': done_message
@@ -323,6 +514,7 @@ class Bot(WebexBot):
                     parent_id = teams_message.parentId if hasattr(teams_message, 'parentId') and teams_message.parentId else teams_message.id
 
                     # Send LLM response directly as Webex message
+                    # Note: Tools like tipper_analysis send cards directly via Webex context
                     self.teams.messages.create(
                         roomId=teams_message.roomId,
                         parentId=parent_id,
@@ -339,6 +531,35 @@ class Bot(WebexBot):
                         text=response_text if isinstance(response_text, str) and len(response_text) < 7000 else "Response too long for message limits"
                     )
 
+            else:
+                # Empty response path - update thinking message and send error
+                logger.warning(f"Received empty response from LLM after {response_time:.1f}s")
+
+                # Update thinking message to show error
+                if thinking_msg:
+                    try:
+                        import requests
+                        edit_url = f'https://webexapis.com/v1/messages/{thinking_msg.id}'
+                        headers = {'Authorization': f'Bearer {CONFIG.webex_bot_access_token_pokedex}', 'Content-Type': 'application/json'}
+                        edit_data = {
+                            'roomId': teams_message.roomId,
+                            'markdown': f"⚠️ **Empty Response** | Time: **{response_time:.1f}s**"
+                        }
+                        requests.put(edit_url, headers=headers, json=edit_data)
+                    except Exception as completion_error:
+                        logger.warning(f"Could not update thinking message for empty response: {completion_error}")
+
+                # Send error message to user
+                try:
+                    parent_id = teams_message.parentId if hasattr(teams_message, 'parentId') and teams_message.parentId else teams_message.id
+                    self.teams.messages.create(
+                        roomId=teams_message.roomId,
+                        parentId=parent_id,
+                        text="❌ I received an empty response from the LLM. This may indicate:\n• The LLM encountered an error\n• The response was filtered or blocked\n• A timeout occurred\n\nPlease try rephrasing your question or try again."
+                    )
+                except Exception as send_error:
+                    logger.error(f"Could not send empty response error message: {send_error}")
+
         except Exception as e:
             logger.error(f"Error in message processing: {e}", exc_info=True)
             self.teams.messages.create(
@@ -347,21 +568,27 @@ class Bot(WebexBot):
             )
 
 
-def _shutdown_handler(signum=None, frame=None):
+def _shutdown_handler(_signum=None, _frame=None):
     """Log shutdown marker before exit"""
     logger.warning("=" * 100)
-    logger.warning(f"🛑 HAL9000 BOT STOPPED - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    logger.warning(f"🛑 POKEDEX BOT STOPPED - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     logger.warning("=" * 100)
 
 
 def main():
-    """HAL9000 main - simplified to use basic WebexBot (keepalive handled by peer_ping_keepalive.py)"""
-    logger.info("Starting HAL9000 with basic WebexBot")
+    """Pokédex main - VANILLA WebexBot with NO resilience features for testing"""
+    bot_name = "Pokedex"
+    logger.info("Starting Pokedex with VANILLA WebexBot (no resilience, no patches)")
 
     # Register shutdown handlers for graceful logging
     atexit.register(_shutdown_handler)
     signal.signal(signal.SIGTERM, _shutdown_handler)
     signal.signal(signal.SIGINT, _shutdown_handler)
+
+    # Initialize bot components first
+    if not initialize_bot():
+        logger.error("Failed to initialize bot components")
+        return 1
 
     # Create bot instance
     bot = Bot(
@@ -369,16 +596,26 @@ def main():
         approved_domains=[CONFIG.my_web_domain],
         # approved_rooms disabled - bot lacks spark:memberships_read scope for validation
         # Security: Only add this bot to authorized rooms to control access
-        bot_name="HAL9000"
+        bot_name=bot_name
     )
 
-    # Initialize bot
-    initialize_bot()
+    # Register callback command for tipper analysis "Write Note" button
+    bot.add_command(WriteTipperNoteCommand())
+    logger.info("Registered WriteTipperNoteCommand callback handler")
 
-    # Run bot (simple and direct)
-    logger.info("🚀 HAL9000 is up and running...")
-    print("🚀 HAL9000 is up and running...", flush=True)
-    bot.run()
+    # Run bot (simple and direct - no monitoring, no reconnection, no keepalive)
+    logger.info("🚀 Pokedex is up and running with vanilla WebexBot...")
+    print("🚀 Pokedex is up and running with vanilla WebexBot...", flush=True)
+
+    try:
+        bot.run()
+    except KeyboardInterrupt:
+        logger.info("🛑 Pokedex stopped by user (Ctrl+C)")
+    except Exception as e:
+        logger.error(f"❌ Pokedex crashed: {e}", exc_info=True)
+        return 1
+
+    return 0
 
 
 if __name__ == "__main__":

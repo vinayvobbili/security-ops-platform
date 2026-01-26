@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 class PersistentSessionManager:
     """Manages persistent conversation sessions using SQLite"""
-    
+
     def __init__(self, db_path: str = None):
         # Default to data/transient directory for database
         if db_path is None:
@@ -35,6 +35,10 @@ class PersistentSessionManager:
         self.session_timeout_hours = 2  # Changed from 24 to 2 hours
         self.max_context_chars = 4000
         self.max_context_messages = 20
+
+        # Cleanup optimization: only run cleanup every N inserts per session
+        self._cleanup_interval = 10  # Run cleanup every 10 messages per session
+        self._session_insert_counts: Dict[str, int] = {}  # Track inserts per session
 
         self._init_database()
         logger.info(f"Persistent session manager initialized with database: {db_path}")
@@ -52,17 +56,23 @@ class PersistentSessionManager:
                     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
                 )
             """)
-            
+
             conn.execute("""
-                CREATE INDEX IF NOT EXISTS idx_session_key 
+                CREATE INDEX IF NOT EXISTS idx_session_key
                 ON conversations(session_key)
             """)
-            
+
             conn.execute("""
-                CREATE INDEX IF NOT EXISTS idx_timestamp 
+                CREATE INDEX IF NOT EXISTS idx_timestamp
                 ON conversations(session_key, timestamp DESC)
             """)
-            
+
+            # Optimized index for cleanup queries (finding oldest messages to delete)
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_session_id_desc
+                ON conversations(session_key, id DESC)
+            """)
+
             conn.commit()
     
     @contextmanager
@@ -86,32 +96,66 @@ class PersistentSessionManager:
         """Add a message to the conversation session"""
         try:
             timestamp = datetime.now().isoformat()
-            
+
             with self._get_db_connection() as conn:
                 # Insert new message
                 conn.execute("""
                     INSERT INTO conversations (session_key, role, content, timestamp)
                     VALUES (?, ?, ?, ?)
                 """, (session_key, role, content, timestamp))
-                
-                # Clean up old messages for this session (keep only last N)
-                conn.execute("""
-                    DELETE FROM conversations 
-                    WHERE session_key = ? 
-                    AND id NOT IN (
-                        SELECT id FROM conversations 
-                        WHERE session_key = ? 
-                        ORDER BY timestamp DESC 
-                        LIMIT ?
-                    )
-                """, (session_key, session_key, self.max_messages_per_session))
-                
+
                 conn.commit()
-                return True
-                
+
+            # Track insert count and only run cleanup periodically (not on every insert)
+            self._session_insert_counts[session_key] = self._session_insert_counts.get(session_key, 0) + 1
+
+            if self._session_insert_counts[session_key] >= self._cleanup_interval:
+                self._cleanup_session(session_key)
+                self._session_insert_counts[session_key] = 0
+
+            return True
+
         except Exception as e:
             logger.error(f"Failed to add message to session {session_key}: {e}")
             return False
+
+    def _cleanup_session(self, session_key: str) -> int:
+        """Clean up old messages for a session, keeping only the most recent N messages.
+
+        Uses an efficient single-pass query instead of NOT IN subquery.
+        """
+        try:
+            with self._get_db_connection() as conn:
+                # Find the minimum ID to keep (the Nth newest message)
+                cursor = conn.execute("""
+                    SELECT id FROM conversations
+                    WHERE session_key = ?
+                    ORDER BY id DESC
+                    LIMIT 1 OFFSET ?
+                """, (session_key, self.max_messages_per_session - 1))
+
+                row = cursor.fetchone()
+
+                if row:
+                    min_id_to_keep = row[0]
+                    # Delete all messages with ID less than the cutoff
+                    cursor = conn.execute("""
+                        DELETE FROM conversations
+                        WHERE session_key = ? AND id < ?
+                    """, (session_key, min_id_to_keep))
+
+                    deleted_count = cursor.rowcount
+                    conn.commit()
+
+                    if deleted_count > 0:
+                        logger.debug(f"Cleaned up {deleted_count} old messages for session {session_key}")
+                    return deleted_count
+
+                return 0
+
+        except Exception as e:
+            logger.error(f"Failed to cleanup session {session_key}: {e}")
+            return 0
     
     def get_conversation_context(self, session_key: str) -> str:
         """Get recent conversation history for context (only messages within timeout window)"""

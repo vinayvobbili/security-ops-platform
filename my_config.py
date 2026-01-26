@@ -52,6 +52,7 @@ def get_config():
         webex_bot_access_token_toodles=os.environ.get("WEBEX_BOT_ACCESS_TOKEN_TOODLES"),
         webex_bot_access_token_jarvis=os.environ.get("WEBEX_BOT_ACCESS_TOKEN_JARVIS"),
         webex_bot_access_token_tars=os.environ.get("WEBEX_BOT_ACCESS_TOKEN_TARS"),
+        webex_bot_access_token_case=os.environ.get("WEBEX_BOT_ACCESS_TOKEN_CASE"),
         webex_bot_access_token_barnacles=os.environ.get("WEBEX_BOT_ACCESS_TOKEN_BARNACLES"),
         webex_bot_access_token_hal9000=os.environ.get("WEBEX_BOT_ACCESS_TOKEN_HAL9000"),
         webex_bot_access_token_pokedex=os.environ.get("WEBEX_BOT_ACCESS_TOKEN_POKEDEX"),
@@ -61,18 +62,20 @@ def get_config():
         webex_bot_email_toodles=os.environ.get("WEBEX_BOT_EMAIL_TOODLES"),
         webex_bot_email_jarvis=os.environ.get("WEBEX_BOT_EMAIL_JARVIS"),
         webex_bot_email_tars=os.environ.get("WEBEX_BOT_EMAIL_TARS"),
+        webex_bot_email_case=os.environ.get("WEBEX_BOT_EMAIL_CASE"),
         webex_bot_email_barnacles=os.environ.get("WEBEX_BOT_EMAIL_BARNACLES"),
         webex_bot_email_money_ball=os.environ.get("WEBEX_BOT_EMAIL_MONEY_BALL"),
         webex_bot_email_msoar=os.environ.get("WEBEX_BOT_EMAIL_MSOAR"),
         webex_bot_email_pinger=os.environ.get("WEBEX_BOT_EMAIL_PINGER"),
         webex_room_id_aging_tickets=os.environ.get("WEBEX_ROOM_ID_AGING_TICKETS"),
-        webex_room_id_test_space=os.environ.get("WEBEX_ROOM_ID_TEST_SPACE"),
+        webex_room_id_vinay_test_space=os.environ.get("WEBEX_ROOM_ID_VINAY_TEST_SPACE"),
         webex_room_id_soc_shift_updates=os.environ.get("WEBEX_ROOM_ID_SOC_SHIFT_UPDATES"),
         webex_room_id_epp_crowdstrike_tagging=os.environ.get("WEBEX_ROOM_ID_EPP_CROWDSTRIKE_TAGGING"),
-        webex_room_id_epp_tanium_tagging=os.environ.get("WEBEX_ROOM_ID_EPP_TANIUM_TAGGING"),
+        webex_room_id_epp_tanium_cloud_tagging=os.environ.get("WEBEX_ROOM_ID_EPP_TANIUM_CLOUD_TAGGING"),
+        webex_room_id_epp_tanium_onprem_tagging=os.environ.get("WEBEX_ROOM_ID_EPP_TANIUM_ONPREM_TAGGING"),
         webex_room_id_metrics=os.environ.get("WEBEX_ROOM_ID_METRICS"),
         webex_room_id_threatcon_collab=os.environ.get("WEBEX_ROOM_ID_THREATCON_COLLAB"),
-        webex_room_id_soc_t2=os.environ.get("WEBEX_ROOM_ID_SOC_T2"),
+        webex_room_id_gosc_t2=os.environ.get("WEBEX_ROOM_ID_GOSC_T2"),
         webex_room_id_automation_engineering=os.environ.get("WEBEX_ROOM_ID_AUTOMATION_ENGINEERING"),
         webex_room_id_response_engineering=os.environ.get("WEBEX_ROOM_ID_RESPONSE_ENGINEERING"),
         webex_room_id_phish_fort=os.environ.get("WEBEX_ROOM_ID_PHISH_FORT"),
@@ -82,6 +85,9 @@ def get_config():
         webex_room_id_qa_tickets=os.environ.get("WEBEX_ROOM_ID_QA_TICKETS"),
         webex_room_id_new_ticket_notifications=os.environ.get("WEBEX_ROOM_ID_NEW_TICKET_NOTIFICATIONS"),
         webex_room_id_abandoned_tickets=os.environ.get("WEBEX_ROOM_ID_ABANDONED_TICKETS"),
+        webex_room_id_celebrations=os.environ.get("WEBEX_ROOM_ID_CELEBRATIONS"),
+        webex_room_id_domain_monitoring=os.environ.get("WEBEX_ROOM_ID_DOMAIN_MONITORING"),
+        webex_room_id_threat_tipper_analysis=os.environ.get("WEBEX_ROOM_ID_THREAT_TIPPER_ANALYSIS"),
         xsoar_prod_api_base_url=os.environ.get("XSOAR_PROD_API_BASE_URL"),
         xsoar_prod_ui_base_url=os.environ.get("XSOAR_PROD_UI_BASE_URL"),
         xsoar_dev_api_base_url=os.environ.get("XSOAR_DEV_API_BASE_URL"),
@@ -143,10 +149,6 @@ def get_config():
         tanium_cloud_api_url=os.environ.get("TANIUM_CLOUD_API_URL"),
         tanium_onprem_api_token=os.environ.get("TANIUM_ONPREM_API_TOKEN"),
         tanium_onprem_api_url=os.environ.get("TANIUM_ONPREM_API_URL"),
-        zscaler_base_url=os.environ.get("ZSCALER_BASE_URL"),
-        zscaler_username=os.environ.get("ZSCALER_USERNAME"),
-        zscaler_password=os.environ.get("ZSCALER_PASSWORD"),
-        zscaler_api_key=os.environ.get("ZSCALER_API_KEY"),
         infoblox_base_url=os.environ.get("INFOBLOX_BASE_URL"),
         infoblox_username=os.environ.get("INFOBLOX_USERNAME"),
         infoblox_password=os.environ.get("INFOBLOX_PASSWORD"),
@@ -155,6 +157,8 @@ def get_config():
         open_weather_map_api_key=os.environ.get("OPEN_WEATHER_MAP_API_KEY"),
         web_server_debug_mode_on=str(os.environ.get("WEB_SERVER_DEBUG_MODE_ON", "False")).lower() == "true",
         web_server_port=int(os.environ.get("WEB_SERVER_PORT", "8080")),
+        ring_tagging_safety_window_minutes=int(os.environ.get("RING_TAGGING_SAFETY_WINDOW_MINUTES", "60")),
+        web_server_url=os.environ.get("WEB_SERVER_BASE_URL"),
         # Microsoft Teams Toodles Bot configuration (from Azure Bot Service)
         teams_toodles_app_id=os.environ.get("TEAMS_TOODLES_APP_ID"),
         teams_toodles_app_password=os.environ.get("TEAMS_TOODLES_APP_PASSWORD"),
@@ -163,6 +167,26 @@ def get_config():
         flask_secret_key=os.environ.get("FLASK_SECRET_KEY"),
         abnormal_security_api_key=os.environ.get("ABNORMAL_SECURITY_API_KEY"),
         logs_viewer_url=os.environ.get("LOGS_VIEWER_URL"),
+        virustotal_api_key=os.environ.get("VIRUSTOTAL_API_KEY"),
+        github_token=os.environ.get("GITHUB_TOKEN"),
+        hibp_api_key=os.environ.get("HIBP_API_KEY"),
+        shodan_api_key=os.environ.get("SHODAN_API_KEY"),
+        abuseipdb_api_key=os.environ.get("ABUSEIPDB_API_KEY"),
+        intelx_api_key=os.environ.get("INTELLIGENCE_X_API_KEY"),
+        intelx_api_base_url=os.environ.get("INTELLIGENCE_X_API_BASE_URL"),
+        recorded_future_api_key=os.environ.get("RECORDED_FUTURE_API_KEY"),
+        recorded_future_api_base_url=os.environ.get("RECORDED_FUTURE_API_BASE_URL"),
+        urlscan_api_key=os.environ.get("URLSCAN_API_KEY"),
+        qradar_api_url=os.environ.get("QRADAR_API_URL"),
+        qradar_api_key=os.environ.get("QRADAR_API_KEY"),
+        vectra_api_base_url=os.environ.get("VECTRA_API_BASE_URL"),
+        vectra_client_id=os.environ.get("VECTRA_API_CLIENT_ID"),
+        vectra_api_key=os.environ.get("VECTRA_API_KEY"),
+        # Zscaler ZIA configuration
+        zscaler_base_url=os.environ.get("ZSCALER_API_BASE_URL"),
+        zscaler_username=os.environ.get("ZSCALER_API_USERNAME"),
+        zscaler_password=os.environ.get("ZSCALER_API_PASSWORD"),
+        zscaler_api_key=os.environ.get("ZSCALER_API_KEY"),
     )
 
 
@@ -175,6 +199,7 @@ class Config:
     webex_bot_access_token_toodles: Optional[str] = None
     webex_bot_access_token_jarvis: Optional[str] = None
     webex_bot_access_token_tars: Optional[str] = None
+    webex_bot_access_token_case: Optional[str] = None
     webex_bot_access_token_barnacles: Optional[str] = None
     webex_bot_access_token_hal9000: Optional[str] = None
     webex_bot_access_token_pokedex: Optional[str] = None
@@ -188,14 +213,16 @@ class Config:
     webex_bot_email_msoar: Optional[str] = None
     webex_bot_email_pinger: Optional[str] = None
     webex_bot_email_tars: Optional[str] = None
+    webex_bot_email_case: Optional[str] = None
     webex_room_id_aging_tickets: Optional[str] = None
-    webex_room_id_test_space: Optional[str] = None
+    webex_room_id_vinay_test_space: Optional[str] = None
     webex_room_id_soc_shift_updates: Optional[str] = None
     webex_room_id_epp_crowdstrike_tagging: Optional[str] = None
-    webex_room_id_epp_tanium_tagging: Optional[str] = None
+    webex_room_id_epp_tanium_cloud_tagging: Optional[str] = None
+    webex_room_id_epp_tanium_onprem_tagging: Optional[str] = None
     webex_room_id_metrics: Optional[str] = None
     webex_room_id_threatcon_collab: Optional[str] = None
-    webex_room_id_soc_t2: Optional[str] = None
+    webex_room_id_gosc_t2: Optional[str] = None
     webex_room_id_automation_engineering: Optional[str] = None
     webex_room_id_response_engineering: Optional[str] = None
     webex_room_id_phish_fort: Optional[str] = None
@@ -205,6 +232,9 @@ class Config:
     webex_room_id_qa_tickets: Optional[str] = None
     webex_room_id_new_ticket_notifications: Optional[str] = None
     webex_room_id_abandoned_tickets: Optional[str] = None
+    webex_room_id_celebrations: Optional[str] = None
+    webex_room_id_domain_monitoring: Optional[str] = None
+    webex_room_id_threat_tipper_analysis: Optional[str] = None
     xsoar_prod_api_base_url: Optional[str] = None
     xsoar_prod_ui_base_url: Optional[str] = None
     xsoar_dev_api_base_url: Optional[str] = None
@@ -266,10 +296,6 @@ class Config:
     tanium_cloud_api_url: Optional[str] = None
     tanium_onprem_api_token: Optional[str] = None
     tanium_onprem_api_url: Optional[str] = None
-    zscaler_base_url: Optional[str] = None
-    zscaler_username: Optional[str] = None
-    zscaler_password: Optional[str] = None
-    zscaler_api_key: Optional[str] = None
     infoblox_base_url: Optional[str] = None
     infoblox_username: Optional[str] = None
     infoblox_password: Optional[str] = None
@@ -278,6 +304,8 @@ class Config:
     open_weather_map_api_key: Optional[str] = None
     web_server_debug_mode_on: bool = False
     web_server_port: Optional[int] = None
+    ring_tagging_safety_window_minutes: int = 60
+    web_server_url: Optional[str] = None
     # Microsoft Teams Toodles Bot configuration (from Azure Bot Service)
     teams_toodles_app_id: Optional[str] = None
     teams_toodles_app_password: Optional[str] = None
@@ -286,3 +314,23 @@ class Config:
     flask_secret_key: Optional[str] = None
     abnormal_security_api_key: Optional[str] = None
     logs_viewer_url: Optional[str] = None
+    virustotal_api_key: Optional[str] = None
+    github_token: Optional[str] = None
+    hibp_api_key: Optional[str] = None
+    shodan_api_key: Optional[str] = None
+    abuseipdb_api_key: Optional[str] = None
+    intelx_api_key: Optional[str] = None
+    intelx_api_base_url: Optional[str] = None
+    recorded_future_api_key: Optional[str] = None
+    recorded_future_api_base_url: Optional[str] = None
+    urlscan_api_key: Optional[str] = None
+    qradar_api_url: Optional[str] = None
+    qradar_api_key: Optional[str] = None
+    vectra_api_base_url: Optional[str] = None
+    vectra_client_id: Optional[str] = None
+    vectra_api_key: Optional[str] = None
+    # Zscaler ZIA configuration
+    zscaler_base_url: Optional[str] = None
+    zscaler_username: Optional[str] = None
+    zscaler_password: Optional[str] = None
+    zscaler_api_key: Optional[str] = None

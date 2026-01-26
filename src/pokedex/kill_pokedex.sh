@@ -3,14 +3,12 @@
 
 echo "🛑 Stopping Pokedex..."
 
-# Kill by process name
-pkill -f "pokedex.py"
+# Kill by process name (ignore errors if no processes found)
+pkill -9 -f "pokedex.py" 2>/dev/null || true
+pkill -9 -f "webex_bots.pokedex" 2>/dev/null || true
 
-# Kill by keyword search for more thorough cleanup
-ps aux | grep -i pokedex | grep -v grep | awk '{print $2}' | xargs -r kill -9
-
-# Also kill any lingering python processes running webex bot
-ps aux | grep -E "(webex_bots|pokedex)" | grep -v grep | awk '{print $2}' | xargs -r kill -9
+# Brief pause for process cleanup
+sleep 1
 
 echo "✅ Pokedex processes terminated"
 

@@ -42,6 +42,26 @@ from webexpythonsdk import WebexAPI
 from my_config import get_config
 from services.crowdstrike import CrowdStrikeClient
 from services.service_now import ServiceNowClient
+from services.epp_tagging_db import insert_tagging_run, bulk_insert_results
+
+
+def classify_untagged_reasons(hosts: List['Host']) -> Dict[str, int]:
+    """Classify why hosts couldn't be tagged based on their status_message.
+
+    Returns counts for: missing_snow_data, no_snow_entry, error
+    """
+    counts = {'missing_snow_data': 0, 'no_snow_entry': 0, 'error': 0}
+    for host in hosts:
+        if host.new_crowd_strike_tag:
+            continue  # Host was tagged successfully
+        msg = host.status_message.lower()
+        if 'not found in servicenow' in msg:
+            counts['no_snow_entry'] += 1
+        elif 'error' in msg:
+            counts['error'] += 1
+        else:
+            counts['missing_snow_data'] += 1
+    return counts
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -153,6 +173,7 @@ class Host:
     was_country_guessed: bool = False
     life_cycle_status: str = ""
     status_message: str = ""
+    _os_domain: str = ""  # Internal: osDomain from ServiceNow, used for fallback country detection
 
     @staticmethod
     def initialize_hosts_parallel(hostnames, max_workers=10):
@@ -244,10 +265,8 @@ class Host:
 
             self.environment = snow_host_details.get('environment', '')
             self.country = snow_host_details.get('country', '')
-            if snow_host_details.get('osDomain') == 'pmli':
-                self.country = 'India PMLI'
-                self.was_country_guessed = True
-                self.status_message += f" Country guessed from os-domain=pmli in SNOW: {self.country}."
+            # Store osDomain for later fallback use (after prefix-based country detection)
+            self._os_domain = snow_host_details.get('osDomain', '')
             self.life_cycle_status = snow_host_details.get('lifecycleStatus', '')
 
             name_lower = self.name.lower()
@@ -282,6 +301,10 @@ class Host:
                 self._assign_country('Korea', "Country guessed from leading digits in hostname.")
             elif self.name.lower().startswith('vm') and 'SensorGroupingTags/US' in self.current_crowd_strike_tags:
                 self._assign_country('US', "Country guessed from leading characters VM in hostname and SensorGroupingTags/US.")
+
+        # Last resort: use osDomain from ServiceNow if still no country
+        if not self.country and self._os_domain == 'pmli':
+            self._assign_country('India PMLI', "Country guessed from os-domain=pmli in SNOW (fallback).")
 
     def _mark_country_as_guessed(self, message: str) -> None:
         """Mark the country as guessed and update the status message."""
@@ -421,7 +444,7 @@ class TagManager:
             response = crowdstrike.update_device_tags(
                 action_name='add',
                 ids=device_ids,
-                tags=[tag]
+                tags=[f"FalconGroupingTags/{tag}"]
             )
             if response.get("status_code") == 200:
                 # Mark hosts as successfully tagged
@@ -429,8 +452,11 @@ class TagManager:
                     host for host in hosts if host.device_id in device_ids
                 )
             else:
-                # Update status message for failed hosts
+                # Log and update status message for failed hosts
                 error_message = response.get('errors', ['Unknown error'])
+                status_code = response.get('status_code', 'unknown')
+                logger.error(f"Failed to apply tag FalconGroupingTags/{tag} to {len(device_ids)} hosts "
+                             f"(status={status_code}): {error_message}")
                 for host in hosts:
                     if host.device_id in device_ids:
                         host.status_message += f"Failed to add tag: {error_message}."
@@ -538,7 +564,7 @@ class FileHandler:
                 host.region,
                 'Yes' if host.was_country_guessed else 'No',
                 ', '.join(host.current_crowd_strike_tags),
-                host.new_crowd_strike_tag,
+                f"FalconGroupingTags/{host.new_crowd_strike_tag}" if host.new_crowd_strike_tag else '',
                 host.status_message or ('Ring tag generated' if host.new_crowd_strike_tag else 'No tag generated'),
             ])
 
@@ -598,11 +624,17 @@ class ReportHandler:
     def generate_time_report(timings: Dict[str, float], stats: Dict[str, int]) -> str:
         """Generate a timing and statistics report."""
 
+        hosts_with_tags = stats.get('hosts_with_tags', 0)
+        successfully_tagged = stats.get('successfully_tagged', hosts_with_tags)
+        failed_to_tag = hosts_with_tags - successfully_tagged
+        no_tag_generated = stats.get('total_hosts', 0) - hosts_with_tags
+
         return f"""
 Summary:
 - Total hosts processed: {stats.get('total_hosts', 0)}
-- Hosts tagged successfully: {stats.get('hosts_with_tags', 0)}
-- Hosts currently without a Ring tag: {stats.get('total_hosts', 0) - stats.get('hosts_with_tags', 0)}
+- Hosts tagged successfully: {successfully_tagged}
+- Hosts failed to tag: {failed_to_tag}
+- Hosts without a determinable Ring tag: {no_tag_generated}
 
 Timing:
 - Fetching and initializing hosts: {ReportHandler.format_duration(timings.get('fetch_duration', 0))}
@@ -650,8 +682,13 @@ def parse_args():
     return parser.parse_args()
 
 
-def run_workflow(room_id):
-    """Main execution workflow without profiling."""
+def run_workflow(room_id, run_by: str = None):
+    """Main execution workflow without profiling.
+
+    Args:
+        room_id: Webex room ID to send reports to
+        run_by: Who initiated the tagging (user name or 'scheduled job')
+    """
     # Fetch and initialize hosts
     fetch_start = time.time()
     hostnames = FileHandler.get_hostnames()
@@ -672,6 +709,9 @@ def run_workflow(room_id):
     generate_tag_end = time.time()
     timings['generate_tag_duration'] = generate_tag_end - generate_tag_start
 
+    # Classify untagged reasons
+    untagged_reasons = classify_untagged_reasons(hosts)
+
     # Filter statistics
     stats = {
         'total_hosts': len(hosts),
@@ -688,6 +728,8 @@ def run_workflow(room_id):
     apply_tag_end = time.time()
     timings['apply_tag_duration'] = apply_tag_end - apply_tag_start
     logger.info(f'Successfully tagged {len(successfully_tagged_hosts)} hosts')
+
+    stats['successfully_tagged'] = len(successfully_tagged_hosts)
 
     # Generate a timing report
     timings['total_duration'] = time.time() - fetch_start
@@ -716,6 +758,66 @@ def run_workflow(room_id):
                 print(f"Deleted CS file: {file_path}")
         except Exception as e:
             print(f"Error deleting CS file {filename}: {e}")
+
+    # Write results to database (after notification to reduce user wait time)
+    try:
+        run_timestamp = datetime.now(EASTERN_TZ).replace(tzinfo=None)  # SQLite doesn't handle tz-aware datetimes well
+        run_id = insert_tagging_run(
+            run_date=run_timestamp.date(),
+            platform='CrowdStrike',
+            run_timestamp=run_timestamp,
+            source_file=Path(output_filename).name if output_filename else None,
+            total_devices=stats['total_hosts'],
+            successfully_tagged=len(successfully_tagged_hosts),
+            failed=stats['hosts_with_tags'] - len(successfully_tagged_hosts),
+            run_by=run_by or 'unknown',
+            untagged_missing_snow_data=untagged_reasons['missing_snow_data'],
+            untagged_no_snow_entry=untagged_reasons['no_snow_entry'],
+            untagged_error=untagged_reasons['error']
+        )
+
+        # Aggregate results by country/region/category/environment/ring_tag for database
+        db_results = []
+        hosts_with_tags = [h for h in hosts if h.new_crowd_strike_tag]
+
+        # Group by country, region, category, environment, ring_tag
+        groups = defaultdict(lambda: {'total': 0, 'success': 0, 'guessed': 0})
+
+        successfully_tagged_ids = {h.device_id for h in successfully_tagged_hosts}
+
+        for host in hosts_with_tags:
+            key = (
+                host.country or 'Unknown',
+                host.region or None,
+                host.category.value if host.category else None,
+                host.environment if isinstance(host.environment, str) else (host.environment[0] if host.environment else None),
+                host.new_crowd_strike_tag
+            )
+            groups[key]['total'] += 1
+            if host.device_id in successfully_tagged_ids:
+                groups[key]['success'] += 1
+            if host.was_country_guessed:
+                groups[key]['guessed'] += 1
+
+        for (country, region, category, environment, ring_tag), counts in groups.items():
+            db_results.append({
+                'country': country,
+                'region': region,
+                'category': category,
+                'environment': environment,
+                'ring_tag': ring_tag,
+                'total_devices': counts['total'],
+                'successfully_tagged': counts['success'],
+                'failed': counts['total'] - counts['success'],
+                'country_guessed': counts['guessed']
+            })
+
+        if db_results:
+            bulk_insert_results(run_id, db_results)
+
+        logger.info(f"Saved CrowdStrike tagging results to database: run_id={run_id}, run_by={run_by}")
+    except Exception as db_err:
+        logger.error(f"Failed to save CrowdStrike tagging results to database: {db_err}")
 
 
 def main() -> None:

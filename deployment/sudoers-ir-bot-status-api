@@ -1,0 +1,6 @@
+# Sudoers rules for IR Bot Status API self-restart
+# Install: sudo cp /home/vinay/pub/IR/deployment/sudoers-ir-bot-status-api /etc/sudoers.d/ir-bot-status-api && sudo chmod 440 /etc/sudoers.d/ir-bot-status-api
+
+vinay ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart ir-bot-status-api.service
+vinay ALL=(ALL) NOPASSWD: /usr/bin/systemctl stop ir-bot-status-api.service
+vinay ALL=(ALL) NOPASSWD: /usr/bin/systemctl start ir-bot-status-api.service

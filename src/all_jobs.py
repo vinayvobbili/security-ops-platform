@@ -41,9 +41,13 @@ from src.charts import (
 from src.components import (
     oncall, approved_security_testing, thithi, response_sla_risk_tickets,
     containment_sla_risk_tickets, incident_declaration_sla_risk, abandoned_tickets,
-    orphaned_tickets
+    orphaned_tickets, birthdays_anniversaries, major_incident_monitor,
+    stale_containment_cleanup
 )
-from src.utils.fs_utils import make_dir_for_todays_charts
+from webex_bots.jarvis import run_automated_ring_tagging_workflow
+from webex_bots.tars import run_automated_ring_tagging_workflow as run_automated_tanium_ring_tagging_workflow
+from src.components import domain_monitoring
+from src.utils.fs_utils import make_dir_for_todays_charts, cleanup_old_transient_data
 from src.utils.logging_utils import setup_logging
 from src import peer_ping_keepalive
 
@@ -84,7 +88,31 @@ TICKET_CACHE_TIMEOUT = 21600  # 360 minutes (6 hours) for ticket enrichment job 
 # Generous timeout prevents premature termination of this critical nightly job
 
 
-def safe_run(*jobs: Callable[[], None], timeout: int = DEFAULT_JOB_TIMEOUT, name: str = None) -> None:
+def _run_job_with_timeout(job: Callable[[], None], job_name: str, timeout: int) -> None:
+    """Internal: Run a single job with timeout protection."""
+    executor = None
+    start_time = time.time()
+    logger.debug(f">>> Starting job: {job_name}")
+    try:
+        executor = ThreadPoolExecutor(max_workers=1)
+        future = executor.submit(job)
+        try:
+            future.result(timeout=timeout)
+            elapsed = time.time() - start_time
+            logger.debug(f"<<< Job completed successfully: {job_name} (took {elapsed:.2f}s)")
+        except FuturesTimeoutError:
+            elapsed = time.time() - start_time
+            logger.error(f"Job timed out after {timeout} seconds: {job_name} (elapsed {elapsed:.2f}s)")
+    except Exception as e:
+        elapsed = time.time() - start_time
+        logger.error(f"Job execution failed for {job_name} after {elapsed:.2f}s: {e}")
+        logger.debug(traceback.format_exc())
+    finally:
+        if executor:
+            executor.shutdown(wait=False)
+
+
+def safe_run(*jobs: Callable[[], None], timeout: int = DEFAULT_JOB_TIMEOUT, name: str = None, blocking: bool = True) -> None:
     """Execute multiple jobs safely with timeout protection, continuing even if some fail.
 
     Sequentially runs each provided job. Each job is isolated with its own ThreadPoolExecutor
@@ -94,38 +122,30 @@ def safe_run(*jobs: Callable[[], None], timeout: int = DEFAULT_JOB_TIMEOUT, name
         *jobs: One or more callable jobs to execute
         timeout: Maximum execution time per job in seconds
         name: Optional descriptive name for the job(s) in logs (overrides auto-detected names)
+        blocking: If False, run jobs in background thread (won't block scheduler)
     """
-    import time
+    import threading
     if not jobs:
         logger.debug("safe_run() called with 0 jobs - nothing to do")
         return
-    logger.debug(f"safe_run() running {len(jobs)} job(s) with timeout={timeout}s")
-    for i, job in enumerate(jobs):
-        # Use provided name, or try to extract function name, or fall back to repr
-        if name:
-            job_name = name if len(jobs) == 1 else f"{name}[{i + 1}/{len(jobs)}]"
-        else:
-            job_name = getattr(job, '__name__', repr(job))
-        executor = None
-        start_time = time.time()
-        logger.debug(f">>> Starting job: {job_name}")
-        try:
-            executor = ThreadPoolExecutor(max_workers=1)
-            future = executor.submit(job)
-            try:
-                future.result(timeout=timeout)
-                elapsed = time.time() - start_time
-                logger.debug(f"<<< Job completed successfully: {job_name} (took {elapsed:.2f}s)")
-            except FuturesTimeoutError:
-                elapsed = time.time() - start_time
-                logger.error(f"Job timed out after {timeout} seconds: {job_name} (elapsed {elapsed:.2f}s)")
-        except Exception as e:
-            elapsed = time.time() - start_time
-            logger.error(f"Job execution failed for {job_name} after {elapsed:.2f}s: {e}")
-            logger.debug(traceback.format_exc())
-        finally:
-            if executor:
-                executor.shutdown(wait=False)
+    logger.debug(f"safe_run() running {len(jobs)} job(s) with timeout={timeout}s, blocking={blocking}")
+
+    def run_all_jobs():
+        for i, job in enumerate(jobs):
+            # Use provided name, or try to extract function name, or fall back to repr
+            if name:
+                job_name = name if len(jobs) == 1 else f"{name}[{i + 1}/{len(jobs)}]"
+            else:
+                job_name = getattr(job, '__name__', repr(job))
+            _run_job_with_timeout(job, job_name, timeout)
+
+    if blocking:
+        run_all_jobs()
+    else:
+        # Run in background daemon thread - won't block scheduler
+        thread = threading.Thread(target=run_all_jobs, daemon=True)
+        thread.start()
+        logger.debug(f"Job(s) started in background thread")
 
 
 # ----------------------------------------------------------------------------------
@@ -191,7 +211,8 @@ CHART_GROUPS: List[dict] = [
             outflow.make_chart,
             mttr_mttc.make_chart,
             sla_breaches.make_chart,
-            secops.send_daily_operational_report_charts
+            threatcon_level.make_chart,  # Generate before DOR so chart is available
+            lambda: secops.send_daily_operational_report_charts(get_config().webex_room_id_metrics)
         ]
     },
     {
@@ -213,7 +234,6 @@ CHART_GROUPS: List[dict] = [
             re_stories.make_chart,
             days_since_incident.make_chart,
             threat_tippers.make_chart,
-            threatcon_level.make_chart,
         ]
     },
     {
@@ -227,7 +247,11 @@ CHART_GROUPS: List[dict] = [
 
 
 def _shutdown_handler(signum=None, frame=None):
-    """Log shutdown marker before exit"""
+    """Log shutdown marker before exit
+
+    Args:
+        frame (object):
+    """
     logger.warning("=" * 100)
     logger.warning(f"🛑 ALL_JOBS SCHEDULER STOPPED - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     logger.warning("=" * 100)
@@ -246,6 +270,12 @@ def main() -> None:
     # Directory preparation (first, fast)
     logger.info("Scheduling daily chart directory preparation...")
     schedule_daily('00:01', lambda: make_dir_for_todays_charts(helper_methods.CHARTS_DIR_PATH), name="chart_dir_prep")
+
+    # Cleanup old transient data (secOps and charts folders older than 30 days)
+    logger.info("Scheduling daily cleanup of old transient data (02:00 ET)...")
+    schedule_daily('02:00', cleanup_old_transient_data, name="transient_data_cleanup")
+
+    # Note: Tipper index rebuild runs on home_jobs.py (same machine as Pokedex)
 
     # Chart groups (data-driven)
     for group in CHART_GROUPS:
@@ -297,6 +327,38 @@ def main() -> None:
     schedule.every().friday.at('14:00', eastern).do(lambda: safe_run(oncall.alert_change, name="oncall_alert"))
     schedule.every().monday.at('08:00', eastern).do(lambda: safe_run(oncall.announce_change, name="oncall_announce"))
 
+    # Automated Crowdstrike ring tagging (Mon/Thu 9 AM ET)
+    # Timeout: 90 min (60 min safety window + 30 min for tagging), non-blocking
+    logger.info("Scheduling automated Crowdstrike ring tagging (Mon/Thu 09:00 ET)...")
+    schedule.every().monday.at('09:00', eastern).do(
+        lambda: safe_run(run_automated_ring_tagging_workflow, name="automated_cs_ring_tagging_monday", timeout=5400, blocking=False)
+    )
+    schedule.every().thursday.at('09:00', eastern).do(
+        lambda: safe_run(run_automated_ring_tagging_workflow, name="automated_cs_ring_tagging_thursday", timeout=5400, blocking=False)
+    )
+
+    # Automated Tanium Cloud ring tagging (Mon/Thu at 4 AM, 12 PM, 8 PM ET)
+    # Timeout: 90 min (60 min safety window + 30 min for tagging), non-blocking
+    logger.info("Scheduling automated Tanium Cloud ring tagging (Mon/Thu 04:00, 12:00, 20:00 ET)...")
+    schedule.every().monday.at('04:00', eastern).do(
+        lambda: safe_run(run_automated_tanium_ring_tagging_workflow, name="automated_tanium_ring_tagging_mon_04am", timeout=5400, blocking=False)
+    )
+    schedule.every().monday.at('12:00', eastern).do(
+        lambda: safe_run(run_automated_tanium_ring_tagging_workflow, name="automated_tanium_ring_tagging_mon_12pm", timeout=5400, blocking=False)
+    )
+    schedule.every().monday.at('20:00', eastern).do(
+        lambda: safe_run(run_automated_tanium_ring_tagging_workflow, name="automated_tanium_ring_tagging_mon_08pm", timeout=5400, blocking=False)
+    )
+    schedule.every().thursday.at('04:00', eastern).do(
+        lambda: safe_run(run_automated_tanium_ring_tagging_workflow, name="automated_tanium_ring_tagging_thu_04am", timeout=5400, blocking=False)
+    )
+    schedule.every().thursday.at('12:00', eastern).do(
+        lambda: safe_run(run_automated_tanium_ring_tagging_workflow, name="automated_tanium_ring_tagging_thu_12pm", timeout=5400, blocking=False)
+    )
+    schedule.every().thursday.at('20:00', eastern).do(
+        lambda: safe_run(run_automated_tanium_ring_tagging_workflow, name="automated_tanium_ring_tagging_thu_08pm", timeout=5400, blocking=False)
+    )
+
     # Daily maintenance
     logger.info("Scheduling daily maintenance tasks...")
     schedule_daily('17:00', approved_security_testing.removed_expired_entries)
@@ -306,11 +368,30 @@ def main() -> None:
                    lambda: orphaned_tickets.send_report(config.webex_room_id_abandoned_tickets)
                    )
 
+    # Stale containment cleanup - removes hosts from containment list when their ticket is closed
+    logger.info("Scheduling stale containment cleanup (18:00 ET)...")
+    schedule_daily('18:00', stale_containment_cleanup.cleanup_stale_containments, name="stale_containment_cleanup")
+
+    # Birthday and anniversary celebrations
+    logger.info("Scheduling daily birthday/anniversary check (08:00 ET)...")
+    schedule_daily('08:00', birthdays_anniversaries.daily_celebration_check, name="birthday_anniversary_check")
+
+    # Domain lookalike and dark web monitoring
+    logger.info("Scheduling daily domain monitoring (08:00 ET)...")
+    schedule_daily('08:00',
+                   lambda: domain_monitoring.run_daily_monitoring(room_id=domain_monitoring.ALERT_ROOM_ID_PROD),
+                   name="domain_monitoring")
+
     # SLA risk monitoring
     logger.info("Scheduling SLA risk monitoring jobs...")
     schedule_sla('minutes:1', lambda: response_sla_risk_tickets.start(config.webex_room_id_response_sla_risk), name="response_sla_risk", timeout=50)
     schedule_sla('minutes:3', lambda: containment_sla_risk_tickets.start(config.webex_room_id_containment_sla_risk), name="containment_sla_risk", timeout=170)
     schedule_sla('hourly:00', lambda: incident_declaration_sla_risk.start(config.webex_room_id_response_sla_risk), name="incident_declaration_sla_risk", timeout=3540)
+
+    # Major Incident monitoring (polls ServiceNow for new incidents assigned to configured groups)
+    # TODO: Uncomment once SNOW ITSM Incident API access is granted (EAD_ITSM_API_INC_GET_APP10140)
+    # logger.info("Scheduling Major Incident monitoring (every 15 minutes)...")
+    # schedule_sla('minutes:15', lambda: major_incident_monitor.check_for_new_incidents(config.webex_room_id_threatcon_collab), name="major_incident_monitor", timeout=300)
 
     total_jobs = len(schedule.get_jobs())
     logger.info(f"All jobs scheduled successfully! Total jobs: {total_jobs}")

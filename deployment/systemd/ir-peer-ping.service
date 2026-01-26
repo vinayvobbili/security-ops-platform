@@ -6,11 +6,11 @@ After=network.target
 Type=oneshot
 User=vinay
 Group=vinay
-WorkingDirectory=/opt/incident-response
-Environment="PYTHONPATH=/opt/incident-response"
-ExecStart=/opt/incident-response/.venv/bin/python /opt/incident-response/src/peer_ping_keepalive.py
-StandardOutput=append:/opt/incident-response/logs/peer_ping.log
-StandardError=append:/opt/incident-response/logs/peer_ping.log
+WorkingDirectory=/home/vinay/pub/IR
+Environment="PYTHONPATH=/home/vinay/pub/IR"
+ExecStart=/home/vinay/pub/IR/.venv/bin/python /home/vinay/pub/IR/src/peer_ping_keepalive.py
+StandardOutput=append:/home/vinay/pub/IR/logs/peer_ping.log
+StandardError=append:/home/vinay/pub/IR/logs/peer_ping.log
 
 # Resource limits
 MemoryMax=100M

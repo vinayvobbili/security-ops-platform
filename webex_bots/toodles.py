@@ -70,9 +70,9 @@ patch_websocket_client()
 # Import datetime before using it
 from datetime import datetime, timedelta
 import ipaddress
-import re
 import signal
 import atexit
+import json
 
 # Log clear startup marker for visual separation in logs
 logger.warning("=" * 100)
@@ -96,16 +96,30 @@ from webexpythonsdk.models.cards import (
 from webexpythonsdk.models.cards.actions import Submit
 
 import src.components.oncall as oncall
+from src.components import birthdays_anniversaries
 from data.data_maps import azdo_projects, azdo_orgs, azdo_area_paths
 
 from services import xsoar, azdo
 from services.approved_testing_utils import add_approved_testing_entry
 from services.crowdstrike import CrowdStrikeClient
 from services.xsoar import ListHandler, TicketHandler, XsoarEnvironment
+
+# Import cards from extracted package
+from webex_bots.cards import (
+    NEW_TICKET_CARD, IOC_HUNT, THREAT_HUNT, AZDO_CARD,
+    APPROVED_TESTING_CARD, TICKET_IMPORT_CARD, TUNING_REQUEST_CARD,
+    URL_BLOCK_VERDICT_CARD, DOMAIN_LOOKALIKE_CARD, BIRTHDAY_ANNIVERSARY_CARD,
+    all_options_card
+)
 from src.components.url_lookup_traffic import URLChecker
 from src.utils.http_utils import get_session
-from src.utils.logging_utils import log_activity
+from src.utils.toodles_decorators import toodles_log_activity
+from src.utils.webex_validation import validate_required_inputs, get_input_value
+from src.utils.xsoar_helpers import build_incident_url, create_incident_with_response
+from src.utils.webex_responses import format_user_response, get_user_email, get_user_display_name
 from src.utils.webex_device_manager import cleanup_devices_on_startup
+from webex_bots.base import ToodlesCommand, CardOnlyCommand
+from src.components.domain_lookalike_scanner import DomainLookalikeScanner
 
 # Get robust HTTP session instance
 http_session = get_session()
@@ -121,9 +135,12 @@ webex_api = configure_webex_api_session(
         single_request_timeout=180
     ),
     pool_connections=50,  # Increased from default 10
-    pool_maxsize=50,      # Increased from default 10
-    max_retries=3         # Enable automatic retry on transient failures
+    pool_maxsize=50,  # Increased from default 10
+    max_retries=3  # Enable automatic retry on transient failures
 )
+
+# Component instances
+domain_scanner = DomainLookalikeScanner(webex_api)
 
 # Global variables
 bot_instance = None
@@ -222,997 +239,6 @@ headers = prod_headers
 prod_incident_handler = TicketHandler(XsoarEnvironment.PROD)
 prod_list_handler = ListHandler(XsoarEnvironment.PROD)
 
-NEW_TICKET_CARD = {
-    "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
-    "type": "AdaptiveCard",
-    "version": "1.3",
-    "body": [
-        {
-            "type": "TextBlock",
-            "text": "New X Ticket",
-            "color": "Accent",
-            "weight": "Bolder",
-            "size": "Medium",
-            "horizontalAlignment": "Center"
-        },
-        {
-            "type": "ColumnSet",
-            "columns": [
-                {
-                    "type": "Column",
-                    "width": 1,
-                    "items": [
-                        {
-                            "type": "TextBlock",
-                            "text": "Title",
-                            "wrap": True,
-                            "horizontalAlignment": "right"
-                        }
-                    ]
-                },
-                {
-                    "type": "Column",
-                    "width": 6,
-                    "items": [
-                        {
-                            "type": "Input.Text",
-                            "id": "title",
-                            "placeholder": ""
-                        }
-                    ]
-                }
-            ]
-        },
-        {
-            "type": "ColumnSet",
-            "columns": [
-                {
-                    "type": "Column",
-                    "width": 1,
-                    "items": [
-                        {
-                            "type": "TextBlock",
-                            "text": "Details",
-                            "wrap": True,
-                            "horizontalAlignment": "right"
-                        }
-                    ]
-                },
-                {
-                    "type": "Column",
-                    "width": 6,
-                    "items": [
-                        {
-                            "type": "Input.Text",
-                            "id": "details",
-                            "placeholder": "",
-                            "isMultiline": True
-                        }
-                    ]
-                }
-            ],
-            "spacing": "None"
-        },
-        {
-            "type": "ColumnSet",
-            "columns": [
-                {
-                    "type": "Column",
-                    "width": 1,
-                    "items": [
-                        {
-                            "type": "TextBlock",
-                            "text": "Detection Source",
-                            "wrap": True,
-                            "horizontalAlignment": "left"
-                        }
-                    ]
-                },
-                {
-                    "type": "Column",
-                    "width": 2,
-                    "items": [
-                        {
-                            "type": "Input.ChoiceSet",
-                            "id": "detection_source",
-                            "choices": [
-                                {
-                                    "title": "Threat Hunt",
-                                    "value": "Threat Hunt"
-                                },
-                                {
-                                    "title": "CrowdStrike Falcon",
-                                    "value": "CrowdStrike Falcon"
-                                },
-                                {
-                                    "title": "Employee Reported",
-                                    "value": "Employee Reported"
-                                },
-                                {
-                                    "title": "Recorded Future",
-                                    "value": "Recorded Future"
-                                },
-                                {
-                                    "title": "Third Party",
-                                    "value": "Third Party"
-                                },
-                                {
-                                    "title": "Abnormal Security",
-                                    "value": "Abnormal Security"
-                                },
-                                {
-                                    "title": "Akamai",
-                                    "value": "Akamai"
-                                },
-                                {
-                                    "title": "AppDynamics",
-                                    "value": "AppDynamics"
-                                },
-                                {
-                                    "title": "Area1",
-                                    "value": "Area1"
-                                },
-                                {
-                                    "title": "Cisco AMP",
-                                    "value": "Cisco AMP"
-                                },
-                                {
-                                    "title": "CrowdStrike Falcon IDP",
-                                    "value": "CrowdStrike Falcon IDP"
-                                },
-                                {
-                                    "title": "Customer Reported",
-                                    "value": "Customer Reported"
-                                },
-                                {
-                                    "title": "Cyberbit",
-                                    "value": "Cyberbit"
-                                },
-                                {
-                                    "title": "Flashpoint",
-                                    "value": "Flashpoint"
-                                },
-                                {
-                                    "title": "ForcePoint",
-                                    "value": "ForcePoint"
-                                },
-                                {
-                                    "title": "Illusive",
-                                    "value": "Illusive"
-                                },
-                                {
-                                    "title": "Infoblox",
-                                    "value": "Infoblox"
-                                },
-                                {
-                                    "title": "Intel471",
-                                    "value": "Intel471"
-                                },
-                                {
-                                    "title": "IronPort",
-                                    "value": "IronPort"
-                                },
-                                {
-                                    "title": "Lumen",
-                                    "value": "Lumen"
-                                },
-                                {
-                                    "title": "PaloAlto",
-                                    "value": "PaloAlto"
-                                },
-                                {
-                                    "title": "Prisma Cloud",
-                                    "value": "Prisma Cloud"
-                                },
-                                {
-                                    "title": "Rubrik",
-                                    "value": "Rubrik"
-                                },
-                                {
-                                    "title": "Tanium",
-                                    "value": "Tanium"
-                                },
-                                {
-                                    "title": "Vectra MDR",
-                                    "value": "Vectra MDR"
-                                },
-                                {
-                                    "title": "ZeroFox",
-                                    "value": "ZeroFox"
-                                },
-                                {
-                                    "title": "ZScaler",
-                                    "value": "ZScaler"
-                                },
-                                {
-                                    "title": "Other",
-                                    "value": "Other"
-                                }
-                            ],
-                            "placeholder": "Select an option",
-                            "isRequired": True,
-                            "errorMessage": "Required"
-                        },
-                    ]
-                }
-            ],
-            "spacing": "None"
-        },
-        {
-            "type": "ActionSet",
-            "spacing": "small",
-            "actions": [
-                {
-                    "type": "Action.Submit",
-                    "title": "Submit",
-                    "data": {
-                        "callback_keyword": "create_x_ticket"
-                    },
-                    "style": "positive"
-                }
-            ],
-            "horizontalAlignment": "right"
-        }
-    ]
-}
-
-IOC_HUNT = {
-    "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
-    "version": "1.3",
-    "type": "AdaptiveCard",
-    "body": [
-        {
-            "type": "TextBlock",
-            "text": "Title",
-            "wrap": True
-        },
-        {
-            "type": "Input.Text",
-            "id": "ioc_hunt_title",
-            "wrap": True
-        },
-        {
-            "type": "TextBlock",
-            "text": "IOCs",
-            "wrap": True
-        },
-        {
-            "type": "Input.Text",
-            "id": "ioc_hunt_iocs",
-            "placeholder": "Domains/Email-Addresses/Files",
-            "wrap": True,
-            "isMultiline": True
-        },
-        {
-            "type": "ActionSet",
-            "spacing": "none",
-            "actions": [
-                {
-                    "type": "Action.Submit",
-                    "title": "Submit",
-                    "data": {
-                        "callback_keyword": "ioc_hunt"
-                    },
-                    "style": "positive"
-                }
-            ],
-            "horizontalAlignment": "right"
-        }
-    ]
-}
-
-THREAT_HUNT = {
-    "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
-    "version": "1.3",
-    "type": "AdaptiveCard",
-    "body": [
-        {
-            "type": "TextBlock",
-            "text": "Hunt Title:",
-            "wrap": True
-        },
-        {
-            "type": "Input.Text",
-            "id": "threat_hunt_title",
-            "wrap": True
-        },
-        {
-            "type": "TextBlock",
-            "text": "Hunt Description:",
-            "wrap": True
-        },
-        {
-            "type": "Input.Text",
-            "id": "threat_hunt_desc",
-            "wrap": True,
-            "isMultiline": True
-        },
-        {
-            "type": "ActionSet",
-            "spacing": "small",
-            "actions": [
-                {
-                    "type": "Action.Submit",
-                    "title": "Submit",
-                    "data": {
-                        "callback_keyword": "threat_hunt"
-                    },
-                    "style": "positive"
-                }
-            ],
-            "horizontalAlignment": "right"
-        }
-    ]
-}
-
-AZDO_CARD = {
-    "type": "AdaptiveCard",
-    "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
-    "version": "1.3",
-    "body": [
-        {
-            "type": "TextBlock",
-            "text": "New AZDO Work Item",
-            "horizontalAlignment": "center",
-            "weight": "bolder",
-            "size": "medium",
-            "color": "accent"
-        },
-        {
-            "type": "TextBlock",
-            "text": "Title",
-            "color": "Accent"
-        },
-        {
-            "type": "Input.Text",
-            "wrap": True,
-            "id": "wit_title"
-        },
-        {
-            "type": "TextBlock",
-            "text": "Description",
-            "color": "Accent"
-        },
-        {
-            "type": "Input.Text",
-            "wrap": True,
-            "id": "wit_description",
-            "isMultiline": True
-        },
-        {
-            "type": "ColumnSet",
-            "columns": [
-                {
-                    "type": "Column",
-                    "items": [
-                        {
-                            "type": "TextBlock",
-                            "text": "Type",
-                            "color": "Accent"
-                        },
-                        {
-                            "type": "Input.ChoiceSet",
-                            "wrap": True,
-                            "id": "wit_type",
-                            "choices": [
-                                {
-                                    "title": "User Story",
-                                    "value": "User%20Story"
-                                },
-                                {
-                                    "title": "Bug",
-                                    "value": "Bug"
-                                },
-                                {
-                                    "title": "Task",
-                                    "value": "Task"
-                                }
-                            ],
-                        }
-                    ]
-                },
-                {
-                    "type": "Column",
-                    "items": [
-                        {
-                            "type": "TextBlock",
-                            "text": "Project",
-                            "color": "Accent"
-                        },
-                        {
-                            "type": "Input.ChoiceSet",
-                            "wrap": True,
-                            "id": "project",
-                            "choices": [
-                                {
-                                    "title": "Cyber Platforms",
-                                    "value": "platforms"
-                                },
-                                {
-                                    "title": "Resp Engg Automation",
-                                    "value": "rea"
-                                },
-                                {
-                                    "title": "Resp Engg Operations",
-                                    "value": "reo"
-                                },
-                                {
-                                    "title": "Detection Engineering",
-                                    "value": "de"
-                                },
-                                {
-                                    "title": "Global Detection and Response Shared",
-                                    "value": "gdr"
-                                }
-                            ],
-                        }
-                    ]
-                },
-                {
-                    "type": "Column",
-                    "items": [
-                        {
-                            "type": "ActionSet",
-                            "actions": [
-                                {
-                                    "type": "Action.Submit",
-                                    "title": "Create",
-                                    "data": {
-                                        "callback_keyword": "azdo_wit"
-                                    },
-                                    "style": "positive"
-                                }
-                            ]
-                        }
-                    ],
-                    "verticalContentAlignment": "Bottom",
-                    "horizontalAlignment": "Right"
-                }
-            ]
-        }
-    ]
-}
-
-APPROVED_TESTING_CARD = {
-    "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
-    "type": "AdaptiveCard",
-    "version": "1.3",
-    "body": [
-        {
-            "type": "TextBlock",
-            "text": "Approved Testing",
-            "horizontalAlignment": "center",
-            "weight": "bolder",
-            "size": "medium",
-            "color": "accent"
-        },
-        {
-            "type": "ColumnSet",
-            "columns": [
-                {
-                    "type": "Column",
-                    "width": 1,
-                    "items": [
-                        {
-                            "type": "TextBlock",
-                            "text": "Username(s)",
-                            "horizontalAlignment": "right"
-                        }
-                    ],
-                    "verticalContentAlignment": "Center"
-                },
-                {
-                    "type": "Column",
-                    "width": 3,
-                    "items": [
-                        {
-                            "type": "Input.Text",
-                            "id": "usernames",
-                            "placeholder": "Use , as seperator"
-                        }
-                    ]
-                }
-            ],
-        },
-        {
-            "type": "ColumnSet",
-            "columns": [
-                {
-                    "type": "Column",
-                    "width": 1,
-                    "items": [
-                        {
-                            "type": "TextBlock",
-                            "text": "IP(s), Hostname(s) of Tester",
-                            "wrap": True,
-                            "horizontalAlignment": "right"
-                        }
-                    ],
-                    "verticalContentAlignment": "Center"
-                },
-                {
-                    "type": "Column",
-                    "width": 3,
-                    "items": [
-                        {
-                            "type": "Input.Text",
-                            "id": "ip_addresses_and_host_names_of_tester",
-                            "placeholder": "Use , as seperator",
-                            "isMultiline": True
-                        }
-                    ]
-                }
-            ]
-        },
-        {
-            "type": "ColumnSet",
-            "columns": [
-                {
-                    "type": "Column",
-                    "width": 1,
-                    "items": [
-                        {
-                            "type": "TextBlock",
-                            "text": "IP(s), Hostname(s) to be tested",
-                            "wrap": True,
-                            "horizontalAlignment": "right"
-                        }
-                    ],
-                    "verticalContentAlignment": "Center"
-                },
-                {
-                    "type": "Column",
-                    "width": 3,
-                    "items": [
-                        {
-                            "type": "Input.Text",
-                            "id": "ip_addresses_and_host_names_to_be_tested",
-                            "placeholder": "Use , as seperator",
-                            "isMultiline": True
-                        }
-                    ]
-                }
-            ]
-        },
-        {
-            "type": "ColumnSet",
-            "columns": [
-                {
-                    "type": "Column",
-                    "width": 1,
-                    "items": [
-                        {
-                            "type": "TextBlock",
-                            "text": "Description",
-                            "horizontalAlignment": "right"
-                        }
-                    ],
-                    "verticalContentAlignment": "Center"
-                },
-                {
-                    "type": "Column",
-                    "width": 3,
-                    "items": [
-                        {
-                            "type": "Input.Text",
-                            "id": "description",
-                            "isMultiline": True
-                        }
-                    ]
-                }
-            ]
-        },
-        {
-            "type": "ColumnSet",
-            "columns": [
-                {
-                    "type": "Column",
-                    "width": 1,
-                    "items": [
-                        {
-                            "type": "TextBlock",
-                            "text": "Notes/Scope",
-                            "wrap": True,
-                            "horizontalAlignment": "right"
-                        }
-                    ],
-                    "verticalContentAlignment": "Center"
-                },
-                {
-                    "type": "Column",
-                    "width": 3,
-                    "items": [
-                        {
-                            "type": "Input.Text",
-                            "id": "scope"
-                        }
-                    ]
-                }
-            ],
-        },
-        {
-            "type": "ColumnSet",
-            "columns": [
-                {
-                    "type": "Column",
-                    "width": 1,
-                    "items": [
-                        {
-                            "type": "TextBlock",
-                            "text": "Keep until",
-                            "horizontalAlignment": "right"
-                        }
-                    ],
-                    "verticalContentAlignment": "Center"
-                },
-                {
-                    "type": "Column",
-                    "width": 3,
-                    "items": [
-                        {
-                            "type": "ColumnSet",
-                            "columns": [
-                                {
-                                    "type": "Column",
-                                    "width": 2,
-                                    "items": [
-                                        {
-                                            "type": "Input.Date",
-                                            "id": "expiry_date",
-                                            "placeholder": "Enter a date"
-                                        }
-                                    ]
-                                },
-                                {
-                                    "type": "Column",
-                                    "width": 1,
-                                    "items": [
-                                        {
-                                            "type": "TextBlock",
-                                            "text": "5 PM ET"
-                                        }
-                                    ],
-                                    "verticalContentAlignment": "Center"
-                                }
-                            ]
-                        }
-                    ]
-                }
-            ],
-        },
-        {
-            "type": "ActionSet",
-            "spacing": "small",
-            "actions": [
-                {
-                    "type": "Action.Submit",
-                    "title": "Get Current List",
-                    "data": {
-                        "callback_keyword": "current_approved_testing"
-                    }
-                },
-                {
-                    "type": "Action.Submit",
-                    "title": "Remove",
-                    "data": {
-                        "callback_keyword": "remove_approved_testing"
-                    },
-                    "style": "positive"
-                },
-                {
-                    "type": "Action.Submit",
-                    "title": "Add",
-                    "data": {
-                        "callback_keyword": "add_approved_testing"
-                    },
-                    "style": "destructive"
-                },
-            ],
-            "horizontalAlignment": "right"
-        }
-    ]
-}
-
-TICKET_IMPORT_CARD = AdaptiveCard(
-    body=[
-        ColumnSet(
-            columns=[
-                Column(
-                    items=[
-                        TextBlock(
-                            text="Prod ticket#",
-                            horizontalAlignment=HorizontalAlignment.RIGHT,
-                        )
-                    ],
-                    width="auto",
-                    verticalContentAlignment=OPTIONS.VerticalContentAlignment.CENTER
-                ),
-                Column(
-                    items=[
-                        INPUTS.Text(
-                            id="prod_ticket_number",
-                            placeholder="Enter prod ticket number",
-                            isRequired=True,
-                            errorMessage='Required'
-                        )
-                    ],
-                    width="stretch",
-                    verticalContentAlignment=OPTIONS.VerticalContentAlignment.CENTER
-                )
-            ]
-        ),
-        ActionSet(
-            actions=[
-                Submit(
-                    title="Submit",
-                    style=ActionStyle.POSITIVE,
-                    data={"callback_keyword": "import"}
-                )
-            ]
-        )
-    ]
-)
-
-TUNING_REQUEST_CARD = AdaptiveCard(
-    body=[
-        TextBlock(
-            text="New Tuning Request",
-            wrap=True,
-            horizontalAlignment=HorizontalAlignment.CENTER,
-            weight=FontWeight.BOLDER,
-            color=Colors.ACCENT,
-        ),
-        INPUTS.Text(
-            id="title",
-            label="Title",
-            isRequired=True,
-            errorMessage="Required"
-        ),
-        INPUTS.Text(
-            id="description",
-            label="Description",
-            isMultiline=True,
-            isRequired=True,
-            errorMessage="Required"
-        ),
-        INPUTS.Text(
-            id="tickets",
-            placeholder="A few recent X tix created by this rule!",
-            label="X ticket(s)",
-            isRequired=True,
-            errorMessage="Required"
-        ),
-        INPUTS.Text(
-            id="ticket_volume",
-            placeholder="Example: 10 tickets/week",
-            label="Approx. Ticket Volume",
-            isRequired=True,
-            errorMessage="Required"
-        ),
-        ActionSet(
-            actions=[
-                Submit(
-                    title="Submit",
-                    style=ActionStyle.POSITIVE,
-                    data={"callback_keyword": "tuning_request"}
-                )
-            ],
-        )
-    ]
-)
-
-URL_BLOCK_VERDICT_CARD = {
-    "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
-    "type": "AdaptiveCard",
-    "version": "1.3",
-    "body": [
-        {
-            "type": "TextBlock",
-            "text": "Check URL Block Verdict",
-            "wrap": True,
-            "horizontalAlignment": "Center",
-            "weight": "Bolder",
-            "color": "Accent"
-        },
-        {
-            "type": "Input.Text",
-            "id": "urls_to_check",
-            "label": "URLs to Check (comma-separated)",
-            "placeholder": "Enter the URLs to check",
-            "isRequired": True,
-            "errorMessage": "Required",
-            "isMultiline": True
-        },
-        {
-            "type": "ActionSet",
-            "horizontalAlignment": "Right",
-            "actions": [
-                {
-                    "type": "Action.Submit",
-                    "title": "Get Block Verdict",
-                    "style": "positive",
-                    "data": {
-                        "callback_keyword": "url_verdict"
-                    }
-                }
-            ]
-        }
-    ]
-}
-
-all_options_card = {
-    "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
-    "type": "AdaptiveCard",
-    "version": "1.3",
-    "actions": [
-        {
-            "type": "Action.ShowCard",
-            "title": "Approved Testing",
-            "card": APPROVED_TESTING_CARD
-        },
-        {
-            "type": "Action.ShowCard",
-            "title": "On Call",
-            "card": {
-                "type": "AdaptiveCard",
-                "body": [{
-                    "type": "ActionSet",
-                    "spacing": "None",
-                    "actions": [
-                        {
-                            "type": "Action.Submit",
-                            "title": "Who",
-                            "data": {
-                                "callback_keyword": "who"
-                            }
-                        },
-                        {
-                            "type": "Action.Submit",
-                            "title": "Rotation",
-                            "data": {
-                                "callback_keyword": "rotation"
-                            }
-                        }
-                    ]
-                }]
-            }
-        },
-        {
-            "type": "Action.ShowCard",
-            "title": "CrowdStrike",
-            "card": {
-                "type": "AdaptiveCard",
-                "body": [
-                    {
-                        "type": "TextBlock",
-                        "size": "small",
-                        "weight": "bolder",
-                        "text": "CS Containment Status",
-                        "horizontalAlignment": "center",
-                        "wrap": True,
-                        "style": "heading"
-                    },
-                    {
-                        "type": "ColumnSet",
-                        "columns": [
-                            {
-                                "type": "Column",
-                                "width": "1",
-                                "items": [
-                                    {
-                                        "type": "TextBlock",
-                                        "text": "Host Name:",
-                                        "wrap": True,
-                                        "horizontalAlignment": "right"
-                                    }
-                                ]
-                            },
-                            {
-                                "type": "Column",
-                                "width": 3,
-                                "items": [
-                                    {
-                                        "type": "Input.Text",
-                                        "id": "host_name_cs"
-                                    }
-                                ]
-                            }
-                        ]
-                    },
-                    {
-                        "type": "ActionSet",
-                        "spacing": "None",
-                        "actions": [
-                            {
-                                "type": "Action.Submit",
-                                "title": "Check Status",
-                                "data": {
-                                    "callback_keyword": "status"
-                                }
-                            },
-                            {
-                                "type": "Action.Submit",
-                                "title": "Uncontain",
-                                "data": {
-                                    "callback_keyword": "uncontain"
-                                },
-                                "style": "positive"
-                            },
-                            {
-                                "type": "Action.Submit",
-                                "title": "Contain",
-                                "data": {
-                                    "callback_keyword": "contain"
-                                },
-                                "style": "destructive"
-                            }
-                        ],
-                        "horizontalAlignment": "right"
-                    }
-                ]
-            }
-        },
-        {
-            "type": "Action.ShowCard",
-            "title": "XSOAR",
-            "card": {
-                "type": "AdaptiveCard",
-                "body": [
-                    {
-                        "type": "ActionSet",
-                        "spacing": "None",
-                        "actions": [
-                            {
-                                "type": "Action.ShowCard",
-                                "title": "IOC Hunt",
-                                "card": IOC_HUNT
-                            },
-                            {
-                                "type": "Action.ShowCard",
-                                "title": "Threat Hunt",
-                                "card": THREAT_HUNT
-                            },
-                            {
-                                "type": "Action.ShowCard",
-                                "title": "Import Ticket",
-                                "card": TICKET_IMPORT_CARD.to_dict()
-                            }
-                        ]
-                    }
-                ]
-            },
-        },
-        {
-            "type": "Action.ShowCard",
-            "title": "Misc",
-            "card": {
-                "type": "AdaptiveCard",
-                "body": [
-                    {
-                        "type": "ActionSet",
-                        "spacing": "None",
-                        "actions": [
-                            {
-                                "type": "Action.Submit",
-                                "title": "Fav URLs",
-                                "data": {
-                                    "callback_keyword": "urls"
-                                }
-                            },
-                            {
-                                "type": "Action.Submit",
-                                "title": "Holidays",
-                                "data": {
-                                    "callback_keyword": "holidays"
-                                }
-                            }
-                        ]
-                    }
-                ]
-            }
-        }
-    ]
-}
 
 
 def get_url_card():
@@ -1290,15 +316,21 @@ def get_url_card():
         }
 
 
-class URLs(Command):
+class URLs(CardOnlyCommand):
+    """Display favorite URLs dynamically loaded from XSOAR."""
+    command_keyword = "urls"
+    help_message = "Favorite URLs 🔗"
+    card = None  # Will be set dynamically in __init__
+
     def __init__(self):
+        # Generate card dynamically before calling parent __init__
         try:
-            url_card = get_url_card()
-            logger.info(f"✅ URL card generated successfully with {len(url_card.get('body', []))} body elements")
+            self.card = get_url_card()
+            logger.info(f"✅ URL card generated successfully with {len(self.card.get('body', []))} body elements")
         except Exception as e:
             logger.error(f"❌ Error generating URL card: {e}", exc_info=True)
             # Fallback to a simple error card
-            url_card = {
+            self.card = {
                 "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
                 "type": "AdaptiveCard",
                 "version": "1.3",
@@ -1308,162 +340,135 @@ class URLs(Command):
                     "color": "Attention"
                 }]
             }
+        super().__init__()
 
-        super().__init__(
-            command_keyword="urls",
-            help_message="Favorite URLs 🔗",
-            card=url_card,
-            delete_previous_message=True
-        )
 
-    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles, log_file_name="toodles_activity_log.csv")
+class GetNewXTicketForm(CardOnlyCommand):
+    """Display the X ticket creation form."""
+    command_keyword = "get_x_ticket_form"
+    help_message = "Create X Ticket 𝑿"
+    card = NEW_TICKET_CARD
+
+
+class CreateXSOARTicket(ToodlesCommand):
+    """Create a new XSOAR ticket from form submission."""
+    command_keyword = "create_x_ticket"
+    card = None
+
+    @toodles_log_activity
     def execute(self, message, attachment_actions, activity):
-        pass
-
-
-class GetNewXTicketForm(Command):
-    def __init__(self):
-        super().__init__(
-            card=NEW_TICKET_CARD,
-            command_keyword="get_x_ticket_form",
-            help_message="Create X Ticket 𝑿",
-            delete_previous_message=True
+        valid, error = validate_required_inputs(
+            attachment_actions,
+            ['title', 'details'],
+            "Please fill in both fields to create a new ticket."
         )
-
-    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles, log_file_name="toodles_activity_log.csv")
-    def execute(self, message, attachment_actions, activity):
-        pass
-
-
-class CreateXSOARTicket(Command):
-    def __init__(self):
-        super().__init__(
-            command_keyword="create_x_ticket",
-            card=None,
-            delete_previous_message=True
-        )
-
-    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles, log_file_name="toodles_activity_log.csv")
-    def execute(self, message, attachment_actions, activity):
-        if attachment_actions.inputs['title'].strip() == "" or attachment_actions.inputs['details'].strip() == "":
-            reply = "Please fill in both fields to create a new ticket."
-            logger.info(f"Reply from CreateXSOARTicket is {len(reply)} characters")
-            return reply
+        if not valid:
+            logger.info(f"Reply from CreateXSOARTicket is {len(error)} characters")
+            return error
 
         incident = {
-            'name': attachment_actions.inputs['title'].strip(),
-            'details': attachment_actions.inputs[
-                           'details'].strip() + f"\nSubmitted by: {activity['actor']['emailAddress']}",
+            'name': get_input_value(attachment_actions, 'title'),
+            'details': get_input_value(attachment_actions, 'details'),
             'CustomFields': {
                 'detectionsource': attachment_actions.inputs['detection_source'],
                 'isusercontacted': False,
                 'securitycategory': 'CAT-5: Scans/Probes/Attempted Access'
             }
         }
-        result = prod_incident_handler.create(incident)
-        new_incident_id = result.get('id')
-        incident_url = CONFIG.xsoar_prod_ui_base_url + '/Custom/caseinfoid/' + new_incident_id
-        reply = f"{activity['actor']['displayName']}, Ticket [#{new_incident_id}]({incident_url}) has been created in XSOAR Prod."
+
+        reply = create_incident_with_response(
+            prod_incident_handler,
+            incident,
+            activity,
+            "{actor}, Ticket [#{ticket_no}]({ticket_url}) has been created in XSOAR Prod."
+        )
         logger.info(f"Reply from CreateXSOARTicket is {len(reply)} characters")
         return reply
 
 
-class IOC(Command):
-    def __init__(self):
-        super().__init__(
-            command_keyword="ioc",
-            card=IOC_HUNT,
-            delete_previous_message=True
-        )
+class IOC(CardOnlyCommand):
+    """Display the IOC hunt form."""
+    command_keyword = "ioc"
+    card = IOC_HUNT
 
-    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles, log_file_name="toodles_activity_log.csv")
+
+class IOCHunt(ToodlesCommand):
+    """Create a new IOC Hunt in XSOAR."""
+    command_keyword = "ioc_hunt"
+    card = None
+
+    @toodles_log_activity
     def execute(self, message, attachment_actions, activity):
-        pass
-
-
-class IOCHunt(Command):
-    def __init__(self):
-        super().__init__(
-            command_keyword="ioc_hunt",
-            card=None,
-            delete_previous_message=True
+        valid, error = validate_required_inputs(
+            attachment_actions,
+            ['ioc_hunt_title', 'ioc_hunt_iocs'],
+            "Please fill in both fields to create a new ticket."
         )
-
-    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles, log_file_name="toodles_activity_log.csv")
-    def execute(self, message, attachment_actions, activity):
-        if attachment_actions.inputs['ioc_hunt_title'].strip() == "" or attachment_actions.inputs[
-            'ioc_hunt_iocs'].strip() == "":
-            return "Please fill in both fields to create a new ticket."
+        if not valid:
+            return error
 
         incident = {
-            'name': attachment_actions.inputs['ioc_hunt_title'].strip(),
-            'details': attachment_actions.inputs['ioc_hunt_iocs'].strip(),
+            'name': get_input_value(attachment_actions, 'ioc_hunt_title'),
+            'details': get_input_value(attachment_actions, 'ioc_hunt_iocs'),
             'type': f'{CONFIG.team_name} IOC Hunt',
             'CustomFields': {
                 'huntsource': 'Other'
             }
         }
-        result = prod_incident_handler.create(incident)
-        ticket_no = result.get('id')
-        incident_url = CONFIG.xsoar_prod_ui_base_url + '/Custom/caseinfoid/' + ticket_no
 
-        return f"{activity['actor']['displayName']}, A New IOC Hunt has been created in XSOAR. Ticket: [#{ticket_no}]({incident_url})"
-
-
-class ThreatHunt(Command):
-    def __init__(self):
-        super().__init__(
-            command_keyword="threat",
-            card=THREAT_HUNT,
-            delete_previous_message=True
+        return create_incident_with_response(
+            prod_incident_handler,
+            incident,
+            activity,
+            "{actor}, A New IOC Hunt has been created in XSOAR. Ticket: [#{ticket_no}]({ticket_url})",
+            append_submitter=False
         )
 
+
+class ThreatHunt(CardOnlyCommand):
+    """Display the threat hunt form."""
+    command_keyword = "threat"
+    card = THREAT_HUNT
+
+
+class CreateThreatHunt(ToodlesCommand):
+    """Create a new Threat Hunt in XSOAR and announce it."""
+    command_keyword = "threat_hunt"
+    card = None
+
+    @toodles_log_activity
     def execute(self, message, attachment_actions, activity):
-        pass
-
-
-class CreateThreatHunt(Command):
-    def __init__(self):
-        super().__init__(
-            command_keyword="threat_hunt",
-            card=None,
-            delete_previous_message=True
+        valid, error = validate_required_inputs(
+            attachment_actions,
+            ['threat_hunt_title', 'threat_hunt_desc'],
+            "Please fill in both fields to create a new ticket."
         )
+        if not valid:
+            return error
 
-    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles, log_file_name="toodles_activity_log.csv")
-    def execute(self, message, attachment_actions, activity):
-        if attachment_actions.inputs['threat_hunt_title'].strip() == "" or attachment_actions.inputs[
-            'threat_hunt_desc'].strip() == "":
-            return "Please fill in both fields to create a new ticket."
-
+        ticket_title = get_input_value(attachment_actions, 'threat_hunt_title')
         incident = {
-            'name': attachment_actions.inputs['threat_hunt_title'].strip(),
-            'details': attachment_actions.inputs[
-                           'threat_hunt_desc'].strip() + f"\nSubmitted by: {activity['actor']['emailAddress']}",
+            'name': ticket_title,
+            'details': get_input_value(attachment_actions, 'threat_hunt_desc') + f"\nSubmitted by: {get_user_email(activity)}",
             'type': "Threat Hunt"
         }
         result = prod_incident_handler.create(incident)
         ticket_no = result.get('id')
-        ticket_title = attachment_actions.inputs['threat_hunt_title'].strip()
-        incident_url = CONFIG.xsoar_prod_ui_base_url + '/Custom/caseinfoid/' + ticket_no
+        incident_url = build_incident_url(ticket_no)
         person_id = attachment_actions.personId
 
         announce_new_threat_hunt(ticket_no, ticket_title, incident_url, person_id)
         return None
 
 
-class CreateAZDOWorkItem(Command):
-    def __init__(self):
-        super().__init__(
-            command_keyword="azdo_wit",
-            help_message="Create AZDO Work Item 💼",
-            card=AZDO_CARD,
-            delete_previous_message=True
-        )
+class CreateAZDOWorkItem(ToodlesCommand):
+    """Create an Azure DevOps work item."""
+    command_keyword = "azdo_wit"
+    help_message = "Create AZDO Work Item 💼"
+    card = AZDO_CARD
 
-    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles, log_file_name="toodles_activity_log.csv")
+    @toodles_log_activity
     def execute(self, message, attachment_actions, activity):
-
         try:
             parent_url = None
             assignee = None
@@ -1472,7 +477,7 @@ class CreateAZDOWorkItem(Command):
             inputs = attachment_actions.inputs
             wit_title = inputs['wit_title']
             wit_type = inputs['wit_type']
-            submitter_display_name = activity['actor']['displayName']
+            submitter_display_name = get_user_display_name(activity)
             wit_description = inputs['wit_description']
             project = inputs['project']
 
@@ -1501,36 +506,37 @@ class CreateAZDOWorkItem(Command):
             )
             azdo_wit_url = f'https://dev.azure.com/{azdo_orgs.get(project)}/{quote(azdo_projects.get(project))}/_workitems/edit/{wit_id}'
             wit_type = wit_type.replace('%20', ' ')
-            return_message = f'{activity['actor']['displayName']}, A new AZDO {wit_type} has been created \n [{wit_id}]({azdo_wit_url}) - {wit_title}'
 
             webex_api.messages.create(
                 roomId=CONFIG.webex_room_id_automation_engineering,
                 markdown=f"{submitter_display_name} has created a new AZDO {wit_type} \n [{wit_id}]({azdo_wit_url}) - {wit_title}"
             )
 
-            return return_message
+            return format_user_response(activity, f"A new AZDO {wit_type} has been created \n [{wit_id}]({azdo_wit_url}) - {wit_title}")
         except Exception as e:
             return str(e)
 
 
-class Review(Command):
-    def __init__(self):
-        super().__init__(
-            command_keyword="review",
-            card=None,
-            delete_previous_message=True
-        )
+class Review(ToodlesCommand):
+    """Submit a ticket for review."""
+    command_keyword = "review"
+    card = None
 
-    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles, log_file_name="toodles_activity_log.csv")
+    @toodles_log_activity
     def execute(self, message, attachment_actions, activity):
-        if attachment_actions.inputs["review_notes"] == "":
-            return "Please add a comment to submit this ticket for review."
+        valid, error = validate_required_inputs(
+            attachment_actions,
+            ['review_notes'],
+            "Please add a comment to submit this ticket for review."
+        )
+        if not valid:
+            return error
 
         curr_date = datetime.now()
         ticket_no = attachment_actions.inputs["incident_id"]
 
         list_dict = prod_list_handler.get_list_data_by_name("review").get('Tickets')
-        add_entry_to_reviews(list_dict, ticket_no, activity['actor']['emailAddress'], curr_date.strftime("%x"),
+        add_entry_to_reviews(list_dict, ticket_no, get_user_email(activity), curr_date.strftime("%x"),
                              attachment_actions.inputs["review_notes"])
         reformat = {"Tickets": list_dict}
         prod_list_handler.save(str(reformat), "review")
@@ -1538,18 +544,11 @@ class Review(Command):
         return f"Ticket {ticket_no} has been added to Reviews."
 
 
-class GetApprovedTestingCard(Command):
-    def __init__(self):
-        super().__init__(
-            command_keyword="testing",
-            help_message="Submit Approved Testing 🧪",
-            card=APPROVED_TESTING_CARD,
-            delete_previous_message=True
-        )
-
-    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles, log_file_name="toodles_activity_log.csv")
-    def execute(self, message, attachment_actions, activity):
-        pass
+class GetApprovedTestingCard(CardOnlyCommand):
+    """Display the approved testing submission form."""
+    command_keyword = "testing"
+    help_message = "Submit Approved Testing 🧪"
+    card = APPROVED_TESTING_CARD
 
 
 # Helper function to convert date format from YYYY-MM-DD to MM/DD/YYYY
@@ -1594,20 +593,20 @@ def get_approved_testing_entries_table():
     return table
 
 
-class GetCurrentApprovedTestingEntries(Command):
-    def __init__(self):
-        super().__init__(
-            command_keyword="current_approved_testing",
-            card=None
-        )
+class GetCurrentApprovedTestingEntries(ToodlesCommand):
+    """Display current approved testing entries."""
+    command_keyword = "current_approved_testing"
+    card = None
+    delete_previous_message = False
 
-    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles, log_file_name="toodles_activity_log.csv")
+    @toodles_log_activity
     def execute(self, message, attachment_actions, activity):
         approved_testing_items_table = get_approved_testing_entries_table()
         # Webex message length limit: 7439 chars before encryption
         max_length = 7400
-        result = (
-            f"{activity['actor']['displayName']}, here are the current Approved Security Testing entries\n"
+        result = format_user_response(
+            activity,
+            f"here are the current Approved Security Testing entries\n"
             "```\n"
             f"{approved_testing_items_table}\n"
             "```\n"
@@ -1616,8 +615,11 @@ class GetCurrentApprovedTestingEntries(Command):
         logger.info(f"Reply from GetCurrentApprovedTestingEntries is {len(result)} characters")
         if len(result) > max_length:
             logger.warning(f"Reply from GetCurrentApprovedTestingEntries exceeded max length: {len(result)}")
-            return (f"{activity['actor']['displayName']}, the current list is too long to be displayed here. "
-                    "You may find the same list at http://gdnr.company.com/get-approved-testing-entries")
+            return format_user_response(
+                activity,
+                "the current list is too long to be displayed here. "
+                "You may find the same list at http://ir.internal.example.com/get-approved-testing-entries"
+            )
         return result
 
 
@@ -1707,22 +709,19 @@ def is_valid_ip(address: str) -> bool:
         return False
 
 
-class AddApprovedTestingEntry(Command):
-    def __init__(self):
-        super().__init__(
-            command_keyword="add_approved_testing",
-            card=None,
-            delete_previous_message=True
-        )
+class AddApprovedTestingEntry(ToodlesCommand):
+    """Add a new approved testing entry."""
+    command_keyword = "add_approved_testing"
+    card = None
 
-    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles, log_file_name="toodles_activity_log.csv")
+    @toodles_log_activity
     def execute(self, message, attachment_actions, activity):
-        usernames = attachment_actions.inputs['usernames'].strip()
-        items_of_tester = attachment_actions.inputs['ip_addresses_and_host_names_of_tester'].strip()
-        items_to_be_tested = attachment_actions.inputs['ip_addresses_and_host_names_to_be_tested'].strip()
-        description = attachment_actions.inputs['description'].strip()
-        scope = attachment_actions.inputs['scope'].strip()
-        submitter = activity['actor']['emailAddress']
+        usernames = get_input_value(attachment_actions, 'usernames')
+        items_of_tester = get_input_value(attachment_actions, 'ip_addresses_and_host_names_of_tester')
+        items_to_be_tested = get_input_value(attachment_actions, 'ip_addresses_and_host_names_to_be_tested')
+        description = get_input_value(attachment_actions, 'description')
+        scope = get_input_value(attachment_actions, 'scope')
+        submitter = get_user_email(activity)
         expiry_date = attachment_actions.inputs['expiry_date']
         if attachment_actions.inputs['callback_keyword'] == 'add_approved_testing' and expiry_date == "":
             expiry_date = (datetime.now(EASTERN_TZ) + timedelta(days=1)).strftime("%Y-%m-%d")
@@ -1744,8 +743,9 @@ class AddApprovedTestingEntry(Command):
         except ValueError as e:
             return str(e)
         approved_testing_items_table = get_approved_testing_entries_table()
-        return (
-            f"{activity['actor']['displayName']}, your entry has been added to the Approved Testing list. Here's the current list\n"
+        return format_user_response(
+            activity,
+            f"your entry has been added to the Approved Testing list. Here's the current list\n"
             "```\n"
             f"{approved_testing_items_table}\n"
             "```\n"
@@ -1753,16 +753,10 @@ class AddApprovedTestingEntry(Command):
         )
 
 
-class RemoveApprovedTestingEntry(Command):
-    def __init__(self):
-        super().__init__(
-            command_keyword="remove_approved_testing",
-            card=None,
-            delete_previous_message=True
-        )
-
-    def execute(self, message, attachment_actions, activity):
-        pass
+class RemoveApprovedTestingEntry(CardOnlyCommand):
+    """Placeholder for removing approved testing entries."""
+    command_keyword = "remove_approved_testing"
+    card = None
 
 
 def add_entry_to_reviews(dict_full, ticket_id, person, date, message):
@@ -1785,125 +779,112 @@ def announce_new_threat_hunt(ticket_no, ticket_title, incident_url, person_id):
     requests.post(webex_data.get('api_url'), headers=request_headers, json=payload_json)
 
 
-class Who(Command):
-    """Return who the on-call person is"""
+class Who(ToodlesCommand):
+    """Return who the on-call person is."""
+    command_keyword = "who"
+    help_message = "On-Call ☎️"
+    card = None
+    delete_previous_message = False  # Keep the welcome card visible
+    exact_command_keyword_match = False  # Allow "@bot who" syntax in group chats
 
-    def __init__(self):
-        super().__init__(
-            command_keyword="who",
-            help_message="On-Call ☎️",
-            card=None,
-            delete_previous_message=False  # Keep the welcome card visible
-        )
-
-    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles, log_file_name="toodles_activity_log.csv")
+    @toodles_log_activity
     def execute(self, message, attachment_actions, activity):
         on_call_person = oncall.get_on_call_person()
-        return f"{activity['actor']['displayName']}, the DnR On-call person is {on_call_person.get('name')} - {on_call_person.get('email_address')} - {on_call_person.get('phone_number')}"
-
-
-class Rotation(Command):
-    """Return who the on-call person is"""
-
-    def __init__(self):
-        super().__init__(
-            command_keyword="rotation",
-            card=None,
-            delete_previous_message=False  # Keep the welcome card visible
+        return format_user_response(
+            activity,
+            f"the IR On-call person is {on_call_person.get('name')} - {on_call_person.get('email_address')} - {on_call_person.get('phone_number')}"
         )
 
-    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles, log_file_name="toodles_activity_log.csv")
+
+class Rotation(ToodlesCommand):
+    """Display the on-call rotation schedule."""
+    command_keyword = "rotation"
+    card = None
+    delete_previous_message = False  # Keep the welcome card visible
+    exact_command_keyword_match = False  # Allow "@bot rotation" syntax in group chats
+
+    @toodles_log_activity
     def execute(self, message, attachment_actions, activity):
         rotation = oncall.get_rotation()
-
         data_frame = pandas.DataFrame(rotation, columns=["Monday_date", "analyst_name"])
         data_frame.columns = ['Monday', 'Analyst']
-
         return data_frame.to_string(index=False)
 
 
-class ContainmentStatusCS(Command):
-    """Return the containment status of a host"""
+class ContainmentStatusCS(ToodlesCommand):
+    """Return the containment status of a host in CrowdStrike."""
+    command_keyword = "status"
+    card = None
+    exact_command_keyword_match = False  # Allow "status hostname" syntax
 
-    def __init__(self):
-        super().__init__(
-            command_keyword="status",
-            card=None,
-            delete_previous_message=True
-        )
-
-    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles, log_file_name="toodles_activity_log.csv")
+    @toodles_log_activity
     def execute(self, message, attachment_actions, activity):
-
         if message.strip() != "":
             host_name_cs = message.strip()
+        elif attachment_actions and hasattr(attachment_actions, 'inputs'):
+            host_name_cs = get_input_value(attachment_actions, 'host_name_cs')
         else:
-            host_name_cs = attachment_actions.inputs['host_name_cs'].strip()
+            host_name_cs = ""
 
         host_name_cs = host_name_cs.replace(f"{CONFIG.team_name}_Toodles status", "").strip()
-        if host_name_cs is None or host_name_cs == "":
+        if not host_name_cs:
             return "Please enter a host name and try again"
 
         try:
             crowdstrike = CrowdStrikeClient()
-            return f'{activity['actor']['displayName']}, The network containment status of {host_name_cs} in CS is **{crowdstrike.get_device_containment_status(host_name_cs)}**'
+            return format_user_response(
+                activity,
+                f"The network containment status of {host_name_cs} in CS is **{crowdstrike.get_device_containment_status(host_name_cs)}**"
+            )
         except Exception as e:
             return f'There seems to be an issue with finding the host you entered. Please make sure the host is valid. Error: {str(e)}'
 
 
-class GetAllOptions(Command):
-    def __init__(self):
-        super().__init__(
-            command_keyword="options",
-            help_message="More Commands",
-            card=all_options_card,
-            delete_previous_message=False  # Keep the welcome card visible
-        )
-
-    def execute(self, message, attachment_actions, activity):
-        pass
+class GetAllOptions(CardOnlyCommand):
+    """Display the all options navigation card."""
+    command_keyword = "options"
+    help_message = "More Commands"
+    card = all_options_card
+    delete_previous_message = False  # Keep the welcome card visible
 
 
-class ImportTicket(Command):
-    def __init__(self):
-        super().__init__(
-            command_keyword="import",
-            card=TICKET_IMPORT_CARD.to_dict(),
-            delete_previous_message=True
-        )
+class ImportTicket(ToodlesCommand):
+    """Import a ticket from production to dev."""
+    command_keyword = "import"
+    card = TICKET_IMPORT_CARD.to_dict()
 
-    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles, log_file_name="toodles_activity_log.csv")
+    @toodles_log_activity
     def execute(self, message, attachment_actions, activity):
         prod_ticket_number = attachment_actions.inputs['prod_ticket_number']
-        requestor_email_address = activity['actor']['emailAddress']
+        requestor_email_address = get_user_email(activity)
         destination_ticket_number, destination_ticket_link = xsoar.import_ticket(prod_ticket_number, requestor_email_address)
-        return f'{activity['actor']['displayName']}, the Prod ticket X#{prod_ticket_number} has been copied to Dev [X#{destination_ticket_number}]({destination_ticket_link})'
-
-
-class CreateTuningRequest(Command):
-    def __init__(self):
-        super().__init__(
-            help_message="Create Tuning Request 🎶",
-            command_keyword="tuning_request",
-            card=TUNING_REQUEST_CARD.to_dict(),
-            delete_previous_message=True
+        return format_user_response(
+            activity,
+            f"the Prod ticket X#{prod_ticket_number} has been copied to Dev [X#{destination_ticket_number}]({destination_ticket_link})"
         )
 
-    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles, log_file_name="toodles_activity_log.csv")
+
+class CreateTuningRequest(ToodlesCommand):
+    """Create a tuning request in Azure DevOps."""
+    command_keyword = "tuning_request"
+    help_message = "Create Tuning Request 🎶"
+    card = TUNING_REQUEST_CARD.to_dict()
+
+    @toodles_log_activity
     def execute(self, message, attachment_actions, activity):
         title = attachment_actions.inputs['title']
         description = attachment_actions.inputs['description']
         tickets = attachment_actions.inputs['tickets']
         ticket_volume = attachment_actions.inputs['ticket_volume']
         description += f'<br><br>Sample tickets: {tickets}<br>Approx. ticket volume: {ticket_volume}'
-        submitter_display_name = activity['actor']['displayName']
+        submitter_display_name = get_user_display_name(activity)
         project = 'de'
         area_path = azdo_area_paths['tuning_request']
 
         tuning_request_id = azdo.create_wit(title=title, description=description, item_type='User Story',
                                             project=project, area_path=area_path, submitter=submitter_display_name)
         tuning_request_url = f'https://dev.azure.com/{azdo_orgs.get(project)}/{quote(azdo_projects.get(project))}/_workitems/edit/{tuning_request_id}'
-        return f"{activity['actor']['displayName']}, Your tuning request has been submitted! \n [{tuning_request_id}]({tuning_request_url}) - {title}"
+        return format_user_response(activity, f"Your tuning request has been submitted! \n [{tuning_request_id}]({tuning_request_url}) - {title}")
 
 
 SEARCH_X_CARD = AdaptiveCard(
@@ -1943,27 +924,19 @@ SEARCH_X_CARD = AdaptiveCard(
 )
 
 
-class GetSearchXSOARCard(Command):
-    def __init__(self):
-        super().__init__(
-            help_message="Search 𝗫",
-            command_keyword="get_search_xsoar_card",
-            card=SEARCH_X_CARD.to_dict(),
-            delete_previous_message=True
-        )
-
-    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles, log_file_name="toodles_activity_log.csv")
-    def execute(self, message, attachment_actions, activity):
-        pass
+class GetSearchXSOARCard(CardOnlyCommand):
+    """Display the XSOAR search form."""
+    command_keyword = "get_search_xsoar_card"
+    help_message = "Search 𝗫"
+    card = SEARCH_X_CARD.to_dict()
 
 
-class FetchXSOARTickets(Command):
-    def __init__(self):
-        super().__init__(
-            command_keyword="fetch_xsoar_tickets",
-            card=None
-        )
+class FetchXSOARTickets(ToodlesCommand):
+    """Fetch XSOAR tickets based on search criteria."""
+    command_keyword = "fetch_xsoar_tickets"
+    card = None
 
+    @toodles_log_activity
     def execute(self, message, attachment_actions, activity):
         username = attachment_actions.inputs['username']
         email = attachment_actions.inputs['email']
@@ -1978,84 +951,82 @@ class FetchXSOARTickets(Command):
         tickets = prod_ticket_handler.get_tickets(query=query)
         if tickets:
             for ticket in tickets:
-                message = f"[X#{ticket.get('id')}]({CONFIG.xsoar_prod_ui_base_url}/Custom/caseinfoid/{ticket.get('id')}) - {ticket.get('name')}\n"
+                message = f"[X#{ticket.get('id')}]({build_incident_url(ticket.get('id'))}) - {ticket.get('name')}\n"
         else:
             message = 'None Found'
         return message
 
 
-class GetCompanyHolidays(Command):
-    def __init__(self):
-        super().__init__(
-            command_keyword="holidays",
-            card=None,
-            delete_previous_message=True
-        )
+class GetCompanyHolidays(ToodlesCommand):
+    """Display company holidays for the year."""
+    command_keyword = "holidays"
+    card = None
+    exact_command_keyword_match = False  # Allow "@bot holidays" syntax in group chats
 
-    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles, log_file_name="toodles_activity_log.csv")
+    @toodles_log_activity
     def execute(self, message, attachment_actions, activity):
         today = datetime.now()
+
+        # Load holidays from JSON
+        with open("data/transient/company_holidays.json", "r") as f:
+            holidays_data = json.load(f)
+
+        year = holidays_data["year"]
         holidays = []
         next_holiday_idx = None
         next_holiday_date = None
         today_holiday_idx = None
-        emoji_map = {
-            "New Year's Day": "🥳",
-            "Martin Luther King, Jr. Day": "🕊️",
-            "Memorial Day": "🇺🇸",
-            "Independence Day": "🎆",
-            "Labor Day": "💼",
-            "Thanksgiving Day": "🦃",
-            "Day After Thanksgiving": "🍂",
-            "Christmas Day": "🎄"
-        }
 
-        with open("../data/transient/company_holidays.txt", "r") as f:
-            for idx, line in enumerate(f.readlines()):
-                # Extract date from line
-                match = re.search(r", ([A-Za-z]+) (\d+)", line)
-                if match:
-                    month_str, day_str = match.groups()
-                    try:
-                        holiday_date = datetime.strptime(f"2025 {month_str} {day_str}", "%Y %B %d")
+        for idx, holiday in enumerate(holidays_data["holidays"]):
+            holiday_date = datetime.strptime(holiday["date"], "%Y-%m-%d")
+            emoji = holiday.get("emoji", "")
+            name = holiday["name"]
 
-                        # Check if this is today's holiday
-                        if holiday_date.date() == today.date():
-                            today_holiday_idx = idx
-                        # Find next future holiday (after today)
-                        elif holiday_date > today and next_holiday_idx is None:
-                            next_holiday_idx = idx
-                            next_holiday_date = holiday_date
+            # Use observed date if present, otherwise use actual date
+            display_date = holiday_date
+            if "observed" in holiday:
+                display_date = datetime.strptime(holiday["observed"], "%Y-%m-%d")
 
-                        # Determine styling
-                        if holiday_date.date() < today.date():
-                            style = 'italic'
-                        else:
-                            style = None
-                    except ValueError:
-                        style = None
-                else:
-                    style = None
+            # Check if this is today's holiday (using observed date)
+            if display_date.date() == today.date():
+                today_holiday_idx = idx
+            # Find next future holiday (after today, using observed date)
+            elif display_date > today and next_holiday_idx is None:
+                next_holiday_idx = idx
+                next_holiday_date = display_date
 
-                # Add emoji if available
-                holiday_name = line.split(' - ')[0]
-                emoji = emoji_map.get(holiday_name, "")
-                holiday_line = f"{emoji} {line.rstrip()}" if emoji else line.rstrip()
-                holidays.append((holiday_line, style))
+            # Determine styling
+            if display_date.date() < today.date():
+                style = 'italic'
+            else:
+                style = None
+
+            # Format date parts for display
+            day_of_week = display_date.strftime("%a")
+            month_abbr = display_date.strftime("%b")
+            day_num = display_date.strftime("%d")
+
+            # Format as: "emoji  day_of_week  month day  -  holiday_name"
+            holiday_line = f"{emoji}  {day_of_week:3s}  {month_abbr:3s} {day_num:2s}  -  {name}"
+            holidays.append((holiday_line, style))
 
         # Add seasonal greeting based on current date
         month = today.month
-        if month in [12, 1, 2]:
-            seasonal_greeting = "❄️ Winter holidays ahead!"
+        if month == 1:
+            seasonal_greeting = "🎊 New year, new days off!"
+        elif month == 2:
+            seasonal_greeting = "❄️ Winter days off ahead!"
         elif month in [3, 4, 5]:
             seasonal_greeting = "🌸 Spring celebrations coming up!"
         elif month in [6, 7, 8]:
             seasonal_greeting = "☀️ Summer holidays to enjoy!"
-        else:  # 9, 10, 11
+        elif month in [9, 10, 11]:
             seasonal_greeting = "🍂 Fall festivities approaching!"
+        else:  # 12
+            seasonal_greeting = "🎄 Holiday season is here!"
 
         # Enhanced title with seasonal greeting
-        title = f"🎉 **2025 Company Holidays** 🎉\n{seasonal_greeting}\n═══════════════════════════════════\n"
+        title = f"🎉 **{year} Company Holidays** 🎉\n{seasonal_greeting}\n═══════════════════════════════════\n"
 
         # Build output with styles and merged countdown
         output_lines = []
@@ -2086,16 +1057,13 @@ class GetCompanyHolidays(Command):
         return title + "\n".join(output_lines) + note
 
 
-class GetBotHealth(Command):
-    """Command to check bot health and status."""
+class GetBotHealth(ToodlesCommand):
+    """Check bot health and status."""
+    command_keyword = "health"
+    card = None
+    exact_command_keyword_match = False  # Allow "@bot health" syntax in group chats
 
-    def __init__(self):
-        super().__init__(
-            command_keyword="health",
-            delete_previous_message=True,
-        )
-
-    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles, log_file_name="toodles_activity_log.csv")
+    @toodles_log_activity
     def execute(self, message, attachment_actions, activity):
         room_id = attachment_actions.roomId
         current_time = datetime.now(EASTERN_TZ)
@@ -2154,47 +1122,71 @@ class GetBotHealth(Command):
         )
 
 
-class Hi(Command):
+class Hi(ToodlesCommand):
     """Simple Hi command to check if bot is alive."""
+    command_keyword = "hi"
+    card = None
+    delete_previous_message = False
+    exact_command_keyword_match = False
 
-    def __init__(self):
-        super().__init__(
-            command_keyword="hi",
-            delete_previous_message=False,
-            exact_command_keyword_match=False,
-        )
-
-    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles, log_file_name="toodles_activity_log.csv")
+    @toodles_log_activity
     def execute(self, message, attachment_actions, activity):
         return "Hi 👋🏾"
 
 
-class GetUrlBlockVerdictForm(Command):
-    """Test URL filtering across ZScaler and Bloxone."""
+class GetDomainLookalikeCard(CardOnlyCommand):
+    """Display the domain lookalike scanner form."""
+    command_keyword = "domain_lookalike"
+    help_message = "Domain Lookalike Scanner 🔍"
+    card = DOMAIN_LOOKALIKE_CARD
 
-    def __init__(self):
-        super().__init__(
-            command_keyword="get_url_block_verdict_form",
-            help_message="URL Block Verdict ⚖️",
-            card=URL_BLOCK_VERDICT_CARD,
-            delete_previous_message=False
-        )
 
+class ProcessDomainLookalike(ToodlesCommand):
+    """Process domain lookalike scan requests."""
+    command_keyword = "domain_lookalike_scan"
+    card = None
+
+    @toodles_log_activity
     def execute(self, message, attachment_actions, activity):
-        pass
+        """Execute domain lookalike scan and return Excel file."""
+        import re
+
+        # Extract inputs
+        domain = attachment_actions.inputs.get('domain', '').strip().lower()
+        registered_only = attachment_actions.inputs.get('registered_only', 'false') == 'true'
+
+        # Validate domain
+        domain_pattern = r'^[a-zA-Z0-9][a-zA-Z0-9.-]*\.[a-zA-Z]{2,}$'
+        if not domain or not re.match(domain_pattern, domain):
+            return "❌ Invalid domain format. Please enter a valid domain like 'example.com' (no http:// or www)"
+
+        # Get room info for callbacks
+        room_id = attachment_actions.roomId if attachment_actions else None
+        if not room_id:
+            logger.error(f"No room_id found in attachment_actions: {attachment_actions}")
+            return "❌ Error: Unable to determine chat room. Please try again."
+
+        # Delegate to scanner component
+        if registered_only:
+            return domain_scanner.start_full_scan(domain, room_id)
+        else:
+            return domain_scanner.start_quick_scan(domain, room_id)
 
 
-class ProcessUrlBlockVerdict(Command):
+class GetUrlBlockVerdictForm(CardOnlyCommand):
+    """Display the URL block verdict form."""
+    command_keyword = "get_url_block_verdict_form"
+    help_message = "URL Block Verdict ⚖️"
+    card = URL_BLOCK_VERDICT_CARD
+    delete_previous_message = False
+
+
+class ProcessUrlBlockVerdict(ToodlesCommand):
     """Process URL filtering submission from the card."""
+    command_keyword = "url_verdict"
+    card = None
 
-    def __init__(self):
-        super().__init__(
-            command_keyword="url_verdict",
-            card=None,
-            delete_previous_message=True
-        )
-
-    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_toodles, log_file_name="toodles_activity_log.csv")
+    @toodles_log_activity
     def execute(self, message, attachment_actions, activity):
         import time
         start_time = time.time()
@@ -2273,6 +1265,150 @@ class ProcessUrlBlockVerdict(Command):
             return f"{activity['actor']['displayName']}, error testing URLs: {str(e)}"
 
 
+class GetBirthdayAnniversaryForm(ToodlesCommand):
+    """Display the birthday and anniversary input form."""
+    command_keyword = "get_birthday_anniversary_form"
+    help_message = "Birthday & Anniversary 🎉"
+    card = None  # Will be dynamically created in execute()
+
+    @toodles_log_activity
+    def execute(self, message, attachment_actions, activity):
+        import copy
+
+        # Get user's existing data to pre-populate the form
+        user_email = get_user_email(activity)
+        existing_data = birthdays_anniversaries.get_employee_by_email(user_email)
+
+        # Deep copy the card template to avoid modifying the original
+        card = copy.deepcopy(BIRTHDAY_ANNIVERSARY_CARD)
+
+        # Pre-populate values if user has existing data
+        if existing_data:
+            # Find and set birthday value (convert MM-DD to YYYY-MM-DD for Input.Date)
+            if existing_data.get('birthday'):
+                try:
+                    birthday_value = f"2000-{existing_data['birthday']}"
+                    # Navigate: body[2] (Container) -> items[0] (first ColumnSet) -> columns[1] -> items[0] (Input.Date)
+                    card["body"][2]["items"][0]["columns"][1]["items"][0]["value"] = birthday_value
+                except (KeyError, IndexError) as e:
+                    logger.warning(f"Error setting birthday value in card: {e}")
+
+            # Find and set anniversary value (already in YYYY-MM-DD format)
+            if existing_data.get('anniversary'):
+                try:
+                    # Navigate: body[2] (Container) -> items[1] (second ColumnSet) -> columns[1] -> items[0] (Input.Date)
+                    card["body"][2]["items"][1]["columns"][1]["items"][0]["value"] = existing_data['anniversary']
+                except (KeyError, IndexError) as e:
+                    logger.warning(f"Error setting anniversary value in card: {e}")
+
+        # Send the card
+        room_id = attachment_actions.roomId if attachment_actions else None
+        if room_id:
+            webex_api.messages.create(
+                roomId=room_id,
+                text="Birthday & Anniversary Form",
+                attachments=[{
+                    "contentType": "application/vnd.microsoft.card.adaptive",
+                    "content": card
+                }]
+            )
+
+        return None
+
+
+class SaveBirthdayAnniversary(ToodlesCommand):
+    """Save birthday and anniversary information from the form."""
+    command_keyword = "save_birthday_anniversary"
+    card = None
+    delete_previous_message = False
+
+    @toodles_log_activity
+    def execute(self, message, attachment_actions, activity):
+        try:
+            # Get user info from activity
+            user_email = get_user_email(activity)
+            user_name = get_user_display_name(activity)
+
+            # Get form inputs (both are optional)
+            birthday_input = attachment_actions.inputs.get('birthday', '').strip()
+            anniversary_input = attachment_actions.inputs.get('anniversary', '').strip()
+
+            # Get existing data to check if user is clearing fields
+            existing_data = birthdays_anniversaries.get_employee_by_email(user_email)
+
+            # Convert birthday from YYYY-MM-DD to MM-DD format
+            birthday = None
+            if birthday_input:
+                try:
+                    date_obj = datetime.strptime(birthday_input, "%Y-%m-%d")
+                    birthday = date_obj.strftime("%m-%d")
+                except ValueError:
+                    return f"{user_name}, invalid birthday format. Please use the date picker to select your birthday."
+
+            # Keep anniversary in YYYY-MM-DD format (as entered)
+            anniversary = anniversary_input if anniversary_input else None
+
+            # Load current data for full update
+            data = birthdays_anniversaries.load_data()
+
+            # Find or create employee record
+            employee = None
+            for emp in data["employees"]:
+                if emp["email"].lower() == user_email.lower():
+                    employee = emp
+                    break
+
+            if employee is None:
+                # New employee
+                employee = {
+                    "email": user_email,
+                    "name": user_name,
+                    "birthday": birthday,
+                    "anniversary": anniversary
+                }
+                data["employees"].append(employee)
+            else:
+                # Update existing employee - ALWAYS overwrite with new values (including None to clear)
+                employee["name"] = user_name  # Update name in case it changed
+                employee["birthday"] = birthday  # Overwrite birthday (None clears it)
+                employee["anniversary"] = anniversary  # Overwrite anniversary (None clears it)
+
+            # Save updated data
+            birthdays_anniversaries.save_data(data)
+
+            # Build response message based on what was saved
+            if birthday and anniversary:
+                result_msg = f"🎉🎊 **Thank you, {user_name}!**\n\nWe'll make sure to celebrate both your **birthday** 🎂 and **work anniversary** 🏆!"
+            elif birthday:
+                result_msg = f"🎂 **Thank you, {user_name}!**\n\nWe'll make sure to celebrate your **birthday** with you! 🎉"
+            elif anniversary:
+                result_msg = f"🏆 **Thank you, {user_name}!**\n\nWe'll make sure to celebrate your **work anniversary** with you! 🎉"
+            else:
+                result_msg = f"✅ **{user_name}**, your birthday and anniversary information has been cleared."
+
+            # Add user to Celebrations room if they submitted at least one date
+            if (birthday or anniversary) and CONFIG.webex_room_id_celebrations:
+                try:
+                    webex_api.memberships.create(
+                        roomId=CONFIG.webex_room_id_celebrations,
+                        personEmail=user_email
+                    )
+                    logger.info(f"Added {user_email} to Celebrations room")
+                    result_msg += "\n\n✨ _You've been added to the Celebrations room where we post birthday and anniversary wishes!_"
+                except Exception as membership_error:
+                    error_str = str(membership_error).lower()
+                    if "already" in error_str or "409" in error_str or "conflict" in error_str:
+                        logger.debug(f"{user_email} is already a member of Celebrations room")
+                    else:
+                        logger.warning(f"Could not add {user_email} to Celebrations room: {membership_error}")
+
+            return result_msg
+
+        except Exception as e:
+            logger.error(f"Error saving birthday/anniversary: {e}", exc_info=True)
+            return f"{activity['actor']['displayName']}, sorry, there was an error saving your information. Please try again."
+
+
 def toodles_bot_factory():
     """Create Toodles bot instance"""
     # Clean up stale device registrations before starting
@@ -2336,6 +1472,11 @@ def toodles_initialization(bot=None):
         bot.add_command(Hi())
         bot.add_command(GetUrlBlockVerdictForm())
         bot.add_command(ProcessUrlBlockVerdict())
+        bot.add_command(GetBirthdayAnniversaryForm())
+        bot.add_command(SaveBirthdayAnniversary())
+        # Domain Lookalike Scanner
+        bot.add_command(GetDomainLookalikeCard())
+        bot.add_command(ProcessDomainLookalike())
         return True
     return False
 

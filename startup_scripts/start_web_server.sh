@@ -1,100 +1,104 @@
 #!/bin/bash
 
-cd /opt/incident-response || exit 1
+cd /home/vinay/pub/IR || exit 1
 
-# Kill ALL existing web server processes if running
-echo "Stopping ALL existing Web Server instances..."
+SERVICE_NAME="ir-web-server.service"
+APP_NAME="Web Server"
+LOG_FILE="/home/vinay/pub/IR/logs/web_server.log"
 
-# Find all web_server.py processes
-WEB_PIDS=$(pgrep -f "web_server.py")
+echo "Managing $APP_NAME via systemd service: $SERVICE_NAME"
+echo ""
 
-if [ -n "$WEB_PIDS" ]; then
-    echo "Found web_server.py processes: $WEB_PIDS"
+# Stop the systemd service if it's running or in a stuck state
+SERVICE_STATE=$(systemctl is-active "$SERVICE_NAME" 2>/dev/null || echo "inactive")
 
-    # Force kill ALL of them immediately (don't wait for graceful shutdown)
-    echo "$WEB_PIDS" | xargs kill -9 2>/dev/null || true
+if [[ "$SERVICE_STATE" != "inactive" ]]; then
+    echo "Stopping $SERVICE_NAME (current state: $SERVICE_STATE)..."
 
-    # Wait and verify they're all dead
-    sleep 2
-
-    # Double-check and kill any stragglers
-    REMAINING=$(pgrep -f "web_server.py")
-    if [ -n "$REMAINING" ]; then
-        echo "Killing remaining processes: $REMAINING"
-        echo "$REMAINING" | xargs kill -9 2>/dev/null || true
-        sleep 1
+    # Reset failed state first if needed
+    if systemctl is-failed --quiet "$SERVICE_NAME" 2>/dev/null; then
+        echo "  Resetting failed state..."
+        sudo systemctl reset-failed "$SERVICE_NAME"
     fi
+
+    sudo systemctl stop "$SERVICE_NAME"
+
+    # Wait up to 30 seconds for graceful stop
+    for i in {1..30}; do
+        if ! systemctl is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
+            break
+        fi
+        if [ $i -eq 15 ]; then
+            echo "  ⏳ Service taking longer than expected to stop..."
+        fi
+        sleep 1
+    done
+
+    # If still running/stuck, force kill
+    CURRENT_STATE=$(systemctl show -p ActiveState --value "$SERVICE_NAME" 2>/dev/null)
+    if systemctl is-active --quiet "$SERVICE_NAME" 2>/dev/null || \
+       [[ "$CURRENT_STATE" == "deactivating" ]] || \
+       [[ "$CURRENT_STATE" == "activating" ]]; then
+        echo "  ⚠️  Graceful stop failed, force killing..."
+        sudo systemctl kill --signal=SIGKILL "$SERVICE_NAME"
+        sleep 2
+        sudo systemctl reset-failed "$SERVICE_NAME" 2>/dev/null || true
+    fi
+
+    echo "✅ $SERVICE_NAME stopped"
 else
-    echo "No existing web_server.py processes found"
+    echo "ℹ️  $SERVICE_NAME is not currently running"
+    # Still reset failed state just in case
+    sudo systemctl reset-failed "$SERVICE_NAME" 2>/dev/null || true
+fi
+
+# Also kill any stray processes (in case they're not managed by systemd)
+echo "Checking for stray web_server.py processes..."
+WEB_PIDS=$(pgrep -f "web_server.py")
+if [ -n "$WEB_PIDS" ]; then
+    echo "Found stray processes: $WEB_PIDS - cleaning up..."
+    echo "$WEB_PIDS" | xargs kill -9 2>/dev/null || true
+    sleep 1
 fi
 
 # Force kill any process using ports 8080 and 8081
 PROXY_PORT=8081
 WEB_PORT=8080
+echo "Checking ports $WEB_PORT and $PROXY_PORT..."
 
-echo "Force killing any processes on ports $WEB_PORT and $PROXY_PORT..."
-
-# Kill anything on proxy port 8081 - multiple attempts to be sure
-for attempt in 1 2 3; do
-    PROXY_PID=$(lsof -ti:$PROXY_PORT 2>/dev/null)
-    if [ -n "$PROXY_PID" ]; then
-        echo "  Killing PID $PROXY_PID using port $PROXY_PORT (attempt $attempt)"
-        kill -9 "$PROXY_PID" 2>/dev/null || true
-        sleep 1
-    else
-        break
-    fi
-done
-
-# Kill anything on web server port 8080
-for attempt in 1 2 3; do
-    WEB_PID=$(lsof -ti:$WEB_PORT 2>/dev/null)
-    if [ -n "$WEB_PID" ]; then
-        echo "  Killing PID $WEB_PID using port $WEB_PORT (attempt $attempt)"
-        kill -9 "$WEB_PID" 2>/dev/null || true
-        sleep 1
-    else
-        break
-    fi
-done
-
-# Give processes time to fully die and sockets to be released
-echo "Waiting for sockets to be fully released..."
-sleep 3
-
-# Final verification
-if lsof -i:$PROXY_PORT > /dev/null 2>&1; then
-    echo "WARNING: Port $PROXY_PORT still in use after cleanup!"
-    lsof -i:$PROXY_PORT
+PROXY_PID=$(lsof -ti:$PROXY_PORT 2>/dev/null)
+if [ -n "$PROXY_PID" ]; then
+    echo "  Killing process using port $PROXY_PORT (PID: $PROXY_PID)"
+    kill -9 "$PROXY_PID" 2>/dev/null || true
+    sleep 1
 fi
-if lsof -i:$WEB_PORT > /dev/null 2>&1; then
-    echo "WARNING: Port $WEB_PORT still in use after cleanup!"
-    lsof -i:$WEB_PORT
+
+WEB_PID=$(lsof -ti:$WEB_PORT 2>/dev/null)
+if [ -n "$WEB_PID" ]; then
+    echo "  Killing process using port $WEB_PORT (PID: $WEB_PID)"
+    kill -9 "$WEB_PID" 2>/dev/null || true
+    sleep 1
 fi
 
 # Ensure logs directory exists
 mkdir -p logs
 
-# Note: Log file preserved for historical troubleshooting
-# Use log rotation instead of wiping logs on restart
-
-# Start new web server instance in background
-# Python logging handles all output - redirect nohup output to /dev/null
-nohup env PYTHONPATH=/opt/incident-response .venv/bin/python web/web_server.py > /dev/null 2>&1 &
-
-echo "Starting Web Server..."
+# Start the systemd service
 echo ""
+echo "Starting $SERVICE_NAME..."
+sudo systemctl start "$SERVICE_NAME"
 
-# Wait for the log file to appear and contain data
+# Wait for service to start
 sleep 2
 
 # Tail the log file until we see startup message or timeout after 30 seconds
-timeout 30 tail -f logs/web_server.log 2>/dev/null | while read -r line; do
+echo "Waiting for $APP_NAME to initialize..."
+timeout 30 tail -f "$LOG_FILE" 2>/dev/null | while read -r line; do
     echo "$line"
     # Look for Flask/Waitress startup message
     if echo "$line" | grep -qE "Serving on|Running on|Started"; then
-        # Give it a few more seconds to finish initialization
-        sleep 3
+        # Give it a moment to finish initialization
+        sleep 2
         pkill -P $$ tail  # Kill the tail process
         break
     fi
@@ -102,13 +106,18 @@ done
 
 echo ""
 
-# Check if the process is actually running
-if pgrep -f "web/web_server.py" > /dev/null; then
-    PID=$(pgrep -f 'web/web_server.py')
-    echo "✅ Web Server is running (PID: $PID)"
+# Check if the service is running
+if systemctl is-active --quiet "$SERVICE_NAME"; then
+    PID=$(systemctl show -p MainPID --value "$SERVICE_NAME")
+    echo "✅ $APP_NAME is running via systemd (PID: $PID)"
     echo ""
-    echo "To view logs: tail -f /opt/incident-response/logs/web_server.log"
+    echo "To view logs: tail -f $LOG_FILE"
+    echo "   or: journalctl -u $SERVICE_NAME -f"
+    echo ""
+    echo "To manage: sudo systemctl {start|stop|restart|status} $SERVICE_NAME"
 else
-    echo "❌ Warning: Web Server process not found"
-    echo "Check logs: tail -20 /opt/incident-response/logs/web_server.log"
+    echo "❌ Warning: $SERVICE_NAME failed to start"
+    echo "Check status: systemctl status $SERVICE_NAME"
+    echo "Check logs: journalctl -u $SERVICE_NAME -n 50"
+    exit 1
 fi

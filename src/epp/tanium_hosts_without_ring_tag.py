@@ -194,9 +194,24 @@ class ReportExporter(Protocol):
 class TaniumDataLoader:
     """Loads data from various sources"""
 
-    def __init__(self, data_dir: Path):
+    def __init__(self, data_dir: Path, instance_filter: Optional[str] = None):
+        """
+        Initialize TaniumDataLoader.
+
+        Args:
+            data_dir: Base data directory
+            instance_filter: Filter for Tanium instance - "cloud", "on-prem", or None for all
+        """
         self.data_dir = data_dir
         self.logger = logging.getLogger(__name__)
+        # Normalize instance filter to match TaniumClient expectations
+        if instance_filter:
+            normalized = instance_filter.lower().replace("-", "")
+            if normalized not in ["cloud", "onprem"]:
+                raise ValueError(f"Invalid instance_filter: {instance_filter}. Must be 'cloud', 'on-prem', or None.")
+            self.instance_filter = normalized
+        else:
+            self.instance_filter = None
 
     def load_tanium_computers(self, test_limit: Optional[int] = None) -> List[Computer]:
         """Load computers from Tanium, handling all the Excel parsing complexity"""
@@ -204,8 +219,9 @@ class TaniumDataLoader:
         output_dir = self.data_dir / "transient" / "epp_device_tagging" / today
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        client = TaniumClient()
-        self.logger.info("🔄 Fetching fresh data from Tanium (cache disabled)...")
+        client = TaniumClient(instance=self.instance_filter)
+        instance_msg = f" ({self.instance_filter})" if self.instance_filter else " (all instances)"
+        self.logger.info(f"🔄 Fetching fresh data from Tanium{instance_msg}...")
         all_hosts_filename = client.get_and_export_all_computers()
 
         if not all_hosts_filename:
@@ -853,15 +869,19 @@ class TaniumRingTagProcessor:
 # Factory/Builder (Dependency Injection)
 # ============================================================================
 
-def create_processor() -> TaniumRingTagProcessor:
-    """Factory method to create fully configured processor"""
+def create_processor(instance_filter: Optional[str] = None) -> TaniumRingTagProcessor:
+    """Factory method to create fully configured processor.
+
+    Args:
+        instance_filter: Filter for Tanium instance - "cloud", "on-prem", or None for all instances
+    """
     config = get_config()
     data_dir = Path(__file__).parent.parent.parent / "data"
     temp_dir = data_dir / "transient" / "epp_device_tagging" / datetime.now(EASTERN_TZ).strftime('%m-%d-%Y')
     temp_dir.mkdir(parents=True, exist_ok=True)
 
     # Create all dependencies
-    data_loader = TaniumDataLoader(data_dir)
+    data_loader = TaniumDataLoader(data_dir, instance_filter=instance_filter)
     country_mappings = data_loader.load_country_mappings()
     region_mappings = data_loader.load_region_mappings()
 

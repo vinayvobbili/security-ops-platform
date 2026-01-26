@@ -373,7 +373,7 @@ class SOCBotHealthTester:
             from my_bot.core.my_model import ask
 
             # Test with bot name prefix
-            response_with_prefix = ask('DnR_Pokedex hello', 'health_test', 'test_room')
+            response_with_prefix = ask('IR_Pokedex hello', 'health_test', 'test_room')
             response_without_prefix = ask('hello', 'health_test', 'test_room')
 
             # Both should result in similar greeting responses

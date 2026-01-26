@@ -5,13 +5,16 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=iruser
-Group=iruser
-WorkingDirectory=/opt/incident-response
-EnvironmentFile=/opt/incident-response/.env
+User=vinay
+Group=vinay
+WorkingDirectory=/home/vinay/pub/IR
+EnvironmentFile=/home/vinay/pub/IR/.env
+
+# Kill any orphan process using this port before starting
+ExecStartPre=-/bin/bash -c 'fuser -k 8033/tcp 2>/dev/null || true'
 
 # Start log viewer for MSOAR bot
-ExecStart=/opt/incident-response/.venv/bin/python deployment/log_viewer.py --port 8033 --title "MSOAR Bot" --file /opt/incident-response/logs/msoar.log
+ExecStart=/home/vinay/pub/IR/.venv/bin/python deployment/log_viewer.py --port 8033 --title "MSOAR Bot" --file /home/vinay/pub/IR/logs/msoar.log
 
 Restart=on-failure
 RestartSec=10

@@ -39,23 +39,31 @@ class AbnormalSecurityError(Exception):
 class AbnormalSecurityClient:
     """Client for interacting with the Abnormal Security API."""
 
-    def __init__(self, api_token: str, base_url: str = "https://api.abnormalplatform.com/v1"):
+    def __init__(self, api_token: Optional[str] = None, base_url: str = "https://api.abnormalplatform.com/v1"):
         """
         Initialize the Abnormal Security API client.
 
         Args:
-            api_token: API authentication token
+            api_token: API authentication token (if None, reads from config)
             base_url: Base URL for the API (default: https://api.abnormalplatform.com/v1)
         """
-        self.api_token = api_token
+        self.api_token = api_token or CONFIG.abnormal_security_api_key
         self.base_url = base_url.rstrip('/')
         self.session = requests.Session()
-        self.session.headers.update({
-            'Authorization': f'Bearer {api_token}',
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-            'User-Agent': 'IR-AbnormalSecurityClient/1.0'
-        })
+
+        if self.api_token:
+            self.session.headers.update({
+                'Authorization': f'Bearer {self.api_token}',
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'User-Agent': 'IR-AbnormalSecurityClient/1.0'
+            })
+        else:
+            logger.warning("Abnormal Security API token not configured")
+
+    def is_configured(self) -> bool:
+        """Check if the client is properly configured with an API token."""
+        return bool(self.api_token)
 
     def _make_request(
             self,
@@ -109,7 +117,7 @@ class AbnormalSecurityClient:
                 try:
                     detail_json = response.json()
                     detail_msg = detail_json.get('detail') or detail_json.get('message') or body_preview
-                except Exception:
+                except (ValueError, requests.exceptions.JSONDecodeError):
                     detail_msg = body_preview
                 if request_id:
                     detail_msg = f"{detail_msg} (request_id={request_id})"
@@ -186,7 +194,6 @@ class AbnormalSecurityClient:
                 'Unknown Partner',
                 'None / Others'
             ]] = None,
-            mock_data: bool = False  # deprecated, kept for backward compatibility
     ) -> Dict[str, Any]:
         """
         Get a list of threats from the Abnormal Security API.
@@ -208,15 +215,9 @@ class AbnormalSecurityClient:
             attack_vector: Filter by attack vector
             attack_strategy: Filter by strategy
             impersonated_party: Filter by impersonated party
-            mock_data: Deprecated (ignored)
 
         Returns:
             Dictionary containing paginated list of threats.
-
-        Example (will call real API, skipped in doctest):
-            >>> client = AbnormalSecurityClient('real-token')  # doctest: +SKIP
-            >>> threats = client.get_threats(page_size=10)  # doctest: +SKIP
-            >>> len(threats.get('threats', []))  # doctest: +SKIP
         """
         params = {
             'pageSize': page_size,
@@ -251,7 +252,6 @@ class AbnormalSecurityClient:
             threat_id: str,
             page_size: int = 100,
             page_number: int = 1,
-            mock_data: bool = False  # deprecated
     ) -> Dict[str, Any]:
         """
         Get detailed information about a specific threat (real API call).
@@ -260,14 +260,9 @@ class AbnormalSecurityClient:
             threat_id: UUID of the threat
             page_size: Number of messages per page
             page_number: Page number
-            mock_data: Deprecated (ignored)
 
         Returns:
             Dictionary of threat details.
-
-        Example (skipped):
-            >>> client = AbnormalSecurityClient('real-token')  # doctest: +SKIP
-            >>> detail = client.get_threat_details('threat-uuid')  # doctest: +SKIP
         """
         params = {
             'pageSize': page_size,
@@ -279,7 +274,6 @@ class AbnormalSecurityClient:
             self,
             threat_id: str,
             action: Literal['remediate', 'unremediate'],
-            mock_data: bool = False  # deprecated
     ) -> Dict[str, Any]:
         """
         Remediate or unremediate a threat (real API call).
@@ -287,14 +281,9 @@ class AbnormalSecurityClient:
         Args:
             threat_id: UUID of the threat
             action: 'remediate' or 'unremediate'
-            mock_data: Deprecated (ignored)
 
         Returns:
             202 response body containing actionId and statusUrl (if synchronous JSON provided).
-
-        Example (skipped):
-            >>> client = AbnormalSecurityClient('real-token')  # doctest: +SKIP
-            >>> resp = client.manage_threat('threat-uuid', 'remediate')  # doctest: +SKIP
         """
         body = {'action': action}
         return self._make_request('POST', f'/threats/{threat_id}', json=body)
@@ -305,15 +294,7 @@ class AbnormalSecurityClient:
             end_time: datetime,
             **kwargs
     ) -> Dict[str, Any]:
-        """
-        Convenience wrapper around get_threats using a time range.
-
-        Example (skipped):
-            >>> from datetime import datetime, timedelta  # doctest: +SKIP
-            >>> client = AbnormalSecurityClient('real-token')  # doctest: +SKIP
-            >>> end = datetime.now(timezone.utc); start = end - timedelta(days=1)  # doctest: +SKIP
-            >>> client.get_threats_by_timerange(start, end)  # doctest: +SKIP
-        """
+        """Convenience wrapper around get_threats using a time range."""
         filter_str = (
             f"receivedTime gte {start_time.strftime('%Y-%m-%dT%H:%M:%SZ')} "
             f"lte {end_time.strftime('%Y-%m-%dT%H:%M:%SZ')}"
@@ -326,13 +307,7 @@ class AbnormalSecurityClient:
             max_pages: Optional[int] = None,
             **kwargs
     ) -> List[Dict[str, Any]]:
-        """
-        Paginate through all threat pages until exhaustion or max_pages.
-
-        Example (skipped):
-            >>> client = AbnormalSecurityClient('real-token')  # doctest: +SKIP
-            >>> all_threats = client.get_all_threats('receivedTime gte 2024-01-01T00:00:00Z lte 2024-01-02T00:00:00Z')  # doctest: +SKIP
-        """
+        """Paginate through all threat pages until exhaustion or max_pages."""
         all_threats: List[Dict[str, Any]] = []
         page_number = 1
         while True:
@@ -352,15 +327,8 @@ class AbnormalSecurityClient:
             filter_param: Optional[str] = None,
             page_size: int = 100,
             page_number: int = 1,
-            mock_data: bool = False  # deprecated
     ) -> Dict[str, Any]:
-        """
-        Retrieve Abnormal cases (real API call).
-
-        Example (skipped):
-            >>> client = AbnormalSecurityClient('real-token')  # doctest: +SKIP
-            >>> client.get_cases(page_size=10)  # doctest: +SKIP
-        """
+        """Retrieve Abnormal cases."""
         params: Dict[str, Any] = {
             'pageSize': page_size,
             'pageNumber': page_number
@@ -372,28 +340,16 @@ class AbnormalSecurityClient:
     def get_case_details(
             self,
             case_id: str,
-            mock_data: bool = False  # deprecated
     ) -> Dict[str, Any]:
-        """Get details for a single case (real API).
-
-        Example (skipped):
-            >>> client = AbnormalSecurityClient('real-token')  # doctest: +SKIP
-            >>> client.get_case_details('case-id')  # doctest: +SKIP
-        """
+        """Get details for a single case."""
         return self._make_request('GET', f'/cases/{case_id}')
 
     def manage_case(
             self,
             case_id: str,
             action: str,
-            mock_data: bool = False  # deprecated
     ) -> Dict[str, Any]:
-        """Update a case status (real API call).
-
-        Example (skipped):
-            >>> client = AbnormalSecurityClient('real-token')  # doctest: +SKIP
-            >>> client.manage_case('case-id', 'acknowledged')  # doctest: +SKIP
-        """
+        """Update a case status."""
         body = {'action': action}
         return self._make_request('POST', f'/cases/{case_id}', json=body)
 
@@ -404,14 +360,7 @@ class AbnormalSecurityClient:
             filter_key: Literal['lastModifiedTime', 'createdTime', 'customerVisibleTime'] = 'lastModifiedTime',
             **kwargs
     ) -> Dict[str, Any]:
-        """Wrapper around get_cases for a time window.
-
-        Example (skipped):
-            >>> from datetime import datetime, timedelta  # doctest: +SKIP
-            >>> client = AbnormalSecurityClient('real-token')  # doctest: +SKIP
-            >>> end = datetime.now(timezone.utc); start = end - timedelta(days=1)  # doctest: +SKIP
-            >>> client.get_cases_by_timerange(start, end)  # doctest: +SKIP
-        """
+        """Wrapper around get_cases for a time window."""
         filter_str = (
             f"{filter_key} gte {start_time.strftime('%Y-%m-%dT%H:%M:%SZ')} "
             f"lte {end_time.strftime('%Y-%m-%dT%H:%M:%SZ')}"
@@ -424,12 +373,7 @@ class AbnormalSecurityClient:
             max_pages: Optional[int] = None,
             **kwargs
     ) -> List[Dict[str, Any]]:
-        """Paginate through all cases matching the filter.
-
-        Example (skipped):
-            >>> client = AbnormalSecurityClient('real-token')  # doctest: +SKIP
-            >>> client.get_all_cases('lastModifiedTime gte 2024-01-01T00:00:00Z lte 2024-01-02T00:00:00Z')  # doctest: +SKIP
-        """
+        """Paginate through all cases matching the filter."""
         all_cases: List[Dict[str, Any]] = []
         page_number = 1
         while True:
@@ -443,6 +387,179 @@ class AbnormalSecurityClient:
                 break
             page_number = next_page
         return all_cases
+
+    # =========================================================================
+    # Abuse Mailbox Campaign Methods
+    # =========================================================================
+
+    def get_abuse_campaigns(
+            self,
+            filter_param: Optional[str] = None,
+            page_size: int = 100,
+            page_number: int = 1
+    ) -> Dict[str, Any]:
+        """Get abuse mailbox campaigns.
+
+        Args:
+            filter_param: Time-based filter (format: 'receivedTime gte YYYY-MM-DDTHH:MM:SSZ')
+            page_size: Number of campaigns per page
+            page_number: Page number to retrieve
+
+        Returns:
+            Dictionary containing paginated list of abuse campaigns.
+        """
+        params: Dict[str, Any] = {
+            'pageSize': page_size,
+            'pageNumber': page_number
+        }
+        if filter_param:
+            params['filter'] = filter_param
+        return self._make_request('GET', '/abusecampaigns', params=params)
+
+    def get_abuse_campaign_details(self, campaign_id: str) -> Dict[str, Any]:
+        """Get details of a specific abuse mailbox campaign.
+
+        Args:
+            campaign_id: The campaign ID
+
+        Returns:
+            Dictionary with campaign details.
+        """
+        return self._make_request('GET', f'/abusecampaigns/{campaign_id}')
+
+    # =========================================================================
+    # Vendor Methods
+    # =========================================================================
+
+    def get_vendors(
+            self,
+            page_size: int = 100,
+            page_number: int = 1
+    ) -> Dict[str, Any]:
+        """Get list of vendors.
+
+        Args:
+            page_size: Number of vendors per page
+            page_number: Page number to retrieve
+
+        Returns:
+            Dictionary containing paginated list of vendors.
+        """
+        params = {
+            'pageSize': page_size,
+            'pageNumber': page_number
+        }
+        return self._make_request('GET', '/vendors', params=params)
+
+    def get_vendor_details(self, vendor_domain: str) -> Dict[str, Any]:
+        """Get details of a specific vendor.
+
+        Args:
+            vendor_domain: The vendor's domain
+
+        Returns:
+            Dictionary with vendor details.
+        """
+        return self._make_request('GET', f'/vendors/{vendor_domain}')
+
+    def get_vendor_activity(
+            self,
+            vendor_domain: str,
+            page_size: int = 100,
+            page_number: int = 1
+    ) -> Dict[str, Any]:
+        """Get activity for a specific vendor.
+
+        Args:
+            vendor_domain: The vendor's domain
+            page_size: Number of activities per page
+            page_number: Page number to retrieve
+
+        Returns:
+            Dictionary with vendor activity.
+        """
+        params = {
+            'pageSize': page_size,
+            'pageNumber': page_number
+        }
+        return self._make_request('GET', f'/vendors/{vendor_domain}/activity', params=params)
+
+    def get_vendor_cases(
+            self,
+            filter_param: Optional[str] = None,
+            page_size: int = 100,
+            page_number: int = 1
+    ) -> Dict[str, Any]:
+        """Get vendor-related cases.
+
+        Args:
+            filter_param: Time-based filter
+            page_size: Number of cases per page
+            page_number: Page number to retrieve
+
+        Returns:
+            Dictionary containing paginated list of vendor cases.
+        """
+        params: Dict[str, Any] = {
+            'pageSize': page_size,
+            'pageNumber': page_number
+        }
+        if filter_param:
+            params['filter'] = filter_param
+        return self._make_request('GET', '/vendor-cases', params=params)
+
+    def get_vendor_case_details(self, case_id: str) -> Dict[str, Any]:
+        """Get details of a specific vendor case.
+
+        Args:
+            case_id: The vendor case ID
+
+        Returns:
+            Dictionary with vendor case details.
+        """
+        return self._make_request('GET', f'/vendor-cases/{case_id}')
+
+    # =========================================================================
+    # Employee Methods
+    # =========================================================================
+
+    def get_employee_identity_analysis(self, email_address: str) -> Dict[str, Any]:
+        """Get identity analysis for an employee.
+
+        Args:
+            email_address: The employee's email address
+
+        Returns:
+            Dictionary with identity analysis data.
+        """
+        return self._make_request('GET', f'/employee/{email_address}/identity')
+
+    def get_employee_information(self, email_address: str) -> Dict[str, Any]:
+        """Get information about an employee.
+
+        Args:
+            email_address: The employee's email address
+
+        Returns:
+            Dictionary with employee information.
+        """
+        return self._make_request('GET', f'/employee/{email_address}')
+
+    # =========================================================================
+    # Threat Intel Feed
+    # =========================================================================
+
+    def get_threat_intel_feed(self) -> Dict[str, Any]:
+        """Get the latest threat intelligence feed.
+
+        Returns:
+            Dictionary with threat intel data.
+        """
+        return self._make_request('GET', '/threat-intel')
+
+    # =========================================================================
+    # Diagnostics
+    # =========================================================================
 
     def diagnose_auth(self) -> Dict[str, Any]:
         """Run lightweight auth/permission diagnostics.
@@ -481,121 +598,53 @@ class AbnormalSecurityClient:
         return results
 
 
-def main():
-    """
-    Main method for testing the Abnormal Security client.
+if __name__ == "__main__":
+    # Quick test for Abnormal Security client
+    import sys
 
-    Examples of how to use the client with various methods.
-    """
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    )
+    logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 
-    if not CONFIG.abnormal_security_api_key:
-        logger.error("ABNORMAL_SECURITY_API_KEY not found in configuration")
-        logger.error("Please ensure your .secrets.age file contains the API key")
-        return
+    client = AbnormalSecurityClient()
 
-    client = AbnormalSecurityClient(CONFIG.abnormal_security_api_key)
+    if not client.is_configured():
+        print("ERROR: Abnormal Security API not configured")
+        print("Ensure ABNORMAL_SECURITY_API_KEY is set in .secrets.age")
+        sys.exit(1)
 
-    logger.info("=" * 80)
-    logger.info("Abnormal Security API Client - Test Suite")
-    logger.info("=" * 80)
+    print("Abnormal Security Client Test")
+    print("=" * 50)
 
-    # Define time range for tests (last 7 days)
-    end_time = datetime.now()
+    # Define time range for tests
+    end_time = datetime.now(timezone.utc)
     start_time = end_time - timedelta(days=7)
 
-    # Test 1: Get recent threats
-    logger.info("Test 1: Getting threats from the last 7 days...")
+    # Test fetching threats
+    print("\n1. Testing threats fetch (last 7 days)...")
     try:
-        threats_response = client.get_threats_by_timerange(
-            start_time=start_time,
-            end_time=end_time,
-            page_size=10
-        )
+        result = client.get_threats_by_timerange(start_time, end_time, page_size=5)
+        threats = result.get("threats", [])
+        print(f"   Found {len(threats)} threats")
+        for t in threats[:3]:
+            print(f"   - {t.get('attackType', 'Unknown')}: {t.get('subject', 'N/A')[:40]}")
+    except AbnormalSecurityError as e:
+        print(f"   Error: {e.detail}")
 
-        threats = threats_response.get('threats', [])
-        logger.info(f"Found {len(threats)} threats")
-
-        if threats:
-            logger.info(f"First threat ID: {threats[0].get('threatId', 'N/A')}")
-
-            # Test 2: Get details for the first threat
-            logger.info("Test 2: Getting details for first threat...")
-            threat_id = threats[0].get('threatId')
-            if threat_id:
-                threat_details = client.get_threat_details(threat_id)
-                logger.info("Retrieved threat details")
-                logger.info(f"  Attack Type: {threat_details.get('attackType', 'N/A')}")
-                logger.info(f"  Subject: {threat_details.get('subject', 'N/A')}")
-                logger.info(f"  Sender: {threat_details.get('fromAddress', 'N/A')}")
-    except AbnormalSecurityError as ase:
-        logger.error(str(ase))
-        logger.info("Running auth diagnostics after 403...")
-        diag = client.diagnose_auth()
-        logger.info(f"Diagnostics: {diag}")
-    except Exception as e:
-        logger.error(f"Error getting threats: {e}", exc_info=True)
-
-    # Test 3: Get recent cases
-    logger.info("Test 3: Getting cases from the last 7 days...")
+    # Test fetching cases
+    print("\n2. Testing cases fetch (last 7 days)...")
     try:
-        cases_response = client.get_cases_by_timerange(
-            start_time=start_time,
-            end_time=end_time,
-            filter_key='lastModifiedTime',
-            page_size=10
-        )
+        result = client.get_cases_by_timerange(start_time, end_time, page_size=5)
+        cases = result.get("cases", [])
+        print(f"   Found {len(cases)} cases")
+        for c in cases[:3]:
+            print(f"   - Case #{c.get('caseId')}: {c.get('severity')} - {c.get('caseType')}")
+    except AbnormalSecurityError as e:
+        print(f"   Error: {e.detail}")
 
-        cases = cases_response.get('cases', [])
-        logger.info(f"Found {len(cases)} cases")
+    # Run diagnostics
+    print("\n3. Running auth diagnostics...")
+    diag = client.diagnose_auth()
+    for endpoint, status in diag.items():
+        print(f"   {endpoint}: {status.get('status', 'unknown')}")
 
-        if cases:
-            logger.info(f"First case ID: {cases[0].get('caseId', 'N/A')}")
-
-            # Test 4: Get details for the first case
-            logger.info("Test 4: Getting details for first case...")
-            case_id = cases[0].get('caseId')
-            if case_id:
-                case_details = client.get_case_details(case_id)
-                logger.info("Retrieved case details")
-                logger.info(f"  Severity: {case_details.get('severity', 'N/A')}")
-                logger.info(f"  Status: {case_details.get('status', 'N/A')}")
-    except AbnormalSecurityError as ase:
-        logger.error(str(ase))
-        logger.info("Running auth diagnostics after 403 on cases...")
-        diag = client.diagnose_auth()
-        logger.info(f"Diagnostics: {diag}")
-    except Exception as e:
-        logger.error(f"Error getting cases: {e}", exc_info=True)
-
-    # Test 5: Get threats with specific filters
-    logger.info("Test 5: Getting threats with filters (attacks only)...")
-    try:
-        filter_str = (
-            f"receivedTime gte {start_time.strftime('%Y-%m-%dT%H:%M:%SZ')} "
-            f"lte {end_time.strftime('%Y-%m-%dT%H:%M:%SZ')}"
-        )
-
-        filtered_threats = client.get_threats(
-            filter_param=filter_str,
-            source='attacks',
-            page_size=5
-        )
-
-        attack_threats = filtered_threats.get('threats', [])
-        logger.info(f"Found {len(attack_threats)} attack threats")
-    except AbnormalSecurityError as ase:
-        logger.error(str(ase))
-    except Exception as e:
-        logger.error(f"Error getting filtered threats: {e}", exc_info=True)
-
-    logger.info("=" * 80)
-    logger.info("Test suite completed")
-    logger.info("=" * 80)
-
-
-if __name__ == "__main__":
-    main()
+    print("\n" + "=" * 50)
+    print("Tests complete!")

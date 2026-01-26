@@ -1,4 +1,10 @@
 #!/usr/bin/python3
+"""
+TARS - Tanium Cloud tagging bot.
+
+Handles Tanium Cloud instance operations for ring tagging.
+For On-Prem operations, see CASE bot.
+"""
 
 # Configure SSL for corporate proxy environments (Zscaler, etc.) - MUST BE FIRST
 import sys
@@ -18,61 +24,66 @@ setup_logging(
     log_level=logging.INFO,
     log_dir=str(ROOT_DIRECTORY / "logs"),
     info_modules=['__main__', 'src.utils.bot_resilience', 'src.utils.webex_device_manager'],
-    rotate_on_startup=False  # Keep logs continuous, rely on RotatingFileHandler for size-based rotation
+    rotate_on_startup=False
 )
 
 logger = logging.getLogger(__name__)
-# Suppress noisy messages from webex libraries
-logging.getLogger('webex_bot').setLevel(logging.ERROR)  # Suppress bot-to-bot and self-message warnings
+logging.getLogger('webex_bot').setLevel(logging.ERROR)
 logging.getLogger('webexteamssdk').setLevel(logging.ERROR)
 logging.getLogger('webex_websocket_client').setLevel(logging.WARNING)
 
 from src.utils.ssl_config import configure_ssl_if_needed
 
-configure_ssl_if_needed(verbose=True)  # Re-enabled due to ZScaler connectivity issues
+configure_ssl_if_needed(verbose=True)
 
-# Apply enhanced WebSocket client patch for better connection resilience
 from src.utils.enhanced_websocket_client import patch_websocket_client
 
 patch_websocket_client()
 
-# Import datetime before using it
 from datetime import datetime, timezone, timedelta
-import random
 import signal
 import atexit
 
-# Log clear startup marker for visual separation in logs
 logger.warning("=" * 100)
 logger.warning(f"🚀 TARS BOT STARTED - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 logger.warning("=" * 100)
-from zoneinfo import ZoneInfo
 
 import fasteners
 import pandas as pd
-from tqdm import tqdm
 from webex_bot.models.command import Command
 from webex_bot.webex_bot import WebexBot
-from webexpythonsdk.models.cards import (
-    AdaptiveCard, Column, ColumnSet,
-    TextBlock, options, HorizontalAlignment, VerticalContentAlignment
-)
-from webexpythonsdk.models.cards.actions import Submit
-from webexpythonsdk.models.cards.inputs import Text as TextInput
 from webexteamssdk import WebexTeamsAPI
 
 from my_config import get_config
 from src.epp.tanium_hosts_without_ring_tag import create_processor
-from src.utils.excel_formatting import apply_professional_formatting
 from src.utils.logging_utils import log_activity
 from src.utils.webex_device_manager import cleanup_devices_on_startup
 from src.utils.webex_utils import send_message_with_retry, send_card_with_retry
 from src.utils.webex_pool_config import configure_webex_api_session
 
-CONFIG = get_config()
+# Import shared Tanium bot functionality
+from webex_bots.tanium_bot_base import (
+    TaniumBotConfig,
+    get_random_loading_message,
+    seek_approval_to_ring_tag_tanium,
+    apply_tags_to_hosts,
+    create_bot_health_card,
+    EASTERN_TZ,
+    run_automated_ring_tagging_workflow as _run_automated_ring_tagging_workflow,
+)
+
+# Default batch size for TARS (Cloud) ring tagging
+DEFAULT_BATCH_SIZE = 1000
+
+# Data directory for transient files (flag files, etc.)
 DATA_DIR = ROOT_DIRECTORY / "data" / "transient" / "epp_device_tagging"
 
-# Configure WebexTeamsAPI with larger connection pool to prevent timeout issues
+CONFIG = get_config()
+
+# Safety window for automated ring tagging (minutes) - loaded from config
+SAFETY_WINDOW_MINUTES = CONFIG.ring_tagging_safety_window_minutes
+
+# Configure WebexTeamsAPI with larger connection pool
 webex_api = configure_webex_api_session(
     WebexTeamsAPI(
         access_token=CONFIG.webex_bot_access_token_tars,
@@ -83,183 +94,34 @@ webex_api = configure_webex_api_session(
     max_retries=3
 )
 
-# Timezone constant for consistent usage
-EASTERN_TZ = ZoneInfo("America/New_York")
-
-# Global resilient bot runner instance (set in main())
-_resilient_runner = None
-
-# Fun loading messages
-LOADING_MESSAGES = [
-    "🔮 Consulting the digital crystal ball...",
-    "🧙‍♂️ Casting data summoning spells...",
-    "🚀 Launching rockets to data planet...",
-    "🕵️‍♂️ Investigating the mysteries of your data...",
-    "🎯 Targeting the perfect metrics...",
-    "🧠 Teaching AI to count really, really fast...",
-    "☕ Brewing fresh analytics (with extra caffeine)...",
-    "🎪 Orchestrating a spectacular data circus...",
-    "🏃‍♂️ Running marathons through databases...",
-    "🎨 Painting beautiful charts with data brushes...",
-    "🛠️ Assembling data with precision tools...",
-    "🌐 Surfing the waves of information...",
-    "🔎 Zooming in on the tiniest details...",
-    "📦 Unpacking boxes of insights...",
-    "🦾 Deploying robot assistants for your data...",
-    "🧩 Piecing together the data puzzle...",
-    "🛰️ Beaming up your data to the cloud...",
-    "🦉 Consulting the wise data owl...",
-    "🧬 Sequencing the DNA of your datasets...",
-    "🦄 Searching for unicorns in your data...",
-    "🧊 Chilling with cool analytics...",
-    "🦖 Digging up data fossils...",
-    "🧗‍♂️ Climbing the mountain of information...",
-    "🛸 Abducting anomalies for analysis...",
-    "🦋 Transforming raw data into insights...",
-    "🧹 Sweeping up data dust...",
-    "🧲 Attracting the most relevant facts...",
-    "🦜 Parroting back the best results...",
-    "🦩 Flamingling with fancy metrics...",
-    "🦦 Otterly focused on your request...",
-    "🦔 Prickling through the data haystack..."
-]
+# Bot configuration for TARS (Cloud instance)
+BOT_CONFIG = TaniumBotConfig(
+    bot_name="TARS",
+    instance_type="cloud",
+    webex_api=webex_api,
+    root_directory=ROOT_DIRECTORY,
+    activity_log_file="tars_activity_log.csv"
+)
 
 
-def get_random_loading_message():
-    """Get a random fun loading message."""
-    return random.choice(LOADING_MESSAGES)
+def run_automated_ring_tagging_workflow():
+    """Wrapper for automated Tanium Cloud ring tagging workflow.
 
-
-def send_report(room_id, filename, message) -> None:
-    """Sends the enriched hosts report to a Webex room, including step run times."""
-    today_date = datetime.now(EASTERN_TZ).strftime('%m-%d-%Y')
-    filepath = DATA_DIR / today_date / filename
-    hosts_count = len(pd.read_excel(filepath))
-
-    try:
-        report_text = (
-            f"{message}. Count={hosts_count}!"
-        )
-        webex_api.messages.create(
-            roomId=room_id,
-            text=report_text,
-            files=[str(filepath)]
-        )
-    except FileNotFoundError:
-        logger.error(f"Report file not found at {filepath}")
-    except Exception as e:
-        logger.error(f"Failed to send report: {e}")
-
-
-def send_report_with_progress(room_id, filename, message, progress_info=None) -> None:
-    """Enhanced report sending with progress information and better formatting."""
-    today_date = datetime.now(EASTERN_TZ).strftime('%m-%d-%Y')
-    filepath = DATA_DIR / today_date / filename
-
-    try:
-        if not filepath.exists():
-            raise FileNotFoundError(f"Report file not found at {filepath}")
-
-        hosts_count = len(pd.read_excel(filepath))
-
-        # Create rich message with emojis and formatting - use Eastern time for user display
-        current_time_eastern = datetime.now(EASTERN_TZ)
-        tz_name = "EST" if current_time_eastern.dst().total_seconds() == 0 else "EDT"
-
-        report_text = f"📊 **{message}**\n\n"
-        report_text += f"📈 **Count:** {hosts_count:,} hosts\n"
-        report_text += f"📅 **Generated:** {current_time_eastern.strftime(f'%Y-%m-%d %H:%M:%S {tz_name}')}\n"
-
-        if progress_info:
-            report_text += f"⏱️ **Processing Time:** {progress_info.get('duration', 'N/A')}\n"
-
-        # Send report with retry (auto-notifies on failure)
-        result = send_message_with_retry(
-            webex_api, room_id=room_id, markdown=report_text, files=[str(filepath)]
-        )
-        if result:
-            logger.info(f"Successfully sent report {filename} with {hosts_count} hosts to room {room_id}")
-
-    except FileNotFoundError:
-        error_msg = f"❌ Report file not found at {filepath}"
-        logger.error(error_msg)
-        send_message_with_retry(webex_api, room_id=room_id, markdown=error_msg)
-    except Exception as e:
-        error_msg = f"❌ Failed to send report: {str(e)}"
-        logger.error(error_msg)
-        send_message_with_retry(webex_api, room_id=room_id, markdown=error_msg)
-
-
-def seek_approval_to_ring_tag_tanium(room_id, total_hosts=None):
-    """Send approval card for Tanium ring tagging with batch size option"""
-    hosts_info = f" ({total_hosts:,} hosts available)" if total_hosts else ""
-
-    card = AdaptiveCard(
-        body=[
-            TextBlock(
-                text="Tanium Ring Tagging Approval",
-                color=options.Colors.ACCENT,
-                size=options.FontSize.LARGE,
-                weight=options.FontWeight.BOLDER,
-                horizontalAlignment=HorizontalAlignment.CENTER),
-            ColumnSet(
-                columns=[
-                    Column(
-                        width="stretch",
-                        items=[
-                            TextBlock(text=f"I can tag workstations and server in Tanium {hosts_info}. Do you want to proceed?", wrap=True)
-                        ],
-                        verticalContentAlignment=VerticalContentAlignment.CENTER
-                    )
-                ]
-            ),
-            TextBlock(
-                text="🧪 Batch Size (Required for Safety)",
-                weight=options.FontWeight.BOLDER,
-                separator=True
-            ),
-            TextBlock(
-                text="Enter number of servers to randomly tag. Default is 500. Use higher numbers (1000, 5000, etc.) for larger deployments, or enter 'all' to tag all hosts.",
-                wrap=True,
-                isSubtle=True
-            ),
-            TextInput(
-                id="batch_size",
-                placeholder="Default: 500 (or enter 1000, 5000, 'all')",
-                isRequired=False
-            )
-        ],
-        actions=[
-            Submit(title="No!", data={"callback_keyword": "dont_ring_tag_tanium_hosts"},
-                   style=options.ActionStyle.DESTRUCTIVE),
-            Submit(title="Yes! Put a 💍 On It!", data={"callback_keyword": "ring_tag_tanium_hosts"},
-                   style=options.ActionStyle.POSITIVE)
-        ]
+    Calls the shared workflow from tanium_bot_base with Cloud-specific parameters.
+    """
+    _run_automated_ring_tagging_workflow(
+        config=BOT_CONFIG,
+        room_id=CONFIG.webex_room_id_epp_tanium_cloud_tagging,
+        safety_window_minutes=SAFETY_WINDOW_MINUTES,
+        default_batch_size=DEFAULT_BATCH_SIZE
     )
-
-    # Use resilient messenger to send card with automatic retry
-    result = send_card_with_retry(webex_api,
-                                  room_id=room_id,
-                                  text="Please approve the Tanium tagging action.",
-                                  attachments=[{"contentType": "application/vnd.microsoft.card.adaptive", "content": card.to_dict()}]
-                                  )
-
-    if result is None:
-        # All retries failed - send fallback notification
-        error_msg = f"❌ **Failed to send approval card**\n\nI couldn't send the approval card after multiple attempts due to network errors.\n\n**What happened:**\n- Report was generated successfully ({total_hosts:,} hosts available)\n- Network error prevented card delivery\n\n**What to do:**\n- Try running the command again\n- Or proceed directly with: `/ring_tag_tanium_hosts`"
-
-        try:
-            send_message_with_retry(webex_api, room_id=room_id, markdown=error_msg)
-        except Exception as notify_error:
-            logger.error(f"Critical: Failed to send fallback notification: {notify_error}")
-            logger.error("⚠️ IMPORTANT: User was NOT notified about approval card failure. Check Webex room manually.")
 
 
 class GetTaniumHostsWithoutRingTag(Command):
     def __init__(self):
         super().__init__(
             command_keyword="tanium_hosts_without_ring_tag",
-            help_message="Get Tanium Hosts without a Ring Tag 🔍💍",
+            help_message="Get Tanium Cloud Hosts without a Ring Tag 🔍💍",
             delete_previous_message=True,
         )
 
@@ -271,17 +133,17 @@ class GetTaniumHostsWithoutRingTag(Command):
                                 room_id=room_id,
                                 markdown=(
                                     f"Hello {activity['actor']['displayName']}! {loading_msg}\n\n"
-                                    "🔍 **Tanium Hosts Without Ring Tag Report** 🏷️\n"
+                                    "🔍 **Tanium Cloud Hosts Without Ring Tag Report** 🏷️\n"
                                     "Estimated completion: ~15 minutes ⏰"
                                 )
                                 )
         lock_path = ROOT_DIRECTORY / "src" / "epp" / "all_tanium_hosts.lock"
-        filepath = None  # Ensure filepath is always defined
+        filepath = None
         try:
             with fasteners.InterProcessLock(lock_path):
-                processor = create_processor()
+                processor = create_processor(instance_filter="cloud")
                 report_path = processor.process_hosts_without_ring_tags(test_limit=None)
-                filepath = report_path  # Use the returned report path
+                filepath = report_path
         except Exception as e:
             logger.error(f"Error in GetTaniumHostsWithoutRingTag execute: {e}")
             send_message_with_retry(webex_api,
@@ -300,11 +162,11 @@ class GetTaniumHostsWithoutRingTag(Command):
             error_msg = filepath if filepath else "Unknown error occurred during report generation"
             send_message_with_retry(webex_api,
                                     room_id=room_id,
-                                    markdown=f"Hello {activity['actor']['displayName']}! ❌ **Error generating Tanium hosts report**: {error_msg}"
+                                    markdown=f"Hello {activity['actor']['displayName']}! ❌ **Error generating Tanium Cloud hosts report**: {error_msg}"
                                     )
             return
 
-        # Count total hosts in report and hosts with successfully generated tags (both Cloud and On-Prem)
+        # Count total hosts in report and hosts with successfully generated tags
         df = pd.read_excel(filepath)
         total_hosts_in_report = len(df)
         hosts_with_generated_tags = df[
@@ -314,76 +176,63 @@ class GetTaniumHostsWithoutRingTag(Command):
             ]
         hosts_with_generated_tags_count = len(hosts_with_generated_tags)
 
-        # Count by source for informational purposes
+        # Count Cloud hosts
         cloud_count = len(hosts_with_generated_tags[hosts_with_generated_tags['Source'].str.contains('Cloud', case=False, na=False)])
-        onprem_count = len(hosts_with_generated_tags[hosts_with_generated_tags['Source'].str.contains('On-Prem', case=False, na=False)])
 
         # Check which instances were actually used in the report
         from services.tanium import TaniumClient
         client = TaniumClient()
-        available_instances = client.list_available_instances()
-        instances_msg = f"📡 **Active instances:** {', '.join(available_instances)}"
-        if len(available_instances) < 2:
-            instances_msg += f"\n⚠️ **Note:** Only {len(available_instances)} of 2 configured instances is accessible from this server"
+        available_instances = [i for i in client.list_available_instances() if 'cloud' in i.lower()]
+        instances_msg = f"📡 **Active Cloud instance:** {', '.join(available_instances) if available_instances else 'None available'}"
+        if not available_instances:
+            instances_msg += "\n⚠️ **Warning:** Cloud instance is not accessible from this server"
 
         # Calculate hosts with issues
         hosts_with_issues = total_hosts_in_report - hosts_with_generated_tags_count
 
-        message = f"Hello {activity['actor']['displayName']}! Here's the list of Tanium hosts without a Ring Tag. Ring tags have also been generated for your review.\n\n"
+        # Calculate number of hosts seen within last 2 hours
+        report_file_time = datetime.fromtimestamp(Path(filepath).stat().st_mtime, tz=timezone.utc)
+        two_hours_before_report = report_file_time - timedelta(hours=2)
+
+        def is_recently_online(last_seen_str):
+            if pd.isna(last_seen_str) or not last_seen_str:
+                return False
+            try:
+                last_seen = datetime.fromisoformat(str(last_seen_str).replace('Z', '+00:00'))
+                return last_seen >= two_hours_before_report
+            except (ValueError, AttributeError):
+                return False
+
+        recently_online_count = 0
+        if 'Last Seen' in hosts_with_generated_tags.columns:
+            recently_online_count = len(hosts_with_generated_tags[hosts_with_generated_tags['Last Seen'].apply(is_recently_online)])
+
+        message = f"Hello {activity['actor']['displayName']}! Here's the list of Tanium Cloud hosts without a Ring Tag. Ring tags have also been generated for your review.\n\n"
         message += f"{instances_msg}\n\n"
         message += f"**Summary:**\n"
         message += f"- Total hosts without ring tags: {total_hosts_in_report:,}\n"
         message += f"- Hosts with ring tags generated: {hosts_with_generated_tags_count:,}\n"
         message += f"  - Cloud: {cloud_count:,}\n"
-        message += f"  - On-Prem: {onprem_count:,}\n"
+        message += f"- Hosts seen within last 2 hours: {recently_online_count:,}\n"
         message += f"- Hosts with errors/missing data: {hosts_with_issues:,}"
 
-        # Send report with retry
         result = send_message_with_retry(webex_api, room_id=room_id, markdown=message, files=[str(filepath)])
 
         if result:
-            # Only send approval card if report was delivered successfully
-            seek_approval_to_ring_tag_tanium(room_id, total_hosts=hosts_with_generated_tags_count)
+            seek_approval_to_ring_tag_tanium(BOT_CONFIG, room_id, total_hosts=hosts_with_generated_tags_count, default_batch_size=DEFAULT_BATCH_SIZE)
 
-
-# Tanium ring tagging commands below
 
 class RingTagTaniumHosts(Command):
     def __init__(self):
         super().__init__(
             command_keyword="ring_tag_tanium_hosts",
-            help_message="Ring Tag 100 Hosts 💍🏷️",
             delete_previous_message=True,
         )
 
     @log_activity(bot_access_token=CONFIG.webex_bot_access_token_tars, log_file_name="tars_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
         room_id = attachment_actions.roomId
-
-        # Extract batch size from the form submission
-        # Default to 500 if user leaves field blank
-        batch_size = 500
-        # if hasattr(attachment_actions, 'inputs') and attachment_actions.inputs:
-        #     batch_size_str = attachment_actions.inputs.get('batch_size', '').strip()
-        #     if batch_size_str:
-        #         # Allow 'all' to tag all hosts
-        #         if batch_size_str.lower() == 'all':
-        #             batch_size = None
-        #         else:
-        #             try:
-        #                 batch_size = int(batch_size_str)
-        #                 if batch_size <= 0:
-        #                     send_message_with_retry(webex_api,
-        #                                             room_id=room_id,
-        #                                             markdown=f"❌ Invalid batch size: {batch_size}. Please enter a positive number or 'all'."
-        #                                             )
-        #                     return
-        #             except ValueError:
-        #                 send_message_with_retry(webex_api,
-        #                                         room_id=room_id,
-        #                                         markdown=f"❌ Invalid batch size: '{batch_size_str}'. Please enter a valid number or 'all'."
-        #                                         )
-        #                 return
+        batch_size = DEFAULT_BATCH_SIZE
 
         loading_msg = get_random_loading_message()
         if batch_size is None:
@@ -392,13 +241,14 @@ class RingTagTaniumHosts(Command):
             batch_info = f" (batch of {batch_size:,} hosts)"
         send_message_with_retry(webex_api,
                                 room_id=room_id,
-                                markdown=f"Hello {activity['actor']['displayName']}! {loading_msg}\n\n🏷️**Starting ring tagging for Tanium hosts from both Cloud and On-Prem instances{batch_info}...**\nEstimated completion: ~5 minutes ⏰"
+                                markdown=f"Hello {activity['actor']['displayName']}! {loading_msg}\n\n🏷️**Starting ring tagging for Tanium Cloud hosts{batch_info}...**\nEstimated completion: ~5 minutes ⏰"
                                 )
 
         lock_path = ROOT_DIRECTORY / "src" / "epp" / "ring_tag_tanium_hosts.lock"
+        user_name = activity['actor']['displayName']
         try:
             with fasteners.InterProcessLock(lock_path):
-                self._apply_tags_to_hosts(room_id, batch_size=batch_size)
+                apply_tags_to_hosts(BOT_CONFIG, room_id, batch_size=batch_size, run_by=user_name)
         except Exception as e:
             logger.error(f"Error in RingTagTaniumHosts execute: {e}")
             send_message_with_retry(webex_api,
@@ -412,393 +262,6 @@ class RingTagTaniumHosts(Command):
                 except Exception as e:
                     logger.error(f"Failed to remove lock file {lock_path}: {e}")
 
-    @staticmethod
-    def _apply_tags_to_hosts(room_id, batch_size=None):
-        """Apply ring tags to Tanium hosts (both Cloud and On-Prem) with optional batch sampling
-
-        Args:
-            room_id: Webex room ID for sending messages
-            batch_size: Optional number of hosts to randomly sample for tagging.
-                       If None, all eligible hosts will be tagged.
-        """
-        import time
-        from services.tanium import TaniumClient
-
-        # Start timing
-        start_time = time.time()
-
-        today_date = datetime.now(EASTERN_TZ).strftime('%m-%d-%Y')
-        report_dir = ROOT_DIRECTORY / "data" / "transient" / "epp_device_tagging" / today_date
-        report_path = report_dir / "Tanium_Ring_Tags_Report.xlsx"
-
-        if not report_path.exists():
-            send_message_with_retry(webex_api,
-                                    room_id=room_id,
-                                    markdown=f"❌ **Error**: Ring tags report not found. Please run the 'tanium_hosts_without_ring_tag' command first to generate the report."
-                                    )
-            return
-
-        try:
-            # Read the report
-            read_start = time.time()
-            df = pd.read_excel(report_path)
-            read_duration = time.time() - read_start
-
-            total_hosts_in_report = len(df)
-
-            # Filter hosts that have generated tags (both Cloud and On-Prem)
-            filter_start = time.time()
-            hosts_to_tag = df[
-                (df['Generated Tag'].notna()) &
-                (df['Generated Tag'] != '')
-                ]
-            filter_duration = time.time() - filter_start
-
-            if len(hosts_to_tag) == 0:
-                send_message_with_retry(webex_api,
-                                        room_id=room_id,
-                                        markdown=f"❌ **No hosts available for tagging**. All hosts in the report are missing generated tags."
-                                        )
-                return
-
-            # Filter for hosts seen within the last 2 hours (currently online)
-            # This improves our chances of selecting online hosts since Tanium can only apply tags if the host is online
-            # Use the report file time as reference (when data was fetched) instead of current time
-            hosts_before_online_filter = len(hosts_to_tag)
-            report_file_time = datetime.fromtimestamp(report_path.stat().st_mtime, tz=timezone.utc)
-            fifteen_minutes_before_report = report_file_time - timedelta(hours=2)
-
-            # Debug: Log available columns and time window
-            logger.debug(f"DEBUG: Available columns in report: {list(hosts_to_tag.columns)}")
-            logger.debug(f"DEBUG: Report file time (data fetch reference): {report_file_time}")
-            logger.debug(f"DEBUG: 2 hours before report threshold: {fifteen_minutes_before_report}")
-
-            # Debug: Show sample Last Seen values if column exists
-            if 'Last Seen' in hosts_to_tag.columns:
-                sample_timestamps = hosts_to_tag['Last Seen'].dropna().head(5).tolist()
-                logger.debug(f"DEBUG: Sample 'Last Seen' timestamps: {sample_timestamps}")
-            else:
-                logger.debug(f"DEBUG: 'Last Seen' column NOT FOUND in report!")
-
-            def is_recently_online(last_seen_str):
-                """Check if a host was seen within the last 2 hours of when the report was generated"""
-                if pd.isna(last_seen_str) or not last_seen_str:
-                    return False
-                try:
-                    # Parse ISO format timestamp from Tanium
-                    last_seen = datetime.fromisoformat(str(last_seen_str).replace('Z', '+00:00'))
-                    return last_seen >= fifteen_minutes_before_report
-                except (ValueError, AttributeError) as e:
-                    logger.debug(f"DEBUG: Failed to parse timestamp '{last_seen_str}': {e}")
-                    return False
-
-            if 'Last Seen' in hosts_to_tag.columns:
-                hosts_to_tag = hosts_to_tag[hosts_to_tag['Last Seen'].apply(is_recently_online)]
-                hosts_after_online_filter = len(hosts_to_tag)
-
-                logger.debug(f"DEBUG: After filtering - {hosts_after_online_filter} hosts out of {hosts_before_online_filter} passed the 15-minute filter")
-
-                if hosts_after_online_filter == 0:
-                    # Show some timestamps of filtered-out hosts for debugging
-                    logger.debug(f"DEBUG: All hosts filtered out! Showing recent timestamps from original data:")
-                    df_temp = pd.read_excel(report_path)
-                    if 'Last Seen' in df_temp.columns:
-                        recent_samples = df_temp['Last Seen'].dropna().tail(10).tolist()
-                        logger.debug(f"DEBUG: Last 10 'Last Seen' values: {recent_samples}")
-
-                    send_message_with_retry(webex_api,
-                                            room_id=room_id,
-                                            markdown=f"❌ **No currently online hosts available for tagging**. Found {hosts_before_online_filter:,} eligible hosts, but none were seen within 2 hours of when the report was generated."
-                                            )
-                    return
-
-                logger.info(f"Filtered to {hosts_after_online_filter} online hosts from {hosts_before_online_filter} eligible hosts (seen within 2 hours of report generation)")
-                if hosts_after_online_filter < hosts_before_online_filter:
-                    send_message_with_retry(webex_api,
-                                            room_id=room_id,
-                                            markdown=f"ℹ️ **Online host filter**: Selected {hosts_after_online_filter:,} hosts seen within 2 hours of report generation from {hosts_before_online_filter:,} eligible hosts."
-                                            )
-            else:
-                logger.debug(f"DEBUG: Skipping online filter - 'Last Seen' column not found in report")
-
-            total_eligible_hosts = len(hosts_to_tag)
-
-            # Apply random sampling if batch size is specified
-            if batch_size is not None:
-                if batch_size >= total_eligible_hosts:
-                    send_message_with_retry(webex_api,
-                                            room_id=room_id,
-                                            markdown=f"ℹ️ **Note**: Batch size ({batch_size:,}) equals or exceeds available hosts ({total_eligible_hosts:,}). Tagging all {total_eligible_hosts:,} hosts."
-                                            )
-                else:
-                    # Randomly sample N hosts from the eligible pool
-                    hosts_to_tag = hosts_to_tag.sample(n=batch_size, random_state=None)
-                    logger.info(f"Randomly sampled {batch_size} hosts from {total_eligible_hosts} eligible hosts")
-                    send_message_with_retry(webex_api,
-                                            room_id=room_id,
-                                            markdown=f"🎲 **Batch mode active**: Randomly selected {batch_size:,} hosts from {total_eligible_hosts:,} eligible hosts for tagging."
-                                            )
-            else:
-                # batch_size is None, meaning user entered 'all'
-                send_message_with_retry(webex_api,
-                                        room_id=room_id,
-                                        markdown=f"📋 **Full deployment mode**: Tagging ALL {total_eligible_hosts:,} eligible hosts from both Cloud and On-Prem instances."
-                                        )
-
-            num_to_tag = len(hosts_to_tag)
-
-            # Initialize Tanium client
-            tanium_client = TaniumClient()
-
-            # Track results
-            successful_tags = []
-            failed_tags = []
-
-            # Group hosts by (instance, tag, package_id) for bulk tagging
-            apply_start = time.time()
-
-            # Create a grouping key and organize hosts
-            from collections import defaultdict
-            host_groups = defaultdict(list)
-
-            total_hosts_to_group = len(hosts_to_tag)
-            logger.info(f"Grouping {total_hosts_to_group} hosts by instance/tag/package for bulk operations...")
-
-            for host_count, (idx, row) in enumerate(hosts_to_tag.iterrows(), 1):
-                computer_name = str(row['Computer Name'])
-                tanium_id = str(row['Tanium ID'])
-                source = str(row['Source'])
-                ring_tag = str(row['Generated Tag'])
-                package_id = str(row['Package ID'])
-                current_tags = str(row.get('Current Tags', ''))
-                comments = str(row.get('Comments', ''))
-                country = str(row.get('Country', ''))
-                region = str(row.get('Region', ''))
-                environment = str(row.get('Environment', ''))
-
-                # Group by (source/instance, tag, package_id)
-                group_key = (source, ring_tag, package_id)
-                host_groups[group_key].append({
-                    'name': computer_name,
-                    'tanium_id': tanium_id,
-                    'tag': ring_tag,
-                    'source': source,
-                    'package_id': package_id,
-                    'current_tags': current_tags,
-                    'comments': comments,
-                    'country': country,
-                    'region': region,
-                    'environment': environment
-                })
-
-                # Log progress every 100 hosts for VM/service logs
-                if host_count % 100 == 0 or host_count == total_hosts_to_group:
-                    logger.info(f"Grouped {host_count}/{total_hosts_to_group} hosts ({host_count*100/total_hosts_to_group:.1f}%)")
-
-            # Process each group with bulk tagging (respecting Titanium's 25 endpoint limit per call)
-            TANIUM_BULK_TAG_LIMIT = 25
-
-            # Split large groups into batches of 25 or fewer
-            batched_groups = []
-            for (source, ring_tag, package_id), hosts in host_groups.items():
-                # Split hosts into batches of 25
-                for i in range(0, len(hosts), TANIUM_BULK_TAG_LIMIT):
-                    batch = hosts[i:i + TANIUM_BULK_TAG_LIMIT]
-                    batched_groups.append(((source, ring_tag, package_id), batch))
-
-            total_batches = len(batched_groups)
-            logger.info(f"Grouped {num_to_tag} hosts into {len(host_groups)} groups, split into {total_batches} API calls (max 25 hosts per call)")
-
-            # Disable tqdm in non-interactive contexts (e.g., when running as a bot/service)
-            # to prevent broken pipe errors
-            import sys
-            disable_tqdm = not sys.stdout.isatty()
-
-            batch_counter = 0
-            with tqdm(total=total_batches, desc="Bulk tagging host batches", unit="batch", disable=disable_tqdm) as pbar:
-                for (source, ring_tag, package_id), hosts in batched_groups:
-                    batch_counter += 1
-                    pbar.set_description(f"Tagging {len(hosts)} hosts in {source} with {ring_tag}")
-
-                    try:
-                        # Get the appropriate instance
-                        instance = tanium_client.get_instance_by_name(source)
-                        if not instance:
-                            # All hosts in this batch fail
-                            for host in hosts:
-                                failed_tags.append({
-                                    'name': host['name'],
-                                    'tanium_id': host['tanium_id'],
-                                    'tag': host['tag'],
-                                    'source': host['source'],
-                                    'package_id': host['package_id'],
-                                    'current_tags': host['current_tags'],
-                                    'comments': host['comments'],
-                                    'country': host['country'],
-                                    'region': host['region'],
-                                    'environment': host['environment'],
-                                    'error': f"Instance '{source}' not found"
-                                })
-                            pbar.update(1)
-                            continue
-
-                        # Bulk add tags to all hosts in this batch (max 25)
-                        result = instance.bulk_add_tags(hosts, ring_tag, package_id)
-
-                        # Extract action ID from result
-                        action_id = result.get('action', {}).get('scheduledAction', {}).get('id', 'N/A')
-
-                        # All hosts in this batch get the same action ID
-                        for host in hosts:
-                            successful_tags.append({
-                                'name': host['name'],
-                                'tanium_id': host['tanium_id'],
-                                'tag': host['tag'],
-                                'source': host['source'],
-                                'package_id': host['package_id'],
-                                'current_tags': host['current_tags'],
-                                'comments': host['comments'],
-                                'country': host['country'],
-                                'region': host['region'],
-                                'environment': host['environment'],
-                                'action_id': action_id
-                            })
-
-                    except Exception as e:
-                        # Preserve full error message from Tanium API
-                        error_msg = str(e)
-                        logger.error(f"Failed to bulk tag {len(hosts)} hosts in {source}: {error_msg}")
-
-                        # All hosts in this batch fail with the same error
-                        for host in hosts:
-                            failed_tags.append({
-                                'name': host['name'],
-                                'tanium_id': host['tanium_id'],
-                                'tag': host['tag'],
-                                'source': host['source'],
-                                'package_id': host['package_id'],
-                                'current_tags': host['current_tags'],
-                                'comments': host['comments'],
-                                'country': host['country'],
-                                'region': host['region'],
-                                'environment': host['environment'],
-                                'error': error_msg
-                            })
-
-                    # Log progress every 10 batches for VM/non-interactive sessions
-                    if batch_counter % 10 == 0 or batch_counter == total_batches:
-                        logger.info(f"Processed batch {batch_counter}/{total_batches} ({batch_counter*100/total_batches:.1f}%) - {len(successful_tags)} successful, {len(failed_tags)} failed")
-
-                    pbar.update(1)
-
-            apply_duration = time.time() - apply_start
-
-            # Create Excel report with results
-            results_data = []
-            for host in successful_tags:
-                results_data.append({
-                    'Computer Name': host['name'],
-                    'Tanium ID': host['tanium_id'],
-                    'Source': host['source'],
-                    'Country': host['country'],
-                    'Region': host['region'],
-                    'Environment': host['environment'],
-                    'Ring Tag': host['tag'],
-                    'Package ID': host['package_id'],
-                    'Action ID': host['action_id'],
-                    'Current Tags': host['current_tags'],
-                    'Status': 'Successfully Tagged'
-                })
-            for host in failed_tags:
-                results_data.append({
-                    'Computer Name': host['name'],
-                    'Tanium ID': host['tanium_id'],
-                    'Source': host['source'],
-                    'Country': host['country'],
-                    'Region': host['region'],
-                    'Environment': host['environment'],
-                    'Ring Tag': host['tag'],
-                    'Package ID': host['package_id'],
-                    'Action ID': 'N/A',
-                    'Current Tags': host['current_tags'],
-                    'Status': f"Failed: {host['error']}"
-                })
-
-            # Create DataFrame and save to Excel
-            results_df = pd.DataFrame(results_data)
-            current_time_eastern = datetime.now(EASTERN_TZ)
-            tz_name = "EST" if current_time_eastern.dst().total_seconds() == 0 else "EDT"
-            timestamp = current_time_eastern.strftime(f'%m_%d_%Y %I:%M %p {tz_name}')
-            output_filename = report_dir / f'Tanium_Ring_Tagging_Results_{timestamp}.xlsx'
-
-            results_df.to_excel(output_filename, index=False)
-
-            # Apply professional formatting to the Excel file
-            column_widths = {
-                'computer name': 35,
-                'tanium id': 25,
-                'source': 15,
-                'country': 22,
-                'region': 18,
-                'environment': 22,
-                'ring tag': 35,
-                'package id': 12,
-                'action id': 15,
-                'current tags': 50,
-                'status': 40
-            }
-            wrap_columns = {'current tags', 'status'}
-            apply_professional_formatting(output_filename, column_widths=column_widths, wrap_columns=wrap_columns)
-
-            # Calculate total duration
-            total_duration = time.time() - start_time
-
-            # Format timing information
-            def format_duration(seconds):
-                """Format seconds into a human-readable duration string."""
-                import math
-                minutes, secs = divmod(seconds, 60)
-                hours, minutes = divmod(minutes, 60)
-                secs = math.ceil(secs)
-                parts = []
-                if hours > 0:
-                    parts.append(f"{int(hours)} hour{'s' if hours != 1 else ''}")
-                if minutes > 0:
-                    parts.append(f"{int(minutes)} minute{'s' if minutes != 1 else ''}")
-                if secs > 0 or not parts:
-                    parts.append(f"{int(secs)} second{'s' if secs != 1 else ''}")
-                return " ".join(parts)
-
-            # Generate summary with timing and bulk operation stats
-            summary_md = f"## 🎉 Tanium Ring Tagging Complete!\n\n"
-            summary_md += f"**Summary:**\n"
-            summary_md += f"- Total hosts in report: {total_hosts_in_report:,}\n"
-            summary_md += f"- Hosts eligible for tagging: {total_eligible_hosts:,}\n"
-            if batch_size is not None and batch_size < total_eligible_hosts:
-                summary_md += f"- 🧪 **Batch mode**: Randomly sampled {num_to_tag:,} hosts (requested: {batch_size:,})\n"
-            else:
-                summary_md += f"- Hosts processed: {num_to_tag:,}\n"
-            summary_md += f"- **API calls executed**: {total_batches:,} (max 25 hosts per call)\n"
-            summary_md += f"- Hosts tagged successfully: {len(successful_tags):,}\n"
-            summary_md += f"- Hosts failed to tag: {len(failed_tags):,}\n\n"
-            summary_md += f"**Timing:**\n"
-            summary_md += f"- Reading report: {format_duration(read_duration)}\n"
-            summary_md += f"- Filtering hosts: {format_duration(filter_duration)}\n"
-            summary_md += f"- Applying tags (bulk): {format_duration(apply_duration)}\n"
-            summary_md += f"- Total execution time: {format_duration(total_duration)}\n\n"
-            summary_md += f"📊 **Detailed results with Action IDs are attached in the Excel report.**\n"
-            summary_md += f"💡 **Note**: Hosts in the same API batch (up to 25) share the same Action ID.\n"
-
-            # Send results with retry
-            send_message_with_retry(webex_api, room_id=room_id, markdown=summary_md, files=[str(output_filename)])
-
-        except Exception as e:
-            logger.error(f"Error applying Tanium ring tags: {e}")
-            send_message_with_retry(webex_api,
-                                    room_id=room_id,
-                                    markdown=f"❌ Failed to apply ring tags: {str(e)}"
-                                    )
-
 
 class DontRingTagTaniumHosts(Command):
     def __init__(self):
@@ -809,26 +272,114 @@ class DontRingTagTaniumHosts(Command):
 
     @log_activity(bot_access_token=CONFIG.webex_bot_access_token_tars, log_file_name="tars_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
-        return f"Alright {activity['actor']['displayName']}, I won't tag Tanium hosts. Until next time!👋🏾"
+        return f"Alright {activity['actor']['displayName']}, I won't tag Tanium Cloud hosts. Until next time!👋🏾"
 
 
-class GetTaniumUnhealthyHosts(Command):
+class StopAutomatedTaniumRingTagging(Command):
+    """Command to stop automated Tanium Cloud ring tagging during safety window."""
+
     def __init__(self):
         super().__init__(
-            command_keyword="tanium_unhealthy_hosts",
-            help_message="Get Tanium Unhealthy Hosts 🔍🤒",
+            command_keyword="stop_automated_tanium_ring_tagging",
             delete_previous_message=True,
         )
 
     @log_activity(bot_access_token=CONFIG.webex_bot_access_token_tars, log_file_name="tars_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
         room_id = attachment_actions.roomId
-        message = f"Hello {activity['actor']['displayName']}! This is still work in progress. Please try again later."
 
+        # Create flag file to signal cancellation
+        flag_file = DATA_DIR / "stop_automated_tanium_tagging.flag"
+        flag_file.parent.mkdir(parents=True, exist_ok=True)
+        flag_file.write_text(f"Stopped by {activity['actor']['displayName']} at {datetime.now(EASTERN_TZ).isoformat()}")
+
+        logger.info(f"Automated Tanium tagging stopped by {activity['actor']['displayName']}")
+
+        send_message_with_retry(
+            webex_api, room_id,
+            markdown=f"🛑 **Automated Tanium Cloud ring tagging has been STOPPED** by {activity['actor']['displayName']}.\n\nNo hosts will be tagged in this run."
+        )
+
+
+class GetTaniumUnhealthyHosts(Command):
+    def __init__(self):
+        super().__init__(
+            command_keyword="tanium_unhealthy_hosts",
+            help_message="Get Tanium Cloud Unhealthy Hosts 🔍🤒",
+            delete_previous_message=True,
+        )
+
+    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_tars, log_file_name="tars_activity_log.csv")
+    def execute(self, message, attachment_actions, activity):
+        from src.epp.tanium_unhealthy_hosts import create_processor as create_unhealthy_processor
+
+        room_id = attachment_actions.roomId
+        loading_msg = get_random_loading_message()
         send_message_with_retry(webex_api,
                                 room_id=room_id,
-                                markdown=message,
+                                markdown=(
+                                    f"Hello {activity['actor']['displayName']}! {loading_msg}\n\n"
+                                    "🔍 **Tanium Cloud Unhealthy Hosts Report** 🤒\n"
+                                    "Checking unhealthy hosts (servers: >1 day, workstations: >3 days), enriching with ServiceNow & CrowdStrike...\n"
+                                    "Estimated completion: ~10-15 minutes ⏰"
                                 )
+                                )
+
+        lock_path = ROOT_DIRECTORY / "src" / "epp" / "tanium_unhealthy_hosts.lock"
+        filepath = None
+        try:
+            with fasteners.InterProcessLock(lock_path):
+                processor = create_unhealthy_processor(instance_filter="cloud")
+                filepath = processor.process(test_limit=None)
+        except Exception as e:
+            logger.error(f"Error in GetTaniumUnhealthyHosts execute: {e}")
+            send_message_with_retry(webex_api,
+                                    room_id=room_id,
+                                    markdown=f"❌ An error occurred while processing your request: {e}"
+                                    )
+            filepath = None
+        finally:
+            if lock_path.exists():
+                try:
+                    lock_path.unlink()
+                except Exception as e:
+                    logger.error(f"Failed to remove lock file {lock_path}: {e}")
+
+        if not filepath or not Path(filepath).exists():
+            error_msg = filepath if filepath else "Unknown error occurred during report generation"
+            send_message_with_retry(webex_api,
+                                    room_id=room_id,
+                                    markdown=f"Hello {activity['actor']['displayName']}! ❌ **Error generating unhealthy hosts report**: {error_msg}"
+                                    )
+            return
+
+        # Read report and generate summary
+        df = pd.read_excel(filepath)
+        total_unhealthy = len(df)
+
+        if total_unhealthy == 0:
+            send_message_with_retry(webex_api,
+                                    room_id=room_id,
+                                    markdown=f"Hello {activity['actor']['displayName']}! 🎉 **Great news!** No unhealthy Tanium Cloud hosts found (servers seen within 1 day, workstations within 3 days)."
+                                    )
+            return
+
+        # Count statistics
+        snow_found = len(df[df['SNOW Status'] == 'Found'])
+        operational_or_pipeline = len(df[df['SNOW Lifecycle'].str.lower().isin(['operational', 'pipeline'])])
+        cs_online = len(df[df['CS Online State'] == 'online'])
+        rtr_candidates = len(df[df['RTR Candidate'] == 'Yes'])
+
+        message = f"Hello {activity['actor']['displayName']}! Here's the **Tanium Cloud Unhealthy Hosts Report** 🤒\n\n"
+        message += f"**Summary:**\n"
+        message += f"- Total unhealthy hosts (servers: >1 day, workstations: >3 days): **{total_unhealthy:,}**\n"
+        message += f"- Found in ServiceNow CMDB: {snow_found:,}\n"
+        message += f"- Lifecycle = Operational/Pipeline: {operational_or_pipeline:,}\n"
+        message += f"- Online in CrowdStrike: {cs_online:,}\n"
+        message += f"- **RTR Remediation Candidates: {rtr_candidates:,}** ✅\n\n"
+        message += "_RTR candidates are hosts that are operational/pipeline in SNOW and online in CrowdStrike - ready for automated Tanium agent reinstallation._"
+
+        send_message_with_retry(webex_api, room_id=room_id, markdown=message, files=[str(filepath)])
 
 
 class GetBotHealth(Command):
@@ -846,39 +397,7 @@ class GetBotHealth(Command):
         room_id = attachment_actions.roomId
         current_time = datetime.now(EASTERN_TZ)
 
-        # Simple status using the resilience framework
-        health_status = "🟢 Healthy"
-        health_detail = "Running with resilience framework"
-
-        # Format current time with timezone
-        tz_name = "EST" if current_time.dst().total_seconds() == 0 else "EDT"
-
-        # Create status card with enhanced details
-        status_card = AdaptiveCard(
-            body=[
-                TextBlock(
-                    text="🤖 TARS Bot Status",
-                    color=options.Colors.GOOD,
-                    size=options.FontSize.LARGE,
-                    weight=options.FontWeight.BOLDER,
-                    horizontalAlignment=HorizontalAlignment.CENTER
-                ),
-                ColumnSet(
-                    columns=[
-                        Column(
-                            width="stretch",
-                            items=[
-                                TextBlock(text="📊 **Status Information**", weight=options.FontWeight.BOLDER),
-                                TextBlock(text=f"Status: {health_status}"),
-                                TextBlock(text=f"Details: {health_detail}"),
-                                TextBlock(text=f"Framework: BotResilient (auto-reconnect, health monitoring)"),
-                                TextBlock(text=f"Current Time: {current_time.strftime(f'%Y-%m-%d %H:%M:%S {tz_name}')}")
-                            ]
-                        )
-                    ]
-                )
-            ]
-        )
+        status_card = create_bot_health_card("TARS", current_time)
 
         send_card_with_retry(webex_api,
                              room_id=room_id,
@@ -904,52 +423,47 @@ class Hi(Command):
 
 def tars_bot_factory():
     """Create TARS bot instance"""
-    # Clean up stale device registrations before creating bot
     cleanup_devices_on_startup(
         CONFIG.webex_bot_access_token_tars,
         bot_name="TARS"
     )
 
-    # Build approved users list: employees + all bots for peer ping communication
     approved_bot_emails = [
         CONFIG.webex_bot_email_toodles,
         CONFIG.webex_bot_email_msoar,
         CONFIG.webex_bot_email_barnacles,
         CONFIG.webex_bot_email_money_ball,
         CONFIG.webex_bot_email_pokedex,
-        CONFIG.webex_bot_email_pinger,  # Pinger bot for keepalive
-        CONFIG.webex_bot_email_jarvis,  # Jarvis bot
+        CONFIG.webex_bot_email_pinger,
+        CONFIG.webex_bot_email_jarvis,
+        CONFIG.webex_bot_email_case,  # CASE bot (On-Prem counterpart)
     ]
 
     return WebexBot(
         CONFIG.webex_bot_access_token_tars,
         approved_domains=[CONFIG.my_web_domain],
-        approved_users=approved_bot_emails,  # Allow other bots for peer ping
-        # approved_rooms disabled - bot lacks spark:memberships_read scope for validation
-        # Security: Only add this bot to authorized rooms to control access
-        bot_name="TARS - The Tanium Assistant",
+        approved_users=approved_bot_emails,
+        bot_name="TARS - The Tanium Cloud Assistant",
         threads=True,
         log_level="ERROR",
-        bot_help_subtitle="Your friendly Tanium tagging bot!",
-        allow_bot_to_bot=True  # Enable peer ping health checks from other bots
+        bot_help_subtitle="Your friendly Tanium Cloud tagging bot!",
+        allow_bot_to_bot=True
     )
 
 
 def tars_initialization(bot):
     """Initialize TARS commands"""
     if bot:
-        # Add Tanium commands to the bot
         bot.add_command(GetTaniumHostsWithoutRingTag())
-        bot.add_command(RingTagTaniumHosts())
-        bot.add_command(DontRingTagTaniumHosts())
+        bot.add_command(RingTagTaniumHosts())  # Hidden - triggered via adaptive card
+        bot.add_command(DontRingTagTaniumHosts())  # Hidden - triggered via adaptive card
+        bot.add_command(StopAutomatedTaniumRingTagging())  # Hidden - triggered via adaptive card
         bot.add_command(GetTaniumUnhealthyHosts())
-        bot.add_command(GetBotHealth())
-        bot.add_command(Hi())
         return True
     return False
 
 
-def _shutdown_handler(signum=None, frame=None):
+def _shutdown_handler(_signum=None, _frame=None):
     """Log shutdown marker before exit"""
     logger.warning("=" * 100)
     logger.warning(f"🛑 TARS BOT STOPPED - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
@@ -957,21 +471,16 @@ def _shutdown_handler(signum=None, frame=None):
 
 
 def main():
-    """TARS main - simplified to use basic WebexBot (keepalive handled by peer_ping_keepalive.py)"""
+    """TARS main - Tanium Cloud tagging bot"""
     logger.info("Starting TARS with basic WebexBot")
 
-    # Register shutdown handlers for graceful logging
     atexit.register(_shutdown_handler)
     signal.signal(signal.SIGTERM, _shutdown_handler)
     signal.signal(signal.SIGINT, _shutdown_handler)
 
-    # Create bot instance
     bot = tars_bot_factory()
-
-    # Initialize commands
     tars_initialization(bot)
 
-    # Run bot (simple and direct)
     logger.info("🚀 TARS is up and running...")
     print("🚀 TARS is up and running...", flush=True)
     bot.run()

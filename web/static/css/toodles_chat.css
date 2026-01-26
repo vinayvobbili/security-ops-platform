@@ -238,3 +238,36 @@ body {
 /* Responsive tweaks */
 @media (max-width: 900px) { .chat-container { max-width: 95%; height: 85vh; } }
 @media (max-width: 600px) { .chat-header { padding: 16px; } .chat-header h1 { font-size: 20px; } .bot-avatar { width: 44px; height: 44px; font-size: 22px; } }
+
+/* ===== Teal-Blue Scrollbar ===== */
+::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+::-webkit-scrollbar-track {
+    background: rgba(1, 169, 130, 0.1);
+    border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: linear-gradient(135deg, #01a982, #005eb8);
+    border-radius: 10px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(135deg, #005eb8, #01a982);
+    border: 2px solid transparent;
+    background-clip: padding-box;
+}
+
+::-webkit-scrollbar-corner {
+    background: transparent;
+}
+
+* {
+    scrollbar-width: thin;
+    scrollbar-color: #01a982 rgba(1, 169, 130, 0.1);
+}

@@ -1,0 +1,28 @@
+[Unit]
+Description=IR CASE Bot (Tanium On-Prem)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=vinay
+Group=vinay
+WorkingDirectory=/home/vinay/pub/IR
+Environment="PYTHONPATH=/home/vinay/pub/IR"
+ExecStartPre=-/usr/bin/pkill -f "webex_bots/case.py"
+ExecStart=/home/vinay/pub/IR/.venv/bin/python webex_bots/case.py
+
+# Restart on failure
+Restart=on-failure
+RestartSec=30
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ir-case
+
+# Resource limits
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

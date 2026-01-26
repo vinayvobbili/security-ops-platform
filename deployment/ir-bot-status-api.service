@@ -1,0 +1,27 @@
+[Unit]
+Description=IR Bot Status API
+After=network.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=10
+User=vinay
+WorkingDirectory=/home/vinay/pub/IR
+Environment="PATH=/home/vinay/pub/IR/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+EnvironmentFile=/home/vinay/pub/IR/.env
+ExecStart=/home/vinay/pub/IR/.venv/bin/python /home/vinay/pub/IR/deployment/bot_status_api.py
+StandardOutput=append:/home/vinay/pub/IR/logs/bot_status_api.log
+StandardError=append:/home/vinay/pub/IR/logs/bot_status_api.log
+
+# Resource limits
+MemoryMax=512M
+CPUQuota=100%
+
+# Restart policy
+RestartSec=10
+StartLimitBurst=5
+
+[Install]
+WantedBy=multi-user.target

@@ -112,7 +112,7 @@ def truncate_text(text, n=50):
 
 
 def main():
-    room_id = CONFIG.webex_room_id_test_space
+    room_id = CONFIG.webex_room_id_vinay_test_space
     send_report(room_id)
 
 

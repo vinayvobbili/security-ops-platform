@@ -1,33 +1,85 @@
 #!/bin/bash
 
-cd /opt/incident-response || exit 1
+cd /home/vinay/pub/IR || exit 1
 
-# Kill existing bot status API if running
-echo "Stopping existing bot status API..."
-pkill -f "deployment/bot_status_api.py" 2>/dev/null
-sleep 1
+SERVICE_NAME="ir-bot-status-api.service"
+APP_NAME="Bot Status API"
+LOG_FILE="/home/vinay/pub/IR/logs/bot_status_api.log"
+
+echo "Managing $APP_NAME via systemd service: $SERVICE_NAME"
+echo ""
+
+# Stop the systemd service if it's running or in a stuck state
+SERVICE_STATE=$(systemctl is-active "$SERVICE_NAME" 2>/dev/null || echo "inactive")
+
+if [[ "$SERVICE_STATE" != "inactive" ]]; then
+    echo "Stopping $SERVICE_NAME (current state: $SERVICE_STATE)..."
+
+    # Reset failed state first if needed
+    if systemctl is-failed --quiet "$SERVICE_NAME" 2>/dev/null; then
+        echo "  Resetting failed state..."
+        sudo systemctl reset-failed "$SERVICE_NAME"
+    fi
+
+    sudo systemctl stop "$SERVICE_NAME"
+
+    # Wait up to 30 seconds for graceful stop
+    for i in {1..30}; do
+        if ! systemctl is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
+            break
+        fi
+        if [ $i -eq 15 ]; then
+            echo "  ⏳ Service taking longer than expected to stop..."
+        fi
+        sleep 1
+    done
+
+    # If still running/stuck, force kill
+    CURRENT_STATE=$(systemctl show -p ActiveState --value "$SERVICE_NAME" 2>/dev/null)
+    if systemctl is-active --quiet "$SERVICE_NAME" 2>/dev/null || \
+       [[ "$CURRENT_STATE" == "deactivating" ]] || \
+       [[ "$CURRENT_STATE" == "activating" ]]; then
+        echo "  ⚠️  Graceful stop failed, force killing..."
+        sudo systemctl kill --signal=SIGKILL "$SERVICE_NAME"
+        sleep 2
+        sudo systemctl reset-failed "$SERVICE_NAME" 2>/dev/null || true
+    fi
+
+    echo "✅ $SERVICE_NAME stopped"
+else
+    echo "ℹ️  $SERVICE_NAME is not currently running"
+    # Still reset failed state just in case
+    sudo systemctl reset-failed "$SERVICE_NAME" 2>/dev/null || true
+fi
 
 # Ensure logs directory exists
 mkdir -p logs
 
-# Load environment variables
-source .env
+# Start the systemd service
+echo ""
+echo "Starting $SERVICE_NAME..."
+sudo systemctl start "$SERVICE_NAME"
 
-# Start new bot status API instance in background
-nohup .venv/bin/python deployment/bot_status_api.py > logs/bot_status_api.log 2>&1 &
-
-echo "Starting Bot Status API..."
+# Wait for service to start
 sleep 2
 
-# Check if the process is actually running
-if pgrep -f "deployment/bot_status_api.py" > /dev/null; then
-    PID=$(pgrep -f 'deployment/bot_status_api.py')
-    echo "✅ Bot Status API is running (PID: $PID)"
-    echo "   Listening on: http://0.0.0.0:8040"
-    echo "   Health check: curl http://localhost:8040/api/health"
+# Show initial log output
+echo "Waiting for $APP_NAME to initialize..."
+timeout 10 tail -f "$LOG_FILE" 2>/dev/null | head -20 || true
+echo ""
+
+# Check if the service is running
+if systemctl is-active --quiet "$SERVICE_NAME"; then
+    PID=$(systemctl show -p MainPID --value "$SERVICE_NAME")
+    echo "✅ $APP_NAME is running via systemd (PID: $PID)"
     echo ""
-    echo "To view logs: tail -f /opt/incident-response/logs/bot_status_api.log"
+    echo "To view logs: tail -f $LOG_FILE"
+    echo "   or: journalctl -u $SERVICE_NAME -f"
+    echo ""
+    echo "To manage: sudo systemctl {start|stop|restart|status} $SERVICE_NAME"
 else
-    echo "❌ Warning: Bot Status API process not found"
-    echo "Check logs: tail -20 /opt/incident-response/logs/bot_status_api.log"
+    echo "❌ Warning: $SERVICE_NAME failed to start"
+    echo "Check status: systemctl status $SERVICE_NAME"
+    echo "Check logs: journalctl -u $SERVICE_NAME -n 50"
+    exit 1
 fi

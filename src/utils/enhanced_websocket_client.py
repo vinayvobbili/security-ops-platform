@@ -270,7 +270,11 @@ def patch_websocket_client():
                         try:
                             await _websocket_recv()
                         except websockets.ConnectionClosed as conn_closed:
-                            logger.warning(f"WebSocket connection closed: {conn_closed.rcvd.code} {conn_closed.rcvd.reason}")
+                            # Handle both normal and abnormal closures
+                            if conn_closed.rcvd:
+                                logger.warning(f"WebSocket connection closed: {conn_closed.rcvd.code} {conn_closed.rcvd.reason}")
+                            else:
+                                logger.warning("WebSocket connection closed abnormally (no close frame received)")
                             raise  # Let backoff handle reconnection
                         except (RuntimeError, OSError, ConnectionError) as fatal_error:
                             # Check if this is a shutdown-related error (event loop closed)
@@ -346,6 +350,34 @@ def patch_websocket_client():
 
                     # Refresh device info on connection errors
                     logger.debug("Refreshing device info due to connection error...")
+                    if self._get_device_info(check_existing=False) is None:
+                        logger.error('could not create device info')
+                        raise Exception("No WDM device info")
+
+                    # Update the URL in case it changed
+                    ws_url = self.device_info.get('webSocketUrl')
+
+                    # Progressive delay based on failure count
+                    delay = min(5 * consecutive_failures, 60)
+                    logger.debug(f"Waiting {delay} seconds before attempting to reconnect...")
+                    # Get or create event loop if needed
+                    try:
+                        loop = asyncio.get_event_loop()
+                    except RuntimeError:
+                        loop = asyncio.new_event_loop()
+                        asyncio.set_event_loop(loop)
+                    loop.run_until_complete(asyncio.sleep(delay))
+
+                except websockets.ConnectionClosed as ws_closed:
+                    consecutive_failures += 1
+                    logger.warning(f"WebSocket disconnected (#{consecutive_failures}), attempting to reconnect...")
+
+                    if consecutive_failures >= max_consecutive_failures:
+                        logger.error(f"Reached maximum consecutive failures ({max_consecutive_failures}). Giving up.")
+                        raise Exception(f"Unable to maintain WebSocket connection after {max_consecutive_failures} attempts.")
+
+                    # Refresh device info to get new WebSocket URL
+                    logger.debug("Refreshing device info after WebSocket closure...")
                     if self._get_device_info(check_existing=False) is None:
                         logger.error('could not create device info')
                         raise Exception("No WDM device info")

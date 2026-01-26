@@ -1,0 +1,1000 @@
+"""
+Core TipperAnalyzer class for tipper novelty analysis.
+
+This module contains the main analysis logic for determining tipper novelty
+against historical data.
+"""
+
+import json
+import logging
+import re
+import time
+from typing import List, Dict, Optional, Any
+
+import services.azdo as azdo
+from src.components.tipper_indexer import TipperIndexer
+from my_config import get_config
+
+from .models import NoveltyAnalysis, IOCHuntResult
+from .formatters import format_analysis_for_display, format_analysis_for_azdo, format_hunt_results_for_azdo
+from .hunting import hunt_iocs
+
+logger = logging.getLogger(__name__)
+
+
+class TipperAnalyzer:
+    """Analyzes tippers for novelty against historical data."""
+
+    def __init__(self):
+        self.indexer = TipperIndexer()
+        self._llm = None
+
+    @property
+    def llm(self):
+        """Lazy load LLM from state manager with higher temperature for analysis."""
+        if self._llm is None:
+            from my_bot.core.state_manager import get_state_manager
+            state_manager = get_state_manager()
+            if state_manager and state_manager.is_initialized:
+                # Use higher temperature (0.4) for more natural analysis prose
+                self._llm = state_manager.get_llm_with_temperature(0.4)
+                if not self._llm:
+                    self._llm = state_manager.llm  # Fallback to default
+        return self._llm
+
+    # -------------------------------------------------------------------------
+    # Entity History from Similar Tippers
+    # -------------------------------------------------------------------------
+    def build_entity_history(self, similar_tippers: List[Dict], exclude_tipper_id: str = None) -> tuple:
+        """
+        Build IOC and malware history in a single pass (one AZDO fetch per tipper).
+
+        Args:
+            similar_tippers: List of similar tipper results from find_similar_tippers
+            exclude_tipper_id: Tipper ID to exclude (current tipper being analyzed)
+
+        Returns:
+            Tuple of (ioc_history, malware_history, history_dates) where:
+            - ioc_history: dict mapping entity value (lowercase) -> list of tipper IDs
+            - malware_history: dict mapping malware name -> list of tipper IDs
+            - history_dates: dict mapping tipper_id -> created_date string
+        """
+        from src.utils.entity_extractor import extract_entities
+
+        ioc_to_tippers: Dict[str, List[str]] = {}
+        malware_to_tippers: Dict[str, List[str]] = {}
+        tipper_dates: Dict[str, str] = {}
+
+        for similar in similar_tippers:
+            tipper_id = str(similar['metadata'].get('id', ''))
+            if not tipper_id:
+                continue
+
+            # Skip the current tipper being analyzed
+            if exclude_tipper_id and tipper_id == str(exclude_tipper_id):
+                continue
+
+            # Fetch full tipper from AZDO (single fetch for both IOCs and malware)
+            tipper = self.fetch_tipper_by_id(tipper_id)
+            if not tipper:
+                logger.debug(f"Could not fetch tipper {tipper_id} for entity history")
+                continue
+
+            # Collect created date for recency display
+            created_date = tipper.get('fields', {}).get('System.CreatedDate', '')
+            if created_date:
+                tipper_dates[tipper_id] = created_date
+
+            description = tipper.get('fields', {}).get('System.Description', '')
+            if not description:
+                continue
+
+            # Extract all entities at once
+            entities = extract_entities(description, include_apt_database=False)
+
+            # Collect IOCs
+            all_iocs = set()
+            all_iocs.update(ip.lower() for ip in entities.ips)
+            all_iocs.update(domain.lower() for domain in entities.domains)
+            all_iocs.update(h.lower() for h in entities.hashes.get('md5', []))
+            all_iocs.update(h.lower() for h in entities.hashes.get('sha1', []))
+            all_iocs.update(h.lower() for h in entities.hashes.get('sha256', []))
+            all_iocs.update(cve.upper() for cve in entities.cves)
+
+            for ioc in all_iocs:
+                if ioc not in ioc_to_tippers:
+                    ioc_to_tippers[ioc] = []
+                if tipper_id not in ioc_to_tippers[ioc]:
+                    ioc_to_tippers[ioc].append(tipper_id)
+
+            # Collect malware families
+            for malware in entities.malware_families:
+                malware_lower = malware.lower()
+                if malware_lower not in malware_to_tippers:
+                    malware_to_tippers[malware_lower] = []
+                if tipper_id not in malware_to_tippers[malware_lower]:
+                    malware_to_tippers[malware_lower].append(tipper_id)
+
+        if ioc_to_tippers or malware_to_tippers:
+            logger.info(f"Built entity history: {len(ioc_to_tippers)} IOCs, {len(malware_to_tippers)} malware families")
+
+        return ioc_to_tippers, malware_to_tippers, tipper_dates
+
+    # -------------------------------------------------------------------------
+    # Recorded Future Enrichment
+    # -------------------------------------------------------------------------
+    def enrich_entities_with_rf(self, entities) -> Dict[str, Any]:
+        """
+        Enrich extracted entities with Recorded Future intelligence.
+
+        Gracefully handles API failures - returns empty dict if RF unavailable.
+        Uses parallel API calls for improved performance.
+
+        Args:
+            entities: ExtractedEntities object from entity_extractor
+
+        Returns:
+            Dictionary with RF enrichment data for each entity type
+        """
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        from services.recorded_future import RecordedFutureClient
+
+        try:
+            client = RecordedFutureClient()
+            if not client.is_configured():
+                logger.debug("Recorded Future API not configured, skipping enrichment")
+                return {}
+        except Exception as e:
+            logger.warning(f"Could not initialize RF client: {e}")
+            return {}
+
+        enrichment = {'actors': [], 'iocs': [], 'extracted_actors': []}
+
+        # Store local APT database info for actors (aliases, region)
+        if hasattr(entities, 'threat_actors_enriched'):
+            for actor in entities.threat_actors_enriched:
+                enrichment['extracted_actors'].append({
+                    'name': actor.name,
+                    'common_name': actor.common_name,
+                    'region': actor.region,
+                    'all_names': actor.all_names,
+                    'aliases_display': actor.get_aliases_display(max_aliases=5),
+                })
+
+        # Define enrichment tasks for parallel execution
+        def enrich_actors():
+            """Enrich threat actors with RF."""
+            actors = []
+            if not entities.threat_actors:
+                return actors
+            logger.info(f"Enriching {len(entities.threat_actors)} threat actor(s) with RF...")
+            for actor_name in entities.threat_actors:
+                try:
+                    result = client.lookup_actor_by_name(actor_name)
+                    if 'error' not in result:
+                        if result.get('match') == 'single':
+                            actor = result.get('actor', {})
+                            summary = client.extract_actor_summary(actor)
+                            actors.append(summary)
+                        elif result.get('match') == 'multiple':
+                            actor_list = result.get('actors', [])
+                            if actor_list:
+                                summary = client.extract_actor_summary(actor_list[0])
+                                actors.append(summary)
+                except Exception as e:
+                    logger.warning(f"RF actor lookup failed for {actor_name}: {e}")
+            return actors
+
+        def enrich_ips():
+            """Enrich IPs with RF."""
+            iocs = []
+            if not entities.ips:
+                return iocs
+            try:
+                logger.info(f"Enriching {len(entities.ips)} IP(s) with RF...")
+                result = client.enrich_ips(entities.ips)
+                if 'error' not in result:
+                    ioc_results = client.extract_enrichment_results(result)
+                    for ioc in ioc_results:
+                        ioc['ioc_type'] = 'IP'
+                        iocs.append(ioc)
+            except Exception as e:
+                logger.warning(f"RF IP enrichment failed: {e}")
+            return iocs
+
+        def enrich_domains():
+            """Enrich domains with RF."""
+            iocs = []
+            if not entities.domains:
+                return iocs
+            try:
+                logger.info(f"Enriching {len(entities.domains)} domain(s) with RF...")
+                result = client.enrich_domains(entities.domains)
+                if 'error' not in result:
+                    ioc_results = client.extract_enrichment_results(result)
+                    for ioc in ioc_results:
+                        ioc['ioc_type'] = 'Domain'
+                        iocs.append(ioc)
+            except Exception as e:
+                logger.warning(f"RF domain enrichment failed: {e}")
+            return iocs
+
+        def enrich_hashes():
+            """Enrich hashes with RF."""
+            iocs = []
+            all_hashes = (
+                entities.hashes.get('md5', []) +
+                entities.hashes.get('sha1', []) +
+                entities.hashes.get('sha256', [])
+            )
+            if not all_hashes:
+                return iocs
+            try:
+                logger.info(f"Enriching {len(all_hashes)} hash(es) with RF...")
+                result = client.enrich_hashes(all_hashes)
+                if 'error' not in result:
+                    ioc_results = client.extract_enrichment_results(result)
+                    for ioc in ioc_results:
+                        ioc['ioc_type'] = 'Hash'
+                        iocs.append(ioc)
+            except Exception as e:
+                logger.warning(f"RF hash enrichment failed: {e}")
+            return iocs
+
+        def enrich_cves():
+            """Enrich CVEs with RF."""
+            iocs = []
+            if not entities.cves:
+                return iocs
+            try:
+                logger.info(f"Enriching {len(entities.cves)} CVE(s) with RF...")
+                result = client.enrich(vulnerabilities=entities.cves)
+                if 'error' not in result:
+                    ioc_results = client.extract_enrichment_results(result)
+                    for ioc in ioc_results:
+                        ioc['ioc_type'] = 'CVE'
+                        iocs.append(ioc)
+            except Exception as e:
+                logger.warning(f"RF CVE enrichment failed: {e}")
+            return iocs
+
+        # Run all enrichment tasks in parallel
+        logger.info("Running RF enrichment in parallel...")
+        with ThreadPoolExecutor(max_workers=5) as executor:
+            future_to_task = {
+                executor.submit(enrich_actors): 'actors',
+                executor.submit(enrich_ips): 'ips',
+                executor.submit(enrich_domains): 'domains',
+                executor.submit(enrich_hashes): 'hashes',
+                executor.submit(enrich_cves): 'cves',
+            }
+
+            for future in as_completed(future_to_task):
+                task_name = future_to_task[future]
+                try:
+                    result = future.result()
+                    if task_name == 'actors':
+                        enrichment['actors'].extend(result)
+                    else:
+                        enrichment['iocs'].extend(result)
+                except Exception as e:
+                    logger.warning(f"RF {task_name} enrichment task failed: {e}")
+
+        # Filter to only high-risk IOCs for display
+        enrichment['high_risk_iocs'] = [
+            ioc for ioc in enrichment['iocs']
+            if ioc.get('risk_score', 0) >= 25  # Medium or higher
+        ]
+
+        actor_count = len(enrichment['actors'])
+        ioc_count = len(enrichment['high_risk_iocs'])
+        if actor_count or ioc_count:
+            logger.info(f"RF enrichment complete: {actor_count} actors, {ioc_count} notable IOCs")
+
+        return enrichment
+
+    # -------------------------------------------------------------------------
+    # Fetch tipper by ID from AZDO
+    # -------------------------------------------------------------------------
+    def fetch_tipper_by_id(self, tipper_id: str, require_area_path: bool = True) -> Optional[Dict]:
+        """Fetch a single tipper from AZDO by ID.
+
+        Args:
+            tipper_id: The work item ID to fetch
+            require_area_path: If True, only returns work items under the Threat Hunting
+                              area path. This prevents typos from fetching unrelated work items.
+        """
+        from data.data_maps import azdo_area_paths
+
+        area_path = azdo_area_paths.get('threat_hunting', 'Detection-Engineering\\DE Rules\\Threat Hunting')
+
+        if require_area_path:
+            query = f"""
+                SELECT [System.Id], [System.Title], [System.Description],
+                       [System.CreatedDate], [System.Tags], [System.State]
+                FROM WorkItems
+                WHERE [System.Id] = {tipper_id}
+                  AND [System.AreaPath] UNDER '{area_path}'
+            """
+        else:
+            query = f"""
+                SELECT [System.Id], [System.Title], [System.Description],
+                       [System.CreatedDate], [System.Tags], [System.State]
+                FROM WorkItems
+                WHERE [System.Id] = {tipper_id}
+            """
+
+        logger.debug(f"Fetching tipper {tipper_id} from AZDO...")
+        results = azdo.fetch_work_items(query)
+
+        if results:
+            logger.debug(f"Found tipper {tipper_id}")
+            return results[0]
+
+        if require_area_path:
+            logger.warning(f"Tipper {tipper_id} not found in Threat Hunting area path")
+        else:
+            logger.warning(f"Tipper {tipper_id} not found in AZDO")
+        return None
+
+    # -------------------------------------------------------------------------
+    # Build the analysis prompt
+    # -------------------------------------------------------------------------
+    def _build_analysis_prompt(
+        self,
+        new_tipper: Dict,
+        similar_tippers: List[Dict],
+        rf_enrichment: Dict[str, Any] = None
+    ) -> str:
+        """Build a structured prompt for the LLM to analyze novelty."""
+        fields = new_tipper.get('fields', {})
+
+        # Clean description HTML
+        description = fields.get('System.Description', 'No description')
+        if description:
+            description = re.sub(r'<[^>]+>', ' ', description)
+            description = re.sub(r'\s+', ' ', description).strip()
+
+        prompt = f"""You are a threat intelligence analyst. Analyze this NEW tipper against historical similar tippers to determine how novel it is.
+
+## NEW TIPPER (the one to analyze)
+**ID**: {new_tipper.get('id', 'Unknown')}
+**Title**: {fields.get('System.Title', 'No title')}
+**Tags**: {fields.get('System.Tags', 'None')}
+**Description**:
+{description[:3000]}
+
+---
+
+## SIMILAR HISTORICAL TIPPERS (from our database)
+"""
+
+        if similar_tippers:
+            for i, similar in enumerate(similar_tippers, 1):
+                meta = similar['metadata']
+                prompt += f"""
+### Similar Tipper #{i} (Similarity: {similar['similarity_score']:.0%})
+- **ID**: {meta.get('id', 'Unknown')}
+- **Title**: {meta.get('title', 'No title')}
+- **Tags**: {meta.get('tags', 'None')}
+- **Created**: {meta.get('created_date', 'Unknown')[:10]}
+- **Preview**: {similar.get('matched_content', '')[:500]}
+"""
+        else:
+            prompt += "\n**No similar tippers found in historical database.**\n"
+
+        # Add threat intelligence section (local APT DB + Recorded Future)
+        has_extracted = rf_enrichment and rf_enrichment.get('extracted_actors')
+        has_rf_actors = rf_enrichment and rf_enrichment.get('actors')
+        has_rf_iocs = rf_enrichment and rf_enrichment.get('high_risk_iocs')
+
+        if has_extracted or has_rf_actors or has_rf_iocs:
+            prompt += """
+---
+
+## THREAT INTELLIGENCE
+"""
+            # Add extracted threat actors with local alias info
+            if has_extracted:
+                prompt += "\n### Threat Actors Identified\n"
+                for actor in rf_enrichment['extracted_actors']:
+                    name = actor.get('name', 'Unknown')
+                    common_name = actor.get('common_name', '')
+                    region = actor.get('region', '')
+                    aliases = actor.get('aliases_display', '')
+
+                    if common_name and common_name != name:
+                        prompt += f"- **{name}** (Common Name: {common_name})\n"
+                    else:
+                        prompt += f"- **{name}**\n"
+
+                    if region:
+                        prompt += f"  - Region: {region}\n"
+                    if aliases:
+                        prompt += f"  - Also Known As: {aliases}\n"
+
+            # Add Recorded Future actor intel (risk scores, targets)
+            if has_rf_actors:
+                prompt += "\n### Recorded Future Actor Intelligence\n"
+                for actor in rf_enrichment['actors']:
+                    name = actor.get('name', 'Unknown')
+                    risk = actor.get('risk_score', 'N/A')
+                    aliases = actor.get('common_names', [])[:3]
+                    categories = actor.get('categories', [])
+                    targets = actor.get('target_industries', [])[:3]
+
+                    prompt += f"- **{name}** (RF Risk: {risk}/99)\n"
+                    if aliases:
+                        prompt += f"  - AKA: {', '.join(aliases)}\n"
+                    if categories:
+                        prompt += f"  - Category: {', '.join(categories)}\n"
+                    if targets:
+                        prompt += f"  - Targets: {', '.join(targets)}\n"
+
+            # Add IOC intel (high risk only)
+            if rf_enrichment.get('high_risk_iocs'):
+                prompt += "\n### Notable IOCs Found\n"
+                for ioc in rf_enrichment['high_risk_iocs'][:10]:
+                    ioc_type = ioc.get('ioc_type', 'Unknown')
+                    value = ioc.get('value', 'Unknown')
+                    risk = ioc.get('risk_score', 0)
+                    level = ioc.get('risk_level', 'Unknown')
+                    rules = ioc.get('rules', [])[:2]
+
+                    prompt += f"- **{value}** ({ioc_type}) - Risk: {risk}/99 ({level})\n"
+                    if rules:
+                        prompt += f"  - Evidence: {', '.join(rules)}\n"
+
+        prompt += """
+---
+
+## YOUR TASK
+
+Analyze the NEW tipper and provide:
+
+1. **NOVELTY SCORE** (1-10):
+   - 1-3: "Seen Before" - Very similar to past tippers, same threat actor, same TTPs
+   - 4-5: "Familiar" - Similar patterns but some variations
+   - 6-7: "Mostly New" - New elements but some familiar aspects
+   - 8-10: "Net New" - New threat actor, new TTPs, new tools, or new campaign
+
+2. **WHAT'S NEW**: List specific elements that are novel (new TTPs, new actor, new technique, new malware). Do NOT include IOCs here - they are tracked separately.
+
+3. **WHAT'S FAMILIAR**: List elements we've seen before (reference specific ticket IDs)
+
+4. **RECOMMENDATION**: One of:
+   - "PRIORITIZE - Novel threat requiring deep investigation"
+   - "STANDARD - Review but leverage past analysis from tickets [X, Y, Z]"
+   - "EXPEDITE - Familiar pattern, apply known playbook from ticket [X]"
+
+Respond in this EXACT JSON format:
+```json
+{
+    "novelty_score": <1-10>,
+    "novelty_label": "<Seen Before|Familiar|Mostly New|Net New>",
+    "summary": "<2-3 sentence executive summary>",
+    "what_is_new": ["<item1>", "<item2>"],
+    "what_is_familiar": ["<item1 (see ticket #X)>", "<item2 (see ticket #Y)>"],
+    "recommendation": "<PRIORITIZE|STANDARD|EXPEDITE> - <reason>",
+    "related_ticket_ids": ["<id1>", "<id2>"]
+}
+```
+"""
+        return prompt
+
+    # -------------------------------------------------------------------------
+    # Parse LLM response
+    # -------------------------------------------------------------------------
+    def _parse_llm_response(self, response: str, tipper: Dict) -> NoveltyAnalysis:
+        """Parse LLM response into structured NoveltyAnalysis."""
+        fields = tipper.get('fields', {})
+        tipper_id = str(tipper.get('id', 'Unknown'))
+        tipper_title = fields.get('System.Title', 'No title')
+        # Parse and format created date: MM/DD/YYYY HH:MM AM/PM ET
+        raw_date = fields.get('System.CreatedDate', '')
+        if raw_date:
+            try:
+                from datetime import datetime
+                import pytz
+                # Parse ISO format (AZDO returns UTC)
+                dt = datetime.fromisoformat(raw_date.replace('Z', '+00:00'))
+                # Convert to Eastern
+                eastern = pytz.timezone('US/Eastern')
+                dt_eastern = dt.astimezone(eastern)
+                created_date = dt_eastern.strftime('%m/%d/%Y %I:%M %p ET')
+            except Exception:
+                created_date = raw_date[:16].replace('T', ' ')
+        else:
+            created_date = ''
+
+        try:
+            # Find JSON block in response
+            json_match = re.search(r'```json\s*(.*?)\s*```', response, re.DOTALL)
+            if json_match:
+                json_str = json_match.group(1)
+            else:
+                # Try to find raw JSON object
+                json_match = re.search(r'\{[^{}]*"novelty_score"[^}]*\}', response, re.DOTALL)
+                if json_match:
+                    json_str = json_match.group(0)
+                else:
+                    raise ValueError("No JSON found in response")
+
+            data = json.loads(json_str)
+
+            # Build related tickets list
+            related_tickets = []
+            for tid in data.get('related_ticket_ids', []):
+                related_tickets.append({'id': str(tid)})
+
+            return NoveltyAnalysis(
+                tipper_id=tipper_id,
+                tipper_title=tipper_title,
+                created_date=created_date,
+                novelty_score=data.get('novelty_score', 5),
+                novelty_label=data.get('novelty_label', 'Unknown'),
+                summary=data.get('summary', 'Unable to generate summary'),
+                what_is_new=data.get('what_is_new', []),
+                what_is_familiar=data.get('what_is_familiar', []),
+                related_tickets=related_tickets,
+                recommendation=data.get('recommendation', 'STANDARD - Manual review required'),
+                raw_llm_response=response
+            )
+
+        except Exception as e:
+            logger.error(f"Failed to parse LLM response: {e}")
+            return NoveltyAnalysis(
+                tipper_id=tipper_id,
+                tipper_title=tipper_title,
+                created_date=created_date,
+                novelty_score=5,
+                novelty_label="Unknown",
+                summary=f"Analysis parsing failed: {str(e)}",
+                what_is_new=[],
+                what_is_familiar=[],
+                related_tickets=[],
+                recommendation="STANDARD - Manual review required (analysis failed)",
+                raw_llm_response=response
+            )
+
+    # -------------------------------------------------------------------------
+    # Main analysis method
+    # -------------------------------------------------------------------------
+    def analyze_tipper(
+        self,
+        tipper_id: str = None,
+        tipper_text: str = None,
+        similar_count: int = 10
+    ) -> NoveltyAnalysis:
+        """
+        Analyze a tipper for novelty.
+
+        Args:
+            tipper_id: AZDO work item ID (fetches from AZDO)
+            tipper_text: Raw text to analyze (alternative to ID)
+            similar_count: Number of similar tippers to retrieve
+
+        Returns:
+            NoveltyAnalysis with scores, findings, and recommendations
+        """
+        # Get the tipper data
+        if tipper_id:
+            logger.info(f"Analyzing tipper #{tipper_id}...")
+            tipper = self.fetch_tipper_by_id(tipper_id)
+            if not tipper:
+                raise ValueError(f"Tipper {tipper_id} not found in AZDO")
+            query_text = self.indexer.extract_tipper_text(tipper)
+        elif tipper_text:
+            logger.info("Analyzing raw threat text...")
+            tipper = {
+                'id': 'text-input',
+                'fields': {
+                    'System.Title': tipper_text[:100],
+                    'System.Description': tipper_text,
+                    'System.Tags': ''
+                }
+            }
+            query_text = tipper_text
+        else:
+            raise ValueError("Must provide either tipper_id or tipper_text")
+
+        # Find similar tippers
+        logger.info("Searching for similar historical tippers...")
+        try:
+            similar_tippers = self.indexer.find_similar_tippers(query_text, k=similar_count)
+            logger.info(f"Found {len(similar_tippers)} similar tippers")
+        except RuntimeError as e:
+            logger.warning(f"Could not search index: {e}")
+            similar_tippers = []
+
+        # Build IOC and malware history from similar tippers (single pass)
+        # Exclude current tipper to avoid marking its own IOCs/malware as "familiar"
+        ioc_history = {}
+        malware_history = {}
+        history_dates = {}
+        if similar_tippers:
+            logger.info("Building entity history from similar tippers...")
+            try:
+                ioc_history, malware_history, history_dates = self.build_entity_history(
+                    similar_tippers, exclude_tipper_id=tipper_id
+                )
+            except Exception as e:
+                logger.warning(f"Could not build entity history: {e}")
+
+        # Extract entities and enrich with Recorded Future
+        # Use full description for entity extraction (query_text is truncated for embedding)
+        rf_enrichment = {}
+        entities = None
+        try:
+            from src.utils.entity_extractor import extract_entities
+            full_description = tipper.get('fields', {}).get('System.Description', '')
+            entity_text = full_description if full_description else query_text
+            logger.info("Extracting entities from tipper text...")
+            entities = extract_entities(entity_text)
+
+            if not entities.is_empty():
+                logger.info(f"Entities found: {entities.summary()}")
+                rf_enrichment = self.enrich_entities_with_rf(entities)
+            else:
+                logger.info("No entities found to enrich")
+        except Exception as e:
+            logger.warning(f"Entity extraction/enrichment failed (continuing without): {e}")
+
+        # Check existing detection rules coverage
+        rules_by_term = {}
+        try:
+            from src.components.tipper_analyzer.rules import search_rules
+            from src.components.tipper_analyzer.rules.catalog import RulesCatalog
+
+            catalog = RulesCatalog()
+            if catalog.collection.count() > 0:
+                # Search for rules matching extracted malware families and threat actors
+                search_terms = []
+                if entities and entities.malware_families:
+                    search_terms.extend(entities.malware_families[:3])
+                if rf_enrichment and rf_enrichment.get('extracted_actors'):
+                    search_terms.extend(
+                        a.get('name', '') for a in rf_enrichment['extracted_actors'][:2]
+                    )
+
+                for term in search_terms:
+                    if term:
+                        result = search_rules(term, k=3)
+                        if result.has_results:
+                            rules_by_term[term] = result
+                            logger.info(f"Found {result.total_found} detection rules for '{term}'")
+        except Exception as e:
+            logger.debug(f"Rules coverage check skipped: {e}")
+
+        # Build prompt and call LLM
+        prompt = self._build_analysis_prompt(tipper, similar_tippers, rf_enrichment)
+
+        logger.info("Generating novelty analysis with LLM...")
+        if not self.llm:
+            raise RuntimeError("LLM not initialized. Ensure Pokedex state manager is running.")
+
+        start_time = time.time()
+        response = self.llm.invoke(prompt)
+        response_text = response.content if hasattr(response, 'content') else str(response)
+
+        # Extract token metrics from LLM response
+        input_tokens = 0
+        output_tokens = 0
+        prompt_time = 0.0
+        generation_time = 0.0
+
+        if hasattr(response, 'usage_metadata') and response.usage_metadata:
+            input_tokens = response.usage_metadata.get('input_tokens', 0)
+            output_tokens = response.usage_metadata.get('output_tokens', 0)
+        elif hasattr(response, 'response_metadata'):
+            metadata = response.response_metadata
+            input_tokens = metadata.get('prompt_eval_count', 0)
+            output_tokens = metadata.get('eval_count', 0)
+            if 'prompt_eval_duration' in metadata:
+                prompt_time = metadata['prompt_eval_duration'] / 1e9
+            if 'eval_duration' in metadata:
+                generation_time = metadata['eval_duration'] / 1e9
+
+        # If timing not available from metadata, use wall clock
+        if generation_time == 0:
+            generation_time = time.time() - start_time
+
+        tokens_per_sec = output_tokens / generation_time if generation_time > 0 else 0.0
+
+        # Parse response
+        analysis = self._parse_llm_response(response_text, tipper)
+        analysis.rf_enrichment = rf_enrichment  # Attach RF enrichment to analysis
+        analysis.ioc_history = ioc_history  # Attach IOC history for novelty display
+        analysis.malware_history = malware_history  # Attach malware history for novelty display
+        analysis.history_dates = history_dates  # Attach tipper dates for recency display
+
+        # Store token metrics in analysis
+        analysis.input_tokens = input_tokens
+        analysis.output_tokens = output_tokens
+        analysis.total_tokens = input_tokens + output_tokens
+        analysis.prompt_time = prompt_time
+        analysis.generation_time = generation_time
+        analysis.tokens_per_sec = tokens_per_sec
+
+        # Store current tipper's malware families and total IOC counts
+        if entities is not None:
+            analysis.current_malware = entities.malware_families
+            analysis.total_iocs_extracted = {
+                'ips': len(entities.ips),
+                'domains': len(entities.domains),
+                'hashes': (len(entities.hashes.get('md5', [])) +
+                          len(entities.hashes.get('sha1', [])) +
+                          len(entities.hashes.get('sha256', []))),
+                'cves': len(entities.cves),
+            }
+        # Store detection rules coverage results
+        if rules_by_term:
+            analysis.existing_rules = rules_by_term
+
+        logger.info(f"Analysis complete: {analysis.novelty_label} ({analysis.novelty_score}/10)")
+
+        return analysis
+
+    # -------------------------------------------------------------------------
+    # Format output for display (delegates to formatters module)
+    # -------------------------------------------------------------------------
+    def format_analysis_for_display(self, analysis: NoveltyAnalysis, source: str = "on-demand") -> str:
+        """Format analysis result for human-readable display."""
+        return format_analysis_for_display(analysis, source)
+
+    def format_analysis_for_azdo(self, analysis: NoveltyAnalysis) -> str:
+        """Format analysis as HTML for AZDO comment."""
+        return format_analysis_for_azdo(analysis)
+
+    def post_analysis_to_tipper(self, analysis: NoveltyAnalysis) -> bool:
+        """
+        Post the analysis as a comment on the AZDO tipper.
+
+        Args:
+            analysis: The NoveltyAnalysis to post
+
+        Returns:
+            True if comment was posted successfully
+        """
+        if analysis.tipper_id == 'text-input':
+            logger.warning("Cannot post comment - analysis was from text input, not a real tipper")
+            return False
+
+        from services.azdo import add_comment_to_work_item
+
+        html_comment = self.format_analysis_for_azdo(analysis)
+
+        logger.info(f"Posting analysis to tipper #{analysis.tipper_id}...")
+        result = add_comment_to_work_item(int(analysis.tipper_id), html_comment)
+
+        if result:
+            logger.info(f"Successfully posted analysis to tipper #{analysis.tipper_id}")
+            return True
+        else:
+            logger.error(f"Failed to post analysis to tipper #{analysis.tipper_id}")
+            return False
+
+    # -------------------------------------------------------------------------
+    # IOC Section Extraction
+    # -------------------------------------------------------------------------
+    def _extract_ioc_section(self, description: str) -> str:
+        """Extract only the IOC section from a tipper description.
+
+        Tippers have a dedicated 'INDICATORS OF COMPROMISE (IOCs)' section
+        that contains the actual IOCs to hunt. This prevents extracting
+        benign domains/IPs mentioned in the narrative text.
+
+        Args:
+            description: Full tipper HTML description
+
+        Returns:
+            Text from the IOC section only, or full description if no IOC section found
+        """
+        import re
+
+        # Strip HTML tags
+        text = re.sub(r'<[^>]+>', ' ', description)
+        text = re.sub(r'&nbsp;', ' ', text)
+        text = re.sub(r'\s+', ' ', text)
+
+        # Look for IOC section markers
+        ioc_markers = [
+            r'INDICATORS?\s+OF\s+COMPROMISE',
+            r'IOCs?\s*:',
+            r'Indicators?\s*:',
+        ]
+
+        ioc_start = -1
+        for marker in ioc_markers:
+            match = re.search(marker, text, re.IGNORECASE)
+            if match:
+                ioc_start = match.start()
+                break
+
+        if ioc_start == -1:
+            # No IOC section found, return full text
+            logger.debug("No IOC section found, using full description")
+            return text
+
+        # Find end of IOC section (next major section or end)
+        # Note: &amp; may appear as literal text after HTML tag stripping
+        end_markers = [
+            r'MITRE\s+ATT(?:&amp;|&)?CK',
+            r'DETECTION\s+RECOMMENDATIONS?',
+            r'RECOMMENDATIONS?',
+            r'REFERENCES?',
+            r'APPENDIX',
+        ]
+
+        ioc_end = len(text)
+        for marker in end_markers:
+            match = re.search(marker, text[ioc_start + 50:], re.IGNORECASE)
+            if match:
+                potential_end = ioc_start + 50 + match.start()
+                if potential_end < ioc_end:
+                    ioc_end = potential_end
+
+        ioc_section = text[ioc_start:ioc_end]
+        logger.debug(f"Extracted IOC section: {len(ioc_section)} chars")
+        return ioc_section
+
+    # -------------------------------------------------------------------------
+    # IOC Hunting (delegates to hunting module)
+    # -------------------------------------------------------------------------
+    def hunt_iocs(
+        self,
+        tipper_id: str = None,
+        tipper_text: str = None,
+        hours: int = 720,
+        tools: List[str] = None
+    ) -> IOCHuntResult:
+        """
+        Hunt for tipper IOCs across multiple security tools.
+
+        Args:
+            tipper_id: Azure DevOps tipper work item ID
+            tipper_text: Raw tipper text (alternative to tipper_id)
+            hours: Hours to search back (default 720 = 30 days)
+            tools: List of tools to hunt in (default: all)
+                   Options: "qradar", "crowdstrike", "abnormal"
+
+        Returns:
+            IOCHuntResult with hits from all tools
+        """
+        from datetime import datetime
+        from src.utils.entity_extractor import extract_entities
+
+        # Get tipper details
+        if tipper_id:
+            tipper = self.fetch_tipper_by_id(tipper_id)
+            if not tipper:
+                return IOCHuntResult(
+                    tipper_id=tipper_id,
+                    tipper_title="Unknown",
+                    hunt_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    total_iocs_searched=0,
+                    total_hits=0,
+                    errors=[f"Could not fetch tipper #{tipper_id}"]
+                )
+            title = tipper.get('fields', {}).get('System.Title', 'Unknown')
+            description = tipper.get('fields', {}).get('System.Description', '')
+        else:
+            tipper_id = 'text-input'
+            title = 'Text Input'
+            description = tipper_text or ''
+
+        # Extract IOCs only from the IOC section (not full description)
+        ioc_section = self._extract_ioc_section(description)
+        entities = extract_entities(ioc_section, include_apt_database=False)
+
+        return hunt_iocs(
+            entities=entities,
+            tipper_id=tipper_id,
+            tipper_title=title,
+            hours=hours,
+            tools=tools
+        )
+
+    def format_hunt_results_for_azdo(self, result: IOCHuntResult) -> str:
+        """Format IOC hunt results as HTML for AZDO comment."""
+        return format_hunt_results_for_azdo(result)
+
+    def post_hunt_results_to_tipper(self, result: IOCHuntResult, rf_enrichment: dict = None) -> bool:
+        """Post IOC hunt results as a comment on the AZDO tipper."""
+        if result.tipper_id == 'text-input':
+            logger.warning("Cannot post hunt results - input was text, not a real tipper")
+            return False
+
+        from services.azdo import add_comment_to_work_item
+
+        html_comment = format_hunt_results_for_azdo(result, rf_enrichment=rf_enrichment)
+
+        logger.info(f"Posting IOC hunt results to tipper #{result.tipper_id}...")
+        posted = add_comment_to_work_item(int(result.tipper_id), html_comment)
+
+        if posted:
+            logger.info(f"Successfully posted hunt results to tipper #{result.tipper_id}")
+            return True
+        else:
+            logger.error(f"Failed to post hunt results to tipper #{result.tipper_id}")
+            return False
+
+    # -------------------------------------------------------------------------
+    # Full Analysis Flow (analyze + post + hunt + post)
+    # -------------------------------------------------------------------------
+    def analyze_and_post(self, tipper_id: str, source: str = "command", room_id: str = None) -> dict:
+        """
+        Full tipper analysis flow: analyze, post to AZDO, return brief summary immediately.
+        IOC hunt runs in background and posts results to AZDO when done.
+
+        Args:
+            tipper_id: The AZDO tipper work item ID
+            source: Source identifier for display formatting ("command", "hourly", etc.)
+            room_id: Optional Webex room ID; if provided, a follow-up message is sent after hunt results are posted
+
+        Returns:
+            dict with 'content' (brief Webex output), 'analysis' object, and token metrics
+        """
+        import threading
+
+        # Run the analysis
+        analysis = self.analyze_tipper(tipper_id=tipper_id)
+
+        # Post full analysis to AZDO
+        azdo_ok = self.post_analysis_to_tipper(analysis)
+        if azdo_ok:
+            logger.info(f"Posted analysis to AZDO tipper #{tipper_id}")
+        else:
+            logger.warning(f"Failed to post analysis to AZDO tipper #{tipper_id}")
+
+        # Build full Webex output (returned immediately, IOC hunt runs in background)
+        display_output = self.format_analysis_for_display(analysis, source=source)
+
+        if not azdo_ok:
+            display_output += "\n⚠️ _Failed to post analysis to AZDO work item_\n"
+
+        # Launch IOC hunt in background thread (results go to AZDO only)
+        rf_enrichment = analysis.rf_enrichment
+
+        def _run_ioc_hunt():
+            try:
+                logger.info(f"[bg] Running IOC hunt for tipper #{tipper_id}...")
+                hunt_result = self.hunt_iocs(tipper_id=tipper_id, hours=720)
+
+                if hunt_result.total_hits > 0:
+                    logger.warning(f"[bg] IOC HITS FOUND for tipper #{tipper_id}: {hunt_result.total_hits} hits")
+
+                if self.post_hunt_results_to_tipper(hunt_result, rf_enrichment=rf_enrichment):
+                    logger.info(f"[bg] Posted hunt results to AZDO tipper #{tipper_id}")
+                    # Send follow-up Webex notification with hunt results summary
+                    if room_id:
+                        try:
+                            from webexpythonsdk import WebexAPI
+                            from my_config import get_config
+                            from .formatters import format_hunt_results_for_webex
+                            config = get_config()
+                            azdo_url = f"https://dev.azure.com/{config.azdo_org}/{config.azdo_de_project}/_workitems/edit/{tipper_id}"
+                            msg = format_hunt_results_for_webex(hunt_result, tipper_id, azdo_url)
+                            webex = WebexAPI(access_token=config.webex_bot_access_token_pokedex)
+                            webex.messages.create(roomId=room_id, markdown=msg)
+                            logger.info(f"[bg] Sent hunt results to Webex for #{tipper_id}")
+                        except Exception as wx_err:
+                            logger.warning(f"[bg] Failed to send Webex notification: {wx_err}")
+                else:
+                    logger.warning(f"[bg] Failed to post hunt results to AZDO tipper #{tipper_id}")
+            except Exception as hunt_err:
+                logger.error(f"[bg] IOC hunt failed for tipper #{tipper_id}: {hunt_err}")
+
+        hunt_thread = threading.Thread(target=_run_ioc_hunt, daemon=True, name=f"ioc-hunt-{tipper_id}")
+        hunt_thread.start()
+
+        return {
+            'content': display_output,
+            'analysis': analysis,
+            'input_tokens': analysis.input_tokens,
+            'output_tokens': analysis.output_tokens,
+            'total_tokens': analysis.total_tokens,
+            'prompt_time': analysis.prompt_time,
+            'generation_time': analysis.generation_time,
+            'tokens_per_sec': analysis.tokens_per_sec
+        }

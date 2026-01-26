@@ -7,7 +7,7 @@ pytz
 python-dateutil
 
 # Webex/Communication
-webexpythonsdk>=2.0.5 # recommended Python SDK for working with all Webex APIs. provides Python methods that map directly to the Webex REST APIs (e.g., messages.create(), rooms.list())
+webexpythonsdk==2.0.4 # pinned to 2.0.4 for compatibility with webex_bot 1.0.8
 webexteamssdk # deprecated
 webex_bot==1.0.8 # the framework handles the WebSocket connection setup
 
@@ -57,6 +57,8 @@ Cartopy
 # Security Tools
 crowdstrike-falconpy
 demisto-py>=3.2.21  # Official Palo Alto XSOAR Python SDK
+dnstwist  # Domain typosquatting detection
+python-whois  # WHOIS lookup library
 
 # Task Scheduling/Utilities
 schedule
@@ -73,7 +75,6 @@ langchain-core>=1.1.3
 langchain-ollama>=1.0.0
 ollama>=0.6.1  # Ollama Python client (used by langchain-ollama)
 langsmith
-faiss-cpu
 rank_bm25
 uuid-utils>=0.12.0  # Required by langchain-core 1.1.3+
 

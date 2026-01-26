@@ -7,9 +7,10 @@ Wants=network-online.target
 Type=simple
 User=vinay
 Group=vinay
-WorkingDirectory=/opt/incident-response
-Environment="PYTHONPATH=/opt/incident-response"
-ExecStart=/opt/incident-response/.venv/bin/python webex_bots/tars.py
+WorkingDirectory=/home/vinay/pub/IR
+Environment="PYTHONPATH=/home/vinay/pub/IR"
+ExecStartPre=-/usr/bin/pkill -f "webex_bots/tars.py"
+ExecStart=/home/vinay/pub/IR/.venv/bin/python webex_bots/tars.py
 
 # Restart on failure
 Restart=on-failure

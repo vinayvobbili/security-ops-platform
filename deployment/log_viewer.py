@@ -338,14 +338,12 @@ def read_log_stream():
 
 
 @app.route('/')
-@requires_auth
 def index():
     """Serve the log viewer page."""
     return render_template_string(HTML_TEMPLATE, title=viewer_title)
 
 
 @app.route('/stream')
-@requires_auth
 def stream():
     """Server-Sent Events endpoint for log streaming."""
     def generate():
