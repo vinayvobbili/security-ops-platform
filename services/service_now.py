@@ -316,6 +316,93 @@ class ServiceNowClient:
             logger.error(f"Error fetching process changes: {str(e)}")
             return {"error": str(e), "status": "ServiceNow API Error"}
 
+    def get_recent_incidents(self, assignment_group_name, minutes=15):
+        """Fetch incidents assigned to a group in the past N minutes.
+
+        Uses the ITSM Incident API endpoint (not the Table API).
+        See KB0224060 for API documentation.
+
+        Args:
+            assignment_group_name: The display name of the assignment group
+            minutes: How far back to look (default 15 minutes)
+
+        Returns:
+            List of incident records or error dict
+        """
+        from datetime import timedelta
+
+        base_url = config.snow_base_url.rstrip('/')
+        endpoint = f"{base_url}/itsm-incident/process/incidents"
+
+        # Calculate time threshold
+        # ITSM API date format: MM-DD-YYYY HH:MM AM/PM (per KB0224060)
+        threshold = (datetime.utcnow() - timedelta(minutes=minutes)).strftime('%m-%d-%Y %I:%M %p')
+
+        # Query params - ITSM API may use different param names than Table API
+        # Try common variations: filter, query, assignmentGroup
+        # NOTE: Once API access is granted, test which params work and adjust
+        params = {
+            'assignmentGroup': assignment_group_name,
+            'limit': 100
+        }
+
+        headers = self.token_manager.get_auth_headers()
+        logger.info(f"Fetching incidents for group '{assignment_group_name}' from past {minutes} minutes")
+        logger.debug(f"Endpoint: {endpoint}, Params: {params}")
+
+        try:
+            self._wait_for_rate_limit()
+            response = self.session.get(endpoint, headers=headers, params=params, timeout=30, verify=False)
+
+            # Log response details for debugging
+            if response.status_code >= 400:
+                logger.error(f"API error {response.status_code}: {response.text[:500]}")
+
+            response.raise_for_status()
+
+            data = response.json()
+            # ITSM API returns 'items' array per KB0224060
+            results = data.get('items', data.get('result', []))
+            if isinstance(data, list):
+                results = data
+
+            # Filter by createdDate client-side since API may not support date filtering
+            # CreatedDate format: "MM-DD-YYYY HH:MM AM/PM"
+            threshold_dt = datetime.utcnow() - timedelta(minutes=minutes)
+            filtered_results = []
+            for inc in results:
+                created_str = inc.get('createdDate', '')
+                if created_str:
+                    try:
+                        created_dt = datetime.strptime(created_str, '%m-%d-%Y %I:%M %p')
+                        if created_dt >= threshold_dt:
+                            filtered_results.append(inc)
+                    except ValueError:
+                        # If date parsing fails, include the incident to be safe
+                        filtered_results.append(inc)
+                else:
+                    filtered_results.append(inc)
+
+            logger.info(f"Found {len(filtered_results)} incidents for '{assignment_group_name}' in the past {minutes} minutes (filtered from {len(results)} total)")
+            return filtered_results
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Error fetching incidents: {str(e)}")
+            return {"error": str(e), "status": "ServiceNow API Error"}
+
+    def get_recent_incidents_by_group_name(self, group_name, minutes=15):
+        """Fetch incidents by group name.
+
+        This is now the same as get_recent_incidents since we query by group name directly.
+
+        Args:
+            group_name: The display name of the assignment group
+            minutes: How far back to look (default 15 minutes)
+
+        Returns:
+            List of incident records or error dict
+        """
+        return self.get_recent_incidents(group_name, minutes=minutes)
+
 
 class AsyncServiceNowClient:
     def __init__(self, token_manager=None):

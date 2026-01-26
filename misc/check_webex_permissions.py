@@ -8,7 +8,7 @@ def check_bot_permissions():
     """Check bot token scopes and permissions"""
     config = get_config()
     bot_access_token = config.webex_bot_access_token_moneyball
-    room_id = config.webex_room_id_test_space
+    room_id = config.webex_room_id_vinay_test_space
 
     api = WebexTeamsAPI(access_token=bot_access_token)
 

@@ -1,36 +1,85 @@
 #!/bin/bash
 
-cd /opt/incident-response || exit 1
+cd /home/vinay/pub/IR || exit 1
 
-# Kill existing all_jobs process if running
-echo "Stopping existing All Jobs instances..."
-pkill -f "src/all_jobs"
-sleep 1
+SERVICE_NAME="ir-all-jobs.service"
+APP_NAME="All Jobs"
+LOG_FILE="/home/vinay/pub/IR/logs/all_jobs.log"
 
-# Note: Log file preserved for historical troubleshooting
-# Use log rotation instead of wiping logs on restart
-
-# Start new all_jobs instance in background
-nohup env PYTHONPATH=/opt/incident-response .venv/bin/python src/all_jobs.py >> logs/all_jobs.log 2>&1 &
-
-echo "Starting All Jobs..."
+echo "Managing $APP_NAME via systemd service: $SERVICE_NAME"
 echo ""
 
-# Wait for the log file to appear and contain data
+# Stop the systemd service if it's running or in a stuck state
+SERVICE_STATE=$(systemctl is-active "$SERVICE_NAME" 2>/dev/null || echo "inactive")
+
+if [[ "$SERVICE_STATE" != "inactive" ]]; then
+    echo "Stopping $SERVICE_NAME (current state: $SERVICE_STATE)..."
+
+    # Reset failed state first if needed
+    if systemctl is-failed --quiet "$SERVICE_NAME" 2>/dev/null; then
+        echo "  Resetting failed state..."
+        sudo systemctl reset-failed "$SERVICE_NAME"
+    fi
+
+    sudo systemctl stop "$SERVICE_NAME"
+
+    # Wait up to 30 seconds for graceful stop
+    for i in {1..30}; do
+        if ! systemctl is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
+            break
+        fi
+        if [ $i -eq 15 ]; then
+            echo "  ⏳ Service taking longer than expected to stop..."
+        fi
+        sleep 1
+    done
+
+    # If still running/stuck, force kill
+    CURRENT_STATE=$(systemctl show -p ActiveState --value "$SERVICE_NAME" 2>/dev/null)
+    if systemctl is-active --quiet "$SERVICE_NAME" 2>/dev/null || \
+       [[ "$CURRENT_STATE" == "deactivating" ]] || \
+       [[ "$CURRENT_STATE" == "activating" ]]; then
+        echo "  ⚠️  Graceful stop failed, force killing..."
+        sudo systemctl kill --signal=SIGKILL "$SERVICE_NAME"
+        sleep 2
+        sudo systemctl reset-failed "$SERVICE_NAME" 2>/dev/null || true
+    fi
+
+    echo "✅ $SERVICE_NAME stopped"
+else
+    echo "ℹ️  $SERVICE_NAME is not currently running"
+    # Still reset failed state just in case
+    sudo systemctl reset-failed "$SERVICE_NAME" 2>/dev/null || true
+fi
+
+# Ensure logs directory exists
+mkdir -p logs
+
+# Start the systemd service
+echo ""
+echo "Starting $SERVICE_NAME..."
+sudo systemctl start "$SERVICE_NAME"
+
+# Wait for service to start
 sleep 2
 
 # Show initial log output
 echo "Initial startup messages:"
-timeout 5 tail -f logs/all_jobs.log 2>/dev/null | head -20 || true
+timeout 5 tail -f "$LOG_FILE" 2>/dev/null | head -20 || true
 echo ""
 
-# Check if the process is actually running
-if pgrep -f "src/all_jobs" > /dev/null; then
-    PID=$(pgrep -f 'src/all_jobs')
-    echo "✅ All Jobs is running (PID: $PID)"
+# Check if the service is running
+if systemctl is-active --quiet "$SERVICE_NAME"; then
+    PID=$(systemctl show -p MainPID --value "$SERVICE_NAME")
+    echo "✅ $APP_NAME is running via systemd (PID: $PID)"
     echo ""
-    echo "To view logs: tail -f /opt/incident-response/logs/all_jobs.log"
+    echo "To view logs: tail -f $LOG_FILE"
+    echo "   or: journalctl -u $SERVICE_NAME -f"
+    echo ""
+    echo "To manage: sudo systemctl {start|stop|restart|status} $SERVICE_NAME"
 else
-    echo "❌ Warning: All Jobs process not found"
-    echo "Check logs: tail -20 /opt/incident-response/logs/all_jobs.log"
+    echo "❌ Warning: $SERVICE_NAME failed to start"
+    echo "Check status: systemctl status $SERVICE_NAME"
+    echo "Check logs: journalctl -u $SERVICE_NAME -n 50"
+    exit 1
 fi

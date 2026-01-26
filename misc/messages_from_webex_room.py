@@ -44,7 +44,7 @@ def main():
     bot_access_token = config.webex_bot_access_token_moneyball
 
     # Get the room ID from the CONFIG
-    room_id_to_query = config.webex_room_id_test_space
+    room_id_to_query = config.webex_room_id_vinay_test_space
 
     print(f"Attempting to get messages from room: {room_id_to_query}")
     messages = get_messages_from_room(room_id_to_query, bot_access_token, max_messages=20)

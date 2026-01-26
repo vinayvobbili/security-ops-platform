@@ -2240,3 +2240,49 @@ body.dark-mode .export-info-banner {
         opacity: 0;
     }
 }
+
+/* ===== Brand Blue/Green Scrollbar ===== */
+::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+::-webkit-scrollbar-track {
+    background: rgba(0, 70, 173, 0.1);
+    border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: linear-gradient(135deg, #0046ad, #00a651);
+    border-radius: 10px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(135deg, #00a651, #4a8bc2);
+    border: 2px solid transparent;
+    background-clip: padding-box;
+}
+
+::-webkit-scrollbar-corner {
+    background: transparent;
+}
+
+* {
+    scrollbar-width: thin;
+    scrollbar-color: #0046ad rgba(0, 70, 173, 0.1);
+}
+
+/* Dark mode scrollbar */
+body.dark-mode ::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+body.dark-mode ::-webkit-scrollbar-thumb {
+    background: linear-gradient(135deg, #4dabf7, #00a651);
+}
+
+body.dark-mode ::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(135deg, #00a651, #4dabf7);
+}

@@ -1,0 +1,17 @@
+# SSH Config File
+# Copy to: ~/.ssh/config
+
+Host lab-vm
+    HostName lab-vm1.internal.local
+    User vinay
+    IdentityFile ~/.ssh/id_ed25519
+    ServerAliveInterval 60
+    ServerAliveCountMax 3
+    ForwardAgent yes
+
+Host met-vm
+    HostName USAZEMETV033EL
+    User vvobbilichetty
+    IdentityFile ~/.ssh/id_ed25519
+    ServerAliveInterval 60
+    ServerAliveCountMax 3

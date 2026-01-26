@@ -32,22 +32,27 @@ azdo_session = RobustHTTPSession(max_retries=3, timeout=120, backoff_factor=0.5)
 prod_list_handler = ListHandler(XsoarEnvironment.PROD)
 
 
-def fetch_work_items(query: str):
+def fetch_work_items(query: str, project: str = None):
     """
     Fetch work items based on a WIQL query using REST API.
 
     Args:
         query (str): The WIQL query string.
+        project (str): The project name. If None, uses the DE project from config or defaults to 'Detection-Engineering'.
 
     Returns:
         List of work items with fields or empty list if no work items are found.
     """
     # Execute WIQL query to get work item IDs
-    wiql_endpoint = f'{organization_url}/_apis/wit/wiql?api-version=7.0'
+    # Use provided project or default to DE project
+    if project is None:
+        project = config.azdo_de_project or 'Detection-Engineering'
+    wiql_endpoint = f'{organization_url}/{project}/_apis/wit/wiql?api-version=7.0'
     query_body = {'query': query}
 
     try:
-        logger.debug(f"Executing WIQL query: {query[:100]}...")
+        logger.debug(f"Executing WIQL query against {wiql_endpoint}")
+        logger.debug(f"Query: {query[:100]}...")
         response = azdo_session.post(wiql_endpoint, headers=headers, json=query_body)
         if response is None:
             logger.error("Failed to query work items after all retries")
@@ -92,6 +97,9 @@ def fetch_work_items(query: str):
 
     except requests.exceptions.RequestException as e:
         logger.error(f"Error executing WIQL query: {e}")
+        if "404" in str(e):
+            logger.error(f"URL not found: {wiql_endpoint}")
+            logger.error(f"Please verify AZDO_ORGANIZATION and AZDO_DE_PROJECT in .env match your Azure DevOps setup")
         return []
 
 
@@ -241,6 +249,45 @@ def create_wit(title, item_type, description, project, submitter, area_path=None
     response.raise_for_status()
     print(response.text)
     return json.loads(response.text).get('id')
+
+
+def add_comment_to_work_item(work_item_id: int, comment: str, project: str = None) -> dict:
+    """
+    Add a comment to an existing work item.
+
+    Args:
+        work_item_id: The ID of the work item to comment on
+        comment: The comment text (supports HTML formatting)
+        project: The project name. If None, uses the DE project from config.
+
+    Returns:
+        dict: The created comment response from AZDO API, or None if failed
+    """
+    if project is None:
+        project = config.azdo_de_project or 'Detection-Engineering'
+
+    url = f"{organization_url}/{project}/_apis/wit/workItems/{work_item_id}/comments?api-version=7.0-preview.3"
+
+    payload = {
+        "text": comment
+    }
+
+    try:
+        logger.debug(f"Adding comment to work item {work_item_id}")
+        response = azdo_session.post(url, headers=headers, json=payload)
+
+        if response is None:
+            logger.error(f"Failed to add comment to work item {work_item_id} after all retries")
+            return None
+
+        response.raise_for_status()
+        result = response.json()
+        logger.info(f"Successfully added comment to work item {work_item_id}")
+        return result
+
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Error adding comment to work item {work_item_id}: {e}")
+        return None
 
 
 def main():

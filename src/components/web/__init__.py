@@ -18,6 +18,7 @@ from . import (
     employee_reach_out_handler,
     countdown_timer_handler,
     proxy_server,
+    epp_tagging_handler,
 )
 
 __all__ = [
@@ -38,4 +39,5 @@ __all__ = [
     'employee_reach_out_handler',
     'countdown_timer_handler',
     'proxy_server',
+    'epp_tagging_handler',
 ]

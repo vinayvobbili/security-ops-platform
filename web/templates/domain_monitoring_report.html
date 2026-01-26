@@ -1,0 +1,1567 @@
+{% extends 'base_layout.html' %}
+
+{% block page_title_plain %}Domain Monitoring Report{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/domain_monitoring_report.css') }}">
+{% endblock %}
+
+{% block body_classes %}monitoring-report-page{% endblock %}
+
+{% set page_title_text = 'Domain Monitoring Report' %}
+{% set page_title_left_icon = '📊' %}
+{% set page_title_right_icon = '🔒' %}
+
+{% block content %}
+<style>
+.summary-card:hover {
+    transform: scale(1.05);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+    border-color: #60a5fa !important;
+}
+</style>
+<div class="monitoring-container">
+    <div class="history-dropdown">
+        <label for="historySelect">View Report: </label>
+        <select id="historySelect" onchange="loadReport(this.value)">
+            <option value="">Latest</option>
+        </select>
+    </div>
+
+    <div id="loadingIndicator" class="loading">
+        <div class="spinner"></div>
+        <div>Loading monitoring results...</div>
+    </div>
+
+    <div id="noDataMessage" class="no-data" style="display:none;">
+        <div class="no-data-icon">📭</div>
+        <div>No monitoring results available yet.</div>
+        <div style="margin-top:10px; font-size:0.9em; color:#888;">The daily monitoring job runs at 8:00 AM ET.</div>
+    </div>
+
+    <div id="reportContent" style="display:none;">
+        <div class="scan-meta" id="scanMeta"></div>
+
+        <div class="summary-cards" id="summaryCards"></div>
+
+        <div class="tabs">
+            <button class="tab active" onclick="showTab('lookalikes')">Lookalike Domains</button>
+            <button class="tab" onclick="showTab('darkweb')">Public Leaks (GitHub/Paste)</button>
+            <button class="tab" onclick="showTab('intelx')">Dark Web (Tor/I2P)</button>
+            <button class="tab" onclick="showTab('ctlogs')">SSL Certificates</button>
+            <button class="tab" onclick="showTab('whois')">WHOIS Changes</button>
+            <button class="tab" onclick="showTab('hibp')">Credential Breaches</button>
+            <button class="tab" onclick="showTab('shodan')">Infrastructure</button>
+            <button class="tab" onclick="showTab('abusech')">Malware/C2</button>
+            <button class="tab" onclick="showTab('abuseipdb')">IP Reputation</button>
+        </div>
+
+        <div id="lookalikes" class="tab-content active"></div>
+        <div id="darkweb" class="tab-content"></div>
+        <div id="intelx" class="tab-content"></div>
+        <div id="ctlogs" class="tab-content"></div>
+        <div id="whois" class="tab-content"></div>
+        <div id="hibp" class="tab-content"></div>
+        <div id="shodan" class="tab-content"></div>
+        <div id="abusech" class="tab-content"></div>
+        <div id="abuseipdb" class="tab-content"></div>
+    </div>
+</div>
+
+<!-- Finding Detail Modal -->
+<div id="findingModal" class="modal-overlay" onclick="if(event.target===this)closeModal()">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3 id="modalTitle">Finding Details</h3>
+            <button class="modal-close" onclick="closeModal()">&times;</button>
+        </div>
+        <div class="modal-body" id="modalBody"></div>
+        <div class="modal-footer">
+            <a id="modalExternalLink" href="#" target="_blank" class="btn-view" style="display:none;text-decoration:none;padding:8px 16px;">Open External Link</a>
+        </div>
+    </div>
+</div>
+
+<script>
+let currentData = null;
+
+async function loadHistory() {
+    try {
+        const response = await fetch('/api/domain-monitoring/history');
+        const data = await response.json();
+
+        const select = document.getElementById('historySelect');
+        if (data.success && data.files.length > 0) {
+            data.files.forEach(file => {
+                const option = document.createElement('option');
+                option.value = file.filename;
+                option.textContent = file.date;
+                select.appendChild(option);
+            });
+        }
+    } catch (e) {
+        console.error('Failed to load history:', e);
+    }
+}
+
+async function loadReport(filename) {
+    document.getElementById('loadingIndicator').style.display = 'block';
+    document.getElementById('reportContent').style.display = 'none';
+    document.getElementById('noDataMessage').style.display = 'none';
+
+    try {
+        const url = filename ? `/api/domain-monitoring/results/${filename}` : '/api/domain-monitoring/results';
+        const response = await fetch(url);
+        const data = await response.json();
+
+        document.getElementById('loadingIndicator').style.display = 'none';
+
+        if (!data.success) {
+            document.getElementById('noDataMessage').style.display = 'block';
+            return;
+        }
+
+        currentData = data.results;
+        renderReport(data.results);
+        document.getElementById('reportContent').style.display = 'block';
+
+    } catch (e) {
+        console.error('Failed to load report:', e);
+        document.getElementById('loadingIndicator').style.display = 'none';
+        document.getElementById('noDataMessage').style.display = 'block';
+    }
+}
+
+function renderReport(results) {
+    // Scan metadata
+    document.getElementById('scanMeta').innerHTML = `
+        <strong>Scan Time:</strong> ${new Date(results.scan_time).toLocaleString()} |
+        <strong>Alerts Sent:</strong> ${results.alerts_sent || 0}
+    `;
+
+    // Summary cards
+    // Count various metrics across all domains
+    let highRiskCount = 0;
+    let ctFindings = 0;
+    let whoisChanges = 0;
+    let vtHighRisk = 0;
+    let hibpBreaches = 0;
+    let shodanExposures = 0;
+    let abusechMalicious = 0;
+    let abuseipdbMalicious = 0;
+
+    Object.values(results.domains || {}).forEach(d => {
+        highRiskCount += (d.dark_web?.high_risk_findings?.length || 0);
+        ctFindings += (d.ct_logs?.high_risk_domains?.length || 0);
+        whoisChanges += (d.whois?.high_severity_changes?.length || 0);
+        whoisChanges += (d.whois?.newly_registered?.length || 0);
+        vtHighRisk += (d.virustotal?.high_risk?.length || 0);
+        hibpBreaches += (d.hibp?.emails_breached || 0);
+        // Only count actual risks: vulnerabilities + risky services (not normal web ports like 80/443)
+        shodanExposures += (d.shodan?.total_vulns || 0);
+        shodanExposures += (d.shodan?.exposed_services?.length || 0);
+        abusechMalicious += (d.abusech?.malicious_domains?.length || 0);
+        abuseipdbMalicious += (d.abuseipdb?.domains_with_malicious_ips?.length || 0);
+    });
+
+    // Count IntelX findings
+    let intelxDarkweb = 0;
+    Object.values(results.domains || {}).forEach(d => {
+        intelxDarkweb += (d.intelx?.darkweb_findings?.length || 0);
+    });
+
+    const cardStyle = 'cursor:pointer;transition:transform 0.2s;';
+    let cardsHtml = `
+        <div class="summary-card ${results.total_new_lookalikes > 0 ? 'alert' : 'success'}" onclick="showTab('lookalikes', true)" style="${cardStyle}" title="View Lookalike Domains">
+            <div class="value">${results.total_new_lookalikes || 0}</div>
+            <div class="label">New Lookalike Domains</div>
+        </div>
+        <div class="summary-card ${results.total_dark_web_findings > 0 ? 'warning' : 'success'}" onclick="showTab('darkweb', true)" style="${cardStyle}" title="View Public Leaks">
+            <div class="value">${results.total_dark_web_findings || 0}</div>
+            <div class="label">Public Leaks</div>
+        </div>
+        <div class="summary-card ${intelxDarkweb > 0 ? 'alert' : 'success'}" onclick="showTab('intelx', true)" style="${cardStyle}" title="View Dark Web Findings">
+            <div class="value">${intelxDarkweb}</div>
+            <div class="label">Dark Web (Tor)</div>
+        </div>
+        <div class="summary-card ${highRiskCount > 0 ? 'alert' : 'success'}" onclick="showTab('lookalikes', true)" style="${cardStyle}" title="View High Risk Domains">
+            <div class="value">${highRiskCount}</div>
+            <div class="label">High Risk Findings</div>
+        </div>
+        <div class="summary-card ${ctFindings > 0 ? 'warning' : 'success'}" onclick="showTab('ctlogs', true)" style="${cardStyle}" title="View SSL Certificates">
+            <div class="value">${ctFindings}</div>
+            <div class="label">New SSL Certs</div>
+        </div>
+        <div class="summary-card ${whoisChanges > 0 ? 'warning' : 'success'}" onclick="showTab('whois', true)" style="${cardStyle}" title="View WHOIS Changes">
+            <div class="value">${whoisChanges}</div>
+            <div class="label">WHOIS Changes</div>
+        </div>
+        <div class="summary-card ${vtHighRisk > 0 ? 'alert' : 'success'}" onclick="showTab('lookalikes', true)" style="${cardStyle}" title="View VT High Risk">
+            <div class="value">${vtHighRisk}</div>
+            <div class="label">VT High Risk</div>
+        </div>
+        <div class="summary-card ${hibpBreaches > 0 ? 'alert' : 'success'}" onclick="showTab('hibp', true)" style="${cardStyle}" title="View Credential Breaches">
+            <div class="value">${hibpBreaches}</div>
+            <div class="label">Breached Emails</div>
+        </div>
+        <div class="summary-card ${shodanExposures > 0 ? 'alert' : 'success'}" onclick="showTab('shodan', true)" style="${cardStyle}" title="View Infrastructure Risks (CVEs + exposed risky services)">
+            <div class="value">${shodanExposures}</div>
+            <div class="label">Infra Risks</div>
+        </div>
+        <div class="summary-card ${abusechMalicious > 0 ? 'alert' : 'success'}" onclick="showTab('abusech', true)" style="${cardStyle}" title="View Malware/C2">
+            <div class="value">${abusechMalicious}</div>
+            <div class="label">Malware/C2</div>
+        </div>
+        <div class="summary-card ${abuseipdbMalicious > 0 ? 'alert' : 'success'}" onclick="showTab('abuseipdb', true)" style="${cardStyle}" title="View IP Reputation">
+            <div class="value">${abuseipdbMalicious}</div>
+            <div class="label">Malicious IPs</div>
+        </div>
+        <div class="summary-card" id="rfSummaryCard" style="display:none;${cardStyle}" onclick="showTab('lookalikes', true)" title="View RF High Risk">
+            <div class="value" id="rfHighRiskValue">0</div>
+            <div class="label">RF High Risk</div>
+        </div>
+    `;
+
+    document.getElementById('summaryCards').innerHTML = cardsHtml;
+
+    // Lookalikes tab
+    renderLookalikes(results.domains);
+
+    // Public Leaks tab (GitHub/Pastebin - NOT dark web)
+    renderDarkWeb(results.domains);
+
+    // Dark Web tab (IntelX - actual Tor/I2P dark web)
+    renderIntelX(results.domains);
+
+    // CT logs tab
+    renderCTLogs(results.domains);
+
+    // WHOIS tab
+    renderWhois(results.domains);
+
+    // HIBP tab
+    renderHIBP(results.domains);
+
+    // Shodan tab
+    renderShodan(results.domains);
+
+    // abuse.ch tab
+    renderAbuseCH(results.domains);
+
+    // AbuseIPDB tab
+    renderAbuseIPDB(results.domains);
+}
+
+// Track risk filter state
+let currentRiskFilter = 'all';
+
+function renderLookalikes(domains) {
+    let html = '';
+
+    // Add risk filter buttons - styled to match dark theme
+    html += `<div class="risk-filter-section" style="margin-bottom:20px;padding:12px 20px;background:linear-gradient(135deg, rgba(30,41,59,0.95) 0%, rgba(51,65,85,0.9) 100%);border:1px solid rgba(99,102,241,0.3);border-radius:12px;box-shadow:0 4px 6px rgba(0,0,0,0.3);">
+        <div style="display:flex;align-items:center;gap:15px;flex-wrap:wrap;">
+            <span style="color:#94a3b8;font-weight:500;font-size:0.9em;">🎯 Filter:</span>
+            <div class="risk-filter-buttons" style="display:flex;gap:8px;flex-wrap:wrap;">
+                <button class="risk-filter-btn active" data-filter="all" onclick="filterByRisk('all', this)"
+                    style="background:rgba(99,102,241,0.8);color:white;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:0.85em;font-weight:500;transition:all 0.2s;">
+                    All
+                </button>
+                <button class="risk-filter-btn" data-filter="threats" onclick="filterByRisk('threats', this)"
+                    style="background:rgba(220,38,38,0.8);color:white;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:0.85em;font-weight:500;transition:all 0.2s;">
+                    🔴 Threats
+                </button>
+                <button class="risk-filter-btn" data-filter="defensive" onclick="filterByRisk('defensive', this)"
+                    style="background:rgba(34,197,94,0.8);color:white;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:0.85em;font-weight:500;transition:all 0.2s;">
+                    🛡️ Defensive
+                </button>
+                <button class="risk-filter-btn" data-filter="parked" onclick="filterByRisk('parked', this)"
+                    style="background:rgba(245,158,11,0.8);color:white;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:0.85em;font-weight:500;transition:all 0.2s;">
+                    🅿️ Parked
+                </button>
+            </div>
+        </div>
+    </div>`;
+
+    Object.entries(domains || {}).forEach(([domain, data]) => {
+        const lookalikes = data.lookalikes || {};
+
+        html += `<div class="domain-section">
+            <div class="domain-title">🎯 ${domain}</div>`;
+
+        if (!lookalikes.success) {
+            html += `<div class="no-data">Scan failed: ${lookalikes.error || 'Unknown error'}</div>`;
+        } else {
+            const newDomains = lookalikes.new_domains || [];
+            const becameActive = lookalikes.became_active || [];
+            const total = lookalikes.total_registered || 0;
+            const isFirstScan = lookalikes.is_first_scan;
+            const riskCounts = lookalikes.risk_counts || {};
+            const defensiveCount = riskCounts.defensive || 0;
+            const actionableCount = (riskCounts.suspicious || 0) + (riskCounts.high_risk || 0);
+            const actionableNew = lookalikes.new_actionable_count || newDomains.filter(d => !d.is_defensive).length;
+            const actionableBecameActive = lookalikes.became_active_actionable_count || becameActive.filter(d => !d.is_defensive).length;
+
+            html += `<p style="margin-bottom:15px;color:#666;">
+                Total registered: <strong>${total}</strong>
+                (<span style="color:#22c55e;" title="Owned by company">${defensiveCount} defensive</span> |
+                <span style="color:#dc2626;" title="Needs investigation">${actionableCount} actionable</span>)
+                ${isFirstScan ? '<span class="badge badge-info">First Scan</span>' : `| New: <strong>${newDomains.length}</strong> (${actionableNew} actionable)`}
+                ${becameActive.length > 0 ? `| <span class="badge badge-danger">⚠️ ${becameActive.length} became active (${actionableBecameActive} actionable)</span>` : ''}
+            </p>`;
+
+            // Show domains that became active first (highest priority)
+            if (becameActive.length > 0) {
+                html += `<h4 style="color:#dc2626;margin-bottom:10px;">🔴 Domains Now Active (Previously Parked)</h4>
+                <table class="findings-table">
+                    <thead><tr><th>Domain</th><th>Risk</th><th>Status</th><th>IP Address</th><th>Registrar</th><th>Reg. Date</th><th>VT</th><th>RF</th><th>Actions</th></tr></thead>
+                    <tbody>`;
+
+                becameActive.forEach(d => {
+                    const riskLevel = d.risk_level || 'unknown';
+                    const isDefensive = d.is_defensive === true;
+                    // Dark theme colors: subtle tinted backgrounds that work with light text
+                    const rowBg = isDefensive ? 'rgba(34,197,94,0.15)' : 'rgba(220,38,38,0.15)';
+                    html += `<tr style="background:${rowBg};" data-risk="${riskLevel}" class="domain-row">
+                        <td><code>${d.domain}</code></td>
+                        <td>${renderRiskBadge(riskLevel, isDefensive)}</td>
+                        <td><span class="badge badge-danger">NOW ACTIVE</span></td>
+                        <td>${d.dns_a ? d.dns_a.join(', ') : '-'}</td>
+                        <td>${renderRegistrarCell(d.registrar)}</td>
+                        <td>${renderRegDateCell(d.domain, d.registration_date, d.vt_reputation)}</td>
+                        <td>${renderVTCell(d)}</td>
+                        <td>${renderRFCell(d)}</td>
+                        <td>${renderActionsCell(d)}</td>
+                    </tr>`;
+                });
+
+                html += `</tbody></table><br>`;
+            }
+
+            if (newDomains.length > 0) {
+                html += `<h4 style="margin-bottom:5px;">📡 Recently Detected Lookalikes</h4>
+                <p style="margin:0 0 10px;font-size:0.85em;color:#94a3b8;">Domains newly detected by monitoring (may have been registered years ago)</p>
+                <table class="findings-table">
+                    <thead><tr><th>Domain</th><th>Risk</th><th>Status</th><th>IP Address</th><th>Registrar</th><th>Reg. Date</th><th>VT</th><th>RF</th><th>Actions</th></tr></thead>
+                    <tbody>`;
+
+                newDomains.forEach(d => {
+                    const riskLevel = d.risk_level || 'unknown';
+                    const isDefensive = d.is_defensive === true;
+                    // Dark theme colors: subtle tinted backgrounds that work with light text
+                    const rowBg = isDefensive ? 'rgba(34,197,94,0.15)' : (riskLevel === 'high_risk' ? 'rgba(220,38,38,0.15)' : '');
+                    html += `<tr style="background:${rowBg};" data-risk="${riskLevel}" class="domain-row">
+                        <td><code>${d.domain}</code></td>
+                        <td>${renderRiskBadge(riskLevel, isDefensive)}</td>
+                        <td>${renderParkingStatusCell(d)}</td>
+                        <td>${d.dns_a ? d.dns_a.join(', ') : '-'}</td>
+                        <td>${renderRegistrarCell(d.registrar)}</td>
+                        <td>${renderRegDateCell(d.domain, d.registration_date, d.vt_reputation)}</td>
+                        <td>${renderVTCell(d)}</td>
+                        <td>${renderRFCell(d)}</td>
+                        <td>${renderActionsCell(d)}</td>
+                    </tr>`;
+                });
+
+                html += `</tbody></table>`;
+            } else if (!isFirstScan && becameActive.length === 0) {
+                html += `<div class="no-data" style="padding:20px;">No new lookalike domains detected since last scan.</div>`;
+            }
+        }
+
+        html += `</div>`;
+    });
+
+    document.getElementById('lookalikes').innerHTML = html || '<div class="no-data">No domains monitored.</div>';
+}
+
+function renderVTCell(domainData) {
+    const vt = domainData.vt_reputation;
+    const domain = domainData.domain;
+    const isDefensive = domainData.is_defensive === true;
+    const vtLink = `https://www.virustotal.com/gui/domain/${encodeURIComponent(domain)}`;
+    const badgeStyle = 'display:inline-block;padding:3px 8px;border-radius:4px;font-size:0.75em;font-weight:600;text-decoration:none;white-space:nowrap;';
+
+    // Defensive domains skip VT enrichment - show N/A
+    if (isDefensive && !vt) {
+        return `<span style="${badgeStyle}background:#374151;color:#9ca3af;" title="Skipped - defensive registration">— N/A</span>`;
+    }
+
+    if (!vt) {
+        // No VT data - show link to check
+        return `<a href="${vtLink}" target="_blank" style="${badgeStyle}background:#4b5563;color:white;" title="No VT data - click to check">🔗 Check</a>`;
+    }
+
+    if (vt.error) {
+        return `<a href="${vtLink}" target="_blank" style="${badgeStyle}background:#6b7280;color:white;" title="${vt.error}">⚠️ Error</a>`;
+    }
+
+    const level = vt.threat_level || 'UNKNOWN';
+    let bgColor, icon;
+
+    if (level === 'HIGH') {
+        bgColor = '#dc2626'; icon = '🔴';
+    } else if (level === 'MEDIUM') {
+        bgColor = '#f97316'; icon = '🟠';
+    } else if (level === 'LOW') {
+        bgColor = '#eab308'; icon = '🟡';
+    } else if (level === 'CLEAN') {
+        bgColor = '#22c55e'; icon = '🟢';
+    } else {
+        bgColor = '#6b7280'; icon = '⚪';
+    }
+
+    const malCount = vt.malicious || 0;
+    const susCount = vt.suspicious || 0;
+    const tooltip = `${level} - ${malCount} malicious, ${susCount} suspicious detections. Click for details.`;
+
+    return `<a href="${vtLink}" target="_blank" style="${badgeStyle}background:${bgColor};color:white;" title="${tooltip}">${icon} ${level}</a>`;
+}
+
+// Render Actions cell with TakeDown button
+function renderActionsCell(domainData) {
+    const domain = domainData.domain;
+    const isDefensive = domainData.is_defensive === true;
+
+    // Don't show takedown for defensive domains
+    if (isDefensive) {
+        return `<span style="background:#22c55e;color:white;padding:2px 6px;border-radius:4px;font-size:0.7em;">✓ Owned</span>`;
+    }
+
+    // Show takedown button for non-defensive domains
+    return `<button onclick="submitTakedown('${domain}')" title="Submit takedown request"
+        style="background:#dc2626;color:white;border:none;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:0.8em;">
+        🚫 TakeDown
+    </button>`;
+}
+
+// Placeholder for takedown submission - to be implemented later
+function submitTakedown(domain) {
+    alert('Takedown submission for ' + domain + ' - Coming soon!');
+}
+
+// Render RF cell for a domain - reads rf_risk_score directly from domain data
+function renderRFCell(domainData) {
+    const score = domainData.rf_risk_score;
+    const isDefensive = domainData.is_defensive === true;
+
+    // Defensive domains skip RF enrichment
+    if (isDefensive && (score === undefined || score === null)) {
+        return `<span class="rf-badge rf-none" title="Skipped - defensive registration">—</span>`;
+    }
+
+    if (score === undefined || score === null) {
+        return `<span class="rf-badge rf-none">-</span>`;
+    }
+
+    let levelClass, icon;
+
+    if (score >= 90) {
+        levelClass = 'rf-critical';
+        icon = '🔴';
+    } else if (score >= 65) {
+        levelClass = 'rf-high';
+        icon = '🟠';
+    } else if (score >= 25) {
+        levelClass = 'rf-medium';
+        icon = '🟡';
+    } else {
+        levelClass = 'rf-low';
+        icon = '🟢';
+    }
+
+    const rules = domainData.rf_rules || [];
+    const rulesTitle = rules.length > 0 ? rules.join(', ') : 'No evidence rules';
+
+    return `<span class="rf-badge ${levelClass}" title="${rulesTitle}">${icon} ${score}</span>`;
+}
+
+// Calculate domain age from registration date
+function calculateDomainAge(registrationDate) {
+    if (!registrationDate || registrationDate === 'N/A' || registrationDate === '-') {
+        return '<span style="color:#6b7280;">-</span>';
+    }
+
+    const regDate = new Date(registrationDate);
+    const now = new Date();
+    const diffMs = now - regDate;
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    const diffMonths = Math.floor(diffDays / 30);
+    const diffYears = Math.floor(diffDays / 365);
+
+    let ageText, ageColor, title;
+
+    if (diffDays < 0) {
+        return '<span style="color:#6b7280;">-</span>';
+    } else if (diffDays < 30) {
+        ageText = `${diffDays}d`;
+        ageColor = '#dc2626'; // Red - very new, suspicious
+        title = `Registered ${diffDays} days ago - VERY NEW, investigate!`;
+    } else if (diffDays < 90) {
+        ageText = `${diffMonths}mo`;
+        ageColor = '#f97316'; // Orange - new
+        title = `Registered ${diffMonths} months ago - relatively new`;
+    } else if (diffDays < 365) {
+        ageText = `${diffMonths}mo`;
+        ageColor = '#eab308'; // Yellow
+        title = `Registered ${diffMonths} months ago`;
+    } else if (diffYears < 5) {
+        ageText = `${diffYears}y`;
+        ageColor = '#22c55e'; // Green - established
+        title = `Registered ${diffYears} years ago - established domain`;
+    } else {
+        ageText = `${diffYears}y`;
+        ageColor = '#06b6d4'; // Cyan - very old, likely defensive
+        title = `Registered ${diffYears} years ago - likely defensive registration`;
+    }
+
+    return `<span style="color:${ageColor};font-weight:600;" title="${title}">${ageText}</span>`;
+}
+
+// Render risk level badge
+function renderRiskBadge(riskLevel, isDefensive) {
+    const badgeStyle = 'display:inline-block;padding:4px 8px;border-radius:4px;font-size:0.75em;font-weight:600;white-space:nowrap;';
+    const badges = {
+        'defensive': `<span style="${badgeStyle}background:#22c55e;color:white;" title="Owned by company - no action needed">🛡️ Defensive</span>`,
+        'parked': `<span style="${badgeStyle}background:#f59e0b;color:white;" title="Domain for sale - monitor">🅿️ Parked</span>`,
+        'suspicious': `<span style="${badgeStyle}background:#f97316;color:white;" title="Active domain - investigate">⚠️ Suspicious</span>`,
+        'high_risk': `<span style="${badgeStyle}background:#dc2626;color:white;" title="Active with threat indicators - urgent">🔴 High Risk</span>`,
+        'unknown': `<span style="${badgeStyle}background:#6b7280;color:white;" title="Unable to determine">❓ Unknown</span>`
+    };
+
+    if (isDefensive) {
+        return badges['defensive'];
+    }
+
+    return badges[riskLevel] || badges['unknown'];
+}
+
+// Render parking status with detailed information
+function renderParkingStatusCell(d) {
+    const badgeStyle = 'display:inline-block;padding:3px 8px;border-radius:4px;font-size:0.75em;font-weight:600;white-space:nowrap;cursor:help;';
+
+    if (d.parked === true) {
+        const provider = d.parking_provider || 'Unknown';
+        const confidence = d.parking_confidence || 'medium';
+        const indicators = d.parking_indicators || [];
+        const finalUrl = d.parking_final_url || '';
+
+        // Color based on confidence
+        let bgColor = '#f59e0b'; // default amber
+        let confIcon = '';
+        if (confidence === 'high') {
+            bgColor = '#22c55e'; // green - confident it's parked (good for us)
+            confIcon = '✓';
+        } else if (confidence === 'low') {
+            bgColor = '#6b7280'; // gray - uncertain
+            confIcon = '?';
+        }
+
+        // Build tooltip with all the details
+        let tooltip = `PARKED (${confidence} confidence)`;
+        tooltip += `\n\nProvider: ${provider}`;
+        if (indicators.length > 0) {
+            tooltip += `\n\nIndicators:\n• ${indicators.join('\n• ')}`;
+        }
+        if (finalUrl) {
+            tooltip += `\n\nRedirected to: ${finalUrl}`;
+        }
+
+        // Display provider name (truncated)
+        const providerDisplay = provider.length > 15 ? provider.substring(0, 13) + '...' : provider;
+
+        return `<span style="${badgeStyle}background:${bgColor};color:white;" title="${tooltip.replace(/"/g, '&quot;')}">🅿️ ${providerDisplay} ${confIcon}</span>`;
+    } else if (d.parked === false) {
+        const finalUrl = d.parking_final_url || '';
+        const tooltip = finalUrl ? `Active site\nURL: ${finalUrl}` : 'Active site - not parked';
+        return `<span style="${badgeStyle}background:#dc2626;color:white;" title="${tooltip.replace(/"/g, '&quot;')}">🌐 Active</span>`;
+    } else {
+        return `<span style="${badgeStyle}background:#374151;color:#9ca3af;" title="Could not determine parking status">— Unknown</span>`;
+    }
+}
+
+// Render registrar with brand protection highlighting
+function renderRegistrarCell(registrar) {
+    if (!registrar || registrar === 'N/A') {
+        return '<span style="color:#6b7280;">-</span>';
+    }
+
+    // Brand protection registrars (indicate defensive registration)
+    const brandProtectionRegistrars = [
+        'markmonitor', 'csc corporate', 'csc global', 'safenames', 'comlaude',
+        'nom-iq', 'clarivate', 'brandshelter', 'corsearch', 'valideus',
+        'corporation service company', 'ncc group'
+    ];
+
+    const registrarLower = registrar.toLowerCase();
+    const isBrandProtection = brandProtectionRegistrars.some(bp => registrarLower.includes(bp));
+
+    // Truncate long registrar names
+    const displayName = registrar.length > 20 ? registrar.substring(0, 18) + '...' : registrar;
+
+    if (isBrandProtection) {
+        return `<span style="color:#22c55e;font-weight:500;" title="${registrar} (Brand Protection Registrar)">🛡️ ${displayName}</span>`;
+    }
+
+    return `<span style="color:#94a3b8;" title="${registrar}">${displayName}</span>`;
+}
+
+// Render registration date with WHOIS lookup link
+// Uses VT creation_date as fallback/cross-reference
+function renderRegDateCell(domain, regDate, vtData) {
+    const whoisUrl = `https://lookup.icann.org/lookup?name=${encodeURIComponent(domain)}`;
+
+    // Get VT creation date if available (Unix timestamp)
+    let vtDate = null;
+    if (vtData && vtData.creation_date) {
+        const d = new Date(vtData.creation_date * 1000);
+        vtDate = d.toISOString().split('T')[0];
+    }
+
+    // Get today's date for comparison
+    const today = new Date().toISOString().split('T')[0];
+
+    // If WHOIS date is missing or invalid, use VT date
+    if (!regDate || regDate === 'N/A' || regDate === '-') {
+        if (vtDate) {
+            return `<a href="${whoisUrl}" target="_blank" style="color:#94a3b8;text-decoration:none;" title="From VirusTotal (WHOIS unavailable)">${vtDate} <span style="font-size:0.7em;">(VT)</span> 🔗</a>`;
+        }
+        return '-';
+    }
+
+    // If WHOIS shows today's date but VT has older date, show VT date with warning
+    // VT caches WHOIS data, so vtDate is likely the original registration date before transfer
+    if (regDate === today && vtDate && vtDate !== today) {
+        return `<a href="${whoisUrl}" target="_blank" style="color:#f59e0b;text-decoration:none;" title="Domain likely transferred. Current WHOIS: ${regDate}, Original (VT cached): ${vtDate}">${vtDate} <span style="font-size:0.7em;">⚠️</span></a>`;
+    }
+
+    // Normal case - show WHOIS date
+    return `<a href="${whoisUrl}" target="_blank" style="color:#94a3b8;text-decoration:none;" title="Verify via ICANN WHOIS lookup">${regDate} 🔗</a>`;
+}
+
+// Filter domains by risk level
+function filterByRisk(filter, button) {
+    currentRiskFilter = filter;
+
+    // Update button states
+    document.querySelectorAll('.risk-filter-btn').forEach(btn => {
+        btn.classList.remove('active');
+        btn.style.opacity = '0.6';
+    });
+    button.classList.add('active');
+    button.style.opacity = '1';
+
+    // Filter table rows
+    document.querySelectorAll('.domain-row').forEach(row => {
+        const rowRisk = row.getAttribute('data-risk');
+
+        let show = false;
+        switch(filter) {
+            case 'all':
+                show = true;
+                break;
+            case 'threats':
+                show = rowRisk === 'high_risk' || rowRisk === 'suspicious';
+                break;
+            case 'defensive':
+                show = rowRisk === 'defensive';
+                break;
+            case 'parked':
+                show = rowRisk === 'parked';
+                break;
+            default:
+                show = true;
+        }
+
+        row.style.display = show ? '' : 'none';
+    });
+
+    // Show/hide empty state messages
+    document.querySelectorAll('.findings-table').forEach(table => {
+        const visibleRows = table.querySelectorAll('tbody .domain-row:not([style*="display: none"])');
+        const emptyMsg = table.nextElementSibling;
+        if (visibleRows.length === 0 && filter !== 'all') {
+            if (!emptyMsg || !emptyMsg.classList.contains('filter-empty-msg')) {
+                const msg = document.createElement('div');
+                msg.className = 'filter-empty-msg no-data';
+                msg.style.padding = '10px';
+                msg.style.marginTop = '10px';
+                msg.textContent = `No ${filter} domains in this section`;
+                table.after(msg);
+            }
+        } else if (emptyMsg && emptyMsg.classList.contains('filter-empty-msg')) {
+            emptyMsg.remove();
+        }
+    });
+}
+
+function renderDarkWeb(domains) {
+    let html = '';
+
+    Object.entries(domains || {}).forEach(([domain, data]) => {
+        const darkWeb = data.dark_web || {};
+
+        html += `<div class="domain-section">
+            <div class="domain-title">🌐 ${domain}</div>`;
+
+        if (!darkWeb.success) {
+            html += `<div class="no-data">Scan failed</div>`;
+        } else {
+            const sources = darkWeb.sources || {};
+            const highRisk = darkWeb.high_risk_findings || [];
+
+            // High risk findings first
+            if (highRisk.length > 0) {
+                html += `<h4 style="color:#dc2626;margin-bottom:10px;">⚠️ High Risk Findings (${highRisk.length})</h4>
+                <table class="findings-table">
+                    <thead><tr><th>Source</th><th>Details</th><th>Risk</th><th>Action</th></tr></thead>
+                    <tbody>`;
+
+                highRisk.forEach((f, idx) => {
+                    let details = '';
+                    let action = '';
+
+                    if (f.source === 'urlscan.io') {
+                        details = `Malicious site: <code>${f.domain || f.url}</code>`;
+                        action = f.scan_url ? `<a href="${f.scan_url}" target="_blank">View Scan</a>` : '-';
+                    } else if (f.source === 'github') {
+                        details = `Repo: ${f.repo}<br>File: <code>${f.path}</code>`;
+                        action = f.url ? `<a href="${f.url}" target="_blank">View File</a>` : '-';
+                    } else if (f.source === 'psbdmp') {
+                        details = `Paste ID: <code>${f.paste_id || 'N/A'}</code>`;
+                        action = f.url ? `<a href="${f.url}" target="_blank">View Paste</a>` : '-';
+                    } else if (f.source === 'leakix') {
+                        details = `Subdomain: <code>${f.subdomain || 'N/A'}</code><br>IP: ${f.ip || 'N/A'}`;
+                        action = '-';
+                    } else {
+                        details = JSON.stringify(f).substring(0, 100);
+                    }
+
+                    html += `<tr>
+                        <td><span class="source-tag">${f.source}</span></td>
+                        <td>${details}</td>
+                        <td><span class="badge badge-danger">High</span></td>
+                        <td>${action}</td>
+                    </tr>`;
+                });
+
+                html += `</tbody></table>`;
+            }
+
+            // Source summaries with expandable rows
+            html += `<h4 style="margin:20px 0 10px;">🔍 All Sources</h4>
+            <table class="findings-table" id="sources-${domain.replace(/\./g, '-')}">
+                <thead><tr><th>Source</th><th>Findings</th><th>Status</th></tr></thead>
+                <tbody>`;
+
+            Object.entries(sources).forEach(([sourceName, sourceData]) => {
+                const count = sourceData.count || 0;
+                const results = sourceData.results || [];
+                const skippedOld = sourceData.skipped_old || 0;
+                const skippedDeleted = sourceData.skipped_deleted || 0;
+                const status = sourceData.success ?
+                    `<span class="badge badge-success">✓ SUCCESS</span>` :
+                    `<span class="badge badge-danger">⚠ FAILED</span>`;
+                const rowId = `${domain.replace(/\./g, '-')}-${sourceName}`;
+                const hasResults = count > 0 && results.length > 0;
+
+                // Show filtered info for psbdmp
+                let filterInfo = '';
+                if (sourceName === 'psbdmp' && (skippedOld > 0 || skippedDeleted > 0)) {
+                    const parts = [];
+                    if (skippedOld > 0) parts.push(`${skippedOld} old`);
+                    if (skippedDeleted > 0) parts.push(`${skippedDeleted} deleted`);
+                    filterInfo = ` <span style="color:#888;font-size:0.85em;">(filtered: ${parts.join(', ')})</span>`;
+                }
+
+                // Main row - clickable if has results
+                if (hasResults) {
+                    html += `<tr class="expandable-row" onclick="toggleSourceDetails('${rowId}')" id="row-${rowId}">
+                        <td>${sourceName}</td>
+                        <td><strong>${count}</strong> <span style="color:#666;font-size:0.85em;">(click to expand)</span>${filterInfo}</td>
+                        <td>${status}</td>
+                    </tr>`;
+
+                    // Detail row with findings
+                    html += `<tr class="detail-row" id="details-${rowId}">
+                        <td colspan="3">
+                            <div class="detail-content">
+                                ${renderSourceFindings(sourceName, results)}
+                            </div>
+                        </td>
+                    </tr>`;
+                } else {
+                    html += `<tr>
+                        <td>${sourceName}</td>
+                        <td>${count}${filterInfo}</td>
+                        <td>${status}</td>
+                    </tr>`;
+                }
+            });
+
+            html += `</tbody></table>`;
+        }
+
+        html += `</div>`;
+    });
+
+    document.getElementById('darkweb').innerHTML = html || '<div class="no-data">No domains monitored.</div>';
+}
+
+function renderSourceFindings(sourceName, results) {
+    if (!results || results.length === 0) return '<p style="color:#666;">No findings</p>';
+
+    let html = `<div style="margin-bottom:10px;color:#666;font-size:0.9em;">Showing ${results.length} finding(s):</div>`;
+
+    results.forEach((finding, idx) => {
+        const findingData = JSON.stringify(finding);
+        let info = '';
+        let actionLink = '';
+
+        switch(sourceName) {
+            case 'psbdmp':
+                info = `<strong>Paste ID:</strong> <code>${finding.paste_id || 'N/A'}</code>`;
+                if (finding.time) {
+                    const pasteDate = new Date(parseInt(finding.time) * 1000);
+                    if (!isNaN(pasteDate.getTime())) {
+                        info += ` &nbsp;|&nbsp; <strong>Posted:</strong> ${pasteDate.toLocaleString()}`;
+                    }
+                }
+                actionLink = finding.url ? `<a href="${finding.url}" target="_blank" class="btn-view btn-external">View Paste</a>` : '';
+                break;
+            case 'github':
+                info = `<strong>Repo:</strong> ${finding.repo || 'N/A'} &nbsp;|&nbsp; <strong>File:</strong> <code>${finding.path || finding.file || 'N/A'}</code>`;
+                if (finding.search_term) info += ` &nbsp;|&nbsp; <strong>Match:</strong> ${finding.search_term}`;
+                actionLink = finding.url ? `<a href="${finding.url}" target="_blank" class="btn-view btn-external">View File</a>` : '';
+                break;
+            case 'urlscan':
+                info = `<strong>URL:</strong> <code>${finding.url || finding.domain || 'N/A'}</code>`;
+                if (finding.ip) info += ` &nbsp;|&nbsp; <strong>IP:</strong> ${finding.ip}`;
+                actionLink = finding.scan_url ? `<a href="${finding.scan_url}" target="_blank" class="btn-view btn-external">View Scan</a>` : '';
+                break;
+            case 'leakix':
+                info = `<strong>Subdomain:</strong> <code>${finding.subdomain || 'N/A'}</code>`;
+                if (finding.ip) info += ` &nbsp;|&nbsp; <strong>IP:</strong> ${finding.ip}`;
+                break;
+            default:
+                info = `<code>${JSON.stringify(finding).substring(0, 150)}...</code>`;
+        }
+
+        html += `<div class="finding-item">
+            <div class="finding-info">${info}</div>
+            <div class="finding-actions">
+                <button class="btn-view" onclick="event.stopPropagation();showFindingDetails('${sourceName}', ${idx}, '${encodeURIComponent(findingData)}')">Details</button>
+                ${actionLink}
+            </div>
+        </div>`;
+    });
+
+    return html;
+}
+
+function toggleSourceDetails(rowId) {
+    const row = document.getElementById('row-' + rowId);
+    const details = document.getElementById('details-' + rowId);
+
+    if (row && details) {
+        row.classList.toggle('expanded');
+        details.classList.toggle('visible');
+    }
+}
+
+function showFindingDetails(sourceName, idx, encodedData) {
+    const finding = JSON.parse(decodeURIComponent(encodedData));
+    const modal = document.getElementById('findingModal');
+    const title = document.getElementById('modalTitle');
+    const body = document.getElementById('modalBody');
+    const extLink = document.getElementById('modalExternalLink');
+
+    title.textContent = `${sourceName.toUpperCase()} Finding Details`;
+
+    let html = '<div class="detail-grid">';
+    let externalUrl = null;
+
+    // Render all properties
+    Object.entries(finding).forEach(([key, value]) => {
+        if (value === null || value === undefined) return;
+
+        let displayValue = value;
+        if (key === 'time' && typeof value === 'number') {
+            displayValue = new Date(value * 1000).toLocaleString();
+        } else if (key === 'scan_time') {
+            displayValue = new Date(value).toLocaleString();
+        } else if (typeof value === 'object') {
+            displayValue = `<code>${JSON.stringify(value)}</code>`;
+        } else if (key === 'url' || key === 'scan_url') {
+            externalUrl = value;
+            displayValue = `<code>${value}</code>`;
+        } else if (typeof value === 'string' && (value.includes('/') || value.includes('.'))) {
+            displayValue = `<code>${value}</code>`;
+        }
+
+        html += `<div class="detail-label">${key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}:</div>
+                 <div class="detail-value">${displayValue}</div>`;
+    });
+
+    html += '</div>';
+    body.innerHTML = html;
+
+    // Set external link
+    if (externalUrl) {
+        extLink.href = externalUrl;
+        extLink.style.display = 'inline-block';
+        extLink.textContent = sourceName === 'psbdmp' ? 'Open Paste' :
+                              sourceName === 'github' ? 'Open on GitHub' :
+                              sourceName === 'urlscan' ? 'Open URLScan' : 'Open Link';
+    } else {
+        extLink.style.display = 'none';
+    }
+
+    modal.classList.add('visible');
+}
+
+function closeModal() {
+    document.getElementById('findingModal').classList.remove('visible');
+}
+
+function renderIntelX(domains) {
+    let html = '';
+
+    Object.entries(domains || {}).forEach(([domain, data]) => {
+        const intelx = data.intelx || {};
+
+        html += `<div class="domain-section">
+            <div class="domain-title">🕵️ ${domain}</div>`;
+
+        if (!intelx.success) {
+            if (intelx.error && !intelx.error.toLowerCase().includes('not configured')) {
+                html += `<div class="no-data">IntelligenceX scan failed: ${intelx.error}</div>`;
+            } else {
+                html += `<div class="no-data">IntelligenceX not configured. <a href="https://intelx.io/account?tab=developer" target="_blank">Get API key</a></div>`;
+            }
+        } else {
+            const darkweb = intelx.darkweb_findings || [];
+            const leaks = intelx.leak_findings || [];
+            const pastes = intelx.paste_findings || [];
+            const emails = intelx.phonebook_emails || [];
+            const subdomains = intelx.phonebook_subdomains || [];
+            const isLimited = intelx.is_limited;
+
+            html += `<p style="margin-bottom:15px;color:#666;">
+                Dark web: <strong>${darkweb.length}</strong> |
+                Leaks: <strong>${leaks.length}</strong> |
+                Pastes: <strong>${pastes.length}</strong>
+                ${isLimited ? '<span class="badge badge-warning">Limited (public API key)</span>' : ''}
+            </p>`;
+
+            // Dark Web findings (Tor/I2P) - highest priority
+            if (darkweb.length > 0) {
+                html += `<h4 style="color:#dc2626;margin-bottom:10px;">🌑 Dark Web Findings (Tor/I2P) - ${darkweb.length}</h4>
+                <table class="findings-table">
+                    <thead><tr><th>Source</th><th>Name</th><th>Date</th><th>Action</th></tr></thead>
+                    <tbody>`;
+
+                darkweb.forEach(f => {
+                    const date = f.date ? f.date.substring(0, 10) : '-';
+                    html += `<tr style="background:rgba(220,38,38,0.15);">
+                        <td><span class="badge badge-danger">${f.media_type || 'darknet'}</span></td>
+                        <td><code>${f.name || 'Unknown'}</code></td>
+                        <td>${date}</td>
+                        <td>${f.intelx_url ? `<a href="${f.intelx_url}" target="_blank" class="btn-view btn-external">View on IntelX</a>` : '-'}</td>
+                    </tr>`;
+                });
+
+                html += `</tbody></table>`;
+            }
+
+            // Data Leak findings
+            if (leaks.length > 0) {
+                html += `<h4 style="color:#f59e0b;margin:20px 0 10px;">💧 Data Leak Findings - ${leaks.length}</h4>
+                <table class="findings-table">
+                    <thead><tr><th>Source</th><th>Name</th><th>Date</th><th>Action</th></tr></thead>
+                    <tbody>`;
+
+                leaks.forEach(f => {
+                    const date = f.date ? f.date.substring(0, 10) : '-';
+                    html += `<tr style="background:rgba(245,158,11,0.15);">
+                        <td><span class="badge badge-warning">${f.media_type || 'leak'}</span></td>
+                        <td><code>${f.name || 'Unknown'}</code></td>
+                        <td>${date}</td>
+                        <td>${f.intelx_url ? `<a href="${f.intelx_url}" target="_blank" class="btn-view btn-external">View on IntelX</a>` : '-'}</td>
+                    </tr>`;
+                });
+
+                html += `</tbody></table>`;
+            }
+
+            // Paste findings
+            if (pastes.length > 0) {
+                html += `<h4 style="margin:20px 0 10px;">📋 Paste Site Findings - ${pastes.length}</h4>
+                <table class="findings-table">
+                    <thead><tr><th>Source</th><th>Name</th><th>Date</th><th>Action</th></tr></thead>
+                    <tbody>`;
+
+                pastes.forEach(f => {
+                    const date = f.date ? f.date.substring(0, 10) : '-';
+                    html += `<tr>
+                        <td><span class="badge badge-info">${f.media_type || 'paste'}</span></td>
+                        <td><code>${f.name || 'Unknown'}</code></td>
+                        <td>${date}</td>
+                        <td>${f.intelx_url ? `<a href="${f.intelx_url}" target="_blank" class="btn-view btn-external">View on IntelX</a>` : '-'}</td>
+                    </tr>`;
+                });
+
+                html += `</tbody></table>`;
+            }
+
+            // Phonebook results (FREE feature)
+            if (emails.length > 0 || subdomains.length > 0) {
+                html += `<h4 style="margin:20px 0 10px;">📖 Phonebook Results (Free)</h4>`;
+
+                if (subdomains.length > 0) {
+                    html += `<details style="margin-bottom:10px;">
+                        <summary style="cursor:pointer;font-weight:bold;">Discovered Subdomains (${subdomains.length})</summary>
+                        <div style="padding:10px;background:rgba(255,255,255,0.05);border-radius:4px;margin-top:5px;max-height:200px;overflow-y:auto;">
+                            ${subdomains.slice(0, 100).map(s => `<code style="margin-right:10px;display:inline-block;margin-bottom:5px;">${s.value}</code>`).join('')}
+                            ${subdomains.length > 100 ? `<div style="margin-top:10px;color:#666;">... and ${subdomains.length - 100} more</div>` : ''}
+                        </div>
+                    </details>`;
+                }
+
+                if (emails.length > 0) {
+                    html += `<details>
+                        <summary style="cursor:pointer;font-weight:bold;">Discovered Email Addresses (${emails.length})</summary>
+                        <div style="padding:10px;background:rgba(255,255,255,0.05);border-radius:4px;margin-top:5px;max-height:200px;overflow-y:auto;">
+                            ${emails.slice(0, 100).map(e => `<code style="margin-right:10px;display:inline-block;margin-bottom:5px;">${e.value}</code>`).join('')}
+                            ${emails.length > 100 ? `<div style="margin-top:10px;color:#666;">... and ${emails.length - 100} more</div>` : ''}
+                        </div>
+                    </details>`;
+                }
+            }
+
+            if (darkweb.length === 0 && leaks.length === 0 && pastes.length === 0) {
+                html += `<div class="no-data" style="padding:20px;background:rgba(34,197,94,0.15);border-color:#22c55e;">
+                    <span style="color:#22c55e;">✓</span> No dark web, leak, or paste findings detected.
+                </div>`;
+            }
+        }
+
+        html += `</div>`;
+    });
+
+    document.getElementById('intelx').innerHTML = html || '<div class="no-data">No domains monitored.</div>';
+}
+
+function renderCTLogs(domains) {
+    let html = '';
+
+    Object.entries(domains || {}).forEach(([domain, data]) => {
+        const ctData = data.ct_logs || {};
+
+        html += `<div class="domain-section">
+            <div class="domain-title">🔐 ${domain}</div>`;
+
+        if (!ctData.success) {
+            if (ctData.error) {
+                html += `<div class="no-data">Scan failed: ${ctData.error}</div>`;
+            } else {
+                html += `<div class="no-data">No CT log data available</div>`;
+            }
+        } else {
+            const highRisk = ctData.high_risk_domains || [];
+            const totalCerts = ctData.total_new_certs || 0;
+            const domainsChecked = ctData.domains_checked || 0;
+
+            html += `<p style="margin-bottom:15px;color:#666;">
+                Domains checked: <strong>${domainsChecked}</strong> |
+                Domains with new certs: <strong>${ctData.domains_with_certs || 0}</strong> |
+                Total new certificates: <strong>${totalCerts}</strong>
+                ${ctData.days_searched ? `<span style="color:#888;"> (last ${ctData.days_searched} days)</span>` : ''}
+            </p>`;
+
+            if (highRisk.length > 0) {
+                html += `<h4 style="color:#dc2626;margin-bottom:10px;">⚠️ Lookalike Domains with New SSL Certificates</h4>
+                <table class="findings-table">
+                    <thead><tr><th>Domain</th><th>Cert Count</th><th>Issuer</th><th>Issued</th><th>Action</th></tr></thead>
+                    <tbody>`;
+
+                highRisk.forEach(item => {
+                    const certs = item.certificates || [];
+                    certs.slice(0, 3).forEach((cert, idx) => {
+                        html += `<tr ${idx === 0 ? 'style="border-top:2px solid #ddd;"' : ''}>
+                            <td>${idx === 0 ? `<code>${item.domain}</code><br><span class="badge badge-warning">${item.cert_count} cert(s)</span>` : ''}</td>
+                            <td>${cert.common_name || '-'}</td>
+                            <td>${cert.issuer_name ? cert.issuer_name.substring(0, 40) + '...' : '-'}</td>
+                            <td>${cert.not_before ? new Date(cert.not_before).toLocaleDateString() : '-'}</td>
+                            <td>${idx === 0 ? `<a href="${item.crt_sh_link}" target="_blank" class="btn-view btn-external">View on crt.sh</a>` : ''}</td>
+                        </tr>`;
+                    });
+                    if (certs.length > 3) {
+                        html += `<tr><td colspan="5" style="text-align:center;color:#666;">... and ${certs.length - 3} more certificates</td></tr>`;
+                    }
+                });
+
+                html += `</tbody></table>`;
+            } else {
+                html += `<div class="no-data" style="padding:20px;">No new SSL certificates detected for lookalike domains in the past ${ctData.days_searched || 7} days.</div>`;
+            }
+        }
+
+        html += `</div>`;
+    });
+
+    document.getElementById('ctlogs').innerHTML = html || '<div class="no-data">No domains monitored.</div>';
+}
+
+function renderWhois(domains) {
+    let html = '';
+
+    Object.entries(domains || {}).forEach(([domain, data]) => {
+        const whoisData = data.whois || {};
+
+        html += `<div class="domain-section">
+            <div class="domain-title">📋 ${domain}</div>`;
+
+        if (!whoisData.success) {
+            if (whoisData.error) {
+                html += `<div class="no-data">Scan failed: ${whoisData.error}</div>`;
+            } else {
+                html += `<div class="no-data">No WHOIS data available</div>`;
+            }
+        } else {
+            const highSeverity = whoisData.high_severity_changes || [];
+            const newlyRegistered = whoisData.newly_registered || [];
+            const domainsScanned = whoisData.domains_scanned || 0;
+            const domainsChanged = whoisData.domains_with_changes || 0;
+
+            html += `<p style="margin-bottom:15px;color:#666;">
+                Domains scanned: <strong>${domainsScanned}</strong> |
+                Domains with changes: <strong>${domainsChanged}</strong> |
+                High severity: <strong>${highSeverity.length}</strong> |
+                Newly registered: <strong>${newlyRegistered.length}</strong>
+            </p>`;
+
+            // High severity WHOIS changes
+            if (highSeverity.length > 0) {
+                html += `<h4 style="color:#dc2626;margin-bottom:10px;">⚠️ High Severity WHOIS Changes</h4>
+                <table class="findings-table">
+                    <thead><tr><th>Domain</th><th>Change Type</th><th>Previous</th><th>Current</th></tr></thead>
+                    <tbody>`;
+
+                highSeverity.forEach(item => {
+                    const changes = item.changes || [];
+                    changes.forEach((change, idx) => {
+                        html += `<tr style="background:rgba(220,38,38,0.15);">
+                            <td>${idx === 0 ? `<code>${item.domain}</code>` : ''}</td>
+                            <td><span class="badge badge-danger">${change.field}</span></td>
+                            <td><code>${formatWhoisValue(change.previous)}</code></td>
+                            <td><code>${formatWhoisValue(change.current)}</code></td>
+                        </tr>`;
+                    });
+                });
+
+                html += `</tbody></table>`;
+            }
+
+            // Newly registered domains
+            if (newlyRegistered.length > 0) {
+                html += `<h4 style="color:#f59e0b;margin:20px 0 10px;">🆕 Recently Registered Lookalike Domains</h4>
+                <table class="findings-table">
+                    <thead><tr><th>Domain</th><th>Creation Date</th><th>Registrar</th></tr></thead>
+                    <tbody>`;
+
+                newlyRegistered.forEach(item => {
+                    html += `<tr style="background:rgba(245,158,11,0.15);">
+                        <td><code>${item.domain}</code></td>
+                        <td>${item.creation_date ? new Date(item.creation_date).toLocaleDateString() : '-'}</td>
+                        <td>${item.registrar || '-'}</td>
+                    </tr>`;
+                });
+
+                html += `</tbody></table>`;
+            }
+
+            if (highSeverity.length === 0 && newlyRegistered.length === 0) {
+                html += `<div class="no-data" style="padding:20px;">No WHOIS changes or newly registered domains detected.</div>`;
+            }
+        }
+
+        html += `</div>`;
+    });
+
+    document.getElementById('whois').innerHTML = html || '<div class="no-data">No domains monitored.</div>';
+}
+
+function formatWhoisValue(value) {
+    if (value === null || value === undefined) return 'N/A';
+    if (Array.isArray(value)) return value.join(', ');
+    if (typeof value === 'object') return JSON.stringify(value);
+    return String(value);
+}
+
+function renderHIBP(domains) {
+    let html = '';
+
+    Object.entries(domains || {}).forEach(([domain, data]) => {
+        const hibpData = data.hibp || {};
+
+        html += `<div class="domain-section">
+            <div class="domain-title">🔓 ${domain}</div>`;
+
+        if (!hibpData.success) {
+            if (hibpData.error) {
+                html += `<div class="no-data">HIBP check failed: ${hibpData.error}</div>`;
+            } else {
+                html += `<div class="no-data">No HIBP data available</div>`;
+            }
+        } else {
+            const breachedEmails = hibpData.breached_emails || [];
+            const cleanEmails = hibpData.clean_emails || [];
+            const emailsChecked = hibpData.emails_checked || 0;
+            const totalBreaches = hibpData.total_breaches || 0;
+
+            html += `<p style="margin-bottom:15px;color:#666;">
+                Emails checked: <strong>${emailsChecked}</strong> |
+                Breached: <strong>${breachedEmails.length}</strong> |
+                Clean: <strong>${cleanEmails.length}</strong> |
+                Total breach appearances: <strong>${totalBreaches}</strong>
+            </p>`;
+
+            if (breachedEmails.length > 0) {
+                html += `<h4 style="color:#dc2626;margin-bottom:10px;">⚠️ Breached Email Addresses</h4>
+                <table class="findings-table">
+                    <thead><tr><th>Email</th><th>Breaches</th><th>Breach Names</th><th>Action</th></tr></thead>
+                    <tbody>`;
+
+                breachedEmails.forEach(item => {
+                    const breaches = item.breaches || [];
+                    let breachNames = breaches.slice(0, 3).map(b =>
+                        typeof b === 'object' ? b.Name : b
+                    ).join(', ');
+                    if (breaches.length > 3) {
+                        breachNames += ` ... +${breaches.length - 3} more`;
+                    }
+
+                    html += `<tr style="background:rgba(220,38,38,0.15);">
+                        <td><code>${item.email}</code></td>
+                        <td><span class="badge badge-danger">${item.breach_count}</span></td>
+                        <td>${breachNames || '-'}</td>
+                        <td><a href="https://haveibeenpwned.com/account/${encodeURIComponent(item.email)}" target="_blank" class="btn-view btn-external">View on HIBP</a></td>
+                    </tr>`;
+                });
+
+                html += `</tbody></table>`;
+            } else if (emailsChecked > 0) {
+                html += `<div class="no-data" style="padding:20px;background:rgba(34,197,94,0.15);border-color:#22c55e;">
+                    <span style="color:#22c55e;">✓</span> No breached emails found among ${emailsChecked} checked addresses.
+                </div>`;
+            }
+
+            if (cleanEmails.length > 0 && breachedEmails.length > 0) {
+                html += `<details style="margin-top:15px;">
+                    <summary style="cursor:pointer;color:#666;">Show ${cleanEmails.length} clean emails</summary>
+                    <div style="padding:10px;background:rgba(255,255,255,0.05);border-radius:4px;margin-top:5px;">
+                        ${cleanEmails.map(e => `<code style="margin-right:10px;">${e}</code>`).join('')}
+                    </div>
+                </details>`;
+            }
+        }
+
+        html += `</div>`;
+    });
+
+    document.getElementById('hibp').innerHTML = html || '<div class="no-data">No domains monitored.</div>';
+}
+
+function renderShodan(domains) {
+    let html = '';
+
+    Object.entries(domains || {}).forEach(([domain, data]) => {
+        const shodanData = data.shodan || {};
+
+        html += `<div class="domain-section">
+            <div class="domain-title">🔍 ${domain}</div>`;
+
+        if (!shodanData.success) {
+            if (shodanData.error) {
+                html += `<div class="no-data">Shodan check failed: ${shodanData.error}</div>`;
+            } else {
+                html += `<div class="no-data">No Shodan data available</div>`;
+            }
+        } else {
+            const hosts = shodanData.hosts || [];
+            const exposedServices = shodanData.exposed_services || [];
+            const vulnerabilities = shodanData.vulnerabilities || [];
+            const totalPorts = shodanData.total_ports || 0;
+            const ipsChecked = shodanData.ips_checked || 0;
+
+            // Only show stats bar if there are findings to investigate
+            const hasFindings = vulnerabilities.length > 0 || exposedServices.length > 0;
+            if (hasFindings) {
+                html += `<p style="margin-bottom:15px;color:#666;">
+                    IPs checked: <strong>${ipsChecked}</strong> |
+                    Vulnerabilities: <strong style="color:${vulnerabilities.length > 0 ? '#dc2626' : 'inherit'};">${vulnerabilities.length}</strong> |
+                    Risky services: <strong style="color:${exposedServices.length > 0 ? '#f59e0b' : 'inherit'};">${exposedServices.length}</strong>
+                </p>`;
+            }
+
+            // Vulnerabilities first (highest priority)
+            if (vulnerabilities.length > 0) {
+                html += `<h4 style="color:#dc2626;margin-bottom:10px;">🔴 Vulnerabilities Detected</h4>
+                <table class="findings-table">
+                    <thead><tr><th>IP</th><th>CVE</th><th>Action</th></tr></thead>
+                    <tbody>`;
+
+                vulnerabilities.forEach(vuln => {
+                    html += `<tr style="background:rgba(220,38,38,0.15);">
+                        <td><code>${vuln.ip}</code></td>
+                        <td><span class="badge badge-danger">${vuln.cve}</span></td>
+                        <td><a href="https://nvd.nist.gov/vuln/detail/${vuln.cve}" target="_blank" class="btn-view btn-external">View CVE</a></td>
+                    </tr>`;
+                });
+
+                html += `</tbody></table>`;
+            }
+
+            // Exposed risky services
+            if (exposedServices.length > 0) {
+                html += `<h4 style="color:#f59e0b;margin:20px 0 10px;">⚠️ Risky Exposed Services</h4>
+                <table class="findings-table">
+                    <thead><tr><th>IP</th><th>Port</th><th>Service</th><th>Risk</th></tr></thead>
+                    <tbody>`;
+
+                exposedServices.forEach(svc => {
+                    html += `<tr style="background:rgba(245,158,11,0.15);">
+                        <td><code>${svc.ip}</code></td>
+                        <td><strong>${svc.port}</strong></td>
+                        <td>${svc.product || 'Unknown'}</td>
+                        <td>${svc.risk_reason || '-'}</td>
+                    </tr>`;
+                });
+
+                html += `</tbody></table>`;
+            }
+
+            // Host details - only show if there are findings to investigate
+            if (hasFindings && hosts.length > 0) {
+                html += `<h4 style="margin:20px 0 10px;">📋 Affected Hosts</h4>`;
+                hosts.forEach(host => {
+                    if (host.error) {
+                        html += `<div class="no-data" style="padding:10px;margin-bottom:10px;">
+                            <code>${host.ip}</code> - ${host.error}
+                        </div>`;
+                    } else {
+                        const ports = host.ports || [];
+                        html += `<div style="background:rgba(255,255,255,0.05);padding:15px;border-radius:8px;margin-bottom:10px;">
+                            <div style="display:flex;justify-content:space-between;align-items:center;">
+                                <div>
+                                    <strong><code>${host.ip}</code></strong>
+                                    ${host.org ? `<span style="color:#666;margin-left:10px;">${host.org}</span>` : ''}
+                                    ${host.country ? `<span style="color:#888;margin-left:10px;">📍 ${host.country}</span>` : ''}
+                                </div>
+                                <a href="https://www.shodan.io/host/${host.ip}" target="_blank" class="btn-view btn-external">View on Shodan</a>
+                            </div>
+                            <div style="margin-top:10px;">
+                                <strong>All ports:</strong> ${ports.length > 0 ? ports.join(', ') : 'None detected'}
+                            </div>
+                            ${host.hostnames && host.hostnames.length > 0 ? `<div style="margin-top:5px;"><strong>Hostnames:</strong> ${host.hostnames.join(', ')}</div>` : ''}
+                        </div>`;
+                    }
+                });
+            }
+
+            // All clear message when no risks found
+            if (!hasFindings) {
+                html += `<div class="no-data" style="padding:20px;background:rgba(34,197,94,0.15);border-color:#22c55e;">
+                    <span style="color:#22c55e;font-size:1.2em;">✓</span>
+                    <strong style="color:#16a34a;">No infrastructure risks detected</strong><br>
+                    <span style="color:#666;font-size:0.9em;margin-top:8px;display:block;">
+                        Checked ${ipsChecked} IP${ipsChecked !== 1 ? 's' : ''} •
+                        Found ${totalPorts} open port${totalPorts !== 1 ? 's' : ''} (standard web ports like 80/443 are expected) •
+                        No CVEs or risky services exposed
+                    </span>
+                </div>`;
+            } else if (totalPorts === 0 && !hasFindings) {
+                html += `<div class="no-data" style="padding:20px;">
+                    No data found in Shodan for this domain's infrastructure.
+                </div>`;
+            }
+        }
+
+        html += `</div>`;
+    });
+
+    document.getElementById('shodan').innerHTML = html || '<div class="no-data">No domains monitored.</div>';
+}
+
+function renderAbuseCH(domains) {
+    let html = '';
+
+    Object.entries(domains || {}).forEach(([domain, data]) => {
+        const abusechData = data.abusech || {};
+
+        html += `<div class="domain-section">
+            <div class="domain-title">☠️ ${domain}</div>`;
+
+        if (!abusechData.success) {
+            if (abusechData.error) {
+                html += `<div class="no-data">abuse.ch check failed: ${abusechData.error}</div>`;
+            } else {
+                html += `<div class="no-data">No abuse.ch data available (no active lookalikes)</div>`;
+            }
+        } else {
+            const maliciousDomains = abusechData.malicious_domains || [];
+            const cleanDomains = abusechData.clean_domains || [];
+            const domainsChecked = abusechData.domains_checked || 0;
+
+            html += `<p style="margin-bottom:15px;color:#666;">
+                Lookalikes checked: <strong>${domainsChecked}</strong> |
+                Malicious: <strong style="color:${maliciousDomains.length > 0 ? '#dc2626' : 'inherit'};">${maliciousDomains.length}</strong> |
+                Clean: <strong>${cleanDomains.length}</strong>
+            </p>`;
+
+            if (maliciousDomains.length > 0) {
+                html += `<h4 style="color:#dc2626;margin-bottom:10px;">🔴 Malware/C2 Domains Detected</h4>
+                <table class="findings-table">
+                    <thead><tr><th>Domain</th><th>Threats</th><th>Sources</th><th>Action</th></tr></thead>
+                    <tbody>`;
+
+                maliciousDomains.forEach(item => {
+                    const threatTypes = item.threat_types || [];
+                    const urlhaus = item.urlhaus || {};
+                    const threatfox = item.threatfox || {};
+
+                    let sources = [];
+                    let links = [];
+
+                    if (urlhaus.found) {
+                        sources.push(`URLhaus (${urlhaus.url_count} URLs)`);
+                        if (urlhaus.urlhaus_link) {
+                            links.push(`<a href="${urlhaus.urlhaus_link}" target="_blank" class="btn-view btn-external">URLhaus</a>`);
+                        }
+                    }
+                    if (threatfox.found) {
+                        sources.push(`ThreatFox (${threatfox.ioc_count} IOCs)`);
+                        if (threatfox.threatfox_link) {
+                            links.push(`<a href="${threatfox.threatfox_link}" target="_blank" class="btn-view btn-external">ThreatFox</a>`);
+                        }
+                    }
+
+                    html += `<tr style="background:rgba(220,38,38,0.15);">
+                        <td><code>${item.domain}</code></td>
+                        <td>${threatTypes.length > 0 ? threatTypes.map(t => `<span class="badge badge-danger">${t}</span>`).join(' ') : '-'}</td>
+                        <td>${sources.join(', ') || '-'}</td>
+                        <td>${links.join(' ') || '-'}</td>
+                    </tr>`;
+                });
+
+                html += `</tbody></table>`;
+            } else if (domainsChecked > 0) {
+                html += `<div class="no-data" style="padding:20px;background:rgba(34,197,94,0.15);border-color:#22c55e;">
+                    <span style="color:#22c55e;">✓</span> No malware or C2 activity detected among ${domainsChecked} active lookalike domains.
+                </div>`;
+            }
+        }
+
+        html += `</div>`;
+    });
+
+    document.getElementById('abusech').innerHTML = html || '<div class="no-data">No domains monitored.</div>';
+}
+
+function renderAbuseIPDB(domains) {
+    let html = '';
+
+    Object.entries(domains || {}).forEach(([domain, data]) => {
+        const abuseipdbData = data.abuseipdb || {};
+
+        html += `<div class="domain-section">
+            <div class="domain-title">🚨 ${domain}</div>`;
+
+        if (!abuseipdbData.success) {
+            if (abuseipdbData.error) {
+                html += `<div class="no-data">AbuseIPDB check failed: ${abuseipdbData.error}</div>`;
+            } else {
+                html += `<div class="no-data">No AbuseIPDB data available (no active lookalikes)</div>`;
+            }
+        } else {
+            const domainsWithMalicious = abuseipdbData.domains_with_malicious_ips || [];
+            const cleanDomains = abuseipdbData.clean_domains || [];
+            const domainsChecked = abuseipdbData.domains_checked || 0;
+
+            html += `<p style="margin-bottom:15px;color:#666;">
+                Lookalikes checked: <strong>${domainsChecked}</strong> |
+                With malicious IPs: <strong style="color:${domainsWithMalicious.length > 0 ? '#dc2626' : 'inherit'};">${domainsWithMalicious.length}</strong> |
+                Clean: <strong>${cleanDomains.length}</strong>
+            </p>`;
+
+            if (domainsWithMalicious.length > 0) {
+                html += `<h4 style="color:#dc2626;margin-bottom:10px;">🔴 Domains Resolving to Malicious IPs</h4>
+                <table class="findings-table">
+                    <thead><tr><th>Domain</th><th>IP Address</th><th>Abuse Score</th><th>Reports</th><th>Action</th></tr></thead>
+                    <tbody>`;
+
+                domainsWithMalicious.forEach(item => {
+                    const maliciousIps = item.malicious_ips || [];
+
+                    maliciousIps.forEach((ipInfo, idx) => {
+                        const ip = ipInfo.ip || '';
+                        const score = ipInfo.abuse_score || 0;
+                        const reports = ipInfo.total_reports || 0;
+                        const country = ipInfo.country || '';
+                        const link = ipInfo.link || `https://www.abuseipdb.com/check/${ip}`;
+
+                        // Color code based on abuse score
+                        const scoreClass = score >= 75 ? 'badge-danger' :
+                                          score >= 50 ? 'badge-warning' : 'badge-info';
+
+                        html += `<tr style="background:rgba(220,38,38,0.15);">
+                            <td>${idx === 0 ? `<code>${item.domain}</code>` : ''}</td>
+                            <td><code>${ip}</code> ${country ? `(${country})` : ''}</td>
+                            <td><span class="badge ${scoreClass}">${score}%</span></td>
+                            <td>${reports}</td>
+                            <td>${idx === 0 ? `<a href="${link}" target="_blank" class="btn-view btn-external">View on AbuseIPDB</a>` : ''}</td>
+                        </tr>`;
+                    });
+                });
+
+                html += `</tbody></table>`;
+            } else if (domainsChecked > 0) {
+                html += `<div class="no-data" style="padding:20px;background:rgba(34,197,94,0.15);border-color:#22c55e;">
+                    <span style="color:#22c55e;">✓</span> No malicious IPs detected among ${domainsChecked} active lookalike domains.
+                </div>`;
+            }
+        }
+
+        html += `</div>`;
+    });
+
+    document.getElementById('abuseipdb').innerHTML = html || '<div class="no-data">No domains monitored.</div>';
+}
+
+function showTab(tabId, scrollToTabs = false) {
+    // Remove active from all tabs and content
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+
+    // Find and activate the correct tab button
+    const tabBtn = document.querySelector(`.tab[onclick*="'${tabId}'"]`);
+    if (tabBtn) tabBtn.classList.add('active');
+
+    // Activate the tab content
+    document.getElementById(tabId).classList.add('active');
+
+    // Scroll to tabs section if called from summary card
+    if (scrollToTabs) {
+        document.querySelector('.tabs').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+}
+
+// Initialize
+document.addEventListener('DOMContentLoaded', () => {
+    loadHistory();
+    const urlFilename = {% if filename %}'{{ filename }}'{% else %}null{% endif %};
+    loadReport(urlFilename);
+});
+</script>
+{% endblock %}

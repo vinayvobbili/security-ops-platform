@@ -111,12 +111,11 @@ def build_ticket_message(seconds_remaining, ticket, due_date_str, index):
     if ticket_owner:
         # Use Webex person email format to make it clickable
         if '@' in ticket_owner:
-            owner_text = f"\n<@personEmail:{ticket_owner}>"
+            owner_text = f"<@personEmail:{ticket_owner}>"
         else:
-            # If it's just a username, assume it's the part before @ and add domain if needed
-            owner_text = ticket_owner
+            owner_text = f"**{ticket_owner}**"
     else:
-        owner_text = "Unassigned"
+        owner_text = "**Unassigned**"
 
     # Format time remaining
     minutes = seconds_remaining // 60
@@ -143,8 +142,8 @@ def build_ticket_message(seconds_remaining, ticket, due_date_str, index):
             pass
 
     return (
-        f"{index}. [{ticket_id}]({incident_url}) - {ticket_name}  \n\n"
-        f"   {owner_text}, act within the next **{time_text}** {sla_info}"
+        f"{index}. [{ticket_id}]({incident_url}) - {ticket_name}\n"
+        f"   {owner_text}, act within the next **{time_text}**{sla_info}"
     )
 
 
@@ -210,5 +209,5 @@ def start(room_id):
 
 
 if __name__ == "__main__":
-    room_id = CONFIG.webex_room_id_test_space
+    room_id = CONFIG.webex_room_id_vinay_test_space
     start(room_id)

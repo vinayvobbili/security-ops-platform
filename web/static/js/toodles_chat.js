@@ -500,7 +500,7 @@ async function fetchOnCallInfo() {
 
         if (result.success) {
             const info = result.data;
-            addBotMessage(`${userName}, the DnR On-call person is ${info.name} - ${info.email_address} - ${info.phone_number}`);
+            addBotMessage(`${userName}, the IR On-call person is ${info.name} - ${info.email_address} - ${info.phone_number}`);
         } else {
             addBotMessage(`Error: ${result.error}`);
         }

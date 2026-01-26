@@ -1,0 +1,180 @@
+{% extends 'base_layout.html' %}
+
+{% block page_title_plain %}Domain Lookalike Detector{% endblock %}
+
+{% block extra_css %}<link rel="stylesheet" href="{{ url_for('static', filename='css/domain_lookalike_search.css') }}">{% endblock %}
+
+{% block body_classes %}domain-lookalike-page{% endblock %}
+
+{% set page_title_text = 'Domain Lookalike Detector' %}
+{% set page_title_left_icon = '🔍' %}
+{% set page_title_right_icon = '🌐' %}
+
+{% block content %}
+    <div class="container">
+        <div class="intro-section">
+            <p class="intro-text">
+                Detect potentially malicious lookalike domains (typosquatting, homograph attacks, etc.)
+                using advanced fuzzing algorithms. Powered by <strong>dnstwist</strong>.
+            </p>
+        </div>
+
+        <form id="searchForm" class="search-form">
+            <div class="form-group">
+                <label for="domain">🌐 Target Domain:</label>
+                <input
+                    type="text"
+                    id="domain"
+                    name="domain"
+                    placeholder="example.com"
+                    required
+                    pattern="[a-zA-Z0-9][a-zA-Z0-9.\-]*\.[a-zA-Z]{2,}"
+                    title="Please enter a valid domain (e.g., example.com)"
+                >
+                <span class="help-text">Enter a domain without http:// or www</span>
+            </div>
+
+            <div class="form-group checkbox-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" id="registered_only" name="registered_only">
+                    <span class="checkbox-text">🎯 Show only registered domains (filter out unregistered)</span>
+                </label>
+                <span class="help-text">⚡ Unchecked: Show all variations (registered + unregistered)</span>
+                <span class="help-text">🎯 Checked: Show only registered domains + check parking status</span>
+            </div>
+
+            <div class="form-group checkbox-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" id="include_malicious_tlds" name="include_malicious_tlds">
+                    <span class="checkbox-text">🌍 Include malicious TLD variations</span>
+                </label>
+                <span class="help-text">Adds variations using TLDs commonly abused in phishing: .tk, .buzz, .xyz, .top, .ga, .ml, .info, .cf, .gq, .icu, .wang, .live, .net, .cn, .online, .host, .org, .us, .ru</span>
+            </div>
+
+            <div class="info-box">
+                <div class="info-header" onclick="this.parentElement.classList.toggle('expanded')">
+                    <span class="info-icon">ℹ️</span>
+                    <span class="info-title">How does this work?</span>
+                    <span class="info-toggle">▼</span>
+                </div>
+                <div class="info-content">
+                    <p><strong>How scanning works:</strong> dnstwist generates thousands of lookalike domain variations using techniques like typosquatting, homoglyphs, bit-flipping, and more. It then performs DNS lookups on each variation to check if it's registered.</p>
+                    <p><strong>Show All (unchecked):</strong> Displays every generated variation - both registered and unregistered domains. Use this to see the full attack surface and what domains <em>could</em> be registered by attackers. Expect 1,000-3,000+ results.</p>
+                    <p><strong>Registered Only (checked):</strong> Filters results to show only domains that are actually registered and have DNS records. These are potential active threats. Also performs parking detection to identify which domains are parked/for-sale vs. actively hosting content.</p>
+                    <p><strong>Parking Detection:</strong> When filtering to registered-only, we visit each domain to detect if it's parked (for sale) or actively serving content. Watch for badges to update in real-time as checks complete.</p>
+                </div>
+            </div>
+
+            <div class="button-group">
+                <button type="submit" class="submit-btn">
+                    <span class="btn-icon">🚀</span>
+                    <span class="btn-text">Scan for Lookalikes</span>
+                </button>
+                <div id="spinner" class="spinner" style="display:none;">
+                    <div class="spinner-circle"></div>
+                    <span class="spinner-text">Scanning...</span>
+                </div>
+            </div>
+        </form>
+
+        <div id="resultsContainer" class="results-container" style="display:none;">
+            <div class="results-header">
+                <h2>🔎 Scan Results</h2>
+                <div class="results-stats">
+                    <div class="stat-card">
+                        <div class="stat-label">Original Domain</div>
+                        <div class="stat-value" id="originalDomain">-</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Total Lookalikes</div>
+                        <div class="stat-value" id="totalCount">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Registered</div>
+                        <div class="stat-value registered" id="registeredCount">0</div>
+                    </div>
+                    <div class="stat-card" style="display:none;">
+                        <div class="stat-label">🅿️ Parked</div>
+                        <div class="stat-value parked" id="parkedCount">0</div>
+                    </div>
+                    <div class="stat-card" id="rfStatCard" style="display:none;">
+                        <div class="stat-label">🛡️ RF High Risk</div>
+                        <div class="stat-value rf-high-risk" id="rfHighRiskCount">0</div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="parkingIndicator" class="parking-status-indicator" style="display:none;">
+                <span class="indicator-icon">🔄</span>
+                <span class="indicator-text">Checking parking status for registered domains...</span>
+                <span class="indicator-progress" id="parkingProgress">0 / 0 checked</span>
+            </div>
+
+            <div id="rfIndicator" class="rf-status-indicator" style="display:none;">
+                <span class="indicator-icon">🛡️</span>
+                <span class="indicator-text">Enriching with RecordedFuture threat intelligence...</span>
+                <span class="indicator-progress" id="rfProgress">0 / 0 enriched</span>
+            </div>
+
+            <div class="filter-controls">
+                <div class="filter-group">
+                    <label for="fuzzerFilter">Filter by Technique:</label>
+                    <select id="fuzzerFilter">
+                        <option value="all">All Techniques</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label for="statusFilter">Filter by Status:</label>
+                    <select id="statusFilter">
+                        <option value="all">All Domains</option>
+                        <option value="registered">Registered Only</option>
+                        <option value="unregistered">Unregistered Only</option>
+                    </select>
+                </div>
+                <div class="filter-group" id="parkingFilterGroup" style="display:none;">
+                    <label for="parkingFilter">Filter by Parking:</label>
+                    <select id="parkingFilter">
+                        <option value="all">All</option>
+                        <option value="parked">🅿️ Parked Only</option>
+                        <option value="active">🌐 Active Only</option>
+                        <option value="unknown">❓ Unknown</option>
+                    </select>
+                </div>
+                <div class="filter-group" id="rfFilterGroup" style="display:none;">
+                    <label for="rfFilter">Filter by RF Risk:</label>
+                    <select id="rfFilter">
+                        <option value="all">All</option>
+                        <option value="critical">🔴 Critical (90+)</option>
+                        <option value="high">🟠 High (65+)</option>
+                        <option value="medium">🟡 Medium (25+)</option>
+                        <option value="low">🟢 Low (&lt;25)</option>
+                    </select>
+                </div>
+                <button id="rfEnrichBtn" class="rf-enrich-btn" style="display:none;">🛡️ RF Enrich</button>
+                <button id="exportBtn" class="export-btn">📥 Export Results</button>
+            </div>
+
+            <div id="resultsTable" class="results-table"></div>
+        </div>
+
+        <div id="errorContainer" class="error-container" style="display:none;">
+            <div class="error-icon">⚠️</div>
+            <div class="error-message" id="errorMessage"></div>
+        </div>
+    </div>
+
+    <!-- Domain Details Modal -->
+    <div id="domainModal" class="modal" style="display:none;">
+        <div class="modal-content">
+            <span class="modal-close">&times;</span>
+            <h2 class="modal-title">🔍 Domain Details</h2>
+            <div id="modalBody" class="modal-body">
+                <div class="modal-spinner">Loading...</div>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block extra_js %}
+    <script src="{{ url_for('static', filename='js/domain_lookalike_search.js') }}"></script>
+{% endblock %}

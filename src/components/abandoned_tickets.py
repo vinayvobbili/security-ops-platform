@@ -73,7 +73,7 @@ def generate_daily_summary(tickets) -> str | None:
         return "Error generating report. Please check the logs."
 
 
-def send_report(room_id=config.webex_room_id_test_space):
+def send_report(room_id=config.webex_room_id_vinay_test_space):
     webex_api = WebexAPI(access_token=config.webex_bot_access_token_soar)
 
     today_minus_7 = datetime.now(tz=eastern) - timedelta(days=7)
@@ -104,13 +104,13 @@ def send_report(room_id=config.webex_room_id_test_space):
         logger.debug(f'Daily Summary:\n{daily_summary}')
         webex_api.messages.create(
             roomId=room_id,
-            text="Abandoned Tickets Summary!",
-            markdown=f'**Abandoned Tickets Summary** (Type={config.team_name} - TP, Last Touched=7+ days ago)\n ``` \n {daily_summary}'
+            text="Abandoned Tickets!",
+            markdown=f'**Abandoned Tickets** (Type={config.team_name} - TP, Last Touched=7+ days ago)\n ``` \n {daily_summary}'
         )
 
 
 def main():
-    send_report(room_id=config.webex_room_id_test_space)
+    send_report(room_id=config.webex_room_id_vinay_test_space)
 
 
 if __name__ == "__main__":

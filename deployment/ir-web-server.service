@@ -5,10 +5,10 @@ After=network.target
 [Service]
 Type=simple
 User=vinay
-WorkingDirectory=/opt/incident-response
-Environment="PATH=/opt/incident-response/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+WorkingDirectory=/home/vinay/pub/IR
+Environment="PATH=/home/vinay/pub/IR/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 Environment="SKIP_POKEDEX_WARMUP=true"
-ExecStart=/opt/incident-response/.venv/bin/python /opt/incident-response/web/web_server.py
+ExecStart=/home/vinay/pub/IR/.venv/bin/python /home/vinay/pub/IR/web/web_server.py
 Restart=always
 RestartSec=10
 

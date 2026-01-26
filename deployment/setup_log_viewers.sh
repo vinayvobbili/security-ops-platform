@@ -37,15 +37,15 @@ echo ""
 
 # Create htpasswd file for basic auth
 echo "Setting up password protection..."
-echo -n "$LOG_VIEWER_PASSWORD" | sudo htpasswd -i -c /opt/incident-response/.htpasswd "$LOG_VIEWER_USERNAME"
-sudo chown iruser:iruser /opt/incident-response/.htpasswd
-sudo chmod 644 /opt/incident-response/.htpasswd
+echo -n "$LOG_VIEWER_PASSWORD" | sudo htpasswd -i -c /home/vinay/pub/IR/.htpasswd "$LOG_VIEWER_USERNAME"
+sudo chown vinay:vinay /home/vinay/pub/IR/.htpasswd
+sudo chmod 644 /home/vinay/pub/IR/.htpasswd
 echo "  ✓ Password configured (username: $LOG_VIEWER_USERNAME, password: $LOG_VIEWER_PASSWORD)"
 echo ""
 
 # Ensure home directory is accessible for nginx
 echo "Configuring directory permissions..."
-chmod 751 /home/iruser
+chmod 751 /home/vinay
 echo "  ✓ Directory permissions set"
 echo ""
 
@@ -56,12 +56,8 @@ server {
     listen 8030;
     server_name $LOG_VIEWER_HOSTNAME;
 
-    root /opt/incident-response/deployment;
+    root /home/vinay/pub/IR/deployment;
     index log-viewer-index.html;
-
-    # Basic auth
-    auth_basic "IR Logs";
-    auth_basic_user_file /opt/incident-response/.htpasswd;
 
     location / {
         try_files \$uri \$uri/ =404;
@@ -295,7 +291,7 @@ echo ""
 # Create symlink in ~/bin for easy management
 echo "Creating management symlink..."
 mkdir -p ~/bin
-ln -sf /opt/incident-response/deployment/manage_log_viewers.sh ~/bin/start_log_service
+ln -sf /home/vinay/pub/IR/deployment/manage_log_viewers.sh ~/bin/start_log_service
 echo "  ✓ Symlink created: ~/bin/start_log_service"
 echo ""
 

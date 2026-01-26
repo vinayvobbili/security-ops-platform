@@ -85,6 +85,9 @@ webex_api = configure_webex_api_session(
 # Timezone constant for consistent usage
 EASTERN_TZ = ZoneInfo("America/New_York")
 
+# Safety window for automated ring tagging (minutes) - loaded from config
+SAFETY_WINDOW_MINUTES = CONFIG.ring_tagging_safety_window_minutes
+
 # Global resilient bot runner instance (set in main())
 _resilient_runner = None
 
@@ -292,6 +295,280 @@ def seek_approval_to_delete_invalid_ring_tags(room_id):
         logger.error("⚠️ Failed to send invalid ring tags approval card after retries. User may not see the approval request.")
 
 
+def send_automated_tagging_safety_window_card(room_id, hosts_count, api=None):
+    """Send card with STOP button for automated ring tagging safety window.
+
+    Args:
+        room_id: Webex room ID to send to
+        hosts_count: Number of hosts to be tagged
+        api: Optional WebexTeamsAPI instance (defaults to module-level webex_api)
+
+    Returns:
+        The message object if successful, None otherwise
+    """
+    from src.utils.webex_utils import send_card_with_retry
+
+    api = api or webex_api
+    current_time = datetime.now(EASTERN_TZ)
+    proceed_time = current_time + pd.Timedelta(minutes=SAFETY_WINDOW_MINUTES)
+    tz_name = "EST" if current_time.dst().total_seconds() == 0 else "EDT"
+
+    card = AdaptiveCard(
+        body=[
+            TextBlock(
+                text="🤖 Automated Ring Tagging - Safety Window",
+                color=options.Colors.WARNING,
+                size=options.FontSize.LARGE,
+                weight=options.FontWeight.BOLDER,
+                horizontalAlignment=HorizontalAlignment.CENTER),
+            ColumnSet(
+                columns=[
+                    Column(
+                        width="stretch",
+                        items=[
+                            TextBlock(
+                                text=f"**{hosts_count:,} hosts** are about to be ring-tagged automatically.",
+                                wrap=True,
+                                weight=options.FontWeight.BOLDER
+                            ),
+                            TextBlock(
+                                text=f"⏰ **Proceed Time:** {proceed_time.strftime(f'%H:%M:%S {tz_name}')}",
+                                wrap=True
+                            ),
+                            TextBlock(
+                                text=f"If you see an issue in the report above, click STOP below within {SAFETY_WINDOW_MINUTES} minutes.",
+                                wrap=True,
+                                color=options.Colors.ATTENTION
+                            ),
+                            TextBlock(
+                                text="Otherwise, tagging will proceed automatically.",
+                                wrap=True
+                            )
+                        ],
+                        verticalContentAlignment=VerticalContentAlignment.CENTER
+                    )
+                ]
+            )
+        ],
+        actions=[
+            Submit(
+                title="🛑 STOP - Do NOT tag these hosts!",
+                data={"callback_keyword": "stop_automated_ring_tagging"},
+                style=options.ActionStyle.DESTRUCTIVE
+            )
+        ]
+    )
+
+    # Use centralized retry utility
+    result = send_card_with_retry(
+        api,
+        room_id,
+        text=f"Automated ring tagging will proceed in {SAFETY_WINDOW_MINUTES} minutes unless stopped.",
+        attachments=[{"contentType": "application/vnd.microsoft.card.adaptive", "content": card.to_dict()}],
+        max_retries=3
+    )
+
+    if not result:
+        logger.error("⚠️ Failed to send automated tagging safety window card after retries.")
+
+    return result
+
+
+def run_automated_ring_tagging_workflow():
+    """Automated Crowdstrike ring tagging workflow with safety window.
+
+    This is the full workflow called by the scheduler. It handles:
+    1. Report generation
+    2. Sending report with safety window card
+    3. Waiting for the safety window
+    4. Checking for stop signal
+    5. Proceeding with tagging (or aborting)
+    6. Sending completion notification
+    """
+    import time
+    import fasteners
+    from src.utils.webex_utils import send_message_with_retry
+
+    room_id = CONFIG.webex_room_id_epp_crowdstrike_tagging
+
+    logger.info("=" * 80)
+    logger.info("Starting automated Crowdstrike ring tagging workflow")
+    logger.info("=" * 80)
+
+    # Send initial notification
+    try:
+        send_message_with_retry(
+            webex_api, room_id,
+            markdown="🚀 **Automated Ring Tagging Job Starting Now**\n\nGenerating report of hosts without ring tags..."
+        )
+    except Exception as e:
+        logger.error(f"Failed to send job start notification: {e}")
+
+    # Step 1: Generate report
+    logger.info("Step 1: Generating CS hosts without ring tag report...")
+    lock_path = ROOT_DIRECTORY / "src" / "epp" / "cs_hosts_without_ring_tag.lock"
+
+    try:
+        with fasteners.InterProcessLock(lock_path):
+            cs_hosts_without_ring_tag.generate_report()
+
+            # Read report to get host count
+            today_date = datetime.now(EASTERN_TZ).strftime('%m-%d-%Y')
+            filename = "cs_hosts_last_seen_without_ring_tag.xlsx"
+            filepath = DATA_DIR / today_date / filename
+
+            if not filepath.exists():
+                logger.error(f"Report file not found at {filepath}. Aborting automated tagging.")
+                send_message_with_retry(
+                    webex_api, room_id,
+                    markdown="❌ Automated ring tagging failed: Report file not found."
+                )
+                return
+
+            hosts_df = pd.read_excel(filepath)
+            hosts_count = len(hosts_df)
+
+            if hosts_count == 0:
+                logger.info("No hosts without ring tags found. Nothing to tag.")
+                send_message_with_retry(
+                    webex_api, room_id,
+                    markdown="✅ Automated ring tagging check complete: No hosts need tagging."
+                )
+                return
+
+            logger.info(f"Found {hosts_count} hosts without ring tags")
+
+    except Exception as e:
+        logger.error(f"Failed to generate report: {e}", exc_info=True)
+        send_message_with_retry(
+            webex_api, room_id,
+            markdown=f"❌ Automated ring tagging failed during report generation: {str(e)}"
+        )
+        return
+    finally:
+        if lock_path.exists():
+            try:
+                lock_path.unlink()
+            except Exception as e:
+                logger.error(f"Failed to remove lock file {lock_path}: {e}")
+
+    # Step 2: Send report with safety window card
+    logger.info("Step 2: Sending report with safety window notification...")
+    try:
+        # Send report file
+        import os
+        file_size_mb = os.path.getsize(filepath) / (1024 * 1024)
+        current_time = datetime.now(EASTERN_TZ)
+        tz_name = "EST" if current_time.dst().total_seconds() == 0 else "EDT"
+
+        report_text = f"📊 **Automated Ring Tagging Report**\n\n"
+        report_text += f"📈 **Count:** {hosts_count:,} hosts\n"
+        report_text += f"📅 **Generated:** {current_time.strftime(f'%Y-%m-%d %H:%M:%S {tz_name}')}\n"
+        report_text += f"📦 **File Size:** {file_size_mb:.2f} MB\n"
+
+        send_message_with_retry(webex_api, room_id, markdown=report_text, files=[str(filepath)])
+
+        # Send safety window card
+        flag_file = DATA_DIR / "stop_automated_tagging.flag"
+
+        # Remove any stale flag file from previous runs
+        if flag_file.exists():
+            flag_file.unlink()
+            logger.info("Removed stale stop flag from previous run")
+
+        safety_card_message = send_automated_tagging_safety_window_card(room_id, hosts_count)
+
+    except Exception as e:
+        logger.error(f"Failed to send report and safety window: {e}", exc_info=True)
+        return
+
+    # Step 3: Wait for safety window
+    logger.info(f"Step 3: Waiting {SAFETY_WINDOW_MINUTES} minutes for user review...")
+    time.sleep(SAFETY_WINDOW_MINUTES * 60)
+
+    # Step 4: Check if stopped
+    logger.info("Step 4: Checking if tagging was stopped...")
+    if flag_file.exists():
+        logger.info("Automated tagging was stopped by user. Aborting.")
+        flag_file.unlink()  # Clean up flag
+        send_message_with_retry(
+            webex_api, room_id,
+            markdown="🛑 Automated ring tagging was stopped. No tags were applied."
+        )
+        return
+
+    # Step 5: Proceed with tagging
+    logger.info("Step 5: No stop signal received. Proceeding with automated ring tagging...")
+
+    # Delete the safety window card to avoid confusion
+    try:
+        if safety_card_message and hasattr(safety_card_message, 'id'):
+            webex_api.messages.delete(safety_card_message.id)
+            logger.info("Deleted safety window card after expiration")
+    except Exception as e:
+        logger.warning(f"Failed to delete safety window card: {e}")
+
+    send_message_with_retry(
+        webex_api, room_id,
+        markdown="✅ Safety window expired. Starting automated ring tagging now..."
+    )
+
+    ring_tag_lock_path = ROOT_DIRECTORY / "src" / "epp" / "ring_tag_cs_hosts.lock"
+    try:
+        with fasteners.InterProcessLock(ring_tag_lock_path):
+            ring_tag_cs_hosts.run_workflow(room_id, run_by='scheduled job')
+            logger.info("Automated ring tagging completed successfully")
+    except Exception as e:
+        logger.error(f"Failed to execute ring tagging: {e}", exc_info=True)
+        send_message_with_retry(
+            webex_api, room_id,
+            markdown=f"❌ Automated ring tagging failed during execution: {str(e)}"
+        )
+    finally:
+        if ring_tag_lock_path.exists():
+            try:
+                ring_tag_lock_path.unlink()
+            except Exception as e:
+                logger.error(f"Failed to remove lock file {ring_tag_lock_path}: {e}")
+
+    # Send next run details
+    try:
+        current_time = datetime.now(EASTERN_TZ)
+        current_weekday = current_time.weekday()  # 0=Monday, 3=Thursday
+
+        # Calculate next run date (Monday=0 or Thursday=3 at 09:00)
+        if current_weekday < 3:  # Before Thursday
+            days_until_thursday = 3 - current_weekday
+            next_run = current_time + pd.Timedelta(days=days_until_thursday)
+            next_run_day = "Thursday"
+        elif current_weekday == 3:  # Thursday
+            if current_time.hour < 9:  # Before 9 AM Thursday
+                next_run = current_time
+                next_run_day = "Thursday"
+            else:  # After 9 AM Thursday, next is Monday
+                days_until_monday = 7 - current_weekday  # Days to next Monday
+                next_run = current_time + pd.Timedelta(days=days_until_monday)
+                next_run_day = "Monday"
+        else:  # Friday, Saturday, Sunday (4, 5, 6)
+            days_until_monday = 7 - current_weekday
+            next_run = current_time + pd.Timedelta(days=days_until_monday)
+            next_run_day = "Monday"
+
+        next_run = next_run.replace(hour=9, minute=0, second=0, microsecond=0)
+        tz_name = "EST" if next_run.dst().total_seconds() == 0 else "EDT"
+
+        send_message_with_retry(
+            webex_api, room_id,
+            markdown=f"📅 **Next Automated Run:** {next_run_day}, {next_run.strftime(f'%B %d, %Y at %I:%M %p {tz_name}')}"
+        )
+    except Exception as e:
+        logger.error(f"Failed to send next run details: {e}")
+
+    logger.info("=" * 80)
+    logger.info("Automated Crowdstrike ring tagging workflow completed")
+    logger.info("=" * 80)
+
+
 class GetCSHostsWithoutRingTag(Command):
     def __init__(self):
         super().__init__(
@@ -351,9 +628,10 @@ class RingTagCSHosts(Command):
             markdown=f"Hello {activity['actor']['displayName']}! {loading_msg}\n\n🏷️**I've started ring tagging the CS Hosts and it is running in the background**\nEstimated completion: ~15 minutes ⏰"
         )
         lock_path = ROOT_DIRECTORY / "src" / "epp" / "ring_tag_cs_hosts.lock"
+        user_name = activity['actor']['displayName']
         try:
             with fasteners.InterProcessLock(lock_path):
-                ring_tag_cs_hosts.run_workflow(room_id)
+                ring_tag_cs_hosts.run_workflow(room_id, run_by=user_name)
         except Exception as e:
             logger.error(f"Error in RingTagCSHosts execute: {e}")
             webex_api.messages.create(
@@ -545,6 +823,28 @@ class GetBotHealth(Command):
         )
 
 
+class CancelAutomatedRingTagging(Command):
+    """Command to stop automated ring tagging during safety window."""
+
+    def __init__(self):
+        super().__init__(
+            command_keyword="stop_automated_ring_tagging",
+            delete_previous_message=True,
+        )
+
+    @log_activity(bot_access_token=CONFIG.webex_bot_access_token_jarvis, log_file_name="jarvis_activity_log.csv")
+    def execute(self, message, attachment_actions, activity):
+        from pathlib import Path
+
+        # Create flag file to signal cancellation
+        flag_file = DATA_DIR / "stop_automated_tagging.flag"
+        flag_file.parent.mkdir(parents=True, exist_ok=True)
+        flag_file.write_text(f"Stopped by {activity['actor']['displayName']} at {datetime.now(EASTERN_TZ).isoformat()}")
+
+        logger.info(f"Automated ring tagging stopped by {activity['actor']['displayName']}")
+        return f"🛑 Automated ring tagging has been cancelled by {activity['actor']['displayName']}. Tags will NOT be applied this time."
+
+
 class Hi(Command):
     """Simple Hi command to check if bot is alive."""
 
@@ -604,6 +904,7 @@ def jarvis_initialization(bot):
         bot.add_command(RemoveInvalidRings())
         bot.add_command(DontRemoveInvalidRings())
         bot.add_command(GetBotHealth())
+        bot.add_command(CancelAutomatedRingTagging())
         bot.add_command(Hi())
         return True
     return False

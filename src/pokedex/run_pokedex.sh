@@ -21,11 +21,11 @@ if ! pgrep -x "ollama" > /dev/null; then
 fi
 
 # Just check if model is available, don't pre-load
-echo "🔍 Checking llama3.1:70b model availability..."
-if ollama list | grep -q "llama3.1:70b"; then
+echo "🔍 Checking qwen2.5:32b model availability..."
+if ollama list | grep -q "qwen2.5:32b"; then
     echo "✅ Model is available"
 else
-    echo "❌ Model not found. Please run: ollama pull llama3.1:70b"
+    echo "❌ Model not found. Please run: ollama pull qwen2.5:32b"
     exit 1
 fi
 

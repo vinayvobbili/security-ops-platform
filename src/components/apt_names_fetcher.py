@@ -387,6 +387,83 @@ def get_all_apt_groups_by_region(file_path: str = '../../data/transient/de/APTAK
         return {}
 
 
+def build_apt_alias_index(file_path: str = '../../data/transient/de/APTAKAcleaned.xlsx') -> Dict[str, Dict[str, Any]]:
+    """
+    Build a reverse lookup index mapping any APT name (common or alias) to full actor info.
+
+    This allows looking up an actor by ANY known name and getting all aliases.
+
+    Args:
+        file_path (str): Path to the Excel file.
+
+    Returns:
+        Dict mapping lowercase name -> {
+            'common_name': str,
+            'region': str,
+            'all_names': List[str],  # All known names including common name
+            'aliases': Dict[str, str]  # vendor -> alias mapping
+        }
+    """
+    try:
+        xl = pd.ExcelFile(file_path)
+        index = {}
+
+        region_sheets = [sheet for sheet in xl.sheet_names if is_region_sheet(sheet)]
+
+        for sheet_name in region_sheets:
+            try:
+                df = xl.parse(sheet_name, header=None)
+
+                if not validate_sheet_structure(df):
+                    continue
+
+                region_name = df.iloc[0, 0] if pd.notna(df.iloc[0, 0]) else sheet_name
+                company_columns = get_company_columns(df)
+                data_rows = df.iloc[2:]
+
+                for idx, row in data_rows.iterrows():
+                    if not pd.notna(row.iloc[0]) or not str(row.iloc[0]).strip():
+                        continue
+
+                    common_name = str(row.iloc[0]).strip()
+
+                    # Collect all alternative names
+                    aliases = {}
+                    all_names = [common_name]
+
+                    for col_idx, company in company_columns.items():
+                        if col_idx < len(row):
+                            alt_name = row.iloc[col_idx]
+                            if pd.notna(alt_name) and str(alt_name).strip():
+                                alt_name_str = str(alt_name).strip()
+                                aliases[company] = alt_name_str
+                                if alt_name_str not in all_names:
+                                    all_names.append(alt_name_str)
+
+                    # Build the actor info
+                    actor_info = {
+                        'common_name': common_name,
+                        'region': region_name,
+                        'all_names': all_names,
+                        'aliases': aliases,
+                    }
+
+                    # Index by all names (lowercase for case-insensitive lookup)
+                    for name in all_names:
+                        index[name.lower()] = actor_info
+
+            except Exception as e:
+                logger.error(f"Error processing sheet '{sheet_name}': {str(e)}")
+                continue
+
+        logger.info(f"Built APT alias index with {len(index)} name mappings")
+        return index
+
+    except Exception as e:
+        logger.error(f"Error building APT alias index: {str(e)}")
+        return {}
+
+
 def get_all_apt_names(file_path: str = '../../data/transient/de/APTAKAcleaned.xlsx') -> List[str]:
     """
     Get all unique APT common names from all region sheets for use as dropdown values.

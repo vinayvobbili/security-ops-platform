@@ -299,3 +299,20 @@ if __name__ == "__main__":
 
     print("\nTesting get_comprehensive_shift_data()")
     print(get_comprehensive_shift_data.invoke({}))
+
+
+# =============================================================================
+# SAMPLE PROMPTS FOR LLM GUIDANCE
+# =============================================================================
+# Use these prompts to help users discover staffing/shift capabilities:
+#
+# - "What shift is it now?"
+# - "Who's on shift today?"
+# - "Who's the shift lead for afternoon shift?"
+# - "How many people are staffed on morning shift?"
+# - "What's the current staffing?"
+# - "Who's working the night shift on Monday?"
+# - "Show me shift performance metrics"
+# - "How did yesterday's afternoon shift perform?"
+# - "Get comprehensive shift data for today"
+# =============================================================================

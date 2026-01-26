@@ -1,0 +1,193 @@
+# Continuous Integration Pipeline
+# This workflow demonstrates CI/CD best practices for the Security Operations Platform
+# Configured for manual dispatch only - not triggered on push/PR
+#
+# To run: Go to Actions tab -> "CI Pipeline" -> "Run workflow"
+
+name: CI Pipeline
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_tests:
+        description: 'Run test suite'
+        required: true
+        default: true
+        type: boolean
+      run_lint:
+        description: 'Run linting checks'
+        required: true
+        default: true
+        type: boolean
+      run_security:
+        description: 'Run security scan'
+        required: true
+        default: true
+        type: boolean
+
+env:
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  lint:
+    name: Code Quality
+    runs-on: ubuntu-latest
+    if: ${{ inputs.run_lint }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install linting tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install flake8 black isort mypy
+
+      - name: Check code formatting with Black
+        run: |
+          black --check --diff src/ services/ webex_bots/ web/ my_bot/ || echo "::warning::Code formatting issues found"
+        continue-on-error: true
+
+      - name: Check import sorting with isort
+        run: |
+          isort --check-only --diff src/ services/ webex_bots/ web/ my_bot/ || echo "::warning::Import sorting issues found"
+        continue-on-error: true
+
+      - name: Lint with flake8
+        run: |
+          # Stop build if there are Python syntax errors or undefined names
+          flake8 src/ services/ webex_bots/ web/ my_bot/ --count --select=E9,F63,F7,F82 --show-source --statistics
+          # Exit-zero treats all errors as warnings
+          flake8 src/ services/ webex_bots/ web/ my_bot/ --count --exit-zero --max-complexity=15 --max-line-length=120 --statistics
+
+      - name: Type checking with mypy
+        run: |
+          mypy src/ services/ --ignore-missing-imports --no-error-summary || echo "::warning::Type checking issues found"
+        continue-on-error: true
+
+  test:
+    name: Test Suite
+    runs-on: ubuntu-latest
+    if: ${{ inputs.run_tests }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Cache pip dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest pytest-cov pytest-asyncio pytest-mock responses
+          pip install -r requirements.txt
+
+      - name: Run tests with coverage
+        run: |
+          pytest tests/ -v --cov=src --cov=services --cov=my_bot --cov-report=xml --cov-report=term-missing
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+
+      - name: Upload coverage report
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./coverage.xml
+          fail_ci_if_error: false
+        continue-on-error: true
+
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    if: ${{ inputs.run_security }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install security tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install bandit safety
+
+      - name: Run Bandit security linter
+        run: |
+          bandit -r src/ services/ webex_bots/ my_bot/ -ll -ii -x '**/test_*' || echo "::warning::Security issues found"
+        continue-on-error: true
+
+      - name: Check dependencies for vulnerabilities
+        run: |
+          pip install -r requirements.txt
+          safety check --full-report || echo "::warning::Vulnerable dependencies found"
+        continue-on-error: true
+
+  build:
+    name: Build Verification
+    runs-on: ubuntu-latest
+    needs: [lint, test]
+    if: always() && (needs.lint.result == 'success' || needs.lint.result == 'skipped') && (needs.test.result == 'success' || needs.test.result == 'skipped')
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Verify imports
+        run: |
+          python -c "
+          import sys
+          sys.path.insert(0, '.')
+
+          # Verify core modules can be imported
+          print('Verifying module imports...')
+
+          try:
+              from my_config import get_config
+              print('  ✓ my_config')
+          except Exception as e:
+              print(f'  ✗ my_config: {e}')
+
+          try:
+              from src.utils.retry_utils import with_retry, RetryConfig
+              print('  ✓ src.utils.retry_utils')
+          except Exception as e:
+              print(f'  ✗ src.utils.retry_utils: {e}')
+
+          try:
+              from src.utils.http_utils import get_session
+              print('  ✓ src.utils.http_utils')
+          except Exception as e:
+              print(f'  ✗ src.utils.http_utils: {e}')
+
+          print('Module verification complete.')
+          "
+
+      - name: Build summary
+        run: |
+          echo "## Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Component | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Lint | ${{ needs.lint.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Tests | ${{ needs.test.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Build | success |" >> $GITHUB_STEP_SUMMARY

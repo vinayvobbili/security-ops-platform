@@ -127,6 +127,30 @@ mutation createParamTaniumAction($comment: String, $distributeSeconds: Int, $exp
 }
 """
 
+SIGNALS_QUERY = """
+query getSignals($first: Int, $after: Cursor) {
+  threatResponseSignals(first: $first, after: $after) {
+    pageInfo {
+      hasNextPage
+      endCursor
+    }
+    edges {
+      node {
+        id
+        name
+        description
+        severity
+        enabled
+        mitreTactics
+        mitreTechniques
+        createdAt
+        updatedAt
+      }
+    }
+  }
+}
+"""
+
 
 @dataclass
 class Computer:
@@ -205,6 +229,7 @@ class TaniumInstance:
         self.headers = {'session': self.token}
         self.graphql_url = f"{self.server_url}/plugin/products/gateway/graphql"
         self.verify_ssl = verify_ssl
+        self.last_error: str | None = None  # Stores last validation/connection error for better error reporting
 
         # Create a persistent session with retry logic to prevent broken pipe errors
         self.session = requests.Session()
@@ -408,12 +433,15 @@ class TaniumInstance:
             )
             if response.status_code == 200:
                 logger.info(f"Token validation successful for {self.name} (URL: {self.server_url})")
+                self.last_error = None
                 return True
             else:
-                logger.warning(f"Token validation failed for {self.name} (URL: {self.server_url}): HTTP {response.status_code} - {response.text}")
+                self.last_error = f"HTTP {response.status_code} - {response.text.strip()}"
+                logger.warning(f"Token validation failed for {self.name} (URL: {self.server_url}): {self.last_error}")
                 return False
         except Exception as e:
-            logger.warning(f"Token validation failed for {self.name} (URL: {self.server_url}): {e}")
+            self.last_error = str(e)
+            logger.warning(f"Token validation failed for {self.name} (URL: {self.server_url}): {self.last_error}")
             return False
 
     def find_computer_by_name(self, computer_name: str) -> Optional[Computer]:
@@ -542,6 +570,48 @@ class TaniumInstance:
         """Public method to iterate through computers with pagination"""
         return self._paginate_computers(limit)
 
+    # ==================== Detection Rules Catalog Methods ====================
+
+    def list_signals(self) -> Dict[str, Any]:
+        """List Threat Response signals (detection rules) from this instance.
+
+        Returns:
+            Dict with signals list or error
+        """
+        signals = []
+        cursor = None
+        page_size = 100
+
+        try:
+            while True:
+                variables = {"first": page_size}
+                if cursor:
+                    variables["after"] = cursor
+
+                result = self.query(SIGNALS_QUERY, variables)
+                data = result.get("data", {}).get("threatResponseSignals", {})
+                edges = data.get("edges", [])
+
+                for edge in edges:
+                    node = edge.get("node", {})
+                    if node:
+                        signals.append(node)
+
+                page_info = data.get("pageInfo", {})
+                if page_info.get("hasNextPage"):
+                    cursor = page_info.get("endCursor")
+                else:
+                    break
+
+            return {"signals": signals, "count": len(signals)}
+
+        except TaniumAPIError as e:
+            logger.error(f"Error listing signals from {self.name}: {e}")
+            return {"error": str(e)}
+        except Exception as e:
+            logger.error(f"Unexpected error listing signals from {self.name}: {e}")
+            return {"error": str(e)}
+
 
 class TaniumClient:
     """Main client for managing multiple Tanium instances"""
@@ -600,15 +670,29 @@ class TaniumClient:
         return results
 
     def _get_all_computers(self, limit: Optional[int] = None) -> List[Computer]:
-        """Get computers from all instances"""
+        """Get computers from all instances.
+
+        Raises:
+            ConnectionError: If no computers could be retrieved and all instances failed,
+                           includes the actual error messages from each failed instance.
+        """
         all_computers = []
+        instance_errors = {}
+
         for instance in self.instances:
             if instance.validate_token():
                 computers = instance.get_computers(limit)
                 all_computers.extend(computers)
             else:
-                logger.warning(f"⚠️  Skipping {instance.name} - token validation failed or instance unreachable")
+                instance_errors[instance.name] = instance.last_error or "Unknown error"
+                logger.warning(f"⚠️  {instance.name} instance configured but unreachable - skipping")
                 print(f"⚠️  WARNING: Skipping {instance.name} instance due to connection or authentication issues")
+
+        # If no computers retrieved and we had errors, raise with details
+        if not all_computers and instance_errors:
+            error_details = "; ".join(f"{name}: {error}" for name, error in instance_errors.items())
+            raise ConnectionError(f"No computers retrieved from any instance. {error_details}")
+
         return all_computers
 
     def _get_output_path(self, filename: Optional[str] = None) -> Path:
@@ -684,6 +768,27 @@ class TaniumClient:
         """Get list of available instance names"""
         return [instance.name for instance in self.instances]
 
+    def list_all_signals(self) -> Dict[str, Any]:
+        """List Threat Response signals from all available instances.
+
+        Returns:
+            Dict with combined signals list or error
+        """
+        all_signals = []
+        errors = []
+
+        for instance in self.instances:
+            result = instance.list_signals()
+            if "error" in result:
+                errors.append(f"{instance.name}: {result['error']}")
+            else:
+                all_signals.extend(result.get("signals", []))
+
+        if not all_signals and errors:
+            return {"error": "; ".join(errors)}
+
+        return {"signals": all_signals, "count": len(all_signals), "errors": errors}
+
 
 def main():
     """Main function to demonstrate usage"""
@@ -707,7 +812,7 @@ def main():
         #     logger.warning("No data to export")
 
         # # Test: Add and Remove tags
-        # test_hostname = "VV10-MLKR-029.company.co.kr"
+        # test_hostname = "HOST002.internal.example.com"
         # test_tag = "TestTag123"
         # instance_name = "On-Prem"  # or "On-Prem"
         # tag_action = 'add'  # Change to 'remove' to test removal
@@ -745,7 +850,7 @@ def main():
         # Test searching for computers
         test_computers = [
             {"name": "HOST001.INTERNAL.EXAMPLE.COM", "instance": "Cloud"},
-            {"name": "VV10-MLKR-029.company.co.kr", "instance": "On-Prem"},
+            {"name": "HOST002.internal.example.com", "instance": "On-Prem"},
         ]
         for computer in test_computers:
             search_term = computer["name"]
