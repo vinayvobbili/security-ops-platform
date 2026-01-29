@@ -1,0 +1,148 @@
+---
+---
+
+@import "jekyll-theme-cayman";
+
+/* Wider content area */
+.main-content {
+  max-width: 80rem;
+  padding: 2rem 6rem;
+  margin: 0 auto;
+  font-size: 1.1rem;
+}
+
+/* Better header styling */
+.page-header {
+  background: linear-gradient(135deg, #155799, #159957);
+  padding: 3rem 2rem;
+}
+
+.project-name {
+  font-size: 2.5rem;
+  font-weight: 700;
+}
+
+.project-tagline {
+  font-size: 1.3rem;
+  opacity: 0.9;
+}
+
+/* Navigation buttons in header */
+.btn {
+  margin: 0.5rem 0.5rem 0.5rem 0;
+  padding: 0.75rem 1.5rem;
+  font-size: 1rem;
+  border-radius: 0.4rem;
+  transition: all 0.2s ease;
+}
+
+.btn:hover {
+  background-color: rgba(255, 255, 255, 0.3);
+  transform: translateY(-1px);
+}
+
+/* Better table styling */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1.5rem 0;
+  font-size: 1rem;
+}
+
+table th {
+  background: linear-gradient(135deg, #155799, #159957);
+  color: white;
+  padding: 0.85rem 1rem;
+  text-align: left;
+  font-weight: 600;
+}
+
+table td {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #e1e4e8;
+}
+
+table tr:hover {
+  background-color: #f6f8fa;
+}
+
+/* Code blocks */
+pre {
+  background-color: #1e1e1e;
+  color: #d4d4d4;
+  border-radius: 8px;
+  padding: 1.25rem;
+  overflow-x: auto;
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+code {
+  background-color: rgba(27, 31, 35, 0.08);
+  padding: 0.2em 0.4em;
+  border-radius: 4px;
+  font-size: 0.9em;
+}
+
+pre code {
+  background: none;
+  padding: 0;
+}
+
+/* Headings */
+h1, h2, h3 {
+  color: #155799;
+  margin-top: 2rem;
+}
+
+h1 {
+  font-size: 2.2rem;
+  border-bottom: 2px solid #159957;
+  padding-bottom: 0.5rem;
+}
+
+h2 {
+  font-size: 1.7rem;
+}
+
+h3 {
+  font-size: 1.3rem;
+}
+
+/* Links */
+a {
+  color: #155799;
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+a:hover {
+  color: #159957;
+  text-decoration: underline;
+}
+
+/* Horizontal rules */
+hr {
+  border: none;
+  height: 2px;
+  background: linear-gradient(to right, #159957, #155799);
+  margin: 2.5rem 0;
+}
+
+/* Responsive adjustments */
+@media screen and (max-width: 64em) {
+  .main-content {
+    padding: 2rem 3rem;
+  }
+}
+
+@media screen and (max-width: 42em) {
+  .main-content {
+    padding: 2rem 1.5rem;
+    font-size: 1rem;
+  }
+
+  .project-name {
+    font-size: 1.8rem;
+  }
+}
