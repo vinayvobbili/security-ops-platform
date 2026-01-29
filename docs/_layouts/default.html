@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en-US">
+  <head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ page.title }} | {{ site.title }}</title>
+    <meta name="description" content="{{ site.description }}">
+    <link rel="stylesheet" href="{{ '/assets/css/style.css?v=' | append: site.github.build_revision | relative_url }}">
+  </head>
+  <body>
+    <header class="page-header" role="banner">
+      <h1 class="project-name">{{ site.title }}</h1>
+      <h2 class="project-tagline">{{ site.description }}</h2>
+      <nav>
+        <a href="{{ '/' | relative_url }}" class="btn">Home</a>
+        <a href="{{ '/architecture' | relative_url }}" class="btn">Architecture</a>
+        <a href="{{ '/features/' | relative_url }}" class="btn">Features</a>
+        <a href="{{ '/about' | relative_url }}" class="btn">About</a>
+        <a href="https://github.com/vinayvobbili/security-ops-platform" class="btn" target="_blank">GitHub</a>
+      </nav>
+    </header>
+
+    <main id="content" class="main-content" role="main">
+      {{ content }}
+
+      <footer class="site-footer">
+        <span class="site-footer-credits">
+          Built by <a href="https://github.com/vinayvobbili">Vinay Vobbilichetty</a> |
+          <a href="https://github.com/vinayvobbili/security-ops-platform">View on GitHub</a>
+        </span>
+      </footer>
+    </main>
+  </body>
+</html>

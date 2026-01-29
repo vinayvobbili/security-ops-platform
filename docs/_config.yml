@@ -1,25 +1,14 @@
 # Jekyll configuration for GitHub Pages
 title: Security Operations Platform
-description: Enterprise-grade security automation platform with LLM-powered assistants, self-healing bots, and 30+ tool integrations
+description: Enterprise-grade security automation with LLM-powered assistants and 30+ tool integrations
 author: Vinay Vobbilichetty
 baseurl: "/security-ops-platform"
 url: "https://vinayvobbili.github.io"
 
-# Theme
-remote_theme: pages-themes/minimal@v0.2.0
+# Theme - Cayman is wider and more modern
+remote_theme: pages-themes/cayman@v0.2.0
 plugins:
   - jekyll-remote-theme
-
-# Navigation
-nav:
-  - title: Home
-    url: /
-  - title: Architecture
-    url: /architecture
-  - title: Features
-    url: /features/
-  - title: About
-    url: /about
 
 # Build settings
 markdown: kramdown
@@ -31,6 +20,3 @@ exclude:
   - Gemfile.lock
   - node_modules
   - vendor
-
-# Enable Mermaid diagrams
-mermaid: true
