@@ -87,9 +87,9 @@ if 'DISABLE_SSL_VERIFY' in os.environ:
     DISABLE_SSL_VERIFY = os.getenv('DISABLE_SSL_VERIFY').lower() == 'true'
     config_source = "environment variable"
 else:
-    # Auto-detect: macOS = disable (Zscaler), Linux = enable (no Zscaler)
-    DISABLE_SSL_VERIFY = system_platform == 'Darwin'  # Darwin = macOS
-    config_source = f"auto-detected ({system_platform})"
+    # Default: enable SSL verification (Zscaler certs installed)
+    DISABLE_SSL_VERIFY = False
+    config_source = f"default ({system_platform})"
 
 if DISABLE_SSL_VERIFY:
     log.info(f"SSL verification DISABLED ({config_source}) - corporate proxy/Zscaler environment")

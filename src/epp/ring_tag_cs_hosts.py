@@ -40,7 +40,7 @@ from tqdm import tqdm
 from webexpythonsdk import WebexAPI
 
 from my_config import get_config
-from services.crowdstrike import CrowdStrikeClient
+from services.crowdstrike import CrowdStrikeClient, CSCredentialProfile
 from services.service_now import ServiceNowClient
 from services.epp_tagging_db import insert_tagging_run, bulk_insert_results
 
@@ -109,7 +109,7 @@ with open(COUNTRIES_FILE, 'r') as f:
     COUNTRY_NAMES_BY_ABBREVIATION = json.load(f)
 
 # Initialize API clients
-crowdstrike = CrowdStrikeClient(use_host_write_creds=True)
+crowdstrike = CrowdStrikeClient(credential_profile=CSCredentialProfile.WRITE)
 
 
 def benchmark(func: F) -> F:
@@ -446,7 +446,7 @@ class TagManager:
                 ids=device_ids,
                 tags=[f"FalconGroupingTags/{tag}"]
             )
-            if response.get("status_code") == 200:
+            if response.get("status_code") in (200, 202):
                 # Mark hosts as successfully tagged
                 successfully_tagged.extend(
                     host for host in hosts if host.device_id in device_ids
@@ -490,7 +490,7 @@ class TagManager:
                 ids=device_ids,
                 tags=tags_to_remove
             )
-            if response.get("status_code") != 200:
+            if response.get("status_code") not in (200, 202):
                 logger.error(f"Failed to remove tags for batch {i // batch_size + 1}: {response.get('errors', ['Unknown error'])}")
 
 

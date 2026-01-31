@@ -5,7 +5,6 @@ Logs all tool invocations by the LLM to help with debugging and monitoring.
 """
 
 import csv
-import os
 import logging
 from datetime import datetime
 from pathlib import Path
@@ -22,6 +21,7 @@ _context = threading.local()
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 LOG_FILE_PATH = PROJECT_ROOT / "data" / "transient" / "logs" / "tool_calls_log.csv"
 
+
 def ensure_log_file_exists():
     """Ensure the log file exists with proper headers"""
     if not LOG_FILE_PATH.exists():
@@ -36,10 +36,11 @@ def ensure_log_file_exists():
                 'tool_name',
                 'input_args',
                 'output_preview',
-                'execution_time_ms',
+                'execution_time_sec',
                 'success',
                 'error_message',
-                'session_id'
+                'user_id',
+                'room_id'
             ])
 
 def set_logging_context(session_id: str):
@@ -67,10 +68,10 @@ def log_tool_call(
         tool_name: Name of the tool that was called
         input_args: Input arguments passed to the tool
         output: Output returned by the tool
-        execution_time_ms: Execution time in milliseconds
+        execution_time_ms: Execution time in milliseconds (converted to seconds for storage)
         success: Whether the tool call was successful
         error_message: Error message if the call failed
-        session_id: Session ID (format: user_id_room_id)
+        session_id: Session ID (format: user_id_room_id), will be split into components
     """
     try:
         with _log_lock:
@@ -82,6 +83,18 @@ def log_tool_call(
             # Get context if not provided
             if session_id is None:
                 session_id = get_logging_context()
+
+            # Split session_id into user_id and room_id
+            if session_id and '_' in session_id:
+                parts = session_id.split('_', 1)
+                user_id = parts[0]
+                room_id = parts[1] if len(parts) > 1 else 'unknown'
+            else:
+                user_id = session_id or 'unknown'
+                room_id = 'unknown'
+
+            # Convert execution time from ms to seconds
+            execution_time_sec = execution_time_ms / 1000.0
 
             # Sanitize input args for CSV (convert to string, limit length)
             input_str = str(input_args)[:500] if input_args else ""
@@ -105,10 +118,11 @@ def log_tool_call(
                     tool_name,
                     input_str,
                     output_preview,
-                    round(execution_time_ms, 2),
+                    round(execution_time_sec, 3),
                     success,
                     error_message,
-                    session_id
+                    user_id,
+                    room_id
                 ])
 
     except Exception as e:

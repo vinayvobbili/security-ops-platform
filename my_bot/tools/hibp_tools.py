@@ -24,22 +24,23 @@ from src.utils.tool_decorator import log_tool_call
 
 logger = logging.getLogger(__name__)
 
-# Initialize HIBP client once
+# Lazy-initialized HIBP client
 _hibp_client: Optional[HIBPClient] = None
 
-try:
-    logger.info("Initializing HIBP client...")
-    _hibp_client = HIBPClient()
 
-    if _hibp_client.is_configured():
-        logger.info("HIBP client initialized successfully.")
-    else:
-        logger.warning("HIBP client not configured (missing API key). Tools will be disabled.")
-        _hibp_client = None
-
-except Exception as e:
-    logger.error(f"Failed to initialize HIBP client: {e}")
-    _hibp_client = None
+def _get_hibp_client() -> Optional[HIBPClient]:
+    """Get HIBP client (lazy initialization)."""
+    global _hibp_client
+    if _hibp_client is None:
+        try:
+            client = HIBPClient()
+            if client.is_configured():
+                _hibp_client = client
+            else:
+                logger.warning("HIBP client not configured (missing API key)")
+        except Exception as e:
+            logger.error(f"Failed to initialize HIBP client: {e}")
+    return _hibp_client
 
 
 def _get_severity_emoji(breach_count: int) -> str:
@@ -258,12 +259,13 @@ def check_email_hibp(email: str) -> str:
     Args:
         email: The email address to check (e.g., "user@example.com")
     """
-    if not _hibp_client:
+    client = _get_hibp_client()
+    if not client:
         return "Error: HIBP service is not configured. Missing API key."
 
     try:
         # Get full breach details (not truncated)
-        data = _hibp_client.check_email(email.strip(), truncate_response=False)
+        data = client.check_email(email.strip(), truncate_response=False)
         return _format_email_result(data)
     except Exception as e:
         logger.error(f"HIBP email check failed: {e}")
@@ -289,7 +291,8 @@ def check_domain_hibp(domain: str) -> str:
     Args:
         domain: The domain to check (e.g., "example.com")
     """
-    if not _hibp_client:
+    client = _get_hibp_client()
+    if not client:
         return "Error: HIBP service is not configured. Missing API key."
 
     try:
@@ -302,7 +305,7 @@ def check_domain_hibp(domain: str) -> str:
         if "@" in domain:
             domain = domain.split("@", 1)[1]
 
-        data = _hibp_client.check_domain_emails(domain, max_checks=20)
+        data = client.check_domain_emails(domain, max_checks=20)
         return _format_domain_result(data)
     except Exception as e:
         logger.error(f"HIBP domain check failed: {e}")
@@ -322,11 +325,12 @@ def get_breach_info_hibp(breach_name: str) -> str:
     Args:
         breach_name: The name of the breach (e.g., "Adobe", "LinkedIn")
     """
-    if not _hibp_client:
+    client = _get_hibp_client()
+    if not client:
         return "Error: HIBP service is not configured. Missing API key."
 
     try:
-        data = _hibp_client.get_breach_details(breach_name.strip())
+        data = client.get_breach_details(breach_name.strip())
         return _format_breach_info(data)
     except Exception as e:
         logger.error(f"HIBP breach info failed: {e}")

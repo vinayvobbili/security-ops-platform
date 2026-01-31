@@ -122,8 +122,8 @@ def get_config():
         investigation_time=os.environ.get("INVESTIGATION_TIME"),
         eradication_time=os.environ.get("ERADICATION_TIME"),
         closure_time=os.environ.get("CLOSURE_TIME"),
-        secops_shift_staffing_filename=os.environ.get("SECOPS_STAFFING_FILENAME"),
-        secops_shift_staffing_sheet_name=os.environ.get("SECOPS_STAFFING_SHEETNAME"),
+        secops_shift_staffing_filename=os.environ.get("SECOPS_STAFFING_FILE_NAME"),
+        secops_shift_staffing_sheet_name=os.environ.get("SECOPS_STAFFING_SHEET_NAME"),
         snow_client_key=os.environ.get("SNOW_CLIENT_KEY"),
         snow_client_secret=os.environ.get("SNOW_CLIENT_SECRET"),
         snow_functional_account_id=os.environ.get("SNOW_FUNCTIONAL_ACCOUNT_ID"),
@@ -145,9 +145,12 @@ def get_config():
         vonage_api_secret=os.environ.get("VONAGE_API_SECRET"),
         webex_api_url=os.environ.get("WEBEX_API_URL"),
         jump_server_host=os.environ.get("JUMP_SERVER_HOST"),
+        should_use_jump_server=os.environ.get("SHOULD_USE_JUMP_SERVER", "false").lower() == "true",
         tanium_cloud_api_token=os.environ.get("TANIUM_CLOUD_API_TOKEN"),
+        tanium_cloud_signals_api_token=os.environ.get("TANIUM_CLOUD_SIGNALS_API_TOKEN"),
         tanium_cloud_api_url=os.environ.get("TANIUM_CLOUD_API_URL"),
         tanium_onprem_api_token=os.environ.get("TANIUM_ONPREM_API_TOKEN"),
+        tanium_onprem_signals_api_token=os.environ.get("TANIUM_ONPREM_SIGNALS_API_TOKEN"),
         tanium_onprem_api_url=os.environ.get("TANIUM_ONPREM_API_URL"),
         infoblox_base_url=os.environ.get("INFOBLOX_BASE_URL"),
         infoblox_username=os.environ.get("INFOBLOX_USERNAME"),
@@ -247,7 +250,7 @@ class Config:
     team_name: Optional[str] = None
     company_name: Optional[str] = None
     ollama_llm_model: Optional[str] = None
-    ollama_embedding_model: Optional[str] = "nomic-embed-text"
+    ollama_embedding_model: Optional[str] = None
     barnacles_approved_users: Optional[str] = None
     azdo_org: Optional[str] = None
     azdo_de_project: Optional[str] = None
@@ -292,9 +295,12 @@ class Config:
     vonage_api_secret: Optional[str] = None
     webex_api_url: Optional[str] = None
     jump_server_host: Optional[str] = None
+    should_use_jump_server: bool = False
     tanium_cloud_api_token: Optional[str] = None
+    tanium_cloud_signals_api_token: Optional[str] = None
     tanium_cloud_api_url: Optional[str] = None
     tanium_onprem_api_token: Optional[str] = None
+    tanium_onprem_signals_api_token: Optional[str] = None
     tanium_onprem_api_url: Optional[str] = None
     infoblox_base_url: Optional[str] = None
     infoblox_username: Optional[str] = None

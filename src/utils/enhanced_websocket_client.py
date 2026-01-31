@@ -137,9 +137,11 @@ def patch_websocket_client():
                             raise
                     except KeyError as e:
                         # Handle missing fields in Webex messages gracefully
-                        if 'malwareQuarantineState' in str(e):
-                            # This is a known issue - Webex sometimes sends messages without malwareQuarantineState
-                            logger.debug(f"Received message without malwareQuarantineState field - skipping")
+                        key_name = str(e).strip("'\"")
+                        if key_name in ('malwareQuarantineState', 'id'):
+                            # Known issues - Webex sometimes sends messages without these fields
+                            # This happens with certain activity types (e.g., typing indicators, read receipts)
+                            logger.debug(f"Received message without '{key_name}' field - skipping")
                             return
                         else:
                             # Other KeyErrors should be logged with full traceback

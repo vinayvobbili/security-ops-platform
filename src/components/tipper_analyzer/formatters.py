@@ -144,7 +144,7 @@ def format_analysis_for_display(analysis: NoveltyAnalysis, source: str = "on-dem
         for item in analysis.what_is_new:
             output += f"  • {item}\n"
     else:
-        output += "  (Nothing significantly new identified)\n"
+        output += "  (No new threat actors, TTPs, techniques, or malware identified)\n"
 
     output += "\n**📋 WHAT'S FAMILIAR:**\n"
     if analysis.what_is_familiar:
@@ -156,7 +156,16 @@ def format_analysis_for_display(analysis: NoveltyAnalysis, source: str = "on-dem
     output += "\n**🔗 RELATED TICKETS:**\n"
     if analysis.related_tickets:
         for ticket in analysis.related_tickets:
-            output += f"  • #{ticket['id']}\n"
+            title = ticket.get('title', '')
+            if title:
+                # Strip "[PRIORITY] CTI Threat Tipper: " prefix
+                if '] CTI Threat Tipper: ' in title:
+                    title = title.split('] CTI Threat Tipper: ', 1)[1]
+                # Truncate long titles
+                display_title = title[:80] + '...' if len(title) > 80 else title
+                output += f"  • #{ticket['id']}: {display_title}\n"
+            else:
+                output += f"  • #{ticket['id']}\n"
     else:
         output += "  (No related tickets)\n"
 
@@ -201,23 +210,22 @@ def format_analysis_for_display(analysis: NoveltyAnalysis, source: str = "on-dem
                 if categories:
                     output += f"    Category: {', '.join(categories)}\n"
 
-        # Show malware families (new vs familiar)
+        # Show malware families (compact summary)
         if analysis.current_malware:
             new_malware, familiar_malware = split_by_history(
                 analysis.current_malware, analysis.malware_history or {}
             )
             if new_malware:
-                output += "\n  **🆕 New Malware/Tools:**\n"
-                for malware in new_malware:
-                    output += f"  • {malware}\n"
+                output += f"\n  **🆕 New Malware/Tools:** {', '.join(new_malware[:5])}\n"
             if familiar_malware:
-                output += "\n  **📋 Familiar Malware/Tools:**\n"
-                for malware, seen_in in familiar_malware:
-                    output += f"  • {malware} (seen in {format_tipper_refs(seen_in)})\n"
+                familiar_names = [m for m, _ in familiar_malware[:3]]
+                output += f"  **📋 Familiar:** {', '.join(familiar_names)}"
+                if len(familiar_malware) > 3:
+                    output += f" (+{len(familiar_malware) - 3} more)"
+                output += "\n"
 
-        # Show IOCs (new vs familiar) - use code block table for readability
+        # Show IOC summary (compact for Webex, full tables go to AZDO)
         if has_rf_iocs or analysis.total_iocs_extracted:
-            # Calculate totals for the note
             total_extracted = sum(analysis.total_iocs_extracted.values()) if analysis.total_iocs_extracted else 0
             high_risk_count = len(rf.get('high_risk_iocs', [])) if rf else 0
 
@@ -228,49 +236,38 @@ def format_analysis_for_display(analysis: NoveltyAnalysis, source: str = "on-dem
                     key_fn=lambda x: x.get('value', '').lower()
                 )
 
-                # First-time IOCs section (not seen in previous tippers)
+                # Compact IOC summary
+                output += "\n  **IOC Summary:**\n"
                 if new_iocs:
-                    output += "\n  **🔍 First-Time IOCs** _(not seen in previous tippers)_**:**\n```\n"
-                    output += f"{'IOC':<66} {'Type':<8} {'Risk':<18}\n"
-                    output += f"{'-'*66} {'-'*8} {'-'*18}\n"
-                    for ioc in new_iocs[:15]:
-                        ioc_type = ioc.get('ioc_type', 'Unknown')
-                        value = defang_ioc(ioc.get('value', 'Unknown'), ioc_type)
-                        risk_score = ioc.get('risk_score', 0)
-                        # Truncate long values
-                        display_value = value[:63] + "..." if len(value) > 66 else value
-                        risk_str = f"{risk_score}/99 ({ioc.get('risk_level', 'Unknown')})"
-                        emoji = get_risk_emoji(risk_score)
-                        output += f"{emoji} {display_value:<64} {ioc_type:<8} {risk_str:<18}\n"
-                    if len(new_iocs) > 15:
-                        output += f"... and {len(new_iocs) - 15} more\n"
-                    output += "```\n"
-
-                # Familiar IOCs section as table
+                    # Show top 3 highest-risk new IOCs
+                    top_new = sorted(new_iocs, key=lambda x: x.get('risk_score', 0), reverse=True)[:3]
+                    output += f"  • 🔍 **{len(new_iocs)} First-Time IOCs** "
+                    top_display = ", ".join(
+                        f"`{defang_ioc(ioc.get('value', '')[:25], ioc.get('ioc_type', ''))}`"
+                        for ioc in top_new
+                    )
+                    output += f"(top: {top_display})\n"
                 if familiar_iocs:
-                    output += "\n  **📋 Familiar IOCs:**\n```\n"
-                    output += f"{'IOC':<66} {'Type':<8} {'Risk':<18} {'Seen In':<20}\n"
-                    output += f"{'-'*66} {'-'*8} {'-'*18} {'-'*20}\n"
-                    for ioc, seen_in in familiar_iocs[:15]:
-                        ioc_type = ioc.get('ioc_type', 'Unknown')
-                        value = defang_ioc(ioc.get('value', 'Unknown'), ioc_type)
-                        risk_score = ioc.get('risk_score', 0)
-                        display_value = value[:63] + "..." if len(value) > 66 else value
-                        risk_str = f"{risk_score}/99 ({ioc.get('risk_level', 'Unknown')})"
-                        refs = format_tipper_refs(seen_in, max_refs=2)
-                        emoji = get_risk_emoji(risk_score)
-                        output += f"{emoji} {display_value:<64} {ioc_type:<8} {risk_str:<18} {refs:<20}\n"
-                    if len(familiar_iocs) > 15:
-                        output += f"... and {len(familiar_iocs) - 15} more\n"
-                    output += "```\n"
-                else:
-                    output += "\n  **📋 Familiar IOCs:** None - all IOCs are new\n"
+                    output += f"  • 📋 **{len(familiar_iocs)} Familiar IOCs** (seen in prior tippers)\n"
 
-            # Add note about total IOCs extracted
             if total_extracted > 0:
-                output += f"\n  _ℹ️ {high_risk_count} high-risk IOCs shown of {total_extracted} total extracted from description_\n"
+                output += f"  _ℹ️ {total_extracted} total IOCs extracted, {high_risk_count} high-risk_\n"
 
-    # Add detection rules coverage section
+    # Add brief MITRE coverage summary
+    if analysis.mitre_techniques:
+        covered_count = len(analysis.mitre_covered)
+        gap_count = len(analysis.mitre_gaps)
+        total = len(analysis.mitre_techniques)
+        if gap_count > 0:
+            output += f"\n**MITRE Coverage:** {covered_count}/{total} techniques covered, "
+            output += f"⚠️ **{gap_count} gap(s):** {', '.join(analysis.mitre_gaps[:3])}"
+            if gap_count > 3:
+                output += f" (+{gap_count - 3} more)"
+            output += "\n"
+        else:
+            output += f"\n**MITRE Coverage:** ✅ All {total} techniques have detection rules\n"
+
+    # Add detection rules coverage section (compact for Webex)
     if analysis.existing_rules:
         from .rules.formatters import format_rules_for_display_section
         rules_section = format_rules_for_display_section(analysis.existing_rules)
@@ -326,7 +323,7 @@ def format_analysis_for_azdo(analysis: NoveltyAnalysis) -> str:
             linked_item = linkify_work_items_html(item)
             html += f"<li>{linked_item}</li>\n"
     else:
-        html += "<li><em>Nothing significantly new identified</em></li>\n"
+        html += "<li><em>No new threat actors, TTPs, techniques, or malware identified</em></li>\n"
 
     html += """</ul>
 
@@ -464,6 +461,61 @@ def format_analysis_for_azdo(analysis: NoveltyAnalysis) -> str:
         rules_html = format_rules_for_azdo(analysis.existing_rules)
         if rules_html:
             html += rules_html
+
+    # Add MITRE ATT&CK coverage gap analysis
+    if analysis.mitre_techniques:
+        html += "\n<h4>&#x1F3AF; MITRE ATT&CK Coverage Analysis</h4>\n"
+
+        if analysis.mitre_covered:
+            covered_badges = " ".join(
+                f'<span style="background-color: #c8e6c9; color: #2e7d32; padding: 2px 6px; '
+                f'border-radius: 3px; font-size: 11px; margin: 1px;">'
+                f'<a href="https://attack.mitre.org/techniques/{t.replace(".", "/")}/" '
+                f'target="_blank" style="color: #2e7d32; text-decoration: none;">✓ {t}</a></span>'
+                for t in analysis.mitre_covered[:10]
+            )
+            html += f"<p><strong>Covered</strong> (existing detection rules): {covered_badges}</p>\n"
+
+        if analysis.mitre_gaps:
+            gap_badges = " ".join(
+                f'<span style="background-color: #ffcdd2; color: #c62828; padding: 2px 6px; '
+                f'border-radius: 3px; font-size: 11px; margin: 1px;">'
+                f'<a href="https://attack.mitre.org/techniques/{t.replace(".", "/")}/" '
+                f'target="_blank" style="color: #c62828; text-decoration: none;">⚠ {t}</a></span>'
+                for t in analysis.mitre_gaps[:10]
+            )
+            html += f"<p><strong>Gaps</strong> (no detection rules): {gap_badges}</p>\n"
+        else:
+            html += "<p><em>✅ All identified techniques have existing detection coverage</em></p>\n"
+
+    # Add Actionable Next Steps section
+    if analysis.actionable_steps:
+        html += "\n<h4>&#x1F4CB; Actionable Next Steps</h4>\n"
+        html += '<table style="border-collapse: collapse; width: 100%; margin-bottom: 10px;">\n'
+        html += (
+            '<tr style="background-color: #e3f2fd;">'
+            '<th style="padding: 6px; border: 1px solid #ccc; width: 80px;">Priority</th>'
+            '<th style="padding: 6px; border: 1px solid #ccc;">Action</th>'
+            '<th style="padding: 6px; border: 1px solid #ccc;">Details</th>'
+            '</tr>\n'
+        )
+        priority_colors = {
+            'HIGH': ('#c62828', '#ffebee'),
+            'MEDIUM': ('#f57c00', '#fff3e0'),
+            'LOW': ('#388e3c', '#e8f5e9'),
+        }
+        for step in analysis.actionable_steps:
+            priority = step.get('priority', 'MEDIUM')
+            text_color, bg_color = priority_colors.get(priority, ('#666', '#f5f5f5'))
+            html += (
+                f'<tr style="background-color: {bg_color};">'
+                f'<td style="padding: 6px; border: 1px solid #ccc; text-align: center;">'
+                f'<strong style="color: {text_color};">{priority}</strong></td>'
+                f'<td style="padding: 6px; border: 1px solid #ccc;"><strong>{step.get("action", "")}</strong></td>'
+                f'<td style="padding: 6px; border: 1px solid #ccc;">{step.get("detail", "")}</td>'
+                f'</tr>\n'
+            )
+        html += "</table>\n"
 
     # Linkify any work item references in the recommendation
     linked_recommendation = linkify_work_items_html(analysis.recommendation)
@@ -613,6 +665,20 @@ def format_hunt_results_for_azdo(result: IOCHuntResult, rf_enrichment: dict = No
         f"<p><em>Searched {result.total_iocs_searched} IOCs over last {result.search_hours} hours ({result.search_hours // 24} days)</em></p>",
     ]
 
+    # Add environment exposure summary if there are hits
+    if result.total_hits > 0:
+        exposure_parts = []
+        if result.unique_hosts > 0:
+            exposure_parts.append(f"<strong>{result.unique_hosts}</strong> unique host(s)")
+        if result.unique_sources:
+            exposure_parts.append(f"<strong>{len(result.unique_sources)}</strong> log source(s): {', '.join(result.unique_sources[:5])}")
+        if exposure_parts:
+            html_parts.append(
+                f"<div style='background-color: #fff3e0; border-left: 4px solid #f57c00; padding: 8px; margin: 8px 0;'>"
+                f"<strong>&#x26A0; Environment Exposure:</strong> {' | '.join(exposure_parts)}"
+                f"</div>"
+            )
+
     # Helper to format a tool's results
     def format_tool_section(tool_result: ToolHuntResult, tool_icon: str, tool_key: str):
         if not tool_result or tool_result.total_hits == 0:
@@ -630,15 +696,32 @@ def format_hunt_results_for_azdo(result: IOCHuntResult, rf_enrichment: dict = No
                 f"<tr style='background-color: #f0f0f0;'>"
                 f"<th style='{th_style}'>IP</th>"
                 f"<th style='{th_style}'>Events</th>"
+                f"<th style='{th_style}'>Direction</th>"
                 f"<th style='{th_style}'>RF Risk</th>"
                 f"<th style='{th_style}'>Sources</th>"
+                f"<th style='{th_style}'>Affected Users</th>"
+                f"<th style='{th_style}'>Affected Hosts</th>"
+                f"<th style='{th_style}'>Context</th>"
                 f"<th style='{th_style}'>First Seen</th>"
                 f"<th style='{th_style}'>Last Seen</th></tr>"
             )
             for hit in tool_result.ip_hits:
                 ip = hit['ip']
                 count = hit['event_count']
+                direction = hit.get('direction', '')
                 sources = ', '.join(hit.get('sources', [])) if hit.get('sources') else ''
+                # Format users and hosts
+                users = hit.get('users', [])
+                hosts = hit.get('hosts', [])
+                users_display = ', '.join(users[:3])
+                if len(users) > 3:
+                    users_display += f" (+{len(users) - 3} more)"
+                hosts_display = ', '.join(hosts[:3])
+                if len(hosts) > 3:
+                    hosts_display += f" (+{len(hosts) - 3} more)"
+                # Format context as semicolon-separated list
+                context_list = hit.get('context', [])
+                context = '; '.join(context_list[:2]) if context_list else ''
                 if tool_key == 'qradar':
                     count_display = _qradar_search_link(ip, 'ip', count)
                 else:
@@ -647,8 +730,12 @@ def format_hunt_results_for_azdo(result: IOCHuntResult, rf_enrichment: dict = No
                     f"<tr style='background-color: #ffe6e6;'>"
                     f"<td style='{td_style}'><code>{ip}</code></td>"
                     f"<td style='{td_style}'>{count_display}</td>"
+                    f"<td style='{td_style}'>{direction}</td>"
                     f"{_rf_risk_cell(ip)}"
                     f"<td style='{td_style}'>{sources}</td>"
+                    f"<td style='{td_style}; font-size: 11px;'>{users_display}</td>"
+                    f"<td style='{td_style}; font-size: 11px;'>{hosts_display}</td>"
+                    f"<td style='{td_style}; font-size: 11px;'>{context}</td>"
                     f"<td style='{td_style}'>{hit.get('first_seen', 'N/A')}</td>"
                     f"<td style='{td_style}'>{hit.get('last_seen', 'N/A')}</td></tr>"
                 )
@@ -663,6 +750,9 @@ def format_hunt_results_for_azdo(result: IOCHuntResult, rf_enrichment: dict = No
                 f"<th style='{th_style}'>Events</th>"
                 f"<th style='{th_style}'>RF Risk</th>"
                 f"<th style='{th_style}'>Sources</th>"
+                f"<th style='{th_style}'>Affected Users</th>"
+                f"<th style='{th_style}'>Email Recipients</th>"
+                f"<th style='{th_style}'>Context</th>"
                 f"<th style='{th_style}'>First Seen</th>"
                 f"<th style='{th_style}'>Last Seen</th></tr>"
             )
@@ -670,6 +760,18 @@ def format_hunt_results_for_azdo(result: IOCHuntResult, rf_enrichment: dict = No
                 domain = hit['domain']
                 count = hit.get('event_count') or hit.get('threat_count', 0)
                 sources = ', '.join(hit.get('sources', [])) if hit.get('sources') else ''
+                # Format users and recipients
+                users = hit.get('users', [])
+                recipients = hit.get('recipients', [])
+                users_display = ', '.join(users[:3])
+                if len(users) > 3:
+                    users_display += f" (+{len(users) - 3} more)"
+                recipients_display = ', '.join(recipients[:3])
+                if len(recipients) > 3:
+                    recipients_display += f" (+{len(recipients) - 3} more)"
+                # Format context as semicolon-separated list
+                context_list = hit.get('context', [])
+                context = '; '.join(context_list[:2]) if context_list else ''
                 if tool_key == 'qradar':
                     count_display = _qradar_search_link(domain, 'domain', count)
                 else:
@@ -680,6 +782,9 @@ def format_hunt_results_for_azdo(result: IOCHuntResult, rf_enrichment: dict = No
                     f"<td style='{td_style}'>{count_display}</td>"
                     f"{_rf_risk_cell(domain)}"
                     f"<td style='{td_style}'>{sources}</td>"
+                    f"<td style='{td_style}; font-size: 11px;'>{users_display}</td>"
+                    f"<td style='{td_style}; font-size: 11px;'>{recipients_display}</td>"
+                    f"<td style='{td_style}; font-size: 11px;'>{context}</td>"
                     f"<td style='{td_style}'>{hit.get('first_seen', 'N/A')}</td>"
                     f"<td style='{td_style}'>{hit.get('last_seen', 'N/A')}</td></tr>"
                 )

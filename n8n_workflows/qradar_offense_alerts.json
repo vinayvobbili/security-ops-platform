@@ -1,0 +1,520 @@
+{
+  "name": "QRadar Offense Alerts to Webex",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 5
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://YOUR_QRADAR_HOST/api/siem/offenses",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "filter",
+              "value": "=status=OPEN and last_updated_time > {{ Date.now() - 300000 }}"
+            },
+            {
+              "name": "fields",
+              "value": "id,description,magnitude,offense_type,status,offense_source,source_network,destination_networks,categories,event_count,last_updated_time,start_time,local_destination_address_ids,source_address_ids"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "SEC",
+              "value": "={{ $credentials.httpHeaderAuth.value }}"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            },
+            {
+              "name": "Version",
+              "value": "19.0"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "query-qradar-offenses",
+      "name": "Query QRadar Offenses",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [460, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "qradar-api-token",
+          "name": "QRadar API Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "check-offenses-exist",
+              "leftValue": "={{ $json.length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-offenses",
+      "name": "Check Offenses Exist",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "=",
+        "options": {}
+      },
+      "id": "split-offenses",
+      "name": "Split Offenses",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [900, 200]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://YOUR_QRADAR_HOST/api/siem/offenses/{{ $json.id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "SEC",
+              "value": "={{ $credentials.httpHeaderAuth.value }}"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            },
+            {
+              "name": "Version",
+              "value": "19.0"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "get-offense-details",
+      "name": "Get Offense Details",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1120, 200],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "qradar-api-token",
+          "name": "QRadar API Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://YOUR_QRADAR_HOST/api/siem/source_addresses?filter=id%20in%20({{ $json.source_address_ids.join(',') }})",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "SEC",
+              "value": "={{ $credentials.httpHeaderAuth.value }}"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            },
+            {
+              "name": "Version",
+              "value": "19.0"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "get-source-ips",
+      "name": "Get Source IPs",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1340, 100],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "qradar-api-token",
+          "name": "QRadar API Token"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://YOUR_QRADAR_HOST/api/siem/local_destination_addresses?filter=id%20in%20({{ $json.local_destination_address_ids.join(',') }})",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "SEC",
+              "value": "={{ $credentials.httpHeaderAuth.value }}"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            },
+            {
+              "name": "Version",
+              "value": "19.0"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "get-dest-ips",
+      "name": "Get Destination IPs",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1340, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "qradar-api-token",
+          "name": "QRadar API Token"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "id": "merge-ip-data",
+      "name": "Merge IP Data",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [1560, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract source IPs from the merged data\nconst sourceIpData = $input.first().json;\nconst destIpData = $input.last().json;\nconst offenseData = $('Get Offense Details').first().json;\n\n// Get first source IP for VirusTotal lookup\nlet sourceIps = [];\nif (Array.isArray(sourceIpData)) {\n  sourceIps = sourceIpData.map(item => item.source_ip || item.ip);\n} else if (sourceIpData && sourceIpData.source_ip) {\n  sourceIps = [sourceIpData.source_ip];\n}\n\nlet destIps = [];\nif (Array.isArray(destIpData)) {\n  destIps = destIpData.map(item => item.local_destination_ip || item.ip);\n} else if (destIpData && destIpData.local_destination_ip) {\n  destIps = [destIpData.local_destination_ip];\n}\n\nreturn {\n  json: {\n    offense: offenseData,\n    sourceIps: sourceIps,\n    destIps: destIps,\n    primarySourceIp: sourceIps[0] || null\n  }\n};"
+      },
+      "id": "prepare-enrichment-data",
+      "name": "Prepare Enrichment Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1780, 200]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://www.virustotal.com/api/v3/ip_addresses/{{ $json.primarySourceIp }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-apikey",
+              "value": "={{ $credentials.httpHeaderAuth.value }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "virustotal-lookup",
+      "name": "VirusTotal IP Lookup",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2000, 200],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "virustotal-api-key",
+          "name": "VirusTotal API Key"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const enrichmentData = $('Prepare Enrichment Data').first().json;\nconst vtResponse = $input.first().json;\nconst offense = enrichmentData.offense;\n\n// Determine severity color based on magnitude\nlet severityColor = '';\nlet severityEmoji = '';\nconst magnitude = offense.magnitude || 0;\n\nif (magnitude >= 8) {\n  severityColor = 'danger';\n  severityEmoji = 'CRITICAL';\n} else if (magnitude >= 6) {\n  severityColor = 'warning';\n  severityEmoji = 'HIGH';\n} else if (magnitude >= 4) {\n  severityColor = 'attention';\n  severityEmoji = 'MEDIUM';\n} else {\n  severityColor = 'good';\n  severityEmoji = 'LOW';\n}\n\n// Parse VirusTotal results\nlet vtSummary = 'N/A - Lookup failed or no data';\nlet vtMalicious = 0;\nlet vtSuspicious = 0;\n\nif (vtResponse && vtResponse.data && vtResponse.data.attributes) {\n  const stats = vtResponse.data.attributes.last_analysis_stats;\n  if (stats) {\n    vtMalicious = stats.malicious || 0;\n    vtSuspicious = stats.suspicious || 0;\n    const harmless = stats.harmless || 0;\n    const undetected = stats.undetected || 0;\n    vtSummary = `Malicious: ${vtMalicious} | Suspicious: ${vtSuspicious} | Harmless: ${harmless} | Undetected: ${undetected}`;\n  }\n  \n  // Add reputation if available\n  if (vtResponse.data.attributes.reputation !== undefined) {\n    vtSummary += ` | Reputation: ${vtResponse.data.attributes.reputation}`;\n  }\n  \n  // Add country if available\n  if (vtResponse.data.attributes.country) {\n    vtSummary += ` | Country: ${vtResponse.data.attributes.country}`;\n  }\n}\n\n// Format categories\nconst categories = offense.categories ? offense.categories.join(', ') : 'N/A';\n\n// Format IPs\nconst sourceIpsStr = enrichmentData.sourceIps.length > 0 ? enrichmentData.sourceIps.join(', ') : 'N/A';\nconst destIpsStr = enrichmentData.destIps.length > 0 ? enrichmentData.destIps.join(', ') : 'N/A';\n\n// Build markdown message for Webex\nconst markdown = `## QRadar Offense Alert\n\n---\n\n### Offense #${offense.id}: ${offense.description || 'No description'}\n\n**Severity:** ${severityEmoji} (Magnitude: ${magnitude}/10)\n\n---\n\n#### Details\n\n| Field | Value |\n|-------|-------|\n| **Status** | ${offense.status || 'OPEN'} |\n| **Event Count** | ${offense.event_count || 0} |\n| **Offense Type** | ${offense.offense_type || 'N/A'} |\n| **Offense Source** | ${offense.offense_source || 'N/A'} |\n\n---\n\n#### Network Information\n\n| Field | Value |\n|-------|-------|\n| **Source IPs** | ${sourceIpsStr} |\n| **Destination IPs** | ${destIpsStr} |\n| **Source Network** | ${offense.source_network || 'N/A'} |\n| **Destination Networks** | ${offense.destination_networks ? offense.destination_networks.join(', ') : 'N/A'} |\n\n---\n\n#### Categories\n\n${categories}\n\n---\n\n#### VirusTotal Enrichment (Source IP: ${enrichmentData.primarySourceIp || 'N/A'})\n\n${vtSummary}\n\n${vtMalicious > 0 ? '**WARNING: Source IP flagged as malicious by VirusTotal vendors!**' : ''}\n\n---\n\n**Start Time:** ${offense.start_time ? new Date(offense.start_time).toISOString() : 'N/A'}\n\n**Last Updated:** ${offense.last_updated_time ? new Date(offense.last_updated_time).toISOString() : 'N/A'}\n\n[View in QRadar Console](https://YOUR_QRADAR_HOST/console/do/sem/offensesummary?appName=Sem&pageId=OffenseSummary&summaryId=${offense.id})`;\n\nreturn {\n  json: {\n    roomId: 'YOUR_WEBEX_ROOM_ID',\n    markdown: markdown,\n    offenseId: offense.id,\n    magnitude: magnitude,\n    severityLevel: severityEmoji\n  }\n};"
+      },
+      "id": "format-message",
+      "name": "Format Webex Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2220, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://webexapis.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"roomId\": \"{{ $json.roomId }}\",\n  \"markdown\": {{ JSON.stringify($json.markdown) }}\n}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $credentials.httpHeaderAuth.value }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "post-to-webex",
+      "name": "Post to Webex",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2440, 200],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "webex-bot-token",
+          "name": "Webex Bot Token"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "no-op",
+      "name": "No New Offenses",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [900, 400]
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Query QRadar Offenses",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Query QRadar Offenses": {
+      "main": [
+        [
+          {
+            "node": "Check Offenses Exist",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Offenses Exist": {
+      "main": [
+        [
+          {
+            "node": "Split Offenses",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No New Offenses",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Offenses": {
+      "main": [
+        [
+          {
+            "node": "Get Offense Details",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Offense Details": {
+      "main": [
+        [
+          {
+            "node": "Get Source IPs",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get Destination IPs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Source IPs": {
+      "main": [
+        [
+          {
+            "node": "Merge IP Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Destination IPs": {
+      "main": [
+        [
+          {
+            "node": "Merge IP Data",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge IP Data": {
+      "main": [
+        [
+          {
+            "node": "Prepare Enrichment Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Enrichment Data": {
+      "main": [
+        [
+          {
+            "node": "VirusTotal IP Lookup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "VirusTotal IP Lookup": {
+      "main": [
+        [
+          {
+            "node": "Format Webex Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Webex Message": {
+      "main": [
+        [
+          {
+            "node": "Post to Webex",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "pinData": {},
+  "versionId": "1",
+  "triggerCount": 1,
+  "tags": [
+    {
+      "name": "Security",
+      "id": "security-tag"
+    },
+    {
+      "name": "QRadar",
+      "id": "qradar-tag"
+    },
+    {
+      "name": "Alerting",
+      "id": "alerting-tag"
+    }
+  ]
+}

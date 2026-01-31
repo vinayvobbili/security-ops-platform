@@ -1,0 +1,789 @@
+{
+  "name": "Vectra Detection Alerts to Webex",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 5
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Every 5 Minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $credentials.vectra.baseUrl }}/oauth2/token",
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "grant_type",
+              "value": "client_credentials"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Basic {{ Buffer.from($credentials.vectra.clientId + ':' + $credentials.vectra.clientSecret).toString('base64') }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/x-www-form-urlencoded"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "vectra-auth",
+      "name": "Vectra OAuth Token",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [220, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $credentials.vectra.baseUrl }}/api/v3.3/detections",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "state",
+              "value": "active"
+            },
+            {
+              "name": "page_size",
+              "value": "50"
+            },
+            {
+              "name": "ordering",
+              "value": "-last_timestamp"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Vectra OAuth Token').item.json.access_token }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": false
+            }
+          }
+        }
+      },
+      "id": "query-vectra-detections",
+      "name": "Query Vectra Detections",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [440, 300],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Filter detections updated in last 5 minutes with high threat/certainty scores\nconst detections = $json.results || [];\nconst now = Date.now();\nconst fiveMinutesAgo = now - (5 * 60 * 1000);\n\n// Filter for recent activity and significant scores\nconst filtered = detections.filter(det => {\n  const lastTimestamp = new Date(det.last_timestamp).getTime();\n  const threat = det.threat || 0;\n  const certainty = det.certainty || 0;\n  \n  // Recent AND (high threat OR high certainty OR combined score >= 50)\n  const isRecent = lastTimestamp >= fiveMinutesAgo;\n  const isSignificant = threat >= 30 || certainty >= 30 || (threat + certainty) / 2 >= 25;\n  \n  return isRecent && isSignificant;\n});\n\n// Sort by combined score (highest first)\nfiltered.sort((a, b) => {\n  const scoreA = (a.threat || 0) + (a.certainty || 0);\n  const scoreB = (b.threat || 0) + (b.certainty || 0);\n  return scoreB - scoreA;\n});\n\nreturn filtered.map(det => ({ json: det }));"
+      },
+      "id": "filter-recent-detections",
+      "name": "Filter Recent High-Score Detections",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "check-detections",
+              "leftValue": "={{ $input.all().length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "has-detections",
+      "name": "Has New Detections?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [880, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $credentials.vectra.baseUrl }}/api/v3.3/detections/{{ $json.id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Vectra OAuth Token').item.json.access_token }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "get-detection-details",
+      "name": "Get Detection Details",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1100, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract entity ID from detection for host lookup\nconst detection = $json;\n\n// Vectra v3.3 API: entity is a direct reference\nconst entityId = detection.entity?.id || detection.src_host?.id || null;\nconst entityType = detection.entity?.type || 'host';\n\n// Extract artifacts (IPs, domains, etc.)\nconst artifacts = {\n  sourceIp: detection.src_ip || detection.summary?.src_ip || null,\n  destinationIps: detection.summary?.dst_ips || [],\n  destinationPorts: detection.summary?.dst_ports || [],\n  domains: detection.summary?.target_domains || [],\n  urls: detection.summary?.target_urls || []\n};\n\nreturn {\n  json: {\n    detection,\n    entityId,\n    entityType,\n    artifacts\n  }\n};"
+      },
+      "id": "extract-artifacts",
+      "name": "Extract Detection Artifacts",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1320, 200]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $credentials.vectra.baseUrl }}/api/v3.3/entities/{{ $json.entityId }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Vectra OAuth Token').item.json.access_token }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "get-entity-details",
+      "name": "Get Host Entity",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1540, 100],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.us-2.crowdstrike.com/oauth2/token",
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "client_id",
+              "value": "={{ $credentials.crowdstrike.clientId }}"
+            },
+            {
+              "name": "client_secret",
+              "value": "={{ $credentials.crowdstrike.clientSecret }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "cs-auth",
+      "name": "CrowdStrike Auth",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1540, 200],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.us-2.crowdstrike.com/devices/queries/devices/v1",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "filter",
+              "value": "=local_ip:'{{ $('Extract Detection Artifacts').item.json.artifacts.sourceIp || '0.0.0.0' }}'"
+            },
+            {
+              "name": "limit",
+              "value": "1"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('CrowdStrike Auth').item.json.access_token }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "cs-host-lookup",
+      "name": "CrowdStrike Host Lookup",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1760, 200],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://www.virustotal.com/api/v3/ip_addresses/{{ $('Extract Detection Artifacts').item.json.artifacts.sourceIp || '0.0.0.0' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-apikey",
+              "value": "={{ $credentials.virustotal.apiKey }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "vt-ip-lookup",
+      "name": "VirusTotal IP Lookup",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1540, 300],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://www.virustotal.com/api/v3/domains/{{ $('Extract Detection Artifacts').item.json.artifacts.domains[0] || 'example.com' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-apikey",
+              "value": "={{ $credentials.virustotal.apiKey }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "vt-domain-lookup",
+      "name": "VirusTotal Domain Lookup",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1540, 400],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $credentials.qradar.baseUrl }}/api/siem/offenses",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "filter",
+              "value": "=status=OPEN and offense_source ILIKE '%{{ $('Extract Detection Artifacts').item.json.artifacts.sourceIp || '0.0.0.0' }}%'"
+            },
+            {
+              "name": "fields",
+              "value": "id,description,magnitude,status,offense_source,categories"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "SEC",
+              "value": "={{ $credentials.qradar.apiKey }}"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            },
+            {
+              "name": "Version",
+              "value": "19.0"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "qradar-offense-lookup",
+      "name": "QRadar Related Offenses",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1760, 400],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "id": "merge-enrichment",
+      "name": "Merge Enrichment Data",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [1980, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Gather all enrichment data\nconst items = $input.all();\n\n// Get data from upstream nodes\nconst detectionData = $('Extract Detection Artifacts').item.json;\nconst detection = detectionData.detection;\nconst artifacts = detectionData.artifacts;\n\n// Entity data (Vectra host)\nconst entityData = $('Get Host Entity').item?.json || {};\n\n// CrowdStrike data\nconst csHostData = $('CrowdStrike Host Lookup').item?.json || {};\nconst csDeviceIds = csHostData?.resources || [];\n\n// VirusTotal data\nconst vtIpData = $('VirusTotal IP Lookup').item?.json || {};\nconst vtDomainData = $('VirusTotal Domain Lookup').item?.json || {};\n\n// QRadar data\nconst qradarOffenses = $('QRadar Related Offenses').item?.json || [];\n\n// ==================== DETECTION INFO ====================\nconst detectionId = detection.id || 'Unknown';\nconst detectionType = detection.detection_type || detection.type_vname || 'Unknown';\nconst threat = detection.threat || 0;\nconst certainty = detection.certainty || 0;\nconst state = detection.state || 'active';\nconst description = detection.summary?.description || detection.description || 'No description available';\nconst firstTimestamp = detection.first_timestamp ? new Date(detection.first_timestamp).toISOString() : 'N/A';\nconst lastTimestamp = detection.last_timestamp ? new Date(detection.last_timestamp).toISOString() : 'N/A';\n\n// MITRE ATT&CK mapping\nconst mitreAttack = detection.mitre_attack || detection.attack_type || null;\nlet mitreInfo = 'N/A';\nif (mitreAttack) {\n  if (typeof mitreAttack === 'object') {\n    const tactics = mitreAttack.tactics?.map(t => t.name || t).join(', ') || 'N/A';\n    const techniques = mitreAttack.techniques?.map(t => t.name || t.id || t).join(', ') || 'N/A';\n    mitreInfo = `Tactics: ${tactics} | Techniques: ${techniques}`;\n  } else {\n    mitreInfo = mitreAttack;\n  }\n}\n\n// ==================== SEVERITY CALCULATION ====================\nlet severityLevel = 'LOW';\nlet severityEmoji = '\\u{1F7E2}'; // Green\nlet severityColor = '#00FF00';\n\nconst combined = (threat + certainty) / 2;\n\nif (threat >= 80 || combined >= 70) {\n  severityLevel = 'CRITICAL';\n  severityEmoji = '\\u{1F534}'; // Red\n  severityColor = '#FF0000';\n} else if (threat >= 50 || combined >= 50) {\n  severityLevel = 'HIGH';\n  severityEmoji = '\\u{1F7E0}'; // Orange\n  severityColor = '#FF8C00';\n} else if (threat >= 25 || combined >= 30) {\n  severityLevel = 'MEDIUM';\n  severityEmoji = '\\u{1F7E1}'; // Yellow\n  severityColor = '#FFD700';\n}\n\n// ==================== HOST/ENTITY INFO ====================\nconst hostName = entityData.name || detection.src_host?.name || 'Unknown';\nconst hostIp = artifacts.sourceIp || entityData.last_source || 'N/A';\nconst hostType = entityData.type || 'host';\nconst hostThreat = entityData.threat || 0;\nconst hostCertainty = entityData.certainty || 0;\nconst hostDetectionCount = entityData.detection_count || 0;\n\n// Destination info\nconst destIps = artifacts.destinationIps?.slice(0, 5).join(', ') || 'N/A';\nconst destPorts = artifacts.destinationPorts?.slice(0, 10).join(', ') || 'N/A';\nconst targetDomains = artifacts.domains?.slice(0, 5).join(', ') || 'N/A';\n\n// ==================== CROWDSTRIKE ENRICHMENT ====================\nlet csInfo = 'N/A - Host not found';\nif (csDeviceIds.length > 0) {\n  csInfo = `Found ${csDeviceIds.length} matching device(s) in CrowdStrike`;\n}\n\n// ==================== VIRUSTOTAL ENRICHMENT ====================\nlet vtIpSummary = 'N/A';\nlet vtIpVerdict = '';\nif (vtIpData?.data?.attributes?.last_analysis_stats) {\n  const stats = vtIpData.data.attributes.last_analysis_stats;\n  const malicious = stats.malicious || 0;\n  const suspicious = stats.suspicious || 0;\n  vtIpSummary = `${malicious} malicious, ${suspicious} suspicious`;\n  if (malicious > 0) vtIpVerdict = '\\u{1F534}';\n  else if (suspicious > 0) vtIpVerdict = '\\u{1F7E1}';\n  else vtIpVerdict = '\\u{1F7E2}';\n}\n\nlet vtDomainSummary = 'N/A';\nlet vtDomainVerdict = '';\nif (vtDomainData?.data?.attributes?.last_analysis_stats) {\n  const stats = vtDomainData.data.attributes.last_analysis_stats;\n  const malicious = stats.malicious || 0;\n  const suspicious = stats.suspicious || 0;\n  vtDomainSummary = `${malicious} malicious, ${suspicious} suspicious`;\n  if (malicious > 0) vtDomainVerdict = '\\u{1F534}';\n  else if (suspicious > 0) vtDomainVerdict = '\\u{1F7E1}';\n  else vtDomainVerdict = '\\u{1F7E2}';\n}\n\n// ==================== QRADAR ENRICHMENT ====================\nlet qradarInfo = 'No related offenses';\nif (Array.isArray(qradarOffenses) && qradarOffenses.length > 0) {\n  const offenseList = qradarOffenses.slice(0, 3).map(o => \n    `#${o.id} (Mag: ${o.magnitude || 'N/A'})`\n  ).join(', ');\n  qradarInfo = `${qradarOffenses.length} related offense(s): ${offenseList}`;\n}\n\n// ==================== BUILD MARKDOWN MESSAGE ====================\nconst vectraConsoleUrl = `${ $credentials?.vectra?.baseUrl || 'https://vectra.company.com' }/detections/${detectionId}`;\n\nconst markdown = `${severityEmoji} **Vectra Detection Alert - ${severityLevel}**\n\n---\n\n**Detection ID:** \\`${detectionId}\\`\n**Type:** ${detectionType}\n**State:** ${state}\n\n**Threat Score:** ${threat}/100 | **Certainty Score:** ${certainty}/100\n\n---\n\n**Description:**\n${description}\n\n---\n\n**Source Host:**\n- **Hostname:** \\`${hostName}\\`\n- **IP Address:** \\`${hostIp}\\`\n- **Host Threat:** ${hostThreat} | **Host Certainty:** ${hostCertainty}\n- **Total Detections on Host:** ${hostDetectionCount}\n\n**Destination(s):**\n- **IPs:** ${destIps}\n- **Ports:** ${destPorts}\n- **Domains:** ${targetDomains}\n\n---\n\n**MITRE ATT&CK Mapping:**\n${mitreInfo}\n\n---\n\n**Threat Intelligence Enrichment:**\n\n${vtIpVerdict} **VirusTotal (Source IP):** ${vtIpSummary}\n${vtDomainVerdict} **VirusTotal (Domain):** ${vtDomainSummary}\n**CrowdStrike:** ${csInfo}\n**QRadar:** ${qradarInfo}\n\n---\n\n**Timeline:**\n- First Seen: ${firstTimestamp}\n- Last Activity: ${lastTimestamp}\n\n---\n\n[View in Vectra Console](${vectraConsoleUrl})`;\n\nreturn {\n  json: {\n    markdown,\n    detectionId,\n    detectionType,\n    threat,\n    certainty,\n    severityLevel,\n    hostName,\n    hostIp,\n    combined,\n    enrichment: {\n      crowdstrike: csInfo,\n      virustotal_ip: vtIpSummary,\n      virustotal_domain: vtDomainSummary,\n      qradar: qradarInfo\n    }\n  }\n};"
+      },
+      "id": "format-alert-message",
+      "name": "Format Alert Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2200, 200]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "high-severity",
+              "leftValue": "={{ $json.severityLevel }}",
+              "rightValue": "CRITICAL",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "high-threat-certainty",
+              "leftValue": "={{ $json.threat >= 50 && $json.certainty >= 50 }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "id": "severity-router",
+      "name": "Severity Router",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [2420, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://webexapis.com/v1/messages",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"roomId\": \"{{ $credentials.webex.socAlertRoomId }}\",\n  \"markdown\": {{ JSON.stringify($json.markdown) }}\n}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $credentials.webex.botToken }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "webex-immediate-alert",
+      "name": "Immediate SOC Alert",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2640, 100]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "medium-severity",
+              "leftValue": "={{ $json.severityLevel }}",
+              "rightValue": "MEDIUM",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "high-severity",
+              "leftValue": "={{ $json.severityLevel }}",
+              "rightValue": "HIGH",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "id": "medium-severity-check",
+      "name": "Medium/High Severity?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [2640, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://webexapis.com/v1/messages",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"roomId\": \"{{ $credentials.webex.standardQueueRoomId }}\",\n  \"markdown\": {{ JSON.stringify($json.markdown) }}\n}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $credentials.webex.botToken }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "webex-standard-queue",
+      "name": "Standard Queue Alert",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2860, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Store low-severity detection for daily digest\n// In production, this would write to a database or queue\nconst detection = $json;\n\n// Get existing digest items from static data or initialize\nconst staticData = $getWorkflowStaticData('global');\nif (!staticData.dailyDigestItems) {\n  staticData.dailyDigestItems = [];\n}\n\n// Add to digest queue\nstaticData.dailyDigestItems.push({\n  detectionId: detection.detectionId,\n  detectionType: detection.detectionType,\n  hostName: detection.hostName,\n  hostIp: detection.hostIp,\n  threat: detection.threat,\n  certainty: detection.certainty,\n  timestamp: new Date().toISOString()\n});\n\n// Keep only last 100 items to prevent memory bloat\nif (staticData.dailyDigestItems.length > 100) {\n  staticData.dailyDigestItems = staticData.dailyDigestItems.slice(-100);\n}\n\nreturn {\n  json: {\n    status: 'queued_for_digest',\n    detectionId: detection.detectionId,\n    queuedItems: staticData.dailyDigestItems.length\n  }\n};"
+      },
+      "id": "queue-for-digest",
+      "name": "Queue for Daily Digest",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2860, 400]
+    },
+    {
+      "parameters": {},
+      "id": "no-detections",
+      "name": "No New Detections",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [1100, 400]
+    }
+  ],
+  "connections": {
+    "Every 5 Minutes": {
+      "main": [
+        [
+          {
+            "node": "Vectra OAuth Token",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Vectra OAuth Token": {
+      "main": [
+        [
+          {
+            "node": "Query Vectra Detections",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Query Vectra Detections": {
+      "main": [
+        [
+          {
+            "node": "Filter Recent High-Score Detections",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Recent High-Score Detections": {
+      "main": [
+        [
+          {
+            "node": "Has New Detections?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has New Detections?": {
+      "main": [
+        [
+          {
+            "node": "Get Detection Details",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No New Detections",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Detection Details": {
+      "main": [
+        [
+          {
+            "node": "Extract Detection Artifacts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Detection Artifacts": {
+      "main": [
+        [
+          {
+            "node": "Get Host Entity",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "CrowdStrike Auth",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "VirusTotal IP Lookup",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "VirusTotal Domain Lookup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Host Entity": {
+      "main": [
+        [
+          {
+            "node": "Merge Enrichment Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CrowdStrike Auth": {
+      "main": [
+        [
+          {
+            "node": "CrowdStrike Host Lookup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CrowdStrike Host Lookup": {
+      "main": [
+        [
+          {
+            "node": "QRadar Related Offenses",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "VirusTotal IP Lookup": {
+      "main": [
+        [
+          {
+            "node": "Merge Enrichment Data",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "VirusTotal Domain Lookup": {
+      "main": [
+        [
+          {
+            "node": "Merge Enrichment Data",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "QRadar Related Offenses": {
+      "main": [
+        [
+          {
+            "node": "Merge Enrichment Data",
+            "type": "main",
+            "index": 3
+          }
+        ]
+      ]
+    },
+    "Merge Enrichment Data": {
+      "main": [
+        [
+          {
+            "node": "Format Alert Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Alert Message": {
+      "main": [
+        [
+          {
+            "node": "Severity Router",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Severity Router": {
+      "main": [
+        [
+          {
+            "node": "Immediate SOC Alert",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Medium/High Severity?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Immediate SOC Alert": {
+      "main": [
+        []
+      ]
+    },
+    "Medium/High Severity?": {
+      "main": [
+        [
+          {
+            "node": "Standard Queue Alert",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Queue for Daily Digest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "pinData": {},
+  "versionId": "1",
+  "triggerCount": 1,
+  "tags": [
+    {
+      "name": "Security",
+      "id": "security-tag"
+    },
+    {
+      "name": "Vectra",
+      "id": "vectra-tag"
+    },
+    {
+      "name": "NDR",
+      "id": "ndr-tag"
+    },
+    {
+      "name": "SOC",
+      "id": "soc-tag"
+    },
+    {
+      "name": "Alerting",
+      "id": "alerting-tag"
+    }
+  ]
+}

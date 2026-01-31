@@ -1,0 +1,504 @@
+{
+  "name": "User Offboarding Security Check",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "user-offboarding-check",
+        "responseMode": "responseNode",
+        "options": {
+          "rawBody": false
+        }
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [220, 300],
+      "webhookId": "user-offboarding-check-webhook"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract and validate user information from webhook\nconst input = $input.first().json;\n\nconst userInfo = {\n  email: input.body?.email || input.email || '',\n  username: input.body?.username || input.username || '',\n  employee_id: input.body?.employee_id || input.employee_id || '',\n  request_id: `offboard-${Date.now()}`,\n  request_timestamp: new Date().toISOString(),\n  initiated_by: input.body?.initiated_by || input.initiated_by || 'system'\n};\n\n// Validate required fields\nif (!userInfo.email && !userInfo.username && !userInfo.employee_id) {\n  throw new Error('At least one identifier required: email, username, or employee_id');\n}\n\n// Extract domain from email for additional checks\nif (userInfo.email) {\n  userInfo.email_domain = userInfo.email.split('@')[1] || '';\n}\n\nreturn [{ json: userInfo }];"
+      },
+      "id": "validate-input",
+      "name": "Validate User Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{$credentials.crowdstrikeApiUrl}}/devices/queries/devices/v1",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "filter",
+              "value": "=email:'{{$json.email}}'+username:'{{$json.username}}'"
+            },
+            {
+              "name": "limit",
+              "value": "100"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "crowdstrike-device-search",
+      "name": "CrowdStrike Device Search",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [700, 100],
+      "credentials": {
+        "oAuth2Api": {
+          "id": "crowdstrike-oauth",
+          "name": "CrowdStrike OAuth2"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{$credentials.zscalerApiUrl}}/webApplicationRules",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "search",
+              "value": "={{$('Validate User Input').item.json.email}}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "zscaler-user-check",
+      "name": "Zscaler ZIA User Check",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [700, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "zscaler-api-key",
+          "name": "Zscaler API Key"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{$credentials.ldapProxyUrl}}/api/users/{{$json.username}}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "ad-account-check",
+      "name": "Active Directory Account Check",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [700, 500],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "ldap-proxy-auth",
+          "name": "LDAP Proxy Auth"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$credentials.xsoarApiUrl}}/incidents/search",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"filter\": {\n    \"query\": \"owner:\\\"{{$('Validate User Input').item.json.email}}\\\" OR assignee:\\\"{{$('Validate User Input').item.json.username}}\\\"\",\n    \"status\": [\"active\", \"pending\", \"investigating\"]\n  },\n  \"size\": 100\n}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "xsoar-ticket-check",
+      "name": "XSOAR Open Tickets Check",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [700, 700],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "xsoar-api-key",
+          "name": "XSOAR API Key"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Aggregate all security check results\nconst userInfo = $('Validate User Input').first().json;\n\n// Process CrowdStrike results\nlet crowdstrikeResult;\ntry {\n  const csData = $('CrowdStrike Device Search').first().json;\n  crowdstrikeResult = {\n    checked: true,\n    devices_found: csData.resources?.length || 0,\n    device_ids: csData.resources || [],\n    active_devices: [],\n    error: csData.errors?.[0]?.message || null\n  };\n} catch (e) {\n  crowdstrikeResult = {\n    checked: false,\n    devices_found: 0,\n    device_ids: [],\n    active_devices: [],\n    error: e.message\n  };\n}\n\n// Process Zscaler results\nlet zscalerResult;\ntry {\n  const zsData = $('Zscaler ZIA User Check').first().json;\n  const userFound = zsData.users?.find(u => \n    u.email?.toLowerCase() === userInfo.email?.toLowerCase()\n  );\n  zscalerResult = {\n    checked: true,\n    user_exists: !!userFound,\n    user_active: userFound?.state === 'ENABLED',\n    user_details: userFound || null,\n    error: null\n  };\n} catch (e) {\n  zscalerResult = {\n    checked: false,\n    user_exists: false,\n    user_active: false,\n    user_details: null,\n    error: e.message\n  };\n}\n\n// Process Active Directory results\nlet adResult;\ntry {\n  const adData = $('Active Directory Account Check').first().json;\n  adResult = {\n    checked: true,\n    account_exists: adData.found !== false,\n    account_disabled: adData.userAccountControl?.disabled === true || \n                      adData.accountDisabled === true ||\n                      (adData.userAccountControl & 2) === 2,\n    last_logon: adData.lastLogon || adData.lastLogonTimestamp || null,\n    password_last_set: adData.pwdLastSet || null,\n    member_of: adData.memberOf || [],\n    error: null\n  };\n} catch (e) {\n  adResult = {\n    checked: false,\n    account_exists: false,\n    account_disabled: false,\n    last_logon: null,\n    password_last_set: null,\n    member_of: [],\n    error: e.message\n  };\n}\n\n// Process XSOAR results\nlet xsoarResult;\ntry {\n  const xsoarData = $('XSOAR Open Tickets Check').first().json;\n  xsoarResult = {\n    checked: true,\n    open_tickets_count: xsoarData.total || xsoarData.data?.length || 0,\n    tickets: (xsoarData.data || []).map(t => ({\n      id: t.id,\n      name: t.name,\n      status: t.status,\n      severity: t.severity,\n      created: t.created\n    })),\n    error: null\n  };\n} catch (e) {\n  xsoarResult = {\n    checked: false,\n    open_tickets_count: 0,\n    tickets: [],\n    error: e.message\n  };\n}\n\n// Calculate 7 days ago for recent activity check\nconst sevenDaysAgo = new Date();\nsevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);\n\n// Check for recent activity\nconst hasRecentActivity = (\n  (adResult.last_logon && new Date(adResult.last_logon) > sevenDaysAgo) ||\n  crowdstrikeResult.devices_found > 0 ||\n  zscalerResult.user_active\n);\n\n// Determine if any active access found\nconst activeAccessFound = (\n  crowdstrikeResult.devices_found > 0 ||\n  (zscalerResult.user_exists && zscalerResult.user_active) ||\n  (adResult.account_exists && !adResult.account_disabled) ||\n  xsoarResult.open_tickets_count > 0\n);\n\n// Build comprehensive report\nconst report = {\n  request_id: userInfo.request_id,\n  user_info: userInfo,\n  timestamp: new Date().toISOString(),\n  checks: {\n    crowdstrike: crowdstrikeResult,\n    zscaler: zscalerResult,\n    active_directory: adResult,\n    xsoar: xsoarResult\n  },\n  summary: {\n    active_access_found: activeAccessFound,\n    requires_immediate_review: activeAccessFound,\n    devices_still_associated: crowdstrikeResult.devices_found,\n    active_accounts: [\n      zscalerResult.user_active ? 'Zscaler ZIA' : null,\n      (adResult.account_exists && !adResult.account_disabled) ? 'Active Directory' : null\n    ].filter(Boolean),\n    pending_access_reviews: xsoarResult.open_tickets_count,\n    recent_activity_detected: hasRecentActivity,\n    recent_activity_window: '7 days'\n  },\n  checklist: {\n    crowdstrike_devices_removed: crowdstrikeResult.devices_found === 0,\n    zscaler_access_revoked: !zscalerResult.user_active,\n    ad_account_disabled: adResult.account_disabled || !adResult.account_exists,\n    xsoar_tickets_reassigned: xsoarResult.open_tickets_count === 0\n  }\n};\n\nreturn [{ json: report }];"
+      },
+      "id": "aggregate-results",
+      "name": "Aggregate Security Check Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [960, 400]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.summary.active_access_found}}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "check-active-access",
+      "name": "Active Access Found?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1180, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$credentials.xsoarApiUrl}}/incident",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"name\": \"[URGENT] Offboarding Access Removal Required - {{$json.user_info.email}}\",\n  \"type\": \"Access Review\",\n  \"severity\": 2,\n  \"owner\": \"Security Operations\",\n  \"labels\": [\n    {\"type\": \"offboarding\", \"value\": \"true\"},\n    {\"type\": \"employee_id\", \"value\": \"{{$json.user_info.employee_id}}\"},\n    {\"type\": \"automated\", \"value\": \"true\"}\n  ],\n  \"customFields\": {\n    \"userEmail\": \"{{$json.user_info.email}}\",\n    \"username\": \"{{$json.user_info.username}}\",\n    \"employeeId\": \"{{$json.user_info.employee_id}}\",\n    \"devicesFound\": {{$json.summary.devices_still_associated}},\n    \"activeAccounts\": \"{{$json.summary.active_accounts.join(', ')}}\",\n    \"pendingReviews\": {{$json.summary.pending_access_reviews}},\n    \"recentActivity\": {{$json.summary.recent_activity_detected}}\n  },\n  \"details\": \"Automated offboarding check found active access that requires immediate removal.\\n\\nUser: {{$json.user_info.email}}\\nDevices Still Associated: {{$json.summary.devices_still_associated}}\\nActive Accounts: {{$json.summary.active_accounts.join(', ')}}\\nPending Access Reviews: {{$json.summary.pending_access_reviews}}\\nRecent Activity Detected: {{$json.summary.recent_activity_detected}}\\n\\nPlease review and remove all access immediately.\"\n}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "create-xsoar-ticket",
+      "name": "Create XSOAR Access Removal Ticket",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1420, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "xsoar-api-key",
+          "name": "XSOAR API Key"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Add ticket information to report\nconst report = $('Aggregate Security Check Results').first().json;\nlet ticketInfo = null;\n\ntry {\n  const ticketData = $('Create XSOAR Access Removal Ticket').first().json;\n  ticketInfo = {\n    created: true,\n    ticket_id: ticketData.id || ticketData.incidentId,\n    ticket_url: ticketData.url || null\n  };\n} catch (e) {\n  ticketInfo = {\n    created: false,\n    error: e.message\n  };\n}\n\nreport.remediation_ticket = ticketInfo;\nreport.status = 'REQUIRES_ACTION';\nreport.priority = 'HIGH';\n\nreturn [{ json: report }];"
+      },
+      "id": "enrich-with-ticket",
+      "name": "Enrich Report with Ticket Info",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1640, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Mark as clean - no active access found\nconst report = $('Aggregate Security Check Results').first().json;\n\nreport.remediation_ticket = null;\nreport.status = 'CLEAN';\nreport.priority = 'LOW';\n\nreturn [{ json: report }];"
+      },
+      "id": "mark-clean",
+      "name": "Mark as Clean",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1420, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Merge both branches\nconst items = $input.all();\nreturn items;"
+      },
+      "id": "merge-results",
+      "name": "Merge Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1860, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Format Webex message\nconst report = $input.first().json;\n\nconst statusEmoji = report.status === 'CLEAN' ? 'WHITE CHECK MARK' : 'WARNING';\nconst statusText = report.status === 'CLEAN' ? 'CLEAN - No Active Access' : 'REQUIRES ACTION - Active Access Found';\n\nlet message = `**User Offboarding Security Check Report**\\n\\n`;\nmessage += `**Status:** ${statusText}\\n`;\nmessage += `**User:** ${report.user_info.email}\\n`;\nmessage += `**Username:** ${report.user_info.username}\\n`;\nmessage += `**Employee ID:** ${report.user_info.employee_id}\\n`;\nmessage += `**Request ID:** ${report.request_id}\\n`;\nmessage += `**Timestamp:** ${report.timestamp}\\n\\n`;\n\nmessage += `---\\n\\n`;\nmessage += `**Security Systems Checklist:**\\n\\n`;\n\n// CrowdStrike\nconst csStatus = report.checklist.crowdstrike_devices_removed ? '[PASS]' : '[FAIL]';\nmessage += `${csStatus} **CrowdStrike:** ${report.checks.crowdstrike.devices_found} devices found\\n`;\nif (report.checks.crowdstrike.error) {\n  message += `   - Error: ${report.checks.crowdstrike.error}\\n`;\n}\n\n// Zscaler\nconst zsStatus = report.checklist.zscaler_access_revoked ? '[PASS]' : '[FAIL]';\nmessage += `${zsStatus} **Zscaler ZIA:** ${report.checks.zscaler.user_active ? 'User ACTIVE' : 'User inactive/removed'}\\n`;\nif (report.checks.zscaler.error) {\n  message += `   - Error: ${report.checks.zscaler.error}\\n`;\n}\n\n// Active Directory\nconst adStatus = report.checklist.ad_account_disabled ? '[PASS]' : '[FAIL]';\nconst adDetail = !report.checks.active_directory.account_exists ? 'Account not found' :\n                report.checks.active_directory.account_disabled ? 'Account disabled' : 'Account ENABLED';\nmessage += `${adStatus} **Active Directory:** ${adDetail}\\n`;\nif (report.checks.active_directory.last_logon) {\n  message += `   - Last Logon: ${report.checks.active_directory.last_logon}\\n`;\n}\nif (report.checks.active_directory.error) {\n  message += `   - Error: ${report.checks.active_directory.error}\\n`;\n}\n\n// XSOAR\nconst xsoarStatus = report.checklist.xsoar_tickets_reassigned ? '[PASS]' : '[FAIL]';\nmessage += `${xsoarStatus} **XSOAR Tickets:** ${report.checks.xsoar.open_tickets_count} open tickets assigned\\n`;\nif (report.checks.xsoar.error) {\n  message += `   - Error: ${report.checks.xsoar.error}\\n`;\n}\n\nmessage += `\\n---\\n\\n`;\nmessage += `**Summary:**\\n`;\nmessage += `- Devices Still Associated: ${report.summary.devices_still_associated}\\n`;\nmessage += `- Active Accounts Found: ${report.summary.active_accounts.length > 0 ? report.summary.active_accounts.join(', ') : 'None'}\\n`;\nmessage += `- Pending Access Reviews: ${report.summary.pending_access_reviews}\\n`;\nmessage += `- Recent Activity (Last 7 Days): ${report.summary.recent_activity_detected ? 'Yes' : 'No'}\\n`;\n\nif (report.remediation_ticket?.created) {\n  message += `\\n**Remediation Ticket Created:** ${report.remediation_ticket.ticket_id}\\n`;\n}\n\nif (report.status !== 'CLEAN') {\n  message += `\\n**[ACTION REQUIRED]** Please review and complete access removal for this user.\\n`;\n}\n\nreturn [{\n  json: {\n    report: report,\n    webex_message: message\n  }\n}];"
+      },
+      "id": "format-webex-message",
+      "name": "Format Webex Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2080, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://webexapis.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"roomId\": \"{{$credentials.webexRoomId}}\",\n  \"markdown\": {{JSON.stringify($json.webex_message)}}\n}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "post-to-webex",
+      "name": "Post Summary to Webex",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [2300, 400],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "webex-bot-token",
+          "name": "Webex Bot Token"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Prepare final response\nconst data = $('Format Webex Message').first().json;\nconst webexResult = $input.first().json;\n\nconst response = {\n  success: true,\n  request_id: data.report.request_id,\n  status: data.report.status,\n  priority: data.report.priority,\n  user: {\n    email: data.report.user_info.email,\n    username: data.report.user_info.username,\n    employee_id: data.report.user_info.employee_id\n  },\n  summary: data.report.summary,\n  checklist: data.report.checklist,\n  remediation_ticket: data.report.remediation_ticket,\n  notification_sent: !webexResult.error,\n  full_report: data.report\n};\n\nreturn [{ json: response }];"
+      },
+      "id": "prepare-response",
+      "name": "Prepare Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2520, 400]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{$json}}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "webhook-response",
+      "name": "Webhook Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [2740, 400]
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Validate User Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate User Input": {
+      "main": [
+        [
+          {
+            "node": "CrowdStrike Device Search",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Zscaler ZIA User Check",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Active Directory Account Check",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "XSOAR Open Tickets Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CrowdStrike Device Search": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Security Check Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Zscaler ZIA User Check": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Security Check Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Active Directory Account Check": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Security Check Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "XSOAR Open Tickets Check": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Security Check Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate Security Check Results": {
+      "main": [
+        [
+          {
+            "node": "Active Access Found?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Active Access Found?": {
+      "main": [
+        [
+          {
+            "node": "Create XSOAR Access Removal Ticket",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Mark as Clean",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create XSOAR Access Removal Ticket": {
+      "main": [
+        [
+          {
+            "node": "Enrich Report with Ticket Info",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enrich Report with Ticket Info": {
+      "main": [
+        [
+          {
+            "node": "Merge Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark as Clean": {
+      "main": [
+        [
+          {
+            "node": "Merge Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Results": {
+      "main": [
+        [
+          {
+            "node": "Format Webex Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Webex Message": {
+      "main": [
+        [
+          {
+            "node": "Post Summary to Webex",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Post Summary to Webex": {
+      "main": [
+        [
+          {
+            "node": "Prepare Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Response": {
+      "main": [
+        [
+          {
+            "node": "Webhook Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "security",
+      "id": "1"
+    },
+    {
+      "name": "offboarding",
+      "id": "2"
+    },
+    {
+      "name": "compliance",
+      "id": "3"
+    }
+  ],
+  "triggerCount": 1,
+  "updatedAt": "2024-01-15T10:00:00.000Z",
+  "versionId": "1"
+}

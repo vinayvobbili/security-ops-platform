@@ -1,0 +1,568 @@
+{
+  "name": "Zscaler URL Blocklist - Webhook Triggered",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "zscaler-block-urls",
+        "responseMode": "responseNode",
+        "options": {
+          "rawBody": false
+        }
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook - Receive Block Request",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "zscaler-url-blocklist"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Zscaler API Key Obfuscation\n// The API key must be obfuscated using timestamp\nconst now = new Date();\nconst timestamp = now.getTime().toString();\n\n// Get credentials from environment/credentials\nconst apiKey = $env.ZSCALER_API_KEY || '{{ZSCALER_API_KEY}}';\nconst username = $env.ZSCALER_USERNAME || '{{ZSCALER_USERNAME}}';\nconst password = $env.ZSCALER_PASSWORD || '{{ZSCALER_PASSWORD}}';\n\n// Obfuscate API key per Zscaler requirements\n// Take timestamp, use specific characters based on timestamp to obfuscate\nfunction obfuscateApiKey(apiKey, timestamp) {\n  const high = timestamp.substring(timestamp.length - 6);\n  const low = (parseInt(high) >> 1).toString();\n  let obfuscatedKey = '';\n  \n  while (obfuscatedKey.length < apiKey.length) {\n    for (let i = 0; i < high.length && obfuscatedKey.length < apiKey.length; i++) {\n      const index = parseInt(high.charAt(i));\n      obfuscatedKey += apiKey.charAt(index);\n    }\n  }\n  \n  return obfuscatedKey;\n}\n\nconst obfuscatedKey = obfuscateApiKey(apiKey, timestamp);\n\n// Store input data for later use\nconst inputData = $input.first().json;\n\nreturn {\n  json: {\n    timestamp: timestamp,\n    apiKey: obfuscatedKey,\n    username: username,\n    password: password,\n    urls_to_block: inputData.urls || [],\n    requester: inputData.requester || 'Unknown',\n    requester_email: inputData.requester_email || '',\n    ticket_id: inputData.ticket_id || '',\n    reason: inputData.reason || 'Manual block request'\n  }\n};"
+      },
+      "id": "prepare-auth",
+      "name": "Prepare Authentication",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://zsapi.zscaler.net/api/v1/authenticatedSession",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ apiKey: $json.apiKey, username: $json.username, password: $json.password, timestamp: $json.timestamp }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "zscaler-auth",
+      "name": "Zscaler - Authenticate",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [680, 300],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract session cookie and prepare for API calls\nconst authResponse = $input.first().json;\nconst previousData = $('Prepare Authentication').first().json;\n\n// Zscaler returns JSESSIONID cookie for authenticated sessions\nconst cookies = authResponse.headers?.['set-cookie'] || [];\nlet jsessionId = '';\n\nfor (const cookie of cookies) {\n  if (cookie.includes('JSESSIONID')) {\n    jsessionId = cookie.split(';')[0];\n    break;\n  }\n}\n\nreturn {\n  json: {\n    sessionCookie: jsessionId,\n    authStatus: authResponse.statusCode === 200 ? 'success' : 'failed',\n    urls_to_block: previousData.urls_to_block,\n    requester: previousData.requester,\n    requester_email: previousData.requester_email,\n    ticket_id: previousData.ticket_id,\n    reason: previousData.reason,\n    auth_timestamp: new Date().toISOString()\n  }\n};"
+      },
+      "id": "extract-session",
+      "name": "Extract Session Cookie",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "auth-check",
+              "leftValue": "={{ $json.authStatus }}",
+              "rightValue": "success",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-auth",
+      "name": "Check Auth Status",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://zsapi.zscaler.net/api/v1/webApplicationRules",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Cookie",
+              "value": "={{ $json.sessionCookie }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "get-current-rules",
+      "name": "Get Current Web Rules",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1340, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Process current rules and prepare URL additions\nconst currentRules = $input.first().json;\nconst sessionData = $('Extract Session Cookie').first().json;\n\nconst urlsToBlock = sessionData.urls_to_block;\nconst sessionCookie = sessionData.sessionCookie;\n\n// Find or identify the custom blocklist category\n// Zscaler typically uses URL categories for blocking\nconst CUSTOM_BLOCKLIST_CATEGORY = 'CUSTOM_BLOCKLIST';\nconst CUSTOM_CATEGORY_ID = 'CUSTOM_01'; // Placeholder - would be retrieved from actual API\n\n// Prepare each URL for processing\nconst urlItems = urlsToBlock.map((url, index) => {\n  // Clean and normalize URL\n  let cleanUrl = url.trim();\n  \n  // Remove protocol if present for Zscaler URL format\n  cleanUrl = cleanUrl.replace(/^https?:\\/\\//i, '');\n  \n  // Remove trailing slash\n  cleanUrl = cleanUrl.replace(/\\/$/, '');\n  \n  return {\n    json: {\n      url: cleanUrl,\n      originalUrl: url,\n      index: index,\n      sessionCookie: sessionCookie,\n      categoryId: CUSTOM_CATEGORY_ID,\n      requester: sessionData.requester,\n      requester_email: sessionData.requester_email,\n      ticket_id: sessionData.ticket_id,\n      reason: sessionData.reason\n    }\n  };\n});\n\nreturn urlItems;"
+      },
+      "id": "prepare-urls",
+      "name": "Prepare URLs for Blocking",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1560, 200]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://zsapi.zscaler.net/api/v1/urlCategories/{{ $json.categoryId }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Cookie",
+              "value": "={{ $json.sessionCookie }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "check-url-category",
+      "name": "Check URL Current Category",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1780, 200]
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "=https://zsapi.zscaler.net/api/v1/urlCategories/{{ $json.categoryId }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Cookie",
+              "value": "={{ $json.sessionCookie }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ configuredName: 'CUSTOM_BLOCKLIST', urls: [$json.url], dbCategorizedUrls: [], customCategory: true, superCategory: 'USER_DEFINED', description: 'Security team managed blocklist - ' + $json.reason }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "add-to-blocklist",
+      "name": "Add URL to Blocklist",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2000, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Aggregate all blocked URLs for activation\nconst items = $input.all();\nconst sessionCookie = items[0]?.json?.sessionCookie || $('Extract Session Cookie').first().json.sessionCookie;\nconst sessionData = $('Extract Session Cookie').first().json;\n\nconst blockedUrls = items.map(item => ({\n  url: item.json.url || item.json.originalUrl,\n  status: item.json.statusCode === 200 ? 'success' : 'failed',\n  response: item.json.body || item.json\n}));\n\nconst successCount = blockedUrls.filter(u => u.status === 'success').length;\nconst failedCount = blockedUrls.filter(u => u.status === 'failed').length;\n\nreturn {\n  json: {\n    sessionCookie: sessionCookie,\n    blockedUrls: blockedUrls,\n    summary: {\n      total: blockedUrls.length,\n      success: successCount,\n      failed: failedCount\n    },\n    requester: sessionData.requester,\n    requester_email: sessionData.requester_email,\n    ticket_id: sessionData.ticket_id,\n    reason: sessionData.reason,\n    timestamp: new Date().toISOString()\n  }\n};"
+      },
+      "id": "aggregate-results",
+      "name": "Aggregate Block Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2220, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://zsapi.zscaler.net/api/v1/status/activate",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Cookie",
+              "value": "={{ $json.sessionCookie }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "activate-changes",
+      "name": "Activate Zscaler Changes",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2440, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Prepare Webex notification message\nconst data = $('Aggregate Block Results').first().json;\nconst activationResponse = $input.first().json;\n\nconst activationStatus = activationResponse.statusCode === 200 ? 'SUCCESS' : 'FAILED';\n\n// Format blocked URLs list\nconst urlList = data.blockedUrls.map(u => `  - ${u.url} (${u.status})`).join('\\n');\n\n// Build markdown message for Webex\nconst message = `## Zscaler URL Blocklist Update\n\n**Status:** ${activationStatus}\n**Timestamp:** ${data.timestamp}\n**Requester:** ${data.requester}\n**Email:** ${data.requester_email || 'N/A'}\n**Ticket:** ${data.ticket_id || 'N/A'}\n**Reason:** ${data.reason}\n\n### Summary\n- **Total URLs:** ${data.summary.total}\n- **Successfully Blocked:** ${data.summary.success}\n- **Failed:** ${data.summary.failed}\n\n### URLs Processed\n${urlList}\n\n---\n*Automated via n8n Zscaler Integration*`;\n\nreturn {\n  json: {\n    markdown: message,\n    roomId: $env.WEBEX_ROOM_ID || '{{WEBEX_ROOM_ID}}',\n    data: data,\n    activationStatus: activationStatus\n  }\n};"
+      },
+      "id": "prepare-webex-message",
+      "name": "Prepare Webex Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2660, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://webexapis.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ roomId: $json.roomId, markdown: $json.markdown }) }}",
+        "options": {}
+      },
+      "id": "send-webex-notification",
+      "name": "Send Webex Notification",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2880, 200],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "webex-auth",
+          "name": "Webex Bot Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "DELETE",
+        "url": "https://zsapi.zscaler.net/api/v1/authenticatedSession",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Cookie",
+              "value": "={{ $('Extract Session Cookie').first().json.sessionCookie }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "logout-zscaler",
+      "name": "Logout Zscaler Session",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [3100, 200]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: true, message: 'URLs processed and blocked', summary: $('Aggregate Block Results').first().json.summary, timestamp: $('Aggregate Block Results').first().json.timestamp }) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "respond-success",
+      "name": "Respond - Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [3320, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Handle authentication failure\nreturn {\n  json: {\n    error: 'Authentication failed',\n    message: 'Could not authenticate to Zscaler API',\n    timestamp: new Date().toISOString()\n  }\n};"
+      },
+      "id": "auth-failed",
+      "name": "Auth Failed Handler",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1340, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://webexapis.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ roomId: $env.WEBEX_ROOM_ID || '{{WEBEX_ROOM_ID}}', markdown: '## Zscaler URL Blocklist - ERROR\\n\\n**Error:** Authentication Failed\\n**Timestamp:** ' + $json.timestamp + '\\n\\nPlease check Zscaler API credentials.' }) }}",
+        "options": {}
+      },
+      "id": "notify-auth-failure",
+      "name": "Notify Auth Failure",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1560, 400],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "webex-auth",
+          "name": "Webex Bot Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: false, error: 'Authentication failed', timestamp: $json.timestamp }) }}",
+        "options": {
+          "responseCode": 401
+        }
+      },
+      "id": "respond-failure",
+      "name": "Respond - Failure",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1780, 400]
+    }
+  ],
+  "connections": {
+    "Webhook - Receive Block Request": {
+      "main": [
+        [
+          {
+            "node": "Prepare Authentication",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Authentication": {
+      "main": [
+        [
+          {
+            "node": "Zscaler - Authenticate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Zscaler - Authenticate": {
+      "main": [
+        [
+          {
+            "node": "Extract Session Cookie",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Session Cookie": {
+      "main": [
+        [
+          {
+            "node": "Check Auth Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Auth Status": {
+      "main": [
+        [
+          {
+            "node": "Get Current Web Rules",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Auth Failed Handler",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Current Web Rules": {
+      "main": [
+        [
+          {
+            "node": "Prepare URLs for Blocking",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare URLs for Blocking": {
+      "main": [
+        [
+          {
+            "node": "Check URL Current Category",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check URL Current Category": {
+      "main": [
+        [
+          {
+            "node": "Add URL to Blocklist",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Add URL to Blocklist": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Block Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate Block Results": {
+      "main": [
+        [
+          {
+            "node": "Activate Zscaler Changes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Activate Zscaler Changes": {
+      "main": [
+        [
+          {
+            "node": "Prepare Webex Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Webex Message": {
+      "main": [
+        [
+          {
+            "node": "Send Webex Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Webex Notification": {
+      "main": [
+        [
+          {
+            "node": "Logout Zscaler Session",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Logout Zscaler Session": {
+      "main": [
+        [
+          {
+            "node": "Respond - Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Auth Failed Handler": {
+      "main": [
+        [
+          {
+            "node": "Notify Auth Failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify Auth Failure": {
+      "main": [
+        [
+          {
+            "node": "Respond - Failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "id": "security",
+      "name": "Security"
+    },
+    {
+      "id": "zscaler",
+      "name": "Zscaler"
+    },
+    {
+      "id": "url-blocking",
+      "name": "URL Blocking"
+    }
+  ],
+  "triggerCount": 1,
+  "updatedAt": "2026-01-29T00:00:00.000Z",
+  "versionId": "1"
+}

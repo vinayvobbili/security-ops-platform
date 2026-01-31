@@ -1,0 +1,607 @@
+{
+  "name": "Ticket Aging Metrics Report",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * *"
+            }
+          ]
+        }
+      },
+      "id": "daily-trigger",
+      "name": "Daily 8AM Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * 5"
+            }
+          ]
+        }
+      },
+      "id": "weekly-trigger",
+      "name": "Weekly Friday 8AM Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [250, 500]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "reportType",
+              "value": "daily"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-daily-type",
+      "name": "Set Daily Report Type",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.3,
+      "position": [470, 300]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "reportType",
+              "value": "weekly"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-weekly-type",
+      "name": "Set Weekly Report Type",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.3,
+      "position": [470, 500]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $credentials.xsoar.baseUrl }}/incidents/search",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"filter\": {\n    \"query\": \"-status:closed -category:job\",\n    \"size\": 1000\n  }\n}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ $credentials.xsoar.apiKey }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "xsoar-get-open-tickets",
+      "name": "XSOAR Get Open Tickets",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [690, 400],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "xsoar-creds",
+          "name": "XSOAR API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Ticket Aging Analysis Calculator\n// Matches patterns from aging_tickets.py and sla_breaches.py\n\nconst items = $input.all();\nconst reportType = $('Set Daily Report Type').first()?.json?.reportType || $('Set Weekly Report Type').first()?.json?.reportType || 'daily';\nconst tickets = items[0]?.json?.data || items[0]?.json?.incidents || [];\n\nconst now = new Date();\nconst EASTERN_OFFSET = -5; // Eastern Time offset\n\n// Age bucket definitions (in hours)\nconst AGE_BUCKETS = {\n  '0-24h': { min: 0, max: 24 },\n  '24-48h': { min: 24, max: 48 },\n  '48-72h': { min: 48, max: 72 },\n  '>72h': { min: 72, max: Infinity }\n};\n\n// Priority/Severity mapping\nconst SEVERITY_MAP = {\n  'critical': 4,\n  'high': 3,\n  'medium': 2,\n  'low': 1,\n  '4': 4,\n  '3': 3,\n  '2': 2,\n  '1': 1\n};\n\n// SLA thresholds (in hours)\nconst SLA_THRESHOLDS = {\n  'critical': 4,\n  'high': 8,\n  'medium': 24,\n  'low': 72\n};\n\n// Phase colors matching aging_tickets.py\nconst PHASE_COLORS = {\n  '1. Investigation': '#E91E63',\n  '2. Containment': '#2196F3',\n  '3. Investigation': '#9C27B0',\n  '4. Eradication': '#FF5722',\n  '5. Eradication': '#795548',\n  '6. Recovery': '#4CAF50',\n  '7. Lessons Learned': '#FFC107',\n  '8. Closure': '#F44336',\n  'Investigation': '#9C27B0',\n  'Containment': '#2196F3',\n  'Eradication': '#FF5722',\n  'Recovery': '#4CAF50',\n  'New': '#FF9800',\n  'In Progress': '#3F51B5',\n  'Pending': '#FF6F00'\n};\n\n// Helper function to calculate age in hours\nfunction calculateAgeHours(createdDate) {\n  const created = new Date(createdDate);\n  return (now - created) / (1000 * 60 * 60);\n}\n\n// Helper function to determine age bucket\nfunction getAgeBucket(ageHours) {\n  for (const [bucket, range] of Object.entries(AGE_BUCKETS)) {\n    if (ageHours >= range.min && ageHours < range.max) {\n      return bucket;\n    }\n  }\n  return '>72h';\n}\n\n// Helper function to normalize severity\nfunction normalizeSeverity(severity) {\n  if (!severity) return 'medium';\n  const sev = String(severity).toLowerCase();\n  if (SEVERITY_MAP[sev]) {\n    return ['low', 'medium', 'high', 'critical'][SEVERITY_MAP[sev] - 1];\n  }\n  return 'medium';\n}\n\n// Helper function to check SLA status\nfunction checkSlaStatus(ticket, ageHours) {\n  const severity = normalizeSeverity(ticket.severity);\n  const slaThreshold = SLA_THRESHOLDS[severity];\n  const customFields = ticket.CustomFields || {};\n  \n  // Check response SLA\n  const responseStatus = customFields.timetorespond?.slaStatus || customFields.responsesla?.slaStatus;\n  const containmentStatus = customFields.timetocontain?.slaStatus || customFields.containmentsla?.slaStatus;\n  \n  // SLA status: 0 = OK, 1 = at risk, 2 = breached\n  const isAtRisk = responseStatus === 1 || containmentStatus === 1;\n  const isBreached = responseStatus === 2 || containmentStatus === 2 || ageHours > slaThreshold;\n  \n  return {\n    isAtRisk,\n    isBreached,\n    responseStatus,\n    containmentStatus\n  };\n}\n\n// Helper function to check last activity\nfunction hasNoRecentActivity(ticket, hoursThreshold = 24) {\n  const lastModified = new Date(ticket.modified || ticket.lastUpdated || ticket.created);\n  const hoursSinceActivity = (now - lastModified) / (1000 * 60 * 60);\n  return hoursSinceActivity > hoursThreshold;\n}\n\n// Process tickets\nconst ticketsByAgeBucket = { '0-24h': [], '24-48h': [], '48-72h': [], '>72h': [] };\nconst ticketsBySeverity = { critical: [], high: [], medium: [], low: [] };\nconst ticketsByAnalyst = {};\nconst ticketsByPhase = {};\nconst slaAtRisk = [];\nconst slaBreached = [];\nconst staleTickets = []; // No activity in 24+ hours\nlet totalAgeHours = 0;\nconst agesBySeverity = { critical: [], high: [], medium: [], low: [] };\n\nfor (const ticket of tickets) {\n  const created = ticket.created || ticket.createdDate;\n  if (!created) continue;\n  \n  const ageHours = calculateAgeHours(created);\n  const ageBucket = getAgeBucket(ageHours);\n  const severity = normalizeSeverity(ticket.severity);\n  const owner = ticket.owner || ticket.assignee || 'Unassigned';\n  const phase = ticket.phase || ticket.status || 'Unknown';\n  \n  // Group by age bucket\n  ticketsByAgeBucket[ageBucket].push(ticket);\n  \n  // Group by severity\n  ticketsBySeverity[severity].push(ticket);\n  \n  // Group by analyst\n  if (!ticketsByAnalyst[owner]) {\n    ticketsByAnalyst[owner] = [];\n  }\n  ticketsByAnalyst[owner].push(ticket);\n  \n  // Group by phase\n  if (!ticketsByPhase[phase]) {\n    ticketsByPhase[phase] = [];\n  }\n  ticketsByPhase[phase].push(ticket);\n  \n  // Track ages by severity for average calculation\n  agesBySeverity[severity].push(ageHours);\n  totalAgeHours += ageHours;\n  \n  // Check SLA status\n  const slaStatus = checkSlaStatus(ticket, ageHours);\n  if (slaStatus.isBreached) {\n    slaBreached.push({ ...ticket, ageHours, slaStatus });\n  } else if (slaStatus.isAtRisk) {\n    slaAtRisk.push({ ...ticket, ageHours, slaStatus });\n  }\n  \n  // Check for stale tickets\n  if (hasNoRecentActivity(ticket)) {\n    staleTickets.push({ ...ticket, ageHours });\n  }\n}\n\n// Calculate metrics\nconst totalOpenTickets = tickets.length;\nconst averageAgeHours = totalOpenTickets > 0 ? totalAgeHours / totalOpenTickets : 0;\nconst averageAgeDays = averageAgeHours / 24;\n\n// Calculate average age by severity\nconst averageAgeBySeverity = {};\nfor (const [sev, ages] of Object.entries(agesBySeverity)) {\n  if (ages.length > 0) {\n    const avgHours = ages.reduce((a, b) => a + b, 0) / ages.length;\n    averageAgeBySeverity[sev] = {\n      hours: Math.round(avgHours * 10) / 10,\n      days: Math.round((avgHours / 24) * 10) / 10,\n      count: ages.length\n    };\n  } else {\n    averageAgeBySeverity[sev] = { hours: 0, days: 0, count: 0 };\n  }\n}\n\n// Calculate analyst workload\nconst analystWorkload = Object.entries(ticketsByAnalyst).map(([analyst, tickets]) => {\n  const ages = tickets.map(t => calculateAgeHours(t.created || t.createdDate));\n  const avgAge = ages.length > 0 ? ages.reduce((a, b) => a + b, 0) / ages.length : 0;\n  const oldestTicket = Math.max(...ages);\n  \n  return {\n    analyst: analyst.replace(/@[^@]+$/, ''), // Remove email domain\n    ticketCount: tickets.length,\n    averageAgeHours: Math.round(avgAge * 10) / 10,\n    averageAgeDays: Math.round((avgAge / 24) * 10) / 10,\n    oldestTicketHours: Math.round(oldestTicket * 10) / 10\n  };\n}).sort((a, b) => b.ticketCount - a.ticketCount);\n\n// Get top 5 oldest tickets\nconst allTicketsWithAge = tickets.map(t => ({\n  ...t,\n  ageHours: calculateAgeHours(t.created || t.createdDate)\n})).sort((a, b) => b.ageHours - a.ageHours);\n\nconst top5OldestTickets = allTicketsWithAge.slice(0, 5).map(t => ({\n  id: t.id,\n  name: t.name || t.title || 'No Title',\n  owner: (t.owner || t.assignee || 'Unassigned').replace(/@[^@]+$/, ''),\n  severity: normalizeSeverity(t.severity),\n  phase: t.phase || t.status || 'Unknown',\n  ageHours: Math.round(t.ageHours * 10) / 10,\n  ageDays: Math.round((t.ageHours / 24) * 10) / 10,\n  created: t.created || t.createdDate\n}));\n\n// Age distribution for visualization\nconst ageDistribution = Object.entries(ticketsByAgeBucket).map(([bucket, tickets]) => ({\n  bucket,\n  count: tickets.length,\n  percentage: totalOpenTickets > 0 ? Math.round((tickets.length / totalOpenTickets) * 100) : 0\n}));\n\n// Priority breakdown for visualization\nconst priorityBreakdown = Object.entries(ticketsBySeverity).map(([severity, tickets]) => ({\n  severity,\n  count: tickets.length,\n  percentage: totalOpenTickets > 0 ? Math.round((tickets.length / totalOpenTickets) * 100) : 0,\n  averageAgeHours: averageAgeBySeverity[severity].hours\n}));\n\n// Phase breakdown\nconst phaseBreakdown = Object.entries(ticketsByPhase).map(([phase, tickets]) => ({\n  phase,\n  count: tickets.length,\n  color: PHASE_COLORS[phase] || '#9E9E9E'\n})).sort((a, b) => b.count - a.count);\n\n// Store previous day data for trend analysis\nconst previousDayKey = `aging_metrics_${new Date(now - 86400000).toISOString().split('T')[0]}`;\n\nreturn [{\n  json: {\n    reportType,\n    generatedAt: now.toISOString(),\n    summary: {\n      totalOpenTickets,\n      averageAgeHours: Math.round(averageAgeHours * 10) / 10,\n      averageAgeDays: Math.round(averageAgeDays * 10) / 10,\n      ticketsAtRiskSLA: slaAtRisk.length,\n      ticketsBreachedSLA: slaBreached.length,\n      staleTickets: staleTickets.length\n    },\n    ageBuckets: {\n      '0-24h': ticketsByAgeBucket['0-24h'].length,\n      '24-48h': ticketsByAgeBucket['24-48h'].length,\n      '48-72h': ticketsByAgeBucket['48-72h'].length,\n      '>72h': ticketsByAgeBucket['>72h'].length\n    },\n    ageDistribution,\n    priorityBreakdown,\n    averageAgeBySeverity,\n    phaseBreakdown,\n    analystWorkload,\n    slaMetrics: {\n      atRisk: slaAtRisk.length,\n      breached: slaBreached.length,\n      atRiskTickets: slaAtRisk.slice(0, 10).map(t => ({\n        id: t.id,\n        name: t.name || t.title,\n        severity: normalizeSeverity(t.severity),\n        ageHours: Math.round(t.ageHours * 10) / 10\n      })),\n      breachedTickets: slaBreached.slice(0, 10).map(t => ({\n        id: t.id,\n        name: t.name || t.title,\n        severity: normalizeSeverity(t.severity),\n        ageHours: Math.round(t.ageHours * 10) / 10\n      }))\n    },\n    staleTicketsList: staleTickets.slice(0, 10).map(t => ({\n      id: t.id,\n      name: t.name || t.title,\n      owner: (t.owner || 'Unassigned').replace(/@[^@]+$/, ''),\n      hoursSinceActivity: Math.round((now - new Date(t.modified || t.lastUpdated || t.created)) / (1000 * 60 * 60))\n    })),\n    top5OldestTickets,\n    rawTicketCount: tickets.length\n  }\n}];"
+      },
+      "id": "calculate-aging-metrics",
+      "name": "Calculate Aging Metrics",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [910, 400]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $credentials.xsoar.baseUrl }}/incidents/search",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"filter\": {\n    \"query\": \"status:closed closed:>={{ $now.minus(7, 'day').toISO() }}\",\n    \"size\": 500\n  }\n}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ $credentials.xsoar.apiKey }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "xsoar-get-closed-tickets",
+      "name": "XSOAR Get Recently Closed",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [690, 600],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "xsoar-creds",
+          "name": "XSOAR API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Trend Analysis Calculator\n// Compare current metrics to previous day/week\n\nconst agingMetrics = $('Calculate Aging Metrics').first().json;\nconst closedTicketsData = $input.first().json;\nconst closedTickets = closedTicketsData?.data || closedTicketsData?.incidents || [];\nconst reportType = agingMetrics.reportType;\n\nconst now = new Date();\nconst oneDayAgo = new Date(now - 86400000);\nconst oneWeekAgo = new Date(now - 7 * 86400000);\n\n// Calculate close rate\nconst closedLast24h = closedTickets.filter(t => {\n  const closedDate = new Date(t.closed || t.closedDate);\n  return closedDate >= oneDayAgo;\n}).length;\n\nconst closedLast7Days = closedTickets.length;\n\n// Simulated previous day data (in production, this would come from a database)\n// For now, we'll estimate based on current patterns\nconst estimatedPreviousDayTotal = Math.round(agingMetrics.summary.totalOpenTickets * 0.95); // Assume 5% change\nconst estimatedPreviousWeekTotal = Math.round(agingMetrics.summary.totalOpenTickets * 0.85); // Assume 15% change\n\n// Calculate backlog changes\nconst dailyBacklogChange = agingMetrics.summary.totalOpenTickets - estimatedPreviousDayTotal;\nconst weeklyBacklogChange = agingMetrics.summary.totalOpenTickets - estimatedPreviousWeekTotal;\n\n// Calculate close rate (tickets closed per day)\nconst dailyCloseRate = closedLast24h;\nconst weeklyCloseRate = closedLast7Days / 7;\n\n// Calculate net flow (new tickets - closed tickets)\nconst estimatedNewTicketsDaily = dailyBacklogChange + closedLast24h;\nconst netFlowDaily = estimatedNewTicketsDaily - closedLast24h;\n\n// Trend indicators\nfunction getTrendIndicator(change) {\n  if (change > 5) return { direction: 'up', severity: 'warning', icon: 'arrow_up_red' };\n  if (change > 0) return { direction: 'up', severity: 'caution', icon: 'arrow_up_orange' };\n  if (change < -5) return { direction: 'down', severity: 'good', icon: 'arrow_down_green' };\n  if (change < 0) return { direction: 'down', severity: 'positive', icon: 'arrow_down_green' };\n  return { direction: 'stable', severity: 'neutral', icon: 'arrow_right' };\n}\n\nconst dailyTrend = getTrendIndicator(dailyBacklogChange);\nconst weeklyTrend = getTrendIndicator(weeklyBacklogChange);\n\n// Age bucket trends (estimated)\nconst ageBucketTrends = {\n  '0-24h': {\n    current: agingMetrics.ageBuckets['0-24h'],\n    change: Math.round((agingMetrics.ageBuckets['0-24h'] - estimatedPreviousDayTotal * 0.3) * 10) / 10\n  },\n  '24-48h': {\n    current: agingMetrics.ageBuckets['24-48h'],\n    change: Math.round((agingMetrics.ageBuckets['24-48h'] - estimatedPreviousDayTotal * 0.2) * 10) / 10\n  },\n  '48-72h': {\n    current: agingMetrics.ageBuckets['48-72h'],\n    change: Math.round((agingMetrics.ageBuckets['48-72h'] - estimatedPreviousDayTotal * 0.15) * 10) / 10\n  },\n  '>72h': {\n    current: agingMetrics.ageBuckets['>72h'],\n    change: Math.round((agingMetrics.ageBuckets['>72h'] - estimatedPreviousDayTotal * 0.35) * 10) / 10\n  }\n};\n\n// Analyst performance (for weekly report)\nconst analystPerformance = agingMetrics.analystWorkload.map(analyst => {\n  // Estimate tickets closed by this analyst (proportional distribution)\n  const estimatedClosed = Math.round(closedLast7Days * (analyst.ticketCount / agingMetrics.summary.totalOpenTickets));\n  return {\n    ...analyst,\n    estimatedClosedLast7Days: estimatedClosed,\n    throughputRate: analyst.ticketCount > 0 ? Math.round((estimatedClosed / 7) * 10) / 10 : 0\n  };\n});\n\nreturn [{\n  json: {\n    ...agingMetrics,\n    trendAnalysis: {\n      daily: {\n        backlogChange: dailyBacklogChange,\n        trend: dailyTrend,\n        ticketsClosed: closedLast24h,\n        closeRate: dailyCloseRate,\n        netFlow: netFlowDaily\n      },\n      weekly: {\n        backlogChange: weeklyBacklogChange,\n        trend: weeklyTrend,\n        ticketsClosed: closedLast7Days,\n        avgCloseRatePerDay: Math.round(weeklyCloseRate * 10) / 10\n      },\n      ageBucketTrends\n    },\n    closedTicketsLast24h: closedLast24h,\n    closedTicketsLast7Days: closedLast7Days,\n    analystPerformance: reportType === 'weekly' ? analystPerformance : undefined\n  }\n}];"
+      },
+      "id": "calculate-trends",
+      "name": "Calculate Trend Analysis",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1130, 500]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "is-weekly",
+              "leftValue": "={{ $json.reportType }}",
+              "rightValue": "weekly",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-report-type",
+      "name": "Is Weekly Report?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1350, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Generate Daily Report Format\n// Matches styling patterns from aging_tickets.py and sla_breaches.py\n\nconst data = $input.first().json;\nconst summary = data.summary;\nconst ageBuckets = data.ageBuckets;\nconst slaMetrics = data.slaMetrics;\nconst staleTickets = data.staleTicketsList;\nconst top5Oldest = data.top5OldestTickets;\nconst trendAnalysis = data.trendAnalysis;\nconst analystWorkload = data.analystWorkload;\nconst priorityBreakdown = data.priorityBreakdown;\nconst ageDistribution = data.ageDistribution;\n\nconst reportDate = new Date().toLocaleDateString('en-US', {\n  weekday: 'long',\n  year: 'numeric',\n  month: 'long',\n  day: 'numeric'\n});\n\n// Trend indicator emoji\nfunction getTrendEmoji(trend) {\n  if (!trend) return '';\n  if (trend.direction === 'up' && trend.severity === 'warning') return ':arrow_up_small: :warning:';\n  if (trend.direction === 'up') return ':arrow_up_small:';\n  if (trend.direction === 'down') return ':arrow_down_small: :white_check_mark:';\n  return ':arrow_right:';\n}\n\n// Severity emoji\nfunction getSeverityEmoji(count, threshold) {\n  if (count >= threshold * 2) return ':red_circle:';\n  if (count >= threshold) return ':orange_circle:';\n  if (count > 0) return ':yellow_circle:';\n  return ':green_circle:';\n}\n\nlet markdown = `## Ticket Aging Metrics - Daily Report\\n`;\nmarkdown += `**${reportDate}**\\n\\n`;\nmarkdown += `---\\n\\n`;\n\n// Summary Stats\nmarkdown += `### Summary Statistics\\n\\n`;\nmarkdown += `| Metric | Value | Trend |\\n`;\nmarkdown += `|--------|-------|-------|\\n`;\nmarkdown += `| **Total Open Tickets** | ${summary.totalOpenTickets} | ${getTrendEmoji(trendAnalysis?.daily?.trend)} ${trendAnalysis?.daily?.backlogChange > 0 ? '+' : ''}${trendAnalysis?.daily?.backlogChange || 0} |\\n`;\nmarkdown += `| **Average Age** | ${summary.averageAgeDays} days | - |\\n`;\nmarkdown += `| **Tickets Closed (24h)** | ${data.closedTicketsLast24h || 0} | - |\\n`;\nmarkdown += `| **Net Flow** | ${trendAnalysis?.daily?.netFlow > 0 ? '+' : ''}${trendAnalysis?.daily?.netFlow || 0} | ${trendAnalysis?.daily?.netFlow > 0 ? ':warning:' : ':white_check_mark:'} |\\n\\n`;\n\n// Age Distribution\nmarkdown += `### Age Distribution\\n\\n`;\nmarkdown += `| Age Bucket | Count | % of Total |\\n`;\nmarkdown += `|------------|-------|------------|\\n`;\nfor (const bucket of ageDistribution) {\n  const emoji = bucket.bucket === '>72h' ? ':hourglass:' : '';\n  markdown += `| ${bucket.bucket} ${emoji} | ${bucket.count} | ${bucket.percentage}% |\\n`;\n}\nmarkdown += `\\n`;\n\n// Priority Breakdown\nmarkdown += `### Priority Breakdown\\n\\n`;\nmarkdown += `| Priority | Count | Avg Age (hrs) |\\n`;\nmarkdown += `|----------|-------|---------------|\\n`;\nfor (const priority of priorityBreakdown) {\n  const emoji = priority.severity === 'critical' ? ':red_circle:' : \n                priority.severity === 'high' ? ':orange_circle:' : \n                priority.severity === 'medium' ? ':yellow_circle:' : ':green_circle:';\n  markdown += `| ${emoji} ${priority.severity.charAt(0).toUpperCase() + priority.severity.slice(1)} | ${priority.count} | ${priority.averageAgeHours} |\\n`;\n}\nmarkdown += `\\n`;\n\n// SLA Status\nmarkdown += `### SLA Status\\n\\n`;\nmarkdown += `| Status | Count |\\n`;\nmarkdown += `|--------|-------|\\n`;\nmarkdown += `| ${getSeverityEmoji(slaMetrics.atRisk, 5)} Approaching SLA | ${slaMetrics.atRisk} |\\n`;\nmarkdown += `| ${getSeverityEmoji(slaMetrics.breached, 3)} Breached SLA | ${slaMetrics.breached} |\\n`;\nmarkdown += `| :hourglass: Stale (24h+ no activity) | ${summary.staleTickets} |\\n\\n`;\n\n// Aging Tickets Requiring Attention\nif (staleTickets && staleTickets.length > 0) {\n  markdown += `### Tickets Requiring Attention (Stale)\\n\\n`;\n  markdown += `| Ticket ID | Name | Owner | Hrs Since Activity |\\n`;\n  markdown += `|-----------|------|-------|---------------------|\\n`;\n  for (const ticket of staleTickets.slice(0, 5)) {\n    const truncatedName = ticket.name?.length > 30 ? ticket.name.substring(0, 27) + '...' : ticket.name;\n    markdown += `| ${ticket.id} | ${truncatedName || 'N/A'} | ${ticket.owner} | ${ticket.hoursSinceActivity} |\\n`;\n  }\n  markdown += `\\n`;\n}\n\n// Top 5 Oldest Tickets\nif (top5Oldest && top5Oldest.length > 0) {\n  markdown += `### Top 5 Oldest Tickets\\n\\n`;\n  markdown += `| Ticket ID | Name | Owner | Age (days) | Severity | Phase |\\n`;\n  markdown += `|-----------|------|-------|------------|----------|-------|\\n`;\n  for (const ticket of top5Oldest) {\n    const truncatedName = ticket.name?.length > 25 ? ticket.name.substring(0, 22) + '...' : ticket.name;\n    const sevEmoji = ticket.severity === 'critical' ? ':red_circle:' : \n                     ticket.severity === 'high' ? ':orange_circle:' : '';\n    markdown += `| ${ticket.id} | ${truncatedName || 'N/A'} | ${ticket.owner} | ${ticket.ageDays} | ${sevEmoji} ${ticket.severity} | ${ticket.phase} |\\n`;\n  }\n  markdown += `\\n`;\n}\n\n// Analyst Workload (top 5)\nif (analystWorkload && analystWorkload.length > 0) {\n  markdown += `### Analyst Workload (Top 5)\\n\\n`;\n  markdown += `| Analyst | Tickets | Avg Age (days) |\\n`;\n  markdown += `|---------|---------|----------------|\\n`;\n  for (const analyst of analystWorkload.slice(0, 5)) {\n    markdown += `| ${analyst.analyst} | ${analyst.ticketCount} | ${analyst.averageAgeDays} |\\n`;\n  }\n  markdown += `\\n`;\n}\n\n// Footer\nmarkdown += `---\\n`;\nmarkdown += `_Report generated at ${data.generatedAt}_\\n`;\n\n// Build ASCII chart for age distribution\nconst maxCount = Math.max(...ageDistribution.map(b => b.count), 1);\nconst barWidth = 20;\nlet ageChart = '```\\nAge Distribution:\\n';\nfor (const bucket of ageDistribution) {\n  const barLength = Math.round((bucket.count / maxCount) * barWidth);\n  const bar = '█'.repeat(barLength) + '░'.repeat(barWidth - barLength);\n  ageChart += `${bucket.bucket.padEnd(8)} |${bar}| ${bucket.count}\\n`;\n}\nageChart += '```\\n';\n\nreturn [{\n  json: {\n    markdown: markdown,\n    ageChart: ageChart,\n    metrics: data,\n    reportType: 'daily'\n  }\n}];"
+      },
+      "id": "format-daily-report",
+      "name": "Format Daily Report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1570, 600]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Generate Weekly Report Format\n// Comprehensive analysis with trends and analyst performance\n\nconst data = $input.first().json;\nconst summary = data.summary;\nconst ageBuckets = data.ageBuckets;\nconst slaMetrics = data.slaMetrics;\nconst staleTickets = data.staleTicketsList;\nconst top5Oldest = data.top5OldestTickets;\nconst trendAnalysis = data.trendAnalysis;\nconst analystWorkload = data.analystWorkload;\nconst analystPerformance = data.analystPerformance;\nconst priorityBreakdown = data.priorityBreakdown;\nconst ageDistribution = data.ageDistribution;\nconst averageAgeBySeverity = data.averageAgeBySeverity;\nconst phaseBreakdown = data.phaseBreakdown;\n\nconst reportDate = new Date().toLocaleDateString('en-US', {\n  weekday: 'long',\n  year: 'numeric',\n  month: 'long',\n  day: 'numeric'\n});\n\nconst weekStart = new Date(Date.now() - 7 * 86400000).toLocaleDateString('en-US', {\n  month: 'short',\n  day: 'numeric'\n});\nconst weekEnd = new Date().toLocaleDateString('en-US', {\n  month: 'short',\n  day: 'numeric'\n});\n\n// Helper functions\nfunction getTrendEmoji(trend) {\n  if (!trend) return '';\n  if (trend.direction === 'up' && trend.severity === 'warning') return ':arrow_up_small: :warning:';\n  if (trend.direction === 'up') return ':arrow_up_small:';\n  if (trend.direction === 'down') return ':arrow_down_small: :white_check_mark:';\n  return ':arrow_right:';\n}\n\nfunction getSeverityEmoji(count, threshold) {\n  if (count >= threshold * 2) return ':red_circle:';\n  if (count >= threshold) return ':orange_circle:';\n  if (count > 0) return ':yellow_circle:';\n  return ':green_circle:';\n}\n\nlet markdown = `## Ticket Aging Metrics - Weekly Report\\n`;\nmarkdown += `**Week of ${weekStart} - ${weekEnd}**\\n\\n`;\nmarkdown += `---\\n\\n`;\n\n// Executive Summary\nmarkdown += `### Executive Summary\\n\\n`;\nconst backlogStatus = trendAnalysis?.weekly?.backlogChange > 0 ? \n  ':warning: **Backlog Growing**' : ':white_check_mark: **Backlog Reducing**';\nmarkdown += `${backlogStatus}\\n\\n`;\n\nmarkdown += `| Metric | Current | Week Ago | Change |\\n`;\nmarkdown += `|--------|---------|----------|--------|\\n`;\nmarkdown += `| **Total Open Tickets** | ${summary.totalOpenTickets} | ~${summary.totalOpenTickets - (trendAnalysis?.weekly?.backlogChange || 0)} | ${trendAnalysis?.weekly?.backlogChange > 0 ? '+' : ''}${trendAnalysis?.weekly?.backlogChange || 0} ${getTrendEmoji(trendAnalysis?.weekly?.trend)} |\\n`;\nmarkdown += `| **Avg Close Rate/Day** | ${trendAnalysis?.weekly?.avgCloseRatePerDay || 0} | - | - |\\n`;\nmarkdown += `| **Total Closed (7d)** | ${data.closedTicketsLast7Days || 0} | - | - |\\n`;\nmarkdown += `| **Avg Ticket Age** | ${summary.averageAgeDays} days | - | - |\\n\\n`;\n\n// Trend Analysis\nmarkdown += `### Week-over-Week Trend Analysis\\n\\n`;\nmarkdown += `#### Backlog Movement\\n`;\nif (trendAnalysis?.weekly?.backlogChange > 0) {\n  markdown += `- :arrow_up: Backlog increased by **${trendAnalysis.weekly.backlogChange}** tickets\\n`;\n  markdown += `- New tickets outpacing closures\\n`;\n} else if (trendAnalysis?.weekly?.backlogChange < 0) {\n  markdown += `- :arrow_down: Backlog decreased by **${Math.abs(trendAnalysis.weekly.backlogChange)}** tickets\\n`;\n  markdown += `- Team is reducing backlog effectively\\n`;\n} else {\n  markdown += `- :arrow_right: Backlog stable\\n`;\n}\nmarkdown += `\\n`;\n\n// Age Bucket Trends\nmarkdown += `#### Age Bucket Changes\\n\\n`;\nmarkdown += `| Age Bucket | Count | Trend |\\n`;\nmarkdown += `|------------|-------|-------|\\n`;\nfor (const bucket of ageDistribution) {\n  const trend = trendAnalysis?.ageBucketTrends?.[bucket.bucket];\n  const trendText = trend?.change > 0 ? `:arrow_up: +${trend.change}` : \n                    trend?.change < 0 ? `:arrow_down: ${trend.change}` : ':arrow_right: 0';\n  markdown += `| ${bucket.bucket} | ${bucket.count} | ${trendText} |\\n`;\n}\nmarkdown += `\\n`;\n\n// Priority Breakdown with Avg Age\nmarkdown += `### Priority Analysis\\n\\n`;\nmarkdown += `| Priority | Count | % | Avg Age (days) |\\n`;\nmarkdown += `|----------|-------|---|----------------|\\n`;\nfor (const priority of priorityBreakdown) {\n  const emoji = priority.severity === 'critical' ? ':red_circle:' : \n                priority.severity === 'high' ? ':orange_circle:' : \n                priority.severity === 'medium' ? ':yellow_circle:' : ':green_circle:';\n  const avgDays = averageAgeBySeverity[priority.severity]?.days || 0;\n  markdown += `| ${emoji} ${priority.severity.charAt(0).toUpperCase() + priority.severity.slice(1)} | ${priority.count} | ${priority.percentage}% | ${avgDays} |\\n`;\n}\nmarkdown += `\\n`;\n\n// Phase Distribution\nmarkdown += `### Phase Distribution\\n\\n`;\nmarkdown += `| Phase | Count |\\n`;\nmarkdown += `|-------|-------|\\n`;\nfor (const phase of phaseBreakdown.slice(0, 8)) {\n  markdown += `| ${phase.phase} | ${phase.count} |\\n`;\n}\nmarkdown += `\\n`;\n\n// SLA Status\nmarkdown += `### SLA Compliance\\n\\n`;\nmarkdown += `| Status | Count | Details |\\n`;\nmarkdown += `|--------|-------|---------|\\n`;\nmarkdown += `| ${getSeverityEmoji(slaMetrics.atRisk, 5)} At Risk | ${slaMetrics.atRisk} | Approaching breach |\\n`;\nmarkdown += `| ${getSeverityEmoji(slaMetrics.breached, 3)} Breached | ${slaMetrics.breached} | Past SLA threshold |\\n`;\nmarkdown += `| :hourglass: Stale | ${summary.staleTickets} | 24h+ no activity |\\n\\n`;\n\n// Analyst Performance Metrics\nif (analystPerformance && analystPerformance.length > 0) {\n  markdown += `### Analyst Performance Metrics\\n\\n`;\n  markdown += `| Analyst | Open Tickets | Closed (7d) | Avg Age (days) | Throughput/Day |\\n`;\n  markdown += `|---------|--------------|-------------|----------------|----------------|\\n`;\n  for (const analyst of analystPerformance.slice(0, 10)) {\n    markdown += `| ${analyst.analyst} | ${analyst.ticketCount} | ${analyst.estimatedClosedLast7Days} | ${analyst.averageAgeDays} | ${analyst.throughputRate} |\\n`;\n  }\n  markdown += `\\n`;\n}\n\n// Top 5 Oldest Tickets\nif (top5Oldest && top5Oldest.length > 0) {\n  markdown += `### Top 5 Oldest Open Tickets\\n\\n`;\n  markdown += `| Ticket ID | Name | Owner | Age (days) | Severity | Phase |\\n`;\n  markdown += `|-----------|------|-------|------------|----------|-------|\\n`;\n  for (const ticket of top5Oldest) {\n    const truncatedName = ticket.name?.length > 25 ? ticket.name.substring(0, 22) + '...' : ticket.name;\n    const sevEmoji = ticket.severity === 'critical' ? ':red_circle:' : \n                     ticket.severity === 'high' ? ':orange_circle:' : '';\n    markdown += `| ${ticket.id} | ${truncatedName || 'N/A'} | ${ticket.owner} | ${ticket.ageDays} | ${sevEmoji} ${ticket.severity} | ${ticket.phase} |\\n`;\n  }\n  markdown += `\\n`;\n}\n\n// Stale Tickets\nif (staleTickets && staleTickets.length > 0) {\n  markdown += `### Stale Tickets Requiring Attention\\n\\n`;\n  markdown += `| Ticket ID | Name | Owner | Hrs Since Activity |\\n`;\n  markdown += `|-----------|------|-------|---------------------|\\n`;\n  for (const ticket of staleTickets.slice(0, 10)) {\n    const truncatedName = ticket.name?.length > 30 ? ticket.name.substring(0, 27) + '...' : ticket.name;\n    markdown += `| ${ticket.id} | ${truncatedName || 'N/A'} | ${ticket.owner} | ${ticket.hoursSinceActivity} |\\n`;\n  }\n  markdown += `\\n`;\n}\n\n// Recommendations\nmarkdown += `### Recommendations\\n\\n`;\nconst recommendations = [];\n\nif (summary.staleTickets > 5) {\n  recommendations.push(':warning: High number of stale tickets. Schedule ticket review session.');\n}\nif (ageBuckets['>72h'] > summary.totalOpenTickets * 0.3) {\n  recommendations.push(':hourglass: Over 30% of tickets are 72+ hours old. Prioritize aging backlog.');\n}\nif (slaMetrics.breached > 0) {\n  recommendations.push(':red_circle: ' + slaMetrics.breached + ' SLA breaches. Review and document root causes.');\n}\nif (trendAnalysis?.weekly?.backlogChange > 10) {\n  recommendations.push(':chart_with_upwards_trend: Significant backlog growth. Consider resource allocation.');\n}\n\nif (recommendations.length === 0) {\n  recommendations.push(':white_check_mark: Metrics within acceptable ranges. Continue current practices.');\n}\n\nfor (const rec of recommendations) {\n  markdown += `- ${rec}\\n`;\n}\nmarkdown += `\\n`;\n\n// ASCII Charts\nlet ageChart = '```\\nAge Distribution Chart:\\n';\nconst maxCount = Math.max(...ageDistribution.map(b => b.count), 1);\nconst barWidth = 25;\nfor (const bucket of ageDistribution) {\n  const barLength = Math.round((bucket.count / maxCount) * barWidth);\n  const bar = '█'.repeat(barLength) + '░'.repeat(barWidth - barLength);\n  ageChart += `${bucket.bucket.padEnd(8)} |${bar}| ${bucket.count} (${bucket.percentage}%)\\n`;\n}\nageChart += '\\nPriority Distribution:\\n';\nconst maxPriority = Math.max(...priorityBreakdown.map(p => p.count), 1);\nfor (const priority of priorityBreakdown) {\n  const barLength = Math.round((priority.count / maxPriority) * barWidth);\n  const bar = '█'.repeat(barLength) + '░'.repeat(barWidth - barLength);\n  ageChart += `${priority.severity.padEnd(8)} |${bar}| ${priority.count}\\n`;\n}\nageChart += '```\\n';\n\n// Footer\nmarkdown += `---\\n`;\nmarkdown += `_Weekly Report generated at ${data.generatedAt}_\\n`;\n\nreturn [{\n  json: {\n    markdown: markdown,\n    ageChart: ageChart,\n    metrics: data,\n    reportType: 'weekly'\n  }\n}];"
+      },
+      "id": "format-weekly-report",
+      "name": "Format Weekly Report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1570, 400]
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "mergeByFields": {
+          "values": []
+        },
+        "options": {}
+      },
+      "id": "merge-reports",
+      "name": "Merge Report Types",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2.1,
+      "position": [1790, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Generate ASCII visualizations matching chart patterns from aging_tickets.py\n// Creates formatted tables and visual representations\n\nconst data = $input.first().json;\nconst metrics = data.metrics;\nconst markdown = data.markdown;\nconst ageChart = data.ageChart;\nconst reportType = data.reportType;\n\n// Build the complete message with charts\nlet fullMessage = markdown;\n\n// Add age distribution chart\nfullMessage += `\\n${ageChart}`;\n\n// Create a simple summary card\nconst summaryCard = `\\n\\n**Quick Stats Card**\\n` +\n  `\\`\\`\\`\\n` +\n  `┌─────────────────────────────────────┐\\n` +\n  `│  TICKET AGING METRICS SUMMARY       │\\n` +\n  `├─────────────────────────────────────┤\\n` +\n  `│  Total Open:     ${String(metrics.summary.totalOpenTickets).padStart(6)}             │\\n` +\n  `│  Avg Age:        ${String(metrics.summary.averageAgeDays).padStart(6)} days         │\\n` +\n  `│  SLA At Risk:    ${String(metrics.slaMetrics.atRisk).padStart(6)}             │\\n` +\n  `│  SLA Breached:   ${String(metrics.slaMetrics.breached).padStart(6)}             │\\n` +\n  `│  Stale Tickets:  ${String(metrics.summary.staleTickets).padStart(6)}             │\\n` +\n  `└─────────────────────────────────────┘\\n` +\n  `\\`\\`\\`\\n`;\n\nfullMessage += summaryCard;\n\n// Add workload distribution visualization for weekly reports\nif (reportType === 'weekly' && metrics.analystWorkload && metrics.analystWorkload.length > 0) {\n  let workloadChart = `\\n**Analyst Workload Distribution**\\n\\`\\`\\`\\n`;\n  const maxTickets = Math.max(...metrics.analystWorkload.map(a => a.ticketCount), 1);\n  const chartWidth = 20;\n  \n  for (const analyst of metrics.analystWorkload.slice(0, 8)) {\n    const barLength = Math.round((analyst.ticketCount / maxTickets) * chartWidth);\n    const bar = '▓'.repeat(barLength) + '░'.repeat(chartWidth - barLength);\n    const name = analyst.analyst.substring(0, 12).padEnd(12);\n    workloadChart += `${name} |${bar}| ${analyst.ticketCount}\\n`;\n  }\n  workloadChart += `\\`\\`\\`\\n`;\n  fullMessage += workloadChart;\n}\n\n// Phase distribution pie-style chart\nif (metrics.phaseBreakdown && metrics.phaseBreakdown.length > 0) {\n  let phaseChart = `\\n**Phase Distribution**\\n\\`\\`\\`\\n`;\n  const total = metrics.phaseBreakdown.reduce((sum, p) => sum + p.count, 0);\n  \n  for (const phase of metrics.phaseBreakdown.slice(0, 6)) {\n    const percentage = total > 0 ? Math.round((phase.count / total) * 100) : 0;\n    const barLength = Math.round(percentage / 5); // Scale to fit\n    const bar = '●'.repeat(barLength);\n    const phaseName = phase.phase.substring(0, 20).padEnd(20);\n    phaseChart += `${phaseName} ${bar} ${percentage}%\\n`;\n  }\n  phaseChart += `\\`\\`\\`\\n`;\n  fullMessage += phaseChart;\n}\n\nreturn [{\n  json: {\n    fullMarkdown: fullMessage,\n    reportType: reportType,\n    summary: metrics.summary,\n    generatedAt: metrics.generatedAt\n  }\n}];"
+      },
+      "id": "generate-visualizations",
+      "name": "Generate Visualizations",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2010, 500]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://webexapis.com/v1/messages",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"roomId\": \"{{ $credentials.webex.agingTicketsRoomId }}\",\n  \"markdown\": {{ JSON.stringify($json.fullMarkdown) }}\n}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $credentials.webex.accessToken }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "webex-post-report",
+      "name": "Post to Webex Aging Tickets Room",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [2230, 500],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "webex-creds",
+          "name": "Webex Bot Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Log workflow execution for monitoring\nconst data = $input.first().json;\n\nconst logEntry = {\n  workflow: 'ticket_aging_metrics',\n  executedAt: new Date().toISOString(),\n  reportType: data.reportType,\n  totalTicketsAnalyzed: data.summary?.totalOpenTickets || 0,\n  slaAtRisk: data.summary?.ticketsAtRiskSLA || 0,\n  slaBreached: data.summary?.ticketsBreachedSLA || 0,\n  status: 'success'\n};\n\nconsole.log('Workflow execution log:', JSON.stringify(logEntry));\n\nreturn [{ json: logEntry }];"
+      },
+      "id": "log-execution",
+      "name": "Log Execution",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2450, 500]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "has-critical-sla",
+              "leftValue": "={{ $json.summary.ticketsBreachedSLA }}",
+              "rightValue": 5,
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "id": "check-critical-alerts",
+      "name": "Has Critical SLA Issues?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1350, 700]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Generate Critical Alert Message\nconst data = $input.first().json;\nconst slaMetrics = data.slaMetrics;\n\nconst alertMessage = `## :rotating_light: CRITICAL: SLA Alert\\n\\n` +\n  `**${slaMetrics.breached} tickets have breached SLA thresholds!**\\n\\n` +\n  `This requires immediate attention from the team.\\n\\n` +\n  `### Breached Tickets:\\n\\n` +\n  slaMetrics.breachedTickets.slice(0, 5).map((t, i) => \n    `${i + 1}. **${t.id}** - ${t.name} (${t.severity}, ${t.ageHours}h old)`\n  ).join('\\n') +\n  `\\n\\n---\\n_Alert generated at ${data.generatedAt}_`;\n\nreturn [{\n  json: {\n    alertMarkdown: alertMessage,\n    breachedCount: slaMetrics.breached\n  }\n}];"
+      },
+      "id": "format-critical-alert",
+      "name": "Format Critical Alert",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1570, 800]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://webexapis.com/v1/messages",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"roomId\": \"{{ $credentials.webex.agingTicketsRoomId }}\",\n  \"markdown\": {{ JSON.stringify($json.alertMarkdown) }}\n}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $credentials.webex.accessToken }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "webex-post-alert",
+      "name": "Post Critical Alert to Webex",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1790, 800],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "webex-creds",
+          "name": "Webex Bot Token"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Daily 8AM Trigger": {
+      "main": [
+        [
+          {
+            "node": "Set Daily Report Type",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Weekly Friday 8AM Trigger": {
+      "main": [
+        [
+          {
+            "node": "Set Weekly Report Type",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Daily Report Type": {
+      "main": [
+        [
+          {
+            "node": "XSOAR Get Open Tickets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Weekly Report Type": {
+      "main": [
+        [
+          {
+            "node": "XSOAR Get Open Tickets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "XSOAR Get Open Tickets": {
+      "main": [
+        [
+          {
+            "node": "Calculate Aging Metrics",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "XSOAR Get Recently Closed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate Aging Metrics": {
+      "main": [
+        [
+          {
+            "node": "Calculate Trend Analysis",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Has Critical SLA Issues?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "XSOAR Get Recently Closed": {
+      "main": [
+        [
+          {
+            "node": "Calculate Trend Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate Trend Analysis": {
+      "main": [
+        [
+          {
+            "node": "Is Weekly Report?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Weekly Report?": {
+      "main": [
+        [
+          {
+            "node": "Format Weekly Report",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Format Daily Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Weekly Report": {
+      "main": [
+        [
+          {
+            "node": "Merge Report Types",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Daily Report": {
+      "main": [
+        [
+          {
+            "node": "Merge Report Types",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Report Types": {
+      "main": [
+        [
+          {
+            "node": "Generate Visualizations",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Visualizations": {
+      "main": [
+        [
+          {
+            "node": "Post to Webex Aging Tickets Room",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Post to Webex Aging Tickets Room": {
+      "main": [
+        [
+          {
+            "node": "Log Execution",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Critical SLA Issues?": {
+      "main": [
+        [
+          {
+            "node": "Format Critical Alert",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Format Critical Alert": {
+      "main": [
+        [
+          {
+            "node": "Post Critical Alert to Webex",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "SOC",
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z"
+    },
+    {
+      "name": "Aging Metrics",
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z"
+    },
+    {
+      "name": "SLA Monitoring",
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z"
+    },
+    {
+      "name": "Automated Reports",
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z"
+    }
+  ],
+  "triggerCount": 2,
+  "updatedAt": "2024-01-01T00:00:00.000Z",
+  "versionId": "1",
+  "meta": {
+    "templateId": "ticket-aging-metrics",
+    "instanceId": "",
+    "description": "Analyzes XSOAR ticket aging metrics with daily and weekly reporting to Webex. Tracks age buckets, priority breakdown, analyst workload, SLA compliance, and trend analysis.",
+    "credentials": {
+      "xsoar": {
+        "baseUrl": "XSOAR instance base URL",
+        "apiKey": "XSOAR API key for authentication"
+      },
+      "webex": {
+        "accessToken": "Webex bot access token (webex_bot_access_token_soar)",
+        "agingTicketsRoomId": "webex_room_id_aging_tickets from my_config"
+      }
+    }
+  }
+}

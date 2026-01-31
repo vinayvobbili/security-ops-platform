@@ -1,5 +1,6 @@
 # Transient data - block all except templates/docs
 data/transient/*
+src/data/
 
 .idea
 .ipynb_checkpoints
@@ -56,3 +57,4 @@ package-lock.json
 chroma_documents/
 data/chroma_contacts/
 data/epp_tagging/*.db
+data/rules_cache/

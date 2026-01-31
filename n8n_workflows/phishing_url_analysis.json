@@ -1,0 +1,726 @@
+{
+  "name": "Phishing URL Analysis Workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "phishing-url-analysis",
+        "responseMode": "responseNode",
+        "options": {
+          "responseData": "allEntries"
+        }
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "phishing-url-analysis-webhook"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse incoming URLs from analyst\nconst body = $input.first().json.body;\nlet urls = [];\n\nif (body.urls && Array.isArray(body.urls)) {\n  urls = body.urls;\n} else if (body.url) {\n  urls = [body.url];\n} else if (typeof body === 'string') {\n  urls = [body];\n}\n\n// Return each URL as separate item for parallel processing\nreturn urls.map(url => ({\n  json: {\n    url: url.trim(),\n    submittedAt: new Date().toISOString(),\n    analysisId: `analysis-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`\n  }\n}));"
+      },
+      "id": "parse-urls",
+      "name": "Parse URLs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://urlscan.io/api/v1/scan",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "url",
+              "value": "={{ $json.url }}"
+            },
+            {
+              "name": "visibility",
+              "value": "private"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "urlscan-submit",
+      "name": "URLScan Submit",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [740, 100],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "urlscan-api-key",
+          "name": "URLScan API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "amount": 15,
+        "unit": "seconds"
+      },
+      "id": "wait-urlscan",
+      "name": "Wait for URLScan",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [960, 100]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://urlscan.io/api/v1/result/{{ $('URLScan Submit').item.json.uuid }}/",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "urlscan-results",
+      "name": "URLScan Results",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1180, 100]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://www.virustotal.com/api/v3/urls/{{ encodeURIComponent($json.url).replace(/%/g, '%25').replace(/\\//g, '%2F').replace(/:/g, '%3A') | Buffer.from($json.url).toString('base64').replace(/=/g, '') }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "virustotal-check",
+      "name": "VirusTotal Check",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [740, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "virustotal-api-key",
+          "name": "VirusTotal API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://safebrowsing.googleapis.com/v4/threatMatches:find",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpQueryAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"client\": {\n    \"clientId\": \"n8n-phishing-workflow\",\n    \"clientVersion\": \"1.0.0\"\n  },\n  \"threatInfo\": {\n    \"threatTypes\": [\"MALWARE\", \"SOCIAL_ENGINEERING\", \"UNWANTED_SOFTWARE\", \"POTENTIALLY_HARMFUL_APPLICATION\"],\n    \"platformTypes\": [\"ANY_PLATFORM\"],\n    \"threatEntryTypes\": [\"URL\"],\n    \"threatEntries\": [\n      {\"url\": \"{{ $json.url }}\"}\n    ]\n  }\n}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "google-safebrowsing",
+      "name": "Google Safe Browsing",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [740, 500],
+      "credentials": {
+        "httpQueryAuth": {
+          "id": "google-safebrowsing-key",
+          "name": "Google Safe Browsing API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract domain from URL\nconst url = $input.first().json.url;\nlet domain;\n\ntry {\n  const urlObj = new URL(url);\n  domain = urlObj.hostname;\n} catch (e) {\n  // Fallback regex extraction\n  const match = url.match(/(?:https?:\\/\\/)?(?:www\\.)?([^\\/:]+)/);\n  domain = match ? match[1] : url;\n}\n\nreturn [{\n  json: {\n    ...$input.first().json,\n    domain: domain\n  }\n}];"
+      },
+      "id": "extract-domain",
+      "name": "Extract Domain",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [740, 700]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://www.whoisxmlapi.com/whoisserver/WhoisService?apiKey={{ $credentials.apiKey }}&domainName={{ $json.domain }}&outputFormat=JSON",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpQueryAuth",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "whois-lookup",
+      "name": "WHOIS Lookup",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [960, 700],
+      "credentials": {
+        "httpQueryAuth": {
+          "id": "whois-api-key",
+          "name": "WHOIS API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "mergeByFields": {
+          "values": [
+            {
+              "field1": "url",
+              "field2": "url"
+            }
+          ]
+        },
+        "options": {
+          "clashHandling": {
+            "values": {
+              "resolveClash": "preferInput2"
+            }
+          }
+        }
+      },
+      "id": "merge-results",
+      "name": "Merge Results",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [1460, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract indicators from all analysis results\nconst item = $input.first().json;\n\n// URLScan results\nconst urlscan = item.urlscanResults || {};\nconst page = urlscan.page || {};\nconst lists = urlscan.lists || {};\nconst verdicts = urlscan.verdicts || {};\nconst meta = urlscan.meta || {};\n\n// VirusTotal results\nconst vt = item.virusTotalResults || {};\nconst vtData = vt.data || {};\nconst vtAttributes = vtData.attributes || {};\nconst vtStats = vtAttributes.last_analysis_stats || {};\n\n// Google Safe Browsing\nconst gsb = item.googleSafeBrowsing || {};\n\n// WHOIS results\nconst whois = item.whoisResults || {};\nconst whoisRecord = whois.WhoisRecord || {};\nconst registryData = whoisRecord.registryData || {};\n\n// Extract indicators\nconst indicators = {\n  // URL Info\n  originalUrl: item.url,\n  finalUrl: page.url || item.url,\n  redirected: (page.url && page.url !== item.url) ? true : false,\n  \n  // Hosting Info\n  ipAddress: page.ip || 'Unknown',\n  server: page.server || 'Unknown',\n  country: page.country || 'Unknown',\n  asn: page.asn || 'Unknown',\n  asnName: page.asnname || 'Unknown',\n  \n  // Domain Info\n  domain: page.domain || item.domain,\n  domainCreatedDate: registryData.createdDate || whoisRecord.createdDate || 'Unknown',\n  domainUpdatedDate: registryData.updatedDate || whoisRecord.updatedDate || 'Unknown',\n  domainExpiresDate: registryData.expiresDate || whoisRecord.expiresDate || 'Unknown',\n  registrar: whoisRecord.registrarName || 'Unknown',\n  registrantOrg: whoisRecord.registrant?.organization || 'Unknown',\n  registrantCountry: whoisRecord.registrant?.country || 'Unknown',\n  \n  // SSL Certificate\n  sslIssuer: (urlscan.data?.requests?.[0]?.response?.response?.securityDetails?.issuer) || 'Unknown',\n  sslValidFrom: (urlscan.data?.requests?.[0]?.response?.response?.securityDetails?.validFrom) || 'Unknown',\n  sslValidTo: (urlscan.data?.requests?.[0]?.response?.response?.securityDetails?.validTo) || 'Unknown',\n  sslProtocol: (urlscan.data?.requests?.[0]?.response?.response?.securityDetails?.protocol) || 'Unknown',\n  \n  // Technologies Detected\n  technologies: lists.technologies || [],\n  \n  // Screenshot\n  screenshotUrl: urlscan.task?.screenshotURL || `https://urlscan.io/screenshots/${urlscan.task?.uuid}.png`,\n  urlscanResultUrl: urlscan.task?.resultURL || `https://urlscan.io/result/${urlscan.task?.uuid}/`,\n  \n  // URLScan Verdicts\n  urlscanMalicious: verdicts.overall?.malicious || false,\n  urlscanScore: verdicts.overall?.score || 0,\n  urlscanCategories: verdicts.overall?.categories || [],\n  urlscanBrands: verdicts.overall?.brands || [],\n  \n  // VirusTotal Stats\n  vtMalicious: vtStats.malicious || 0,\n  vtSuspicious: vtStats.suspicious || 0,\n  vtHarmless: vtStats.harmless || 0,\n  vtUndetected: vtStats.undetected || 0,\n  vtTotalEngines: (vtStats.malicious || 0) + (vtStats.suspicious || 0) + (vtStats.harmless || 0) + (vtStats.undetected || 0),\n  vtPermalink: vtData.links?.self || '',\n  \n  // Google Safe Browsing\n  gsbFlagged: (gsb.matches && gsb.matches.length > 0) ? true : false,\n  gsbThreats: gsb.matches || []\n};\n\n// Calculate domain age in days\nlet domainAgeDays = -1;\nif (indicators.domainCreatedDate && indicators.domainCreatedDate !== 'Unknown') {\n  const createdDate = new Date(indicators.domainCreatedDate);\n  const now = new Date();\n  domainAgeDays = Math.floor((now - createdDate) / (1000 * 60 * 60 * 24));\n}\nindicators.domainAgeDays = domainAgeDays;\n\nreturn [{\n  json: {\n    ...item,\n    indicators: indicators\n  }\n}];"
+      },
+      "id": "extract-indicators",
+      "name": "Extract Indicators",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1680, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Calculate risk score based on multiple factors\nconst item = $input.first().json;\nconst ind = item.indicators;\n\nlet riskScore = 0;\nlet riskFactors = [];\n\n// Factor 1: VirusTotal detections (max 40 points)\nif (ind.vtMalicious > 0) {\n  const vtScore = Math.min(40, ind.vtMalicious * 4);\n  riskScore += vtScore;\n  riskFactors.push(`VT: ${ind.vtMalicious} malicious detections (+${vtScore})`);\n}\nif (ind.vtSuspicious > 0) {\n  const vtSuspScore = Math.min(10, ind.vtSuspicious * 2);\n  riskScore += vtSuspScore;\n  riskFactors.push(`VT: ${ind.vtSuspicious} suspicious detections (+${vtSuspScore})`);\n}\n\n// Factor 2: URLScan verdicts (max 25 points)\nif (ind.urlscanMalicious) {\n  riskScore += 25;\n  riskFactors.push('URLScan: Marked as malicious (+25)');\n} else if (ind.urlscanScore > 0) {\n  const urlscanPts = Math.min(15, ind.urlscanScore * 3);\n  riskScore += urlscanPts;\n  riskFactors.push(`URLScan: Score ${ind.urlscanScore} (+${urlscanPts})`);\n}\n\n// Factor 3: Google Safe Browsing (15 points)\nif (ind.gsbFlagged) {\n  riskScore += 15;\n  const threats = ind.gsbThreats.map(t => t.threatType).join(', ');\n  riskFactors.push(`Google Safe Browsing: Flagged (${threats}) (+15)`);\n}\n\n// Factor 4: Domain age < 30 days (10 points)\nif (ind.domainAgeDays >= 0 && ind.domainAgeDays < 30) {\n  riskScore += 10;\n  riskFactors.push(`Domain age: ${ind.domainAgeDays} days (< 30 days) (+10)`);\n} else if (ind.domainAgeDays >= 30 && ind.domainAgeDays < 90) {\n  riskScore += 5;\n  riskFactors.push(`Domain age: ${ind.domainAgeDays} days (< 90 days) (+5)`);\n}\n\n// Factor 5: Suspicious keywords in URL (max 15 points)\nconst suspiciousKeywords = [\n  'login', 'signin', 'account', 'verify', 'secure', 'update', 'confirm',\n  'banking', 'paypal', 'microsoft', 'apple', 'google', 'amazon', 'netflix',\n  'password', 'credential', 'suspend', 'limit', 'unusual', 'alert',\n  'urgent', 'immediate', 'action', 'required', 'expire', 'locked'\n];\nconst urlLower = ind.originalUrl.toLowerCase();\nconst foundKeywords = suspiciousKeywords.filter(kw => urlLower.includes(kw));\nif (foundKeywords.length > 0) {\n  const keywordScore = Math.min(15, foundKeywords.length * 3);\n  riskScore += keywordScore;\n  riskFactors.push(`Suspicious keywords: ${foundKeywords.join(', ')} (+${keywordScore})`);\n}\n\n// Factor 6: Known phishing patterns (max 20 points)\nconst phishingPatterns = [\n  { pattern: /\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}/, desc: 'IP address in URL', score: 10 },\n  { pattern: /@/, desc: '@ symbol in URL', score: 15 },\n  { pattern: /https?:\\/\\/[^/]*-[^/]*-[^/]*\\./, desc: 'Multiple hyphens in domain', score: 5 },\n  { pattern: /\\.(tk|ml|ga|cf|gq|xyz|top|work|click|link|info)\\b/i, desc: 'Suspicious TLD', score: 8 },\n  { pattern: /[^a-zA-Z0-9](login|secure|account|verify)[^a-zA-Z0-9]/i, desc: 'Security keywords in path', score: 5 },\n  { pattern: /\\.(php|asp|aspx)\\?.*=/i, desc: 'Dynamic page with parameters', score: 3 },\n  { pattern: /bit\\.ly|tinyurl|goo\\.gl|t\\.co|shorturl/i, desc: 'URL shortener detected', score: 7 },\n  { pattern: /[а-яА-Я]|[\\u0400-\\u04FF]/i, desc: 'Cyrillic characters (homograph)', score: 15 },\n  { pattern: /punycode|xn--/i, desc: 'Punycode domain', score: 10 }\n];\n\nlet patternScore = 0;\nfor (const p of phishingPatterns) {\n  if (p.pattern.test(ind.originalUrl)) {\n    patternScore += p.score;\n    riskFactors.push(`Pattern: ${p.desc} (+${p.score})`);\n  }\n}\nriskScore += Math.min(20, patternScore);\n\n// Factor 7: Redirect to different domain (5 points)\nif (ind.redirected && ind.finalUrl) {\n  try {\n    const origDomain = new URL(ind.originalUrl).hostname;\n    const finalDomain = new URL(ind.finalUrl).hostname;\n    if (origDomain !== finalDomain) {\n      riskScore += 5;\n      riskFactors.push(`Redirects to different domain: ${finalDomain} (+5)`);\n    }\n  } catch (e) {}\n}\n\n// Cap score at 100\nriskScore = Math.min(100, riskScore);\n\n// Determine risk level and color\nlet riskLevel, riskColor, recommendation;\nif (riskScore >= 70) {\n  riskLevel = 'HIGH';\n  riskColor = '#FF0000'; // Red\n  recommendation = 'BLOCK - High confidence phishing/malicious URL. Recommend immediate blocking and investigation.';\n} else if (riskScore >= 40) {\n  riskLevel = 'MEDIUM';\n  riskColor = '#FFA500'; // Orange\n  recommendation = 'INVESTIGATE - Moderate risk indicators present. Manual review recommended before blocking.';\n} else if (riskScore >= 20) {\n  riskLevel = 'LOW';\n  riskColor = '#FFFF00'; // Yellow\n  recommendation = 'MONITOR - Some suspicious indicators but likely benign. Continue monitoring.';\n} else {\n  riskLevel = 'MINIMAL';\n  riskColor = '#00FF00'; // Green\n  recommendation = 'ALLOW - No significant risk indicators detected. URL appears safe.';\n}\n\nreturn [{\n  json: {\n    ...item,\n    riskAssessment: {\n      score: riskScore,\n      level: riskLevel,\n      color: riskColor,\n      factors: riskFactors,\n      recommendation: recommendation\n    }\n  }\n}];"
+      },
+      "id": "calculate-risk",
+      "name": "Calculate Risk Score",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1900, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Format comprehensive report for Webex\nconst item = $input.first().json;\nconst ind = item.indicators;\nconst risk = item.riskAssessment;\n\n// Risk level emoji mapping\nconst riskEmoji = {\n  'HIGH': '\ud83d\udd34',\n  'MEDIUM': '\ud83d\udfe0',\n  'LOW': '\ud83d\udfe1',\n  'MINIMAL': '\ud83d\udfe2'\n};\n\n// Format domain age\nlet domainAgeStr = 'Unknown';\nif (ind.domainAgeDays >= 0) {\n  if (ind.domainAgeDays < 30) {\n    domainAgeStr = `${ind.domainAgeDays} days \u26a0\ufe0f (Very New)`;\n  } else if (ind.domainAgeDays < 90) {\n    domainAgeStr = `${ind.domainAgeDays} days (New)`;\n  } else if (ind.domainAgeDays < 365) {\n    domainAgeStr = `${ind.domainAgeDays} days`;\n  } else {\n    const years = Math.floor(ind.domainAgeDays / 365);\n    domainAgeStr = `${years} year(s) (${ind.domainAgeDays} days)`;\n  }\n}\n\n// Format VT verdict\nlet vtVerdict = 'Clean';\nif (ind.vtMalicious > 0) {\n  vtVerdict = `\ud83d\udd34 ${ind.vtMalicious}/${ind.vtTotalEngines} engines flagged as MALICIOUS`;\n} else if (ind.vtSuspicious > 0) {\n  vtVerdict = `\ud83d\udfe0 ${ind.vtSuspicious}/${ind.vtTotalEngines} engines flagged as SUSPICIOUS`;\n} else {\n  vtVerdict = `\ud83d\udfe2 ${ind.vtHarmless}/${ind.vtTotalEngines} engines - Clean`;\n}\n\n// Format URLScan verdict\nlet urlscanVerdict = ind.urlscanMalicious ? '\ud83d\udd34 MALICIOUS' : '\ud83d\udfe2 Clean';\nif (ind.urlscanScore > 0) {\n  urlscanVerdict += ` (Score: ${ind.urlscanScore})`;\n}\nif (ind.urlscanCategories && ind.urlscanCategories.length > 0) {\n  urlscanVerdict += ` - Categories: ${ind.urlscanCategories.join(', ')}`;\n}\n\n// Format Google Safe Browsing\nlet gsbVerdict = ind.gsbFlagged ? \n  `\ud83d\udd34 FLAGGED - ${ind.gsbThreats.map(t => t.threatType).join(', ')}` : \n  '\ud83d\udfe2 Not flagged';\n\n// Build markdown report\nconst report = `## \ud83d\udd0d Phishing URL Analysis Report\n\n**Analysis ID:** ${item.analysisId}\n**Submitted:** ${item.submittedAt}\n\n---\n\n### ${riskEmoji[risk.level]} Risk Assessment: **${risk.level}** (Score: ${risk.score}/100)\n\n**Recommendation:** ${risk.recommendation}\n\n---\n\n### \ud83c\udf10 URL Information\n| Field | Value |\n|-------|-------|\n| Original URL | \\`${ind.originalUrl}\\` |\n| Final URL | \\`${ind.finalUrl}\\` |\n| Redirected | ${ind.redirected ? 'Yes \u26a0\ufe0f' : 'No'} |\n| Domain | ${ind.domain} |\n\n---\n\n### \ud83d\udda5\ufe0f Hosting Information\n| Field | Value |\n|-------|-------|\n| IP Address | ${ind.ipAddress} |\n| Country | ${ind.country} |\n| ASN | ${ind.asn} (${ind.asnName}) |\n| Server | ${ind.server} |\n\n---\n\n### \ud83d\udcdc Domain/WHOIS Information\n| Field | Value |\n|-------|-------|\n| Domain Age | ${domainAgeStr} |\n| Created | ${ind.domainCreatedDate} |\n| Expires | ${ind.domainExpiresDate} |\n| Registrar | ${ind.registrar} |\n| Registrant Org | ${ind.registrantOrg} |\n| Registrant Country | ${ind.registrantCountry} |\n\n---\n\n### \ud83d\udd10 SSL Certificate\n| Field | Value |\n|-------|-------|\n| Issuer | ${ind.sslIssuer} |\n| Protocol | ${ind.sslProtocol} |\n\n---\n\n### \ud83d\udee1\ufe0f Security Verdicts\n| Service | Verdict |\n|---------|---------|  \n| VirusTotal | ${vtVerdict} |\n| URLScan.io | ${urlscanVerdict} |\n| Google Safe Browsing | ${gsbVerdict} |\n\n---\n\n### \u26a0\ufe0f Risk Factors\n${risk.factors.length > 0 ? risk.factors.map(f => `- ${f}`).join('\\n') : '- No significant risk factors detected'}\n\n---\n\n### \ud83d\udcf7 Screenshot & Reports\n- **Screenshot:** [View Screenshot](${ind.screenshotUrl})\n- **URLScan Report:** [View Full Report](${ind.urlscanResultUrl})\n${ind.vtPermalink ? `- **VirusTotal Report:** [View Report](${ind.vtPermalink})` : ''}\n\n---\n\n### \ud83d\udee0\ufe0f Technologies Detected\n${ind.technologies && ind.technologies.length > 0 ? ind.technologies.join(', ') : 'None detected'}\n\n---\n*Analysis performed by n8n Phishing URL Analysis Workflow*`;\n\n// Also create a plain text summary for notifications\nconst summary = `[${risk.level}] URL: ${ind.originalUrl} - Score: ${risk.score}/100 - ${risk.recommendation}`;\n\nreturn [{\n  json: {\n    ...item,\n    report: {\n      markdown: report,\n      summary: summary,\n      screenshotUrl: ind.screenshotUrl,\n      urlscanReportUrl: ind.urlscanResultUrl\n    }\n  }\n}];"
+      },
+      "id": "format-report",
+      "name": "Format Report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2120, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://webexapis.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"roomId\": \"{{ $env.WEBEX_ROOM_ID }}\",\n  \"markdown\": {{ JSON.stringify($json.report.markdown) }}\n}",
+        "options": {}
+      },
+      "id": "send-webex",
+      "name": "Send to Webex",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2340, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "webex-bot-token",
+          "name": "Webex Bot Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "high-risk-check",
+              "leftValue": "={{ $json.riskAssessment.level }}",
+              "rightValue": "HIGH",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-high-risk",
+      "name": "Check High Risk",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [2560, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.zscaler.com/v1/webApplicationRules/urlFilteringRules",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"name\": \"Auto-blocked phishing: {{ $json.indicators.domain }}\",\n  \"order\": 1,\n  \"protocols\": [\"ANY_RULE\"],\n  \"state\": \"ENABLED\",\n  \"action\": \"BLOCK\",\n  \"urlCategories\": [\"CUSTOM_URL_CATEGORY\"],\n  \"urls\": [\"{{ $json.indicators.domain }}\"],\n  \"description\": \"Auto-blocked by n8n Phishing Analysis - Score: {{ $json.riskAssessment.score }} - {{ new Date().toISOString() }}\"\n}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "zscaler-block",
+      "name": "Add to Zscaler Blocklist",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2780, 200],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "zscaler-api-key",
+          "name": "Zscaler API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://webexapis.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"roomId\": \"{{ $env.WEBEX_ROOM_ID }}\",\n  \"markdown\": \"\ud83d\udea8 **AUTO-BLOCK EXECUTED**\\n\\nDomain \\`{{ $json.indicators.domain }}\\` has been automatically added to Zscaler blocklist due to HIGH risk score ({{ $json.riskAssessment.score }}/100).\"\n}",
+        "options": {}
+      },
+      "id": "notify-block",
+      "name": "Notify Block Action",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [3000, 200],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "webex-bot-token",
+          "name": "Webex Bot Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"status\": \"success\",\n  \"analysisId\": \"{{ $('Parse URLs').item.json.analysisId }}\",\n  \"url\": \"{{ $json.indicators.originalUrl }}\",\n  \"riskLevel\": \"{{ $json.riskAssessment.level }}\",\n  \"riskScore\": {{ $json.riskAssessment.score }},\n  \"recommendation\": \"{{ $json.riskAssessment.recommendation }}\",\n  \"screenshotUrl\": \"{{ $json.indicators.screenshotUrl }}\",\n  \"urlscanReport\": \"{{ $json.indicators.urlscanResultUrl }}\",\n  \"autoBlocked\": {{ $json.riskAssessment.level === 'HIGH' }}\n}",
+        "options": {}
+      },
+      "id": "webhook-response",
+      "name": "Webhook Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [3220, 300]
+    },
+    {
+      "parameters": {},
+      "id": "no-op-low-risk",
+      "name": "No Auto-Block",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [2780, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Store URLScan results with original URL for merging\nconst urlscanData = $input.first().json;\nconst originalUrl = $('Parse URLs').item.json.url;\n\nreturn [{\n  json: {\n    url: originalUrl,\n    urlscanResults: urlscanData\n  }\n}];"
+      },
+      "id": "prep-urlscan",
+      "name": "Prep URLScan Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1400, 100]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Store VirusTotal results with original URL for merging\nconst vtData = $input.first().json;\nconst originalUrl = $('Parse URLs').item.json.url;\n\nreturn [{\n  json: {\n    url: originalUrl,\n    virusTotalResults: vtData\n  }\n}];"
+      },
+      "id": "prep-vt",
+      "name": "Prep VT Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [960, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Store Google Safe Browsing results with original URL for merging\nconst gsbData = $input.first().json;\nconst originalUrl = $('Parse URLs').item.json.url;\n\nreturn [{\n  json: {\n    url: originalUrl,\n    googleSafeBrowsing: gsbData\n  }\n}];"
+      },
+      "id": "prep-gsb",
+      "name": "Prep GSB Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [960, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Store WHOIS results with original URL for merging\nconst whoisData = $input.first().json;\nconst originalUrl = $('Extract Domain').item.json.url;\n\nreturn [{\n  json: {\n    url: originalUrl,\n    whoisResults: whoisData\n  }\n}];"
+      },
+      "id": "prep-whois",
+      "name": "Prep WHOIS Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1180, 700]
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineAll",
+        "options": {}
+      },
+      "id": "merge-all",
+      "name": "Merge All Data",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [1400, 400]
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Parse URLs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse URLs": {
+      "main": [
+        [
+          {
+            "node": "URLScan Submit",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "VirusTotal Check",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Google Safe Browsing",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Extract Domain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "URLScan Submit": {
+      "main": [
+        [
+          {
+            "node": "Wait for URLScan",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait for URLScan": {
+      "main": [
+        [
+          {
+            "node": "URLScan Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "URLScan Results": {
+      "main": [
+        [
+          {
+            "node": "Prep URLScan Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "VirusTotal Check": {
+      "main": [
+        [
+          {
+            "node": "Prep VT Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Safe Browsing": {
+      "main": [
+        [
+          {
+            "node": "Prep GSB Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Domain": {
+      "main": [
+        [
+          {
+            "node": "WHOIS Lookup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "WHOIS Lookup": {
+      "main": [
+        [
+          {
+            "node": "Prep WHOIS Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prep URLScan Data": {
+      "main": [
+        [
+          {
+            "node": "Merge Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prep VT Data": {
+      "main": [
+        [
+          {
+            "node": "Merge All Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prep GSB Data": {
+      "main": [
+        [
+          {
+            "node": "Merge All Data",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Prep WHOIS Data": {
+      "main": [
+        [
+          {
+            "node": "Merge All Data",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Merge All Data": {
+      "main": [
+        [
+          {
+            "node": "Merge Results",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge Results": {
+      "main": [
+        [
+          {
+            "node": "Extract Indicators",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Indicators": {
+      "main": [
+        [
+          {
+            "node": "Calculate Risk Score",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate Risk Score": {
+      "main": [
+        [
+          {
+            "node": "Format Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Report": {
+      "main": [
+        [
+          {
+            "node": "Send to Webex",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send to Webex": {
+      "main": [
+        [
+          {
+            "node": "Check High Risk",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check High Risk": {
+      "main": [
+        [
+          {
+            "node": "Add to Zscaler Blocklist",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Auto-Block",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Add to Zscaler Blocklist": {
+      "main": [
+        [
+          {
+            "node": "Notify Block Action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify Block Action": {
+      "main": [
+        [
+          {
+            "node": "Webhook Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "No Auto-Block": {
+      "main": [
+        [
+          {
+            "node": "Webhook Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "phishing-url-analysis-workflow"
+  },
+  "pinData": {},
+  "versionId": "1.0.0",
+  "triggerCount": 0,
+  "tags": [
+    {
+      "id": "security",
+      "name": "Security"
+    },
+    {
+      "id": "phishing",
+      "name": "Phishing Analysis"
+    },
+    {
+      "id": "incident-response",
+      "name": "Incident Response"
+    }
+  ]
+}

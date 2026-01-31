@@ -1,0 +1,609 @@
+{
+  "name": "Failed Login Monitor - Suspicious Authentication Patterns",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 15
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Schedule Trigger (15 min)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.QRADAR_URL}}/api/ariel/searches",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "SEC",
+              "value": "={{$env.QRADAR_API_TOKEN}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"query_expression\": \"SELECT sourceip, destinationip, username, eventcount, DATEFORMAT(starttime, 'yyyy-MM-dd HH:mm:ss') as event_time, CATEGORYNAME(category) as category_name, LOGSOURCENAME(logsourceid) as log_source FROM events WHERE category IN (8100, 8101, 8102, 8103, 8104, 8105, 8106, 8107, 8108, 8109, 8110, 8111, 8112, 8113, 8114, 8115, 8116, 8117, 8118, 8119) AND INOFFENSE(FALSE) AND starttime >= {{ Date.now() - 900000 }} ORDER BY starttime DESC LAST 15 MINUTES\"\n}"
+      },
+      "id": "qradar-search-init",
+      "name": "QRadar - Init Failed Login Search",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [460, 300],
+      "retryOnFail": true,
+      "waitBetweenTries": 3000,
+      "maxTries": 3
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "duration": 5,
+        "unit": "seconds"
+      },
+      "id": "wait-for-search",
+      "name": "Wait for QRadar Search",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{$env.QRADAR_URL}}/api/ariel/searches/{{$node['QRadar - Init Failed Login Search'].json.search_id}}/results",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "SEC",
+              "value": "={{$env.QRADAR_API_TOKEN}}"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        }
+      },
+      "id": "qradar-get-results",
+      "name": "QRadar - Get Search Results",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Aggregate and analyze failed login events\nconst events = $input.first().json.events || [];\n\nif (events.length === 0) {\n  return [{ json: { no_events: true, message: 'No failed login events in the last 15 minutes' } }];\n}\n\n// Data structures for aggregation\nconst bySourceIP = {};\nconst byTargetAccount = {};\nconst successAfterFailure = [];\nconst privilegedAccounts = ['administrator', 'admin', 'root', 'sa', 'dba', 'sysadmin', 'domain admin', 'enterprise admin'];\nconst privilegedPatterns = [/^admin/i, /admin$/i, /_admin$/i, /^svc_/i, /^service_/i];\n\n// Helper to check if account is privileged\nconst isPrivileged = (username) => {\n  if (!username) return false;\n  const lowerUser = username.toLowerCase();\n  if (privilegedAccounts.includes(lowerUser)) return true;\n  return privilegedPatterns.some(pattern => pattern.test(username));\n};\n\n// Helper to check if time is after hours (before 7 AM or after 7 PM)\nconst isAfterHours = (eventTime) => {\n  const date = new Date(eventTime);\n  const hour = date.getHours();\n  return hour < 7 || hour >= 19;\n};\n\n// Process each event\nevents.forEach(event => {\n  const sourceIP = event.sourceip || 'unknown';\n  const username = event.username || 'unknown';\n  const eventTime = event.event_time;\n  const category = event.category_name || '';\n  const isFailure = category.toLowerCase().includes('fail') || \n                    category.toLowerCase().includes('invalid') ||\n                    [8101, 8102, 8103, 8109, 8110].includes(event.category);\n  const isSuccess = category.toLowerCase().includes('success') ||\n                    [8100, 8104, 8105].includes(event.category);\n  \n  // Group by source IP\n  if (!bySourceIP[sourceIP]) {\n    bySourceIP[sourceIP] = {\n      ip: sourceIP,\n      failures: [],\n      successes: [],\n      targetAccounts: new Set(),\n      firstSeen: eventTime,\n      lastSeen: eventTime,\n      totalEvents: 0,\n      afterHoursAttempts: 0,\n      privilegedTargets: new Set()\n    };\n  }\n  \n  const ipData = bySourceIP[sourceIP];\n  ipData.totalEvents++;\n  ipData.lastSeen = eventTime;\n  \n  if (isFailure) {\n    ipData.failures.push({ time: eventTime, username, category });\n    ipData.targetAccounts.add(username);\n    \n    if (isPrivileged(username)) {\n      ipData.privilegedTargets.add(username);\n    }\n    \n    if (isAfterHours(eventTime)) {\n      ipData.afterHoursAttempts++;\n    }\n  }\n  \n  if (isSuccess) {\n    ipData.successes.push({ time: eventTime, username, category });\n  }\n  \n  // Group by target account\n  if (!byTargetAccount[username]) {\n    byTargetAccount[username] = {\n      username,\n      isPrivileged: isPrivileged(username),\n      sourceIPs: new Set(),\n      failures: [],\n      successes: [],\n      firstSeen: eventTime,\n      lastSeen: eventTime\n    };\n  }\n  \n  const accountData = byTargetAccount[username];\n  accountData.sourceIPs.add(sourceIP);\n  accountData.lastSeen = eventTime;\n  \n  if (isFailure) {\n    accountData.failures.push({ time: eventTime, sourceIP, category });\n  }\n  \n  if (isSuccess) {\n    accountData.successes.push({ time: eventTime, sourceIP, category });\n  }\n});\n\n// Detect patterns and build alerts\nconst detections = [];\n\n// Analyze by source IP\nObject.values(bySourceIP).forEach(ipData => {\n  const failureCount = ipData.failures.length;\n  const uniqueTargets = ipData.targetAccounts.size;\n  const hasSuccess = ipData.successes.length > 0;\n  \n  // Rule 1: 5+ failures in 5 min from same IP = brute force\n  if (failureCount >= 5) {\n    // Check if within 5 minute window\n    const sortedFailures = ipData.failures.sort((a, b) => new Date(a.time) - new Date(b.time));\n    for (let i = 0; i <= sortedFailures.length - 5; i++) {\n      const windowStart = new Date(sortedFailures[i].time);\n      const windowEnd = new Date(sortedFailures[i + 4].time);\n      const diffMinutes = (windowEnd - windowStart) / 60000;\n      \n      if (diffMinutes <= 5) {\n        detections.push({\n          type: 'BRUTE_FORCE',\n          severity: hasSuccess ? 'CRITICAL' : 'HIGH',\n          sourceIP: ipData.ip,\n          failureCount,\n          targetAccounts: Array.from(ipData.targetAccounts),\n          privilegedTargets: Array.from(ipData.privilegedTargets),\n          timeWindow: `${sortedFailures[i].time} to ${sortedFailures[i + 4].time}`,\n          firstSeen: ipData.firstSeen,\n          lastSeen: ipData.lastSeen,\n          successAfterFailure: hasSuccess,\n          successDetails: hasSuccess ? ipData.successes : [],\n          afterHoursAttempts: ipData.afterHoursAttempts,\n          description: `Brute force attack detected: ${failureCount} failed login attempts from ${ipData.ip}`\n        });\n        break; // One detection per IP for this rule\n      }\n    }\n  }\n  \n  // Rule 2: Failures to 3+ accounts from same IP = password spray\n  if (uniqueTargets >= 3) {\n    // Check if not already flagged as brute force\n    const existingBruteForce = detections.find(d => d.type === 'BRUTE_FORCE' && d.sourceIP === ipData.ip);\n    if (!existingBruteForce) {\n      detections.push({\n        type: 'PASSWORD_SPRAY',\n        severity: hasSuccess ? 'CRITICAL' : 'HIGH',\n        sourceIP: ipData.ip,\n        failureCount,\n        targetAccounts: Array.from(ipData.targetAccounts),\n        privilegedTargets: Array.from(ipData.privilegedTargets),\n        uniqueAccountsTargeted: uniqueTargets,\n        firstSeen: ipData.firstSeen,\n        lastSeen: ipData.lastSeen,\n        successAfterFailure: hasSuccess,\n        successDetails: hasSuccess ? ipData.successes : [],\n        afterHoursAttempts: ipData.afterHoursAttempts,\n        description: `Password spray attack detected: ${ipData.ip} targeted ${uniqueTargets} different accounts`\n      });\n    } else {\n      // Upgrade existing detection\n      existingBruteForce.type = 'BRUTE_FORCE_AND_SPRAY';\n      existingBruteForce.uniqueAccountsTargeted = uniqueTargets;\n      existingBruteForce.description = `Combined brute force and password spray attack from ${ipData.ip}`;\n    }\n  }\n  \n  // Rule 3: Success after failures = potential compromise\n  if (hasSuccess && failureCount > 0) {\n    const lastFailure = ipData.failures[ipData.failures.length - 1];\n    const firstSuccess = ipData.successes.find(s => new Date(s.time) > new Date(lastFailure.time));\n    \n    if (firstSuccess) {\n      detections.push({\n        type: 'POTENTIAL_COMPROMISE',\n        severity: 'CRITICAL',\n        sourceIP: ipData.ip,\n        failureCount,\n        targetAccounts: Array.from(ipData.targetAccounts),\n        compromisedAccount: firstSuccess.username,\n        privilegedTargets: Array.from(ipData.privilegedTargets),\n        failuresBeforeSuccess: failureCount,\n        successTime: firstSuccess.time,\n        lastFailureTime: lastFailure.time,\n        firstSeen: ipData.firstSeen,\n        lastSeen: ipData.lastSeen,\n        afterHoursAttempts: ipData.afterHoursAttempts,\n        description: `CRITICAL: Successful login after ${failureCount} failures - potential account compromise of ${firstSuccess.username}`\n      });\n    }\n  }\n  \n  // Rule 4: After-hours failures to admin accounts\n  if (ipData.afterHoursAttempts > 0 && ipData.privilegedTargets.size > 0) {\n    const existingDetection = detections.find(d => d.sourceIP === ipData.ip);\n    if (existingDetection) {\n      existingDetection.afterHoursAdminAttempt = true;\n      existingDetection.severity = existingDetection.severity === 'HIGH' ? 'CRITICAL' : existingDetection.severity;\n    } else {\n      detections.push({\n        type: 'AFTER_HOURS_ADMIN_ATTEMPT',\n        severity: 'HIGH',\n        sourceIP: ipData.ip,\n        failureCount,\n        targetAccounts: Array.from(ipData.targetAccounts),\n        privilegedTargets: Array.from(ipData.privilegedTargets),\n        afterHoursAttempts: ipData.afterHoursAttempts,\n        firstSeen: ipData.firstSeen,\n        lastSeen: ipData.lastSeen,\n        successAfterFailure: hasSuccess,\n        description: `Suspicious after-hours login attempts to privileged accounts from ${ipData.ip}`\n      });\n    }\n  }\n});\n\n// Convert Sets to Arrays for JSON serialization\nObject.values(byTargetAccount).forEach(account => {\n  account.sourceIPs = Array.from(account.sourceIPs);\n});\n\n// Return aggregated data and detections\nreturn [{\n  json: {\n    analysisTime: new Date().toISOString(),\n    totalEventsAnalyzed: events.length,\n    uniqueSourceIPs: Object.keys(bySourceIP).length,\n    uniqueTargetAccounts: Object.keys(byTargetAccount).length,\n    detectionCount: detections.length,\n    detections: detections,\n    bySourceIP: Object.values(bySourceIP).map(ip => ({\n      ...ip,\n      targetAccounts: Array.from(ip.targetAccounts),\n      privilegedTargets: Array.from(ip.privilegedTargets)\n    })),\n    byTargetAccount: Object.values(byTargetAccount),\n    hasDetections: detections.length > 0\n  }\n}];"
+      },
+      "id": "aggregate-analyze",
+      "name": "Aggregate & Analyze Events",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.hasDetections}}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "check-detections",
+      "name": "Has Detections?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1340, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Split detections for individual processing\nconst data = $input.first().json;\nconst detections = data.detections || [];\n\nreturn detections.map(detection => ({\n  json: {\n    ...detection,\n    analysisTime: data.analysisTime,\n    totalEventsAnalyzed: data.totalEventsAnalyzed\n  }\n}));"
+      },
+      "id": "split-detections",
+      "name": "Split Detections",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1560, 200]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=http://ip-api.com/json/{{$json.sourceIP}}?fields=status,message,continent,country,regionName,city,zip,lat,lon,timezone,isp,org,as,asname,query",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "geoip-lookup",
+      "name": "GeoIP Lookup",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1780, 200],
+      "retryOnFail": true,
+      "waitBetweenTries": 1000,
+      "maxTries": 2
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.abuseipdb.com/api/v2/check",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Key",
+              "value": "={{$env.ABUSEIPDB_API_KEY}}"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "ipAddress",
+              "value": "={{$node['Split Detections'].json.sourceIP}}"
+            },
+            {
+              "name": "maxAgeInDays",
+              "value": "90"
+            },
+            {
+              "name": "verbose",
+              "value": "true"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "abuseipdb-check",
+      "name": "AbuseIPDB Check",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1780, 400],
+      "retryOnFail": true,
+      "waitBetweenTries": 2000,
+      "maxTries": 2
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.INTERNAL_API_URL}}/api/v1/known-ips/check",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{$env.INTERNAL_API_TOKEN}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"ip\": \"{{$node['Split Detections'].json.sourceIP}}\",\n  \"check_types\": [\"vpn\", \"office\", \"cloud\", \"partner\", \"employee_home\"]\n}"
+      },
+      "id": "known-ip-check",
+      "name": "Check Known IP Sources",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1780, 600],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Merge detection with enrichment data\nconst detection = $('Split Detections').first().json;\nconst geoData = $('GeoIP Lookup').first().json;\nconst abuseData = $('AbuseIPDB Check').first().json;\nconst knownIPData = $('Check Known IP Sources').first().json;\n\n// Process GeoIP data\nconst geoInfo = geoData.status === 'success' ? {\n  country: geoData.country || 'Unknown',\n  region: geoData.regionName || 'Unknown',\n  city: geoData.city || 'Unknown',\n  timezone: geoData.timezone || 'Unknown',\n  isp: geoData.isp || 'Unknown',\n  organization: geoData.org || 'Unknown',\n  asn: geoData.as || 'Unknown',\n  coordinates: geoData.lat && geoData.lon ? `${geoData.lat}, ${geoData.lon}` : 'Unknown'\n} : {\n  country: 'Lookup Failed',\n  region: 'N/A',\n  city: 'N/A',\n  timezone: 'N/A',\n  isp: 'N/A',\n  organization: 'N/A',\n  asn: 'N/A',\n  coordinates: 'N/A'\n};\n\n// Process AbuseIPDB data\nconst abuseInfo = abuseData.data ? {\n  abuseScore: abuseData.data.abuseConfidenceScore || 0,\n  totalReports: abuseData.data.totalReports || 0,\n  lastReported: abuseData.data.lastReportedAt || 'Never',\n  isWhitelisted: abuseData.data.isWhitelisted || false,\n  isTor: abuseData.data.isTor || false,\n  usageType: abuseData.data.usageType || 'Unknown',\n  domain: abuseData.data.domain || 'Unknown',\n  hostnames: abuseData.data.hostnames || [],\n  countryCode: abuseData.data.countryCode || 'Unknown'\n} : {\n  abuseScore: 0,\n  totalReports: 0,\n  lastReported: 'Lookup Failed',\n  isWhitelisted: false,\n  isTor: false,\n  usageType: 'Unknown',\n  domain: 'Unknown',\n  hostnames: [],\n  countryCode: 'Unknown'\n};\n\n// Process known IP check\nconst knownIPInfo = !knownIPData.error ? {\n  isKnown: knownIPData.isKnown || false,\n  ipType: knownIPData.type || 'unknown',\n  ipCategory: knownIPData.category || 'external',\n  assignedTo: knownIPData.assignedTo || null,\n  notes: knownIPData.notes || null\n} : {\n  isKnown: false,\n  ipType: 'unknown',\n  ipCategory: 'external',\n  assignedTo: null,\n  notes: 'Known IP lookup failed'\n};\n\n// Determine if IP is external/suspicious\nconst isExternalIP = !knownIPInfo.isKnown || knownIPInfo.ipCategory === 'external';\nconst isHighRiskIP = abuseInfo.abuseScore >= 50 || abuseInfo.isTor;\nconst isMediumRiskIP = abuseInfo.abuseScore >= 25 && abuseInfo.abuseScore < 50;\n\n// Calculate overall risk score\nlet riskScore = 0;\nif (detection.type === 'POTENTIAL_COMPROMISE') riskScore += 50;\nif (detection.type === 'BRUTE_FORCE_AND_SPRAY') riskScore += 40;\nif (detection.type === 'BRUTE_FORCE') riskScore += 35;\nif (detection.type === 'PASSWORD_SPRAY') riskScore += 35;\nif (detection.type === 'AFTER_HOURS_ADMIN_ATTEMPT') riskScore += 30;\nif (detection.successAfterFailure) riskScore += 30;\nif (isHighRiskIP) riskScore += 25;\nif (isMediumRiskIP) riskScore += 15;\nif (detection.privilegedTargets && detection.privilegedTargets.length > 0) riskScore += 20;\nif (detection.afterHoursAttempts > 0) riskScore += 10;\nif (abuseInfo.isTor) riskScore += 15;\nif (isExternalIP) riskScore += 10;\nif (detection.failureCount >= 10) riskScore += 10;\nif (detection.uniqueAccountsTargeted >= 5) riskScore += 10;\n\n// Cap at 100\nriskScore = Math.min(100, riskScore);\n\n// Determine priority level\nlet priority;\nif (riskScore >= 80 || detection.type === 'POTENTIAL_COMPROMISE') {\n  priority = 'CRITICAL';\n} else if (riskScore >= 60) {\n  priority = 'HIGH';\n} else if (riskScore >= 40) {\n  priority = 'MEDIUM';\n} else {\n  priority = 'LOW';\n}\n\n// Determine recommended actions\nconst recommendedActions = [];\nif (isExternalIP && isHighRiskIP) {\n  recommendedActions.push('RECOMMEND_BLOCK_IP');\n}\nif (detection.type === 'POTENTIAL_COMPROMISE') {\n  recommendedActions.push('FORCE_PASSWORD_RESET');\n  recommendedActions.push('REVIEW_ACCOUNT_ACTIVITY');\n  recommendedActions.push('CHECK_FOR_LATERAL_MOVEMENT');\n}\nif (detection.privilegedTargets && detection.privilegedTargets.length > 0) {\n  recommendedActions.push('REVIEW_PRIVILEGED_ACCESS');\n}\nif (abuseInfo.isTor) {\n  recommendedActions.push('INVESTIGATE_TOR_ACCESS');\n}\nrecommendedActions.push('CREATE_INCIDENT_TICKET');\n\nreturn [{\n  json: {\n    detection: {\n      ...detection,\n      enrichedAt: new Date().toISOString()\n    },\n    geoInfo,\n    abuseInfo,\n    knownIPInfo,\n    riskAssessment: {\n      riskScore,\n      priority,\n      isExternalIP,\n      isHighRiskIP,\n      isMediumRiskIP,\n      recommendedActions\n    }\n  }\n}];"
+      },
+      "id": "merge-enrichment",
+      "name": "Merge Enrichment Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2000, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Format alert message for Webex\nconst data = $input.first().json;\nconst detection = data.detection;\nconst geo = data.geoInfo;\nconst abuse = data.abuseInfo;\nconst knownIP = data.knownIPInfo;\nconst risk = data.riskAssessment;\n\n// Severity emoji/indicator based on priority\nconst severityIndicator = {\n  'CRITICAL': '**[CRITICAL]**',\n  'HIGH': '**[HIGH]**',\n  'MEDIUM': '[MEDIUM]',\n  'LOW': '[LOW]'\n}[risk.priority] || '[UNKNOWN]';\n\n// Attack type mapping\nconst attackTypeLabels = {\n  'BRUTE_FORCE': 'Brute Force Attack',\n  'PASSWORD_SPRAY': 'Password Spray Attack',\n  'BRUTE_FORCE_AND_SPRAY': 'Combined Brute Force & Password Spray',\n  'POTENTIAL_COMPROMISE': 'POTENTIAL ACCOUNT COMPROMISE',\n  'AFTER_HOURS_ADMIN_ATTEMPT': 'After-Hours Admin Login Attempt'\n};\n\n// Build the alert message\nlet message = `## ${severityIndicator} Authentication Alert\\n\\n`;\nmessage += `### Attack Type: ${attackTypeLabels[detection.type] || detection.type}\\n\\n`;\nmessage += `**Risk Score:** ${risk.riskScore}/100\\n\\n`;\n\n// Source IP Information\nmessage += `### Source Information\\n`;\nmessage += `- **Source IP:** \\`${detection.sourceIP}\\`\\n`;\nmessage += `- **Location:** ${geo.city}, ${geo.region}, ${geo.country}\\n`;\nmessage += `- **ISP/Org:** ${geo.isp} / ${geo.organization}\\n`;\nmessage += `- **ASN:** ${geo.asn}\\n`;\nmessage += `- **Timezone:** ${geo.timezone}\\n\\n`;\n\n// IP Reputation\nmessage += `### IP Reputation (AbuseIPDB)\\n`;\nmessage += `- **Abuse Score:** ${abuse.abuseScore}%\\n`;\nmessage += `- **Total Reports:** ${abuse.totalReports}\\n`;\nmessage += `- **Last Reported:** ${abuse.lastReported}\\n`;\nmessage += `- **Is Tor Exit Node:** ${abuse.isTor ? 'YES' : 'No'}\\n`;\nmessage += `- **Usage Type:** ${abuse.usageType}\\n\\n`;\n\n// Known IP Status\nmessage += `### Internal IP Check\\n`;\nmessage += `- **Known IP:** ${knownIP.isKnown ? 'YES' : 'No'}\\n`;\nif (knownIP.isKnown) {\n  message += `- **Type:** ${knownIP.ipType}\\n`;\n  message += `- **Category:** ${knownIP.ipCategory}\\n`;\n  if (knownIP.assignedTo) message += `- **Assigned To:** ${knownIP.assignedTo}\\n`;\n}\nmessage += `\\n`;\n\n// Target Accounts\nmessage += `### Target Accounts\\n`;\nmessage += `- **Accounts Targeted:** ${detection.targetAccounts ? detection.targetAccounts.join(', ') : 'N/A'}\\n`;\nif (detection.privilegedTargets && detection.privilegedTargets.length > 0) {\n  message += `- **Privileged Accounts Targeted:** ${detection.privilegedTargets.join(', ')}\\n`;\n}\nif (detection.uniqueAccountsTargeted) {\n  message += `- **Unique Accounts:** ${detection.uniqueAccountsTargeted}\\n`;\n}\nmessage += `\\n`;\n\n// Timeline\nmessage += `### Timeline\\n`;\nmessage += `- **First Seen:** ${detection.firstSeen}\\n`;\nmessage += `- **Last Seen:** ${detection.lastSeen}\\n`;\nmessage += `- **Total Failures:** ${detection.failureCount}\\n`;\nif (detection.afterHoursAttempts > 0) {\n  message += `- **After-Hours Attempts:** ${detection.afterHoursAttempts}\\n`;\n}\nmessage += `\\n`;\n\n// SUCCESS AFTER FAILURE - CRITICAL ALERT\nif (detection.successAfterFailure || detection.type === 'POTENTIAL_COMPROMISE') {\n  message += `### **CRITICAL: SUCCESSFUL LOGIN DETECTED**\\n`;\n  message += `A successful login was detected after ${detection.failuresBeforeSuccess || detection.failureCount} failed attempts!\\n`;\n  if (detection.compromisedAccount) {\n    message += `- **Compromised Account:** \\`${detection.compromisedAccount}\\`\\n`;\n  }\n  if (detection.successTime) {\n    message += `- **Success Time:** ${detection.successTime}\\n`;\n  }\n  message += `\\n**IMMEDIATE ACTION REQUIRED**\\n\\n`;\n}\n\n// Recommended Actions\nmessage += `### Recommended Actions\\n`;\nrisk.recommendedActions.forEach(action => {\n  const actionLabels = {\n    'RECOMMEND_BLOCK_IP': 'Block source IP at perimeter firewall',\n    'FORCE_PASSWORD_RESET': 'Force password reset for compromised account',\n    'REVIEW_ACCOUNT_ACTIVITY': 'Review all recent activity for affected account(s)',\n    'CHECK_FOR_LATERAL_MOVEMENT': 'Check for signs of lateral movement',\n    'REVIEW_PRIVILEGED_ACCESS': 'Review privileged account access logs',\n    'INVESTIGATE_TOR_ACCESS': 'Investigate Tor access - potential anonymization',\n    'CREATE_INCIDENT_TICKET': 'Create incident ticket for tracking'\n  };\n  message += `- ${actionLabels[action] || action}\\n`;\n});\n\nmessage += `\\n---\\n`;\nmessage += `*Alert generated at ${detection.enrichedAt || new Date().toISOString()}*\\n`;\nmessage += `*Detection ID: ${detection.sourceIP}-${Date.now()}*`;\n\nreturn [{\n  json: {\n    ...data,\n    webexMessage: message,\n    alertTitle: `${severityIndicator} ${attackTypeLabels[detection.type] || detection.type} from ${detection.sourceIP}`\n  }\n}];"
+      },
+      "id": "format-webex-alert",
+      "name": "Format Webex Alert",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2220, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.WEBEX_WEBHOOK_URL}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"roomId\": \"{{$env.WEBEX_ROOM_ID}}\",\n  \"markdown\": {{ JSON.stringify($json.webexMessage) }}\n}"
+      },
+      "id": "webex-alert",
+      "name": "Send Webex Alert",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [2440, 300],
+      "retryOnFail": true,
+      "waitBetweenTries": 2000,
+      "maxTries": 3
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.XSOAR_URL}}/incident",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{$env.XSOAR_API_KEY}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"name\": \"{{ $json.alertTitle }}\",\n  \"type\": \"Authentication Attack\",\n  \"severity\": {{ $json.riskAssessment.priority === 'CRITICAL' ? 4 : $json.riskAssessment.priority === 'HIGH' ? 3 : $json.riskAssessment.priority === 'MEDIUM' ? 2 : 1 }},\n  \"createInvestigation\": true,\n  \"labels\": [\n    { \"type\": \"attack_type\", \"value\": \"{{ $json.detection.type }}\" },\n    { \"type\": \"source_ip\", \"value\": \"{{ $json.detection.sourceIP }}\" },\n    { \"type\": \"risk_score\", \"value\": \"{{ $json.riskAssessment.riskScore }}\" },\n    { \"type\": \"country\", \"value\": \"{{ $json.geoInfo.country }}\" },\n    { \"type\": \"abuse_score\", \"value\": \"{{ $json.abuseInfo.abuseScore }}\" }\n  ],\n  \"customFields\": {\n    \"sourceip\": \"{{ $json.detection.sourceIP }}\",\n    \"targetaccounts\": \"{{ $json.detection.targetAccounts ? $json.detection.targetAccounts.join(', ') : 'N/A' }}\",\n    \"attacktype\": \"{{ $json.detection.type }}\",\n    \"riskscore\": {{ $json.riskAssessment.riskScore }},\n    \"geolocation\": \"{{ $json.geoInfo.city }}, {{ $json.geoInfo.country }}\",\n    \"abusescore\": {{ $json.abuseInfo.abuseScore }},\n    \"istor\": {{ $json.abuseInfo.isTor }},\n    \"successafterFailure\": {{ $json.detection.successAfterFailure || false }},\n    \"failurecount\": {{ $json.detection.failureCount }},\n    \"firstseen\": \"{{ $json.detection.firstSeen }}\",\n    \"lastseen\": \"{{ $json.detection.lastSeen }}\",\n    \"recommendedactions\": \"{{ $json.riskAssessment.recommendedActions.join('; ') }}\"\n  },\n  \"details\": {{ JSON.stringify($json.webexMessage) }}\n}"
+      },
+      "id": "create-xsoar-ticket",
+      "name": "Create XSOAR Incident",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [2440, 500],
+      "retryOnFail": true,
+      "waitBetweenTries": 3000,
+      "maxTries": 2
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.riskAssessment.isExternalIP && $json.abuseInfo.abuseScore >= 50}}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "check-block-recommend",
+      "name": "High Abuse Score External IP?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [2660, 500]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.FIREWALL_API_URL}}/api/v1/block-recommendations",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{$env.FIREWALL_API_TOKEN}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"action\": \"recommend_block\",\n  \"ip_address\": \"{{ $json.detection.sourceIP }}\",\n  \"reason\": \"Authentication attack detected - {{ $json.detection.type }}\",\n  \"risk_score\": {{ $json.riskAssessment.riskScore }},\n  \"abuse_score\": {{ $json.abuseInfo.abuseScore }},\n  \"attack_details\": {\n    \"type\": \"{{ $json.detection.type }}\",\n    \"failure_count\": {{ $json.detection.failureCount }},\n    \"target_accounts\": {{ JSON.stringify($json.detection.targetAccounts) }},\n    \"success_after_failure\": {{ $json.detection.successAfterFailure || false }},\n    \"geo_location\": \"{{ $json.geoInfo.country }}\"\n  },\n  \"source\": \"n8n-failed-login-monitor\",\n  \"timestamp\": \"{{ new Date().toISOString() }}\",\n  \"auto_approve\": false,\n  \"duration_hours\": 24,\n  \"notes\": \"Auto-generated block recommendation from failed login monitor. Review before approval.\"\n}"
+      },
+      "id": "recommend-block",
+      "name": "Recommend IP Block",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [2880, 400],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Log the completed alert processing\nconst data = $input.first().json;\n\nreturn [{\n  json: {\n    status: 'completed',\n    timestamp: new Date().toISOString(),\n    detection: {\n      type: data.detection?.type,\n      sourceIP: data.detection?.sourceIP,\n      priority: data.riskAssessment?.priority,\n      riskScore: data.riskAssessment?.riskScore\n    },\n    actions: {\n      webexAlertSent: true,\n      xsoarTicketCreated: true,\n      blockRecommended: data.riskAssessment?.isExternalIP && data.abuseInfo?.abuseScore >= 50\n    },\n    message: `Alert processed for ${data.detection?.type} from ${data.detection?.sourceIP}`\n  }\n}];"
+      },
+      "id": "log-completion",
+      "name": "Log Alert Completion",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3100, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// No detections to process\nreturn [{\n  json: {\n    status: 'no_detections',\n    timestamp: new Date().toISOString(),\n    message: 'No suspicious authentication patterns detected in the last 15 minutes'\n  }\n}];"
+      },
+      "id": "no-detections-log",
+      "name": "Log No Detections",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1560, 400]
+    }
+  ],
+  "connections": {
+    "Schedule Trigger (15 min)": {
+      "main": [
+        [
+          {
+            "node": "QRadar - Init Failed Login Search",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "QRadar - Init Failed Login Search": {
+      "main": [
+        [
+          {
+            "node": "Wait for QRadar Search",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait for QRadar Search": {
+      "main": [
+        [
+          {
+            "node": "QRadar - Get Search Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "QRadar - Get Search Results": {
+      "main": [
+        [
+          {
+            "node": "Aggregate & Analyze Events",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate & Analyze Events": {
+      "main": [
+        [
+          {
+            "node": "Has Detections?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Detections?": {
+      "main": [
+        [
+          {
+            "node": "Split Detections",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log No Detections",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Detections": {
+      "main": [
+        [
+          {
+            "node": "GeoIP Lookup",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "AbuseIPDB Check",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Check Known IP Sources",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GeoIP Lookup": {
+      "main": [
+        [
+          {
+            "node": "Merge Enrichment Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AbuseIPDB Check": {
+      "main": [
+        [
+          {
+            "node": "Merge Enrichment Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Known IP Sources": {
+      "main": [
+        [
+          {
+            "node": "Merge Enrichment Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Enrichment Data": {
+      "main": [
+        [
+          {
+            "node": "Format Webex Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Webex Alert": {
+      "main": [
+        [
+          {
+            "node": "Send Webex Alert",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Create XSOAR Incident",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Webex Alert": {
+      "main": [
+        [
+          {
+            "node": "Log Alert Completion",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create XSOAR Incident": {
+      "main": [
+        [
+          {
+            "node": "High Abuse Score External IP?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "High Abuse Score External IP?": {
+      "main": [
+        [
+          {
+            "node": "Recommend IP Block",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Alert Completion",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Recommend IP Block": {
+      "main": [
+        [
+          {
+            "node": "Log Alert Completion",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "saveExecutionProgress": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "security",
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z"
+    },
+    {
+      "name": "authentication",
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z"
+    },
+    {
+      "name": "monitoring",
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z"
+    }
+  ],
+  "triggerCount": 1,
+  "updatedAt": "2024-01-01T00:00:00.000Z",
+  "versionId": "1"
+}

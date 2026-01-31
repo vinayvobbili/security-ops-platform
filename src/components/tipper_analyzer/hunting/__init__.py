@@ -87,6 +87,22 @@ def hunt_iocs(
         r.total_hits for r in [qradar_result, crowdstrike_result, abnormal_result] if r
     )
 
+    # Compute environment exposure summary
+    unique_hosts = set()
+    unique_sources = set()
+
+    for tool_result in [qradar_result, crowdstrike_result, abnormal_result]:
+        if not tool_result:
+            continue
+        # Collect unique sources from all hits
+        for hit in tool_result.ip_hits + tool_result.domain_hits:
+            if hit.get('sources'):
+                unique_sources.update(hit['sources'])
+        # Collect hostnames from hash hits (CrowdStrike)
+        for hit in tool_result.hash_hits:
+            if hit.get('hostnames'):
+                unique_hosts.update(hit['hostnames'])
+
     return IOCHuntResult(
         tipper_id=tipper_id,
         tipper_title=tipper_title,
@@ -97,5 +113,7 @@ def hunt_iocs(
         qradar=qradar_result,
         crowdstrike=crowdstrike_result,
         abnormal=abnormal_result,
-        errors=all_errors[:10]
+        errors=all_errors[:10],
+        unique_hosts=len(unique_hosts),
+        unique_sources=list(unique_sources)[:20],
     )

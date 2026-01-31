@@ -1,0 +1,481 @@
+{
+  "name": "Tanium Asset Inventory Weekly Report",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 6,
+              "triggerAtDay": 1
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Weekly Schedule (Monday 6 AM)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        100,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://tanium.company.com/api/v2/session/login",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"username\": \"{{ $env.TANIUM_USERNAME }}\",\n  \"password\": \"{{ $env.TANIUM_PASSWORD }}\"\n}",
+        "options": {}
+      },
+      "id": "tanium-auth",
+      "name": "Authenticate to Tanium",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        300,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://tanium.company.com/api/v2/questions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "session",
+              "value": "={{ $json.data.session }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"question_text\": \"Get Computer Name and IP Address and Operating System and Last Reboot from all machines\"\n}",
+        "options": {}
+      },
+      "id": "submit-question",
+      "name": "Submit Tanium Question",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        500,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Store the question ID and session token for polling\nconst questionId = $input.first().json.data.id;\nconst sessionToken = $('Authenticate to Tanium').first().json.data.session;\n\nreturn [{\n  json: {\n    question_id: questionId,\n    session_token: sessionToken,\n    poll_count: 0,\n    max_polls: 30\n  }\n}];"
+      },
+      "id": "init-polling",
+      "name": "Initialize Polling",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        700,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://tanium.company.com/api/v2/result_data/question/{{ $json.question_id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "session",
+              "value": "={{ $json.session_token }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "poll-results",
+      "name": "Poll for Question Results",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        900,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Check if results are complete\nconst data = $input.first().json;\nconst prevData = $('Initialize Polling').first().json;\n\nconst estimatedTotal = data.data?.result_sets?.[0]?.estimated_total || 0;\nconst rowCount = data.data?.result_sets?.[0]?.row_count || 0;\nconst pollCount = prevData.poll_count + 1;\n\n// Results are ready when row_count approaches estimated_total or after max polls\nconst isComplete = (rowCount >= estimatedTotal * 0.95) || pollCount >= prevData.max_polls;\n\nreturn [{\n  json: {\n    ...data,\n    question_id: prevData.question_id,\n    session_token: prevData.session_token,\n    poll_count: pollCount,\n    max_polls: prevData.max_polls,\n    is_complete: isComplete,\n    estimated_total: estimatedTotal,\n    row_count: rowCount\n  }\n}];"
+      },
+      "id": "check-results",
+      "name": "Check Results Status",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "condition-complete",
+              "leftValue": "={{ $json.is_complete }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-complete",
+      "name": "Results Complete?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1300,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "amount": 10,
+        "unit": "seconds"
+      },
+      "id": "wait-poll",
+      "name": "Wait 10 Seconds",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1500,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse Tanium results into structured asset list\nconst resultData = $input.first().json;\nconst resultSets = resultData.data?.result_sets || [];\n\nif (resultSets.length === 0 || !resultSets[0].rows) {\n  return [{ json: { assets: [], error: 'No results found' } }];\n}\n\nconst columns = resultSets[0].columns || [];\nconst rows = resultSets[0].rows || [];\n\n// Map column names to indices\nconst colMap = {};\ncolumns.forEach((col, idx) => {\n  const name = col.name.toLowerCase();\n  if (name.includes('computer name')) colMap.hostname = idx;\n  else if (name.includes('ip address')) colMap.ip_address = idx;\n  else if (name.includes('operating system')) colMap.os = idx;\n  else if (name.includes('last reboot')) colMap.last_reboot = idx;\n});\n\nconst now = new Date();\nconst assets = rows.map(row => {\n  const values = row.data || [];\n  \n  // Extract values from Tanium response format\n  const getValue = (idx) => {\n    if (idx === undefined || !values[idx]) return '';\n    const cell = values[idx];\n    // Tanium returns array of objects with text property\n    if (Array.isArray(cell)) {\n      return cell.map(c => c.text || c).join(', ');\n    }\n    return cell.text || cell || '';\n  };\n  \n  return {\n    hostname: getValue(colMap.hostname),\n    ip_address: getValue(colMap.ip_address),\n    os: getValue(colMap.os),\n    last_reboot: getValue(colMap.last_reboot),\n    last_seen: now.toISOString()\n  };\n});\n\nreturn [{ json: { assets, count: assets.length } }];"
+      },
+      "id": "parse-results",
+      "name": "Parse Asset Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1500,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Generate summary statistics\nconst data = $input.first().json;\nconst assets = data.assets || [];\n\n// Count by OS type\nconst osCounts = {};\nassets.forEach(asset => {\n  const os = asset.os || 'Unknown';\n  // Normalize OS names for grouping\n  let osGroup = 'Other';\n  if (os.toLowerCase().includes('windows 10')) osGroup = 'Windows 10';\n  else if (os.toLowerCase().includes('windows 11')) osGroup = 'Windows 11';\n  else if (os.toLowerCase().includes('windows server 2019')) osGroup = 'Windows Server 2019';\n  else if (os.toLowerCase().includes('windows server 2022')) osGroup = 'Windows Server 2022';\n  else if (os.toLowerCase().includes('windows server')) osGroup = 'Windows Server (Other)';\n  else if (os.toLowerCase().includes('windows')) osGroup = 'Windows (Other)';\n  else if (os.toLowerCase().includes('mac') || os.toLowerCase().includes('darwin')) osGroup = 'macOS';\n  else if (os.toLowerCase().includes('linux') || os.toLowerCase().includes('ubuntu') || os.toLowerCase().includes('centos') || os.toLowerCase().includes('rhel')) osGroup = 'Linux';\n  \n  osCounts[osGroup] = (osCounts[osGroup] || 0) + 1;\n});\n\n// Find stale endpoints (not seen in 7+ days based on last_reboot as proxy)\nconst now = new Date();\nconst sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);\n\nconst staleEndpoints = assets.filter(asset => {\n  if (!asset.last_reboot) return true;\n  try {\n    const lastReboot = new Date(asset.last_reboot);\n    return lastReboot < sevenDaysAgo;\n  } catch {\n    return false;\n  }\n});\n\n// Sort OS counts for display\nconst sortedOsCounts = Object.entries(osCounts)\n  .sort((a, b) => b[1] - a[1])\n  .map(([os, count]) => ({ os, count }));\n\nconst summary = {\n  report_date: now.toISOString(),\n  total_endpoints: assets.length,\n  os_breakdown: sortedOsCounts,\n  stale_endpoints_count: staleEndpoints.length,\n  stale_endpoints: staleEndpoints.slice(0, 50).map(e => ({\n    hostname: e.hostname,\n    ip_address: e.ip_address,\n    last_reboot: e.last_reboot\n  }))\n};\n\nreturn [{ json: { assets, summary } }];"
+      },
+      "id": "generate-stats",
+      "name": "Generate Summary Statistics",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1700,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Prepare data for file export\nconst data = $input.first().json;\nconst assets = data.assets || [];\nconst summary = data.summary || {};\n\nconst exportData = {\n  metadata: {\n    report_name: 'Tanium Asset Inventory',\n    generated_at: new Date().toISOString(),\n    source: 'Tanium',\n    workflow: 'tanium_asset_inventory'\n  },\n  summary: summary,\n  assets: assets\n};\n\nreturn [{ json: exportData }];"
+      },
+      "id": "prepare-export",
+      "name": "Prepare Export Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1900,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "write",
+        "fileName": "=/data/exports/tanium_asset_inventory_{{ $now.format('yyyy-MM-dd') }}.json",
+        "options": {
+          "encoding": "utf8"
+        }
+      },
+      "id": "write-file",
+      "name": "Export to JSON File",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [
+        2100,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Format Webex message with summary\nconst data = $('Generate Summary Statistics').first().json;\nconst summary = data.summary || {};\n\n// Build OS breakdown string\nconst osBreakdown = (summary.os_breakdown || [])\n  .map(item => `  - ${item.os}: ${item.count}`)\n  .join('\\n');\n\n// Build stale endpoints warning\nlet staleWarning = '';\nif (summary.stale_endpoints_count > 0) {\n  const staleList = (summary.stale_endpoints || []).slice(0, 10)\n    .map(e => `  - ${e.hostname} (${e.ip_address})`)\n    .join('\\n');\n  staleWarning = `\\n\\n**Stale Endpoints (${summary.stale_endpoints_count} total, showing top 10):**\\n${staleList}`;\n  if (summary.stale_endpoints_count > 10) {\n    staleWarning += `\\n  ... and ${summary.stale_endpoints_count - 10} more`;\n  }\n}\n\nconst message = `## Tanium Weekly Asset Inventory Report\n\n**Report Date:** ${new Date(summary.report_date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}\n\n### Summary\n- **Total Endpoints:** ${summary.total_endpoints || 0}\n- **Stale Endpoints (7+ days):** ${summary.stale_endpoints_count || 0}\n\n### OS Distribution\n${osBreakdown || '  No data available'}${staleWarning}\n\n---\n*Generated by n8n Tanium Asset Inventory Workflow*`;\n\nreturn [{ json: { markdown: message } }];"
+      },
+      "id": "format-webex",
+      "name": "Format Webex Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2100,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://webexapis.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"roomId\": \"{{ $env.WEBEX_ROOM_ID }}\",\n  \"markdown\": {{ JSON.stringify($json.markdown) }}\n}",
+        "options": {}
+      },
+      "id": "post-webex",
+      "name": "Post to Webex",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2300,
+        400
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "webex-token",
+          "name": "Webex Bot Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Merge outputs for final status\nconst fileResult = $('Export to JSON File').first().json;\nconst webexResult = $('Post to Webex').first().json;\nconst summary = $('Generate Summary Statistics').first().json.summary;\n\nreturn [{\n  json: {\n    status: 'success',\n    file_exported: true,\n    webex_posted: true,\n    summary: {\n      total_endpoints: summary.total_endpoints,\n      stale_count: summary.stale_endpoints_count,\n      report_date: summary.report_date\n    }\n  }\n}];"
+      },
+      "id": "final-status",
+      "name": "Final Status",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2500,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Weekly Schedule (Monday 6 AM)": {
+      "main": [
+        [
+          {
+            "node": "Authenticate to Tanium",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Authenticate to Tanium": {
+      "main": [
+        [
+          {
+            "node": "Submit Tanium Question",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Submit Tanium Question": {
+      "main": [
+        [
+          {
+            "node": "Initialize Polling",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Initialize Polling": {
+      "main": [
+        [
+          {
+            "node": "Poll for Question Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Poll for Question Results": {
+      "main": [
+        [
+          {
+            "node": "Check Results Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Results Status": {
+      "main": [
+        [
+          {
+            "node": "Results Complete?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Results Complete?": {
+      "main": [
+        [
+          {
+            "node": "Parse Asset Results",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Wait 10 Seconds",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait 10 Seconds": {
+      "main": [
+        [
+          {
+            "node": "Poll for Question Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Asset Results": {
+      "main": [
+        [
+          {
+            "node": "Generate Summary Statistics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Summary Statistics": {
+      "main": [
+        [
+          {
+            "node": "Prepare Export Data",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Format Webex Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Export Data": {
+      "main": [
+        [
+          {
+            "node": "Export to JSON File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Export to JSON File": {
+      "main": [
+        [
+          {
+            "node": "Final Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Webex Message": {
+      "main": [
+        [
+          {
+            "node": "Post to Webex",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Post to Webex": {
+      "main": [
+        [
+          {
+            "node": "Final Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "asset-management",
+      "id": "tag-asset"
+    },
+    {
+      "name": "tanium",
+      "id": "tag-tanium"
+    },
+    {
+      "name": "scheduled",
+      "id": "tag-scheduled"
+    }
+  ],
+  "pinData": {},
+  "meta": {
+    "templateId": "tanium-asset-inventory-v1",
+    "instanceId": "n8n-instance"
+  }
+}

@@ -44,9 +44,14 @@ COLLECTION_NAME = "threat_tippers"
 class OllamaEmbeddingFunction:
     """Custom embedding function using Ollama API."""
 
-    def __init__(self, model: str = "nomic-embed-text"):
+    def __init__(self, model: str = None):
+        # Use config if no model specified
+        if model is None:
+            from my_config import get_config
+            config = get_config()
+            model = config.ollama_embedding_model or "all-minilm:l6-v2"
         self.model = model
-        self.api_url = "http://localhost:11434/api/embed"
+        self.api_url = "http://localhost:11434/api/embeddings"
 
     def __call__(self, input: List[str]) -> List[List[float]]:
         """Generate embeddings for a list of texts."""
@@ -62,12 +67,12 @@ class OllamaEmbeddingFunction:
             try:
                 response = requests.post(
                     self.api_url,
-                    json={"model": self.model, "input": text},
+                    json={"model": self.model, "prompt": text},
                     timeout=60
                 )
                 response.raise_for_status()
                 result = response.json()
-                return result["embeddings"][0]
+                return result["embedding"]
             except Exception as e:
                 if attempt < max_retries - 1:
                     logger.warning(f"Embedding failed (attempt {attempt + 1}): {e}")

@@ -23,17 +23,15 @@ COMMON_TLDS = {
     'onion',  # Tor hidden services
 }
 
-# Known benign domains to exclude (minimal list - IOC section extraction handles most cases)
+# Minimal benign domains to exclude during extraction (reduces unnecessary VT API calls)
+# VT filtering in analyzer.py handles the rest - this is just a fast first-pass filter
 BENIGN_DOMAINS = {
-    'google.com', 'microsoft.com', 'github.com', 'amazonaws.com',
-    'cloudflare.com', 'azure.com', 'windows.net', 'office.com',
-    'office365.com', 'outlook.com', 'live.com', 'apple.com',
-    'example.com', 'localhost', 'test.com',
-    'company.com', 'www.company.com',
-    # Common email providers - don't hunt for these domains
-    # (email addresses using them will still be extracted as emails)
-    'gmail.com', 'hotmail.com', 'yahoo.com', 'aol.com', 'protonmail.com',
-    'icloud.com', 'mail.com', 'zoho.com', 'yandex.com', 'gmx.com',
+    # Test/placeholder domains
+    'example.com', 'localhost', 'test.com', 'company.com',
+    # Common email providers (email addresses still extracted, just not as domain IOCs)
+    'gmail.com', 'hotmail.com', 'yahoo.com', 'outlook.com', 'live.com',
+    # Internal domains - never hunt for these
+    'acme.com', 'acme-internal.net', 'acmecorp.com',
 }
 
 # Known benign IPs to exclude
@@ -73,6 +71,7 @@ class ExtractedEntities:
     threat_actors: List[str] = field(default_factory=list)  # Simple list for backward compat
     threat_actors_enriched: List[ThreatActorInfo] = field(default_factory=list)  # With alias info
     malware_families: List[str] = field(default_factory=list)  # Malware tools/families
+    mitre_techniques: List[str] = field(default_factory=list)  # MITRE ATT&CK technique IDs
 
     def is_empty(self) -> bool:
         """Check if no entities were extracted."""
@@ -86,7 +85,8 @@ class ExtractedEntities:
             not self.cves and
             not self.emails and
             not self.threat_actors and
-            not self.malware_families
+            not self.malware_families and
+            not self.mitre_techniques
         )
 
     def to_dict(self) -> dict:
@@ -109,6 +109,7 @@ class ExtractedEntities:
                 for ta in self.threat_actors_enriched
             ],
             'malware_families': self.malware_families,
+            'mitre_techniques': self.mitre_techniques,
         }
 
     def summary(self) -> str:
@@ -131,6 +132,8 @@ class ExtractedEntities:
             parts.append(f"{len(self.threat_actors)} threat actors")
         if self.malware_families:
             parts.append(f"{len(self.malware_families)} malware families")
+        if self.mitre_techniques:
+            parts.append(f"{len(self.mitre_techniques)} MITRE techniques")
         return ", ".join(parts) if parts else "No entities found"
 
 
@@ -263,6 +266,23 @@ def extract_cves(text: str) -> List[str]:
     # Normalize to uppercase and deduplicate
     cves = list(dict.fromkeys(cve.upper() for cve in matches))
     return cves
+
+
+def extract_mitre_techniques(text: str) -> List[str]:
+    """Extract MITRE ATT&CK technique IDs from text.
+
+    Matches patterns like:
+    - T1059 (technique)
+    - T1059.001 (sub-technique)
+    - TA0001 (tactic - less common but useful)
+    """
+    # Match technique IDs: T followed by 4 digits, optionally with .NNN sub-technique
+    technique_pattern = r'\bT1\d{3}(?:\.\d{3})?\b'
+    matches = re.findall(technique_pattern, text, re.IGNORECASE)
+
+    # Normalize to uppercase and deduplicate, preserving order
+    techniques = list(dict.fromkeys(t.upper() for t in matches))
+    return techniques
 
 
 def extract_threat_actors(text: str, known_apt_names: Set[str] = None) -> List[str]:
@@ -555,6 +575,7 @@ def extract_entities(text: str, include_apt_database: bool = True) -> ExtractedE
         threat_actors=raw_actors,
         threat_actors_enriched=threat_actors_enriched,
         malware_families=extract_malware_families(clean_text),
+        mitre_techniques=extract_mitre_techniques(clean_text),
     )
 
     if not entities.is_empty():

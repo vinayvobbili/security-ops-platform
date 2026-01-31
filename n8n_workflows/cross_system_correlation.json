@@ -1,0 +1,907 @@
+{
+  "name": "Cross-System Incident Correlation",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "correlate-incident",
+        "responseMode": "responseNode",
+        "options": {
+          "rawBody": true
+        }
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [220, 300],
+      "webhookId": "cross-system-correlation"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse and validate incoming incident data\nconst body = $input.first().json.body || $input.first().json;\n\n// Extract key identifiers\nconst incidentData = {\n  incidentId: body.incident_id || body.id || `INC-${Date.now()}`,\n  hostname: body.hostname || body.host || body.device_name || null,\n  ip: body.ip || body.src_ip || body.ip_address || null,\n  user: body.user || body.username || body.user_name || null,\n  timestamp: body.timestamp || body.created_time || new Date().toISOString(),\n  severity: body.severity || 'medium',\n  source: body.source || 'unknown',\n  description: body.description || body.name || '',\n  rawData: body\n};\n\n// Calculate time window (15 minutes before and after)\nconst eventTime = new Date(incidentData.timestamp);\nconst windowStart = new Date(eventTime.getTime() - 15 * 60 * 1000).toISOString();\nconst windowEnd = new Date(eventTime.getTime() + 15 * 60 * 1000).toISOString();\n\n// Validate we have at least one identifier\nif (!incidentData.hostname && !incidentData.ip && !incidentData.user) {\n  throw new Error('Incident must contain at least one identifier: hostname, ip, or user');\n}\n\nreturn {\n  json: {\n    ...incidentData,\n    timeWindow: {\n      start: windowStart,\n      end: windowEnd,\n      eventTime: eventTime.toISOString()\n    },\n    correlationId: `CORR-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`\n  }\n};"
+      },
+      "id": "parse-incident",
+      "name": "Parse Incident Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.crowdstrike.com/oauth2/token",
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "client_id",
+              "value": "={{ $env.CROWDSTRIKE_CLIENT_ID }}"
+            },
+            {
+              "name": "client_secret",
+              "value": "={{ $env.CROWDSTRIKE_CLIENT_SECRET }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "cs-auth",
+      "name": "CrowdStrike Auth",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [660, 100]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.crowdstrike.com/detects/queries/detects/v1",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "filter",
+              "value": "=device.hostname:'{{ $('Parse Incident Data').item.json.hostname }}'+created_timestamp:>='{{ $('Parse Incident Data').item.json.timeWindow.start }}'+created_timestamp:<='{{ $('Parse Incident Data').item.json.timeWindow.end }}'"
+            },
+            {
+              "name": "limit",
+              "value": "100"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "cs-query-detections",
+      "name": "Query CrowdStrike Detections",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [880, 100],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "crowdstrike-bearer",
+          "name": "CrowdStrike Bearer Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.crowdstrike.com/detects/entities/summaries/GET/v1",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ ids: $json.resources || [] }) }}",
+        "options": {}
+      },
+      "id": "cs-get-detection-details",
+      "name": "Get CrowdStrike Detection Details",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1100, 100],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "crowdstrike-bearer",
+          "name": "CrowdStrike Bearer Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.QRADAR_URL }}/api/ariel/searches",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "query_expression",
+              "value": "=SELECT * FROM events WHERE sourceip='{{ $('Parse Incident Data').item.json.ip }}' OR destinationip='{{ $('Parse Incident Data').item.json.ip }}' AND starttime >= {{ Date.parse($('Parse Incident Data').item.json.timeWindow.start) }} AND endtime <= {{ Date.parse($('Parse Incident Data').item.json.timeWindow.end) }} LIMIT 100"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "qradar-query-events",
+      "name": "Query QRadar Events",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [660, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "qradar-sec-token",
+          "name": "QRadar SEC Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.QRADAR_URL }}/api/ariel/searches/{{ $json.search_id }}/results",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "qradar-get-results",
+      "name": "Get QRadar Results",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [880, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "qradar-sec-token",
+          "name": "QRadar SEC Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.QRADAR_URL }}/api/siem/offenses",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "filter",
+              "value": "=source_network contains '{{ $('Parse Incident Data').item.json.ip }}' or destination_networks contains '{{ $('Parse Incident Data').item.json.ip }}'"
+            },
+            {
+              "name": "Range",
+              "value": "items=0-50"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "qradar-query-offenses",
+      "name": "Query QRadar Offenses",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1100, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "qradar-sec-token",
+          "name": "QRadar SEC Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.VECTRA_URL }}/api/v2.4/search/detections",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "query_string",
+              "value": "=detection.src_ip:\"{{ $('Parse Incident Data').item.json.ip }}\" OR host.name:\"{{ $('Parse Incident Data').item.json.hostname }}\""
+            },
+            {
+              "name": "page_size",
+              "value": "50"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "vectra-query-detections",
+      "name": "Query Vectra Detections",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [660, 500],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "vectra-api-token",
+          "name": "Vectra API Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.VECTRA_URL }}/api/v2.4/search/hosts",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "query_string",
+              "value": "=host.ip:\"{{ $('Parse Incident Data').item.json.ip }}\" OR host.name:\"{{ $('Parse Incident Data').item.json.hostname }}\""
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "vectra-query-hosts",
+      "name": "Query Vectra Hosts",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [880, 500],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "vectra-api-token",
+          "name": "Vectra API Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.XSOAR_URL }}/incidents/search",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"filter\": {\n    \"query\": \"hostname:\\\"{{ $('Parse Incident Data').item.json.hostname }}\\\" OR srcip:\\\"{{ $('Parse Incident Data').item.json.ip }}\\\" OR dstip:\\\"{{ $('Parse Incident Data').item.json.ip }}\\\" OR username:\\\"{{ $('Parse Incident Data').item.json.user }}\\\"\",\n    \"fromDate\": \"{{ $('Parse Incident Data').item.json.timeWindow.start }}\",\n    \"toDate\": \"{{ $('Parse Incident Data').item.json.timeWindow.end }}\"\n  },\n  \"size\": 50\n}",
+        "options": {}
+      },
+      "id": "xsoar-query-incidents",
+      "name": "Query XSOAR Incidents",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [660, 700],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "xsoar-api-key",
+          "name": "XSOAR API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.XSOAR_URL }}/indicators/search",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"query\": \"value:\\\"{{ $('Parse Incident Data').item.json.ip }}\\\" OR value:\\\"{{ $('Parse Incident Data').item.json.hostname }}\\\"\",\n  \"size\": 100\n}",
+        "options": {}
+      },
+      "id": "xsoar-query-indicators",
+      "name": "Query XSOAR Indicators",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [880, 700],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "xsoar-api-key",
+          "name": "XSOAR API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.SERVICENOW_URL }}/api/now/table/incident",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "sysparm_query",
+              "value": "=cmdb_ciLIKE{{ $('Parse Incident Data').item.json.hostname }}^ORshort_descriptionLIKE{{ $('Parse Incident Data').item.json.ip }}^sys_created_on>=javascript:gs.dateGenerate('{{ $('Parse Incident Data').item.json.timeWindow.start.split('T')[0] }}','{{ $('Parse Incident Data').item.json.timeWindow.start.split('T')[1].split('.')[0] }}')"
+            },
+            {
+              "name": "sysparm_limit",
+              "value": "50"
+            },
+            {
+              "name": "sysparm_display_value",
+              "value": "true"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "snow-query-incidents",
+      "name": "Query ServiceNow Incidents",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [660, 900],
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "servicenow-basic",
+          "name": "ServiceNow Basic Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.SERVICENOW_URL }}/api/now/table/cmdb_ci",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "sysparm_query",
+              "value": "=nameLIKE{{ $('Parse Incident Data').item.json.hostname }}^ORip_addressLIKE{{ $('Parse Incident Data').item.json.ip }}"
+            },
+            {
+              "name": "sysparm_limit",
+              "value": "10"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "snow-query-cmdb",
+      "name": "Query ServiceNow CMDB",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [880, 900],
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "servicenow-basic",
+          "name": "ServiceNow Basic Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineAll",
+        "options": {}
+      },
+      "id": "merge-all-results",
+      "name": "Merge All Query Results",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2.1,
+      "position": [1320, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build correlation timeline from all sources\nconst items = $input.all();\nconst originalIncident = $('Parse Incident Data').first().json;\n\n// Extract and normalize events from each source\nlet allEvents = [];\n\n// Process CrowdStrike detections\nfor (const item of items) {\n  const data = item.json;\n  \n  // CrowdStrike detections\n  if (data.resources && Array.isArray(data.resources)) {\n    for (const detection of data.resources) {\n      allEvents.push({\n        source: 'CrowdStrike',\n        type: 'detection',\n        id: detection.detection_id || detection.cid,\n        timestamp: detection.created_timestamp || detection.first_behavior,\n        severity: detection.max_severity_displayname || detection.severity,\n        title: detection.behaviors?.[0]?.display_name || detection.tactic || 'Detection',\n        hostname: detection.device?.hostname,\n        ip: detection.device?.local_ip,\n        user: detection.behaviors?.[0]?.user_name,\n        tactic: detection.behaviors?.[0]?.tactic,\n        technique: detection.behaviors?.[0]?.technique,\n        mitre: {\n          tactic: detection.behaviors?.[0]?.tactic,\n          technique: detection.behaviors?.[0]?.technique,\n          techniqueId: detection.behaviors?.[0]?.technique_id\n        },\n        rawData: detection\n      });\n    }\n  }\n  \n  // QRadar events\n  if (data.events && Array.isArray(data.events)) {\n    for (const event of data.events) {\n      allEvents.push({\n        source: 'QRadar',\n        type: 'event',\n        id: event.qid || event.event_id,\n        timestamp: new Date(event.starttime || event.endtime).toISOString(),\n        severity: event.severity || event.magnitude,\n        title: event.eventname || event.category,\n        hostname: event.hostname,\n        ip: event.sourceip || event.destinationip,\n        user: event.username,\n        rawData: event\n      });\n    }\n  }\n  \n  // QRadar offenses\n  if (Array.isArray(data) && data[0]?.offense_type !== undefined) {\n    for (const offense of data) {\n      allEvents.push({\n        source: 'QRadar',\n        type: 'offense',\n        id: offense.id,\n        timestamp: new Date(offense.start_time).toISOString(),\n        severity: offense.magnitude,\n        title: offense.description || `Offense ${offense.id}`,\n        hostname: null,\n        ip: offense.offense_source,\n        user: null,\n        categories: offense.categories,\n        rawData: offense\n      });\n    }\n  }\n  \n  // Vectra detections\n  if (data.results && data.results[0]?.detection_category !== undefined) {\n    for (const detection of data.results) {\n      allEvents.push({\n        source: 'Vectra',\n        type: 'detection',\n        id: detection.id,\n        timestamp: detection.first_timestamp || detection.last_timestamp,\n        severity: detection.threat * 10, // Vectra uses 0-10 scale\n        title: detection.detection_type || detection.category,\n        hostname: detection.src_host?.name,\n        ip: detection.src_ip,\n        user: detection.src_account?.name,\n        category: detection.detection_category,\n        rawData: detection\n      });\n    }\n  }\n  \n  // XSOAR incidents\n  if (data.data && Array.isArray(data.data)) {\n    for (const incident of data.data) {\n      allEvents.push({\n        source: 'XSOAR',\n        type: 'incident',\n        id: incident.id,\n        timestamp: incident.created || incident.occurred,\n        severity: incident.severity,\n        title: incident.name,\n        hostname: incident.labels?.find(l => l.type === 'hostname')?.value,\n        ip: incident.labels?.find(l => l.type === 'IP')?.value,\n        user: incident.labels?.find(l => l.type === 'user')?.value,\n        status: incident.status,\n        rawData: incident\n      });\n    }\n  }\n  \n  // ServiceNow incidents\n  if (data.result && Array.isArray(data.result)) {\n    for (const incident of data.result) {\n      if (incident.number) { // SNOW incident has number field\n        allEvents.push({\n          source: 'ServiceNow',\n          type: 'incident',\n          id: incident.sys_id,\n          number: incident.number,\n          timestamp: incident.sys_created_on,\n          severity: incident.severity || incident.priority,\n          title: incident.short_description,\n          hostname: incident.cmdb_ci?.display_value,\n          ip: null,\n          user: incident.caller_id?.display_value,\n          state: incident.state,\n          rawData: incident\n        });\n      }\n    }\n  }\n}\n\n// Sort by timestamp\nallEvents.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));\n\n// Generate timeline with links\nconst timeline = allEvents.map((event, index) => ({\n  ...event,\n  timelinePosition: index,\n  timeDelta: index > 0 \n    ? (new Date(event.timestamp) - new Date(allEvents[index-1].timestamp)) / 1000 \n    : 0\n}));\n\nreturn {\n  json: {\n    originalIncident,\n    timeline,\n    eventCount: allEvents.length,\n    sources: [...new Set(allEvents.map(e => e.source))],\n    timeRange: {\n      earliest: allEvents[0]?.timestamp,\n      latest: allEvents[allEvents.length-1]?.timestamp\n    }\n  }\n};"
+      },
+      "id": "build-timeline",
+      "name": "Build Correlation Timeline",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1540, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Calculate correlation scores and identify patterns\nconst data = $input.first().json;\nconst { originalIncident, timeline } = data;\n\n// Scoring weights\nconst WEIGHTS = {\n  SAME_HOST_SAME_WINDOW: 90,\n  SAME_IP_SAME_WINDOW: 85,\n  SAME_USER_DIFF_HOST: 80, // Lateral movement indicator\n  SAME_DETECTION_MULTI_HOST: 75, // Potential campaign\n  SAME_TACTIC: 60,\n  TIME_PROXIMITY: 50 // Events within 5 mins\n};\n\n// Group events by various attributes\nconst byHost = {};\nconst byIP = {};\nconst byUser = {};\nconst byDetectionType = {};\nconst byTactic = {};\n\nfor (const event of timeline) {\n  if (event.hostname) {\n    byHost[event.hostname] = byHost[event.hostname] || [];\n    byHost[event.hostname].push(event);\n  }\n  if (event.ip) {\n    byIP[event.ip] = byIP[event.ip] || [];\n    byIP[event.ip].push(event);\n  }\n  if (event.user) {\n    byUser[event.user] = byUser[event.user] || [];\n    byUser[event.user].push(event);\n  }\n  if (event.title) {\n    byDetectionType[event.title] = byDetectionType[event.title] || [];\n    byDetectionType[event.title].push(event);\n  }\n  if (event.tactic || event.mitre?.tactic) {\n    const tactic = event.tactic || event.mitre?.tactic;\n    byTactic[tactic] = byTactic[tactic] || [];\n    byTactic[tactic].push(event);\n  }\n}\n\n// Calculate correlations\nconst correlations = [];\nlet totalScore = 0;\n\n// Same host correlations\nfor (const [host, events] of Object.entries(byHost)) {\n  if (events.length > 1 && host === originalIncident.hostname) {\n    correlations.push({\n      type: 'SAME_HOST',\n      indicator: host,\n      eventCount: events.length,\n      score: WEIGHTS.SAME_HOST_SAME_WINDOW,\n      events: events.map(e => ({ id: e.id, source: e.source, title: e.title }))\n    });\n    totalScore += WEIGHTS.SAME_HOST_SAME_WINDOW;\n  }\n}\n\n// Same IP correlations\nfor (const [ip, events] of Object.entries(byIP)) {\n  if (events.length > 1 && ip === originalIncident.ip) {\n    correlations.push({\n      type: 'SAME_IP',\n      indicator: ip,\n      eventCount: events.length,\n      score: WEIGHTS.SAME_IP_SAME_WINDOW,\n      events: events.map(e => ({ id: e.id, source: e.source, title: e.title }))\n    });\n    totalScore += WEIGHTS.SAME_IP_SAME_WINDOW;\n  }\n}\n\n// Lateral movement detection (same user, different hosts)\nfor (const [user, events] of Object.entries(byUser)) {\n  const uniqueHosts = [...new Set(events.filter(e => e.hostname).map(e => e.hostname))];\n  if (uniqueHosts.length > 1) {\n    correlations.push({\n      type: 'LATERAL_MOVEMENT',\n      indicator: user,\n      hosts: uniqueHosts,\n      eventCount: events.length,\n      score: WEIGHTS.SAME_USER_DIFF_HOST,\n      severity: 'high',\n      events: events.map(e => ({ id: e.id, source: e.source, hostname: e.hostname, title: e.title }))\n    });\n    totalScore += WEIGHTS.SAME_USER_DIFF_HOST;\n  }\n}\n\n// Potential campaign detection (same detection across multiple hosts)\nfor (const [detType, events] of Object.entries(byDetectionType)) {\n  const uniqueHosts = [...new Set(events.filter(e => e.hostname).map(e => e.hostname))];\n  if (uniqueHosts.length > 2) {\n    correlations.push({\n      type: 'POTENTIAL_CAMPAIGN',\n      indicator: detType,\n      affectedHosts: uniqueHosts,\n      eventCount: events.length,\n      score: WEIGHTS.SAME_DETECTION_MULTI_HOST,\n      severity: 'critical',\n      events: events.map(e => ({ id: e.id, source: e.source, hostname: e.hostname }))\n    });\n    totalScore += WEIGHTS.SAME_DETECTION_MULTI_HOST;\n  }\n}\n\n// Calculate confidence level\nlet confidence = 'low';\nif (totalScore > 200) confidence = 'high';\nelse if (totalScore > 100) confidence = 'medium';\n\n// Identify attack chain progression using MITRE tactics order\nconst MITRE_KILL_CHAIN = [\n  'Reconnaissance', 'Resource Development', 'Initial Access', \n  'Execution', 'Persistence', 'Privilege Escalation', \n  'Defense Evasion', 'Credential Access', 'Discovery', \n  'Lateral Movement', 'Collection', 'Command and Control', \n  'Exfiltration', 'Impact'\n];\n\nconst attackChain = [];\nfor (const tactic of MITRE_KILL_CHAIN) {\n  const matchingEvents = byTactic[tactic] || [];\n  if (matchingEvents.length > 0) {\n    attackChain.push({\n      stage: tactic,\n      position: MITRE_KILL_CHAIN.indexOf(tactic),\n      events: matchingEvents.map(e => ({\n        id: e.id,\n        source: e.source,\n        technique: e.technique || e.mitre?.technique,\n        timestamp: e.timestamp\n      }))\n    });\n  }\n}\n\nreturn {\n  json: {\n    ...data,\n    correlation: {\n      totalScore,\n      confidence,\n      correlationCount: correlations.length,\n      correlations,\n      patterns: {\n        lateralMovement: correlations.some(c => c.type === 'LATERAL_MOVEMENT'),\n        potentialCampaign: correlations.some(c => c.type === 'POTENTIAL_CAMPAIGN'),\n        attackChainDetected: attackChain.length > 1\n      }\n    },\n    attackChain: {\n      stages: attackChain,\n      progression: attackChain.map(s => s.stage).join(' -> '),\n      coverage: (attackChain.length / MITRE_KILL_CHAIN.length * 100).toFixed(1) + '%'\n    },\n    groupedBy: {\n      host: Object.keys(byHost),\n      ip: Object.keys(byIP),\n      user: Object.keys(byUser),\n      detectionType: Object.keys(byDetectionType)\n    }\n  }\n};"
+      },
+      "id": "calculate-correlation",
+      "name": "Calculate Correlation Scores",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1760, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build enriched incident output with all correlations\nconst data = $input.first().json;\n\n// Collect all related ticket IDs\nconst relatedTickets = {\n  xsoar: [],\n  serviceNow: [],\n  crowdstrike: [],\n  qradar: [],\n  vectra: []\n};\n\nfor (const event of data.timeline) {\n  switch (event.source) {\n    case 'XSOAR':\n      relatedTickets.xsoar.push({ id: event.id, title: event.title });\n      break;\n    case 'ServiceNow':\n      relatedTickets.serviceNow.push({ id: event.id, number: event.number, title: event.title });\n      break;\n    case 'CrowdStrike':\n      relatedTickets.crowdstrike.push({ id: event.id, title: event.title });\n      break;\n    case 'QRadar':\n      if (event.type === 'offense') {\n        relatedTickets.qradar.push({ id: event.id, title: event.title });\n      }\n      break;\n    case 'Vectra':\n      relatedTickets.vectra.push({ id: event.id, title: event.title });\n      break;\n  }\n}\n\n// Build timeline visualization data\nconst timelineVisualization = data.timeline.map(event => ({\n  time: event.timestamp,\n  source: event.source,\n  type: event.type,\n  severity: event.severity,\n  title: event.title,\n  id: event.id,\n  deltaSeconds: event.timeDelta\n}));\n\n// Build enriched output\nconst enrichedIncident = {\n  meta: {\n    correlationId: data.originalIncident.correlationId,\n    processedAt: new Date().toISOString(),\n    version: '1.0'\n  },\n  original: {\n    incidentId: data.originalIncident.incidentId,\n    hostname: data.originalIncident.hostname,\n    ip: data.originalIncident.ip,\n    user: data.originalIncident.user,\n    timestamp: data.originalIncident.timestamp,\n    severity: data.originalIncident.severity,\n    source: data.originalIncident.source,\n    description: data.originalIncident.description\n  },\n  correlation: {\n    score: data.correlation.totalScore,\n    confidence: data.correlation.confidence,\n    patterns: data.correlation.patterns,\n    details: data.correlation.correlations\n  },\n  attackChain: data.attackChain,\n  timeline: {\n    eventCount: data.eventCount,\n    sources: data.sources,\n    timeRange: data.timeRange,\n    events: timelineVisualization\n  },\n  relatedTickets,\n  summary: {\n    totalRelatedEvents: data.eventCount,\n    sourcesInvolved: data.sources.length,\n    lateralMovementDetected: data.correlation.patterns.lateralMovement,\n    potentialCampaign: data.correlation.patterns.potentialCampaign,\n    attackChainStages: data.attackChain.stages.length,\n    recommendedPriority: data.correlation.totalScore > 200 ? 'critical' \n      : data.correlation.totalScore > 100 ? 'high' \n      : data.correlation.totalScore > 50 ? 'medium' : 'low'\n  }\n};\n\nreturn {\n  json: enrichedIncident\n};"
+      },
+      "id": "build-enriched-output",
+      "name": "Build Enriched Incident",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1980, 500]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "check-xsoar-tickets",
+              "leftValue": "={{ $json.relatedTickets.xsoar.length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-xsoar-update",
+      "name": "Has XSOAR Tickets?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [2200, 500]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.XSOAR_URL }}/incident/{{ $json.original.incidentId }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"customFields\": {\n    \"correlatedincidents\": \"{{ $json.relatedTickets.xsoar.map(t => t.id).join(',') }}\",\n    \"correlatedevents\": {{ $json.timeline.eventCount }},\n    \"correlationscore\": {{ $json.correlation.score }},\n    \"attackchainstages\": \"{{ $json.attackChain.progression }}\",\n    \"lateralmovementdetected\": {{ $json.correlation.patterns.lateralMovement }},\n    \"relatedservicenowtickets\": \"{{ $json.relatedTickets.serviceNow.map(t => t.number).join(',') }}\",\n    \"relatedcrowdstrikedetections\": \"{{ $json.relatedTickets.crowdstrike.map(t => t.id).join(',') }}\",\n    \"relatedqradaroffenses\": \"{{ $json.relatedTickets.qradar.map(t => t.id).join(',') }}\"\n  }\n}",
+        "options": {}
+      },
+      "id": "xsoar-update-incident",
+      "name": "Update XSOAR with Correlations",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [2420, 400],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "xsoar-api-key",
+          "name": "XSOAR API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.XSOAR_URL }}/entry/note",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"investigationId\": \"{{ $('Build Enriched Incident').item.json.original.incidentId }}\",\n  \"data\": \"## Cross-System Correlation Results\\n\\n**Correlation ID:** {{ $('Build Enriched Incident').item.json.meta.correlationId }}\\n**Correlation Score:** {{ $('Build Enriched Incident').item.json.correlation.score }} ({{ $('Build Enriched Incident').item.json.correlation.confidence }} confidence)\\n\\n### Summary\\n- **Total Related Events:** {{ $('Build Enriched Incident').item.json.timeline.eventCount }}\\n- **Sources Involved:** {{ $('Build Enriched Incident').item.json.timeline.sources.join(', ') }}\\n- **Lateral Movement Detected:** {{ $('Build Enriched Incident').item.json.correlation.patterns.lateralMovement }}\\n- **Potential Campaign:** {{ $('Build Enriched Incident').item.json.correlation.patterns.potentialCampaign }}\\n\\n### Attack Chain\\n{{ $('Build Enriched Incident').item.json.attackChain.progression || 'No attack chain detected' }}\\n\\n### Related Tickets\\n- **ServiceNow:** {{ $('Build Enriched Incident').item.json.relatedTickets.serviceNow.map(t => t.number).join(', ') || 'None' }}\\n- **CrowdStrike:** {{ $('Build Enriched Incident').item.json.relatedTickets.crowdstrike.length }} detections\\n- **QRadar:** {{ $('Build Enriched Incident').item.json.relatedTickets.qradar.length }} offenses\\n- **Vectra:** {{ $('Build Enriched Incident').item.json.relatedTickets.vectra.length }} detections\"\n}",
+        "options": {}
+      },
+      "id": "xsoar-add-note",
+      "name": "Add Correlation Note to XSOAR",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [2640, 400],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "xsoar-api-key",
+          "name": "XSOAR API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Return full enriched incident for API response\nconst enrichedIncident = $('Build Enriched Incident').first().json;\n\nreturn {\n  json: {\n    success: true,\n    message: 'Cross-system correlation completed',\n    ...enrichedIncident\n  }\n};"
+      },
+      "id": "prepare-response-with-update",
+      "name": "Prepare Response (Updated)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2860, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Return enriched incident without XSOAR update\nconst enrichedIncident = $('Build Enriched Incident').first().json;\n\nreturn {\n  json: {\n    success: true,\n    message: 'Cross-system correlation completed (no XSOAR tickets to update)',\n    ...enrichedIncident\n  }\n};"
+      },
+      "id": "prepare-response-no-update",
+      "name": "Prepare Response (No Update)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2420, 600]
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineAll",
+        "options": {}
+      },
+      "id": "merge-responses",
+      "name": "Merge Responses",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2.1,
+      "position": [3080, 500]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "name": "X-Correlation-ID",
+                "value": "={{ $json.meta?.correlationId }}"
+              }
+            ]
+          }
+        }
+      },
+      "id": "send-response",
+      "name": "Send Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [3300, 500]
+    },
+    {
+      "parameters": {
+        "errorMessage": "={{ $json.error || 'An error occurred during correlation' }}"
+      },
+      "id": "error-handler",
+      "name": "Error Handler",
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [1540, 800]
+    },
+    {
+      "parameters": {
+        "amount": 3,
+        "unit": "seconds"
+      },
+      "id": "wait-qradar",
+      "name": "Wait for QRadar Search",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [760, 380]
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Parse Incident Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Incident Data": {
+      "main": [
+        [
+          {
+            "node": "CrowdStrike Auth",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Query QRadar Events",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Query Vectra Detections",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Query XSOAR Incidents",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Query ServiceNow Incidents",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CrowdStrike Auth": {
+      "main": [
+        [
+          {
+            "node": "Query CrowdStrike Detections",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Query CrowdStrike Detections": {
+      "main": [
+        [
+          {
+            "node": "Get CrowdStrike Detection Details",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get CrowdStrike Detection Details": {
+      "main": [
+        [
+          {
+            "node": "Merge All Query Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Query QRadar Events": {
+      "main": [
+        [
+          {
+            "node": "Wait for QRadar Search",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait for QRadar Search": {
+      "main": [
+        [
+          {
+            "node": "Get QRadar Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get QRadar Results": {
+      "main": [
+        [
+          {
+            "node": "Query QRadar Offenses",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Query QRadar Offenses": {
+      "main": [
+        [
+          {
+            "node": "Merge All Query Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Query Vectra Detections": {
+      "main": [
+        [
+          {
+            "node": "Query Vectra Hosts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Query Vectra Hosts": {
+      "main": [
+        [
+          {
+            "node": "Merge All Query Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Query XSOAR Incidents": {
+      "main": [
+        [
+          {
+            "node": "Query XSOAR Indicators",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Query XSOAR Indicators": {
+      "main": [
+        [
+          {
+            "node": "Merge All Query Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Query ServiceNow Incidents": {
+      "main": [
+        [
+          {
+            "node": "Query ServiceNow CMDB",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Query ServiceNow CMDB": {
+      "main": [
+        [
+          {
+            "node": "Merge All Query Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge All Query Results": {
+      "main": [
+        [
+          {
+            "node": "Build Correlation Timeline",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Correlation Timeline": {
+      "main": [
+        [
+          {
+            "node": "Calculate Correlation Scores",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate Correlation Scores": {
+      "main": [
+        [
+          {
+            "node": "Build Enriched Incident",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Enriched Incident": {
+      "main": [
+        [
+          {
+            "node": "Has XSOAR Tickets?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has XSOAR Tickets?": {
+      "main": [
+        [
+          {
+            "node": "Update XSOAR with Correlations",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare Response (No Update)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update XSOAR with Correlations": {
+      "main": [
+        [
+          {
+            "node": "Add Correlation Note to XSOAR",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Add Correlation Note to XSOAR": {
+      "main": [
+        [
+          {
+            "node": "Prepare Response (Updated)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Response (Updated)": {
+      "main": [
+        [
+          {
+            "node": "Merge Responses",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Response (No Update)": {
+      "main": [
+        [
+          {
+            "node": "Merge Responses",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge Responses": {
+      "main": [
+        [
+          {
+            "node": "Send Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  },
+  "versionId": "1",
+  "meta": {
+    "templateCredsSetupCompleted": false,
+    "instanceId": "cross-system-correlation-v1"
+  },
+  "id": "cross-system-correlation",
+  "tags": [
+    {
+      "id": "incident-response",
+      "name": "Incident Response"
+    },
+    {
+      "id": "correlation",
+      "name": "Correlation"
+    },
+    {
+      "id": "siem-integration",
+      "name": "SIEM Integration"
+    }
+  ],
+  "pinData": {},
+  "staticData": null,
+  "triggerCount": 0
+}

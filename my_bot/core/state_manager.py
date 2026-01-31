@@ -10,6 +10,7 @@ import atexit
 import logging
 import os
 import signal
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional
 
 from langchain_ollama import ChatOllama, OllamaEmbeddings
@@ -25,7 +26,7 @@ from my_bot.tools.staffing_tools import get_current_shift_info, get_current_staf
 # from my_bot.tools.metrics_tools import get_bot_metrics, get_bot_metrics_summary  # Commented out to reduce context
 from my_bot.tools.test_tools import run_tests, simple_live_message_test
 from my_bot.tools.weather_tools import get_weather_info
-from my_bot.tools.xsoar_summary_tools import generate_executive_summary, add_note_to_xsoar_ticket
+from my_bot.tools.xsoar_tools import generate_executive_summary, add_note_to_xsoar_ticket, get_xsoar_ticket
 from my_bot.tools.virustotal_tools import lookup_ip_virustotal, lookup_domain_virustotal, lookup_url_virustotal, lookup_hash_virustotal, reanalyze_virustotal
 from my_bot.tools.abuseipdb_tools import lookup_ip_abuseipdb, lookup_domain_abuseipdb
 from my_bot.tools.urlscan_tools import search_urlscan, scan_url_urlscan
@@ -56,8 +57,8 @@ class SecurityBotStateManager:
     NUM_CTX = 16384  # Ollama context window size in tokens
     CONTEXT_WARNING_THRESHOLD = 0.80  # Warn when context usage exceeds 80%
 
-    # System prompt for the security operations assistant (optimized for llama3.1:70b)
-    SYSTEM_PROMPT = """You are HAL 9000, an expert security operations assistant powered by Llama 3.1 70B. You combine deep technical expertise with genuine helpfulness to support SOC analysts and security engineers.
+    # System prompt for the security operations assistant
+    SYSTEM_PROMPT = """You are an expert Security Operations Center (SOC) assistant. You combine deep technical expertise with genuine helpfulness to support SOC analysts and security engineers.
 
 CORE IDENTITY:
 - You're a senior security analyst in digital form - think critically, reason through problems, and provide expert-level guidance
@@ -67,7 +68,7 @@ CORE IDENTITY:
 
 REASONING APPROACH:
 - For complex questions, think step-by-step before answering
-- When multiple tools could help, explain your approach briefly then execute
+- When multiple tools are needed, call them in sequence and synthesize the results
 - Connect the dots across multiple data sources - synthesize, don't just summarize
 - If something seems suspicious or anomalous, call it out proactively
 - Offer follow-up suggestions when relevant ("Want me to also check...?")
@@ -81,35 +82,23 @@ SCOPE:
 - Security operations, SOC workflows, threat intelligence, incident response, and work-related queries
 - For off-topic questions, briefly decline: "That's outside my security focus - happy to help with any SOC-related questions though!"
 
-TOOL USAGE:
-- XSOAR tickets: generate_executive_summary, suggest_remediation, add_note_to_xsoar_ticket
-- Threat Intel: VirusTotal, AbuseIPDB, URLScan, Shodan, IntelligenceX, abuse.ch, Recorded Future
-- EDR/NDR: CrowdStrike (detections, incidents, devices), Vectra (network detections, entity lookup)
-- SIEM: QRadar (events, offenses, AQL queries)
-- Endpoints: Tanium (host lookup, search)
-- Threat Tippers: analyze_tipper_novelty, analyze_threat_text
-- Operations: staffing tools, weather, search_local_documents
+CRITICAL - ALWAYS EXECUTE TOOLS, NEVER JUST DESCRIBE THEM:
+- When a user asks a question that requires tools, CALL THE TOOLS and return the results
+- NEVER respond with "here's how you would do it" or show example tool calls - actually execute them
+- If a tool requires data you don't have, first call a tool that provides it
+- Return actual data from tool results, not instructions on how to get it
 
-When users explicitly request a tool (e.g., "use suggest_remediation for 929947"), execute immediately.
+VERIFICATION REQUIREMENTS:
+- CONTAINMENT STATUS: Always verify with CrowdStrike using get_device_containment_status, even if the XSOAR ticket shows "Host Contained: Yes". The XSOAR field reflects the request, not the actual state. CrowdStrike is the source of truth for containment status.
+- When asked about containment for a ticket, first get the hostname from the ticket, then call CrowdStrike to verify the actual status.
 
-RESPONSE FORMATTING (Webex Markdown):
-Your responses are rendered in Webex, which supports markdown:
-- **bold** for emphasis, _italic_ for terms
-- Headers: ## Section, ### Subsection
-- Bullet lists with - or •, numbered lists with 1. 2. 3.
-- Code blocks with triple backticks for commands/logs
-- Blockquotes with > for highlighting key findings
+RESPONSE STYLE: Use markdown formatting. Lead with the answer, keep it scannable - analysts are busy."""
 
-Style guidelines:
-- Lead with the answer, then supporting details
-- Use numbered steps for procedures
-- Keep responses scannable - analysts are busy
-- Cite sources: "Per [Document Name]..."
-
-EXECUTIVE SUMMARIES:
-After generating one, ask if they want revisions (tone, detail, focus) and iterate until satisfied.
-
-Remember: You have the reasoning power of a 70B model - use it. Don't give shallow answers when deeper analysis would help. Think like a senior analyst who happens to have instant access to every security tool."""
+    def _get_system_prompt(self) -> str:
+        """Return system prompt with current date injected."""
+        from datetime import datetime
+        today = datetime.now().strftime("%B %d, %Y")  # e.g., "January 27, 2026"
+        return f"Today's date is {today}.\n\n{self.SYSTEM_PROMPT}"
 
     def __init__(self):
         # Configuration
@@ -147,6 +136,20 @@ Remember: You have the reasoning power of a 70B model - use it. Don't give shall
             # Signal handlers can only be registered in main thread
             # This is expected when running in background threads
             pass
+
+    def initialize_llm_only(self) -> bool:
+        """Connect to Ollama LLM only - lightweight init for tipper analyzer."""
+        if self.is_initialized:
+            return True
+        try:
+            if not self._initialize_ai_components():
+                return False
+            self.is_initialized = True
+            logging.info("Ready")
+            return True
+        except Exception as e:
+            logging.error(f"Failed to connect to Ollama: {e}", exc_info=True)
+            return False
 
     def initialize_all_components(self) -> bool:
         """Initialize all components in correct order"""
@@ -192,28 +195,29 @@ Remember: You have the reasoning power of a 70B model - use it. Don't give shall
         logging.info("Document processor initialized")
 
     def _initialize_ai_components(self) -> bool:
-        """Initialize AI components (LLM and embeddings)"""
+        """Create Python wrappers for Ollama models (models already loaded in GPU)."""
         try:
-            logging.info(f"Initializing Langchain model: {self.model_config.llm_model_name}...")
+            logging.info(f"Connecting to LLM: {self.model_config.llm_model_name}...")
             self.llm = ChatOllama(
                 model=self.model_config.llm_model_name,
                 temperature=self.model_config.temperature,
                 keep_alive=-1,  # Keep model loaded indefinitely in Ollama memory
-                num_ctx=self.NUM_CTX  # Context window for tool definitions
+                num_ctx=self.NUM_CTX,  # Context window for tool definitions
+                client_kwargs={'timeout': 300.0},  # 5 minute timeout to prevent indefinite hangs
             )
-            logging.info(f"Langchain model {self.model_config.llm_model_name} initialized (num_ctx={self.NUM_CTX}).")
+            logging.info(f"Connected to {self.model_config.llm_model_name} (num_ctx={self.NUM_CTX})")
 
-            logging.info(f"Initializing Ollama embeddings with model: {self.model_config.embedding_model_name}...")
+            logging.info(f"Connecting to embeddings: {self.model_config.embedding_model_name}...")
             self.embeddings = OllamaEmbeddings(
                 model=self.model_config.embedding_model_name
                 # OllamaEmbeddings doesn't support timeout parameter
             )
-            logging.info("Ollama embeddings initialized.")
+            logging.info(f"Connected to {self.model_config.embedding_model_name}")
 
             return True
 
         except Exception as e:
-            logging.error(f"Failed to initialize AI components: {e}")
+            logging.error(f"Failed to connect to Ollama models: {e}")
             return False
 
     def _initialize_document_processing(self) -> bool:
@@ -260,6 +264,7 @@ Remember: You have the reasoning power of a 70B model - use it. Don't give shall
                 get_current_staffing,
 
                 # XSOAR tools
+                get_xsoar_ticket,
                 generate_executive_summary,
                 add_note_to_xsoar_ticket,
                 suggest_remediation,
@@ -385,7 +390,7 @@ Remember: You have the reasoning power of a 70B model - use it. Don't give shall
         """
         try:
             messages = [
-                {"role": "system", "content": self.SYSTEM_PROMPT},
+                {"role": "system", "content": self._get_system_prompt()},
                 {"role": "user", "content": query}
             ]
 
@@ -449,12 +454,11 @@ Remember: You have the reasoning power of a 70B model - use it. Don't give shall
                 # Add the AI message with tool calls to conversation
                 messages.append({"role": "assistant", "content": response.content})
 
-                # Execute each tool call
-                for tool_call in response.tool_calls:
+                # Execute tool calls in parallel
+                def execute_single_tool(tool_call):
                     tool_name = tool_call['name']
                     tool_args = tool_call.get('args', {})
                     tool_id = tool_call['id']
-
                     logging.info(f"Executing tool: {tool_name}")
 
                     if tool_name in self.available_tools:
@@ -465,7 +469,13 @@ Remember: You have the reasoning power of a 70B model - use it. Don't give shall
                     else:
                         tool_result = f"Tool {tool_name} not found"
 
-                    messages.append({"role": "tool", "content": str(tool_result), "tool_call_id": tool_id})
+                    return {"role": "tool", "content": str(tool_result), "tool_call_id": tool_id}
+
+                # Run tools in parallel with ThreadPoolExecutor
+                with ThreadPoolExecutor(max_workers=5) as executor:
+                    futures = {executor.submit(execute_single_tool, tc): tc for tc in response.tool_calls}
+                    for future in as_completed(futures):
+                        messages.append(future.result())
 
             # Debug: Log if response is empty
             if response and (not response.content or len(response.content.strip()) == 0):
@@ -511,7 +521,7 @@ Remember: You have the reasoning power of a 70B model - use it. Don't give shall
         """
         try:
             messages = [
-                {"role": "system", "content": self.SYSTEM_PROMPT},
+                {"role": "system", "content": self._get_system_prompt()},
                 {"role": "user", "content": query}
             ]
 
@@ -523,8 +533,8 @@ Remember: You have the reasoning power of a 70B model - use it. Don't give shall
                 # Add the AI message with tool calls to conversation
                 messages.append({"role": "assistant", "content": response.content})
 
-                # Execute each tool call
-                for tool_call in response.tool_calls:
+                # Execute tool calls in parallel
+                def execute_single_tool(tool_call):
                     tool_name = tool_call['name']
                     tool_args = tool_call.get('args', {})
                     tool_id = tool_call['id']
@@ -537,8 +547,12 @@ Remember: You have the reasoning power of a 70B model - use it. Don't give shall
                     else:
                         tool_result = f"Tool {tool_name} not found"
 
-                    # Add tool result to conversation
-                    messages.append({"role": "tool", "content": str(tool_result), "tool_call_id": tool_id})
+                    return {"role": "tool", "content": str(tool_result), "tool_call_id": tool_id}
+
+                with ThreadPoolExecutor(max_workers=5) as executor:
+                    futures = {executor.submit(execute_single_tool, tc): tc for tc in response.tool_calls}
+                    for future in as_completed(futures):
+                        messages.append(future.result())
 
                 # Stream final response with tool results
                 for chunk in self.llm_with_tools.stream(messages):
@@ -590,7 +604,8 @@ Remember: You have the reasoning power of a 70B model - use it. Don't give shall
             model=self.model_config.llm_model_name,
             temperature=temperature,
             keep_alive=-1,
-            num_ctx=self.NUM_CTX
+            num_ctx=self.NUM_CTX,
+            client_kwargs={'timeout': 300.0},  # 5 minute timeout to prevent indefinite hangs
         )
 
     def get_embeddings(self) -> Optional[OllamaEmbeddings]:

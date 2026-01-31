@@ -1,0 +1,608 @@
+{
+  "name": "Weekly User Offboarding Audit - Orphaned Account Detection",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "weeks",
+              "triggerAtDay": [1],
+              "triggerAtHour": 6,
+              "triggerAtMinute": 0
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Weekly Schedule (Monday 6 AM)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [220, 400]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{$credentials.hrSystemApiUrl}}/api/terminations",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "status",
+              "value": "terminated"
+            },
+            {
+              "name": "termination_date_from",
+              "value": "={{$now.minus({days: 90}).toISO().split('T')[0]}}"
+            },
+            {
+              "name": "include_details",
+              "value": "true"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "fetch-hr-terminations",
+      "name": "Fetch HR Termination List",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [460, 400],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "hr-system-api",
+          "name": "HR System API"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Process HR termination data\nconst hrData = $input.first().json;\n\nconst terminatedUsers = (hrData.employees || hrData.data || hrData || []).map(emp => ({\n  employee_id: emp.employee_id || emp.id,\n  email: emp.email || emp.work_email,\n  username: emp.username || emp.samAccountName || emp.email?.split('@')[0],\n  full_name: emp.full_name || `${emp.first_name} ${emp.last_name}`,\n  termination_date: emp.termination_date || emp.end_date,\n  department: emp.department,\n  manager: emp.manager || emp.manager_email,\n  termination_type: emp.termination_type || 'standard'\n}));\n\n// Store audit metadata\nconst auditInfo = {\n  audit_id: `weekly-audit-${Date.now()}`,\n  audit_timestamp: new Date().toISOString(),\n  total_terminated_users: terminatedUsers.length,\n  lookback_period_days: 90\n};\n\nreturn [{\n  json: {\n    audit_info: auditInfo,\n    terminated_users: terminatedUsers\n  }\n}];"
+      },
+      "id": "process-hr-data",
+      "name": "Process HR Termination Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 400]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{$credentials.crowdstrikeApiUrl}}/devices/queries/devices/v1",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "limit",
+              "value": "5000"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "id": "crowdstrike-all-devices",
+      "name": "CrowdStrike Get All Devices",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [920, 200],
+      "credentials": {
+        "oAuth2Api": {
+          "id": "crowdstrike-oauth",
+          "name": "CrowdStrike OAuth2"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$credentials.crowdstrikeApiUrl}}/devices/entities/devices/v2",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"ids\": {{JSON.stringify($('CrowdStrike Get All Devices').first().json.resources || [])}}\n}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "id": "crowdstrike-device-details",
+      "name": "CrowdStrike Get Device Details",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1140, 200],
+      "credentials": {
+        "oAuth2Api": {
+          "id": "crowdstrike-oauth",
+          "name": "CrowdStrike OAuth2"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{$credentials.zscalerApiUrl}}/users",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "page",
+              "value": "1"
+            },
+            {
+              "name": "pageSize",
+              "value": "1000"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "id": "zscaler-all-users",
+      "name": "Zscaler Get All Users",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [920, 400],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "zscaler-api-key",
+          "name": "Zscaler API Key"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{$credentials.ldapProxyUrl}}/api/users",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "filter",
+              "value": "(objectClass=user)"
+            },
+            {
+              "name": "attributes",
+              "value": "sAMAccountName,mail,userAccountControl,lastLogon,employeeID"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "id": "ad-all-users",
+      "name": "Active Directory Get All Users",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [920, 600],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "ldap-proxy-auth",
+          "name": "LDAP Proxy Auth"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Cross-reference terminated users with security tools\nconst hrData = $('Process HR Termination Data').first().json;\nconst auditInfo = hrData.audit_info;\nconst terminatedUsers = hrData.terminated_users;\n\n// Get security tool data\nlet crowdstrikeDevices = [];\ntry {\n  const csData = $('CrowdStrike Get Device Details').first().json;\n  crowdstrikeDevices = csData.resources || [];\n} catch (e) {\n  console.log('CrowdStrike error:', e.message);\n}\n\nlet zscalerUsers = [];\ntry {\n  const zsData = $('Zscaler Get All Users').first().json;\n  zscalerUsers = zsData.users || zsData || [];\n} catch (e) {\n  console.log('Zscaler error:', e.message);\n}\n\nlet adUsers = [];\ntry {\n  const adData = $('Active Directory Get All Users').first().json;\n  adUsers = adData.users || adData || [];\n} catch (e) {\n  console.log('AD error:', e.message);\n}\n\n// Build lookup maps for faster matching\nconst csDevicesByEmail = {};\nconst csDevicesByUsername = {};\ncrowdstrikeDevices.forEach(device => {\n  if (device.email) {\n    const email = device.email.toLowerCase();\n    if (!csDevicesByEmail[email]) csDevicesByEmail[email] = [];\n    csDevicesByEmail[email].push(device);\n  }\n  if (device.username) {\n    const username = device.username.toLowerCase();\n    if (!csDevicesByUsername[username]) csDevicesByUsername[username] = [];\n    csDevicesByUsername[username].push(device);\n  }\n});\n\nconst zscalerByEmail = {};\nzscalerUsers.forEach(user => {\n  if (user.email) {\n    zscalerByEmail[user.email.toLowerCase()] = user;\n  }\n});\n\nconst adByEmail = {};\nconst adByUsername = {};\nconst adByEmployeeId = {};\nadUsers.forEach(user => {\n  if (user.mail) adByEmail[user.mail.toLowerCase()] = user;\n  if (user.sAMAccountName) adByUsername[user.sAMAccountName.toLowerCase()] = user;\n  if (user.employeeID) adByEmployeeId[user.employeeID] = user;\n});\n\n// Cross-reference each terminated user\nconst orphanedAccounts = [];\nconst cleanUsers = [];\n\nterminatedUsers.forEach(user => {\n  const email = user.email?.toLowerCase();\n  const username = user.username?.toLowerCase();\n  const employeeId = user.employee_id;\n  \n  const issues = [];\n  \n  // Check CrowdStrike\n  const csDevices = [\n    ...(csDevicesByEmail[email] || []),\n    ...(csDevicesByUsername[username] || [])\n  ];\n  const uniqueCSDevices = [...new Map(csDevices.map(d => [d.device_id, d])).values()];\n  if (uniqueCSDevices.length > 0) {\n    issues.push({\n      system: 'CrowdStrike',\n      type: 'device_assigned',\n      details: {\n        device_count: uniqueCSDevices.length,\n        devices: uniqueCSDevices.map(d => ({\n          device_id: d.device_id,\n          hostname: d.hostname,\n          platform: d.platform_name,\n          last_seen: d.last_seen\n        }))\n      }\n    });\n  }\n  \n  // Check Zscaler\n  const zsUser = zscalerByEmail[email];\n  if (zsUser && zsUser.state === 'ENABLED') {\n    issues.push({\n      system: 'Zscaler ZIA',\n      type: 'active_account',\n      details: {\n        user_id: zsUser.id,\n        state: zsUser.state,\n        groups: zsUser.groups || []\n      }\n    });\n  }\n  \n  // Check Active Directory\n  const adUser = adByEmail[email] || adByUsername[username] || adByEmployeeId[employeeId];\n  if (adUser) {\n    // Check if account is enabled (bit 2 of userAccountControl)\n    const isDisabled = adUser.userAccountControl && (adUser.userAccountControl & 2) === 2;\n    if (!isDisabled) {\n      issues.push({\n        system: 'Active Directory',\n        type: 'account_enabled',\n        details: {\n          sAMAccountName: adUser.sAMAccountName,\n          userAccountControl: adUser.userAccountControl,\n          lastLogon: adUser.lastLogon\n        }\n      });\n    }\n  }\n  \n  if (issues.length > 0) {\n    orphanedAccounts.push({\n      user: user,\n      issues: issues,\n      days_since_termination: Math.floor((Date.now() - new Date(user.termination_date).getTime()) / (1000 * 60 * 60 * 24)),\n      risk_level: issues.length >= 2 ? 'HIGH' : 'MEDIUM'\n    });\n  } else {\n    cleanUsers.push(user);\n  }\n});\n\n// Sort by risk level and days since termination\norphanedAccounts.sort((a, b) => {\n  if (a.risk_level !== b.risk_level) {\n    return a.risk_level === 'HIGH' ? -1 : 1;\n  }\n  return b.days_since_termination - a.days_since_termination;\n});\n\nconst auditResult = {\n  audit_info: {\n    ...auditInfo,\n    completed_at: new Date().toISOString(),\n    systems_checked: ['CrowdStrike', 'Zscaler ZIA', 'Active Directory']\n  },\n  summary: {\n    total_terminated_users_checked: terminatedUsers.length,\n    orphaned_accounts_found: orphanedAccounts.length,\n    clean_users: cleanUsers.length,\n    high_risk_count: orphanedAccounts.filter(a => a.risk_level === 'HIGH').length,\n    medium_risk_count: orphanedAccounts.filter(a => a.risk_level === 'MEDIUM').length\n  },\n  orphaned_accounts: orphanedAccounts,\n  clean_users: cleanUsers.map(u => u.email)\n};\n\nreturn [{ json: auditResult }];"
+      },
+      "id": "cross-reference-audit",
+      "name": "Cross-Reference Audit",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1400, 400]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{$json.summary.orphaned_accounts_found}}",
+              "operation": "larger",
+              "value2": 0
+            }
+          ]
+        }
+      },
+      "id": "check-orphaned-accounts",
+      "name": "Orphaned Accounts Found?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1620, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Split orphaned accounts for individual XSOAR tickets\nconst auditResult = $input.first().json;\nconst orphanedAccounts = auditResult.orphaned_accounts;\n\n// Only create tickets for HIGH risk accounts\n// For MEDIUM risk, we'll just include in the report\nconst highRiskAccounts = orphanedAccounts.filter(a => a.risk_level === 'HIGH');\n\nreturn highRiskAccounts.map(account => ({\n  json: {\n    audit_info: auditResult.audit_info,\n    account: account\n  }\n}));"
+      },
+      "id": "split-for-tickets",
+      "name": "Split High Risk for Tickets",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1860, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$credentials.xsoarApiUrl}}/incident",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"name\": \"[ORPHANED ACCOUNT] Access Removal Required - {{$json.account.user.email}}\",\n  \"type\": \"Access Review\",\n  \"severity\": {{$json.account.risk_level === 'HIGH' ? 2 : 3}},\n  \"owner\": \"Security Operations\",\n  \"labels\": [\n    {\"type\": \"orphaned-account\", \"value\": \"true\"},\n    {\"type\": \"weekly-audit\", \"value\": \"true\"},\n    {\"type\": \"employee_id\", \"value\": \"{{$json.account.user.employee_id}}\"},\n    {\"type\": \"risk_level\", \"value\": \"{{$json.account.risk_level}}\"},\n    {\"type\": \"automated\", \"value\": \"true\"}\n  ],\n  \"customFields\": {\n    \"userEmail\": \"{{$json.account.user.email}}\",\n    \"username\": \"{{$json.account.user.username}}\",\n    \"employeeId\": \"{{$json.account.user.employee_id}}\",\n    \"terminationDate\": \"{{$json.account.user.termination_date}}\",\n    \"daysSinceTermination\": {{$json.account.days_since_termination}},\n    \"affectedSystems\": \"{{$json.account.issues.map(i => i.system).join(', ')}}\",\n    \"auditId\": \"{{$json.audit_info.audit_id}}\"\n  },\n  \"details\": \"Weekly audit detected orphaned account requiring access removal.\\n\\nUser: {{$json.account.user.full_name}} ({{$json.account.user.email}})\\nTermination Date: {{$json.account.user.termination_date}}\\nDays Since Termination: {{$json.account.days_since_termination}}\\nRisk Level: {{$json.account.risk_level}}\\n\\nAffected Systems:\\n{{$json.account.issues.map(i => '- ' + i.system + ': ' + i.type).join('\\\\n')}}\\n\\nPlease remove all access immediately.\"\n}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "create-xsoar-orphan-ticket",
+      "name": "Create XSOAR Orphan Account Ticket",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [2080, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "xsoar-api-key",
+          "name": "XSOAR API Key"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Collect all created tickets\nconst tickets = $input.all().map(item => ({\n  user_email: item.json.account?.user?.email || 'unknown',\n  ticket_id: item.json.id || item.json.incidentId || 'failed',\n  risk_level: item.json.account?.risk_level || 'unknown'\n}));\n\nreturn [{ json: { created_tickets: tickets } }];"
+      },
+      "id": "collect-tickets",
+      "name": "Collect Created Tickets",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2300, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// No orphaned accounts found - mark as clean\nconst auditResult = $input.first().json;\n\nreturn [{\n  json: {\n    audit_result: auditResult,\n    created_tickets: []\n  }\n}];"
+      },
+      "id": "no-orphans",
+      "name": "No Orphans Found",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1860, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Merge ticket creation results with audit data\nconst items = $input.all();\n\n// Get audit result from cross-reference\nconst auditResult = $('Cross-Reference Audit').first().json;\n\n// Get tickets if created\nlet createdTickets = [];\ntry {\n  const ticketData = $('Collect Created Tickets').first()?.json;\n  createdTickets = ticketData?.created_tickets || [];\n} catch (e) {\n  // No tickets created\n}\n\nreturn [{\n  json: {\n    audit_result: auditResult,\n    created_tickets: createdTickets\n  }\n}];"
+      },
+      "id": "merge-audit-results",
+      "name": "Merge Audit Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2520, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Format comprehensive Webex report\nconst data = $input.first().json;\nconst audit = data.audit_result;\nconst tickets = data.created_tickets || [];\n\nlet message = `**Weekly User Offboarding Audit Report**\\n\\n`;\nmessage += `**Audit ID:** ${audit.audit_info.audit_id}\\n`;\nmessage += `**Completed:** ${audit.audit_info.completed_at}\\n`;\nmessage += `**Lookback Period:** ${audit.audit_info.lookback_period_days} days\\n\\n`;\n\nmessage += `---\\n\\n`;\nmessage += `**Summary:**\\n`;\nmessage += `- Total Terminated Users Checked: ${audit.summary.total_terminated_users_checked}\\n`;\nmessage += `- Orphaned Accounts Found: ${audit.summary.orphaned_accounts_found}\\n`;\nmessage += `- Clean Users: ${audit.summary.clean_users}\\n`;\nmessage += `- High Risk Issues: ${audit.summary.high_risk_count}\\n`;\nmessage += `- Medium Risk Issues: ${audit.summary.medium_risk_count}\\n\\n`;\n\nmessage += `**Systems Checked:**\\n`;\naudit.audit_info.systems_checked.forEach(sys => {\n  message += `- ${sys}\\n`;\n});\nmessage += `\\n`;\n\nif (audit.summary.orphaned_accounts_found > 0) {\n  message += `---\\n\\n`;\n  message += `**[ATTENTION] Orphaned Accounts Requiring Action:**\\n\\n`;\n  \n  // Group by risk level\n  const highRisk = audit.orphaned_accounts.filter(a => a.risk_level === 'HIGH');\n  const mediumRisk = audit.orphaned_accounts.filter(a => a.risk_level === 'MEDIUM');\n  \n  if (highRisk.length > 0) {\n    message += `**HIGH RISK (${highRisk.length}):**\\n`;\n    highRisk.slice(0, 10).forEach(account => {\n      message += `- **${account.user.full_name}** (${account.user.email})\\n`;\n      message += `  - Terminated: ${account.user.termination_date} (${account.days_since_termination} days ago)\\n`;\n      message += `  - Issues: ${account.issues.map(i => i.system).join(', ')}\\n`;\n    });\n    if (highRisk.length > 10) {\n      message += `  - ... and ${highRisk.length - 10} more\\n`;\n    }\n    message += `\\n`;\n  }\n  \n  if (mediumRisk.length > 0) {\n    message += `**MEDIUM RISK (${mediumRisk.length}):**\\n`;\n    mediumRisk.slice(0, 5).forEach(account => {\n      message += `- ${account.user.full_name} (${account.user.email}) - ${account.issues.map(i => i.system).join(', ')}\\n`;\n    });\n    if (mediumRisk.length > 5) {\n      message += `  - ... and ${mediumRisk.length - 5} more\\n`;\n    }\n    message += `\\n`;\n  }\n  \n  if (tickets.length > 0) {\n    message += `**XSOAR Tickets Created:** ${tickets.length}\\n`;\n    tickets.slice(0, 5).forEach(t => {\n      message += `- ${t.user_email}: Ticket #${t.ticket_id}\\n`;\n    });\n    if (tickets.length > 5) {\n      message += `- ... and ${tickets.length - 5} more tickets\\n`;\n    }\n  }\n} else {\n  message += `---\\n\\n`;\n  message += `**[ALL CLEAR]** No orphaned accounts detected. All terminated users have been properly deprovisioned.\\n`;\n}\n\nmessage += `\\n---\\n`;\nmessage += `*This is an automated weekly audit. For questions, contact Security Operations.*\\n`;\n\nreturn [{\n  json: {\n    audit_result: audit,\n    created_tickets: tickets,\n    webex_message: message\n  }\n}];"
+      },
+      "id": "format-weekly-report",
+      "name": "Format Weekly Report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2740, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://webexapis.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"roomId\": \"{{$credentials.webexSecurityRoomId}}\",\n  \"markdown\": {{JSON.stringify($json.webex_message)}}\n}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "post-weekly-to-webex",
+      "name": "Post Weekly Report to Webex",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [2960, 400],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "webex-bot-token",
+          "name": "Webex Bot Token"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$credentials.hrSystemApiUrl}}/api/audit-reports",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"audit_type\": \"weekly_offboarding_security_check\",\n  \"audit_id\": \"{{$('Format Weekly Report').item.json.audit_result.audit_info.audit_id}}\",\n  \"timestamp\": \"{{$('Format Weekly Report').item.json.audit_result.audit_info.completed_at}}\",\n  \"summary\": {{JSON.stringify($('Format Weekly Report').item.json.audit_result.summary)}},\n  \"orphaned_accounts\": {{$('Format Weekly Report').item.json.audit_result.summary.orphaned_accounts_found}},\n  \"tickets_created\": {{($('Format Weekly Report').item.json.created_tickets || []).length}},\n  \"status\": \"completed\"\n}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "log-audit-to-hr",
+      "name": "Log Audit to HR System",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [3180, 400],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "hr-system-api",
+          "name": "HR System API"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Final audit completion log\nconst reportData = $('Format Weekly Report').first().json;\n\nconst finalReport = {\n  status: 'completed',\n  audit_id: reportData.audit_result.audit_info.audit_id,\n  summary: reportData.audit_result.summary,\n  tickets_created: reportData.created_tickets.length,\n  notification_sent: true,\n  completed_at: new Date().toISOString()\n};\n\nconsole.log('Weekly offboarding audit completed:', JSON.stringify(finalReport));\n\nreturn [{ json: finalReport }];"
+      },
+      "id": "final-log",
+      "name": "Final Audit Log",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3400, 400]
+    }
+  ],
+  "connections": {
+    "Weekly Schedule (Monday 6 AM)": {
+      "main": [
+        [
+          {
+            "node": "Fetch HR Termination List",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch HR Termination List": {
+      "main": [
+        [
+          {
+            "node": "Process HR Termination Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process HR Termination Data": {
+      "main": [
+        [
+          {
+            "node": "CrowdStrike Get All Devices",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Zscaler Get All Users",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Active Directory Get All Users",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CrowdStrike Get All Devices": {
+      "main": [
+        [
+          {
+            "node": "CrowdStrike Get Device Details",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CrowdStrike Get Device Details": {
+      "main": [
+        [
+          {
+            "node": "Cross-Reference Audit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Zscaler Get All Users": {
+      "main": [
+        [
+          {
+            "node": "Cross-Reference Audit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Active Directory Get All Users": {
+      "main": [
+        [
+          {
+            "node": "Cross-Reference Audit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cross-Reference Audit": {
+      "main": [
+        [
+          {
+            "node": "Orphaned Accounts Found?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Orphaned Accounts Found?": {
+      "main": [
+        [
+          {
+            "node": "Split High Risk for Tickets",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Orphans Found",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split High Risk for Tickets": {
+      "main": [
+        [
+          {
+            "node": "Create XSOAR Orphan Account Ticket",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create XSOAR Orphan Account Ticket": {
+      "main": [
+        [
+          {
+            "node": "Collect Created Tickets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Collect Created Tickets": {
+      "main": [
+        [
+          {
+            "node": "Merge Audit Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "No Orphans Found": {
+      "main": [
+        [
+          {
+            "node": "Merge Audit Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Audit Results": {
+      "main": [
+        [
+          {
+            "node": "Format Weekly Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Weekly Report": {
+      "main": [
+        [
+          {
+            "node": "Post Weekly Report to Webex",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Post Weekly Report to Webex": {
+      "main": [
+        [
+          {
+            "node": "Log Audit to HR System",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Audit to HR System": {
+      "main": [
+        [
+          {
+            "node": "Final Audit Log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "security",
+      "id": "1"
+    },
+    {
+      "name": "offboarding",
+      "id": "2"
+    },
+    {
+      "name": "compliance",
+      "id": "3"
+    },
+    {
+      "name": "scheduled",
+      "id": "4"
+    },
+    {
+      "name": "weekly-audit",
+      "id": "5"
+    }
+  ],
+  "triggerCount": 1,
+  "updatedAt": "2024-01-15T10:00:00.000Z",
+  "versionId": "1"
+}

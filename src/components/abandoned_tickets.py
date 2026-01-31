@@ -76,10 +76,10 @@ def generate_daily_summary(tickets) -> str | None:
 def send_report(room_id=config.webex_room_id_vinay_test_space):
     webex_api = WebexAPI(access_token=config.webex_bot_access_token_soar)
 
-    today_minus_7 = datetime.now(tz=eastern) - timedelta(days=7)
+    today_minus_5 = datetime.now(tz=eastern) - timedelta(days=5)
 
     # Query for all open tickets (no time filter needed for abandoned tickets check)
-    query = f'-status:closed type:{config.team_name} -type:"{config.team_name} Third Party Compromise" created:<{today_minus_7.strftime("%Y-%m-%d")}'
+    query = f'-status:closed type:{config.team_name} -type:"{config.team_name} Third Party Compromise" created:<{today_minus_5.strftime("%Y-%m-%d")}'
     logger.debug(f'Query for tickets: {query}')
 
     tickets = TicketHandler(XsoarEnvironment.PROD).get_tickets(query=query)
@@ -87,13 +87,18 @@ def send_report(room_id=config.webex_room_id_vinay_test_space):
 
     if not tickets:
         logger.info("No tickets found.")
+        webex_api.messages.create(
+            roomId=room_id,
+            text="No abandoned tickets today!",
+            markdown="🎉 **Zero abandoned tickets today!** 🎊\n\nAll tickets are being actively worked. Keep it up! 💪"
+        )
         return
 
-    # Filter incidents where last entry was more than 7 days ago
+    # Filter incidents where last entry was more than 5 days ago
     abandoned_tickets = []
     for ticket in tickets:
         last_entry_date, note_content = get_last_entry_details(ticket["id"])
-        if last_entry_date and last_entry_date < today_minus_7:
+        if last_entry_date and last_entry_date < today_minus_5:
             ticket["last_entry_date"] = last_entry_date
             ticket["note"] = note_content or ""
             abandoned_tickets.append(ticket)
@@ -105,7 +110,13 @@ def send_report(room_id=config.webex_room_id_vinay_test_space):
         webex_api.messages.create(
             roomId=room_id,
             text="Abandoned Tickets!",
-            markdown=f'**Abandoned Tickets** (Type={config.team_name} - TP, Last Touched=7+ days ago)\n ``` \n {daily_summary}'
+            markdown=f'**Abandoned Tickets** (Type={config.team_name} - TP, Last Touched=5+ days ago)\n ``` \n {daily_summary}'
+        )
+    else:
+        webex_api.messages.create(
+            roomId=room_id,
+            text="No abandoned tickets today!",
+            markdown="🎉 **Zero abandoned tickets today!** 🎊\n\nAll tickets are being actively worked. Keep it up! 💪"
         )
 
 

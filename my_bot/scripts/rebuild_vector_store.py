@@ -75,9 +75,9 @@ def main():
         print(f"Failed to initialize document processor: {e}")
         return
 
-    # Force rebuild
-    print("Force rebuilding ChromaDB collection...")
-    rebuild_success = doc_processor.force_rebuild()
+    # Rebuild index from scratch
+    print("Rebuilding ChromaDB collection from scratch...")
+    rebuild_success = doc_processor.rebuild_index()
 
     if rebuild_success:
         print("Document index rebuilt successfully!")

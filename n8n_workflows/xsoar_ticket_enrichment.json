@@ -1,0 +1,1079 @@
+{
+  "name": "XSOAR Ticket Enrichment",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "xsoar-ticket-enrichment",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [250, 300],
+      "webhookId": "xsoar-ticket-enrichment"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://xsoar.company.com/incident/{{ $json.incident_id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "YOUR_API_KEY"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "get-xsoar-ticket",
+      "name": "Get XSOAR Ticket Details",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [470, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract indicators from XSOAR ticket description and custom fields\nconst ticket = $input.first().json;\n\n// Combine all text fields that might contain indicators\nconst textToAnalyze = [\n  ticket.description || '',\n  ticket.details || '',\n  ticket.rawJSON || '',\n  ticket.labels ? JSON.stringify(ticket.labels) : '',\n  ticket.customFields ? JSON.stringify(ticket.customFields) : ''\n].join(' ');\n\n// Regex patterns for indicator extraction\nconst patterns = {\n  // IPv4 addresses (avoiding common false positives like version numbers)\n  ipv4: /\\b(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\b/g,\n  \n  // IPv6 addresses\n  ipv6: /\\b(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}\\b|\\b(?:[0-9a-fA-F]{1,4}:){1,7}:|\\b(?:[0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}\\b/g,\n  \n  // Domain names (excluding common file extensions and internal domains)\n  domains: /\\b(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\\.)+(?:com|net|org|io|co|info|biz|edu|gov|mil|int|xyz|online|site|tech|cloud|app|dev|ai|security|cyber)\\b/gi,\n  \n  // MD5 hashes (32 hex characters)\n  md5: /\\b[a-fA-F0-9]{32}\\b/g,\n  \n  // SHA1 hashes (40 hex characters)\n  sha1: /\\b[a-fA-F0-9]{40}\\b/g,\n  \n  // SHA256 hashes (64 hex characters)\n  sha256: /\\b[a-fA-F0-9]{64}\\b/g,\n  \n  // Hostnames (computer names, typically alphanumeric with hyphens)\n  hostnames: /\\b(?:PC|WS|SRV|HOST|DESKTOP|LAPTOP|SERVER|WORKSTATION|DC|VM)[-_]?[A-Z0-9]{2,15}\\b/gi,\n  \n  // URLs for additional context\n  urls: /https?:\\/\\/[^\\s<>\"']+/gi\n};\n\n// Extract and deduplicate indicators\nfunction extractUnique(text, pattern) {\n  const matches = text.match(pattern) || [];\n  return [...new Set(matches)];\n}\n\n// Filter out private/internal IPs\nfunction filterPublicIPs(ips) {\n  return ips.filter(ip => {\n    const parts = ip.split('.').map(Number);\n    // Exclude private ranges: 10.x.x.x, 172.16-31.x.x, 192.168.x.x, 127.x.x.x\n    if (parts[0] === 10) return false;\n    if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return false;\n    if (parts[0] === 192 && parts[1] === 168) return false;\n    if (parts[0] === 127) return false;\n    if (parts[0] === 0) return false;\n    return true;\n  });\n}\n\n// Extract all indicators\nconst ipv4Addresses = extractUnique(textToAnalyze, patterns.ipv4);\nconst publicIPs = filterPublicIPs(ipv4Addresses);\nconst ipv6Addresses = extractUnique(textToAnalyze, patterns.ipv6);\nconst domains = extractUnique(textToAnalyze, patterns.domains);\nconst md5Hashes = extractUnique(textToAnalyze, patterns.md5);\nconst sha1Hashes = extractUnique(textToAnalyze, patterns.sha1);\nconst sha256Hashes = extractUnique(textToAnalyze, patterns.sha256);\nconst hostnames = extractUnique(textToAnalyze, patterns.hostnames);\nconst urls = extractUnique(textToAnalyze, patterns.urls);\n\n// Combine all hashes\nconst allHashes = [...md5Hashes, ...sha1Hashes, ...sha256Hashes];\n\n// Return structured indicator data\nreturn {\n  json: {\n    incident_id: ticket.id || ticket.incident_id,\n    incident_name: ticket.name || 'Unknown',\n    indicators: {\n      ips: publicIPs,\n      ipv6: ipv6Addresses,\n      domains: domains,\n      hashes: {\n        md5: md5Hashes,\n        sha1: sha1Hashes,\n        sha256: sha256Hashes,\n        all: allHashes\n      },\n      hostnames: hostnames,\n      urls: urls\n    },\n    counts: {\n      ips: publicIPs.length,\n      ipv6: ipv6Addresses.length,\n      domains: domains.length,\n      hashes: allHashes.length,\n      hostnames: hostnames.length,\n      urls: urls.length,\n      total: publicIPs.length + ipv6Addresses.length + domains.length + allHashes.length + hostnames.length\n    },\n    original_ticket: ticket\n  }\n};"
+      },
+      "id": "extract-indicators",
+      "name": "Extract Indicators",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [690, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Prepare items for parallel enrichment branches\nconst data = $input.first().json;\n\nreturn {\n  json: {\n    ...data,\n    // Pass through for all parallel branches\n    ips_to_enrich: data.indicators.ips,\n    domains_to_enrich: data.indicators.domains,\n    hashes_to_enrich: data.indicators.hashes.all,\n    hostnames_to_enrich: data.indicators.hostnames\n  }\n};"
+      },
+      "id": "prepare-enrichment",
+      "name": "Prepare Enrichment Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [910, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "ip-condition",
+              "leftValue": "={{ $json.counts.ips }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-ips",
+      "name": "Has IPs?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1130, 100]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "domain-condition",
+              "leftValue": "={{ $json.counts.domains }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-domains",
+      "name": "Has Domains?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1130, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "hash-condition",
+              "leftValue": "={{ $json.counts.hashes }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-hashes",
+      "name": "Has Hashes?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1130, 500]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "hostname-condition",
+              "leftValue": "={{ $json.counts.hostnames }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-hostnames",
+      "name": "Has Hostnames?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1130, 700]
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "split-ips",
+      "name": "Split IPs",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [1350, 0]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://www.virustotal.com/api/v3/ip_addresses/{{ $json.ips_to_enrich[$runIndex] || $json.indicators.ips[$runIndex] }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-apikey",
+              "value": "YOUR_VIRUSTOTAL_API_KEY"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true
+            }
+          }
+        }
+      },
+      "id": "vt-ip-lookup",
+      "name": "VirusTotal IP Lookup",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1570, -100]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.abuseipdb.com/api/v2/check",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Key",
+              "value": "YOUR_ABUSEIPDB_API_KEY"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "ipAddress",
+              "value": "={{ $json.ips_to_enrich[$runIndex] || $json.indicators.ips[$runIndex] }}"
+            },
+            {
+              "name": "maxAgeInDays",
+              "value": "90"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "abuseipdb-lookup",
+      "name": "AbuseIPDB Lookup",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1570, 0]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.shodan.io/shodan/host/{{ $json.ips_to_enrich[$runIndex] || $json.indicators.ips[$runIndex] }}",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "key",
+              "value": "YOUR_SHODAN_API_KEY"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "shodan-lookup",
+      "name": "Shodan Lookup",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1570, 100]
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "split-domains",
+      "name": "Split Domains",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [1350, 200]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://www.virustotal.com/api/v3/domains/{{ $json.domains_to_enrich[$runIndex] || $json.indicators.domains[$runIndex] }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-apikey",
+              "value": "YOUR_VIRUSTOTAL_API_KEY"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "vt-domain-lookup",
+      "name": "VirusTotal Domain Lookup",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1570, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://urlscan.io/api/v1/scan/",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "API-Key",
+              "value": "YOUR_URLSCAN_API_KEY"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"url\": \"https://{{ $json.domains_to_enrich[$runIndex] || $json.indicators.domains[$runIndex] }}\",\n  \"visibility\": \"private\"\n}",
+        "options": {}
+      },
+      "id": "urlscan-lookup",
+      "name": "URLScan.io Scan",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1570, 300]
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "split-hashes",
+      "name": "Split Hashes",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [1350, 400]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://www.virustotal.com/api/v3/files/{{ $json.hashes_to_enrich[$runIndex] || $json.indicators.hashes.all[$runIndex] }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-apikey",
+              "value": "YOUR_VIRUSTOTAL_API_KEY"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "vt-hash-lookup",
+      "name": "VirusTotal Hash Lookup",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1570, 400]
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "split-hostnames",
+      "name": "Split Hostnames",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [1350, 600]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.crowdstrike.com/devices/queries/devices/v1",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "filter",
+              "value": "=hostname:'{{ $json.hostnames_to_enrich[$runIndex] || $json.indicators.hostnames[$runIndex] }}'"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "crowdstrike-device-lookup",
+      "name": "CrowdStrike Device Lookup",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1570, 550]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://tanium.company.com/api/v2/endpoints/search",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "session",
+              "value": "YOUR_TANIUM_SESSION_TOKEN"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"query\": {\n    \"hostname\": \"{{ $json.hostnames_to_enrich[$runIndex] || $json.indicators.hostnames[$runIndex] }}\"\n  }\n}",
+        "options": {}
+      },
+      "id": "tanium-endpoint-lookup",
+      "name": "Tanium Endpoint Lookup",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1570, 700]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Aggregate IP enrichment results\nconst items = $input.all();\nconst results = [];\n\nfor (const item of items) {\n  const data = item.json;\n  results.push({\n    ip: data.ip || 'unknown',\n    virustotal: data.vt_result || null,\n    abuseipdb: data.abuseipdb_result || null,\n    shodan: data.shodan_result || null\n  });\n}\n\nreturn { json: { ip_enrichment: results } };"
+      },
+      "id": "aggregate-ip-results",
+      "name": "Aggregate IP Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1790, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Aggregate domain enrichment results\nconst items = $input.all();\nconst results = [];\n\nfor (const item of items) {\n  const data = item.json;\n  results.push({\n    domain: data.domain || 'unknown',\n    virustotal: data.vt_result || null,\n    urlscan: data.urlscan_result || null\n  });\n}\n\nreturn { json: { domain_enrichment: results } };"
+      },
+      "id": "aggregate-domain-results",
+      "name": "Aggregate Domain Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1790, 250]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Aggregate hash enrichment results\nconst items = $input.all();\nconst results = [];\n\nfor (const item of items) {\n  const data = item.json;\n  results.push({\n    hash: data.hash || 'unknown',\n    virustotal: data.vt_result || null\n  });\n}\n\nreturn { json: { hash_enrichment: results } };"
+      },
+      "id": "aggregate-hash-results",
+      "name": "Aggregate Hash Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1790, 450]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Aggregate hostname enrichment results\nconst items = $input.all();\nconst results = [];\n\nfor (const item of items) {\n  const data = item.json;\n  results.push({\n    hostname: data.hostname || 'unknown',\n    crowdstrike: data.crowdstrike_result || null,\n    tanium: data.tanium_result || null\n  });\n}\n\nreturn { json: { hostname_enrichment: results } };"
+      },
+      "id": "aggregate-hostname-results",
+      "name": "Aggregate Hostname Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1790, 650]
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "mergeByFields": {
+          "values": []
+        },
+        "options": {}
+      },
+      "id": "merge-all-enrichments",
+      "name": "Merge All Enrichments",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2.1,
+      "position": [2010, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Compile comprehensive enrichment summary\nconst inputs = $input.all();\n\n// Gather all enrichment data\nlet ipEnrichment = [];\nlet domainEnrichment = [];\nlet hashEnrichment = [];\nlet hostnameEnrichment = [];\nlet incidentId = '';\nlet incidentName = '';\n\nfor (const input of inputs) {\n  const data = input.json;\n  if (data.ip_enrichment) ipEnrichment = ipEnrichment.concat(data.ip_enrichment);\n  if (data.domain_enrichment) domainEnrichment = domainEnrichment.concat(data.domain_enrichment);\n  if (data.hash_enrichment) hashEnrichment = hashEnrichment.concat(data.hash_enrichment);\n  if (data.hostname_enrichment) hostnameEnrichment = hostnameEnrichment.concat(data.hostname_enrichment);\n  if (data.incident_id) incidentId = data.incident_id;\n  if (data.incident_name) incidentName = data.incident_name;\n}\n\n// Generate summary statistics\nconst maliciousIPs = ipEnrichment.filter(ip => {\n  if (ip.virustotal?.data?.attributes?.last_analysis_stats?.malicious > 0) return true;\n  if (ip.abuseipdb?.data?.abuseConfidenceScore > 50) return true;\n  return false;\n});\n\nconst maliciousDomains = domainEnrichment.filter(domain => {\n  if (domain.virustotal?.data?.attributes?.last_analysis_stats?.malicious > 0) return true;\n  return false;\n});\n\nconst maliciousHashes = hashEnrichment.filter(hash => {\n  if (hash.virustotal?.data?.attributes?.last_analysis_stats?.malicious > 0) return true;\n  return false;\n});\n\n// Build formatted note for XSOAR\nconst timestamp = new Date().toISOString();\n\nlet enrichmentNote = `## Automated Enrichment Summary\\n`;\nenrichmentNote += `**Generated:** ${timestamp}\\n\\n`;\n\n// IP Summary\nenrichmentNote += `### IP Address Analysis\\n`;\nenrichmentNote += `- Total IPs analyzed: ${ipEnrichment.length}\\n`;\nenrichmentNote += `- Potentially malicious: ${maliciousIPs.length}\\n\\n`;\n\nfor (const ip of ipEnrichment) {\n  const vtStats = ip.virustotal?.data?.attributes?.last_analysis_stats || {};\n  const abuseScore = ip.abuseipdb?.data?.abuseConfidenceScore || 0;\n  const shodanPorts = ip.shodan?.ports || [];\n  \n  enrichmentNote += `**${ip.ip}**\\n`;\n  enrichmentNote += `- VirusTotal: ${vtStats.malicious || 0}/${(vtStats.malicious || 0) + (vtStats.harmless || 0) + (vtStats.undetected || 0)} detections\\n`;\n  enrichmentNote += `- AbuseIPDB: ${abuseScore}% confidence score\\n`;\n  enrichmentNote += `- Shodan: ${shodanPorts.length} open ports (${shodanPorts.slice(0, 5).join(', ')}${shodanPorts.length > 5 ? '...' : ''})\\n\\n`;\n}\n\n// Domain Summary\nenrichmentNote += `### Domain Analysis\\n`;\nenrichmentNote += `- Total domains analyzed: ${domainEnrichment.length}\\n`;\nenrichmentNote += `- Potentially malicious: ${maliciousDomains.length}\\n\\n`;\n\nfor (const domain of domainEnrichment) {\n  const vtStats = domain.virustotal?.data?.attributes?.last_analysis_stats || {};\n  const urlscanVerdict = domain.urlscan?.verdicts?.overall?.malicious ? 'Malicious' : 'Clean';\n  \n  enrichmentNote += `**${domain.domain}**\\n`;\n  enrichmentNote += `- VirusTotal: ${vtStats.malicious || 0}/${(vtStats.malicious || 0) + (vtStats.harmless || 0) + (vtStats.undetected || 0)} detections\\n`;\n  enrichmentNote += `- URLScan.io: ${urlscanVerdict}\\n\\n`;\n}\n\n// Hash Summary\nenrichmentNote += `### File Hash Analysis\\n`;\nenrichmentNote += `- Total hashes analyzed: ${hashEnrichment.length}\\n`;\nenrichmentNote += `- Potentially malicious: ${maliciousHashes.length}\\n\\n`;\n\nfor (const hash of hashEnrichment) {\n  const vtStats = hash.virustotal?.data?.attributes?.last_analysis_stats || {};\n  const fileName = hash.virustotal?.data?.attributes?.meaningful_name || 'Unknown';\n  \n  enrichmentNote += `**${hash.hash}**\\n`;\n  enrichmentNote += `- File name: ${fileName}\\n`;\n  enrichmentNote += `- VirusTotal: ${vtStats.malicious || 0}/${(vtStats.malicious || 0) + (vtStats.harmless || 0) + (vtStats.undetected || 0)} detections\\n\\n`;\n}\n\n// Hostname Summary\nenrichmentNote += `### Endpoint Analysis\\n`;\nenrichmentNote += `- Total hostnames analyzed: ${hostnameEnrichment.length}\\n\\n`;\n\nfor (const host of hostnameEnrichment) {\n  const csDeviceFound = host.crowdstrike?.resources?.length > 0;\n  const taniumFound = host.tanium?.data?.length > 0;\n  \n  enrichmentNote += `**${host.hostname}**\\n`;\n  enrichmentNote += `- CrowdStrike: ${csDeviceFound ? 'Found in inventory' : 'Not found'}\\n`;\n  enrichmentNote += `- Tanium: ${taniumFound ? 'Found in inventory' : 'Not found'}\\n\\n`;\n}\n\n// Risk Assessment\nconst totalMalicious = maliciousIPs.length + maliciousDomains.length + maliciousHashes.length;\nlet riskLevel = 'Low';\nif (totalMalicious >= 3) riskLevel = 'High';\nelse if (totalMalicious >= 1) riskLevel = 'Medium';\n\nenrichmentNote += `### Risk Assessment\\n`;\nenrichmentNote += `**Overall Risk Level: ${riskLevel}**\\n`;\nenrichmentNote += `- Malicious IPs: ${maliciousIPs.length}\\n`;\nenrichmentNote += `- Malicious Domains: ${maliciousDomains.length}\\n`;\nenrichmentNote += `- Malicious Files: ${maliciousHashes.length}\\n`;\n\n// Build Webex message\nlet webexMessage = `**XSOAR Incident Enrichment Complete**\\n\\n`;\nwebexMessage += `**Incident:** ${incidentName} (${incidentId})\\n`;\nwebexMessage += `**Risk Level:** ${riskLevel}\\n\\n`;\nwebexMessage += `**Summary:**\\n`;\nwebexMessage += `- ${ipEnrichment.length} IPs analyzed (${maliciousIPs.length} malicious)\\n`;\nwebexMessage += `- ${domainEnrichment.length} domains analyzed (${maliciousDomains.length} malicious)\\n`;\nwebexMessage += `- ${hashEnrichment.length} hashes analyzed (${maliciousHashes.length} malicious)\\n`;\nwebexMessage += `- ${hostnameEnrichment.length} hostnames verified\\n\\n`;\n\nif (totalMalicious > 0) {\n  webexMessage += `**Requires immediate attention!**\\n`;\n}\n\nreturn {\n  json: {\n    incident_id: incidentId,\n    incident_name: incidentName,\n    enrichment_note: enrichmentNote,\n    webex_message: webexMessage,\n    risk_level: riskLevel,\n    summary: {\n      total_ips: ipEnrichment.length,\n      malicious_ips: maliciousIPs.length,\n      total_domains: domainEnrichment.length,\n      malicious_domains: maliciousDomains.length,\n      total_hashes: hashEnrichment.length,\n      malicious_hashes: maliciousHashes.length,\n      total_hostnames: hostnameEnrichment.length\n    },\n    enrichment_data: {\n      ips: ipEnrichment,\n      domains: domainEnrichment,\n      hashes: hashEnrichment,\n      hostnames: hostnameEnrichment\n    }\n  }\n};"
+      },
+      "id": "compile-summary",
+      "name": "Compile Enrichment Summary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2230, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://xsoar.company.com/incident/{{ $json.incident_id }}/note",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "YOUR_API_KEY"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"data\": \"{{ $json.enrichment_note.replace(/\\n/g, '\\\\n').replace(/\"/g, '\\\\\"') }}\",\n  \"investigationId\": \"{{ $json.incident_id }}\",\n  \"version\": 1\n}",
+        "options": {}
+      },
+      "id": "update-xsoar-ticket",
+      "name": "Update XSOAR Ticket with Notes",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [2450, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://webexapis.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer YOUR_WEBEX_BOT_TOKEN"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"roomId\": \"YOUR_SOC_ROOM_ID\",\n  \"markdown\": \"{{ $json.webex_message.replace(/\\n/g, '\\\\n').replace(/\"/g, '\\\\\"') }}\"\n}",
+        "options": {}
+      },
+      "id": "post-to-webex",
+      "name": "Post Summary to Webex SOC Channel",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [2450, 400]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"status\": \"success\",\n  \"incident_id\": \"{{ $json.incident_id }}\",\n  \"risk_level\": \"{{ $json.risk_level }}\",\n  \"summary\": {{ JSON.stringify($json.summary) }}\n}",
+        "options": {}
+      },
+      "id": "respond-webhook",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [2670, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Return empty result for branches with no indicators\nreturn { json: { ip_enrichment: [] } };"
+      },
+      "id": "no-ips",
+      "name": "No IPs to Enrich",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1350, 100]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Return empty result for branches with no indicators\nreturn { json: { domain_enrichment: [] } };"
+      },
+      "id": "no-domains",
+      "name": "No Domains to Enrich",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1350, 350]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Return empty result for branches with no indicators\nreturn { json: { hash_enrichment: [] } };"
+      },
+      "id": "no-hashes",
+      "name": "No Hashes to Enrich",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1350, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Return empty result for branches with no indicators\nreturn { json: { hostname_enrichment: [] } };"
+      },
+      "id": "no-hostnames",
+      "name": "No Hostnames to Enrich",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1350, 750]
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get XSOAR Ticket Details",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get XSOAR Ticket Details": {
+      "main": [
+        [
+          {
+            "node": "Extract Indicators",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Indicators": {
+      "main": [
+        [
+          {
+            "node": "Prepare Enrichment Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Enrichment Data": {
+      "main": [
+        [
+          {
+            "node": "Has IPs?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Has Domains?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Has Hashes?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Has Hostnames?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has IPs?": {
+      "main": [
+        [
+          {
+            "node": "Split IPs",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No IPs to Enrich",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Domains?": {
+      "main": [
+        [
+          {
+            "node": "Split Domains",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Domains to Enrich",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Hashes?": {
+      "main": [
+        [
+          {
+            "node": "Split Hashes",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Hashes to Enrich",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Hostnames?": {
+      "main": [
+        [
+          {
+            "node": "Split Hostnames",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Hostnames to Enrich",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split IPs": {
+      "main": [
+        [
+          {
+            "node": "VirusTotal IP Lookup",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "AbuseIPDB Lookup",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Shodan Lookup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "VirusTotal IP Lookup": {
+      "main": [
+        [
+          {
+            "node": "Aggregate IP Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AbuseIPDB Lookup": {
+      "main": [
+        [
+          {
+            "node": "Aggregate IP Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Shodan Lookup": {
+      "main": [
+        [
+          {
+            "node": "Aggregate IP Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Domains": {
+      "main": [
+        [
+          {
+            "node": "VirusTotal Domain Lookup",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "URLScan.io Scan",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "VirusTotal Domain Lookup": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Domain Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "URLScan.io Scan": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Domain Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Hashes": {
+      "main": [
+        [
+          {
+            "node": "VirusTotal Hash Lookup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "VirusTotal Hash Lookup": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Hash Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Hostnames": {
+      "main": [
+        [
+          {
+            "node": "CrowdStrike Device Lookup",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Tanium Endpoint Lookup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CrowdStrike Device Lookup": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Hostname Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tanium Endpoint Lookup": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Hostname Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate IP Results": {
+      "main": [
+        [
+          {
+            "node": "Merge All Enrichments",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate Domain Results": {
+      "main": [
+        [
+          {
+            "node": "Merge All Enrichments",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate Hash Results": {
+      "main": [
+        [
+          {
+            "node": "Merge All Enrichments",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate Hostname Results": {
+      "main": [
+        [
+          {
+            "node": "Merge All Enrichments",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "No IPs to Enrich": {
+      "main": [
+        [
+          {
+            "node": "Merge All Enrichments",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "No Domains to Enrich": {
+      "main": [
+        [
+          {
+            "node": "Merge All Enrichments",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "No Hashes to Enrich": {
+      "main": [
+        [
+          {
+            "node": "Merge All Enrichments",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "No Hostnames to Enrich": {
+      "main": [
+        [
+          {
+            "node": "Merge All Enrichments",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge All Enrichments": {
+      "main": [
+        [
+          {
+            "node": "Compile Enrichment Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compile Enrichment Summary": {
+      "main": [
+        [
+          {
+            "node": "Update XSOAR Ticket with Notes",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Post Summary to Webex SOC Channel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update XSOAR Ticket with Notes": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Post Summary to Webex SOC Channel": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  },
+  "versionId": "1",
+  "meta": {
+    "templateId": "xsoar-ticket-enrichment",
+    "instanceId": ""
+  },
+  "tags": [
+    {
+      "name": "Security",
+      "id": "security"
+    },
+    {
+      "name": "XSOAR",
+      "id": "xsoar"
+    },
+    {
+      "name": "Enrichment",
+      "id": "enrichment"
+    }
+  ],
+  "pinData": {}
+}

@@ -9,10 +9,8 @@ import random
 import time
 import traceback
 from datetime import date, datetime, timedelta
-from pathlib import Path
 from typing import Any, Dict, List
 
-import pytz
 from requests import exceptions as requests_exceptions
 from tabulate import tabulate
 from tenacity import retry, stop_after_attempt, wait_exponential, before_sleep_log
@@ -23,23 +21,22 @@ from webexpythonsdk.models.cards import (
     AdaptiveCard, HorizontalAlignment, FactSet, Fact
 )
 
+from my_config import get_config
 from services import azdo
 from services.xsoar import TicketHandler, ListHandler, XsoarEnvironment
+from src.charts.threatcon_level import load_threatcon_data, THREAT_CON_FILE
 from .constants import (
     config,
     root_directory,
-    ShiftConstants,
     MANAGEMENT_NOTES_FILE,
     DOR_CHART_MESSAGES,
     SHIFT_PERFORMANCE_MESSAGES,
     SHIFT_CHANGE_MESSAGES,
     CHART_NOT_FOUND_MESSAGES,
 )
-from .staffing import get_staffing_data, get_shift_timings
-from .shift_utils import safe_parse_datetime, get_eastern_timezone
 from .metrics import get_open_tickets, BASE_QUERY
-from my_config import get_config
-from src.charts.threatcon_level import load_threatcon_data, THREAT_CON_FILE
+from .shift_utils import safe_parse_datetime, get_eastern_timezone
+from .staffing import get_staffing_data, get_shift_timings
 
 logger = logging.getLogger(__name__)
 CONFIG = get_config()
@@ -61,10 +58,15 @@ def get_region_wise_ticket_counts() -> str:
         # Get all open tickets (not closed)
         open_tickets = ticket_handler.get_tickets(query=BASE_QUERY + ' -status:closed')
 
-        # Get closed incidents with MTP impact (last 24 hours to match daily report)
+        # Get closed incidents with MTP impact (yesterday)
+        yesterday = datetime.now() - timedelta(days=1)
+        start_of_yesterday = yesterday.replace(hour=0, minute=0, second=0, microsecond=0)
+        end_of_yesterday = yesterday.replace(hour=23, minute=59, second=59, microsecond=0)
+        time_format = '%Y-%m-%dT%H:%M:%S'
+        closed_filter = f'closed:>="{start_of_yesterday.strftime(time_format)}" closed:<="{end_of_yesterday.strftime(time_format)}"'
+
         closed_mtp = ticket_handler.get_tickets(
-            query=BASE_QUERY + ' status:closed CustomFields.impact:"Malicious True Positive"',
-            period={"byFrom": "hours", "fromValue": 24, "byTo": "hours", "toValue": 0}
+            query=BASE_QUERY + f' status:closed CustomFields.impact:"Malicious True Positive" {closed_filter}'
         )
 
         # Define regions in display order
@@ -88,6 +90,12 @@ def get_region_wise_ticket_counts() -> str:
         total_open = sum(open_by_region.values())
         total_closed = sum(closed_by_region.values())
 
+        # Determine max digit width for each column (including total)
+        all_open = list(open_by_region.values()) + [total_open]
+        all_closed = list(closed_by_region.values()) + [total_closed]
+        open_width = len(str(max(all_open)))
+        closed_width = len(str(max(all_closed)))
+
         # Build table using texttable
         table = Texttable()
         table.set_deco(Texttable.HEADER | Texttable.VLINES)
@@ -96,11 +104,11 @@ def get_region_wise_ticket_counts() -> str:
         table.header(['Region', 'Open Tickets', 'Closed Incidents'])
 
         for region in regions:
-            open_count = str(open_by_region[region]).zfill(2)
-            closed_count = closed_by_region[region]
+            open_count = str(open_by_region[region]).zfill(open_width)
+            closed_count = str(closed_by_region[region]).zfill(closed_width)
             table.add_row([region, open_count, closed_count])
 
-        table.add_row(['Total', total_open, total_closed])
+        table.add_row(['Total', str(total_open).zfill(open_width), str(total_closed).zfill(closed_width)])
 
         return f"```\n{table.draw()}\n```"
 

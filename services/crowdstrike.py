@@ -8,6 +8,7 @@ import logging
 import sys
 import time
 from datetime import datetime
+from enum import Enum
 from pathlib import Path
 from typing import Dict, Optional, Any, List
 
@@ -23,17 +24,23 @@ from src.utils.http_utils import get_session
 logger = logging.getLogger(__name__)
 
 DATA_DIR = Path(__file__).parent.parent / "data" / "transient" / "epp_device_tagging"
-SHOULD_USE_PROXY = True
 CS_FETCH_MAX_WORKERS = 10
 
 # Get robust HTTP session instance
 http_session = get_session()
 
 
+class CSCredentialProfile(Enum):
+    """CrowdStrike API credential profiles for different permission levels."""
+    READ = "read"
+    WRITE = "write"
+    RTR = "rtr"
+
+
 class CrowdStrikeClient:
     """Client for interacting with the CrowdStrike Falcon API."""
 
-    def __init__(self, use_host_write_creds: bool = False, max_workers: Optional[int] = None):
+    def __init__(self, credential_profile: CSCredentialProfile = CSCredentialProfile.READ, max_workers: Optional[int] = None):
         self.config = get_config()
         self.base_url = "api.us-2.crowdstrike.com"
         self.proxies = self._setup_proxy()
@@ -42,7 +49,7 @@ class CrowdStrikeClient:
             logger.info(f"[CrowdStrikeClient] Proxy enabled: {self.proxies}")
         else:
             logger.info("[CrowdStrikeClient] Proxy not enabled.")
-        self.use_host_write_creds = use_host_write_creds
+        self.credential_profile = credential_profile
         self.auth = self._create_auth()
         self.hosts_client = Hosts(auth_object=self.auth, timeout=30)
         self.detects_client = Detects(auth_object=self.auth, timeout=30)
@@ -52,13 +59,17 @@ class CrowdStrikeClient:
         self.max_workers = max_workers or CS_FETCH_MAX_WORKERS
 
     def _get_client_id_secret(self):
-        if self.use_host_write_creds:
-            return self.config.cs_host_write_client_id, self.config.cs_host_write_client_secret
-        return self.config.cs_ro_client_id, self.config.cs_ro_client_secret
+        match self.credential_profile:
+            case CSCredentialProfile.READ:
+                return self.config.cs_ro_client_id, self.config.cs_ro_client_secret
+            case CSCredentialProfile.WRITE:
+                return self.config.cs_host_write_client_id, self.config.cs_host_write_client_secret
+            case CSCredentialProfile.RTR:
+                return self.config.cs_rtr_client_id, self.config.cs_rtr_client_secret
 
     def _setup_proxy(self):
-        """Setup proxy configuration if enabled"""
-        if not SHOULD_USE_PROXY:
+        """Setup proxy configuration if jump server is enabled"""
+        if not self.config.should_use_jump_server:
             return None
 
         proxy_url = f"http://{self.config.jump_server_host}:8081"
@@ -741,7 +752,7 @@ class CrowdStrikeClient:
 
 def process_unique_hosts(df: pd.DataFrame) -> pd.DataFrame:
     """Process dataframe to get unique hosts with latest last_seen"""
-    df["last_seen"] = pd.to_datetime(df["last_seen"], errors='coerce').dt.tz_localize(None)
+    df["last_seen"] = pd.to_datetime(df["last_seen"], errors='coerce', utc=True).dt.tz_convert(None)  # type: ignore[union-attr]
     return df.loc[df.groupby("hostname")["last_seen"].idxmax()]
 
 

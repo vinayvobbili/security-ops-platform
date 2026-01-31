@@ -14,16 +14,19 @@ from langchain_core.tools import tool
 from services.service_now import ServiceNowClient
 from src.utils.tool_decorator import log_tool_call
 
-# Initialize ServiceNow client once
+# Lazy-initialized ServiceNow client
 _servicenow_client: Optional[ServiceNowClient] = None
 
-try:
-    logging.info("Initializing ServiceNow client...")
-    _servicenow_client = ServiceNowClient()
-    logging.info("ServiceNow client initialized successfully.")
-except Exception as e:
-    logging.error(f"Failed to initialize ServiceNow client: {e}")
-    _servicenow_client = None
+
+def _get_servicenow_client() -> Optional[ServiceNowClient]:
+    """Get ServiceNow client (lazy initialization)."""
+    global _servicenow_client
+    if _servicenow_client is None:
+        try:
+            _servicenow_client = ServiceNowClient()
+        except Exception as e:
+            logging.error(f"Failed to initialize ServiceNow client: {e}")
+    return _servicenow_client
 
 
 def _format_host_details(details: dict, hostname: str) -> str:
@@ -106,14 +109,15 @@ def get_host_details_snow(hostname: str) -> str:
     Args:
         hostname: The hostname to look up (e.g., "US1Q60TZ3" or "SERVER01.domain.com")
     """
-    if not _servicenow_client:
-        return "Error: ServiceNow service is not initialized."
+    client = _get_servicenow_client()
+    if not client:
+        return "Error: ServiceNow service is not available."
 
     hostname = hostname.strip()
     # Remove domain suffix if present
     hostname_short = hostname.split('.')[0]
 
-    details = _servicenow_client.get_host_details(hostname_short)
+    details = client.get_host_details(hostname_short)
     return _format_host_details(details, hostname_short)
 
 

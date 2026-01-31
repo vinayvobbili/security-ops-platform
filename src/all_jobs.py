@@ -47,6 +47,7 @@ from src.components import (
 from webex_bots.jarvis import run_automated_ring_tagging_workflow
 from webex_bots.tars import run_automated_ring_tagging_workflow as run_automated_tanium_ring_tagging_workflow
 from src.components import domain_monitoring
+from services import phish_fort
 from src.utils.fs_utils import make_dir_for_todays_charts, cleanup_old_transient_data
 from src.utils.logging_utils import setup_logging
 from src import peer_ping_keepalive
@@ -376,11 +377,18 @@ def main() -> None:
     logger.info("Scheduling daily birthday/anniversary check (08:00 ET)...")
     schedule_daily('08:00', birthdays_anniversaries.daily_celebration_check, name="birthday_anniversary_check")
 
-    # Domain lookalike and dark web monitoring
+    # Domain lookalike, dark web, and brand impersonation monitoring
+    # Includes CT log search for semantic attacks (acme-loan.com) via crt.sh
     logger.info("Scheduling daily domain monitoring (08:00 ET)...")
     schedule_daily('08:00',
                    lambda: domain_monitoring.run_daily_monitoring(room_id=domain_monitoring.ALERT_ROOM_ID_PROD),
                    name="domain_monitoring")
+
+    # PhishFort incident report - weekly summary of active phishing takedowns
+    logger.info("Scheduling weekly PhishFort incident report (Monday 09:00 ET)...")
+    schedule.every().monday.at('09:00', eastern).do(
+        lambda: safe_run(lambda: phish_fort.fetch_and_report_incidents(room_id=config.webex_room_id_phish_fort), name="phishfort_report")
+    )
 
     # SLA risk monitoring
     logger.info("Scheduling SLA risk monitoring jobs...")

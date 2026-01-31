@@ -1,0 +1,1188 @@
+{
+  "name": "EPP CrowdStrike Tagging Approval Workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "epp-tagging-request",
+        "options": {
+          "rawBody": false
+        },
+        "responseMode": "responseNode"
+      },
+      "id": "webhook-trigger",
+      "name": "Tagging Request Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "webhookId": "epp-tagging-request-webhook"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Validate incoming request payload\nconst body = $json.body || $json;\n\n// Required fields\nconst hostnames = body.hostnames || [];\nconst tagAction = body.tag_action; // 'add' or 'remove'\nconst tagName = body.tag_name; // ring0, ring1, ring2, or custom tag\nconst requester = body.requester; // analyst email\nconst justification = body.justification;\n\n// Validation errors\nconst errors = [];\n\nif (!hostnames || !Array.isArray(hostnames) || hostnames.length === 0) {\n  errors.push('hostnames: Required field, must be a non-empty array');\n}\n\nif (!tagAction || !['add', 'remove'].includes(tagAction)) {\n  errors.push('tag_action: Required field, must be \"add\" or \"remove\"');\n}\n\nif (!tagName || typeof tagName !== 'string') {\n  errors.push('tag_name: Required field (ring0, ring1, ring2, or custom tag)');\n}\n\nif (!requester || typeof requester !== 'string' || !requester.includes('@')) {\n  errors.push('requester: Required field, must be a valid email address');\n}\n\nif (!justification || typeof justification !== 'string' || justification.trim().length < 10) {\n  errors.push('justification: Required field, must be at least 10 characters');\n}\n\n// Generate request ID\nconst requestId = `EPP-TAG-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;\n\nreturn {\n  json: {\n    isValid: errors.length === 0,\n    errors,\n    requestId,\n    hostnames,\n    tagAction,\n    tagName,\n    requester,\n    justification,\n    hostCount: hostnames.length,\n    requestTimestamp: new Date().toISOString()\n  }\n};"
+      },
+      "id": "validate-request",
+      "name": "Validate Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 0]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "check-valid",
+              "leftValue": "={{ $json.isValid }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "is-valid-request",
+      "name": "Is Valid Request?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [440, 0]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: false, error: 'Validation failed', details: $json.errors }) }}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "id": "respond-validation-error",
+      "name": "Respond Validation Error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [660, 120]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.us-2.crowdstrike.com/oauth2/token",
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "client_id",
+              "value": "={{ $credentials.crowdstrike.clientId }}"
+            },
+            {
+              "name": "client_secret",
+              "value": "={{ $credentials.crowdstrike.clientSecret }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "cs-auth",
+      "name": "CrowdStrike Auth",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [660, -120]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Store the access token and original request data\nconst accessToken = $json.access_token;\nconst requestData = $('Validate Request').item.json;\n\n// Build the filter query for CrowdStrike host lookup\nconst hostnames = requestData.hostnames;\nconst hostnameFilter = hostnames.map(h => `hostname:'${h}'`).join(',');\n\nreturn {\n  json: {\n    accessToken,\n    ...requestData,\n    hostnameFilter\n  }\n};"
+      },
+      "id": "prepare-cs-query",
+      "name": "Prepare CS Query",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [880, -120]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.us-2.crowdstrike.com/devices/queries/devices/v1",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "filter",
+              "value": "={{ $json.hostnameFilter }}"
+            },
+            {
+              "name": "limit",
+              "value": "500"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "cs-query-hosts",
+      "name": "Query Hosts in CS",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1100, -120]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "has-hosts",
+              "leftValue": "={{ $json.resources?.length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "hosts-found",
+      "name": "Hosts Found in CS?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1320, -120]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.us-2.crowdstrike.com/devices/entities/devices/v2",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ ids: $json.resources }) }}",
+        "options": {}
+      },
+      "id": "cs-get-host-details",
+      "name": "Get Host Details",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1540, -220]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: false, error: 'No hosts found in CrowdStrike', requestId: $('Validate Request').item.json.requestId }) }}",
+        "options": {
+          "responseCode": 404
+        }
+      },
+      "id": "respond-hosts-not-found",
+      "name": "Respond Hosts Not Found",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1540, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Process host details and current tags\nconst requestData = $('Prepare CS Query').item.json;\nconst hostDetails = $json.resources || [];\n\n// Map hosts with their current tags\nconst hosts = hostDetails.map(host => ({\n  deviceId: host.device_id,\n  hostname: host.hostname,\n  platform: host.platform_name,\n  osVersion: host.os_version,\n  lastSeen: host.last_seen,\n  status: host.status,\n  currentTags: host.tags || [],\n  productType: host.product_type_desc,\n  machineType: host.chassis_type_desc\n}));\n\n// Check which hosts were found vs not found\nconst foundHostnames = hosts.map(h => h.hostname.toLowerCase());\nconst requestedHostnames = requestData.hostnames.map(h => h.toLowerCase());\nconst notFoundHostnames = requestedHostnames.filter(h => !foundHostnames.includes(h));\n\n// Analyze current ring tags\nconst hostsWithRingTags = hosts.filter(h => \n  h.currentTags.some(t => t.includes('Ring') || t.includes('ring'))\n);\n\n// Build the proposed tag in CrowdStrike format\nconst proposedTag = requestData.tagName.startsWith('FalconGroupingTags/') \n  ? requestData.tagName \n  : `FalconGroupingTags/${requestData.tagName}`;\n\nreturn {\n  json: {\n    ...requestData,\n    hosts,\n    foundCount: hosts.length,\n    notFoundHostnames,\n    notFoundCount: notFoundHostnames.length,\n    hostsWithExistingRingTags: hostsWithRingTags.length,\n    proposedTag,\n    deviceIds: hosts.map(h => h.deviceId)\n  }\n};"
+      },
+      "id": "analyze-host-tags",
+      "name": "Analyze Host Tags",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1760, -220]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Check requester permissions based on tag type\nconst requestData = $json;\nconst requester = requestData.requester;\nconst tagName = requestData.tagName.toLowerCase();\nconst tagAction = requestData.tagAction;\n\n// Permission configuration (would typically come from external config/database)\n// For now, define simple rules\nconst isRing0Tag = tagName.includes('ring0');\nconst isRing1Tag = tagName.includes('ring1');\nconst isRing2Tag = tagName.includes('ring2');\n\n// Define permission levels (simplified - in production, query from LDAP/AD)\nconst seniorAnalysts = [\n  // Add senior analyst emails here\n];\n\nconst securityLeads = [\n  // Add security lead emails here  \n];\n\nconst managers = [\n  // Add manager emails here\n];\n\n// Check permissions\nlet hasPermission = true;\nlet permissionIssue = null;\n\n// Ring0 (production/critical) requires higher privilege\nif (isRing0Tag && tagAction === 'add') {\n  // Only senior analysts and above can add ring0 tags\n  // For now, allow all authenticated users but flag for approval\n  hasPermission = true; // Will require manager approval\n}\n\nreturn {\n  json: {\n    ...requestData,\n    hasPermission,\n    permissionIssue,\n    isRing0Tag,\n    isRing1Tag,\n    isRing2Tag,\n    requesterDomain: requester.split('@')[1] || 'unknown'\n  }\n};"
+      },
+      "id": "check-permissions",
+      "name": "Check Permissions",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1980, -220]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Check for change freeze periods\nconst requestData = $json;\nconst now = new Date();\n\n// Get current hour in ET timezone\nconst etOptions = { timeZone: 'America/New_York', hour: 'numeric', hour12: false };\nconst currentHourET = parseInt(new Intl.DateTimeFormat('en-US', etOptions).format(now));\nconst currentDayET = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', weekday: 'short' }).format(now);\n\n// Define change freeze windows (example: no changes during weekends or after hours)\nconst isWeekend = ['Sat', 'Sun'].includes(currentDayET);\nconst isAfterHours = currentHourET < 7 || currentHourET > 19; // Before 7 AM or after 7 PM ET\n\n// Check for explicit freeze dates (would come from calendar/config)\nconst freezeDates = [\n  // Add freeze dates in format 'YYYY-MM-DD'\n];\n\nconst todayStr = now.toISOString().split('T')[0];\nconst isFreezePeriod = freezeDates.includes(todayStr);\n\n// During freeze, only allow with explicit override\nconst inSafetyWindow = !isFreezePeriod && !isWeekend;\nconst safetyWarning = isFreezePeriod \n  ? 'Change freeze is active. Approval from management required.'\n  : isWeekend\n    ? 'Weekend change - requires additional approval.'\n    : isAfterHours\n      ? 'After-hours change - consider waiting for business hours.'\n      : null;\n\nreturn {\n  json: {\n    ...requestData,\n    inSafetyWindow,\n    safetyWarning,\n    isWeekend,\n    isAfterHours,\n    isFreezePeriod,\n    currentTimeET: now.toLocaleString('en-US', { timeZone: 'America/New_York' })\n  }\n};"
+      },
+      "id": "check-safety-window",
+      "name": "Check Safety Window",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2200, -220]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Perform risk assessment and determine approval requirements\nconst requestData = $json;\n\n// Risk factors\nconst hostCount = requestData.foundCount;\nconst isRing0 = requestData.isRing0Tag;\nconst tagAction = requestData.tagAction;\nconst hasExistingRingTags = requestData.hostsWithExistingRingTags > 0;\nconst isFreezePeriod = requestData.isFreezePeriod;\nconst isWeekend = requestData.isWeekend;\n\n// Calculate risk level\nlet riskLevel = 'low';\nlet riskScore = 0;\nconst riskFactors = [];\n\n// Host count risk\nif (hostCount > 100) {\n  riskScore += 30;\n  riskFactors.push(`Bulk change: ${hostCount} hosts`);\n} else if (hostCount > 50) {\n  riskScore += 20;\n  riskFactors.push(`Large change: ${hostCount} hosts`);\n} else if (hostCount > 10) {\n  riskScore += 10;\n  riskFactors.push(`Multiple hosts: ${hostCount}`);\n}\n\n// Ring0 (production) changes are high risk\nif (isRing0) {\n  riskScore += 40;\n  riskFactors.push('Ring0 (production/critical) tag change');\n}\n\n// Removing tags from hosts with ring tags\nif (tagAction === 'remove' && hasExistingRingTags) {\n  riskScore += 15;\n  riskFactors.push('Removing existing ring tags');\n}\n\n// Change during freeze or weekend\nif (isFreezePeriod) {\n  riskScore += 30;\n  riskFactors.push('Change during freeze period');\n}\n\nif (isWeekend) {\n  riskScore += 10;\n  riskFactors.push('Weekend change');\n}\n\n// Determine risk level and required approvals\nif (riskScore >= 50) {\n  riskLevel = 'high';\n} else if (riskScore >= 25) {\n  riskLevel = 'medium';\n}\n\n// Determine approval requirements\nlet requiresApproval = true;\nlet approvalType = 'standard';\nlet approvers = [];\n\nif (isRing0) {\n  approvalType = 'manager';\n  approvers.push('manager');\n}\n\nif (hostCount > 10) {\n  approvalType = 'lead';\n  approvers.push('lead');\n}\n\nif (isRing0 && hostCount > 10) {\n  approvalType = 'security_review';\n  approvers.push('security_lead');\n}\n\nif (isFreezePeriod) {\n  approvalType = 'emergency';\n  approvers.push('director');\n}\n\nreturn {\n  json: {\n    ...requestData,\n    riskLevel,\n    riskScore,\n    riskFactors,\n    requiresApproval,\n    approvalType,\n    approvers\n  }\n};"
+      },
+      "id": "risk-assessment",
+      "name": "Risk Assessment",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2420, -220]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Format approval request message for Webex\nconst data = $json;\n\n// Risk level emoji\nconst riskEmoji = data.riskLevel === 'high' ? '\\u{1F534}' : data.riskLevel === 'medium' ? '\\u{1F7E1}' : '\\u{1F7E2}';\n\n// Build host list (truncate if too many)\nconst maxHostsToShow = 10;\nconst hostList = data.hosts.slice(0, maxHostsToShow).map(h => \n  `  - \\`${h.hostname}\\` (${h.productType || 'Unknown'}) - Current tags: ${h.currentTags.slice(0, 3).join(', ') || 'None'}`\n).join('\\n');\n\nconst moreHostsText = data.hosts.length > maxHostsToShow \n  ? `\\n  - ... and ${data.hosts.length - maxHostsToShow} more hosts`\n  : '';\n\n// Not found hosts\nconst notFoundText = data.notFoundCount > 0\n  ? `\\n\\n**\\u{26A0}\\u{FE0F} Hosts Not Found:** ${data.notFoundHostnames.slice(0, 5).join(', ')}${data.notFoundCount > 5 ? ` and ${data.notFoundCount - 5} more` : ''}`\n  : '';\n\n// Safety warning\nconst safetyText = data.safetyWarning\n  ? `\\n\\n**\\u{26A0}\\u{FE0F} Warning:** ${data.safetyWarning}`\n  : '';\n\n// Risk factors\nconst riskFactorsText = data.riskFactors.length > 0\n  ? `\\n\\n**Risk Factors:**\\n${data.riskFactors.map(f => `  - ${f}`).join('\\n')}`\n  : '';\n\n// Build markdown message\nconst markdown = `${riskEmoji} **EPP Tag Change Request**\n\n**Request ID:** \\`${data.requestId}\\`\n**Requester:** ${data.requester}\n**Submitted:** ${data.currentTimeET}\n\n---\n\n**Action:** ${data.tagAction.toUpperCase()} tag\n**Tag:** \\`${data.proposedTag}\\`\n**Hosts:** ${data.foundCount} (${data.notFoundCount} not found)\n\n**Justification:**\n> ${data.justification}\n\n---\n\n**Affected Hosts:**\n${hostList}${moreHostsText}${notFoundText}\n\n---\n\n**Risk Level:** ${data.riskLevel.toUpperCase()} (Score: ${data.riskScore})${riskFactorsText}\n**Approval Type:** ${data.approvalType.replace('_', ' ').toUpperCase()}${safetyText}\n\n---\n\nPlease review and respond:\n- **APPROVE**: Click the Approve button or reply with \\`/approve ${data.requestId}\\`\n- **REJECT**: Click the Reject button or reply with \\`/reject ${data.requestId} <reason>\\``;\n\n// Build adaptive card for Webex\nconst adaptiveCard = {\n  contentType: 'application/vnd.microsoft.card.adaptive',\n  content: {\n    type: 'AdaptiveCard',\n    version: '1.2',\n    body: [\n      {\n        type: 'TextBlock',\n        text: `${riskEmoji} EPP Tag Change Request`,\n        size: 'large',\n        weight: 'bolder',\n        color: data.riskLevel === 'high' ? 'attention' : data.riskLevel === 'medium' ? 'warning' : 'good'\n      },\n      {\n        type: 'FactSet',\n        facts: [\n          { title: 'Request ID', value: data.requestId },\n          { title: 'Requester', value: data.requester },\n          { title: 'Action', value: `${data.tagAction.toUpperCase()} ${data.proposedTag}` },\n          { title: 'Host Count', value: `${data.foundCount} hosts` },\n          { title: 'Risk Level', value: `${data.riskLevel.toUpperCase()} (${data.riskScore})` }\n        ]\n      },\n      {\n        type: 'TextBlock',\n        text: `**Justification:** ${data.justification}`,\n        wrap: true\n      }\n    ],\n    actions: [\n      {\n        type: 'Action.Submit',\n        title: 'Approve',\n        style: 'positive',\n        data: {\n          action: 'approve',\n          requestId: data.requestId,\n          callback_keyword: 'epp_tag_approve'\n        }\n      },\n      {\n        type: 'Action.Submit',\n        title: 'Reject',\n        style: 'destructive',\n        data: {\n          action: 'reject',\n          requestId: data.requestId,\n          callback_keyword: 'epp_tag_reject'\n        }\n      }\n    ]\n  }\n};\n\nreturn {\n  json: {\n    ...data,\n    approvalMessage: markdown,\n    adaptiveCard\n  }\n};"
+      },
+      "id": "format-approval-request",
+      "name": "Format Approval Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2640, -220]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://webexapis.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"roomId\": \"{{ $credentials.webex.roomId || 'YOUR_WEBEX_ROOM_ID_EPP_CROWDSTRIKE_TAGGING' }}\",\n  \"markdown\": {{ JSON.stringify($json.approvalMessage) }},\n  \"attachments\": [{{ JSON.stringify($json.adaptiveCard) }}]\n}",
+        "options": {}
+      },
+      "id": "send-approval-request",
+      "name": "Send Approval to Webex",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2860, -220]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Store pending request in workflow static data for later processing\nconst requestData = $('Format Approval Request').item.json;\nconst webexMessageId = $json.id;\n\n// Build the pending request record\nconst pendingRequest = {\n  requestId: requestData.requestId,\n  webexMessageId,\n  requester: requestData.requester,\n  hostnames: requestData.hostnames,\n  deviceIds: requestData.deviceIds,\n  tagAction: requestData.tagAction,\n  proposedTag: requestData.proposedTag,\n  riskLevel: requestData.riskLevel,\n  approvalType: requestData.approvalType,\n  createdAt: new Date().toISOString(),\n  expiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString(), // 48 hour expiry\n  status: 'pending',\n  justification: requestData.justification,\n  hosts: requestData.hosts\n};\n\n// In production, this would be stored in a database\n// For now, return for external storage\nreturn {\n  json: {\n    pendingRequest,\n    success: true,\n    message: 'Approval request created and sent to Webex'\n  }\n};"
+      },
+      "id": "store-pending-request",
+      "name": "Store Pending Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3080, -220]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: true, requestId: $json.pendingRequest.requestId, status: 'pending_approval', message: $json.message, expiresAt: $json.pendingRequest.expiresAt }) }}",
+        "options": {
+          "responseCode": 202
+        }
+      },
+      "id": "respond-request-submitted",
+      "name": "Respond Request Submitted",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [3300, -220]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "epp-tagging-approval-response",
+        "options": {
+          "rawBody": false
+        },
+        "responseMode": "responseNode"
+      },
+      "id": "approval-webhook",
+      "name": "Approval Response Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 400],
+      "webhookId": "epp-tagging-approval-response"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse approval/rejection response\nconst body = $json.body || $json;\n\n// Handle Webex card action or direct API call\nconst action = body.action || body.data?.action;\nconst requestId = body.requestId || body.data?.requestId;\nconst approver = body.approver || body.personEmail;\nconst reason = body.reason || '';\n\nconst isApproved = action === 'approve';\nconst isRejected = action === 'reject';\n\nreturn {\n  json: {\n    requestId,\n    action,\n    isApproved,\n    isRejected,\n    approver,\n    reason,\n    responseTimestamp: new Date().toISOString()\n  }\n};"
+      },
+      "id": "parse-approval-response",
+      "name": "Parse Approval Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 400]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "is-approved",
+              "leftValue": "={{ $json.isApproved }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-approval-decision",
+      "name": "Approved?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [440, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Retrieve the pending request from storage\n// In production, this would query the database\nconst approvalData = $json;\n\n// For this example, we'll expect the pending request data to be passed\n// In a real implementation, fetch from database using requestId\nconst pendingRequest = {\n  // This would be fetched from storage\n  requestId: approvalData.requestId,\n  deviceIds: approvalData.deviceIds || [],\n  proposedTag: approvalData.proposedTag || '',\n  tagAction: approvalData.tagAction || 'add',\n  requester: approvalData.requester || '',\n  hosts: approvalData.hosts || []\n};\n\nreturn {\n  json: {\n    ...pendingRequest,\n    approver: approvalData.approver,\n    approvedAt: approvalData.responseTimestamp\n  }\n};"
+      },
+      "id": "retrieve-pending-request",
+      "name": "Retrieve Pending Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 280]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.us-2.crowdstrike.com/oauth2/token",
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "client_id",
+              "value": "={{ $credentials.crowdstrike_write.clientId }}"
+            },
+            {
+              "name": "client_secret",
+              "value": "={{ $credentials.crowdstrike_write.clientSecret }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "cs-auth-write",
+      "name": "CrowdStrike Auth (Write)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [880, 280]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "https://api.us-2.crowdstrike.com/devices/entities/devices/tags/v1",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"action\": \"{{ $('Retrieve Pending Request').item.json.tagAction }}\",\n  \"device_ids\": {{ JSON.stringify($('Retrieve Pending Request').item.json.deviceIds) }},\n  \"tags\": [\"{{ $('Retrieve Pending Request').item.json.proposedTag }}\"]\n}",
+        "options": {}
+      },
+      "id": "cs-update-tags",
+      "name": "Update CS Tags",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1100, 280]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "tag-success",
+              "leftValue": "={{ $json.errors?.length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "tag-update-success",
+      "name": "Tag Update Success?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1320, 280]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Create audit log entry for successful tagging\nconst requestData = $('Retrieve Pending Request').item.json;\nconst csResponse = $('Update CS Tags').item.json;\n\nconst auditEntry = {\n  timestamp: new Date().toISOString(),\n  eventType: 'EPP_TAG_CHANGE',\n  action: requestData.tagAction,\n  requestId: requestData.requestId,\n  tag: requestData.proposedTag,\n  deviceCount: requestData.deviceIds.length,\n  deviceIds: requestData.deviceIds,\n  requester: requestData.requester,\n  approver: requestData.approver,\n  approvedAt: requestData.approvedAt,\n  status: 'success',\n  csResponseCode: csResponse.status_code || 200\n};\n\nreturn {\n  json: {\n    auditEntry,\n    requestData\n  }\n};"
+      },
+      "id": "log-success",
+      "name": "Log Audit Trail (Success)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1540, 180]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://webexapis.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"roomId\": \"{{ $credentials.webex.roomId || 'YOUR_WEBEX_ROOM_ID_EPP_CROWDSTRIKE_TAGGING' }}\",\n  \"markdown\": \"\\u{2705} **EPP Tag Change Completed**\\n\\n**Request ID:** `{{ $json.requestData.requestId }}`\\n**Action:** {{ $json.requestData.tagAction }} `{{ $json.requestData.proposedTag }}`\\n**Hosts:** {{ $json.requestData.deviceIds.length }} devices updated\\n**Approver:** {{ $json.requestData.approver }}\\n**Completed:** {{ $json.auditEntry.timestamp }}\\n\\n---\\nChange has been applied successfully.\"\n}",
+        "options": {}
+      },
+      "id": "notify-success",
+      "name": "Notify Success",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1760, 180]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://webexapis.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"toPersonEmail\": \"{{ $('Retrieve Pending Request').item.json.requester }}\",\n  \"markdown\": \"\\u{2705} **Your EPP Tag Change Request Has Been Completed**\\n\\n**Request ID:** `{{ $('Retrieve Pending Request').item.json.requestId }}`\\n**Action:** {{ $('Retrieve Pending Request').item.json.tagAction }} `{{ $('Retrieve Pending Request').item.json.proposedTag }}`\\n**Hosts:** {{ $('Retrieve Pending Request').item.json.deviceIds.length }} devices updated\\n**Approved by:** {{ $('Retrieve Pending Request').item.json.approver }}\\n\\nYour requested changes have been applied to CrowdStrike.\"\n}",
+        "options": {}
+      },
+      "id": "notify-requester-success",
+      "name": "Notify Requester (Success)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1980, 180]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: true, requestId: $('Retrieve Pending Request').item.json.requestId, status: 'completed', devicesUpdated: $('Retrieve Pending Request').item.json.deviceIds.length }) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "respond-tagging-complete",
+      "name": "Respond Tagging Complete",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [2200, 180]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Log failed tag update\nconst requestData = $('Retrieve Pending Request').item.json;\nconst csResponse = $('Update CS Tags').item.json;\n\nconst failureEntry = {\n  timestamp: new Date().toISOString(),\n  eventType: 'EPP_TAG_CHANGE_FAILED',\n  action: requestData.tagAction,\n  requestId: requestData.requestId,\n  tag: requestData.proposedTag,\n  deviceCount: requestData.deviceIds.length,\n  requester: requestData.requester,\n  approver: requestData.approver,\n  status: 'failed',\n  errors: csResponse.errors || ['Unknown error']\n};\n\nreturn {\n  json: {\n    failureEntry,\n    requestData\n  }\n};"
+      },
+      "id": "log-failure",
+      "name": "Log Audit Trail (Failure)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1540, 380]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://webexapis.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"roomId\": \"{{ $credentials.webex.roomId || 'YOUR_WEBEX_ROOM_ID_EPP_CROWDSTRIKE_TAGGING' }}\",\n  \"markdown\": \"\\u{274C} **EPP Tag Change Failed**\\n\\n**Request ID:** `{{ $json.requestData.requestId }}`\\n**Action:** {{ $json.requestData.tagAction }} `{{ $json.requestData.proposedTag }}`\\n**Error:** {{ JSON.stringify($json.failureEntry.errors) }}\\n\\nPlease investigate and retry if appropriate.\"\n}",
+        "options": {}
+      },
+      "id": "notify-failure",
+      "name": "Notify Failure",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1760, 380]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: false, requestId: $('Retrieve Pending Request').item.json.requestId, status: 'failed', errors: $json.failureEntry.errors }) }}",
+        "options": {
+          "responseCode": 500
+        }
+      },
+      "id": "respond-tagging-failed",
+      "name": "Respond Tagging Failed",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1980, 380]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Handle rejection\nconst rejectionData = $json;\n\nconst rejectionEntry = {\n  timestamp: new Date().toISOString(),\n  eventType: 'EPP_TAG_REJECTED',\n  requestId: rejectionData.requestId,\n  rejectedBy: rejectionData.approver,\n  reason: rejectionData.reason || 'No reason provided'\n};\n\nreturn {\n  json: {\n    rejectionEntry,\n    rejectionData\n  }\n};"
+      },
+      "id": "process-rejection",
+      "name": "Process Rejection",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 520]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://webexapis.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"roomId\": \"{{ $credentials.webex.roomId || 'YOUR_WEBEX_ROOM_ID_EPP_CROWDSTRIKE_TAGGING' }}\",\n  \"markdown\": \"\\u{1F6AB} **EPP Tag Change Rejected**\\n\\n**Request ID:** `{{ $json.rejectionData.requestId }}`\\n**Rejected by:** {{ $json.rejectionData.approver }}\\n**Reason:** {{ $json.rejectionEntry.reason }}\\n**Timestamp:** {{ $json.rejectionEntry.timestamp }}\"\n}",
+        "options": {}
+      },
+      "id": "notify-rejection",
+      "name": "Notify Rejection",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [880, 520]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://webexapis.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"toPersonEmail\": \"{{ $json.rejectionData.requester || '' }}\",\n  \"markdown\": \"\\u{1F6AB} **Your EPP Tag Change Request Was Rejected**\\n\\n**Request ID:** `{{ $json.rejectionData.requestId }}`\\n**Rejected by:** {{ $json.rejectionData.approver }}\\n**Reason:** {{ $json.rejectionEntry.reason }}\\n\\nPlease contact the approver if you have questions.\"\n}",
+        "options": {}
+      },
+      "id": "notify-requester-rejection",
+      "name": "Notify Requester (Rejection)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1100, 520],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: true, requestId: $('Process Rejection').item.json.rejectionData.requestId, status: 'rejected', reason: $('Process Rejection').item.json.rejectionEntry.reason }) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "respond-rejection-processed",
+      "name": "Respond Rejection Processed",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1320, 520]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 1
+            }
+          ]
+        }
+      },
+      "id": "timeout-check-trigger",
+      "name": "Check Timeouts (Hourly)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 700]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Check for pending requests that need escalation or auto-rejection\n// In production, this would query the database for pending requests\n\nconst now = new Date();\nconst escalationThreshold = 24 * 60 * 60 * 1000; // 24 hours\nconst autoRejectThreshold = 48 * 60 * 60 * 1000; // 48 hours\n\n// This would fetch from database in production\nconst pendingRequests = [];\n\nconst needsEscalation = [];\nconst needsAutoReject = [];\n\nfor (const request of pendingRequests) {\n  const createdAt = new Date(request.createdAt);\n  const age = now - createdAt;\n  \n  if (age >= autoRejectThreshold) {\n    needsAutoReject.push(request);\n  } else if (age >= escalationThreshold && !request.escalated) {\n    needsEscalation.push(request);\n  }\n}\n\nreturn {\n  json: {\n    needsEscalation,\n    needsAutoReject,\n    checkedAt: now.toISOString()\n  }\n};"
+      },
+      "id": "check-pending-timeouts",
+      "name": "Check Pending Timeouts",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 700]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "has-escalations",
+              "leftValue": "={{ $json.needsEscalation.length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "has-escalations",
+      "name": "Has Escalations?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [440, 700]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://webexapis.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"roomId\": \"{{ $credentials.webex.roomId || 'YOUR_WEBEX_ROOM_ID_EPP_CROWDSTRIKE_TAGGING' }}\",\n  \"markdown\": \"\\u{23F0} **Escalation: Pending EPP Tag Requests Need Attention**\\n\\nThe following requests have been pending for over 24 hours and require backup approver attention:\\n\\n{{ $json.needsEscalation.map(r => `- Request \\`${r.requestId}\\` from ${r.requester} (${r.hostnames.length} hosts)`).join('\\\\n') }}\\n\\n**Auto-rejection will occur in 24 hours if no action is taken.**\"\n}",
+        "options": {}
+      },
+      "id": "send-escalation",
+      "name": "Send Escalation Notice",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [660, 600]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "has-auto-reject",
+              "leftValue": "={{ $json.needsAutoReject.length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "has-auto-rejects",
+      "name": "Has Auto-Rejects?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [880, 700]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Auto-reject expired requests\nconst requests = $json.needsAutoReject;\n\nconst autoRejected = requests.map(r => ({\n  ...r,\n  status: 'auto_rejected',\n  rejectedAt: new Date().toISOString(),\n  rejectionReason: 'Request expired after 48 hours without approval'\n}));\n\nreturn {\n  json: {\n    autoRejected,\n    count: autoRejected.length\n  }\n};"
+      },
+      "id": "process-auto-rejections",
+      "name": "Process Auto-Rejections",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, 600]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://webexapis.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"roomId\": \"{{ $credentials.webex.roomId || 'YOUR_WEBEX_ROOM_ID_EPP_CROWDSTRIKE_TAGGING' }}\",\n  \"markdown\": \"\\u{274C} **Auto-Rejected EPP Tag Requests**\\n\\nThe following requests have been automatically rejected after 48 hours without response:\\n\\n{{ $json.autoRejected.map(r => `- Request \\`${r.requestId}\\` from ${r.requester}`).join('\\\\n') }}\\n\\nRequesters have been notified. If these changes are still needed, please submit new requests.\"\n}",
+        "options": {}
+      },
+      "id": "notify-auto-rejections",
+      "name": "Notify Auto-Rejections",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1320, 600]
+    },
+    {
+      "parameters": {},
+      "id": "no-timeouts",
+      "name": "No Pending Timeouts",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [1100, 800]
+    }
+  ],
+  "connections": {
+    "Tagging Request Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validate Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Request": {
+      "main": [
+        [
+          {
+            "node": "Is Valid Request?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Valid Request?": {
+      "main": [
+        [
+          {
+            "node": "CrowdStrike Auth",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Validation Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CrowdStrike Auth": {
+      "main": [
+        [
+          {
+            "node": "Prepare CS Query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare CS Query": {
+      "main": [
+        [
+          {
+            "node": "Query Hosts in CS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Query Hosts in CS": {
+      "main": [
+        [
+          {
+            "node": "Hosts Found in CS?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Hosts Found in CS?": {
+      "main": [
+        [
+          {
+            "node": "Get Host Details",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Hosts Not Found",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Host Details": {
+      "main": [
+        [
+          {
+            "node": "Analyze Host Tags",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze Host Tags": {
+      "main": [
+        [
+          {
+            "node": "Check Permissions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Permissions": {
+      "main": [
+        [
+          {
+            "node": "Check Safety Window",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Safety Window": {
+      "main": [
+        [
+          {
+            "node": "Risk Assessment",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Risk Assessment": {
+      "main": [
+        [
+          {
+            "node": "Format Approval Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Approval Request": {
+      "main": [
+        [
+          {
+            "node": "Send Approval to Webex",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Approval to Webex": {
+      "main": [
+        [
+          {
+            "node": "Store Pending Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Pending Request": {
+      "main": [
+        [
+          {
+            "node": "Respond Request Submitted",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Approval Response Webhook": {
+      "main": [
+        [
+          {
+            "node": "Parse Approval Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Approval Response": {
+      "main": [
+        [
+          {
+            "node": "Approved?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Approved?": {
+      "main": [
+        [
+          {
+            "node": "Retrieve Pending Request",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Process Rejection",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Retrieve Pending Request": {
+      "main": [
+        [
+          {
+            "node": "CrowdStrike Auth (Write)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CrowdStrike Auth (Write)": {
+      "main": [
+        [
+          {
+            "node": "Update CS Tags",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update CS Tags": {
+      "main": [
+        [
+          {
+            "node": "Tag Update Success?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tag Update Success?": {
+      "main": [
+        [
+          {
+            "node": "Log Audit Trail (Success)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Audit Trail (Failure)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Audit Trail (Success)": {
+      "main": [
+        [
+          {
+            "node": "Notify Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify Success": {
+      "main": [
+        [
+          {
+            "node": "Notify Requester (Success)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify Requester (Success)": {
+      "main": [
+        [
+          {
+            "node": "Respond Tagging Complete",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Audit Trail (Failure)": {
+      "main": [
+        [
+          {
+            "node": "Notify Failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify Failure": {
+      "main": [
+        [
+          {
+            "node": "Respond Tagging Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Rejection": {
+      "main": [
+        [
+          {
+            "node": "Notify Rejection",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify Rejection": {
+      "main": [
+        [
+          {
+            "node": "Notify Requester (Rejection)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify Requester (Rejection)": {
+      "main": [
+        [
+          {
+            "node": "Respond Rejection Processed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Timeouts (Hourly)": {
+      "main": [
+        [
+          {
+            "node": "Check Pending Timeouts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Pending Timeouts": {
+      "main": [
+        [
+          {
+            "node": "Has Escalations?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Escalations?": {
+      "main": [
+        [
+          {
+            "node": "Send Escalation Notice",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Has Auto-Rejects?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Escalation Notice": {
+      "main": [
+        [
+          {
+            "node": "Has Auto-Rejects?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Auto-Rejects?": {
+      "main": [
+        [
+          {
+            "node": "Process Auto-Rejections",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Pending Timeouts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Auto-Rejections": {
+      "main": [
+        [
+          {
+            "node": "Notify Auto-Rejections",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "EPP",
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z"
+    },
+    {
+      "name": "CrowdStrike",
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z"
+    },
+    {
+      "name": "Approval Workflow",
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z"
+    },
+    {
+      "name": "Webex",
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z"
+    }
+  ],
+  "triggerCount": 0,
+  "pinData": {}
+}

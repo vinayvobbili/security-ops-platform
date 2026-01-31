@@ -1,0 +1,674 @@
+{
+  "name": "Certificate Transparency Monitor",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 6
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 300],
+      "notes": "Runs every 6 hours to check for new certificates"
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "companyDomain",
+              "value": "={{ $env.COMPANY_DOMAIN || 'company.com' }}"
+            },
+            {
+              "name": "webexRoomId",
+              "value": "={{ $env.WEBEX_ROOM_ID }}"
+            },
+            {
+              "name": "webexToken",
+              "value": "={{ $env.WEBEX_ACCESS_TOKEN }}"
+            },
+            {
+              "name": "virusTotalApiKey",
+              "value": "={{ $env.VIRUSTOTAL_API_KEY }}"
+            }
+          ],
+          "object": [
+            {
+              "name": "knownInfrastructure",
+              "value": "={{ JSON.parse($env.KNOWN_INFRASTRUCTURE || '{\"subdomains\": [\"www\", \"mail\", \"api\", \"app\", \"portal\", \"dev\", \"staging\", \"test\", \"cdn\", \"static\", \"assets\", \"docs\", \"support\", \"help\", \"blog\", \"shop\", \"store\", \"admin\", \"dashboard\", \"login\", \"auth\", \"sso\", \"vpn\", \"remote\", \"webmail\", \"ftp\", \"sftp\", \"git\", \"gitlab\", \"github\", \"jenkins\", \"ci\", \"jira\", \"confluence\", \"slack\", \"teams\"], \"trustedCAs\": [\"Let\\'s Encrypt\", \"DigiCert\", \"Sectigo\", \"GlobalSign\", \"Comodo\", \"GoDaddy\", \"Amazon\", \"Google Trust Services\", \"Cloudflare\", \"ZeroSSL\"], \"trustedWildcardCAs\": [\"DigiCert\", \"Sectigo\", \"GlobalSign\", \"Comodo\"]}') }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-config",
+      "name": "Set Configuration",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [220, 300],
+      "notes": "Configure company domain and known infrastructure"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://crt.sh/?q=%25.{{ $json.companyDomain }}&output=json",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 60000
+        }
+      },
+      "id": "query-crtsh",
+      "name": "Query crt.sh",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [440, 300],
+      "notes": "Query Certificate Transparency logs via crt.sh API"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get configuration from previous node\nconst config = $('Set Configuration').first().json;\nconst certificates = $input.all();\n\n// Calculate cutoff time (6 hours ago)\nconst sixHoursAgo = new Date(Date.now() - 6 * 60 * 60 * 1000);\n\n// Get seen certificates from static data (workflow variable)\nlet seenCerts = [];\ntry {\n  const staticData = $getWorkflowStaticData('global');\n  seenCerts = staticData.seenCertificates || [];\n} catch (e) {\n  seenCerts = [];\n}\n\nconst newCertificates = [];\nconst seenIds = new Set(seenCerts);\n\nfor (const item of certificates) {\n  const cert = item.json;\n  \n  // Skip if already seen\n  if (seenIds.has(cert.id)) {\n    continue;\n  }\n  \n  // Parse entry timestamp\n  const entryTime = new Date(cert.entry_timestamp);\n  \n  // Filter for certificates issued in last 6 hours\n  if (entryTime < sixHoursAgo) {\n    continue;\n  }\n  \n  // Extract domain names from certificate\n  const commonName = cert.common_name || '';\n  const nameValue = cert.name_value || '';\n  \n  // Parse all domains from name_value (newline separated)\n  const domains = nameValue.split('\\n').filter(d => d.trim());\n  const allDomains = [...new Set([commonName, ...domains].filter(d => d))];\n  \n  // Extract issuer info\n  const issuerName = cert.issuer_name || '';\n  const issuerCA = extractCA(issuerName);\n  \n  // Check if wildcard certificate\n  const isWildcard = allDomains.some(d => d.startsWith('*.'));\n  \n  // Extract subdomains\n  const companyDomain = config.companyDomain;\n  const subdomains = extractSubdomains(allDomains, companyDomain);\n  \n  newCertificates.push({\n    id: cert.id,\n    serialNumber: cert.serial_number,\n    commonName: commonName,\n    domains: allDomains,\n    subdomains: subdomains,\n    issuerCA: issuerCA,\n    issuerName: issuerName,\n    isWildcard: isWildcard,\n    notBefore: cert.not_before,\n    notAfter: cert.not_after,\n    entryTimestamp: cert.entry_timestamp,\n    companyDomain: companyDomain,\n    knownInfrastructure: config.knownInfrastructure\n  });\n  \n  seenIds.add(cert.id);\n}\n\n// Update seen certificates (keep last 10000 to prevent memory bloat)\nconst updatedSeenCerts = Array.from(seenIds).slice(-10000);\ntry {\n  const staticData = $getWorkflowStaticData('global');\n  staticData.seenCertificates = updatedSeenCerts;\n} catch (e) {\n  // Ignore if static data not available\n}\n\nfunction extractCA(issuerName) {\n  // Extract CA name from issuer string\n  const caMatch = issuerName.match(/O=([^,]+)/i);\n  if (caMatch) {\n    return caMatch[1].trim();\n  }\n  return issuerName;\n}\n\nfunction extractSubdomains(domains, companyDomain) {\n  const subdomains = [];\n  const domainRegex = new RegExp(`^(\\\\*\\\\.)?(.+)\\\\.${companyDomain.replace('.', '\\\\.')}$`, 'i');\n  \n  for (const domain of domains) {\n    const match = domain.match(domainRegex);\n    if (match && match[2]) {\n      subdomains.push(match[2]);\n    } else if (domain === companyDomain) {\n      subdomains.push('@'); // Root domain\n    }\n  }\n  \n  return [...new Set(subdomains)];\n}\n\nreturn newCertificates.map(cert => ({ json: cert }));"
+      },
+      "id": "filter-new-certs",
+      "name": "Filter New Certificates",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 300],
+      "notes": "Filter for new certs in last 6 hours, track seen certs"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "has-certs",
+              "leftValue": "={{ $json.id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "isNotEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-has-certs",
+      "name": "Has New Certificates?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [880, 300],
+      "notes": "Check if there are new certificates to process"
+    },
+    {
+      "parameters": {
+        "jsCode": "const cert = $json;\nconst knownInfra = cert.knownInfrastructure;\n\nlet riskLevel = 'low';\nlet riskScore = 0;\nconst riskFactors = [];\nconst recommendations = [];\n\n// Check 1: Unknown subdomains\nconst unknownSubdomains = cert.subdomains.filter(sub => {\n  if (sub === '@') return false; // Root domain is known\n  return !knownInfra.subdomains.some(known => \n    sub === known || sub.endsWith('.' + known) || sub.startsWith(known + '.')\n  );\n});\n\nif (unknownSubdomains.length > 0) {\n  riskScore += 30;\n  riskFactors.push({\n    type: 'unknown_subdomain',\n    severity: 'medium',\n    details: `Unknown subdomains detected: ${unknownSubdomains.join(', ')}`,\n    subdomains: unknownSubdomains\n  });\n  recommendations.push('Investigate unknown subdomains - verify if legitimate infrastructure');\n}\n\n// Check 2: Wildcard certificate from unexpected CA\nif (cert.isWildcard) {\n  const isTrustedWildcardCA = knownInfra.trustedWildcardCAs.some(ca => \n    cert.issuerCA.toLowerCase().includes(ca.toLowerCase())\n  );\n  \n  if (!isTrustedWildcardCA) {\n    riskScore += 50;\n    riskFactors.push({\n      type: 'suspicious_wildcard',\n      severity: 'high',\n      details: `Wildcard certificate issued by unexpected CA: ${cert.issuerCA}`,\n      issuerCA: cert.issuerCA\n    });\n    recommendations.push('Verify wildcard certificate issuance was authorized');\n    recommendations.push('Check if CA is approved for wildcard certificates in your organization');\n  }\n}\n\n// Check 3: Untrusted CA\nconst isTrustedCA = knownInfra.trustedCAs.some(ca => \n  cert.issuerCA.toLowerCase().includes(ca.toLowerCase())\n);\n\nif (!isTrustedCA) {\n  riskScore += 25;\n  riskFactors.push({\n    type: 'untrusted_ca',\n    severity: 'medium',\n    details: `Certificate issued by CA not in trusted list: ${cert.issuerCA}`,\n    issuerCA: cert.issuerCA\n  });\n  recommendations.push('Verify if this CA should be added to trusted list or investigate unauthorized issuance');\n}\n\n// Check 4: Very short validity (potential test/staging leak)\nconst notBefore = new Date(cert.notBefore);\nconst notAfter = new Date(cert.notAfter);\nconst validityDays = (notAfter - notBefore) / (1000 * 60 * 60 * 24);\n\nif (validityDays < 30) {\n  riskScore += 10;\n  riskFactors.push({\n    type: 'short_validity',\n    severity: 'low',\n    details: `Certificate has very short validity period: ${Math.round(validityDays)} days`,\n    validityDays: Math.round(validityDays)\n  });\n  recommendations.push('Short validity certificates may indicate testing - verify if intentional');\n}\n\n// Check 5: Multiple domains (potential shared hosting risk)\nif (cert.domains.length > 10) {\n  riskScore += 15;\n  riskFactors.push({\n    type: 'many_domains',\n    severity: 'low',\n    details: `Certificate covers many domains: ${cert.domains.length}`,\n    domainCount: cert.domains.length\n  });\n  recommendations.push('Review all domains on certificate for unauthorized entries');\n}\n\n// Determine overall risk level\nif (riskScore >= 50) {\n  riskLevel = 'high';\n} else if (riskScore >= 25) {\n  riskLevel = 'medium';\n} else {\n  riskLevel = 'low';\n}\n\n// Determine if suspicious (needs investigation)\nconst isSuspicious = riskLevel === 'high' || unknownSubdomains.length > 0;\n\nreturn {\n  json: {\n    ...cert,\n    riskAssessment: {\n      riskLevel: riskLevel,\n      riskScore: riskScore,\n      riskFactors: riskFactors,\n      recommendations: recommendations,\n      isSuspicious: isSuspicious,\n      unknownSubdomains: unknownSubdomains,\n      requiresInvestigation: isSuspicious\n    }\n  }\n};"
+      },
+      "id": "risk-assessment",
+      "name": "Risk Assessment",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, 200],
+      "notes": "Assess risk: unknown subdomains, unexpected CAs, wildcards"
+    },
+    {
+      "parameters": {
+        "jsCode": "const cert = $json;\n\n// Extract first domain for DNS lookup (prefer non-wildcard)\nlet checkDomain = cert.domains.find(d => !d.startsWith('*.')) || cert.domains[0];\n\n// Remove wildcard prefix if present\nif (checkDomain.startsWith('*.')) {\n  checkDomain = checkDomain.substring(2);\n}\n\nreturn {\n  json: {\n    ...cert,\n    checkDomain: checkDomain\n  }\n};"
+      },
+      "id": "prepare-dns-check",
+      "name": "Prepare DNS Check",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1320, 200],
+      "notes": "Prepare domain for DNS resolution check"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://dns.google/resolve?name={{ $json.checkDomain }}&type=A",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 10000
+        }
+      },
+      "id": "dns-resolve",
+      "name": "DNS Resolution Check",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1540, 200],
+      "notes": "Check if domain resolves using Google DNS API",
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const prevData = $('Prepare DNS Check').first().json;\nconst dnsResponse = $json;\n\nlet resolvedIPs = [];\nlet dnsStatus = 'unknown';\n\nif (dnsResponse && dnsResponse.Answer) {\n  resolvedIPs = dnsResponse.Answer\n    .filter(a => a.type === 1) // A records\n    .map(a => a.data);\n  dnsStatus = 'resolved';\n} else if (dnsResponse && dnsResponse.Status === 3) {\n  dnsStatus = 'nxdomain'; // Domain does not exist\n} else if (dnsResponse && dnsResponse.Status === 0 && !dnsResponse.Answer) {\n  dnsStatus = 'no_records';\n} else {\n  dnsStatus = 'error';\n}\n\nreturn {\n  json: {\n    ...prevData,\n    dnsCheck: {\n      status: dnsStatus,\n      resolvedIPs: resolvedIPs,\n      queryDomain: prevData.checkDomain\n    }\n  }\n};"
+      },
+      "id": "parse-dns-response",
+      "name": "Parse DNS Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1760, 200],
+      "notes": "Parse DNS resolution results"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "has-ip",
+              "leftValue": "={{ $json.dnsCheck.resolvedIPs.length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-has-ip",
+      "name": "Domain Resolves?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1980, 200],
+      "notes": "Check if domain has resolved IPs for further investigation"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://www.virustotal.com/api/v3/ip_addresses/{{ $json.dnsCheck.resolvedIPs[0] }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 15000
+        },
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-apikey",
+              "value": "={{ $('Set Configuration').first().json.virusTotalApiKey }}"
+            }
+          ]
+        }
+      },
+      "id": "virustotal-ip-check",
+      "name": "VirusTotal IP Check",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2200, 100],
+      "notes": "Check IP reputation in VirusTotal",
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const prevData = $('Parse DNS Response').first().json;\nconst vtResponse = $json;\n\nlet vtAnalysis = {\n  checked: false,\n  ipAddress: prevData.dnsCheck.resolvedIPs[0],\n  maliciousCount: 0,\n  suspiciousCount: 0,\n  harmlessCount: 0,\n  asOwner: 'Unknown',\n  country: 'Unknown',\n  reputation: 0,\n  isMalicious: false\n};\n\nif (vtResponse && vtResponse.data && vtResponse.data.attributes) {\n  const attrs = vtResponse.data.attributes;\n  const stats = attrs.last_analysis_stats || {};\n  \n  vtAnalysis = {\n    checked: true,\n    ipAddress: prevData.dnsCheck.resolvedIPs[0],\n    maliciousCount: stats.malicious || 0,\n    suspiciousCount: stats.suspicious || 0,\n    harmlessCount: stats.harmless || 0,\n    undetectedCount: stats.undetected || 0,\n    asOwner: attrs.as_owner || 'Unknown',\n    asn: attrs.asn || 'Unknown',\n    country: attrs.country || 'Unknown',\n    reputation: attrs.reputation || 0,\n    isMalicious: (stats.malicious || 0) > 0\n  };\n  \n  // Update risk assessment if VT found issues\n  if (vtAnalysis.isMalicious) {\n    prevData.riskAssessment.riskFactors.push({\n      type: 'malicious_ip',\n      severity: 'critical',\n      details: `IP ${vtAnalysis.ipAddress} flagged by ${vtAnalysis.maliciousCount} security vendors`,\n      ipAddress: vtAnalysis.ipAddress,\n      maliciousCount: vtAnalysis.maliciousCount\n    });\n    prevData.riskAssessment.riskLevel = 'critical';\n    prevData.riskAssessment.riskScore += 100;\n    prevData.riskAssessment.recommendations.push('URGENT: IP is flagged as malicious - investigate immediately');\n  }\n  \n  if (vtAnalysis.suspiciousCount > 0) {\n    prevData.riskAssessment.riskFactors.push({\n      type: 'suspicious_ip',\n      severity: 'high',\n      details: `IP ${vtAnalysis.ipAddress} flagged as suspicious by ${vtAnalysis.suspiciousCount} vendors`,\n      ipAddress: vtAnalysis.ipAddress,\n      suspiciousCount: vtAnalysis.suspiciousCount\n    });\n    if (prevData.riskAssessment.riskLevel !== 'critical') {\n      prevData.riskAssessment.riskLevel = 'high';\n    }\n    prevData.riskAssessment.riskScore += 50;\n  }\n}\n\nreturn {\n  json: {\n    ...prevData,\n    virusTotalAnalysis: vtAnalysis\n  }\n};"
+      },
+      "id": "parse-vt-response",
+      "name": "Parse VirusTotal Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2420, 100],
+      "notes": "Parse VirusTotal IP analysis results"
+    },
+    {
+      "parameters": {
+        "jsCode": "// For non-resolving domains, add placeholder for VT analysis\nconst cert = $json;\n\nreturn {\n  json: {\n    ...cert,\n    virusTotalAnalysis: {\n      checked: false,\n      reason: 'Domain does not resolve to any IP',\n      ipAddress: null\n    }\n  }\n};"
+      },
+      "id": "skip-vt-check",
+      "name": "Skip VT Check",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2200, 300],
+      "notes": "Domain doesn't resolve - skip VT check"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "mergeByFields": {
+          "values": [
+            {
+              "field1": "id",
+              "field2": "id"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "merge-results",
+      "name": "Merge Results",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [2640, 200],
+      "notes": "Merge VT checked and non-checked results"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\n// Categorize certificates\nconst critical = [];\nconst high = [];\nconst medium = [];\nconst low = [];\nconst allCerts = [];\n\nfor (const item of items) {\n  const cert = item.json;\n  allCerts.push(cert);\n  \n  switch (cert.riskAssessment.riskLevel) {\n    case 'critical':\n      critical.push(cert);\n      break;\n    case 'high':\n      high.push(cert);\n      break;\n    case 'medium':\n      medium.push(cert);\n      break;\n    default:\n      low.push(cert);\n  }\n}\n\n// Build summary\nconst summary = {\n  timestamp: new Date().toISOString(),\n  totalNewCertificates: allCerts.length,\n  bySeverity: {\n    critical: critical.length,\n    high: high.length,\n    medium: medium.length,\n    low: low.length\n  },\n  criticalCerts: critical,\n  highRiskCerts: high,\n  mediumRiskCerts: medium,\n  lowRiskCerts: low,\n  allCertificates: allCerts,\n  requiresAttention: critical.length > 0 || high.length > 0,\n  companyDomain: items[0]?.json?.companyDomain || 'Unknown'\n};\n\nreturn {\n  json: summary\n};"
+      },
+      "id": "aggregate-results",
+      "name": "Aggregate Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2860, 200],
+      "notes": "Aggregate all results and categorize by risk level"
+    },
+    {
+      "parameters": {
+        "jsCode": "const summary = $json;\n\n// Build Webex message with proper markdown formatting\nlet message = `## Certificate Transparency Monitor Report\\n\\n`;\nmessage += `**Scan Time:** ${summary.timestamp}\\n`;\nmessage += `**Domain Monitored:** ${summary.companyDomain}\\n\\n`;\n\nmessage += `### Summary\\n`;\nmessage += `- **Total New Certificates:** ${summary.totalNewCertificates}\\n`;\nmessage += `- **Critical:** ${summary.bySeverity.critical}\\n`;\nmessage += `- **High Risk:** ${summary.bySeverity.high}\\n`;\nmessage += `- **Medium Risk:** ${summary.bySeverity.medium}\\n`;\nmessage += `- **Low Risk:** ${summary.bySeverity.low}\\n\\n`;\n\n// Critical alerts\nif (summary.criticalCerts.length > 0) {\n  message += `### CRITICAL ALERTS\\n\\n`;\n  for (const cert of summary.criticalCerts) {\n    message += formatCertAlert(cert, 'critical');\n  }\n}\n\n// High risk alerts\nif (summary.highRiskCerts.length > 0) {\n  message += `### HIGH RISK CERTIFICATES\\n\\n`;\n  for (const cert of summary.highRiskCerts) {\n    message += formatCertAlert(cert, 'high');\n  }\n}\n\n// Medium risk (condensed)\nif (summary.mediumRiskCerts.length > 0) {\n  message += `### Medium Risk Certificates\\n\\n`;\n  for (const cert of summary.mediumRiskCerts.slice(0, 5)) {\n    message += `- **${cert.commonName}** - ${cert.riskAssessment.riskFactors.map(f => f.type).join(', ')}\\n`;\n  }\n  if (summary.mediumRiskCerts.length > 5) {\n    message += `- _...and ${summary.mediumRiskCerts.length - 5} more_\\n`;\n  }\n  message += '\\n';\n}\n\n// Low risk summary\nif (summary.lowRiskCerts.length > 0) {\n  message += `### Low Risk Certificates\\n`;\n  message += `${summary.lowRiskCerts.length} new certificates detected with low risk. No immediate action required.\\n\\n`;\n}\n\n// Recommendations section\nif (summary.requiresAttention) {\n  message += `### Recommended Actions\\n\\n`;\n  const allRecs = new Set();\n  \n  for (const cert of [...summary.criticalCerts, ...summary.highRiskCerts]) {\n    for (const rec of cert.riskAssessment.recommendations) {\n      allRecs.add(rec);\n    }\n  }\n  \n  for (const rec of allRecs) {\n    message += `1. ${rec}\\n`;\n  }\n  message += '\\n';\n}\n\n// No issues found\nif (summary.totalNewCertificates === 0) {\n  message = `## Certificate Transparency Monitor Report\\n\\n`;\n  message += `**Scan Time:** ${summary.timestamp}\\n`;\n  message += `**Domain Monitored:** ${summary.companyDomain}\\n\\n`;\n  message += `No new certificates detected in the last 6 hours.\\n`;\n}\n\nfunction formatCertAlert(cert, severity) {\n  let alert = '';\n  const icon = severity === 'critical' ? '**[CRITICAL]**' : '**[HIGH]**';\n  \n  alert += `${icon} **${cert.commonName}**\\n`;\n  alert += `- **Domains:** ${cert.domains.slice(0, 5).join(', ')}${cert.domains.length > 5 ? '...' : ''}\\n`;\n  alert += `- **Issuer:** ${cert.issuerCA}\\n`;\n  alert += `- **Issued:** ${cert.notBefore}\\n`;\n  \n  if (cert.dnsCheck) {\n    alert += `- **DNS Status:** ${cert.dnsCheck.status}`;\n    if (cert.dnsCheck.resolvedIPs.length > 0) {\n      alert += ` (${cert.dnsCheck.resolvedIPs.join(', ')})`;\n    }\n    alert += '\\n';\n  }\n  \n  if (cert.virusTotalAnalysis && cert.virusTotalAnalysis.checked) {\n    const vt = cert.virusTotalAnalysis;\n    alert += `- **VirusTotal:** ${vt.maliciousCount} malicious, ${vt.suspiciousCount} suspicious\\n`;\n    alert += `- **Hosting:** ${vt.asOwner} (${vt.country})\\n`;\n  }\n  \n  alert += `- **Risk Factors:**\\n`;\n  for (const factor of cert.riskAssessment.riskFactors) {\n    alert += `  - ${factor.details}\\n`;\n  }\n  alert += '\\n';\n  \n  return alert;\n}\n\nreturn {\n  json: {\n    ...summary,\n    webexMessage: message\n  }\n};"
+      },
+      "id": "format-webex-message",
+      "name": "Format Webex Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3080, 200],
+      "notes": "Format results as Webex markdown message"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://webexapis.com/v1/messages",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        },
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Set Configuration').first().json.webexToken }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "roomId",
+              "value": "={{ $('Set Configuration').first().json.webexRoomId }}"
+            },
+            {
+              "name": "markdown",
+              "value": "={{ $json.webexMessage }}"
+            }
+          ]
+        }
+      },
+      "id": "send-webex-alert",
+      "name": "Send Webex Alert",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [3300, 200],
+      "notes": "Send formatted alert to Webex room"
+    },
+    {
+      "parameters": {
+        "jsCode": "const summary = $('Format Webex Message').first().json;\n\nreturn {\n  json: {\n    status: 'completed',\n    timestamp: new Date().toISOString(),\n    summary: {\n      totalCertificates: summary.totalNewCertificates,\n      critical: summary.bySeverity.critical,\n      high: summary.bySeverity.high,\n      medium: summary.bySeverity.medium,\n      low: summary.bySeverity.low,\n      alertSent: true\n    }\n  }\n};"
+      },
+      "id": "final-status",
+      "name": "Final Status",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3520, 200],
+      "notes": "Output final workflow status"
+    },
+    {
+      "parameters": {
+        "jsCode": "// No new certificates found - log status\nreturn {\n  json: {\n    status: 'completed',\n    timestamp: new Date().toISOString(),\n    message: 'No new certificates found in the monitoring window',\n    alertSent: false\n  }\n};"
+      },
+      "id": "no-certs-found",
+      "name": "No New Certificates",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, 400],
+      "notes": "Handle case when no new certs found"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Check for lookalike domains (phishing detection)\nconst cert = $json;\nconst companyDomain = cert.companyDomain;\nconst companyName = companyDomain.split('.')[0];\n\n// Common typosquatting patterns\nconst lookalikePotentials = [];\n\nfor (const domain of cert.domains) {\n  // Skip if exact company domain\n  if (domain.endsWith('.' + companyDomain) || domain === companyDomain) {\n    continue;\n  }\n  \n  const domainBase = domain.split('.').slice(-2, -1)[0] || domain.split('.')[0];\n  \n  // Check for typosquatting patterns\n  const patterns = [\n    // Character substitution (l/1, o/0, etc.)\n    domainBase.replace(/l/g, '1'),\n    domainBase.replace(/o/g, '0'),\n    domainBase.replace(/i/g, '1'),\n    // Missing characters\n    companyName.slice(1),\n    companyName.slice(0, -1),\n    // Double characters\n    companyName.replace(/(.)/g, '$1$1'),\n    // Swapped characters\n    ...getSwappedVersions(companyName)\n  ];\n  \n  // Calculate similarity\n  const similarity = calculateSimilarity(domainBase.toLowerCase(), companyName.toLowerCase());\n  \n  if (similarity > 0.6 && similarity < 1.0) {\n    lookalikePotentials.push({\n      domain: domain,\n      similarity: Math.round(similarity * 100),\n      pattern: 'high_similarity'\n    });\n  }\n  \n  // Check for brand + keyword patterns\n  const brandKeywords = ['login', 'secure', 'account', 'verify', 'update', 'support', 'help', 'service'];\n  for (const keyword of brandKeywords) {\n    if (domainBase.includes(companyName) && domainBase.includes(keyword)) {\n      lookalikePotentials.push({\n        domain: domain,\n        similarity: 70,\n        pattern: 'brand_keyword_combo'\n      });\n    }\n  }\n}\n\n// Add lookalike findings to risk assessment\nif (lookalikePotentials.length > 0) {\n  cert.riskAssessment.riskFactors.push({\n    type: 'lookalike_domain',\n    severity: 'critical',\n    details: `Potential phishing/lookalike domains detected: ${lookalikePotentials.map(l => l.domain).join(', ')}`,\n    lookalikes: lookalikePotentials\n  });\n  cert.riskAssessment.riskLevel = 'critical';\n  cert.riskAssessment.riskScore += 100;\n  cert.riskAssessment.recommendations.push('CRITICAL: Potential phishing infrastructure detected - investigate and consider takedown');\n}\n\nfunction calculateSimilarity(s1, s2) {\n  const longer = s1.length > s2.length ? s1 : s2;\n  const shorter = s1.length > s2.length ? s2 : s1;\n  \n  if (longer.length === 0) return 1.0;\n  \n  const costs = [];\n  for (let i = 0; i <= s1.length; i++) {\n    let lastValue = i;\n    for (let j = 0; j <= s2.length; j++) {\n      if (i === 0) {\n        costs[j] = j;\n      } else if (j > 0) {\n        let newValue = costs[j - 1];\n        if (s1.charAt(i - 1) !== s2.charAt(j - 1)) {\n          newValue = Math.min(Math.min(newValue, lastValue), costs[j]) + 1;\n        }\n        costs[j - 1] = lastValue;\n        lastValue = newValue;\n      }\n    }\n    if (i > 0) costs[s2.length] = lastValue;\n  }\n  \n  return (longer.length - costs[s2.length]) / longer.length;\n}\n\nfunction getSwappedVersions(str) {\n  const versions = [];\n  for (let i = 0; i < str.length - 1; i++) {\n    const swapped = str.slice(0, i) + str[i + 1] + str[i] + str.slice(i + 2);\n    versions.push(swapped);\n  }\n  return versions;\n}\n\nreturn { json: cert };"
+      },
+      "id": "lookalike-detection",
+      "name": "Lookalike Domain Detection",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2640, 400],
+      "notes": "Detect potential phishing/typosquatting domains"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "skip-vt-rate-limit",
+              "leftValue": "={{ $('Set Configuration').first().json.virusTotalApiKey }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "isNotEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-vt-api-key",
+      "name": "Has VT API Key?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [2200, 0],
+      "notes": "Only check VT if API key is configured"
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Set Configuration",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Configuration": {
+      "main": [
+        [
+          {
+            "node": "Query crt.sh",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Query crt.sh": {
+      "main": [
+        [
+          {
+            "node": "Filter New Certificates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter New Certificates": {
+      "main": [
+        [
+          {
+            "node": "Has New Certificates?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has New Certificates?": {
+      "main": [
+        [
+          {
+            "node": "Risk Assessment",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No New Certificates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Risk Assessment": {
+      "main": [
+        [
+          {
+            "node": "Prepare DNS Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare DNS Check": {
+      "main": [
+        [
+          {
+            "node": "DNS Resolution Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DNS Resolution Check": {
+      "main": [
+        [
+          {
+            "node": "Parse DNS Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse DNS Response": {
+      "main": [
+        [
+          {
+            "node": "Domain Resolves?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Domain Resolves?": {
+      "main": [
+        [
+          {
+            "node": "Has VT API Key?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Skip VT Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has VT API Key?": {
+      "main": [
+        [
+          {
+            "node": "VirusTotal IP Check",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Skip VT Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "VirusTotal IP Check": {
+      "main": [
+        [
+          {
+            "node": "Parse VirusTotal Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse VirusTotal Response": {
+      "main": [
+        [
+          {
+            "node": "Lookalike Domain Detection",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Skip VT Check": {
+      "main": [
+        [
+          {
+            "node": "Lookalike Domain Detection",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lookalike Domain Detection": {
+      "main": [
+        [
+          {
+            "node": "Merge Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Results": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate Results": {
+      "main": [
+        [
+          {
+            "node": "Format Webex Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Webex Message": {
+      "main": [
+        [
+          {
+            "node": "Send Webex Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Webex Alert": {
+      "main": [
+        [
+          {
+            "node": "Final Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all"
+  },
+  "staticData": {
+    "global": {
+      "seenCertificates": []
+    }
+  },
+  "tags": [
+    {
+      "name": "security",
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z"
+    },
+    {
+      "name": "certificate-transparency",
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z"
+    },
+    {
+      "name": "monitoring",
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z"
+    },
+    {
+      "name": "phishing-detection",
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z"
+    }
+  ],
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "certificate-transparency-monitor-v1"
+  }
+}

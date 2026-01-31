@@ -1,0 +1,282 @@
+{
+  "name": "Alert Deduplication Workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "alert-intake",
+        "options": {
+          "responseMode": "onReceived",
+          "responseData": "allEntries"
+        }
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "webhookId": "alert-intake-webhook"
+    },
+    {
+      "parameters": {
+        "functionCode": "// Normalize Alert Format\n// Supports CrowdStrike, QRadar, and Vectra alert formats\n\nconst input = items[0].json;\nlet normalized = {};\n\n// Detect source and normalize\nif (input.metadata && input.metadata.eventType) {\n  // CrowdStrike format\n  normalized = {\n    source: 'crowdstrike',\n    hostname: input.ComputerName || input.hostname || input.aid || 'unknown',\n    ip_address: input.LocalIP || input.aip || input.ip_address || 'unknown',\n    detection_type: input.DetectName || input.Tactic || input.detection_type || 'unknown',\n    severity: normalizeSeverity(input.Severity || input.SeverityName || 'medium'),\n    timestamp: input.ProcessStartTime || input.timestamp || new Date().toISOString(),\n    raw_alert: input\n  };\n} else if (input.QIDNAME || input.LOGSOURCENAME) {\n  // QRadar format\n  normalized = {\n    source: 'qradar',\n    hostname: input.HOSTNAME || input.IDENTITYHOSTNAME || input.hostname || 'unknown',\n    ip_address: input.SOURCEIP || input.DESTINATIONIP || input.ip_address || 'unknown',\n    detection_type: input.QIDNAME || input.CATEGORYNAME || input.detection_type || 'unknown',\n    severity: normalizeSeverity(input.SEVERITY || input.MAGNITUDE || 'medium'),\n    timestamp: input.STARTTIME || input.starttime || new Date().toISOString(),\n    raw_alert: input\n  };\n} else if (input.entity || input.detection) {\n  // Vectra format\n  normalized = {\n    source: 'vectra',\n    hostname: input.entity?.name || input.src_host?.name || input.hostname || 'unknown',\n    ip_address: input.entity?.ip || input.src_ip || input.ip_address || 'unknown',\n    detection_type: input.detection?.detection_type || input.category || input.detection_type || 'unknown',\n    severity: normalizeSeverity(input.threat || input.certainty || input.severity || 'medium'),\n    timestamp: input.first_timestamp || input.timestamp || new Date().toISOString(),\n    raw_alert: input\n  };\n} else {\n  // Generic/unknown format - attempt best-effort normalization\n  normalized = {\n    source: input.source || 'unknown',\n    hostname: input.hostname || input.host || input.computer_name || 'unknown',\n    ip_address: input.ip_address || input.ip || input.src_ip || input.dest_ip || 'unknown',\n    detection_type: input.detection_type || input.alert_type || input.rule_name || input.event_type || 'unknown',\n    severity: normalizeSeverity(input.severity || input.priority || 'medium'),\n    timestamp: input.timestamp || input.created_at || input.event_time || new Date().toISOString(),\n    raw_alert: input\n  };\n}\n\n// Helper function to normalize severity to standard scale\nfunction normalizeSeverity(severity) {\n  if (typeof severity === 'number') {\n    if (severity >= 90 || severity >= 9) return 'critical';\n    if (severity >= 70 || severity >= 7) return 'high';\n    if (severity >= 40 || severity >= 4) return 'medium';\n    return 'low';\n  }\n  \n  const sev = String(severity).toLowerCase();\n  if (['critical', 'crit', '1', 'very high', 'severe'].includes(sev)) return 'critical';\n  if (['high', '2', 'major'].includes(sev)) return 'high';\n  if (['medium', 'med', '3', 'moderate', 'warning'].includes(sev)) return 'medium';\n  if (['low', '4', '5', 'minor', 'info', 'informational'].includes(sev)) return 'low';\n  return 'medium';\n}\n\n// Add processing metadata\nnormalized.processing_timestamp = new Date().toISOString();\nnormalized.workflow_version = '1.0.0';\n\nreturn [{ json: normalized }];"
+      },
+      "id": "normalize-alert",
+      "name": "Normalize Alert Format",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [470, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Generate Deduplication Key\n// Hash of (hostname + detection_type + 6-hour window)\n\nconst crypto = require('crypto');\nconst alert = items[0].json;\n\n// Calculate 6-hour time window\n// Floor to nearest 6-hour boundary for consistent windowing\nconst timestamp = new Date(alert.timestamp);\nconst sixHoursMs = 6 * 60 * 60 * 1000;\nconst windowStart = new Date(Math.floor(timestamp.getTime() / sixHoursMs) * sixHoursMs);\nconst windowId = windowStart.toISOString();\n\n// Create dedup key components\nconst dedupComponents = {\n  hostname: (alert.hostname || 'unknown').toLowerCase().trim(),\n  detection_type: (alert.detection_type || 'unknown').toLowerCase().trim(),\n  window_id: windowId\n};\n\n// Generate hash\nconst dedupString = JSON.stringify(dedupComponents);\nconst dedupKey = crypto.createHash('sha256').update(dedupString).digest('hex').substring(0, 16);\n\n// Add dedup metadata to alert\nalert.dedup_key = dedupKey;\nalert.dedup_window_start = windowStart.toISOString();\nalert.dedup_window_end = new Date(windowStart.getTime() + sixHoursMs).toISOString();\nalert.dedup_components = dedupComponents;\n\nreturn [{ json: alert }];"
+      },
+      "id": "generate-dedup-key",
+      "name": "Generate Dedup Key",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [690, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Deduplication Logic using n8n Static Data\n// Manages alert state across workflow executions\n\nconst alert = items[0].json;\nconst dedupKey = alert.dedup_key;\nconst currentTime = new Date();\nconst sixHoursMs = 6 * 60 * 60 * 1000;\n\n// Severity ranking for escalation detection\nconst severityRank = {\n  'low': 1,\n  'medium': 2,\n  'high': 3,\n  'critical': 4\n};\n\n// Get static data (persists across workflow executions)\nconst staticData = $getWorkflowStaticData('global');\n\n// Initialize alert store if not exists\nif (!staticData.alertStore) {\n  staticData.alertStore = {};\n}\n\n// Clean up expired entries (older than 6 hours)\nconst now = currentTime.getTime();\nfor (const key in staticData.alertStore) {\n  const entry = staticData.alertStore[key];\n  if (now - new Date(entry.first_seen).getTime() > sixHoursMs) {\n    delete staticData.alertStore[key];\n  }\n}\n\n// Check for existing alert with same dedup key\nconst existingAlert = staticData.alertStore[dedupKey];\n\nlet decision = {};\n\nif (!existingAlert) {\n  // First occurrence - store and pass through\n  staticData.alertStore[dedupKey] = {\n    first_seen: alert.timestamp,\n    last_seen: alert.timestamp,\n    occurrence_count: 1,\n    highest_severity: alert.severity,\n    hosts: [alert.hostname],\n    ip_addresses: [alert.ip_address],\n    detection_type: alert.detection_type,\n    source: alert.source\n  };\n  \n  decision = {\n    action: 'pass_through',\n    reason: 'first_occurrence',\n    occurrence_count: 1,\n    first_seen: alert.timestamp,\n    related_hosts: [alert.hostname],\n    related_ips: [alert.ip_address]\n  };\n  \n} else {\n  // Duplicate found - check conditions\n  existingAlert.occurrence_count++;\n  existingAlert.last_seen = alert.timestamp;\n  \n  // Track unique hosts and IPs\n  if (!existingAlert.hosts.includes(alert.hostname)) {\n    existingAlert.hosts.push(alert.hostname);\n  }\n  if (!existingAlert.ip_addresses.includes(alert.ip_address)) {\n    existingAlert.ip_addresses.push(alert.ip_address);\n  }\n  \n  // Check for severity escalation\n  const currentSeverityRank = severityRank[alert.severity] || 2;\n  const previousSeverityRank = severityRank[existingAlert.highest_severity] || 2;\n  \n  if (currentSeverityRank > previousSeverityRank) {\n    // Severity escalation - pass through\n    existingAlert.highest_severity = alert.severity;\n    \n    decision = {\n      action: 'pass_through',\n      reason: 'severity_escalation',\n      previous_severity: existingAlert.highest_severity,\n      new_severity: alert.severity,\n      occurrence_count: existingAlert.occurrence_count,\n      first_seen: existingAlert.first_seen,\n      related_hosts: existingAlert.hosts,\n      related_ips: existingAlert.ip_addresses\n    };\n  } else {\n    // Regular duplicate - suppress\n    decision = {\n      action: 'suppress',\n      reason: 'duplicate_within_window',\n      occurrence_count: existingAlert.occurrence_count,\n      first_seen: existingAlert.first_seen,\n      suppressed_at: currentTime.toISOString(),\n      related_hosts: existingAlert.hosts,\n      related_ips: existingAlert.ip_addresses\n    };\n  }\n}\n\n// Attach decision to alert\nalert.dedup_decision = decision;\nalert.occurrence_count = decision.occurrence_count;\nalert.first_seen = decision.first_seen;\nalert.related_hosts = decision.related_hosts;\nalert.related_ips = decision.related_ips;\n\n// Update static data\nstaticData.alertStore[dedupKey] = staticData.alertStore[dedupKey] || {};\n\nreturn [{ json: alert }];"
+      },
+      "id": "dedup-logic",
+      "name": "Deduplication Logic",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [910, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.dedup_decision.action}}",
+              "operation": "equals",
+              "value2": "pass_through"
+            }
+          ]
+        }
+      },
+      "id": "route-decision",
+      "name": "Route by Decision",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1130, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Enrich passed-through alerts with additional context\n\nconst alert = items[0].json;\n\n// Add enrichment fields\nalert.enriched = true;\nalert.enrichment_timestamp = new Date().toISOString();\n\n// Calculate time since first seen\nconst firstSeen = new Date(alert.first_seen);\nconst now = new Date();\nalert.time_since_first_seen_seconds = Math.floor((now - firstSeen) / 1000);\n\n// Add escalation flag if applicable\nalert.is_escalation = alert.dedup_decision.reason === 'severity_escalation';\n\n// Add multi-host indicator\nalert.is_multi_host = (alert.related_hosts && alert.related_hosts.length > 1);\nalert.affected_host_count = alert.related_hosts ? alert.related_hosts.length : 1;\n\n// Generate alert fingerprint for downstream correlation\nconst fingerprint = {\n  detection_type: alert.detection_type,\n  source: alert.source,\n  severity: alert.severity,\n  primary_host: alert.hostname\n};\nalert.alert_fingerprint = JSON.stringify(fingerprint);\n\nreturn [{ json: alert }];"
+      },
+      "id": "enrich-alert",
+      "name": "Enrich Alert",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1350, 200]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Log suppressed alerts for metrics and debugging\n\nconst alert = items[0].json;\n\n// Create suppression log entry\nconst suppressionLog = {\n  log_type: 'alert_suppressed',\n  dedup_key: alert.dedup_key,\n  detection_type: alert.detection_type,\n  hostname: alert.hostname,\n  source: alert.source,\n  severity: alert.severity,\n  occurrence_count: alert.occurrence_count,\n  first_seen: alert.first_seen,\n  suppressed_at: new Date().toISOString(),\n  reason: alert.dedup_decision.reason,\n  window_start: alert.dedup_window_start,\n  window_end: alert.dedup_window_end\n};\n\n// This output can be sent to a logging system or discarded\n// Useful for tracking dedup effectiveness metrics\n\nreturn [{ json: suppressionLog }];"
+      },
+      "id": "log-suppressed",
+      "name": "Log Suppressed",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1350, 400]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Multi-Host Event Aggregation\n// Creates super-alerts when 5+ hosts have same detection type\n\nconst alert = items[0].json;\nconst staticData = $getWorkflowStaticData('global');\nconst currentTime = new Date();\nconst aggregationWindowMs = 30 * 60 * 1000; // 30-minute aggregation window\n\n// Initialize aggregation store\nif (!staticData.aggregationStore) {\n  staticData.aggregationStore = {};\n}\n\n// Clean up expired aggregation windows\nconst now = currentTime.getTime();\nfor (const key in staticData.aggregationStore) {\n  const entry = staticData.aggregationStore[key];\n  if (now - new Date(entry.window_start).getTime() > aggregationWindowMs) {\n    delete staticData.aggregationStore[key];\n  }\n}\n\n// Create aggregation key based on detection type and source\nconst aggKey = `${alert.source}_${alert.detection_type}`.toLowerCase().replace(/[^a-z0-9_]/g, '_');\n\n// Get or create aggregation entry\nlet aggEntry = staticData.aggregationStore[aggKey];\n\nif (!aggEntry) {\n  aggEntry = {\n    detection_type: alert.detection_type,\n    source: alert.source,\n    window_start: currentTime.toISOString(),\n    hosts: [],\n    ip_addresses: [],\n    alerts: [],\n    highest_severity: 'low',\n    multi_host_triggered: false\n  };\n  staticData.aggregationStore[aggKey] = aggEntry;\n}\n\n// Severity ranking\nconst severityRank = { 'low': 1, 'medium': 2, 'high': 3, 'critical': 4 };\n\n// Add current alert to aggregation\nif (!aggEntry.hosts.includes(alert.hostname)) {\n  aggEntry.hosts.push(alert.hostname);\n}\nif (!aggEntry.ip_addresses.includes(alert.ip_address)) {\n  aggEntry.ip_addresses.push(alert.ip_address);\n}\naggEntry.alerts.push({\n  hostname: alert.hostname,\n  ip_address: alert.ip_address,\n  timestamp: alert.timestamp,\n  severity: alert.severity\n});\n\n// Update highest severity\nif (severityRank[alert.severity] > severityRank[aggEntry.highest_severity]) {\n  aggEntry.highest_severity = alert.severity;\n}\n\n// Check for multi-host threshold (5+ unique hosts)\nconst multiHostThreshold = 5;\nlet output = [];\n\nif (aggEntry.hosts.length >= multiHostThreshold && !aggEntry.multi_host_triggered) {\n  // Create multi-host super-alert\n  aggEntry.multi_host_triggered = true;\n  \n  const superAlert = {\n    alert_type: 'multi_host_event',\n    detection_type: alert.detection_type,\n    source: alert.source,\n    severity: 'critical', // Auto-escalate to critical\n    original_highest_severity: aggEntry.highest_severity,\n    affected_hosts: aggEntry.hosts,\n    affected_host_count: aggEntry.hosts.length,\n    affected_ip_addresses: aggEntry.ip_addresses,\n    window_start: aggEntry.window_start,\n    triggered_at: currentTime.toISOString(),\n    constituent_alerts: aggEntry.alerts,\n    alert_count: aggEntry.alerts.length,\n    message: `Multi-host event detected: ${aggEntry.hosts.length} hosts affected by ${alert.detection_type}`,\n    recommended_action: 'Immediate investigation required - potential lateral movement or widespread attack',\n    dedup_key: alert.dedup_key,\n    workflow_version: '1.0.0'\n  };\n  \n  // Output both the super-alert and the original alert\n  output.push({ json: superAlert });\n  output.push({ json: { ...alert, triggered_multi_host: true } });\n} else {\n  // Just pass through the enriched alert\n  alert.aggregation_status = {\n    key: aggKey,\n    current_host_count: aggEntry.hosts.length,\n    threshold: multiHostThreshold,\n    multi_host_triggered: aggEntry.multi_host_triggered\n  };\n  output.push({ json: alert });\n}\n\nreturn output;"
+      },
+      "id": "multi-host-aggregation",
+      "name": "Multi-Host Aggregation",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1570, 200]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Prepare final deduplicated alert stream\n// Output format ready for downstream workflows\n\nconst alert = items[0].json;\nconst outputTime = new Date().toISOString();\n\n// Create standardized output format\nconst dedupedAlert = {\n  // Core alert fields\n  id: `dedup_${alert.dedup_key}_${Date.now()}`,\n  source: alert.source,\n  hostname: alert.hostname,\n  ip_address: alert.ip_address,\n  detection_type: alert.detection_type,\n  severity: alert.severity,\n  timestamp: alert.timestamp,\n  \n  // Deduplication metadata\n  dedup_key: alert.dedup_key,\n  occurrence_count: alert.occurrence_count,\n  first_seen: alert.first_seen,\n  is_escalation: alert.is_escalation || false,\n  is_multi_host: alert.is_multi_host || false,\n  \n  // Related entities\n  related_hosts: alert.related_hosts || [alert.hostname],\n  related_ips: alert.related_ips || [alert.ip_address],\n  affected_host_count: alert.affected_host_count || 1,\n  \n  // Multi-host event fields (if applicable)\n  alert_type: alert.alert_type || 'single_alert',\n  triggered_multi_host: alert.triggered_multi_host || false,\n  \n  // Aggregation info\n  aggregation_status: alert.aggregation_status || null,\n  \n  // Processing metadata\n  processing_timestamp: alert.processing_timestamp,\n  output_timestamp: outputTime,\n  workflow_version: alert.workflow_version || '1.0.0',\n  dedup_decision: alert.dedup_decision,\n  \n  // Original alert data (for reference)\n  raw_alert: alert.raw_alert\n};\n\n// Add message field if this is a multi-host event\nif (alert.alert_type === 'multi_host_event') {\n  dedupedAlert.message = alert.message;\n  dedupedAlert.recommended_action = alert.recommended_action;\n  dedupedAlert.constituent_alerts = alert.constituent_alerts;\n}\n\nreturn [{ json: dedupedAlert }];"
+      },
+      "id": "format-output",
+      "name": "Format Output",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1790, 200]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "status",
+              "value": "deduplicated_alert_ready"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "output-marker",
+      "name": "Output Stream",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [2010, 200],
+      "notesInFlow": true,
+      "notes": "Deduplicated alerts exit here for downstream workflows"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "suppression-metrics",
+      "name": "Suppression Metrics",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [1570, 400],
+      "notesInFlow": true,
+      "notes": "Connect to metrics/logging system"
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Normalize Alert Format",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Alert Format": {
+      "main": [
+        [
+          {
+            "node": "Generate Dedup Key",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Dedup Key": {
+      "main": [
+        [
+          {
+            "node": "Deduplication Logic",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Deduplication Logic": {
+      "main": [
+        [
+          {
+            "node": "Route by Decision",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route by Decision": {
+      "main": [
+        [
+          {
+            "node": "Enrich Alert",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Suppressed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enrich Alert": {
+      "main": [
+        [
+          {
+            "node": "Multi-Host Aggregation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Suppressed": {
+      "main": [
+        [
+          {
+            "node": "Suppression Metrics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Multi-Host Aggregation": {
+      "main": [
+        [
+          {
+            "node": "Format Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Output": {
+      "main": [
+        [
+          {
+            "node": "Output Stream",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  },
+  "versionId": "1.0.0",
+  "meta": {
+    "instanceId": "alert-dedup-workflow",
+    "templateCredsSetupCompleted": true
+  },
+  "tags": [
+    {
+      "id": "1",
+      "name": "incident-response"
+    },
+    {
+      "id": "2",
+      "name": "deduplication"
+    },
+    {
+      "id": "3",
+      "name": "soc-automation"
+    }
+  ],
+  "pinData": {},
+  "staticData": {
+    "global": {
+      "alertStore": {},
+      "aggregationStore": {}
+    }
+  }
+}

@@ -17,41 +17,57 @@ from services.crowdstrike import CrowdStrikeClient
 # Import tool logging decorator
 from src.utils.tool_decorator import log_tool_call
 
-# Initialize CrowdStrike client once
+# Lazy-initialized CrowdStrike client
 _crowdstrike_client: Optional[CrowdStrikeClient] = None
 
-try:
-    logging.info("Initializing CrowdStrike client...")
-    _crowdstrike_client = CrowdStrikeClient()
-    
-    # Test the connection
-    token = _crowdstrike_client.get_access_token()
-    if token:
-        logging.info("CrowdStrike client initialized successfully.")
-    else:
-        logging.warning("CrowdStrike client failed to get access token. Tools will be disabled.")
-        _crowdstrike_client = None
-        
-except Exception as e:
-    logging.error(f"Failed to initialize CrowdStrike client: {e}")
-    _crowdstrike_client = None
+
+def _get_crowdstrike_client() -> Optional[CrowdStrikeClient]:
+    """Get CrowdStrike client (lazy initialization)."""
+    global _crowdstrike_client
+    if _crowdstrike_client is None:
+        try:
+            _crowdstrike_client = CrowdStrikeClient()
+        except Exception as e:
+            logging.error(f"Failed to initialize CrowdStrike client: {e}")
+    return _crowdstrike_client
 
 
 @tool
 @log_tool_call
 def get_device_containment_status(hostname: str) -> str:
-    """Get device containment status from CrowdStrike."""
-    if not _crowdstrike_client:
-        return "Error: CrowdStrike service is not initialized."
+    """Get device containment status from CrowdStrike.
+
+    IMPORTANT: The hostname parameter must be an actual device hostname (e.g., 'WORKSTATION01',
+    'SERVER-NYC-001'), NOT a ticket number or ID. If you have a ticket ID, first use
+    get_xsoar_ticket to retrieve the ticket and extract the hostname field from it.
+
+    Args:
+        hostname: The device hostname to check. Must be a valid hostname, not a ticket ID.
+    """
+    client = _get_crowdstrike_client()
+    if not client:
+        return "Error: CrowdStrike service is not available."
 
     hostname = hostname.strip().upper()
-    status = _crowdstrike_client.get_device_containment_status(hostname)
+    status = client.get_device_containment_status(hostname)
 
-    if status == 'Host not found in CS':
+    if status == 'Host not found in CS console or an error occurred.':
         return f"Hostname '{hostname}' was not found in CrowdStrike."
 
     if status:
-        return f"Containment status for '{hostname}': {status}"
+        result = f"Containment status for '{hostname}': {status}"
+
+        # If containment is pending, automatically check online status to explain why
+        if status == 'containment_pending':
+            online_status = client.get_device_online_state(hostname)
+            if online_status:
+                result += f"\nDevice online status: {online_status}"
+                if online_status == 'offline':
+                    result += "\nNote: Containment is pending because the device is offline. It will complete when the device reconnects."
+                elif online_status == 'online':
+                    result += "\nNote: Device is online but containment is still pending. This may indicate a delay or issue with the CrowdStrike agent."
+
+        return result
 
     return f"Unable to retrieve containment status for hostname '{hostname}'."
 
@@ -59,12 +75,20 @@ def get_device_containment_status(hostname: str) -> str:
 @tool
 @log_tool_call
 def get_device_online_status(hostname: str) -> str:
-    """Get device online status from CrowdStrike."""
-    if not _crowdstrike_client:
-        return "Error: CrowdStrike service is not initialized."
+    """Get device online status from CrowdStrike.
+
+    IMPORTANT: The hostname must be an actual device hostname (e.g., 'WORKSTATION01'),
+    NOT a ticket number. If you have a ticket ID, first fetch the ticket to get the hostname.
+
+    Args:
+        hostname: The device hostname to check. Must be a valid hostname, not a ticket ID.
+    """
+    client = _get_crowdstrike_client()
+    if not client:
+        return "Error: CrowdStrike service is not available."
 
     hostname = hostname.strip().upper()
-    status = _crowdstrike_client.get_device_online_state(hostname)
+    status = client.get_device_online_state(hostname)
 
     if status:
         return f"Online status for '{hostname}': {status}"
@@ -76,16 +100,17 @@ def get_device_online_status(hostname: str) -> str:
 @log_tool_call
 def get_device_details_cs(hostname: str) -> str:
     """Get detailed device information from CrowdStrike."""
-    if not _crowdstrike_client:
-        return "Error: CrowdStrike service is not initialized."
+    client = _get_crowdstrike_client()
+    if not client:
+        return "Error: CrowdStrike service is not available."
 
     hostname = hostname.strip().upper()
-    device_id = _crowdstrike_client.get_device_id(hostname)
+    device_id = client.get_device_id(hostname)
 
     if not device_id:
         return f"Hostname '{hostname}' was not found in CrowdStrike."
 
-    details = _crowdstrike_client.get_device_details(device_id)
+    details = client.get_device_details(device_id)
 
     if details:
         info_parts = [
@@ -254,8 +279,9 @@ def get_crowdstrike_detections(limit: int = 20, status: str = "") -> str:
         status: Filter by status - "new", "in_progress", "true_positive",
                 "false_positive", "closed", or empty for all
     """
-    if not _crowdstrike_client:
-        return "Error: CrowdStrike service is not initialized."
+    client = _get_crowdstrike_client()
+    if not client:
+        return "Error: CrowdStrike service is not available."
 
     # Validate and cap limit
     limit = min(max(1, limit), 100)
@@ -265,7 +291,7 @@ def get_crowdstrike_detections(limit: int = 20, status: str = "") -> str:
     if status:
         filter_query = f"status:'{status}'"
 
-    data = _crowdstrike_client.get_detections(limit=limit, filter_query=filter_query)
+    data = client.get_detections(limit=limit, filter_query=filter_query)
 
     if "error" in data:
         return f"Error: {data['error']}"
@@ -285,10 +311,11 @@ def get_crowdstrike_detection_details(detection_id: str) -> str:
     Args:
         detection_id: The CrowdStrike alert composite ID
     """
-    if not _crowdstrike_client:
-        return "Error: CrowdStrike service is not initialized."
+    client = _get_crowdstrike_client()
+    if not client:
+        return "Error: CrowdStrike service is not available."
 
-    data = _crowdstrike_client.get_detection_by_id(detection_id.strip())
+    data = client.get_detection_by_id(detection_id.strip())
 
     if "error" in data:
         return f"Error: {data['error']}"
@@ -362,13 +389,14 @@ def search_crowdstrike_detections_by_hostname(hostname: str, limit: int = 20) ->
         hostname: The hostname to search for
         limit: Maximum number of detections to return (default 20)
     """
-    if not _crowdstrike_client:
-        return "Error: CrowdStrike service is not initialized."
+    client = _get_crowdstrike_client()
+    if not client:
+        return "Error: CrowdStrike service is not available."
 
     hostname = hostname.strip().upper()
     limit = min(max(1, limit), 100)
 
-    data = _crowdstrike_client.get_detections_by_hostname(hostname, limit=limit)
+    data = client.get_detections_by_hostname(hostname, limit=limit)
 
     if "error" in data:
         return f"Error: {data['error']}"
@@ -396,8 +424,9 @@ def get_crowdstrike_incidents(limit: int = 20, status: str = "") -> str:
         status: Filter by status - "20" (New), "25" (Reopened),
                 "30" (In Progress), "40" (Closed), or empty for all
     """
-    if not _crowdstrike_client:
-        return "Error: CrowdStrike service is not initialized."
+    client = _get_crowdstrike_client()
+    if not client:
+        return "Error: CrowdStrike service is not available."
 
     # Validate and cap limit
     limit = min(max(1, limit), 100)
@@ -407,7 +436,7 @@ def get_crowdstrike_incidents(limit: int = 20, status: str = "") -> str:
     if status:
         filter_query = f"status:'{status}'"
 
-    data = _crowdstrike_client.get_incidents(limit=limit, filter_query=filter_query)
+    data = client.get_incidents(limit=limit, filter_query=filter_query)
 
     if "error" in data:
         return f"Error: {data['error']}"
@@ -427,10 +456,11 @@ def get_crowdstrike_incident_details(incident_id: str) -> str:
     Args:
         incident_id: The CrowdStrike incident ID
     """
-    if not _crowdstrike_client:
-        return "Error: CrowdStrike service is not initialized."
+    client = _get_crowdstrike_client()
+    if not client:
+        return "Error: CrowdStrike service is not available."
 
-    data = _crowdstrike_client.get_incident_by_id(incident_id.strip())
+    data = client.get_incident_by_id(incident_id.strip())
 
     if "error" in data:
         return f"Error: {data['error']}"
@@ -483,6 +513,378 @@ def get_crowdstrike_incident_details(incident_id: str) -> str:
 
 
 # =============================================================================
+# CROWDSTRIKE RTR (REAL TIME RESPONSE) TOOLS
+# =============================================================================
+
+# Threshold for switching from table to Excel file
+BROWSER_HISTORY_TABLE_LIMIT = 25
+
+# Module-level variable to track generated file paths for Webex upload
+_last_generated_file_path = None
+
+
+def get_and_clear_generated_file_path():
+    """Get the last generated file path and clear it."""
+    global _last_generated_file_path
+    path = _last_generated_file_path
+    _last_generated_file_path = None
+    return path
+
+
+@tool
+@log_tool_call
+def collect_browser_history(hostname: str, days: int = 7) -> str:
+    """Collect browser history from a device using CrowdStrike RTR.
+
+    USE THIS TOOL when user asks for browser history, browsing history,
+    web history, or visited sites from a specific device/host.
+
+    Args:
+        hostname: The target device hostname (e.g., 'LAPTOP123', 'US24J65C4')
+        days: Number of days of history to retrieve (default: 7, max: 90)
+    """
+    global _last_generated_file_path
+    import time
+    import sqlite3
+    import tempfile
+    import os
+    from datetime import datetime, timedelta
+    from pathlib import Path
+    from services.crowdstrike_rtr import run_rtr_script, download_rtr_file
+
+    hostname = hostname.strip().upper()
+    days = min(max(1, days), 90)
+    cutoff_date = datetime.now() - timedelta(days=days)
+
+    # Step 1: Run staging script to copy history files to temp location
+    logging.info(f"Staging browser history files on {hostname}")
+    result = run_rtr_script(
+        hostname=hostname,
+        cloud_script_name="Stage_Browser_History",
+        command_line=""
+    )
+
+    if not result["success"]:
+        error = result["error"]
+        if "offline" in error.lower():
+            return f"❌ Cannot collect browser history: Device **{hostname}** is offline. RTR requires the device to be online."
+        elif "not found" in error.lower():
+            return f"❌ Cannot collect browser history: Hostname **{hostname}** was not found in CrowdStrike."
+        else:
+            return f"❌ Failed to stage browser history from **{hostname}**: {error}"
+
+    output = result["output"]
+    if "NO_HISTORY_FILES_FOUND" in output:
+        return f"⚠️ No browser history databases found on **{hostname}**."
+
+    # Step 2: Parse staged file paths from output
+    staged_files = []
+    in_files_section = False
+    for line in output.split('\n'):
+        line = line.strip()
+        if line == "STAGED_FILES_START":
+            in_files_section = True
+            continue
+        if line == "STAGED_FILES_END":
+            in_files_section = False
+            continue
+        if in_files_section and '|' in line:
+            parts = line.split('|')
+            if len(parts) >= 3:
+                staged_files.append({
+                    'browser': parts[0],
+                    'user': parts[1],
+                    'remote_path': parts[2],
+                    'size_kb': float(parts[3]) if len(parts) > 3 and parts[3] else 0
+                })
+
+    if not staged_files:
+        return f"⚠️ No browser history files were staged on **{hostname}**.\n\nOutput: {output[:1000]}"
+
+    logging.info(f"Found {len(staged_files)} staged files on {hostname}")
+
+    # Step 3: Download each file and parse locally
+    all_entries = []
+    temp_dir = tempfile.mkdtemp(prefix="browser_history_", dir="/tmp")
+
+    try:
+        for staged in staged_files:
+            remote_path = staged['remote_path']
+            browser = staged['browser']
+            user = staged['user']
+            local_filename = f"{browser}_{user}_{os.path.basename(remote_path)}"
+            local_path = os.path.join(temp_dir, local_filename)
+
+            logging.info(f"Downloading {remote_path} from {hostname}")
+            download_result = download_rtr_file(hostname, remote_path, local_path)
+
+            if not download_result['success']:
+                logging.warning(f"Failed to download {remote_path}: {download_result['error']}")
+                continue
+
+            # Step 4: Parse SQLite database
+            entries = _parse_sqlite_history(local_path, browser, user, cutoff_date)
+            all_entries.extend(entries)
+            logging.info(f"Parsed {len(entries)} entries from {browser} ({user})")
+
+    finally:
+        # Cleanup temp files
+        import shutil
+        shutil.rmtree(temp_dir, ignore_errors=True)
+
+    if not all_entries:
+        return f"⚠️ No browser history entries found on **{hostname}** for the last {days} days."
+
+    # Sort by timestamp descending
+    all_entries.sort(key=lambda x: x.get('timestamp', ''), reverse=True)
+
+    # Step 5: Generate output
+    if len(all_entries) > BROWSER_HISTORY_TABLE_LIMIT:
+        file_path = save_to_excel(
+            all_entries,
+            f"browser_history_{hostname}",
+            columns=['Browser', 'URL', 'Title', 'Timestamp', 'Visit Count'],
+            column_widths={'browser': 20, 'url': 60, 'title': 40, 'timestamp': 20, 'visit count': 12},
+            wrap_columns={'url', 'title'},
+            date_columns={'timestamp'}
+        )
+        if file_path:
+            _last_generated_file_path = file_path
+            return f"✅ Collected **{len(all_entries)}** browser history entries from **{hostname}** (last {days} days). Results saved to Excel file."
+
+    # Return as markdown table
+    lines = [f"## 🌐 Browser History from {hostname} (Last {days} days)", ""]
+    lines.append("| Time | Browser | URL | Title |")
+    lines.append("|------|---------|-----|-------|")
+    for entry in all_entries[:BROWSER_HISTORY_TABLE_LIMIT]:
+        time_str = entry.get("timestamp", "")[:19]
+        browser = entry.get("browser", "")[:15]
+        url = entry.get("url", "")[:50] + ("..." if len(entry.get("url", "")) > 50 else "")
+        title = entry.get("title", "")[:30] + ("..." if len(entry.get("title", "")) > 30 else "")
+        lines.append(f"| {time_str} | {browser} | {url} | {title} |")
+
+    if len(all_entries) > BROWSER_HISTORY_TABLE_LIMIT:
+        lines.append(f"\n*Showing {BROWSER_HISTORY_TABLE_LIMIT} of {len(all_entries)} entries*")
+
+    return "\n".join(lines)
+
+
+def _parse_sqlite_history(db_path: str, browser: str, user: str, cutoff_date) -> list:
+    """Parse browser history from a SQLite database file."""
+    import sqlite3
+    from datetime import datetime, timedelta
+
+    entries = []
+    try:
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+
+        if browser.lower() in ['chrome', 'edge']:
+            # Chrome/Edge: timestamps are WebKit format (microseconds since 1601-01-01)
+            # Convert cutoff to WebKit timestamp
+            webkit_epoch = datetime(1601, 1, 1)
+            webkit_cutoff = int((cutoff_date - webkit_epoch).total_seconds() * 1000000)
+
+            cursor.execute("""
+                SELECT url, title, last_visit_time, visit_count
+                FROM urls
+                WHERE last_visit_time > ?
+                ORDER BY last_visit_time DESC
+                LIMIT 1000
+            """, (webkit_cutoff,))
+
+            for row in cursor.fetchall():
+                url, title, visit_time, visit_count = row
+                # Convert WebKit timestamp to datetime
+                if visit_time:
+                    try:
+                        ts = datetime(1601, 1, 1) + timedelta(microseconds=visit_time)
+                        timestamp = ts.strftime('%Y-%m-%d %H:%M:%S')
+                    except:
+                        timestamp = str(visit_time)
+                else:
+                    timestamp = ""
+
+                entries.append({
+                    'browser': f"{browser} ({user})",
+                    'url': url or "",
+                    'title': title or "",
+                    'timestamp': timestamp,
+                    'visit_count': visit_count or 0
+                })
+
+        elif browser.lower() == 'firefox':
+            # Firefox: timestamps are microseconds since Unix epoch
+            unix_cutoff = int((cutoff_date - datetime(1970, 1, 1)).total_seconds() * 1000000)
+
+            cursor.execute("""
+                SELECT url, title, last_visit_date, visit_count
+                FROM moz_places
+                WHERE last_visit_date > ? AND visit_count > 0
+                ORDER BY last_visit_date DESC
+                LIMIT 1000
+            """, (unix_cutoff,))
+
+            for row in cursor.fetchall():
+                url, title, visit_time, visit_count = row
+                if visit_time:
+                    try:
+                        ts = datetime(1970, 1, 1) + timedelta(microseconds=visit_time)
+                        timestamp = ts.strftime('%Y-%m-%d %H:%M:%S')
+                    except:
+                        timestamp = str(visit_time)
+                else:
+                    timestamp = ""
+
+                entries.append({
+                    'browser': f"{browser} ({user})",
+                    'url': url or "",
+                    'title': title or "",
+                    'timestamp': timestamp,
+                    'visit_count': visit_count or 0
+                })
+
+        conn.close()
+    except Exception as e:
+        logging.error(f"Error parsing {browser} history: {e}")
+
+    return entries
+
+
+def is_browser_history_command(message: str) -> tuple[bool, str, int]:
+    """Check if message is a browser history command.
+
+    Returns:
+        Tuple of (is_command, hostname, days)
+    """
+    import re
+    message_lower = message.lower().strip()
+
+    # Patterns: "browser history <hostname>" or "browser history <hostname> <days>"
+    patterns = [
+        r"^browser\s+history\s+(\S+)(?:\s+(\d+)\s*(?:days?)?)?$",
+        r"^browsing\s+history\s+(\S+)(?:\s+(\d+)\s*(?:days?)?)?$",
+        r"^get\s+browser\s+history\s+(?:from\s+)?(\S+)(?:\s+(\d+)\s*(?:days?)?)?$",
+        r"^collect\s+browser\s+history\s+(?:from\s+)?(\S+)(?:\s+(\d+)\s*(?:days?)?)?$",
+    ]
+
+    for pattern in patterns:
+        match = re.match(pattern, message_lower)
+        if match:
+            hostname = match.group(1).upper()
+            days = int(match.group(2)) if match.group(2) else 7
+            return True, hostname, days
+
+    return False, "", 0
+
+
+def _parse_browser_history_output(output: str) -> list[dict]:
+    """Parse RTR script output into structured data."""
+    entries = []
+    lines = output.strip().split('\n')
+
+    for line in lines:
+        line = line.strip()
+        if not line or line.startswith('===') or line.startswith('Found') or line.startswith('No browser'):
+            continue
+
+        # Try to parse table-like output (URL | Title | Visit Time | Count)
+        if '|' in line:
+            parts = [p.strip() for p in line.split('|')]
+            if len(parts) >= 3:
+                entries.append({
+                    'url': parts[0][:200],  # Truncate long URLs
+                    'title': parts[1][:100] if len(parts) > 1 else '',
+                    'visit_time': parts[2] if len(parts) > 2 else '',
+                    'visit_count': parts[3] if len(parts) > 3 else ''
+                })
+        # Handle space/tab separated output
+        elif '\t' in line:
+            parts = line.split('\t')
+            if len(parts) >= 2 and parts[0].startswith('http'):
+                entries.append({
+                    'url': parts[0][:200],
+                    'title': parts[1][:100] if len(parts) > 1 else '',
+                    'visit_time': parts[2] if len(parts) > 2 else '',
+                    'visit_count': parts[3] if len(parts) > 3 else ''
+                })
+
+    return entries
+
+
+def _format_history_as_markdown_table(entries: list[dict], hostname: str, days: int) -> str:
+    """Format browser history entries as a Webex markdown table."""
+    if not entries:
+        return f"No browser history entries found for {hostname} in the last {days} days."
+
+    lines = [
+        f"## 🌐 Browser History from {hostname} (Last {days} days)",
+        f"Found **{len(entries)}** entries:\n",
+        "| URL | Title | Last Visit |",
+        "|-----|-------|------------|"
+    ]
+
+    for entry in entries[:BROWSER_HISTORY_TABLE_LIMIT]:
+        url = entry.get('url', '')[:50] + ('...' if len(entry.get('url', '')) > 50 else '')
+        title = entry.get('title', '')[:30] + ('...' if len(entry.get('title', '')) > 30 else '')
+        visit_time = entry.get('visit_time', 'N/A')
+        lines.append(f"| {url} | {title} | {visit_time} |")
+
+    if len(entries) > BROWSER_HISTORY_TABLE_LIMIT:
+        lines.append(f"\n*Showing first {BROWSER_HISTORY_TABLE_LIMIT} of {len(entries)} entries*")
+
+    return '\n'.join(lines)
+
+
+def save_to_excel(entries: list[dict], filename_prefix: str, columns: list[str] = None,
+                   column_widths: dict = None, wrap_columns: set = None, date_columns: set = None) -> str:
+    """Save a list of dicts to Excel file with professional formatting.
+
+    Generic utility function for saving data to Excel.
+
+    Args:
+        entries: List of dictionaries to save
+        filename_prefix: Prefix for the filename (e.g., 'browser_history_HOSTNAME')
+        columns: Optional list of column names. If not provided, uses dict keys.
+        column_widths: Optional dict mapping column names (lowercase) to widths
+        wrap_columns: Optional set of column names (lowercase) that should wrap text
+        date_columns: Optional set of column names (lowercase) that contain dates
+
+    Returns:
+        Path to the saved Excel file
+    """
+    import pandas as pd
+    from pathlib import Path
+    from datetime import datetime
+    from src.utils.excel_formatting import apply_professional_formatting
+
+    # Create output directory in /tmp for auto-cleanup
+    output_dir = Path("/tmp/excel_exports")
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Create filename with timestamp
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    filename = f"{filename_prefix}_{timestamp}.xlsx"
+    filepath = output_dir / filename
+
+    # Create DataFrame and save
+    df = pd.DataFrame(entries)
+    if columns and len(columns) == len(df.columns):
+        df.columns = columns
+    df.to_excel(filepath, index=False, engine='openpyxl')
+
+    # Apply professional formatting
+    apply_professional_formatting(
+        str(filepath),
+        column_widths=column_widths,
+        wrap_columns=wrap_columns,
+        date_columns=date_columns
+    )
+
+    return str(filepath)
+
+
+# =============================================================================
 # SAMPLE PROMPTS FOR LLM GUIDANCE
 # =============================================================================
 # Use these prompts to help users discover CrowdStrike capabilities:
@@ -514,5 +916,12 @@ def get_crowdstrike_incident_details(incident_id: str) -> str:
 # - "Get new CrowdStrike incidents"
 # - "Show me CrowdStrike Falcon incidents"
 # - "Get details for CrowdStrike incident inc:abc123"
+#
+# --- RTR Tools ---
+# - "Get browser history from HOST123"
+# - "Collect browsing history from WORKSTATION01"
+# - "Download browser history for LAPTOP-XYZ for the last 14 days"
+# - "What websites did HOST123 visit in the last 30 days?"
+# - "Pull Chrome/Edge/Firefox history from SERVER01"
 #
 # =============================================================================

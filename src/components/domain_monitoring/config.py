@@ -60,6 +60,54 @@ def load_monitored_domains() -> list[str]:
     return []
 
 
+def load_watchlist(domain: str) -> list[str]:
+    """Load watchlist domains for a monitored domain.
+
+    Watchlist contains suspicious domains (e.g., acme-loan.com) that dnstwist
+    can't detect because they use semantic attacks (brand + keyword combinations).
+    These are checked daily in CT logs for new certificates.
+
+    Args:
+        domain: The monitored domain to get watchlist for
+
+    Returns:
+        List of suspicious domains to monitor
+    """
+    if CONFIG_FILE.exists():
+        try:
+            with open(CONFIG_FILE, "r") as f:
+                config = json.load(f)
+                watchlist = config.get("watchlist", {})
+                return watchlist.get(domain, [])
+        except (json.JSONDecodeError, IOError) as e:
+            logger.error(f"Error loading watchlist config: {e}")
+    return []
+
+
+def load_defensive_domains(domain: str) -> list[str]:
+    """Load defensive domain registrations for a monitored domain.
+
+    Defensive domains are known legitimate domains owned by the company to
+    protect the brand. These are excluded from impersonation alerts.
+
+    Args:
+        domain: The monitored domain to get defensive domains for
+
+    Returns:
+        List of legitimate defensive domains (includes the monitored domain itself)
+    """
+    legitimate = [domain]  # Always include the monitored domain
+    if CONFIG_FILE.exists():
+        try:
+            with open(CONFIG_FILE, "r") as f:
+                config = json.load(f)
+                defensive = config.get("defensive_domains", {})
+                legitimate.extend(defensive.get(domain, []))
+        except (json.JSONDecodeError, IOError) as e:
+            logger.error(f"Error loading defensive domains config: {e}")
+    return legitimate
+
+
 def get_webex_api() -> WebexTeamsAPI:
     """Get configured Webex API instance with connection pooling."""
     return configure_webex_api_session(

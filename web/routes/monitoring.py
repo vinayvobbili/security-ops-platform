@@ -5,8 +5,13 @@ import logging
 from datetime import datetime
 from pathlib import Path
 
-from flask import Blueprint, jsonify, render_template
+from flask import Blueprint, jsonify, render_template, request
 
+from services.cert_transparency import (
+    get_outstanding_threats,
+    acknowledge_threat,
+    acknowledge_all_threats,
+)
 from src.utils.logging_utils import log_web_activity
 
 logger = logging.getLogger(__name__)
@@ -90,4 +95,47 @@ def api_domain_monitoring_history():
 
     except Exception as exc:
         logger.error(f"Error listing monitoring history: {exc}", exc_info=True)
+        return jsonify({'success': False, 'error': str(exc)}), 500
+
+
+@monitoring_bp.route('/api/domain-monitoring/threats')
+@log_web_activity
+def api_outstanding_threats():
+    """API endpoint to get outstanding (unacknowledged) threats."""
+    try:
+        threats = get_outstanding_threats()
+        return jsonify({'success': True, 'threats': threats, 'count': len(threats)})
+    except Exception as exc:
+        logger.error(f"Error fetching outstanding threats: {exc}", exc_info=True)
+        return jsonify({'success': False, 'error': str(exc)}), 500
+
+
+@monitoring_bp.route('/api/domain-monitoring/threats/acknowledge', methods=['POST'])
+@log_web_activity
+def api_acknowledge_threat():
+    """API endpoint to acknowledge a threat (remove from outstanding)."""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'error': 'No JSON data provided'}), 400
+
+        domain = data.get('domain')
+        ack_all = data.get('all', False)
+
+        if ack_all:
+            count = acknowledge_all_threats()
+            logger.info(f"Acknowledged all {count} outstanding threats")
+            return jsonify({'success': True, 'message': f'Acknowledged {count} threats'})
+
+        if not domain:
+            return jsonify({'success': False, 'error': 'Domain is required'}), 400
+
+        if acknowledge_threat(domain):
+            logger.info(f"Acknowledged threat: {domain}")
+            return jsonify({'success': True, 'message': f'Acknowledged {domain}'})
+        else:
+            return jsonify({'success': False, 'error': f'Threat not found: {domain}'}), 404
+
+    except Exception as exc:
+        logger.error(f"Error acknowledging threat: {exc}", exc_info=True)
         return jsonify({'success': False, 'error': str(exc)}), 500

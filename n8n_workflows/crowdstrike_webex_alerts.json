@@ -1,0 +1,450 @@
+{
+  "name": "CrowdStrike Incidents to Webex",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 5
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Every 5 Minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.us-2.crowdstrike.com/oauth2/token",
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "client_id",
+              "value": "={{ $credentials.crowdstrike.clientId }}"
+            },
+            {
+              "name": "client_secret",
+              "value": "={{ $credentials.crowdstrike.clientSecret }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "cs-auth",
+      "name": "CrowdStrike Auth",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [220, 0]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.us-2.crowdstrike.com/incidents/queries/incidents/v1",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "filter",
+              "value": "status:'20'+created_timestamp:>='{{ $now.minus(5, 'minutes').toISO() }}'"
+            },
+            {
+              "name": "sort",
+              "value": "created_timestamp|desc"
+            },
+            {
+              "name": "limit",
+              "value": "50"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": false
+            }
+          }
+        }
+      },
+      "id": "cs-query-incidents",
+      "name": "Query New Incidents",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [440, 0],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "check-incidents",
+              "leftValue": "={{ $json.resources.length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "has-incidents",
+      "name": "Has New Incidents?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [660, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.us-2.crowdstrike.com/incidents/entities/incidents/GET/v1",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ ids: $json.resources }) }}",
+        "options": {}
+      },
+      "id": "cs-get-incident-details",
+      "name": "Get Incident Details",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [880, -100]
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "resources",
+        "options": {}
+      },
+      "id": "split-incidents",
+      "name": "Split Incidents",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [1100, -100]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract external IP for enrichment\nconst incident = $json;\nconst hosts = incident.hosts || [];\nconst externalIp = hosts[0]?.external_ip || null;\n\n// Pass through incident data with extracted IP\nreturn {\n  json: {\n    ...incident,\n    _enrichmentIp: externalIp\n  }\n};"
+      },
+      "id": "extract-ip",
+      "name": "Extract IP for Enrichment",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1320, -100]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://www.virustotal.com/api/v3/ip_addresses/{{ $json._enrichmentIp || '0.0.0.0' }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": false
+            }
+          }
+        }
+      },
+      "id": "vt-enrich",
+      "name": "VirusTotal",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1540, -200],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.shodan.io/shodan/host/{{ $json._enrichmentIp || '0.0.0.0' }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpQueryAuth",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": false
+            }
+          }
+        }
+      },
+      "id": "shodan-enrich",
+      "name": "Shodan",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1540, -100],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.abuseipdb.com/api/v2/check",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "ipAddress",
+              "value": "={{ $json._enrichmentIp || '0.0.0.0' }}"
+            },
+            {
+              "name": "maxAgeInDays",
+              "value": "90"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": false
+            }
+          }
+        }
+      },
+      "id": "abuseipdb-enrich",
+      "name": "AbuseIPDB",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1540, 0],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "id": "merge-enrichment",
+      "name": "Merge Enrichment",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [1760, -100]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get all inputs\nconst items = $input.all();\n\n// Find each data source (they come in order: VT, Shodan, AbuseIPDB)\nconst vtData = items[0]?.json || {};\nconst shodanData = items[1]?.json || {};\nconst abuseData = items[2]?.json || {};\n\n// Get original incident data (passed through from extract-ip node)\nconst incident = $('Extract IP for Enrichment').item.json;\n\n// Extract key fields from incident\nconst incidentId = incident.incident_id || 'Unknown';\nconst description = incident.description || 'No description';\nconst severity = incident.fine_score || 0;\nconst status = incident.status === 20 ? 'New' : incident.status === 25 ? 'Reopened' : incident.status === 30 ? 'In Progress' : 'Closed';\nconst created = incident.created ? new Date(incident.created).toISOString() : 'Unknown';\nconst tactics = incident.tactics?.join(', ') || 'None identified';\nconst techniques = incident.techniques?.join(', ') || 'None identified';\n\n// Host info\nconst hosts = incident.hosts || [];\nconst hostnames = hosts.map(h => h.hostname).join(', ') || 'Unknown';\nconst externalIp = incident._enrichmentIp || 'N/A';\nconst localIp = hosts[0]?.local_ip || 'N/A';\nconst platform = hosts[0]?.platform_name || 'Unknown';\n\n// User info  \nconst users = incident.users || [];\nconst usernames = users.map(u => u.user_name).join(', ') || 'Unknown';\n\n// ==================== ENRICHMENT PARSING ====================\n\n// VirusTotal\nlet vtSummary = 'N/A';\nlet vtVerdict = '';\nif (vtData?.data?.attributes?.last_analysis_stats) {\n  const stats = vtData.data.attributes.last_analysis_stats;\n  const malicious = stats.malicious || 0;\n  const suspicious = stats.suspicious || 0;\n  vtSummary = `${malicious} malicious, ${suspicious} suspicious`;\n  if (malicious > 0) vtVerdict = '\\u{1F534}';\n  else if (suspicious > 0) vtVerdict = '\\u{1F7E1}';\n  else vtVerdict = '\\u{1F7E2}';\n}\n\n// Shodan\nlet shodanSummary = 'N/A';\nlet shodanPorts = [];\nlet shodanVulns = [];\nif (shodanData && !shodanData.error) {\n  // Open ports\n  if (shodanData.ports && shodanData.ports.length > 0) {\n    shodanPorts = shodanData.ports.slice(0, 10);\n    shodanSummary = `Ports: ${shodanPorts.join(', ')}`;\n  }\n  // Vulnerabilities\n  if (shodanData.vulns && shodanData.vulns.length > 0) {\n    shodanVulns = shodanData.vulns.slice(0, 5);\n    shodanSummary += ` | Vulns: ${shodanVulns.join(', ')}`;\n  }\n  // Organization\n  if (shodanData.org) {\n    shodanSummary += ` | Org: ${shodanData.org}`;\n  }\n  // ISP\n  if (shodanData.isp) {\n    shodanSummary += ` | ISP: ${shodanData.isp}`;\n  }\n}\n\n// AbuseIPDB\nlet abuseSummary = 'N/A';\nlet abuseVerdict = '';\nif (abuseData?.data) {\n  const data = abuseData.data;\n  const score = data.abuseConfidenceScore || 0;\n  const reports = data.totalReports || 0;\n  const country = data.countryCode || 'Unknown';\n  const isp = data.isp || 'Unknown';\n  const domain = data.domain || 'N/A';\n  \n  abuseSummary = `Score: ${score}% | Reports: ${reports} | Country: ${country}`;\n  if (domain !== 'N/A') abuseSummary += ` | Domain: ${domain}`;\n  \n  if (score >= 50) abuseVerdict = '\\u{1F534}';\n  else if (score >= 25) abuseVerdict = '\\u{1F7E1}';\n  else abuseVerdict = '\\u{1F7E2}';\n}\n\n// ==================== SEVERITY & FORMATTING ====================\n\n// Severity emoji for incident\nlet severityEmoji = '';\nif (severity >= 80) severityEmoji = '\\u{1F534}';\nelse if (severity >= 50) severityEmoji = '\\u{1F7E0}';\nelse if (severity >= 30) severityEmoji = '\\u{1F7E1}';\nelse severityEmoji = '\\u{1F7E2}';\n\n// Build markdown message\nconst markdown = `${severityEmoji} **CrowdStrike Incident Alert**\n\n**Incident ID:** \\`${incidentId}\\`\n**Severity:** ${severity}/100 | **Status:** ${status}\n**Created:** ${created}\n\n---\n**Description:** ${description}\n\n**MITRE ATT&CK:**\n- Tactics: ${tactics}\n- Techniques: ${techniques}\n\n---\n**Affected Hosts:**\n- Hostname(s): \\`${hostnames}\\`\n- External IP: \\`${externalIp}\\`\n- Local IP: \\`${localIp}\\`\n- Platform: ${platform}\n\n**User(s):** ${usernames}\n\n---\n**Threat Intelligence Enrichment**\n\n${vtVerdict} **VirusTotal:** ${vtSummary}\n${abuseVerdict} **AbuseIPDB:** ${abuseSummary}\n**Shodan:** ${shodanSummary}\n\n---\n[View in Falcon Console](https://falcon.us-2.crowdstrike.com/incidents/incidents/${incidentId})`;\n\nreturn {\n  json: {\n    markdown,\n    incidentId,\n    severity,\n    hostnames,\n    externalIp,\n    enrichment: {\n      virustotal: vtSummary,\n      shodan: shodanSummary,\n      abuseipdb: abuseSummary\n    }\n  }\n};"
+      },
+      "id": "format-message",
+      "name": "Format Alert Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1980, -100]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://webexapis.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"roomId\": \"YOUR_WEBEX_ROOM_ID\",\n  \"markdown\": {{ JSON.stringify($json.markdown) }}\n}",
+        "options": {}
+      },
+      "id": "webex-send",
+      "name": "Send to Webex",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2200, -100]
+    },
+    {
+      "parameters": {},
+      "id": "no-incidents",
+      "name": "No New Incidents",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [880, 100]
+    }
+  ],
+  "connections": {
+    "Every 5 Minutes": {
+      "main": [
+        [
+          {
+            "node": "CrowdStrike Auth",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CrowdStrike Auth": {
+      "main": [
+        [
+          {
+            "node": "Query New Incidents",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Query New Incidents": {
+      "main": [
+        [
+          {
+            "node": "Has New Incidents?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has New Incidents?": {
+      "main": [
+        [
+          {
+            "node": "Get Incident Details",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No New Incidents",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Incident Details": {
+      "main": [
+        [
+          {
+            "node": "Split Incidents",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Incidents": {
+      "main": [
+        [
+          {
+            "node": "Extract IP for Enrichment",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract IP for Enrichment": {
+      "main": [
+        [
+          {
+            "node": "VirusTotal",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Shodan",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "AbuseIPDB",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "VirusTotal": {
+      "main": [
+        [
+          {
+            "node": "Merge Enrichment",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Shodan": {
+      "main": [
+        [
+          {
+            "node": "Merge Enrichment",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "AbuseIPDB": {
+      "main": [
+        [
+          {
+            "node": "Merge Enrichment",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Merge Enrichment": {
+      "main": [
+        [
+          {
+            "node": "Format Alert Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Alert Message": {
+      "main": [
+        [
+          {
+            "node": "Send to Webex",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "SOC",
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z"
+    },
+    {
+      "name": "CrowdStrike",
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z"
+    },
+    {
+      "name": "Threat Intel",
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z"
+    }
+  ],
+  "triggerCount": 0,
+  "pinData": {}
+}

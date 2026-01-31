@@ -38,10 +38,13 @@ class DetectionRule:
 
     def to_metadata(self) -> Dict[str, Any]:
         """Convert to ChromaDB-compatible metadata dict (flat strings)."""
+        # Truncate description to 500 chars for ChromaDB storage efficiency
+        desc = self.description[:500] if self.description else ""
         return {
             "rule_id": self.rule_id,
             "platform": self.platform,
             "name": self.name,
+            "description": desc,
             "rule_type": self.rule_type,
             "enabled": str(self.enabled),
             "severity": self.severity,

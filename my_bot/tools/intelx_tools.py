@@ -24,19 +24,19 @@ from src.utils.tool_decorator import log_tool_call
 
 logger = logging.getLogger(__name__)
 
-# Initialize IntelX client once
+# Lazy-initialized IntelligenceX client
 _intelx_client: Optional[IntelligenceXClient] = None
 
-try:
-    logger.info("Initializing IntelligenceX client...")
-    _intelx_client = get_client()
-    if _intelx_client.is_public_key:
-        logger.warning("IntelligenceX using public API key - results will be limited.")
-    else:
-        logger.info("IntelligenceX client initialized with custom API key.")
-except Exception as e:
-    logger.error(f"Failed to initialize IntelligenceX client: {e}")
-    _intelx_client = None
+
+def _get_intelx_client() -> Optional[IntelligenceXClient]:
+    """Get IntelligenceX client (lazy initialization)."""
+    global _intelx_client
+    if _intelx_client is None:
+        try:
+            _intelx_client = get_client()
+        except Exception as e:
+            logger.error(f"Failed to initialize IntelligenceX client: {e}")
+    return _intelx_client
 
 
 def _get_severity_emoji(darkweb_count: int, leak_count: int) -> str:
@@ -172,11 +172,12 @@ def search_intelx(search_term: str) -> str:
     Args:
         search_term: Domain, email, IP, or other term to search (e.g., "example.com", "user@example.com")
     """
-    if not _intelx_client:
+    client = _get_intelx_client()
+    if not client:
         return "Error: IntelligenceX service is not initialized."
 
     try:
-        data = _intelx_client.search_domain(search_term.strip())
+        data = client.search_domain(search_term.strip())
         return _format_search_result(data)
     except Exception as e:
         logger.error(f"IntelX search failed: {e}")
@@ -194,11 +195,12 @@ def search_darkweb_intelx(search_term: str) -> str:
     Args:
         search_term: Domain, email, or term to search for dark web mentions
     """
-    if not _intelx_client:
+    client = _get_intelx_client()
+    if not client:
         return "Error: IntelligenceX service is not initialized."
 
     try:
-        data = _intelx_client.search_darkweb_only(search_term.strip(), max_results=50)
+        data = client.search_darkweb_only(search_term.strip(), max_results=50)
 
         if not data.get("success"):
             return f"Error: {data.get('error', 'Unknown error')}"

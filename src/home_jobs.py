@@ -10,6 +10,7 @@ Usage:
 """
 
 import logging
+import os
 import signal
 import sys
 import time
@@ -28,6 +29,9 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from src.utils.logging_utils import setup_logging
 from src.utils.webex_utils import get_room_name
 from src.components.tipper_analyzer import analyze_recent_tippers
+from src.components.tipper_analyzer.rules.sync import sync_catalog
+from src.components.tipper_indexer import sync_tipper_index
+from src.components.tanium_signals_sync import sync_tanium_signals_catalog
 from my_config import get_config
 
 # Configure logging (file handler)
@@ -96,6 +100,24 @@ def schedule_daily(time_str: str, job: Callable[[], Any], name: str = None, time
     logger.info(f"Scheduled '{name or job.__name__}' daily at {time_str} ET")
 
 
+def schedule_weekdays(time_str: str, job: Callable[[], Any], name: str = None, timeout: int = DEFAULT_JOB_TIMEOUT) -> None:
+    """Schedule a job to run Monday-Friday at a given time (Eastern).
+
+    Args:
+        time_str: Time in 'HH:MM' format (Eastern timezone)
+        job: Callable job to execute
+        name: Optional descriptive name for logs
+        timeout: Job timeout in seconds
+    """
+    job_name = name or job.__name__
+    schedule.every().monday.at(time_str, eastern).do(lambda: safe_run(job, timeout=timeout, name=name))
+    schedule.every().tuesday.at(time_str, eastern).do(lambda: safe_run(job, timeout=timeout, name=name))
+    schedule.every().wednesday.at(time_str, eastern).do(lambda: safe_run(job, timeout=timeout, name=name))
+    schedule.every().thursday.at(time_str, eastern).do(lambda: safe_run(job, timeout=timeout, name=name))
+    schedule.every().friday.at(time_str, eastern).do(lambda: safe_run(job, timeout=timeout, name=name))
+    logger.info(f"Scheduled '{job_name}' Mon-Fri at {time_str} ET")
+
+
 def schedule_hourly(minute: int, job: Callable[[], Any], name: str = None, timeout: int = DEFAULT_JOB_TIMEOUT) -> None:
     """Schedule a job to run every hour at a given minute.
 
@@ -110,12 +132,12 @@ def schedule_hourly(minute: int, job: Callable[[], Any], name: str = None, timeo
 
 
 def schedule_business_hours(
-    minute: int,
-    job: Callable[[], Any],
-    name: str = None,
-    timeout: int = DEFAULT_JOB_TIMEOUT,
-    start_hour: int = 9,
-    end_hour: int = 18
+        minute: int,
+        job: Callable[[], Any],
+        name: str = None,
+        timeout: int = DEFAULT_JOB_TIMEOUT,
+        start_hour: int = 9,
+        end_hour: int = 18
 ) -> None:
     """Schedule a job to run during US business hours (Mon-Fri, Eastern timezone).
 
@@ -173,11 +195,43 @@ def main() -> None:
         logger.info(f"Tipper analysis will send to room: {room_name}")
     else:
         logger.warning("WARNING: No tipper analysis room configured!")
-    schedule_business_hours(
-        15,
-        lambda: analyze_recent_tippers(hours_back=1, room_id=tipper_analysis_room),
-        name="business_hours_tipper_analysis",
-        timeout=900  # 15 min timeout - should handle several tippers
+    # Hourly tipper analysis - controlled by ENABLE_HOURLY_TIPPER_ANALYSIS env var
+    if os.environ.get("ENABLE_HOURLY_TIPPER_ANALYSIS", "false").lower() == "true":
+        schedule_business_hours(
+            15,
+            lambda: analyze_recent_tippers(hours_back=1, room_id=tipper_analysis_room),
+            name="business_hours_tipper_analysis",
+            timeout=900  # 15 min timeout - should handle several tippers
+        )
+        logger.info("Hourly tipper analysis ENABLED")
+    else:
+        logger.info("Hourly tipper analysis DISABLED (set ENABLE_HOURLY_TIPPER_ANALYSIS=true to enable)")
+
+    # Detection rules catalog sync - refreshes CrowdStrike/QRadar rules daily
+    # Runs at 7:00 PM ET Mon-Fri when user is at computer (ZPA connected)
+    schedule_weekdays(
+        "19:00",
+        sync_catalog,
+        name="daily_rules_catalog_sync",
+        timeout=600  # 10 min timeout
+    )
+
+    # Tanium signals catalog sync - fetches signals from Cloud and On-Prem Tanium
+    # Runs at 7:05 PM ET Mon-Fri when user is at computer (ZPA connected)
+    schedule_weekdays(
+        "19:05",
+        sync_tanium_signals_catalog,
+        name="daily_tanium_signals_sync",
+        timeout=600  # 10 min timeout
+    )
+
+    # Tipper index sync - indexes new tippers for similarity search
+    # Runs at 7:10 PM ET Mon-Fri when user is at computer (ZPA connected)
+    schedule_weekdays(
+        "19:10",
+        lambda: sync_tipper_index(days_back=7),  # Look back 7 days to catch any missed
+        name="daily_tipper_index_sync",
+        timeout=1800  # 30 min timeout - indexing can be slow
     )
 
     # -------------------------------------------------------------------------

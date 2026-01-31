@@ -2,6 +2,10 @@
 
 Sends a concise end-of-day summary card with critical findings only.
 Full details available on the web report.
+
+Outstanding threats persist in alerts until acknowledged via:
+  - acknowledge_threat(domain) - remove single threat
+  - acknowledge_all_threats() - clear all
 """
 
 from datetime import datetime
@@ -12,6 +16,8 @@ from webexpythonsdk.models.cards import (
     AdaptiveCard, TextBlock, Container, options, HorizontalAlignment,
 )
 from webexpythonsdk.models.cards.actions import OpenUrl
+
+from services.cert_transparency import get_outstanding_threats
 
 from ..config import EASTERN_TZ
 from ..card_helpers import get_container_style, send_adaptive_card
@@ -55,6 +61,20 @@ def send_daily_summary(webex_api: WebexTeamsAPI, results: Dict[str, Any], report
             for m in abusech.get("malicious_domains", [])[:2]:
                 critical_items.append(("☠️", f"{m.get('domain', domain)} - malware"))
 
+        # Brand CT impersonation - CRITICAL (semantic attacks like acme-loan.com)
+        brand_ct = domain_data.get("brand_ct_search", {})
+        if brand_ct.get("success"):
+            for imp in brand_ct.get("new_domains", [])[:3]:  # Top 3
+                imp_domain = imp.get("domain", "unknown")
+                issuer = imp.get("issuer", "Unknown CA")[:20]
+                critical_items.append(("🎣", f"{imp_domain} has SSL cert ({issuer})"))
+
+        # Watchlist domains with certs - CRITICAL
+        watchlist = domain_data.get("watchlist", {})
+        if watchlist.get("success"):
+            for w in watchlist.get("domains_with_certs", [])[:2]:
+                critical_items.append(("🎣", f"{w.get('domain', 'unknown')} has SSL cert"))
+
         # Count warnings (not shown in detail)
         hibp = domain_data.get("hibp", {})
         if hibp.get("success"):
@@ -63,6 +83,26 @@ def send_daily_summary(webex_api: WebexTeamsAPI, results: Dict[str, Any], report
         ct_logs = domain_data.get("ct_logs", {})
         if ct_logs.get("success"):
             warning_count += len(ct_logs.get("high_risk_domains", []))
+
+    # Outstanding threats - these persist until acknowledged
+    # (Even if analyst missed yesterday's alert, they'll see it today)
+    outstanding = get_outstanding_threats()
+
+    # Add outstanding threats not already in critical_items
+    already_shown = {desc.split()[0] for _, desc in critical_items}  # Extract domain from description
+    for threat in outstanding[:5]:  # Top 5 outstanding
+        domain = threat.get("domain", "unknown")
+        if domain not in already_shown:
+            days_ago = ""
+            if threat.get("discovered_at"):
+                try:
+                    disc_date = datetime.fromisoformat(threat["discovered_at"].replace("Z", "+00:00"))
+                    days = (datetime.now(EASTERN_TZ) - disc_date.astimezone(EASTERN_TZ)).days
+                    if days > 0:
+                        days_ago = f" ({days}d ago)"
+                except (ValueError, TypeError):
+                    pass
+            critical_items.append(("⚠️", f"{domain} - unacknowledged{days_ago}"))
 
     # Determine status
     if critical_items:

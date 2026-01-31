@@ -1,0 +1,767 @@
+{
+  "name": "Zscaler Auto-Block - URLhaus Threat Feed",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 1
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Schedule - Hourly Poll",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://urlhaus-api.abuse.ch/v1/urls/recent/",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 30000
+        }
+      },
+      "id": "fetch-urlhaus",
+      "name": "Fetch URLhaus Recent URLs",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse URLhaus feed and extract new malicious URLs\nconst response = $input.first().json;\nconst urls = response.body?.urls || [];\n\n// Get the last processed timestamp from static data\nconst lastProcessed = $getWorkflowStaticData('global').lastProcessedTimestamp || 0;\nconst currentTimestamp = Date.now();\n\n// Filter for new URLs added since last check\n// URLhaus provides dateadded in format: YYYY-MM-DD HH:MM:SS\nconst newUrls = urls.filter(urlEntry => {\n  const dateAdded = new Date(urlEntry.dateadded).getTime();\n  return dateAdded > lastProcessed;\n});\n\n// Filter for high-threat categories\nconst threatCategories = ['malware_download', 'phishing', 'cryptomining', 'exploit'];\nconst highThreatUrls = newUrls.filter(urlEntry => {\n  const tags = urlEntry.tags || [];\n  const threat = urlEntry.threat || '';\n  return threatCategories.some(cat => \n    threat.toLowerCase().includes(cat) || \n    tags.some(tag => tag.toLowerCase().includes(cat))\n  );\n});\n\n// Limit to prevent overwhelming Zscaler API (process max 100 per run)\nconst urlsToProcess = highThreatUrls.slice(0, 100);\n\n// Update last processed timestamp\n$getWorkflowStaticData('global').lastProcessedTimestamp = currentTimestamp;\n\n// Extract unique URLs\nconst uniqueUrls = [...new Set(urlsToProcess.map(u => u.url))];\n\nif (uniqueUrls.length === 0) {\n  return {\n    json: {\n      hasNewUrls: false,\n      message: 'No new high-threat URLs found',\n      timestamp: new Date().toISOString(),\n      checked: urls.length\n    }\n  };\n}\n\nreturn {\n  json: {\n    hasNewUrls: true,\n    urls: uniqueUrls,\n    urlDetails: urlsToProcess.map(u => ({\n      url: u.url,\n      threat: u.threat,\n      tags: u.tags,\n      dateadded: u.dateadded,\n      urlhaus_link: u.urlhaus_link\n    })),\n    count: uniqueUrls.length,\n    timestamp: new Date().toISOString(),\n    source: 'URLhaus (abuse.ch)'\n  }\n};"
+      },
+      "id": "parse-urlhaus",
+      "name": "Parse URLhaus Feed",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "has-urls",
+              "leftValue": "={{ $json.hasNewUrls }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-new-urls",
+      "name": "New URLs Found?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Zscaler API Key Obfuscation for automated polling\nconst now = new Date();\nconst timestamp = now.getTime().toString();\n\n// Get credentials from environment/credentials\nconst apiKey = $env.ZSCALER_API_KEY || '{{ZSCALER_API_KEY}}';\nconst username = $env.ZSCALER_USERNAME || '{{ZSCALER_USERNAME}}';\nconst password = $env.ZSCALER_PASSWORD || '{{ZSCALER_PASSWORD}}';\n\n// Obfuscate API key per Zscaler requirements\nfunction obfuscateApiKey(apiKey, timestamp) {\n  const high = timestamp.substring(timestamp.length - 6);\n  const low = (parseInt(high) >> 1).toString();\n  let obfuscatedKey = '';\n  \n  while (obfuscatedKey.length < apiKey.length) {\n    for (let i = 0; i < high.length && obfuscatedKey.length < apiKey.length; i++) {\n      const index = parseInt(high.charAt(i));\n      obfuscatedKey += apiKey.charAt(index);\n    }\n  }\n  \n  return obfuscatedKey;\n}\n\nconst obfuscatedKey = obfuscateApiKey(apiKey, timestamp);\nconst urlhausData = $input.first().json;\n\nreturn {\n  json: {\n    timestamp: timestamp,\n    apiKey: obfuscatedKey,\n    username: username,\n    password: password,\n    urls_to_block: urlhausData.urls,\n    urlDetails: urlhausData.urlDetails,\n    count: urlhausData.count,\n    source: urlhausData.source,\n    feedTimestamp: urlhausData.timestamp\n  }\n};"
+      },
+      "id": "prepare-zscaler-auth",
+      "name": "Prepare Zscaler Auth",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://zsapi.zscaler.net/api/v1/authenticatedSession",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ apiKey: $json.apiKey, username: $json.username, password: $json.password, timestamp: $json.timestamp }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "zscaler-authenticate",
+      "name": "Zscaler Authenticate",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1340, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract session and prepare for bulk URL blocking\nconst authResponse = $input.first().json;\nconst prevData = $('Prepare Zscaler Auth').first().json;\n\nconst cookies = authResponse.headers?.['set-cookie'] || [];\nlet jsessionId = '';\n\nfor (const cookie of cookies) {\n  if (cookie.includes('JSESSIONID')) {\n    jsessionId = cookie.split(';')[0];\n    break;\n  }\n}\n\nconst authSuccess = authResponse.statusCode === 200;\n\nreturn {\n  json: {\n    sessionCookie: jsessionId,\n    authSuccess: authSuccess,\n    urls_to_block: prevData.urls_to_block,\n    urlDetails: prevData.urlDetails,\n    count: prevData.count,\n    source: prevData.source,\n    feedTimestamp: prevData.feedTimestamp\n  }\n};"
+      },
+      "id": "extract-zscaler-session",
+      "name": "Extract Zscaler Session",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1560, 200]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "auth-success",
+              "leftValue": "={{ $json.authSuccess }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-zscaler-auth",
+      "name": "Auth Successful?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1780, 200]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://zsapi.zscaler.net/api/v1/urlCategories?customOnly=true",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Cookie",
+              "value": "={{ $json.sessionCookie }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "get-custom-categories",
+      "name": "Get Custom URL Categories",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2000, 100]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Find or create the threat feed blocklist category\nconst categoriesResponse = $input.first().json;\nconst sessionData = $('Extract Zscaler Session').first().json;\n\nconst categories = categoriesResponse.body || [];\nconst THREAT_FEED_CATEGORY_NAME = 'THREAT_FEED_BLOCKLIST';\n\n// Find existing threat feed category\nlet threatCategory = categories.find(cat => \n  cat.configuredName === THREAT_FEED_CATEGORY_NAME\n);\n\n// Get existing URLs in the category to avoid duplicates\nlet existingUrls = threatCategory?.urls || [];\n\n// Filter out URLs that are already blocked\nconst newUrlsToBlock = sessionData.urls_to_block.filter(url => {\n  const cleanUrl = url.replace(/^https?:\\/\\//i, '').replace(/\\/$/, '');\n  return !existingUrls.includes(cleanUrl) && !existingUrls.includes(url);\n});\n\n// Combine existing with new (limit to 25000 per Zscaler limits)\nconst combinedUrls = [...existingUrls, ...newUrlsToBlock.map(u => \n  u.replace(/^https?:\\/\\//i, '').replace(/\\/$/, '')\n)].slice(0, 25000);\n\nreturn {\n  json: {\n    sessionCookie: sessionData.sessionCookie,\n    categoryId: threatCategory?.id || null,\n    categoryExists: !!threatCategory,\n    categoryName: THREAT_FEED_CATEGORY_NAME,\n    existingUrlCount: existingUrls.length,\n    newUrlCount: newUrlsToBlock.length,\n    urls: combinedUrls,\n    urlDetails: sessionData.urlDetails.filter(d => \n      newUrlsToBlock.includes(d.url)\n    ),\n    source: sessionData.source,\n    feedTimestamp: sessionData.feedTimestamp\n  }\n};"
+      },
+      "id": "prepare-category-update",
+      "name": "Prepare Category Update",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2220, 100]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "category-exists",
+              "leftValue": "={{ $json.categoryExists }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "category-exists-check",
+      "name": "Category Exists?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [2440, 100]
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "=https://zsapi.zscaler.net/api/v1/urlCategories/{{ $json.categoryId }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Cookie",
+              "value": "={{ $json.sessionCookie }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ configuredName: $json.categoryName, urls: $json.urls, dbCategorizedUrls: [], customCategory: true, superCategory: 'USER_DEFINED', description: 'Auto-populated from URLhaus threat feed - Last updated: ' + $json.feedTimestamp }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "update-existing-category",
+      "name": "Update Existing Category",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2660, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://zsapi.zscaler.net/api/v1/urlCategories",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Cookie",
+              "value": "={{ $json.sessionCookie }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ configuredName: $json.categoryName, urls: $json.urls, dbCategorizedUrls: [], customCategory: true, superCategory: 'USER_DEFINED', description: 'Auto-populated from URLhaus threat feed - Created: ' + $json.feedTimestamp }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "create-new-category",
+      "name": "Create New Category",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2660, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Merge results from category update/create\nconst items = $input.all();\nconst categoryData = $('Prepare Category Update').first().json;\n\nlet updateResult = items[0]?.json || {};\n\nreturn {\n  json: {\n    sessionCookie: categoryData.sessionCookie,\n    categoryUpdateStatus: updateResult.statusCode === 200 || updateResult.statusCode === 201 ? 'success' : 'failed',\n    categoryName: categoryData.categoryName,\n    newUrlCount: categoryData.newUrlCount,\n    totalUrls: categoryData.urls.length,\n    urlDetails: categoryData.urlDetails,\n    source: categoryData.source,\n    feedTimestamp: categoryData.feedTimestamp\n  }\n};"
+      },
+      "id": "merge-category-result",
+      "name": "Merge Category Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2880, 100]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://zsapi.zscaler.net/api/v1/status/activate",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Cookie",
+              "value": "={{ $json.sessionCookie }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "activate-zscaler-changes",
+      "name": "Activate Zscaler Changes",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [3100, 100]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Prepare comprehensive Webex notification\nconst mergeData = $('Merge Category Results').first().json;\nconst activateResponse = $input.first().json;\n\nconst activationStatus = activateResponse.statusCode === 200 ? 'SUCCESS' : 'FAILED';\n\n// Format URL details for the message\nlet urlSummary = '';\nif (mergeData.urlDetails && mergeData.urlDetails.length > 0) {\n  // Show first 10 URLs with their threat info\n  const displayUrls = mergeData.urlDetails.slice(0, 10);\n  urlSummary = displayUrls.map(u => \n    `  - \\`${u.url.substring(0, 60)}${u.url.length > 60 ? '...' : ''}\\` - ${u.threat}`\n  ).join('\\n');\n  \n  if (mergeData.urlDetails.length > 10) {\n    urlSummary += `\\n  ... and ${mergeData.urlDetails.length - 10} more`;\n  }\n} else {\n  urlSummary = '  No new URLs added this cycle';\n}\n\nconst message = `## Zscaler Threat Feed Auto-Block\n\n**Source:** ${mergeData.source}\n**Activation Status:** ${activationStatus}\n**Feed Timestamp:** ${mergeData.feedTimestamp}\n**Processed At:** ${new Date().toISOString()}\n\n### Statistics\n- **New URLs Blocked:** ${mergeData.newUrlCount}\n- **Total URLs in Category:** ${mergeData.totalUrls}\n- **Category:** ${mergeData.categoryName}\n- **Category Update:** ${mergeData.categoryUpdateStatus}\n\n### New Threats Blocked\n${urlSummary}\n\n---\n*Automated threat intelligence integration via n8n*`;\n\nreturn {\n  json: {\n    markdown: message,\n    roomId: $env.WEBEX_ROOM_ID || '{{WEBEX_ROOM_ID}}',\n    newUrlCount: mergeData.newUrlCount,\n    sessionCookie: mergeData.sessionCookie\n  }\n};"
+      },
+      "id": "prepare-webex-notification",
+      "name": "Prepare Webex Notification",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3320, 100]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "has-new-urls",
+              "leftValue": "={{ $json.newUrlCount }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "should-notify",
+      "name": "Has New URLs?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [3540, 100]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://webexapis.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ roomId: $json.roomId, markdown: $json.markdown }) }}",
+        "options": {}
+      },
+      "id": "send-webex-notification",
+      "name": "Send Webex Notification",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [3760, 0],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "webex-auth",
+          "name": "Webex Bot Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "DELETE",
+        "url": "https://zsapi.zscaler.net/api/v1/authenticatedSession",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Cookie",
+              "value": "={{ $json.sessionCookie }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "logout-zscaler",
+      "name": "Logout Zscaler",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [3980, 100]
+    },
+    {
+      "parameters": {
+        "jsCode": "// No new URLs - skip processing but log\nconsole.log('URLhaus check completed - no new high-threat URLs found');\nreturn {\n  json: {\n    status: 'completed',\n    message: 'No new URLs to process',\n    timestamp: new Date().toISOString()\n  }\n};"
+      },
+      "id": "no-new-urls",
+      "name": "No New URLs Handler",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Handle Zscaler auth failure\nconst message = `## Zscaler Auto-Block - Authentication Failed\n\n**Timestamp:** ${new Date().toISOString()}\n**Error:** Could not authenticate to Zscaler API\n\nPlease check:\n- API credentials are valid\n- API key is not expired\n- Network connectivity to Zscaler\n\n---\n*Automated threat intelligence integration via n8n*`;\n\nreturn {\n  json: {\n    markdown: message,\n    roomId: $env.WEBEX_ROOM_ID || '{{WEBEX_ROOM_ID}}',\n    error: 'auth_failed'\n  }\n};"
+      },
+      "id": "auth-failure-handler",
+      "name": "Auth Failure Handler",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2000, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://webexapis.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ roomId: $json.roomId, markdown: $json.markdown }) }}",
+        "options": {}
+      },
+      "id": "notify-auth-failure",
+      "name": "Notify Auth Failure",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2220, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "webex-auth",
+          "name": "Webex Bot Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Skip notification - no new URLs\nreturn {\n  json: {\n    status: 'skipped',\n    message: 'No notification sent - no new URLs blocked',\n    sessionCookie: $json.sessionCookie\n  }\n};"
+      },
+      "id": "skip-notification",
+      "name": "Skip Notification",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3760, 200]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "merge-before-logout",
+      "name": "Merge Before Logout",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [3980, 100]
+    }
+  ],
+  "connections": {
+    "Schedule - Hourly Poll": {
+      "main": [
+        [
+          {
+            "node": "Fetch URLhaus Recent URLs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch URLhaus Recent URLs": {
+      "main": [
+        [
+          {
+            "node": "Parse URLhaus Feed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse URLhaus Feed": {
+      "main": [
+        [
+          {
+            "node": "New URLs Found?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "New URLs Found?": {
+      "main": [
+        [
+          {
+            "node": "Prepare Zscaler Auth",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No New URLs Handler",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Zscaler Auth": {
+      "main": [
+        [
+          {
+            "node": "Zscaler Authenticate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Zscaler Authenticate": {
+      "main": [
+        [
+          {
+            "node": "Extract Zscaler Session",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Zscaler Session": {
+      "main": [
+        [
+          {
+            "node": "Auth Successful?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Auth Successful?": {
+      "main": [
+        [
+          {
+            "node": "Get Custom URL Categories",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Auth Failure Handler",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Custom URL Categories": {
+      "main": [
+        [
+          {
+            "node": "Prepare Category Update",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Category Update": {
+      "main": [
+        [
+          {
+            "node": "Category Exists?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Category Exists?": {
+      "main": [
+        [
+          {
+            "node": "Update Existing Category",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Create New Category",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Existing Category": {
+      "main": [
+        [
+          {
+            "node": "Merge Category Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create New Category": {
+      "main": [
+        [
+          {
+            "node": "Merge Category Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Category Results": {
+      "main": [
+        [
+          {
+            "node": "Activate Zscaler Changes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Activate Zscaler Changes": {
+      "main": [
+        [
+          {
+            "node": "Prepare Webex Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Webex Notification": {
+      "main": [
+        [
+          {
+            "node": "Has New URLs?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has New URLs?": {
+      "main": [
+        [
+          {
+            "node": "Send Webex Notification",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Skip Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Webex Notification": {
+      "main": [
+        [
+          {
+            "node": "Logout Zscaler",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Skip Notification": {
+      "main": [
+        [
+          {
+            "node": "Logout Zscaler",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Auth Failure Handler": {
+      "main": [
+        [
+          {
+            "node": "Notify Auth Failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  },
+  "staticData": {
+    "global": {
+      "lastProcessedTimestamp": 0
+    }
+  },
+  "tags": [
+    {
+      "id": "security",
+      "name": "Security"
+    },
+    {
+      "id": "zscaler",
+      "name": "Zscaler"
+    },
+    {
+      "id": "threat-intel",
+      "name": "Threat Intelligence"
+    },
+    {
+      "id": "urlhaus",
+      "name": "URLhaus"
+    },
+    {
+      "id": "automated",
+      "name": "Automated"
+    }
+  ],
+  "triggerCount": 1,
+  "updatedAt": "2026-01-29T00:00:00.000Z",
+  "versionId": "1"
+}

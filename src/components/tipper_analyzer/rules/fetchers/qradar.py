@@ -1,6 +1,6 @@
 """QRadar detection rules fetcher.
 
-Fetches custom analytics rules and saved searches from QRadar,
+Fetches custom analytics rules from QRadar,
 normalizing them into DetectionRule objects.
 """
 
@@ -46,7 +46,7 @@ def _extract_threat_context(text: str) -> dict:
 
 @register_fetcher("qradar")
 def fetch_qradar_rules() -> List[DetectionRule]:
-    """Fetch custom rules and saved searches from QRadar."""
+    """Fetch custom analytics rules from QRadar."""
     from services.qradar import QRadarClient
 
     rules = []
@@ -62,18 +62,16 @@ def fetch_qradar_rules() -> List[DetectionRule]:
     if "error" not in result:
         for rule in result.get("rules", []):
             name = rule.get("name", "")
-            notes = rule.get("notes", "")
-            search_text = f"{name} {notes}"
-            context = _extract_threat_context(search_text)
+            context = _extract_threat_context(name)
 
             rules.append(DetectionRule(
                 rule_id=f"qradar-rule-{rule.get('id', '')}",
                 platform="qradar",
                 name=name,
-                description=notes,
+                description="",
                 rule_type="custom_rule",
                 enabled=rule.get("enabled", True),
-                severity="",  # QRadar rules don't have severity in the API response
+                severity="",
                 tags=[],
                 malware_families=context["malware"],
                 threat_actors=context["actors"],
@@ -84,35 +82,6 @@ def fetch_qradar_rules() -> List[DetectionRule]:
         logger.info(f"Fetched {len(result.get('rules', []))} custom analytics rules")
     else:
         logger.warning(f"Failed to fetch QRadar rules: {result['error']}")
-
-    # Fetch saved searches
-    logger.info("Fetching QRadar saved searches...")
-    result = client.list_saved_searches()
-    if "error" not in result:
-        for search in result.get("searches", []):
-            name = search.get("name", "")
-            description = search.get("description", "") or ""
-            aql = search.get("aql", "") or ""
-            search_text = f"{name} {description} {aql}"
-            context = _extract_threat_context(search_text)
-
-            rules.append(DetectionRule(
-                rule_id=f"qradar-search-{search.get('id', '')}",
-                platform="qradar",
-                name=name,
-                description=description,
-                rule_type="saved_search",
-                enabled=True,  # Saved searches are always "enabled"
-                tags=[],
-                malware_families=context["malware"],
-                threat_actors=context["actors"],
-                mitre_techniques=context["mitre"],
-                created_date="",
-                modified_date="",
-            ))
-        logger.info(f"Fetched {len(result.get('searches', []))} saved searches")
-    else:
-        logger.warning(f"Failed to fetch QRadar saved searches: {result['error']}")
 
     logger.info(f"Total QRadar rules: {len(rules)}")
     return rules
