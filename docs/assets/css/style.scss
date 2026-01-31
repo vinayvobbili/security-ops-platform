@@ -13,32 +13,45 @@
 
 /* Better header styling */
 .page-header {
-  background: linear-gradient(135deg, #155799, #159957);
-  padding: 3rem 2rem;
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+  padding: 4rem 2rem;
+  text-align: center;
 }
 
 .project-name {
-  font-size: 2.5rem;
+  font-size: 2.8rem;
   font-weight: 700;
+  color: #ffffff;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+  margin-bottom: 0.5rem;
 }
 
 .project-tagline {
-  font-size: 1.3rem;
-  opacity: 0.9;
+  font-size: 1.4rem;
+  color: #94a3b8;
+  font-weight: 400;
+  max-width: 700px;
+  margin: 0 auto;
+  line-height: 1.6;
 }
 
 /* Navigation buttons in header */
 .btn {
-  margin: 0.5rem 0.5rem 0.5rem 0;
+  margin: 0.5rem;
   padding: 0.75rem 1.5rem;
   font-size: 1rem;
-  border-radius: 0.4rem;
-  transition: all 0.2s ease;
+  border-radius: 0.5rem;
+  transition: all 0.3s ease;
+  background-color: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: #ffffff;
 }
 
 .btn:hover {
-  background-color: rgba(255, 255, 255, 0.3);
-  transform: translateY(-1px);
+  background-color: #3b82f6;
+  border-color: #3b82f6;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
 }
 
 /* Better table styling */
@@ -47,23 +60,33 @@ table {
   border-collapse: collapse;
   margin: 1.5rem 0;
   font-size: 1rem;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 table th {
-  background: linear-gradient(135deg, #155799, #159957);
+  background: linear-gradient(135deg, #1e3a5f, #2563eb);
   color: white;
-  padding: 0.85rem 1rem;
+  padding: 1rem 1.25rem;
   text-align: left;
   font-weight: 600;
+  text-transform: uppercase;
+  font-size: 0.85rem;
+  letter-spacing: 0.5px;
 }
 
 table td {
-  padding: 0.75rem 1rem;
-  border-bottom: 1px solid #e1e4e8;
+  padding: 0.9rem 1.25rem;
+  border-bottom: 1px solid #e5e7eb;
 }
 
 table tr:hover {
-  background-color: #f6f8fa;
+  background-color: #f0f9ff;
+}
+
+table tr:last-child td {
+  border-bottom: none;
 }
 
 /* Code blocks */
@@ -91,33 +114,38 @@ pre code {
 
 /* Headings */
 h1, h2, h3 {
-  color: #155799;
-  margin-top: 2rem;
+  color: #1e3a5f;
+  margin-top: 2.5rem;
+  font-weight: 700;
 }
 
 h1 {
   font-size: 2.2rem;
-  border-bottom: 2px solid #159957;
-  padding-bottom: 0.5rem;
+  border-bottom: 3px solid #3b82f6;
+  padding-bottom: 0.75rem;
+  margin-bottom: 1.5rem;
 }
 
 h2 {
-  font-size: 1.7rem;
+  font-size: 1.75rem;
+  color: #1e40af;
 }
 
 h3 {
-  font-size: 1.3rem;
+  font-size: 1.35rem;
+  color: #2563eb;
 }
 
 /* Links */
 a {
-  color: #155799;
+  color: #2563eb;
   text-decoration: none;
-  transition: color 0.2s ease;
+  transition: all 0.2s ease;
+  font-weight: 500;
 }
 
 a:hover {
-  color: #159957;
+  color: #1d4ed8;
   text-decoration: underline;
 }
 
@@ -125,14 +153,51 @@ a:hover {
 hr {
   border: none;
   height: 2px;
-  background: linear-gradient(to right, #159957, #155799);
-  margin: 2.5rem 0;
+  background: linear-gradient(to right, #3b82f6, #1e3a5f);
+  margin: 3rem 0;
+  opacity: 0.6;
+}
+
+/* Strong/bold text in tables */
+table td strong {
+  color: #1e3a5f;
+}
+
+/* Lists */
+ul, ol {
+  padding-left: 1.5rem;
+}
+
+li {
+  margin-bottom: 0.5rem;
+  line-height: 1.7;
+}
+
+/* Paragraphs */
+p {
+  line-height: 1.8;
+  color: #374151;
+}
+
+/* Code blocks enhancement */
+pre {
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.15);
+  border: 1px solid #2d2d2d;
+}
+
+/* Feature cards - for h3 sections */
+h3 + p {
+  margin-top: 0.5rem;
 }
 
 /* Responsive adjustments */
 @media screen and (max-width: 64em) {
   .main-content {
     padding: 2rem 3rem;
+  }
+
+  .page-header {
+    padding: 3rem 1.5rem;
   }
 }
 
@@ -144,5 +209,14 @@ hr {
 
   .project-name {
     font-size: 1.8rem;
+  }
+
+  .project-tagline {
+    font-size: 1.1rem;
+  }
+
+  .btn {
+    padding: 0.6rem 1rem;
+    font-size: 0.9rem;
   }
 }
