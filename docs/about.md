@@ -20,7 +20,7 @@ The Security Operations Automation Platform is an enterprise-grade solution desi
 | Security Tool Integrations | 30+ |
 | LLM Investigation Tools | 22 |
 | Production Chat Bots | 10 |
-| MTTR Improvement | 80%+ reduction |
+| n8n Automation Workflows | 32 |
 
 ---
 

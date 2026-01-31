@@ -18,7 +18,7 @@ This platform automates and orchestrates security operations workflows, providin
 - **10 Production Webex Bots** with self-healing WebSocket architecture
 - **30+ Security Tool Integrations** (CrowdStrike, Tanium, QRadar, ServiceNow, etc.)
 - **Real-time SOC Dashboards** with metrics, ticket aging, and trend analysis
-- **Automated Incident Response** playbooks reducing MTTR by 80%+
+- **Automated Incident Response** playbooks and workflows
 
 ---
 
