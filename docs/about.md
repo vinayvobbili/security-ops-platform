@@ -77,7 +77,9 @@ Security Automation Engineer specializing in:
 
 ### Connect
 
-- [LinkedIn](https://linkedin.com/in/vinay-vobbilichetty)
+<script src="https://platform.linkedin.com/badges/js/profile.js" async defer type="text/javascript"></script>
+<div class="badge-base LI-profile-badge" data-locale="en_US" data-size="large" data-theme="dark" data-type="VERTICAL" data-vanity="vinay-vobbilichetty" data-version="v1"><a class="badge-base__link LI-simple-link" href="https://www.linkedin.com/in/vinay-vobbilichetty?trk=profile-badge">Vinay Vobbilichetty</a></div>
+
 - [GitHub](https://github.com/vinayvobbili)
 
 ---
