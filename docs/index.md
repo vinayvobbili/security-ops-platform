@@ -16,7 +16,7 @@ An enterprise-grade security operations platform that automates and orchestrates
 | **Security Tool Integrations** | 30+ |
 | **LLM Investigation Tools** | 22 |
 | **Production Chat Bots** | 10 |
-| **MTTR Reduction** | 80%+ |
+| **Automated Workflows** | 30+ |
 
 ---
 
@@ -28,7 +28,7 @@ This platform addresses three critical challenges in modern security operations:
 Security teams juggle dozens of disconnected tools. This platform unifies **30+ security tools** into cohesive, automated workflows - from EDR and SIEM to threat intelligence and ticketing systems.
 
 ### 2. Response Time
-Manual investigation and response is slow. By automating routine tasks and leveraging AI for triage, this platform reduces **Mean Time to Respond (MTTR) by over 80%**.
+Manual investigation and response is slow. By automating routine tasks and leveraging AI for triage, this platform **significantly reduces Mean Time to Respond (MTTR)**.
 
 ### 3. Analyst Workload
 SOC analysts face alert fatigue and repetitive queries. **LLM-powered assistants** handle routine investigations, freeing analysts for complex threats.
