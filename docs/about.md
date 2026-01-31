@@ -73,7 +73,7 @@ Security Automation Engineer specializing in:
 - LLM-powered security tools
 - Enterprise integration architecture
 
-Currently pursuing **MS in Cybersecurity** at NC State University.
+**MS in Cybersecurity** from NC State University (May 2025).
 
 ### Connect
 
