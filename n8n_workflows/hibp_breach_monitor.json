@@ -1,0 +1,541 @@
+{
+  "name": "HIBP Breach Monitor",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 24
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Daily Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {},
+      "id": "manual-trigger",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [240, 500]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "email",
+              "value": "={{ $json.email || 'user@company.com' }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-email-input",
+      "name": "Set Email Input",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.3,
+      "position": [460, 500]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://haveibeenpwned.com/api/v3/breaches",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "hibp-api-key",
+              "value": "={{ $env.HIBP_API_KEY || 'YOUR_KEY' }}"
+            },
+            {
+              "name": "user-agent",
+              "value": "n8n-soc-automation"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "get-all-breaches",
+      "name": "Get All Breaches",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [460, 200]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://haveibeenpwned.com/api/v3/breaches?domain=company.com",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "hibp-api-key",
+              "value": "={{ $env.HIBP_API_KEY || 'YOUR_KEY' }}"
+            },
+            {
+              "name": "user-agent",
+              "value": "n8n-soc-automation"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "get-domain-breaches",
+      "name": "Get Company Domain Breaches",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [460, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get all breaches from input\nconst allBreaches = items[0].json;\n\n// Calculate timestamp for 24 hours ago\nconst now = new Date();\nconst yesterday = new Date(now.getTime() - (24 * 60 * 60 * 1000));\n\n// Filter breaches added in the last 24 hours\nconst newBreaches = [];\n\nif (Array.isArray(allBreaches)) {\n  for (const breach of allBreaches) {\n    const addedDate = new Date(breach.AddedDate);\n    if (addedDate >= yesterday) {\n      newBreaches.push({\n        json: {\n          name: breach.Name,\n          title: breach.Title,\n          domain: breach.Domain,\n          breachDate: breach.BreachDate,\n          addedDate: breach.AddedDate,\n          modifiedDate: breach.ModifiedDate,\n          pwnCount: breach.PwnCount,\n          description: breach.Description,\n          dataClasses: breach.DataClasses,\n          isVerified: breach.IsVerified,\n          isFabricated: breach.IsFabricated,\n          isSensitive: breach.IsSensitive,\n          isRetired: breach.IsRetired,\n          isSpamList: breach.IsSpamList,\n          isMalware: breach.IsMalware,\n          logoPath: breach.LogoPath,\n          isNew: true\n        }\n      });\n    }\n  }\n}\n\n// If no new breaches, return a marker item\nif (newBreaches.length === 0) {\n  return [{\n    json: {\n      noNewBreaches: true,\n      message: 'No new breaches detected in the last 24 hours',\n      checkTime: now.toISOString()\n    }\n  }];\n}\n\nreturn newBreaches;"
+      },
+      "id": "filter-new-breaches",
+      "name": "Filter New Breaches (Last 24h)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get domain breaches\nconst domainBreaches = items[0].json;\nconst companyDomain = 'company.com';\n\n// Create a Set of breach names affecting company domain\nconst affectedBreachNames = new Set();\n\nif (Array.isArray(domainBreaches)) {\n  for (const breach of domainBreaches) {\n    affectedBreachNames.add(breach.Name);\n  }\n}\n\nreturn [{\n  json: {\n    companyDomain: companyDomain,\n    affectedBreachNames: Array.from(affectedBreachNames),\n    totalDomainBreaches: affectedBreachNames.size,\n    domainBreaches: domainBreaches || []\n  }\n}];"
+      },
+      "id": "process-domain-breaches",
+      "name": "Process Domain Breaches",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 400]
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "mergeByFields": {
+          "values": []
+        },
+        "combinationMode": "multiplex",
+        "options": {}
+      },
+      "id": "merge-breach-data",
+      "name": "Merge Breach Data",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2.1,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "condition-no-breaches",
+              "leftValue": "={{ $json.noNewBreaches }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-new-breaches-exist",
+      "name": "Check if New Breaches Exist",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Process merged breach data and format for alerting\nconst newBreachData = items[0].json;\nconst domainData = items[1] ? items[1].json : { affectedBreachNames: [], companyDomain: 'company.com' };\n\n// Skip if no new breaches marker\nif (newBreachData.noNewBreaches) {\n  return [{\n    json: {\n      skipAlert: true,\n      message: newBreachData.message\n    }\n  }];\n}\n\n// Check if this breach affects company domain\nconst isCompanyAffected = domainData.affectedBreachNames.includes(newBreachData.name);\n\n// Determine severity\nlet severity = 'LOW';\nlet severityEmoji = '';\n\nif (isCompanyAffected) {\n  severity = 'HIGH';\n  severityEmoji = 'CRITICAL';\n} else if (newBreachData.pwnCount > 1000000) {\n  severity = 'MEDIUM';\n  severityEmoji = 'WARNING';\n} else {\n  severity = 'LOW';\n  severityEmoji = 'INFO';\n}\n\n// Format data classes for display\nconst dataClassesFormatted = newBreachData.dataClasses ? newBreachData.dataClasses.join(', ') : 'Unknown';\n\n// Check for sensitive data types\nconst sensitiveDataTypes = ['Passwords', 'Password hints', 'Credit cards', 'Bank account numbers', 'Social security numbers', 'Government issued IDs'];\nconst hasSensitiveData = newBreachData.dataClasses ? \n  newBreachData.dataClasses.some(dc => sensitiveDataTypes.includes(dc)) : false;\n\n// Generate recommended actions based on data exposed\nconst recommendations = [];\n\nif (newBreachData.dataClasses) {\n  if (newBreachData.dataClasses.includes('Passwords') || newBreachData.dataClasses.includes('Password hints')) {\n    recommendations.push('Immediately reset passwords for affected accounts');\n    recommendations.push('Enable multi-factor authentication where possible');\n  }\n  if (newBreachData.dataClasses.includes('Email addresses')) {\n    recommendations.push('Monitor for phishing attempts targeting exposed email addresses');\n  }\n  if (newBreachData.dataClasses.includes('Credit cards') || newBreachData.dataClasses.includes('Bank account numbers')) {\n    recommendations.push('Monitor financial accounts for unauthorized transactions');\n    recommendations.push('Consider placing fraud alerts on credit reports');\n  }\n  if (newBreachData.dataClasses.includes('Social security numbers') || newBreachData.dataClasses.includes('Government issued IDs')) {\n    recommendations.push('Consider identity theft protection services');\n    recommendations.push('Monitor credit reports for suspicious activity');\n  }\n  if (newBreachData.dataClasses.includes('Phone numbers')) {\n    recommendations.push('Be vigilant against SMS phishing (smishing) attacks');\n  }\n}\n\n// Default recommendations\nif (recommendations.length === 0) {\n  recommendations.push('Review security posture and update credentials if necessary');\n  recommendations.push('Monitor for suspicious activity related to exposed data');\n}\n\nif (isCompanyAffected) {\n  recommendations.unshift('URGENT: Company domain affected - initiate incident response procedures');\n  recommendations.push('Notify affected users and stakeholders');\n  recommendations.push('Review company accounts for unauthorized access');\n}\n\nreturn [{\n  json: {\n    breachName: newBreachData.name,\n    breachTitle: newBreachData.title,\n    breachDomain: newBreachData.domain,\n    breachDate: newBreachData.breachDate,\n    addedDate: newBreachData.addedDate,\n    pwnCount: newBreachData.pwnCount,\n    pwnCountFormatted: newBreachData.pwnCount ? newBreachData.pwnCount.toLocaleString() : 'Unknown',\n    dataClasses: newBreachData.dataClasses,\n    dataClassesFormatted: dataClassesFormatted,\n    description: newBreachData.description,\n    isVerified: newBreachData.isVerified,\n    isCompanyAffected: isCompanyAffected,\n    companyDomain: domainData.companyDomain,\n    severity: severity,\n    severityEmoji: severityEmoji,\n    hasSensitiveData: hasSensitiveData,\n    recommendations: recommendations,\n    recommendationsFormatted: recommendations.map((r, i) => `${i + 1}. ${r}`).join('\\n'),\n    alertTimestamp: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "enrich-breach-data",
+      "name": "Enrich Breach Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1340, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "const breach = items[0].json;\n\n// Build Webex adaptive card message\nconst webexMessage = {\n  roomId: '{{ $env.WEBEX_ROOM_ID || \"YOUR_WEBEX_ROOM_ID\" }}',\n  markdown: `## ${breach.severityEmoji} HIBP Breach Alert: ${breach.severity} Severity\\n\\n` +\n    `**Breach Name:** ${breach.breachTitle}\\n` +\n    `**Breach Date:** ${breach.breachDate}\\n` +\n    `**Added to HIBP:** ${breach.addedDate}\\n` +\n    `**Affected Domain:** ${breach.breachDomain || 'N/A'}\\n` +\n    `**Pwned Count:** ${breach.pwnCountFormatted}\\n` +\n    `**Verified:** ${breach.isVerified ? 'Yes' : 'No'}\\n\\n` +\n    `### Data Types Exposed\\n${breach.dataClassesFormatted}\\n\\n` +\n    `### Company Domain Status\\n` +\n    `**Domain Checked:** ${breach.companyDomain}\\n` +\n    `**Company Affected:** ${breach.isCompanyAffected ? 'YES - IMMEDIATE ACTION REQUIRED' : 'No'}\\n\\n` +\n    `### Description\\n${breach.description || 'No description available'}\\n\\n` +\n    `### Recommended Actions\\n${breach.recommendationsFormatted}\\n\\n` +\n    `---\\n_Alert generated: ${breach.alertTimestamp}_`,\n  attachments: [\n    {\n      contentType: 'application/vnd.microsoft.card.adaptive',\n      content: {\n        type: 'AdaptiveCard',\n        version: '1.2',\n        body: [\n          {\n            type: 'TextBlock',\n            text: `${breach.severityEmoji} HIBP Breach Alert`,\n            weight: 'bolder',\n            size: 'large',\n            color: breach.severity === 'HIGH' ? 'attention' : (breach.severity === 'MEDIUM' ? 'warning' : 'default')\n          },\n          {\n            type: 'FactSet',\n            facts: [\n              { title: 'Breach Name', value: breach.breachTitle },\n              { title: 'Severity', value: breach.severity },\n              { title: 'Breach Date', value: breach.breachDate },\n              { title: 'Pwned Count', value: breach.pwnCountFormatted },\n              { title: 'Company Affected', value: breach.isCompanyAffected ? 'YES' : 'No' }\n            ]\n          },\n          {\n            type: 'TextBlock',\n            text: 'Data Types Exposed',\n            weight: 'bolder',\n            separator: true\n          },\n          {\n            type: 'TextBlock',\n            text: breach.dataClassesFormatted,\n            wrap: true\n          },\n          {\n            type: 'TextBlock',\n            text: 'Recommended Actions',\n            weight: 'bolder',\n            separator: true\n          },\n          {\n            type: 'TextBlock',\n            text: breach.recommendationsFormatted,\n            wrap: true\n          }\n        ]\n      }\n    }\n  ]\n};\n\nreturn [{ json: webexMessage }];"
+      },
+      "id": "format-webex-alert",
+      "name": "Format Webex Alert",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1560, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://webexapis.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $env.WEBEX_BOT_TOKEN || 'YOUR_WEBEX_BOT_TOKEN' }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "roomId",
+              "value": "={{ $json.roomId }}"
+            },
+            {
+              "name": "markdown",
+              "value": "={{ $json.markdown }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "send-webex-alert",
+      "name": "Send Webex Alert",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1780, 200]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://haveibeenpwned.com/api/v3/breachedaccount/{{ encodeURIComponent($json.email) }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "hibp-api-key",
+              "value": "={{ $env.HIBP_API_KEY || 'YOUR_KEY' }}"
+            },
+            {
+              "name": "user-agent",
+              "value": "n8n-soc-automation"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "check-email-breaches",
+      "name": "Check Email Breaches",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [680, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "const email = items[0].json.email || $('Set Email Input').first().json.email;\nconst breaches = items[0].json;\n\n// Handle case where no breaches found (404 returns empty)\nif (!breaches || (Array.isArray(breaches) && breaches.length === 0)) {\n  return [{\n    json: {\n      email: email,\n      breachCount: 0,\n      message: `No breaches found for ${email}`,\n      breaches: [],\n      alertRequired: false\n    }\n  }];\n}\n\n// Process breach results\nconst breachList = Array.isArray(breaches) ? breaches : [breaches];\n\nconst processedBreaches = breachList.map(b => ({\n  name: b.Name,\n  title: b.Title,\n  domain: b.Domain,\n  breachDate: b.BreachDate,\n  dataClasses: b.DataClasses,\n  pwnCount: b.PwnCount\n}));\n\n// Collect all unique data classes\nconst allDataClasses = [...new Set(breachList.flatMap(b => b.DataClasses || []))];\n\nreturn [{\n  json: {\n    email: email,\n    breachCount: breachList.length,\n    message: `Found ${breachList.length} breach(es) for ${email}`,\n    breaches: processedBreaches,\n    breachNames: processedBreaches.map(b => b.title).join(', '),\n    allDataClassesExposed: allDataClasses.join(', '),\n    alertRequired: true,\n    checkTimestamp: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "process-email-results",
+      "name": "Process Email Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "const result = items[0].json;\n\nconst webexMessage = {\n  roomId: '{{ $env.WEBEX_ROOM_ID || \"YOUR_WEBEX_ROOM_ID\" }}',\n  markdown: `## Email Breach Check Results\\n\\n` +\n    `**Email:** ${result.email}\\n` +\n    `**Breaches Found:** ${result.breachCount}\\n\\n` +\n    (result.breachCount > 0 ? \n      `### Breaches\\n${result.breachNames}\\n\\n` +\n      `### Data Types Exposed\\n${result.allDataClassesExposed}\\n\\n` +\n      `### Recommended Actions\\n` +\n      `1. Reset password for this email account\\n` +\n      `2. Enable MFA if not already enabled\\n` +\n      `3. Check for password reuse across other services\\n` +\n      `4. Monitor for suspicious activity\\n`\n      : \n      `Good news! No known breaches found for this email.\\n`\n    ) +\n    `\\n---\\n_Check performed: ${result.checkTimestamp}_`\n};\n\nreturn [{ json: webexMessage }];"
+      },
+      "id": "format-email-check-alert",
+      "name": "Format Email Check Alert",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 500]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://webexapis.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $env.WEBEX_BOT_TOKEN || 'YOUR_WEBEX_BOT_TOKEN' }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "roomId",
+              "value": "={{ $json.roomId }}"
+            },
+            {
+              "name": "markdown",
+              "value": "={{ $json.markdown }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "send-email-check-alert",
+      "name": "Send Email Check Alert",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1340, 500]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "status",
+              "value": "No new breaches in last 24 hours"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "no-alert-needed",
+      "name": "No Alert Needed",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.3,
+      "position": [1340, 400]
+    }
+  ],
+  "connections": {
+    "Daily Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get All Breaches",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get Company Domain Breaches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Set Email Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Email Input": {
+      "main": [
+        [
+          {
+            "node": "Check Email Breaches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get All Breaches": {
+      "main": [
+        [
+          {
+            "node": "Filter New Breaches (Last 24h)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Company Domain Breaches": {
+      "main": [
+        [
+          {
+            "node": "Process Domain Breaches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter New Breaches (Last 24h)": {
+      "main": [
+        [
+          {
+            "node": "Merge Breach Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Domain Breaches": {
+      "main": [
+        [
+          {
+            "node": "Merge Breach Data",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge Breach Data": {
+      "main": [
+        [
+          {
+            "node": "Check if New Breaches Exist",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check if New Breaches Exist": {
+      "main": [
+        [
+          {
+            "node": "Enrich Breach Data",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Alert Needed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enrich Breach Data": {
+      "main": [
+        [
+          {
+            "node": "Format Webex Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Webex Alert": {
+      "main": [
+        [
+          {
+            "node": "Send Webex Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Email Breaches": {
+      "main": [
+        [
+          {
+            "node": "Process Email Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Email Results": {
+      "main": [
+        [
+          {
+            "node": "Format Email Check Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Email Check Alert": {
+      "main": [
+        [
+          {
+            "node": "Send Email Check Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "security",
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z"
+    },
+    {
+      "name": "hibp",
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z"
+    },
+    {
+      "name": "breach-monitoring",
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z"
+    }
+  ],
+  "triggerCount": 2,
+  "updatedAt": "2024-01-01T00:00:00.000Z",
+  "versionId": "1"
+}

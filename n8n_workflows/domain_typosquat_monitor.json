@@ -1,0 +1,478 @@
+{
+  "name": "Domain Typosquat Monitor",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 24
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Daily Schedule",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [0, 300]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "domains",
+              "value": "=[\"company.com\", \"company.io\"]"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-domains",
+      "name": "Set Company Domains",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.2,
+      "position": [220, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Domain Typosquat Variation Generator\n// Generates various typosquatting domain variations\n\nconst inputDomains = JSON.parse($input.first().json.domains);\n\n// Homoglyph mappings (Latin to similar-looking characters)\nconst homoglyphs = {\n  'a': ['\u0430', '\u00e0', '\u00e1', '\u00e2', '\u00e3', '\u00e4', '\u0101'],\n  'b': ['\u0412', '\u0432', '\u0253'],\n  'c': ['\u0441', '\u00e7', '\u010b'],\n  'd': ['\u0501', '\u0257'],\n  'e': ['\u0435', '\u00e8', '\u00e9', '\u00ea', '\u00eb', '\u0113'],\n  'g': ['\u0261', '\u01f5'],\n  'h': ['\u04bb', '\u0570'],\n  'i': ['\u0456', '\u00ec', '\u00ed', '\u00ee', '\u00ef', '1', 'l'],\n  'j': ['\u0458', '\u0135'],\n  'k': ['\u043a', '\u0137'],\n  'l': ['\u04cf', '1', 'I', '\u0131'],\n  'm': ['\u043c', '\u0271'],\n  'n': ['\u0578', '\u0146', '\u00f1'],\n  'o': ['\u043e', '\u00f2', '\u00f3', '\u00f4', '\u00f5', '\u00f6', '0'],\n  'p': ['\u0440', '\u03c1'],\n  'q': ['\u051b', '\u0566'],\n  'r': ['\u0433', '\u0155'],\n  's': ['\u0455', '\u015b', '\u015f', '5'],\n  't': ['\u0442', '\u0163', '\u0165'],\n  'u': ['\u0446', '\u00f9', '\u00fa', '\u00fb', '\u00fc'],\n  'v': ['\u0475', '\u03bd'],\n  'w': ['\u0461', '\u0175'],\n  'x': ['\u0445', '\u04b3'],\n  'y': ['\u0443', '\u00fd', '\u00ff'],\n  'z': ['\u0290', '\u017c', '\u017e']\n};\n\n// Character substitutions (common typos and leet speak)\nconst charSubstitutions = {\n  'a': ['4', '@', 'q'],\n  'b': ['d', '6'],\n  'c': ['k', '('],\n  'd': ['b', 'cl'],\n  'e': ['3'],\n  'g': ['9', 'q'],\n  'i': ['1', 'l', '!'],\n  'l': ['1', 'i', '|'],\n  'o': ['0'],\n  's': ['5', '$', 'z'],\n  't': ['7', '+'],\n  'z': ['s', '2']\n};\n\n// TLD variations to check\nconst tldVariations = ['.com', '.co', '.net', '.org', '.io', '.info', '.biz', '.xyz', '.online', '.site', '.app', '.dev', '.cloud'];\n\n// Keyboard adjacent keys for fat finger typos\nconst keyboardAdjacent = {\n  'a': ['s', 'q', 'w', 'z'],\n  'b': ['v', 'g', 'h', 'n'],\n  'c': ['x', 'd', 'f', 'v'],\n  'd': ['s', 'e', 'r', 'f', 'c', 'x'],\n  'e': ['w', 's', 'd', 'r'],\n  'f': ['d', 'r', 't', 'g', 'v', 'c'],\n  'g': ['f', 't', 'y', 'h', 'b', 'v'],\n  'h': ['g', 'y', 'u', 'j', 'n', 'b'],\n  'i': ['u', 'j', 'k', 'o'],\n  'j': ['h', 'u', 'i', 'k', 'm', 'n'],\n  'k': ['j', 'i', 'o', 'l', 'm'],\n  'l': ['k', 'o', 'p'],\n  'm': ['n', 'j', 'k'],\n  'n': ['b', 'h', 'j', 'm'],\n  'o': ['i', 'k', 'l', 'p'],\n  'p': ['o', 'l'],\n  'q': ['w', 'a'],\n  'r': ['e', 'd', 'f', 't'],\n  's': ['a', 'w', 'e', 'd', 'z', 'x'],\n  't': ['r', 'f', 'g', 'y'],\n  'u': ['y', 'h', 'j', 'i'],\n  'v': ['c', 'f', 'g', 'b'],\n  'w': ['q', 'a', 's', 'e'],\n  'x': ['z', 's', 'd', 'c'],\n  'y': ['t', 'g', 'h', 'u'],\n  'z': ['a', 's', 'x']\n};\n\nfunction generateVariations(domain) {\n  const variations = new Set();\n  const parts = domain.split('.');\n  const name = parts[0];\n  const originalTld = '.' + parts.slice(1).join('.');\n  \n  // 1. Missing character variations\n  for (let i = 0; i < name.length; i++) {\n    const missing = name.slice(0, i) + name.slice(i + 1);\n    if (missing.length > 0) {\n      variations.add(missing + originalTld);\n    }\n  }\n  \n  // 2. Extra character (doubling)\n  for (let i = 0; i < name.length; i++) {\n    const doubled = name.slice(0, i) + name[i] + name.slice(i);\n    variations.add(doubled + originalTld);\n  }\n  \n  // 3. Character substitution (common typos)\n  for (let i = 0; i < name.length; i++) {\n    const char = name[i].toLowerCase();\n    if (charSubstitutions[char]) {\n      for (const sub of charSubstitutions[char]) {\n        const substituted = name.slice(0, i) + sub + name.slice(i + 1);\n        variations.add(substituted + originalTld);\n      }\n    }\n  }\n  \n  // 4. Homoglyph variations (most dangerous)\n  for (let i = 0; i < name.length; i++) {\n    const char = name[i].toLowerCase();\n    if (homoglyphs[char]) {\n      for (const glyph of homoglyphs[char]) {\n        const homoglyphed = name.slice(0, i) + glyph + name.slice(i + 1);\n        variations.add(homoglyphed + originalTld);\n      }\n    }\n  }\n  \n  // 5. Adjacent character typos (fat finger)\n  for (let i = 0; i < name.length; i++) {\n    const char = name[i].toLowerCase();\n    if (keyboardAdjacent[char]) {\n      for (const adj of keyboardAdjacent[char]) {\n        const typo = name.slice(0, i) + adj + name.slice(i + 1);\n        variations.add(typo + originalTld);\n      }\n    }\n  }\n  \n  // 6. Swapped adjacent characters\n  for (let i = 0; i < name.length - 1; i++) {\n    const swapped = name.slice(0, i) + name[i + 1] + name[i] + name.slice(i + 2);\n    variations.add(swapped + originalTld);\n  }\n  \n  // 7. TLD variations\n  for (const tld of tldVariations) {\n    if (tld !== originalTld) {\n      variations.add(name + tld);\n    }\n  }\n  \n  // 8. Common prefix/suffix additions\n  const prefixes = ['www-', 'login-', 'secure-', 'my', 'the', 'get'];\n  const suffixes = ['-login', '-secure', '-support', '-help', '-online', 's'];\n  \n  for (const prefix of prefixes) {\n    variations.add(prefix + name + originalTld);\n  }\n  \n  for (const suffix of suffixes) {\n    variations.add(name + suffix + originalTld);\n  }\n  \n  // 9. Hyphen insertion/removal\n  for (let i = 1; i < name.length; i++) {\n    const withHyphen = name.slice(0, i) + '-' + name.slice(i);\n    variations.add(withHyphen + originalTld);\n  }\n  \n  // Remove hyphen if exists\n  if (name.includes('-')) {\n    variations.add(name.replace(/-/g, '') + originalTld);\n  }\n  \n  // 10. Dot insertion (subdomain-like)\n  for (let i = 1; i < name.length; i++) {\n    const withDot = name.slice(0, i) + '.' + name.slice(i);\n    variations.add(withDot + originalTld);\n  }\n  \n  return Array.from(variations);\n}\n\n// Generate all variations for all input domains\nconst allVariations = [];\n\nfor (const domain of inputDomains) {\n  const variations = generateVariations(domain);\n  for (const variation of variations) {\n    allVariations.push({\n      originalDomain: domain,\n      typosquatDomain: variation,\n      generatedAt: new Date().toISOString()\n    });\n  }\n}\n\nreturn allVariations;"
+      },
+      "id": "generate-variations",
+      "name": "Generate Typosquat Variations",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 300]
+    },
+    {
+      "parameters": {
+        "batchSize": 10,
+        "options": {}
+      },
+      "id": "split-batches",
+      "name": "Split Into Batches",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [660, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// DNS Lookup for typosquat domain\nconst dns = require('dns');\nconst { promisify } = require('util');\n\nconst resolveDns = promisify(dns.resolve4);\n\nconst item = $input.first().json;\nconst domain = item.typosquatDomain;\n\ntry {\n  const addresses = await resolveDns(domain);\n  return {\n    ...item,\n    dnsResolved: true,\n    ipAddresses: addresses,\n    resolvedAt: new Date().toISOString()\n  };\n} catch (error) {\n  return {\n    ...item,\n    dnsResolved: false,\n    ipAddresses: [],\n    dnsError: error.code || error.message\n  };\n}"
+      },
+      "id": "dns-lookup",
+      "name": "DNS Lookup",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [880, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.dnsResolved }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "filter-resolved",
+      "name": "Filter Resolved Domains",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1100, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://www.whoisxmlapi.com/whoisserver/WhoisService?apiKey={{$env.WHOIS_API_KEY}}&domainName={{ $json.typosquatDomain }}&outputFormat=JSON",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "whois-lookup",
+      "name": "WHOIS Lookup",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1320, 200],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://crt.sh/?q={{ $json.typosquatDomain }}&output=json",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "crt-sh-lookup",
+      "name": "Certificate Transparency Lookup",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1540, 200],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Merge WHOIS and CT data, check if domain is newly registered\nconst item = $input.first().json;\n\n// Parse WHOIS data\nlet whoisData = {};\nlet registrationDate = null;\nlet registrar = null;\nlet isNewlyRegistered = false;\n\ntry {\n  if (item.WhoisRecord) {\n    whoisData = item.WhoisRecord;\n    registrationDate = whoisData.createdDate || whoisData.registryData?.createdDate;\n    registrar = whoisData.registrarName || whoisData.registryData?.registrarName;\n    \n    // Check if registered within last 30 days\n    if (registrationDate) {\n      const regDate = new Date(registrationDate);\n      const thirtyDaysAgo = new Date();\n      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);\n      isNewlyRegistered = regDate > thirtyDaysAgo;\n    }\n  }\n} catch (e) {\n  // WHOIS parsing failed\n}\n\n// Parse CT logs\nlet hasCertificate = false;\nlet certificates = [];\n\ntry {\n  if (Array.isArray(item.data)) {\n    hasCertificate = item.data.length > 0;\n    certificates = item.data.slice(0, 5).map(cert => ({\n      issuer: cert.issuer_name,\n      notBefore: cert.not_before,\n      notAfter: cert.not_after\n    }));\n  }\n} catch (e) {\n  // CT parsing failed\n}\n\nreturn {\n  originalDomain: item.originalDomain,\n  typosquatDomain: item.typosquatDomain,\n  ipAddresses: item.ipAddresses,\n  registrationDate: registrationDate,\n  registrar: registrar,\n  isNewlyRegistered: isNewlyRegistered,\n  hasCertificate: hasCertificate,\n  certificates: certificates,\n  resolvedAt: item.resolvedAt\n};"
+      },
+      "id": "merge-whois-ct",
+      "name": "Process WHOIS & CT Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1760, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Check if domain is new (not seen before)\n// Uses workflow static data for persistence\n\nconst staticData = $getWorkflowStaticData('global');\n\n// Initialize known domains if not exists\nif (!staticData.knownDomains) {\n  staticData.knownDomains = {};\n}\n\nconst item = $input.first().json;\nconst domain = item.typosquatDomain;\n\n// Check if this is a new finding\nconst isNewFinding = !staticData.knownDomains[domain];\n\nif (isNewFinding) {\n  // Store the domain with first seen timestamp\n  staticData.knownDomains[domain] = {\n    firstSeen: new Date().toISOString(),\n    originalDomain: item.originalDomain,\n    ipAddresses: item.ipAddresses\n  };\n}\n\nreturn {\n  ...item,\n  isNewFinding: isNewFinding,\n  firstSeen: isNewFinding ? new Date().toISOString() : staticData.knownDomains[domain].firstSeen\n};"
+      },
+      "id": "check-known-domains",
+      "name": "Check Known Domains",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1980, 200]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.isNewFinding }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "filter-new-findings",
+      "name": "Filter New Findings",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [2200, 200]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://urlscan.io/api/v1/search/?q=domain:{{ $json.typosquatDomain }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "urlscan-search",
+      "name": "URLScan.io Search",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [2420, 100],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "urlscan-api",
+          "name": "URLScan API"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://urlscan.io/api/v1/scan/",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "url",
+              "value": "=https://{{ $json.typosquatDomain }}"
+            },
+            {
+              "name": "visibility",
+              "value": "private"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "urlscan-submit",
+      "name": "Submit to URLScan",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [2640, 100],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "urlscan-api",
+          "name": "URLScan API"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Calculate risk assessment based on various factors\nconst item = $input.first().json;\n\nlet riskScore = 0;\nlet riskFactors = [];\n\n// Factor 1: Domain resolves (base risk)\nif (item.ipAddresses && item.ipAddresses.length > 0) {\n  riskScore += 20;\n  riskFactors.push('Domain resolves to IP');\n}\n\n// Factor 2: Newly registered (high risk indicator)\nif (item.isNewlyRegistered) {\n  riskScore += 30;\n  riskFactors.push('Newly registered (within 30 days)');\n}\n\n// Factor 3: Has SSL certificate\nif (item.hasCertificate) {\n  riskScore += 15;\n  riskFactors.push('Has SSL certificate');\n}\n\n// Factor 4: URLScan found existing scans (indicates active use)\nif (item.results && item.results.length > 0) {\n  riskScore += 25;\n  riskFactors.push('Previously scanned on URLScan');\n}\n\n// Factor 5: Homoglyph detection\nconst homoglyphChars = /[\\u0430\\u0435\\u043e\\u0441\\u0443\\u0445\\u0440\\u0456]/;\nif (homoglyphChars.test(item.typosquatDomain)) {\n  riskScore += 35;\n  riskFactors.push('Contains homoglyph characters (high deception)');\n}\n\n// Factor 6: Uses common phishing keywords\nconst phishingKeywords = ['login', 'secure', 'account', 'verify', 'update', 'confirm', 'banking', 'support'];\nfor (const keyword of phishingKeywords) {\n  if (item.typosquatDomain.includes(keyword)) {\n    riskScore += 15;\n    riskFactors.push(`Contains suspicious keyword: ${keyword}`);\n    break;\n  }\n}\n\n// Determine risk level\nlet riskLevel;\nif (riskScore >= 70) {\n  riskLevel = 'CRITICAL';\n} else if (riskScore >= 50) {\n  riskLevel = 'HIGH';\n} else if (riskScore >= 30) {\n  riskLevel = 'MEDIUM';\n} else {\n  riskLevel = 'LOW';\n}\n\n// Get URLScan screenshot URL if available\nlet screenshotUrl = null;\nlet activeContent = false;\n\nif (item.uuid) {\n  screenshotUrl = `https://urlscan.io/screenshots/${item.uuid}.png`;\n  activeContent = true;\n}\n\nreturn {\n  originalDomain: item.originalDomain,\n  typosquatDomain: item.typosquatDomain,\n  ipAddresses: item.ipAddresses,\n  registrationDate: item.registrationDate,\n  registrar: item.registrar,\n  isNewlyRegistered: item.isNewlyRegistered,\n  hasCertificate: item.hasCertificate,\n  certificates: item.certificates,\n  hasActiveContent: activeContent,\n  screenshotUrl: screenshotUrl,\n  urlscanUuid: item.uuid,\n  riskScore: riskScore,\n  riskLevel: riskLevel,\n  riskFactors: riskFactors,\n  firstSeen: item.firstSeen\n};"
+      },
+      "id": "risk-assessment",
+      "name": "Risk Assessment",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2860, 100]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.WEBEX_WEBHOOK_URL}}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"roomId\": \"{{$env.WEBEX_ROOM_ID}}\",\n  \"markdown\": \"## :warning: Typosquat Domain Alert\\n\\n**Risk Level:** {{ $json.riskLevel }} (Score: {{ $json.riskScore }}/100)\\n\\n### Domain Details\\n- **Lookalike Domain:** `{{ $json.typosquatDomain }}`\\n- **Impersonating:** `{{ $json.originalDomain }}`\\n- **First Detected:** {{ $json.firstSeen }}\\n\\n### Technical Information\\n- **IP Addresses:** {{ $json.ipAddresses.join(', ') || 'N/A' }}\\n- **Registration Date:** {{ $json.registrationDate || 'Unknown' }}\\n- **Registrar:** {{ $json.registrar || 'Unknown' }}\\n- **Has SSL Certificate:** {{ $json.hasCertificate ? 'Yes' : 'No' }}\\n- **Active Content:** {{ $json.hasActiveContent ? 'Yes' : 'No' }}\\n\\n### Risk Factors\\n{{ $json.riskFactors.map(f => '- ' + f).join('\\\\n') }}\\n\\n{{ $json.screenshotUrl ? '### Screenshot\\\\n[View Screenshot](' + $json.screenshotUrl + ')' : '' }}\\n\\n{{ $json.urlscanUuid ? '[View Full URLScan Report](https://urlscan.io/result/' + $json.urlscanUuid + '/)' : '' }}\\n\\n---\\n*Automated alert from Domain Typosquat Monitor*\"\n}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "webex-alert",
+      "name": "Alert to Webex",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [3080, 100]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Summary node - log all processed domains\nconst items = $input.all();\n\nconst summary = {\n  timestamp: new Date().toISOString(),\n  totalAlertsGenerated: items.length,\n  alertsByRiskLevel: {\n    CRITICAL: items.filter(i => i.json.riskLevel === 'CRITICAL').length,\n    HIGH: items.filter(i => i.json.riskLevel === 'HIGH').length,\n    MEDIUM: items.filter(i => i.json.riskLevel === 'MEDIUM').length,\n    LOW: items.filter(i => i.json.riskLevel === 'LOW').length\n  },\n  domainsAlerted: items.map(i => ({\n    domain: i.json.typosquatDomain,\n    impersonating: i.json.originalDomain,\n    risk: i.json.riskLevel,\n    score: i.json.riskScore\n  }))\n};\n\nreturn summary;"
+      },
+      "id": "summary",
+      "name": "Generate Summary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3300, 100]
+    },
+    {
+      "parameters": {},
+      "id": "no-action",
+      "name": "No New Findings",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [2420, 300]
+    },
+    {
+      "parameters": {},
+      "id": "no-dns",
+      "name": "Domain Not Resolving",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [1320, 400]
+    }
+  ],
+  "connections": {
+    "Daily Schedule": {
+      "main": [
+        [
+          {
+            "node": "Set Company Domains",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Company Domains": {
+      "main": [
+        [
+          {
+            "node": "Generate Typosquat Variations",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Typosquat Variations": {
+      "main": [
+        [
+          {
+            "node": "Split Into Batches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Into Batches": {
+      "main": [
+        [
+          {
+            "node": "DNS Lookup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DNS Lookup": {
+      "main": [
+        [
+          {
+            "node": "Filter Resolved Domains",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Resolved Domains": {
+      "main": [
+        [
+          {
+            "node": "WHOIS Lookup",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Domain Not Resolving",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "WHOIS Lookup": {
+      "main": [
+        [
+          {
+            "node": "Certificate Transparency Lookup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Certificate Transparency Lookup": {
+      "main": [
+        [
+          {
+            "node": "Process WHOIS & CT Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process WHOIS & CT Data": {
+      "main": [
+        [
+          {
+            "node": "Check Known Domains",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Known Domains": {
+      "main": [
+        [
+          {
+            "node": "Filter New Findings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter New Findings": {
+      "main": [
+        [
+          {
+            "node": "URLScan.io Search",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No New Findings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "URLScan.io Search": {
+      "main": [
+        [
+          {
+            "node": "Submit to URLScan",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Submit to URLScan": {
+      "main": [
+        [
+          {
+            "node": "Risk Assessment",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Risk Assessment": {
+      "main": [
+        [
+          {
+            "node": "Alert to Webex",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Alert to Webex": {
+      "main": [
+        [
+          {
+            "node": "Generate Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveExecutionProgress": true,
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "staticData": {
+    "global": {
+      "knownDomains": {}
+    }
+  },
+  "tags": [
+    {
+      "name": "security",
+      "id": "security-tag"
+    },
+    {
+      "name": "monitoring",
+      "id": "monitoring-tag"
+    },
+    {
+      "name": "brand-protection",
+      "id": "brand-protection-tag"
+    }
+  ],
+  "pinData": {},
+  "versionId": "1.0.0",
+  "meta": {
+    "instanceId": "domain-typosquat-monitor-v1"
+  }
+}

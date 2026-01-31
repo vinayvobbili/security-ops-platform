@@ -618,7 +618,7 @@ class GetCurrentApprovedTestingEntries(ToodlesCommand):
             return format_user_response(
                 activity,
                 "the current list is too long to be displayed here. "
-                "You may find the same list at http://ir.company.com/get-approved-testing-entries"
+                "You may find the same list at http://gdnr.company.com/get-approved-testing-entries"
             )
         return result
 
@@ -950,11 +950,21 @@ class FetchXSOARTickets(ToodlesCommand):
         prod_ticket_handler = TicketHandler(XsoarEnvironment.PROD)
         tickets = prod_ticket_handler.get_tickets(query=query)
         if tickets:
+            result = ""
             for ticket in tickets:
-                message = f"[X#{ticket.get('id')}]({build_incident_url(ticket.get('id'))}) - {ticket.get('name')}\n"
+                result += f"[X#{ticket.get('id')}]({build_incident_url(ticket.get('id'))}) - {ticket.get('name')}\n"
+            return format_user_response(activity, f"here are the matching tickets:\n{result}")
         else:
-            message = 'None Found'
-        return message
+            # Build descriptive message about what was searched
+            search_criteria = []
+            if username:
+                search_criteria.append(f"username **{username}**")
+            if email:
+                search_criteria.append(f"email **{email}**")
+            if hostname:
+                search_criteria.append(f"hostname **{hostname}**")
+            criteria_text = ", ".join(search_criteria) if search_criteria else "the given criteria"
+            return format_user_response(activity, f"no tickets found in X for {criteria_text}")
 
 
 class GetCompanyHolidays(ToodlesCommand):

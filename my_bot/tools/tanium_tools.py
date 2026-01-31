@@ -23,23 +23,36 @@ from src.utils.tool_decorator import log_tool_call
 
 logger = logging.getLogger(__name__)
 
-# Initialize Tanium client once
+# Lazy-initialized Tanium client (only connects when first used)
 _tanium_client: Optional[TaniumClient] = None
+_tanium_client_initialized: bool = False
 
-try:
-    logger.info("Initializing Tanium client...")
-    _tanium_client = TaniumClient()
 
-    available_instances = _tanium_client.list_available_instances()
-    if available_instances:
-        logger.info(f"Tanium client initialized. Available instances: {', '.join(available_instances)}")
-    else:
-        logger.warning("Tanium client initialized but no instances are available/configured.")
+def _get_tanium_client() -> Optional[TaniumClient]:
+    """Lazily initialize and return the Tanium client."""
+    global _tanium_client, _tanium_client_initialized
+
+    if _tanium_client_initialized:
+        return _tanium_client
+
+    _tanium_client_initialized = True
+
+    try:
+        logger.info("Initializing Tanium client...")
+        _tanium_client = TaniumClient()
+
+        available_instances = _tanium_client.list_available_instances()
+        if available_instances:
+            logger.info(f"Tanium client initialized. Available instances: {', '.join(available_instances)}")
+        else:
+            logger.warning("Tanium client initialized but no instances are available/configured.")
+            _tanium_client = None
+
+    except Exception as e:
+        logger.error(f"Failed to initialize Tanium client: {e}")
         _tanium_client = None
 
-except Exception as e:
-    logger.error(f"Failed to initialize Tanium client: {e}")
-    _tanium_client = None
+    return _tanium_client
 
 
 def _format_computer_result(computer, instance_name: str) -> str:
@@ -114,7 +127,8 @@ def lookup_endpoint_tanium(hostname: str) -> str:
     Args:
         hostname: The exact hostname to look up (e.g., "WORKSTATION-001")
     """
-    if not _tanium_client:
+    client = _get_tanium_client()
+    if not client:
         return "Error: Tanium service is not configured or no instances available."
 
     try:
@@ -122,7 +136,7 @@ def lookup_endpoint_tanium(hostname: str) -> str:
         results = []
 
         # Search all available instances
-        for instance in _tanium_client.instances:
+        for instance in client.instances:
             try:
                 computer = instance.find_computer_by_name(hostname)
                 if computer:
@@ -132,7 +146,7 @@ def lookup_endpoint_tanium(hostname: str) -> str:
                 continue
 
         if not results:
-            instances_checked = ", ".join(_tanium_client.list_available_instances())
+            instances_checked = ", ".join(client.list_available_instances())
             return (
                 f"## Tanium Endpoint Lookup\n"
                 f"**Hostname:** {hostname}\n"
@@ -175,7 +189,8 @@ def search_endpoints_tanium(search_term: str, instance: str = "cloud") -> str:
         search_term: Partial hostname to search for (e.g., "WORKSTATION", "NYC-PC")
         instance: Which Tanium instance to search - "cloud" or "onprem" (default: "cloud")
     """
-    if not _tanium_client:
+    client = _get_tanium_client()
+    if not client:
         return "Error: Tanium service is not configured or no instances available."
 
     try:
@@ -192,7 +207,7 @@ def search_endpoints_tanium(search_term: str, instance: str = "cloud") -> str:
             instance_name = instance
 
         # Check if instance exists
-        available = _tanium_client.list_available_instances()
+        available = client.list_available_instances()
         matching_instance = None
         for inst in available:
             if inst.lower() == instance_name.lower():
@@ -206,7 +221,7 @@ def search_endpoints_tanium(search_term: str, instance: str = "cloud") -> str:
                 f"Available instances: {', '.join(available)}"
             )
 
-        computers = _tanium_client.search_computers(search_term, matching_instance, limit=10)
+        computers = client.search_computers(search_term, matching_instance, limit=10)
         return _format_search_results(computers, search_term, matching_instance)
 
     except TaniumAPIError as e:
@@ -225,11 +240,12 @@ def list_tanium_instances() -> str:
     Use this tool to see which Tanium instances are configured and available
     before performing lookups or searches.
     """
-    if not _tanium_client:
+    client = _get_tanium_client()
+    if not client:
         return "Error: Tanium service is not configured."
 
     try:
-        instances = _tanium_client.list_available_instances()
+        instances = client.list_available_instances()
 
         if not instances:
             return (
@@ -244,7 +260,7 @@ def list_tanium_instances() -> str:
             "",
         ]
 
-        for instance in _tanium_client.instances:
+        for instance in client.instances:
             is_valid = instance.validate_token()
             status = "✅ Connected" if is_valid else "❌ Connection failed"
             result.append(f"- **{instance.name}**: {status}")

@@ -19,17 +19,19 @@ from src.utils.tool_decorator import log_tool_call
 
 logger = logging.getLogger(__name__)
 
-# Initialize URLScan client once
+# Lazy-initialized URLScan client
 _urlscan_client: Optional[URLScanClient] = None
 
-try:
-    logger.info("Initializing URLScan client...")
-    _urlscan_client = URLScanClient()
-    # Search works without API key, so client is always usable
-    logger.info(f"URLScan client initialized (API key configured: {_urlscan_client.is_configured()}).")
-except Exception as e:
-    logger.error(f"Failed to initialize URLScan client: {e}")
-    _urlscan_client = None
+
+def _get_urlscan_client() -> Optional[URLScanClient]:
+    """Get URLScan client (lazy initialization)."""
+    global _urlscan_client
+    if _urlscan_client is None:
+        try:
+            _urlscan_client = URLScanClient()
+        except Exception as e:
+            logger.error(f"Failed to initialize URLScan client: {e}")
+    return _urlscan_client
 
 
 def _format_timestamp(ts: str) -> str:
@@ -247,8 +249,9 @@ def search_urlscan(domain: str) -> str:
     Args:
         domain: The domain to search for (e.g., "example.com")
     """
-    if not _urlscan_client:
-        return "Error: URLScan service is not initialized."
+    client = _get_urlscan_client()
+    if not client:
+        return "Error: URLScan service is not available."
 
     try:
         # Clean up domain input
@@ -258,7 +261,7 @@ def search_urlscan(domain: str) -> str:
         if "/" in domain:
             domain = domain.split("/", 1)[0]
 
-        data = _urlscan_client.search_domain(domain, size=5)
+        data = client.search_domain(domain, size=5)
         return _format_search_result(data, domain)
     except Exception as e:
         logger.error(f"URLScan search failed: {e}")
@@ -286,10 +289,11 @@ def scan_url_urlscan(url: str) -> str:
     Args:
         url: The full URL to scan (e.g., "https://example.com/page")
     """
-    if not _urlscan_client:
-        return "Error: URLScan service is not initialized."
+    client = _get_urlscan_client()
+    if not client:
+        return "Error: URLScan service is not available."
 
-    if not _urlscan_client.is_configured():
+    if not client.is_configured():
         return "Error: URLScan API key not configured. Cannot submit new scans.\n\nUse `search_urlscan` to search existing scans instead."
 
     try:
@@ -302,7 +306,7 @@ def scan_url_urlscan(url: str) -> str:
         logger.info(f"Submitting URL to URLScan: {url}")
 
         # Submit scan
-        submit_result = _urlscan_client.submit_scan(url, visibility="public")
+        submit_result = client.submit_scan(url, visibility="public")
 
         if not submit_result.get("success"):
             return f"Error submitting scan: {submit_result.get('error', 'Unknown error')}"
@@ -318,7 +322,7 @@ def scan_url_urlscan(url: str) -> str:
         # Poll for results
         max_attempts = 4
         for attempt in range(max_attempts):
-            result = _urlscan_client.get_scan_result(uuid)
+            result = client.get_scan_result(uuid)
 
             if result.get("success"):
                 return _format_scan_result(result, url)

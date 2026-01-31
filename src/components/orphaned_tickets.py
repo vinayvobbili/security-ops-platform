@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
 from tabulate import tabulate
@@ -39,9 +39,15 @@ def severity_to_name(severity):
 def send_report(room_id):
     try:
         ticket_handler = TicketHandler(XsoarEnvironment.PROD)
-        query = f'-status:closed -category:job type:{CONFIG.team_name} owner:""'
+        today = date.today().strftime('%Y-%m-%d')
+        query = f'-status:closed -category:job type:{CONFIG.team_name} owner:"" created:<{today}'
         tickets = ticket_handler.get_tickets(query)
         if not tickets:
+            webex_api.messages.create(
+                roomId=room_id,
+                text="No orphaned tickets today!",
+                markdown="🎉 **Zero orphaned tickets today!** 🎊\n\nAll tickets have owners. Great job, team! 👏"
+            )
             return
 
         # Build table rows for tabulate

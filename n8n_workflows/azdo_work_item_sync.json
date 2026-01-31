@@ -1,0 +1,944 @@
+{
+  "name": "Azure DevOps Work Item Sync",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 15
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger-15min",
+      "name": "Every 15 Minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 300]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9 * * 1"
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger-weekly",
+      "name": "Weekly Monday 9AM",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 900]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Prepare Azure DevOps query parameters\nconst now = new Date();\nconst fifteenMinutesAgo = new Date(now.getTime() - (15 * 60 * 1000));\n\n// Format date for WIQL query (YYYY-MM-DD format works, or ISO string)\nconst formatDateForWiql = (d) => {\n  return d.toISOString().split('T')[0];\n};\n\n// For more precise time filtering, we'll use ChangedDate with time\nconst formatDateTimeForWiql = (d) => {\n  return d.toISOString().replace('T', ' ').split('.')[0];\n};\n\n// Work item types to query\nconst workItemTypes = ['Bug', 'Task', 'Feature', 'User Story'];\n\n// Area paths for Security team\nconst securityAreaPaths = [\n  'Detection-Engineering\\\\Detection Engineering',\n  'Detection-Engineering\\\\Security',\n  'Detection-Engineering\\\\Automation',\n  'Detection-Engineering\\\\Vulnerability Management'\n];\n\nreturn {\n  json: {\n    queryTime: now.toISOString(),\n    sinceDatetime: formatDateTimeForWiql(fifteenMinutesAgo),\n    workItemTypes,\n    securityAreaPaths,\n    // Categories for routing\n    categories: {\n      detectionEngineering: ['Detection Engineering', 'DE Rules', 'Threat Hunting'],\n      vulnerability: ['Vulnerability Management', 'CVE', 'Patching'],\n      automation: ['Automation', 'n8n', 'Bot Development', 'XSOAR']\n    }\n  }\n};"
+      },
+      "id": "prepare-query-params",
+      "name": "Prepare Query Parameters",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://dev.azure.com/{{ $credentials.azureDevOps.organization }}/{{ $credentials.azureDevOps.project }}/_apis/wit/wiql?api-version=7.0",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"query\": \"SELECT [System.Id], [System.Title], [System.State], [System.WorkItemType], [System.AssignedTo], [System.AreaPath], [System.IterationPath], [System.Tags], [System.ChangedDate], [System.CreatedDate], [Microsoft.VSTS.Common.Priority], [Microsoft.VSTS.Scheduling.TargetDate] FROM WorkItems WHERE [System.TeamProject] = @project AND [System.WorkItemType] IN ('Bug', 'Task', 'Feature', 'User Story') AND ([System.AreaPath] UNDER 'Detection-Engineering\\\\Detection Engineering' OR [System.AreaPath] UNDER 'Detection-Engineering\\\\Security' OR [System.AreaPath] UNDER 'Detection-Engineering\\\\Automation') AND [System.ChangedDate] >= @Today-1 ORDER BY [System.ChangedDate] DESC\"\n}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "azdo-wiql-query",
+      "name": "Query Security Work Items (WIQL)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [440, 300],
+      "continueOnFail": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "notes": "Queries Azure DevOps for security-related work items updated in the last day. Uses WIQL (Work Item Query Language)."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract work item IDs from WIQL response\nconst response = $input.first().json;\n\nif (!response.workItems || response.workItems.length === 0) {\n  return { json: { noResults: true, message: 'No work items found matching criteria' } };\n}\n\n// Extract IDs for batch fetch\nconst workItemIds = response.workItems.map(wi => wi.id);\n\n// Split into batches of 50 (Azure DevOps API limit)\nconst batchSize = 50;\nconst batches = [];\nfor (let i = 0; i < workItemIds.length; i += batchSize) {\n  batches.push(workItemIds.slice(i, i + batchSize));\n}\n\nreturn batches.map((batch, index) => ({\n  json: {\n    batchIndex: index,\n    totalBatches: batches.length,\n    ids: batch,\n    idsParam: batch.join(',')\n  }\n}));"
+      },
+      "id": "extract-work-item-ids",
+      "name": "Extract Work Item IDs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "check-results",
+              "leftValue": "={{ $json.noResults }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "has-work-items",
+      "name": "Has Work Items?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [880, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://dev.azure.com/{{ $credentials.azureDevOps.organization }}/_apis/wit/workitems?ids={{ $json.idsParam }}&$expand=relations&api-version=7.0",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "azdo-fetch-work-items",
+      "name": "Fetch Work Item Details",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1100, 200],
+      "continueOnFail": true,
+      "notes": "Fetches full work item details including relations for each batch of IDs."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Process and categorize work items\nconst items = $input.all();\nconst queryParams = $('Prepare Query Parameters').first().json;\n\nlet allWorkItems = [];\n\n// Collect all work items from all batches\nfor (const item of items) {\n  if (item.json.value && Array.isArray(item.json.value)) {\n    allWorkItems = allWorkItems.concat(item.json.value);\n  }\n}\n\nif (allWorkItems.length === 0) {\n  return { json: { noResults: true, message: 'No work item details retrieved' } };\n}\n\n// Categorize work items\nconst categorized = {\n  detectionEngineering: [],\n  vulnerability: [],\n  automation: [],\n  blocked: [],\n  approachingDeadline: [],\n  completed: [],\n  all: []\n};\n\nconst now = new Date();\nconst threeDaysFromNow = new Date(now.getTime() + (3 * 24 * 60 * 60 * 1000));\n\nfor (const wi of allWorkItems) {\n  const fields = wi.fields || {};\n  const areaPath = fields['System.AreaPath'] || '';\n  const state = fields['System.State'] || '';\n  const tags = fields['System.Tags'] || '';\n  const title = fields['System.Title'] || '';\n  const targetDate = fields['Microsoft.VSTS.Scheduling.TargetDate'];\n  const description = fields['System.Description'] || '';\n  \n  // Build processed work item\n  const processedItem = {\n    id: wi.id,\n    url: wi._links?.html?.href || `https://dev.azure.com/_workitems/edit/${wi.id}`,\n    title: title,\n    state: state,\n    type: fields['System.WorkItemType'] || 'Unknown',\n    areaPath: areaPath,\n    iterationPath: fields['System.IterationPath'] || '',\n    assignedTo: fields['System.AssignedTo']?.displayName || 'Unassigned',\n    assignedToEmail: fields['System.AssignedTo']?.uniqueName || '',\n    priority: fields['Microsoft.VSTS.Common.Priority'] || 0,\n    tags: tags,\n    targetDate: targetDate,\n    createdDate: fields['System.CreatedDate'],\n    changedDate: fields['System.ChangedDate'],\n    description: description.substring(0, 500), // Truncate for readability\n    relations: wi.relations || [],\n    // Extract XSOAR ticket references from description/tags\n    xsoarReferences: [],\n    cveReferences: [],\n    incidentReferences: []\n  };\n  \n  // Extract references from description and tags\n  const textToSearch = `${title} ${description} ${tags}`.toLowerCase();\n  \n  // Find XSOAR ticket references (format: XSOAR-12345 or incident-12345)\n  const xsoarPattern = /(?:xsoar|incident)[-#]?(\\d+)/gi;\n  let match;\n  while ((match = xsoarPattern.exec(textToSearch)) !== null) {\n    processedItem.xsoarReferences.push(match[1]);\n  }\n  \n  // Find CVE references\n  const cvePattern = /CVE-\\d{4}-\\d{4,}/gi;\n  while ((match = cvePattern.exec(textToSearch)) !== null) {\n    processedItem.cveReferences.push(match[0].toUpperCase());\n  }\n  \n  // Find incident references (INC-12345 pattern)\n  const incPattern = /INC[-#]?(\\d+)/gi;\n  while ((match = incPattern.exec(textToSearch)) !== null) {\n    processedItem.incidentReferences.push(match[1]);\n  }\n  \n  // Remove duplicates\n  processedItem.xsoarReferences = [...new Set(processedItem.xsoarReferences)];\n  processedItem.cveReferences = [...new Set(processedItem.cveReferences)];\n  processedItem.incidentReferences = [...new Set(processedItem.incidentReferences)];\n  \n  // Add to all items\n  categorized.all.push(processedItem);\n  \n  // Categorize by area path\n  const areaLower = areaPath.toLowerCase();\n  const tagsLower = tags.toLowerCase();\n  \n  if (areaLower.includes('detection') || areaLower.includes('de rules') || areaLower.includes('threat hunting') || tagsLower.includes('detection')) {\n    categorized.detectionEngineering.push(processedItem);\n  }\n  \n  if (areaLower.includes('vulnerability') || areaLower.includes('cve') || areaLower.includes('patching') || processedItem.cveReferences.length > 0) {\n    categorized.vulnerability.push(processedItem);\n  }\n  \n  if (areaLower.includes('automation') || areaLower.includes('n8n') || areaLower.includes('bot') || tagsLower.includes('automation') || tagsLower.includes('n8n')) {\n    categorized.automation.push(processedItem);\n  }\n  \n  // Check for blocked state\n  const stateLower = state.toLowerCase();\n  if (stateLower === 'blocked' || stateLower === 'on hold' || tagsLower.includes('blocked')) {\n    categorized.blocked.push(processedItem);\n  }\n  \n  // Check for approaching deadline (within 3 days)\n  if (targetDate) {\n    const deadline = new Date(targetDate);\n    if (deadline <= threeDaysFromNow && deadline >= now && stateLower !== 'closed' && stateLower !== 'done') {\n      processedItem.daysUntilDeadline = Math.ceil((deadline - now) / (24 * 60 * 60 * 1000));\n      categorized.approachingDeadline.push(processedItem);\n    }\n  }\n  \n  // Check for completed items\n  if (stateLower === 'closed' || stateLower === 'done' || stateLower === 'resolved') {\n    categorized.completed.push(processedItem);\n  }\n}\n\nreturn {\n  json: {\n    processedAt: now.toISOString(),\n    totalCount: allWorkItems.length,\n    categorized,\n    summary: {\n      total: categorized.all.length,\n      detectionEngineering: categorized.detectionEngineering.length,\n      vulnerability: categorized.vulnerability.length,\n      automation: categorized.automation.length,\n      blocked: categorized.blocked.length,\n      approachingDeadline: categorized.approachingDeadline.length,\n      completed: categorized.completed.length\n    }\n  }\n};"
+      },
+      "id": "categorize-work-items",
+      "name": "Categorize Work Items",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1320, 200]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "check-blocked",
+              "leftValue": "={{ $json.summary.blocked }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "has-blocked-items",
+      "name": "Has Blocked Items?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1540, 0]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "check-deadline",
+              "leftValue": "={{ $json.summary.approachingDeadline }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "has-deadline-items",
+      "name": "Has Approaching Deadlines?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1540, 200]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "check-completed",
+              "leftValue": "={{ $json.summary.completed }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "has-completed-items",
+      "name": "Has Completed Items?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1540, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Format blocked items alert\nconst data = $('Categorize Work Items').first().json;\nconst blockedItems = data.categorized.blocked;\n\nif (blockedItems.length === 0) {\n  return { json: { skip: true } };\n}\n\nlet markdown = `**:warning: BLOCKED WORK ITEMS ALERT**\\n\\n`;\nmarkdown += `The following ${blockedItems.length} security work item(s) are currently blocked and require attention:\\n\\n`;\n\nfor (const item of blockedItems) {\n  markdown += `---\\n`;\n  markdown += `**[${item.id}](${item.url})** - ${item.title}\\n`;\n  markdown += `- **Type:** ${item.type} | **State:** ${item.state}\\n`;\n  markdown += `- **Assigned To:** ${item.assignedTo}\\n`;\n  markdown += `- **Area Path:** ${item.areaPath}\\n`;\n  if (item.tags) {\n    markdown += `- **Tags:** ${item.tags}\\n`;\n  }\n  if (item.targetDate) {\n    markdown += `- **Target Date:** ${new Date(item.targetDate).toLocaleDateString()}\\n`;\n  }\n  markdown += `\\n`;\n}\n\nmarkdown += `---\\n`;\nmarkdown += `*Please review and unblock these items or update their status.*\\n`;\n\nreturn {\n  json: {\n    markdown,\n    alertType: 'blocked',\n    itemCount: blockedItems.length\n  }\n};"
+      },
+      "id": "format-blocked-alert",
+      "name": "Format Blocked Alert",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1760, -100]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Format deadline reminder\nconst data = $('Categorize Work Items').first().json;\nconst deadlineItems = data.categorized.approachingDeadline;\n\nif (deadlineItems.length === 0) {\n  return { json: { skip: true } };\n}\n\n// Sort by days until deadline\ndeadlineItems.sort((a, b) => a.daysUntilDeadline - b.daysUntilDeadline);\n\nlet markdown = `**:hourglass: DEADLINE REMINDER**\\n\\n`;\nmarkdown += `The following ${deadlineItems.length} security work item(s) have deadlines approaching within 3 days:\\n\\n`;\n\nfor (const item of deadlineItems) {\n  const urgency = item.daysUntilDeadline <= 1 ? ':red_circle:' : item.daysUntilDeadline <= 2 ? ':orange_circle:' : ':yellow_circle:';\n  \n  markdown += `${urgency} **[${item.id}](${item.url})** - ${item.title}\\n`;\n  markdown += `- **Due in:** ${item.daysUntilDeadline} day(s) (${new Date(item.targetDate).toLocaleDateString()})\\n`;\n  markdown += `- **Type:** ${item.type} | **State:** ${item.state}\\n`;\n  markdown += `- **Assigned To:** ${item.assignedTo}\\n`;\n  markdown += `\\n`;\n}\n\nmarkdown += `---\\n`;\nmarkdown += `*Please prioritize these items to meet deadlines.*\\n`;\n\nreturn {\n  json: {\n    markdown,\n    alertType: 'deadline',\n    itemCount: deadlineItems.length\n  }\n};"
+      },
+      "id": "format-deadline-reminder",
+      "name": "Format Deadline Reminder",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1760, 100]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Process completed items for XSOAR updates\nconst data = $('Categorize Work Items').first().json;\nconst completedItems = data.categorized.completed;\n\nif (completedItems.length === 0) {\n  return { json: { skip: true, updates: [] } };\n}\n\n// Filter items that have XSOAR/incident references\nconst itemsWithXsoarRefs = completedItems.filter(item => \n  item.xsoarReferences.length > 0 || item.incidentReferences.length > 0\n);\n\nif (itemsWithXsoarRefs.length === 0) {\n  return { json: { skip: true, updates: [], message: 'No completed items with XSOAR references' } };\n}\n\n// Prepare updates for XSOAR\nconst xsoarUpdates = [];\n\nfor (const item of itemsWithXsoarRefs) {\n  const comment = `Azure DevOps Work Item Completed:\\n\\n` +\n    `**Work Item:** [${item.id}](${item.url})\\n` +\n    `**Title:** ${item.title}\\n` +\n    `**Type:** ${item.type}\\n` +\n    `**Completed By:** ${item.assignedTo}\\n` +\n    `**Completed Date:** ${new Date(item.changedDate).toLocaleString()}\\n\\n` +\n    `This work item has been marked as completed in Azure DevOps.`;\n  \n  // Create update entries for each referenced incident\n  for (const incidentId of [...item.xsoarReferences, ...item.incidentReferences]) {\n    xsoarUpdates.push({\n      incidentId: incidentId,\n      adoWorkItemId: item.id,\n      adoWorkItemUrl: item.url,\n      adoWorkItemTitle: item.title,\n      comment: comment\n    });\n  }\n}\n\nreturn {\n  json: {\n    skip: false,\n    updates: xsoarUpdates,\n    completedCount: completedItems.length,\n    linkedCount: itemsWithXsoarRefs.length\n  }\n};"
+      },
+      "id": "process-completed-for-xsoar",
+      "name": "Process Completed for XSOAR",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1760, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://webexapis.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"roomId\": \"YOUR_SECURITY_ENGINEERING_ROOM_ID\",\n  \"markdown\": {{ JSON.stringify($json.markdown) }}\n}",
+        "options": {}
+      },
+      "id": "webex-blocked-alert",
+      "name": "Post Blocked Alert to Webex",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1980, -100],
+      "notes": "Replace YOUR_SECURITY_ENGINEERING_ROOM_ID with your Webex room ID"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://webexapis.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"roomId\": \"YOUR_SECURITY_ENGINEERING_ROOM_ID\",\n  \"markdown\": {{ JSON.stringify($json.markdown) }}\n}",
+        "options": {}
+      },
+      "id": "webex-deadline-reminder",
+      "name": "Post Deadline Reminder to Webex",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1980, 100],
+      "notes": "Replace YOUR_SECURITY_ENGINEERING_ROOM_ID with your Webex room ID"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "has-updates",
+              "leftValue": "={{ $json.updates.length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "has-xsoar-updates",
+      "name": "Has XSOAR Updates?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1980, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Split XSOAR updates into individual items\nconst data = $input.first().json;\n\nif (!data.updates || data.updates.length === 0) {\n  return [];\n}\n\nreturn data.updates.map(update => ({ json: update }));"
+      },
+      "id": "split-xsoar-updates",
+      "name": "Split XSOAR Updates",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2200, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://{{ $credentials.xsoar.baseUrl }}/incident/{{ $json.incidentId }}/note",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"data\": {{ JSON.stringify($json.comment) }},\n  \"investigationId\": \"{{ $json.incidentId }}\",\n  \"version\": 1\n}",
+        "options": {}
+      },
+      "id": "update-xsoar-ticket",
+      "name": "Update XSOAR Ticket",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2420, 200],
+      "continueOnFail": true,
+      "notes": "Adds a note to XSOAR incident when related ADO work item is completed"
+    },
+    {
+      "parameters": {},
+      "id": "no-blocked",
+      "name": "No Blocked Items",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [1760, -200]
+    },
+    {
+      "parameters": {},
+      "id": "no-deadlines",
+      "name": "No Deadline Items",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [1760, 200]
+    },
+    {
+      "parameters": {},
+      "id": "no-completed",
+      "name": "No Completed Items",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [1760, 500]
+    },
+    {
+      "parameters": {},
+      "id": "no-work-items",
+      "name": "No Work Items to Process",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [1100, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Check for bidirectional link opportunities\n// Find XSOAR tickets that mention ADO items and ADO items that reference incidents\n\nconst data = $('Categorize Work Items').first().json;\nconst allItems = data.categorized.all;\n\nconst linksToCreate = [];\n\nfor (const item of allItems) {\n  // Items with XSOAR references that should be linked\n  if (item.xsoarReferences.length > 0) {\n    for (const xsoarId of item.xsoarReferences) {\n      linksToCreate.push({\n        type: 'ado_to_xsoar',\n        adoItemId: item.id,\n        adoItemUrl: item.url,\n        adoItemTitle: item.title,\n        xsoarIncidentId: xsoarId,\n        action: 'create_link_in_ado'\n      });\n    }\n  }\n  \n  // Items with CVE references - cross-reference with CVE workflow\n  if (item.cveReferences.length > 0) {\n    linksToCreate.push({\n      type: 'cve_reference',\n      adoItemId: item.id,\n      adoItemUrl: item.url,\n      adoItemTitle: item.title,\n      cveIds: item.cveReferences,\n      action: 'track_cve_status'\n    });\n  }\n  \n  // Items with incident references\n  if (item.incidentReferences.length > 0) {\n    for (const incId of item.incidentReferences) {\n      linksToCreate.push({\n        type: 'incident_reference',\n        adoItemId: item.id,\n        adoItemUrl: item.url,\n        adoItemTitle: item.title,\n        incidentId: incId,\n        action: 'update_incident'\n      });\n    }\n  }\n}\n\nreturn {\n  json: {\n    linksToCreate,\n    totalLinks: linksToCreate.length,\n    byType: {\n      ado_to_xsoar: linksToCreate.filter(l => l.type === 'ado_to_xsoar').length,\n      cve_reference: linksToCreate.filter(l => l.type === 'cve_reference').length,\n      incident_reference: linksToCreate.filter(l => l.type === 'incident_reference').length\n    }\n  }\n};"
+      },
+      "id": "check-bidirectional-links",
+      "name": "Check Bidirectional Links",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1540, 600]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Track Detection Engineering items - rule deployment status\nconst data = $('Categorize Work Items').first().json;\nconst deItems = data.categorized.detectionEngineering;\n\nif (deItems.length === 0) {\n  return { json: { skip: true, tracking: [] } };\n}\n\n// Categorize DE items by state for tracking\nconst tracking = {\n  pendingDeployment: [],\n  inDevelopment: [],\n  inReview: [],\n  deployed: [],\n  needsAttention: []\n};\n\nfor (const item of deItems) {\n  const stateLower = item.state.toLowerCase();\n  const tagsLower = (item.tags || '').toLowerCase();\n  \n  // Categorize based on state and tags\n  if (stateLower === 'closed' || stateLower === 'done' || tagsLower.includes('deployed')) {\n    tracking.deployed.push(item);\n  } else if (stateLower === 'in review' || stateLower === 'code review' || tagsLower.includes('review')) {\n    tracking.inReview.push(item);\n  } else if (stateLower === 'active' || stateLower === 'in progress' || stateLower === 'development') {\n    tracking.inDevelopment.push(item);\n  } else if (stateLower === 'new' || stateLower === 'to do' || tagsLower.includes('pending')) {\n    tracking.pendingDeployment.push(item);\n  } else if (stateLower === 'blocked' || stateLower === 'on hold') {\n    tracking.needsAttention.push(item);\n  } else {\n    tracking.inDevelopment.push(item); // Default\n  }\n}\n\nreturn {\n  json: {\n    skip: false,\n    category: 'detection_engineering',\n    tracking,\n    summary: {\n      total: deItems.length,\n      pendingDeployment: tracking.pendingDeployment.length,\n      inDevelopment: tracking.inDevelopment.length,\n      inReview: tracking.inReview.length,\n      deployed: tracking.deployed.length,\n      needsAttention: tracking.needsAttention.length\n    }\n  }\n};"
+      },
+      "id": "track-detection-engineering",
+      "name": "Track Detection Engineering Items",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1760, 700]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Track Vulnerability items - cross-reference with CVE workflow\nconst data = $('Categorize Work Items').first().json;\nconst vulnItems = data.categorized.vulnerability;\n\nif (vulnItems.length === 0) {\n  return { json: { skip: true, tracking: [] } };\n}\n\n// Categorize vulnerability items\nconst tracking = {\n  withCVE: [],\n  pendingPatch: [],\n  inRemediation: [],\n  mitigated: [],\n  needsAssessment: []\n};\n\nfor (const item of vulnItems) {\n  const stateLower = item.state.toLowerCase();\n  const tagsLower = (item.tags || '').toLowerCase();\n  \n  // Items with CVE references\n  if (item.cveReferences.length > 0) {\n    tracking.withCVE.push({\n      ...item,\n      cves: item.cveReferences\n    });\n  }\n  \n  // Categorize by remediation status\n  if (stateLower === 'closed' || stateLower === 'done' || tagsLower.includes('mitigated') || tagsLower.includes('patched')) {\n    tracking.mitigated.push(item);\n  } else if (stateLower === 'active' || stateLower === 'in progress' || tagsLower.includes('remediating')) {\n    tracking.inRemediation.push(item);\n  } else if (tagsLower.includes('pending') || tagsLower.includes('scheduled')) {\n    tracking.pendingPatch.push(item);\n  } else {\n    tracking.needsAssessment.push(item);\n  }\n}\n\nreturn {\n  json: {\n    skip: false,\n    category: 'vulnerability',\n    tracking,\n    summary: {\n      total: vulnItems.length,\n      withCVE: tracking.withCVE.length,\n      pendingPatch: tracking.pendingPatch.length,\n      inRemediation: tracking.inRemediation.length,\n      mitigated: tracking.mitigated.length,\n      needsAssessment: tracking.needsAssessment.length\n    },\n    cveList: tracking.withCVE.flatMap(i => i.cves)\n  }\n};"
+      },
+      "id": "track-vulnerability-items",
+      "name": "Track Vulnerability Items",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1980, 700]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Track Automation items - n8n/bot development\nconst data = $('Categorize Work Items').first().json;\nconst autoItems = data.categorized.automation;\n\nif (autoItems.length === 0) {\n  return { json: { skip: true, tracking: [] } };\n}\n\n// Categorize automation items\nconst tracking = {\n  n8nWorkflows: [],\n  xsoarPlaybooks: [],\n  botDevelopment: [],\n  inProgress: [],\n  deployed: [],\n  backlog: []\n};\n\nfor (const item of autoItems) {\n  const titleLower = item.title.toLowerCase();\n  const tagsLower = (item.tags || '').toLowerCase();\n  const areaLower = item.areaPath.toLowerCase();\n  const stateLower = item.state.toLowerCase();\n  \n  // Categorize by automation type\n  if (titleLower.includes('n8n') || tagsLower.includes('n8n') || titleLower.includes('workflow')) {\n    tracking.n8nWorkflows.push(item);\n  } else if (titleLower.includes('xsoar') || titleLower.includes('playbook') || tagsLower.includes('xsoar')) {\n    tracking.xsoarPlaybooks.push(item);\n  } else if (titleLower.includes('bot') || tagsLower.includes('bot') || titleLower.includes('chatbot')) {\n    tracking.botDevelopment.push(item);\n  }\n  \n  // Categorize by state\n  if (stateLower === 'closed' || stateLower === 'done') {\n    tracking.deployed.push(item);\n  } else if (stateLower === 'active' || stateLower === 'in progress') {\n    tracking.inProgress.push(item);\n  } else {\n    tracking.backlog.push(item);\n  }\n}\n\nreturn {\n  json: {\n    skip: false,\n    category: 'automation',\n    tracking,\n    summary: {\n      total: autoItems.length,\n      n8nWorkflows: tracking.n8nWorkflows.length,\n      xsoarPlaybooks: tracking.xsoarPlaybooks.length,\n      botDevelopment: tracking.botDevelopment.length,\n      inProgress: tracking.inProgress.length,\n      deployed: tracking.deployed.length,\n      backlog: tracking.backlog.length\n    }\n  }\n};"
+      },
+      "id": "track-automation-items",
+      "name": "Track Automation Items",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2200, 700]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Prepare Weekly Sprint Summary\n// This runs on Monday mornings to summarize the previous week\n\nconst now = new Date();\nconst oneWeekAgo = new Date(now.getTime() - (7 * 24 * 60 * 60 * 1000));\n\nreturn {\n  json: {\n    reportType: 'weekly_sprint_summary',\n    periodStart: oneWeekAgo.toISOString(),\n    periodEnd: now.toISOString(),\n    weekNumber: getWeekNumber(now),\n    year: now.getFullYear()\n  }\n};\n\nfunction getWeekNumber(d) {\n  const firstDayOfYear = new Date(d.getFullYear(), 0, 1);\n  const pastDaysOfYear = (d - firstDayOfYear) / 86400000;\n  return Math.ceil((pastDaysOfYear + firstDayOfYear.getDay() + 1) / 7);\n}"
+      },
+      "id": "prepare-weekly-params",
+      "name": "Prepare Weekly Parameters",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 900]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://dev.azure.com/{{ $credentials.azureDevOps.organization }}/{{ $credentials.azureDevOps.project }}/_apis/wit/wiql?api-version=7.0",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"query\": \"SELECT [System.Id], [System.Title], [System.State], [System.WorkItemType], [System.AssignedTo], [System.AreaPath], [System.IterationPath], [System.Tags], [System.ChangedDate], [System.CreatedDate], [Microsoft.VSTS.Common.Priority], [Microsoft.VSTS.Scheduling.TargetDate], [Microsoft.VSTS.Scheduling.StoryPoints] FROM WorkItems WHERE [System.TeamProject] = @project AND [System.WorkItemType] IN ('Bug', 'Task', 'Feature', 'User Story') AND ([System.AreaPath] UNDER 'Detection-Engineering\\\\Detection Engineering' OR [System.AreaPath] UNDER 'Detection-Engineering\\\\Security' OR [System.AreaPath] UNDER 'Detection-Engineering\\\\Automation') AND [System.ChangedDate] >= @Today-7 ORDER BY [System.ChangedDate] DESC\"\n}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "azdo-weekly-query",
+      "name": "Query Weekly Work Items",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [440, 900],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract work item IDs for weekly report\nconst response = $input.first().json;\n\nif (!response.workItems || response.workItems.length === 0) {\n  return { json: { noResults: true, message: 'No work items found for weekly report' } };\n}\n\nconst workItemIds = response.workItems.map(wi => wi.id);\n\n// Split into batches of 50\nconst batchSize = 50;\nconst batches = [];\nfor (let i = 0; i < workItemIds.length; i += batchSize) {\n  batches.push(workItemIds.slice(i, i + batchSize));\n}\n\nreturn batches.map((batch, index) => ({\n  json: {\n    batchIndex: index,\n    totalBatches: batches.length,\n    ids: batch,\n    idsParam: batch.join(',')\n  }\n}));"
+      },
+      "id": "extract-weekly-ids",
+      "name": "Extract Weekly IDs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 900]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "check-weekly-results",
+              "leftValue": "={{ $json.noResults }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "has-weekly-items",
+      "name": "Has Weekly Items?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [880, 900]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://dev.azure.com/{{ $credentials.azureDevOps.organization }}/_apis/wit/workitems?ids={{ $json.idsParam }}&$expand=relations&api-version=7.0",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "azdo-fetch-weekly-items",
+      "name": "Fetch Weekly Work Items",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1100, 800],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Calculate Sprint Velocity Metrics\nconst items = $input.all();\nconst weeklyParams = $('Prepare Weekly Parameters').first().json;\n\nlet allWorkItems = [];\nfor (const item of items) {\n  if (item.json.value && Array.isArray(item.json.value)) {\n    allWorkItems = allWorkItems.concat(item.json.value);\n  }\n}\n\nif (allWorkItems.length === 0) {\n  return { json: { noResults: true } };\n}\n\n// Calculate metrics\nconst metrics = {\n  totalItems: allWorkItems.length,\n  byState: {},\n  byType: {},\n  byAreaPath: {},\n  byAssignee: {},\n  completed: [],\n  created: [],\n  storyPointsCompleted: 0,\n  storyPointsTotal: 0,\n  improvements: []\n};\n\nconst oneWeekAgo = new Date(weeklyParams.periodStart);\n\nfor (const wi of allWorkItems) {\n  const fields = wi.fields || {};\n  const state = fields['System.State'] || 'Unknown';\n  const type = fields['System.WorkItemType'] || 'Unknown';\n  const areaPath = fields['System.AreaPath'] || 'Unknown';\n  const assignee = fields['System.AssignedTo']?.displayName || 'Unassigned';\n  const storyPoints = fields['Microsoft.VSTS.Scheduling.StoryPoints'] || 0;\n  const createdDate = new Date(fields['System.CreatedDate']);\n  const changedDate = new Date(fields['System.ChangedDate']);\n  \n  // Count by state\n  metrics.byState[state] = (metrics.byState[state] || 0) + 1;\n  \n  // Count by type\n  metrics.byType[type] = (metrics.byType[type] || 0) + 1;\n  \n  // Count by area path (simplified)\n  const areaSimple = areaPath.split('\\\\').pop();\n  metrics.byAreaPath[areaSimple] = (metrics.byAreaPath[areaSimple] || 0) + 1;\n  \n  // Count by assignee\n  metrics.byAssignee[assignee] = (metrics.byAssignee[assignee] || 0) + 1;\n  \n  // Track story points\n  metrics.storyPointsTotal += storyPoints;\n  \n  // Completed items\n  const stateLower = state.toLowerCase();\n  if (stateLower === 'closed' || stateLower === 'done' || stateLower === 'resolved') {\n    metrics.completed.push({\n      id: wi.id,\n      title: fields['System.Title'],\n      type: type,\n      assignee: assignee,\n      storyPoints: storyPoints\n    });\n    metrics.storyPointsCompleted += storyPoints;\n    \n    // Track as improvement if it's a security-related completion\n    const title = (fields['System.Title'] || '').toLowerCase();\n    const tags = (fields['System.Tags'] || '').toLowerCase();\n    if (title.includes('detection') || title.includes('rule') || title.includes('alert') ||\n        title.includes('vulnerability') || title.includes('security') || title.includes('automation') ||\n        tags.includes('security') || tags.includes('improvement')) {\n      metrics.improvements.push({\n        id: wi.id,\n        title: fields['System.Title'],\n        type: type\n      });\n    }\n  }\n  \n  // Created this week\n  if (createdDate >= oneWeekAgo) {\n    metrics.created.push({\n      id: wi.id,\n      title: fields['System.Title'],\n      type: type,\n      createdDate: fields['System.CreatedDate']\n    });\n  }\n}\n\n// Calculate velocity\nmetrics.velocity = {\n  itemsCompleted: metrics.completed.length,\n  itemsCreated: metrics.created.length,\n  storyPointsCompleted: metrics.storyPointsCompleted,\n  completionRate: metrics.totalItems > 0 ? \n    ((metrics.completed.length / metrics.totalItems) * 100).toFixed(1) : 0\n};\n\n// Find upcoming deadlines (next 7 days)\nconst nextWeek = new Date();\nnextWeek.setDate(nextWeek.getDate() + 7);\nconst now = new Date();\n\nmetrics.upcomingDeadlines = allWorkItems\n  .filter(wi => {\n    const targetDate = wi.fields?.['Microsoft.VSTS.Scheduling.TargetDate'];\n    const state = (wi.fields?.['System.State'] || '').toLowerCase();\n    if (!targetDate || state === 'closed' || state === 'done') return false;\n    const deadline = new Date(targetDate);\n    return deadline >= now && deadline <= nextWeek;\n  })\n  .map(wi => ({\n    id: wi.id,\n    title: wi.fields?.['System.Title'],\n    targetDate: wi.fields?.['Microsoft.VSTS.Scheduling.TargetDate'],\n    assignee: wi.fields?.['System.AssignedTo']?.displayName || 'Unassigned'\n  }))\n  .sort((a, b) => new Date(a.targetDate) - new Date(b.targetDate));\n\nreturn {\n  json: {\n    weekNumber: weeklyParams.weekNumber,\n    year: weeklyParams.year,\n    periodStart: weeklyParams.periodStart,\n    periodEnd: weeklyParams.periodEnd,\n    metrics\n  }\n};"
+      },
+      "id": "calculate-velocity-metrics",
+      "name": "Calculate Velocity Metrics",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1320, 800]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Format Weekly Sprint Summary for Webex\nconst data = $input.first().json;\nconst metrics = data.metrics;\n\nlet markdown = `## Weekly Security Engineering Sprint Summary\\n`;\nmarkdown += `**Week ${data.weekNumber}, ${data.year}**\\n`;\nmarkdown += `*Period: ${new Date(data.periodStart).toLocaleDateString()} - ${new Date(data.periodEnd).toLocaleDateString()}*\\n\\n`;\nmarkdown += `---\\n\\n`;\n\n// Velocity Metrics\nmarkdown += `### Velocity Metrics\\n\\n`;\nmarkdown += `| Metric | Value |\\n`;\nmarkdown += `|--------|-------|\\n`;\nmarkdown += `| **Items Completed** | ${metrics.velocity.itemsCompleted} |\\n`;\nmarkdown += `| **Items Created** | ${metrics.velocity.itemsCreated} |\\n`;\nmarkdown += `| **Story Points Completed** | ${metrics.velocity.storyPointsCompleted} |\\n`;\nmarkdown += `| **Completion Rate** | ${metrics.velocity.completionRate}% |\\n\\n`;\n\n// Work Items by State\nmarkdown += `### Items by State\\n\\n`;\nmarkdown += `| State | Count |\\n`;\nmarkdown += `|-------|-------|\\n`;\nfor (const [state, count] of Object.entries(metrics.byState).sort((a, b) => b[1] - a[1])) {\n  markdown += `| ${state} | ${count} |\\n`;\n}\nmarkdown += `\\n`;\n\n// Work Items by Type\nmarkdown += `### Items by Type\\n\\n`;\nmarkdown += `| Type | Count |\\n`;\nmarkdown += `|------|-------|\\n`;\nfor (const [type, count] of Object.entries(metrics.byType).sort((a, b) => b[1] - a[1])) {\n  markdown += `| ${type} | ${count} |\\n`;\n}\nmarkdown += `\\n`;\n\n// Completed Security Improvements\nmarkdown += `### Completed Security Improvements\\n\\n`;\nif (metrics.improvements.length > 0) {\n  for (const item of metrics.improvements.slice(0, 10)) {\n    markdown += `- **[${item.id}]** ${item.title} (${item.type})\\n`;\n  }\n  if (metrics.improvements.length > 10) {\n    markdown += `- *...and ${metrics.improvements.length - 10} more*\\n`;\n  }\n} else {\n  markdown += `*No security improvements completed this week.*\\n`;\n}\nmarkdown += `\\n`;\n\n// Top Contributors\nmarkdown += `### Top Contributors\\n\\n`;\nconst sortedAssignees = Object.entries(metrics.byAssignee)\n  .sort((a, b) => b[1] - a[1])\n  .slice(0, 5);\n\nmarkdown += `| Assignee | Items Worked |\\n`;\nmarkdown += `|----------|--------------|\\n`;\nfor (const [assignee, count] of sortedAssignees) {\n  markdown += `| ${assignee} | ${count} |\\n`;\n}\nmarkdown += `\\n`;\n\n// Upcoming Deadlines\nmarkdown += `### Upcoming Deadlines (Next 7 Days)\\n\\n`;\nif (metrics.upcomingDeadlines.length > 0) {\n  markdown += `| ID | Title | Due Date | Assignee |\\n`;\n  markdown += `|----|-------|----------|----------|\\n`;\n  for (const item of metrics.upcomingDeadlines.slice(0, 10)) {\n    const dueDate = new Date(item.targetDate).toLocaleDateString();\n    const title = item.title.length > 40 ? item.title.substring(0, 37) + '...' : item.title;\n    markdown += `| ${item.id} | ${title} | ${dueDate} | ${item.assignee} |\\n`;\n  }\n} else {\n  markdown += `*No upcoming deadlines in the next 7 days.*\\n`;\n}\nmarkdown += `\\n`;\n\n// Area Path Distribution\nmarkdown += `### Work by Area\\n\\n`;\nmarkdown += `| Area | Count |\\n`;\nmarkdown += `|------|-------|\\n`;\nfor (const [area, count] of Object.entries(metrics.byAreaPath).sort((a, b) => b[1] - a[1])) {\n  markdown += `| ${area} | ${count} |\\n`;\n}\nmarkdown += `\\n`;\n\n// Footer\nmarkdown += `---\\n`;\nmarkdown += `*Report generated at ${new Date().toISOString()}*\\n`;\n\nreturn {\n  json: {\n    markdown,\n    summary: {\n      weekNumber: data.weekNumber,\n      year: data.year,\n      itemsCompleted: metrics.velocity.itemsCompleted,\n      storyPointsCompleted: metrics.velocity.storyPointsCompleted,\n      completionRate: metrics.velocity.completionRate,\n      upcomingDeadlines: metrics.upcomingDeadlines.length\n    }\n  }\n};"
+      },
+      "id": "format-weekly-summary",
+      "name": "Format Weekly Summary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1540, 800]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://webexapis.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"roomId\": \"YOUR_SECURITY_ENGINEERING_ROOM_ID\",\n  \"markdown\": {{ JSON.stringify($json.markdown) }}\n}",
+        "options": {}
+      },
+      "id": "webex-weekly-summary",
+      "name": "Post Weekly Summary to Webex",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1760, 800],
+      "notes": "Replace YOUR_SECURITY_ENGINEERING_ROOM_ID with your Webex room ID"
+    },
+    {
+      "parameters": {},
+      "id": "no-weekly-items",
+      "name": "No Weekly Items",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [1100, 1000]
+    },
+    {
+      "parameters": {},
+      "id": "no-xsoar-updates",
+      "name": "No XSOAR Updates",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [2200, 400]
+    }
+  ],
+  "connections": {
+    "Every 15 Minutes": {
+      "main": [
+        [
+          {
+            "node": "Prepare Query Parameters",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Weekly Monday 9AM": {
+      "main": [
+        [
+          {
+            "node": "Prepare Weekly Parameters",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Query Parameters": {
+      "main": [
+        [
+          {
+            "node": "Query Security Work Items (WIQL)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Query Security Work Items (WIQL)": {
+      "main": [
+        [
+          {
+            "node": "Extract Work Item IDs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Work Item IDs": {
+      "main": [
+        [
+          {
+            "node": "Has Work Items?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Work Items?": {
+      "main": [
+        [
+          {
+            "node": "Fetch Work Item Details",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Work Items to Process",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Work Item Details": {
+      "main": [
+        [
+          {
+            "node": "Categorize Work Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Categorize Work Items": {
+      "main": [
+        [
+          {
+            "node": "Has Blocked Items?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Has Approaching Deadlines?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Has Completed Items?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Check Bidirectional Links",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Blocked Items?": {
+      "main": [
+        [
+          {
+            "node": "Format Blocked Alert",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Blocked Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Approaching Deadlines?": {
+      "main": [
+        [
+          {
+            "node": "Format Deadline Reminder",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Deadline Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Completed Items?": {
+      "main": [
+        [
+          {
+            "node": "Process Completed for XSOAR",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Completed Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Blocked Alert": {
+      "main": [
+        [
+          {
+            "node": "Post Blocked Alert to Webex",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Deadline Reminder": {
+      "main": [
+        [
+          {
+            "node": "Post Deadline Reminder to Webex",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Completed for XSOAR": {
+      "main": [
+        [
+          {
+            "node": "Has XSOAR Updates?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has XSOAR Updates?": {
+      "main": [
+        [
+          {
+            "node": "Split XSOAR Updates",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No XSOAR Updates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split XSOAR Updates": {
+      "main": [
+        [
+          {
+            "node": "Update XSOAR Ticket",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Bidirectional Links": {
+      "main": [
+        [
+          {
+            "node": "Track Detection Engineering Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Track Detection Engineering Items": {
+      "main": [
+        [
+          {
+            "node": "Track Vulnerability Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Track Vulnerability Items": {
+      "main": [
+        [
+          {
+            "node": "Track Automation Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Weekly Parameters": {
+      "main": [
+        [
+          {
+            "node": "Query Weekly Work Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Query Weekly Work Items": {
+      "main": [
+        [
+          {
+            "node": "Extract Weekly IDs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Weekly IDs": {
+      "main": [
+        [
+          {
+            "node": "Has Weekly Items?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Weekly Items?": {
+      "main": [
+        [
+          {
+            "node": "Fetch Weekly Work Items",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Weekly Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Weekly Work Items": {
+      "main": [
+        [
+          {
+            "node": "Calculate Velocity Metrics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate Velocity Metrics": {
+      "main": [
+        [
+          {
+            "node": "Format Weekly Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Weekly Summary": {
+      "main": [
+        [
+          {
+            "node": "Post Weekly Summary to Webex",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  },
+  "versionId": "1",
+  "meta": {
+    "templateId": "azdo-work-item-sync",
+    "instanceId": "",
+    "notes": "## Azure DevOps Work Item Sync Workflow\n\n### Overview\nThis workflow synchronizes Azure DevOps work items with security operations, providing:\n- Real-time status tracking for security work items\n- Blocked item alerts\n- Deadline reminders\n- Bidirectional linking with XSOAR tickets\n- CVE cross-referencing\n- Weekly sprint velocity metrics\n\n### Configuration Required\n\n#### 1. Azure DevOps Credentials\nSet up HTTP Basic Auth credentials with:\n- Username: (leave empty)\n- Password: Your Azure DevOps PAT (Personal Access Token)\n\nRequired PAT scopes:\n- Work Items: Read & Write\n- Analytics: Read\n\nAlso configure these credential fields:\n- `organization`: Your Azure DevOps organization name\n- `project`: Your project name (e.g., 'Detection-Engineering')\n\n#### 2. XSOAR Credentials\nSet up HTTP Header Auth with:\n- Header Name: `Authorization`\n- Header Value: Your XSOAR API key\n- `baseUrl`: Your XSOAR server URL (without trailing slash)\n\n#### 3. Webex Credentials\nSet up HTTP Header Auth with:\n- Header Name: `Authorization`\n- Header Value: `Bearer YOUR_WEBEX_BOT_TOKEN`\n\nReplace `YOUR_SECURITY_ENGINEERING_ROOM_ID` with your actual Webex room ID in all Webex nodes.\n\n### Area Paths Monitored\nThe workflow monitors these Azure DevOps area paths:\n- Detection-Engineering\\Detection Engineering\n- Detection-Engineering\\Security\n- Detection-Engineering\\Automation\n- Detection-Engineering\\Vulnerability Management\n\n### Work Item Categories\n\n#### Detection Engineering\n- Tracks rule deployment status\n- Monitors in-development, in-review, and deployed items\n- Area paths containing 'detection', 'DE Rules', 'Threat Hunting'\n\n#### Vulnerability Management\n- Cross-references with CVE workflow\n- Tracks remediation status\n- Extracts CVE-xxxx-xxxxx references\n\n#### Automation\n- Tracks n8n workflow development\n- Monitors XSOAR playbook creation\n- Tracks bot development items\n\n### Alerts & Notifications\n\n#### Blocked Items Alert\n- Triggered when items are in 'Blocked' or 'On Hold' state\n- Posted to Webex security-engineering channel\n\n#### Deadline Reminders\n- Items with target dates within 3 days\n- Color-coded urgency indicators\n\n#### XSOAR Integration\n- Completed ADO items with XSOAR references update linked tickets\n- Pattern matching: XSOAR-12345, incident-12345, INC-12345\n\n### Weekly Sprint Summary\n- Runs every Monday at 9 AM\n- Velocity metrics (items completed, story points)\n- Security improvements completed\n- Top contributors\n- Upcoming deadlines\n- Work distribution by area\n\n### Rate Limiting\n- 15-minute polling interval for real-time updates\n- Batched API calls (50 items per request)\n- Retry logic with backoff for failed requests"
+  },
+  "tags": [
+    {
+      "name": "Azure DevOps",
+      "id": "azdo"
+    },
+    {
+      "name": "Security Engineering",
+      "id": "security-engineering"
+    },
+    {
+      "name": "Work Item Sync",
+      "id": "work-item-sync"
+    },
+    {
+      "name": "XSOAR Integration",
+      "id": "xsoar-integration"
+    },
+    {
+      "name": "Sprint Metrics",
+      "id": "sprint-metrics"
+    }
+  ],
+  "pinData": {}
+}

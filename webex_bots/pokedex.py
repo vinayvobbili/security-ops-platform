@@ -62,6 +62,7 @@ import random
 import signal
 import atexit
 from datetime import datetime
+from typing import Optional
 
 from pytz import timezone
 from webex_bot.webex_bot import WebexBot
@@ -70,8 +71,9 @@ from my_config import get_config
 from my_bot.core.my_model import (
     ask, initialize_model_and_agent,
     is_help_command, get_help_response,
-    is_tipper_command, handle_tipper_command_with_metrics,
-    is_rules_command, handle_rules_command
+    handle_tipper_command_with_metrics,
+    handle_rules_command,
+    is_falcon_command, handle_falcon_command
 )
 from my_bot.core.session_manager import get_session_manager
 from src.utils.webex_utils import get_room_name
@@ -115,7 +117,7 @@ LOG_FILE_DIR = Path(__file__).parent.parent / 'data' / 'transient' / 'logs'
 from src.components.contacts_lookup import search_contacts_with_llm_with_metrics
 
 # XSOAR executive summary tool
-from my_bot.tools.xsoar_summary_tools import generate_executive_summary_with_metrics
+from my_bot.tools.xsoar_tools import generate_executive_summary_with_metrics
 
 
 def log_conversation(user_name: str, user_prompt: str, bot_response: str, response_time: float, room_name: str):
@@ -180,6 +182,16 @@ def initialize_bot():
         if cleaned_count > 0:
             logger.info(f"🧹 Cleaned up {cleaned_count} old conversation messages")
 
+        # Preload the LLM model into Ollama memory with keep_alive=-1
+        # This ensures the model stays loaded even if Pokédex stops
+        from my_bot.core.state_manager import get_state_manager
+        state_manager = get_state_manager()
+        logger.info("🔥 Warming up LLM model (loading into Ollama memory with keep_alive=-1)...")
+        if state_manager.fast_warmup():
+            logger.info("✅ LLM model pre-loaded and will stay in Ollama memory")
+        else:
+            logger.warning("⚠️ LLM warmup failed - model will load on first query")
+
         # Set bot as ready immediately after core initialization
         total_time = (datetime.now() - start_time).total_seconds()
 
@@ -202,70 +214,265 @@ def initialize_bot():
         return False
 
 
-class WriteTipperNoteCommand(Command):
-    """Callback command handler for the 'Write Note' button on tipper analysis cards."""
+class BasePokedexCommand(Command):
+    """Base class for Pokédex commands with common utilities."""
 
-    def __init__(self):
-        super().__init__(
-            command_keyword="write_tipper_note",
-            help_message="Write tipper analysis to AZDO",
-            card_callback_keyword="write_tipper_note"
-        )
+    def __init__(self, command_keyword: str, help_message: str = ""):
+        super().__init__(command_keyword=command_keyword, help_message=help_message)
+        self._webex_api = None
 
     def execute(self, message, attachment_actions, activity):
-        """Execute the write note action when user clicks the button."""
-        try:
-            from my_bot.tools.tipper_analysis_tools import write_analysis_to_azdo
+        """Override in subclasses."""
+        raise NotImplementedError("Subclasses must implement execute()")
+
+    @property
+    def webex_api(self):
+        """Lazy-loaded Webex API client."""
+        if self._webex_api is None:
             from webexpythonsdk import WebexAPI
+            self._webex_api = WebexAPI(access_token=CONFIG.webex_bot_access_token_pokedex)
+        return self._webex_api
 
-            # Get the data from the card action (tipper_id and HTML_comment)
-            inputs = getattr(attachment_actions, 'inputs', {}) or {}
-            tipper_id = inputs.get('tipper_id')
-            html_comment = inputs.get('html_comment')
-
-            # Fallback to JSON_data if inputs doesn't have the data
-            if not tipper_id or not html_comment:
-                action_data = getattr(attachment_actions, 'json_data', {}) or {}
-                tipper_id = tipper_id or action_data.get('tipper_id')
-                html_comment = html_comment or action_data.get('html_comment')
-
-            if not tipper_id:
-                return "⚠️ Could not determine tipper ID. Please run the analysis again."
-
-            if not html_comment:
-                return "⚠️ No analysis data found. Please run the analysis again."
-
-            # Get the person who clicked the button
-            clicker_email = getattr(attachment_actions, 'personEmail', None)
-            logger.info(f"WriteTipperNoteCommand: Writing analysis for tipper #{tipper_id} (clicked by {clicker_email})")
-
-            # Write the analysis to AZDO using the HTML_comment from the card data
-            result = write_analysis_to_azdo(tipper_id, html_comment)
-
-            # Add mention of the person who clicked
-            if clicker_email:
-                result = f"<@personEmail:{clicker_email}> {result}"
-
-            # Send confirmation message back to the room where the button was clicked
-            room_id = attachment_actions.roomId
-            webex_api = WebexAPI(access_token=CONFIG.webex_bot_access_token_pokedex)
-            webex_api.messages.create(roomId=room_id, markdown=result)
-            logger.info(f"Sent confirmation message for tipper #{tipper_id} to room")
-
-            # Delete the card message to prevent duplicate clicks
-            try:
-                card_message_id = attachment_actions.messageId
-                if card_message_id:
-                    webex_api.messages.delete(card_message_id)
-                    logger.info(f"Deleted card message {card_message_id}")
-            except Exception as del_err:
-                logger.warning(f"Could not delete card message: {del_err}")
-
-            return None  # Don't return anything since we sent the message explicitly
-
+    def send_thinking(self, room_id: str, parent_id: str = None) -> Optional[str]:
+        """Send a thinking indicator and return the message ID."""
+        try:
+            thinking_message = random.choice(THINKING_MESSAGES)
+            msg = self.webex_api.messages.create(
+                roomId=room_id,
+                parentId=parent_id,
+                text=thinking_message
+            )
+            return msg.id
         except Exception as e:
-            logger.error(f"Error in WriteTipperNoteCommand: {e}", exc_info=True)
-            return f"❌ Error writing note: {str(e)}"
+            logger.warning(f"Failed to send thinking message: {e}")
+            return None
+
+    def update_thinking_done(self, message_id: Optional[str], room_id: str, response_time: float, metrics: dict = None):  # noqa: PLR6301
+        """Update thinking message to show completion with metrics."""
+        if not message_id:
+            return
+        try:
+            import requests
+            done_prefix = random.choice(DONE_MESSAGES)
+            if metrics and metrics.get('total_tokens', 0) > 0 and metrics.get('generation_time', 0) > 0:
+                done_message = f"{done_prefix} ⚡ Time: **{response_time:.1f}s** ({metrics['prompt_time']:.1f}s prompt + {metrics['generation_time']:.1f}s gen) | Tokens: {metrics['input_tokens']}→{metrics['output_tokens']} | Speed: {metrics['tokens_per_sec']:.1f} tok/s"
+            else:
+                done_message = f"{done_prefix} ⚡ Response time: **{response_time:.1f}s**"
+
+            edit_url = f'https://webexapis.com/v1/messages/{message_id}'
+            headers = {'Authorization': f'Bearer {CONFIG.webex_bot_access_token_pokedex}', 'Content-Type': 'application/json'}
+            requests.put(edit_url, headers=headers, json={'roomId': room_id, 'markdown': done_message})
+        except Exception as e:
+            logger.warning(f"Failed to update thinking message: {e}")
+
+    def send_response(self, room_id: str, parent_id: str, content: str, file_path: str = None):
+        """Send the response, optionally with a file attachment."""
+        try:
+            if file_path:
+                import os
+                if os.path.exists(file_path):
+                    self.webex_api.messages.create(
+                        roomId=room_id,
+                        parentId=parent_id,
+                        text=content,
+                        files=[file_path]
+                    )
+                    os.remove(file_path)
+                    logger.info(f"Uploaded and deleted file: {file_path}")
+                    return
+            # Regular text response
+            if len(content) > 7000:
+                content = content[:6900] + "\n\n*[Response truncated for message limits]*"
+            self.webex_api.messages.create(roomId=room_id, parentId=parent_id, markdown=content)
+        except Exception as e:
+            logger.error(f"Failed to send response: {e}")
+
+
+class TipperCommand(BasePokedexCommand):
+    """Handle tipper analysis command: tipper <id>"""
+
+    def __init__(self):
+        super().__init__(command_keyword="tipper", help_message="Analyze a tipper: `tipper 12345`")
+
+    def execute(self, message, attachment_actions, activity):
+        import re
+        from datetime import datetime
+
+        text = message.text or ""
+        room_id = message.roomId
+        parent_id = getattr(message, 'parentId', None) or message.id
+
+        # Extract tipper ID
+        match = re.search(r'tipper\s+#?(\d+)', text, re.IGNORECASE)
+        if not match:
+            return "❌ Usage: `tipper <id>`\n\nExample: `tipper 12345`"
+
+        tipper_id = match.group(1)
+        start_time = datetime.now()
+
+        # Send thinking indicator
+        thinking_id = self.send_thinking(room_id, parent_id)
+
+        try:
+            result = handle_tipper_command_with_metrics(tipper_id, room_id)
+            response_time = (datetime.now() - start_time).total_seconds()
+
+            self.update_thinking_done(thinking_id, room_id, response_time, result)
+            self.send_response(room_id, parent_id, result['content'])
+            return None
+        except Exception as e:
+            logger.error(f"Tipper command error: {e}", exc_info=True)
+            return f"❌ Error analyzing tipper: {e}"
+
+
+class RulesCommand(BasePokedexCommand):
+    """Handle detection rules search: rules <query>"""
+
+    def __init__(self):
+        super().__init__(command_keyword="rules", help_message="Search detection rules: `rules emotet`")
+
+    def execute(self, message, attachment_actions, activity):
+        import re
+        from datetime import datetime
+
+        text = message.text or ""
+        room_id = message.roomId
+        parent_id = getattr(message, 'parentId', None) or message.id
+
+        # Extract query
+        match = re.search(r'rules?\s+(.+)', text, re.IGNORECASE)
+        if not match:
+            return "❌ Usage: `rules <query>`\n\nExample: `rules emotet`"
+
+        query = match.group(1).strip()
+        start_time = datetime.now()
+        thinking_id = self.send_thinking(room_id, parent_id)
+
+        try:
+            result = handle_rules_command(query)
+            response_time = (datetime.now() - start_time).total_seconds()
+
+            self.update_thinking_done(thinking_id, room_id, response_time, result)
+            self.send_response(room_id, parent_id, result['content'])
+            return None
+        except Exception as e:
+            logger.error(f"Rules command error: {e}", exc_info=True)
+            return f"❌ Error searching rules: {e}"
+
+
+class ContactsCommand(BasePokedexCommand):
+    """Handle contacts lookup: contacts <query>"""
+
+    def __init__(self):
+        super().__init__(command_keyword="contacts", help_message="Lookup contacts: `contacts john smith`")
+
+    def execute(self, message, attachment_actions, activity):
+        from datetime import datetime
+
+        text = message.text or ""
+        room_id = message.roomId
+        parent_id = getattr(message, 'parentId', None) or message.id
+
+        # Extract query after "contacts "
+        if not text.lower().strip().startswith('contacts '):
+            return "❌ Usage: `contacts <name or query>`\n\nExample: `contacts john smith`"
+
+        query = text[text.lower().find('contacts') + 9:].strip()
+        if not query:
+            return "❌ Usage: `contacts <name or query>`\n\nExample: `contacts john smith`"
+
+        start_time = datetime.now()
+        thinking_id = self.send_thinking(room_id, parent_id)
+
+        try:
+            result = search_contacts_with_llm_with_metrics(query)
+            response_time = (datetime.now() - start_time).total_seconds()
+
+            self.update_thinking_done(thinking_id, room_id, response_time, result)
+            self.send_response(room_id, parent_id, result['content'])
+            return None
+        except Exception as e:
+            logger.error(f"Contacts command error: {e}", exc_info=True)
+            return f"❌ Error looking up contacts: {e}"
+
+
+class ExecsumCommand(BasePokedexCommand):
+    """Handle executive summary: execsum <ticket_id>"""
+
+    def __init__(self):
+        super().__init__(command_keyword="execsum", help_message="Generate executive summary: `execsum 929947`")
+
+    def execute(self, message, attachment_actions, activity):
+        from datetime import datetime
+
+        text = message.text or ""
+        room_id = message.roomId
+        parent_id = getattr(message, 'parentId', None) or message.id
+
+        # Extract ticket ID
+        parts = text.lower().split('execsum')
+        if len(parts) < 2 or not parts[1].strip():
+            return "❌ Usage: `execsum <ticket_id>`\n\nExample: `execsum 929947`"
+
+        ticket_id = parts[1].strip()
+        start_time = datetime.now()
+        thinking_id = self.send_thinking(room_id, parent_id)
+
+        try:
+            result = generate_executive_summary_with_metrics(ticket_id, "prod")
+            response_time = (datetime.now() - start_time).total_seconds()
+
+            self.update_thinking_done(thinking_id, room_id, response_time, result)
+            self.send_response(room_id, parent_id, result['content'])
+            return None
+        except Exception as e:
+            logger.error(f"Execsum command error: {e}", exc_info=True)
+            return f"❌ Error generating executive summary: {e}"
+
+
+class FalconCommand(BasePokedexCommand):
+    """Handle CrowdStrike/Falcon commands: falcon <query>"""
+
+    # Room whitelist for RTR commands - restricted due to powerful capabilities
+    ALLOWED_ROOMS = [CONFIG.webex_room_id_threatcon_collab, CONFIG.webex_room_id_vinay_test_space]
+
+    def __init__(self):
+        super().__init__(command_keyword="falcon", help_message="CrowdStrike operations: `falcon get detections for HOST123`")
+
+    def execute(self, message, attachment_actions, activity):
+        # Silent failure if used from unauthorized room
+        if message.roomId not in self.ALLOWED_ROOMS:
+            logger.warning(f"Falcon command blocked - unauthorized room: {message.roomId}")
+            return None
+        import re
+        from datetime import datetime
+
+        text = message.text or ""
+        room_id = message.roomId
+        parent_id = getattr(message, 'parentId', None) or message.id
+
+        # Extract query after falcon/cs/crowdstrike
+        match = re.search(r'(?:falcon|cs|crowdstrike)\s+(.+)', text, re.IGNORECASE)
+        if not match:
+            return "❌ Usage: `falcon <query>`\n\nExamples:\n• `falcon get browser history from HOST123`\n• `falcon check containment for HOST456`\n• `falcon detections for LAPTOP789`"
+
+        query = match.group(1).strip()
+        start_time = datetime.now()
+        thinking_id = self.send_thinking(room_id, parent_id)
+
+        try:
+            result = handle_falcon_command(query, room_id=room_id)
+            response_time = (datetime.now() - start_time).total_seconds()
+
+            self.update_thinking_done(thinking_id, room_id, response_time, result)
+
+            # Handle file upload for browser history
+            file_path = result.get('file_path')
+            self.send_response(room_id, parent_id, result['content'], file_path)
+            return None
+        except Exception as e:
+            logger.error(f"Falcon command error: {e}", exc_info=True)
+            return f"❌ Error executing Falcon command: {e}"
 
 
 class Bot(WebexBot):
@@ -337,8 +544,8 @@ class Bot(WebexBot):
 
                 def update_thinking_message():
                     counter = 1
-                    MAX_EDITS = 9  # Limit to 9 edits to reserve the 10th for the final message
-                    while thinking_active.is_set() and counter <= MAX_EDITS:
+                    max_edits = 9  # Limit to 9 edits to reserve the 10th for the final message
+                    while thinking_active.is_set() and counter <= max_edits:
                         time.sleep(15)
                         if thinking_active.is_set():  # Check again after sleep
                             try:
@@ -385,67 +592,46 @@ class Bot(WebexBot):
                 prompt_time = 0.0
                 generation_time = 0.0
                 tokens_per_sec = 0.0
-            # Check for tipper command - runs LLM analysis
-            elif is_tipper_command(cleaned_message)[0]:
-                _, tipper_id = is_tipper_command(cleaned_message)
-                result = handle_tipper_command_with_metrics(tipper_id, teams_message.roomId)
+            # Check for falcon command - direct CrowdStrike operations (room-restricted)
+            elif is_falcon_command(cleaned_message)[0]:
+                # Silent failure if used from unauthorized room
+                if teams_message.roomId not in FalconCommand.ALLOWED_ROOMS:
+                    logger.warning(f"Falcon command blocked - unauthorized room: {teams_message.roomId}")
+                    if thinking_active:
+                        thinking_active.clear()
+                    return
+                _, falcon_query = is_falcon_command(cleaned_message)
+                result = handle_falcon_command(falcon_query, room_id=teams_message.roomId)
                 response_text = result['content']
-                input_tokens = result['input_tokens']
-                output_tokens = result['output_tokens']
-                total_tokens = result['total_tokens']
-                prompt_time = result['prompt_time']
-                generation_time = result['generation_time']
-                tokens_per_sec = result['tokens_per_sec']
-            # Check for rules command - detection rules catalog search
-            elif is_rules_command(cleaned_message)[0]:
-                _, rules_query = is_rules_command(cleaned_message)
-                result = handle_rules_command(rules_query)
-                response_text = result['content']
-                input_tokens = result['input_tokens']
-                output_tokens = result['output_tokens']
-                total_tokens = result['total_tokens']
-                prompt_time = result['prompt_time']
-                generation_time = result['generation_time']
-                tokens_per_sec = result['tokens_per_sec']
-            # Check for contacts command - vector store + LLM lookup
-            elif cleaned_message.lower().startswith('contacts '):
-                contacts_query = cleaned_message[9:]  # Remove "contacts " prefix
-                result = search_contacts_with_llm_with_metrics(contacts_query)
-                response_text = result['content']
-                input_tokens = result['input_tokens']
-                output_tokens = result['output_tokens']
-                total_tokens = result['total_tokens']
-                prompt_time = result['prompt_time']
-                generation_time = result['generation_time']
-                tokens_per_sec = result['tokens_per_sec']
-            # Check for execsum command - XSOAR executive summary
-            elif cleaned_message.lower().startswith('execsum '):
-                ticket_id = cleaned_message[8:].strip()  # Remove "execsum " prefix
-                if ticket_id:
-                    result = generate_executive_summary_with_metrics(ticket_id, "prod")
-                    response_text = result['content']
-                    input_tokens = result['input_tokens']
-                    output_tokens = result['output_tokens']
-                    total_tokens = result['total_tokens']
-                    prompt_time = result['prompt_time']
-                    generation_time = result['generation_time']
-                    tokens_per_sec = result['tokens_per_sec']
-                else:
-                    response_text = "❌ Usage: `execsum <ticket_id>`\n\nExample: `execsum 929947`"
-                    input_tokens = 0
-                    output_tokens = 0
-                    total_tokens = 0
-                    prompt_time = 0.0
-                    generation_time = 0.0
-                    tokens_per_sec = 0.0
+                input_tokens = result.get('input_tokens', 0)
+                output_tokens = result.get('output_tokens', 0)
+                total_tokens = result.get('total_tokens', 0)
+                prompt_time = result.get('prompt_time', 0.0)
+                generation_time = result.get('generation_time', 0.0)
+                tokens_per_sec = result.get('tokens_per_sec', 0.0)
+                # Handle file upload for browser history
+                file_path = result.get('file_path')
+                if file_path:
+                    import os
+                    if os.path.exists(file_path):
+                        parent_id = teams_message.parentId if hasattr(teams_message, 'parentId') and teams_message.parentId else teams_message.id
+                        self.teams.messages.create(
+                            roomId=teams_message.roomId,
+                            parentId=parent_id,
+                            text=response_text,
+                            files=[file_path]
+                        )
+                        os.remove(file_path)
+                        logger.info(f"Uploaded and deleted browser history file: {file_path}")
+                        response_text = None  # Signal that response was already sent with file
             else:
                 # Process query through LLM agent
                 try:
                     # ask() now returns a dict with content, token counts, and timing data
                     result = ask(
                         raw_message,
-                        user_id=teams_message.personId,
-                        room_id=teams_message.roomId
+                        user_id=teams_message.personEmail,
+                        room_id=room_name
                     )
                     response_text = result['content']
                     input_tokens = result['input_tokens']
@@ -464,7 +650,26 @@ class Bot(WebexBot):
                     generation_time = 0.0
                     tokens_per_sec = 0.0
 
-            # Format for Webex
+            # Format for Webex (skip if response was already sent with file)
+            if response_text is None:
+                # Response was already sent (e.g., with file attachment)
+                # Just update thinking message and return
+                if thinking_active:
+                    thinking_active.clear()
+                end_time = datetime.now()
+                response_time = (end_time - start_time).total_seconds()
+                if thinking_msg:
+                    done_prefix = random.choice(DONE_MESSAGES)
+                    done_message = f"{done_prefix} ⚡ Response time: **{response_time:.1f}s**"
+                    try:
+                        import requests
+                        edit_url = f'https://webexapis.com/v1/messages/{thinking_msg.id}'
+                        headers = {'Authorization': f'Bearer {CONFIG.webex_bot_access_token_pokedex}', 'Content-Type': 'application/json'}
+                        requests.put(edit_url, headers=headers, json={'roomId': teams_message.roomId, 'markdown': done_message})
+                    except Exception:
+                        pass
+                return
+
             if len(response_text) > 7000:
                 response_text = response_text[:6900] + "\n\n*[Response truncated for message limits]*"
 
@@ -594,14 +799,17 @@ def main():
     bot = Bot(
         teams_bot_token=WEBEX_ACCESS_TOKEN,
         approved_domains=[CONFIG.my_web_domain],
-        # approved_rooms disabled - bot lacks spark:memberships_read scope for validation
-        # Security: Only add this bot to authorized rooms to control access
+        approved_rooms=[CONFIG.webex_room_id_threatcon_collab, CONFIG.webex_room_id_vinay_test_space, CONFIG.webex_room_id_threat_tipper_analysis],
         bot_name=bot_name
     )
 
-    # Register callback command for tipper analysis "Write Note" button
-    bot.add_command(WriteTipperNoteCommand())
-    logger.info("Registered WriteTipperNoteCommand callback handler")
+    # Register commands
+    bot.add_command(TipperCommand())
+    bot.add_command(RulesCommand())
+    bot.add_command(ContactsCommand())
+    bot.add_command(ExecsumCommand())
+    bot.add_command(FalconCommand())
+    logger.info("Registered commands: tipper, rules, contacts, execsum, falcon")
 
     # Run bot (simple and direct - no monitoring, no reconnection, no keepalive)
     logger.info("🚀 Pokedex is up and running with vanilla WebexBot...")

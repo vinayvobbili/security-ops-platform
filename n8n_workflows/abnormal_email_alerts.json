@@ -1,0 +1,779 @@
+{
+  "name": "Abnormal Security Email Threat Alerts",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 5
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Every 5 Minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.abnormalplatform.com/v1/threats",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "filter",
+              "value": "=receivedTime gte {{ $now.minus(5, 'minutes').toFormat(\"yyyy-MM-dd'T'HH:mm:ss'Z'\") }} lte {{ $now.toFormat(\"yyyy-MM-dd'T'HH:mm:ss'Z'\") }}"
+            },
+            {
+              "name": "pageSize",
+              "value": "100"
+            },
+            {
+              "name": "source",
+              "value": "all"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": false
+            }
+          }
+        }
+      },
+      "id": "abnormal-get-threats",
+      "name": "Query Abnormal Threats",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [220, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "abnormal-api-key",
+          "name": "Abnormal Security API Key"
+        }
+      },
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "check-threats",
+              "leftValue": "={{ $json.threats?.length || 0 }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "has-threats",
+      "name": "Has New Threats?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [440, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Filter threats by attack types (phishing, BEC, malware)\nconst data = $input.first().json;\nconst threats = data.threats || [];\n\nconst targetAttackTypes = [\n  'Phishing: Credential',\n  'Phishing: Sensitive Data',\n  'Social Engineering (BEC)',\n  'Invoice/Payment Fraud (BEC)',\n  'Malware',\n  'Internal-to-Internal Attacks (Email Account Takeover)',\n  'Extortion'\n];\n\nconst filteredThreats = threats.filter(threat => {\n  const attackType = threat.attackType || '';\n  return targetAttackTypes.some(t => attackType.includes(t) || t.includes(attackType));\n});\n\nif (filteredThreats.length === 0) {\n  return [];\n}\n\n// Return each threat as a separate item for processing\nreturn filteredThreats.map(threat => ({\n  json: {\n    threatId: threat.threatId,\n    attackType: threat.attackType,\n    attackStrategy: threat.attackStrategy,\n    attackVector: threat.attackVector,\n    impersonatedParty: threat.impersonatedParty,\n    subject: threat.subject,\n    fromAddress: threat.fromAddress,\n    fromName: threat.fromName,\n    toAddresses: threat.toAddresses || [],\n    receivedTime: threat.receivedTime,\n    remediationStatus: threat.remediationStatus,\n    isRead: threat.isRead,\n    abxMessageId: threat.abxMessageId,\n    abxPortalUrl: threat.abxPortalUrl\n  }\n}));"
+      },
+      "id": "filter-attack-types",
+      "name": "Filter by Attack Types",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 200]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.abnormalplatform.com/v1/threats/{{ $json.threatId }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "pageSize",
+              "value": "100"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "get-threat-details",
+      "name": "Get Threat Details",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [880, 200],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "abnormal-api-key",
+          "name": "Abnormal Security API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract indicators from threat details\nconst threat = $input.first().json;\nconst basicThreat = $('Filter by Attack Types').item.json;\n\n// Extract URLs from messages\nconst messages = threat.messages || [];\nlet urls = [];\nlet attachments = [];\nlet senderIPs = [];\nlet recipients = [];\n\nfor (const msg of messages) {\n  // Extract URLs\n  if (msg.urls && Array.isArray(msg.urls)) {\n    urls = urls.concat(msg.urls);\n  }\n  if (msg.urlCount > 0 && msg.urls) {\n    urls = urls.concat(msg.urls);\n  }\n  \n  // Extract attachments\n  if (msg.attachmentNames && Array.isArray(msg.attachmentNames)) {\n    attachments = attachments.concat(msg.attachmentNames.map(name => ({\n      name: name,\n      sha256: msg.attachmentSha256s?.[msg.attachmentNames.indexOf(name)] || null\n    })));\n  }\n  \n  // Sender IP\n  if (msg.senderIpAddress) {\n    senderIPs.push(msg.senderIpAddress);\n  }\n  \n  // Recipients\n  if (msg.recipientAddress) {\n    recipients.push(msg.recipientAddress);\n  }\n}\n\n// Deduplicate\nurls = [...new Set(urls)];\nsenderIPs = [...new Set(senderIPs)];\nrecipients = [...new Set(recipients)];\n\n// Extract sender domain\nconst fromAddress = basicThreat.fromAddress || '';\nconst senderDomain = fromAddress.includes('@') ? fromAddress.split('@')[1] : fromAddress;\n\n// Combine all recipients\nconst allRecipients = [...new Set([...recipients, ...(basicThreat.toAddresses || [])])];\n\nreturn [{\n  json: {\n    ...basicThreat,\n    threatDetails: threat,\n    indicators: {\n      senderEmail: fromAddress,\n      senderDomain: senderDomain,\n      senderIPs: senderIPs,\n      urls: urls.slice(0, 10), // Limit to first 10 URLs\n      attachments: attachments.slice(0, 5), // Limit to first 5 attachments\n      urlCount: urls.length,\n      attachmentCount: attachments.length\n    },\n    recipients: allRecipients,\n    recipientCount: allRecipients.length,\n    summaryInsights: threat.summaryInsights || [],\n    messages: messages.slice(0, 5) // Keep first 5 messages for context\n  }\n}];"
+      },
+      "id": "extract-indicators",
+      "name": "Extract Indicators",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Risk assessment based on threat characteristics\nconst item = $input.first().json;\n\nlet riskScore = 0;\nlet riskLevel = 'LOW';\nlet riskFactors = [];\nlet escalationRequired = false;\nlet immediateAction = false;\n\n// VIP recipient list (customize as needed)\nconst vipPatterns = [\n  /ceo@/i, /cfo@/i, /cto@/i, /coo@/i, /ciso@/i,\n  /president@/i, /vp@/i, /director@/i, /executive@/i,\n  /chief/i, /founder@/i, /owner@/i,\n  /@c-suite/i, /board@/i\n];\n\nconst recipients = item.recipients || [];\n\n// Check for VIP recipients\nconst vipRecipients = recipients.filter(r => \n  vipPatterns.some(pattern => pattern.test(r))\n);\n\nif (vipRecipients.length > 0) {\n  riskScore += 30;\n  escalationRequired = true;\n  riskFactors.push(`VIP recipient(s) targeted: ${vipRecipients.join(', ')}`);\n}\n\n// Check for executive impersonation\nconst impersonatedParty = item.impersonatedParty || '';\nif (impersonatedParty === 'VIP' || impersonatedParty.toLowerCase().includes('executive')) {\n  riskScore += 25;\n  escalationRequired = true;\n  riskFactors.push(`Executive/VIP impersonation detected: ${impersonatedParty}`);\n}\n\n// Check for malware attachment\nconst attackType = item.attackType || '';\nconst attackVector = item.attackVector || '';\n\nif (attackType.toLowerCase().includes('malware')) {\n  riskScore += 40;\n  immediateAction = true;\n  riskFactors.push('Malware attack detected - IMMEDIATE CONTAINMENT REQUIRED');\n}\n\nif (attackVector === 'Attachment' || attackVector === 'Attachment with Zipped File') {\n  riskScore += 15;\n  riskFactors.push(`Malicious attachment vector: ${attackVector}`);\n  if (item.indicators.attachmentCount > 0) {\n    immediateAction = true;\n    riskFactors.push(`${item.indicators.attachmentCount} suspicious attachment(s) detected`);\n  }\n}\n\n// Attack type scoring\nconst attackTypeScores = {\n  'Phishing: Credential': 25,\n  'Phishing: Sensitive Data': 25,\n  'Social Engineering (BEC)': 30,\n  'Invoice/Payment Fraud (BEC)': 35,\n  'Malware': 40,\n  'Internal-to-Internal Attacks (Email Account Takeover)': 35,\n  'Extortion': 20\n};\n\nconst typeScore = attackTypeScores[attackType] || 15;\nriskScore += typeScore;\nriskFactors.push(`Attack type: ${attackType} (+${typeScore})`);\n\n// Attack strategy scoring\nconst strategy = item.attackStrategy || '';\nif (strategy.includes('Compromised') || strategy.includes('Spoofed')) {\n  riskScore += 15;\n  riskFactors.push(`Attack strategy: ${strategy}`);\n}\n\n// Recipient count (mass targeting)\nif (item.recipientCount > 10) {\n  riskScore += 10;\n  riskFactors.push(`Mass targeting: ${item.recipientCount} recipients`);\n}\n\n// URL count\nif (item.indicators.urlCount > 5) {\n  riskScore += 5;\n  riskFactors.push(`Multiple suspicious URLs: ${item.indicators.urlCount}`);\n}\n\n// Cap score at 100\nriskScore = Math.min(100, riskScore);\n\n// Determine risk level\nif (riskScore >= 70 || immediateAction) {\n  riskLevel = 'CRITICAL';\n} else if (riskScore >= 50 || escalationRequired) {\n  riskLevel = 'HIGH';\n} else if (riskScore >= 30) {\n  riskLevel = 'MEDIUM';\n} else {\n  riskLevel = 'LOW';\n}\n\n// Determine action\nlet recommendedAction = 'MONITOR';\nif (immediateAction) {\n  recommendedAction = 'IMMEDIATE_CONTAINMENT';\n} else if (riskLevel === 'CRITICAL' || riskLevel === 'HIGH') {\n  recommendedAction = 'AUTO_REMEDIATE';\n} else if (riskLevel === 'MEDIUM') {\n  recommendedAction = 'INVESTIGATE';\n}\n\nreturn [{\n  json: {\n    ...item,\n    riskAssessment: {\n      score: riskScore,\n      level: riskLevel,\n      factors: riskFactors,\n      escalationRequired: escalationRequired,\n      immediateAction: immediateAction,\n      recommendedAction: recommendedAction,\n      vipRecipients: vipRecipients\n    }\n  }\n}];"
+      },
+      "id": "risk-assessment",
+      "name": "Risk Assessment",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1320, 200]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://www.virustotal.com/api/v3/domains/{{ $json.indicators.senderDomain }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "vt-domain-check",
+      "name": "VirusTotal Domain Check",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1540, 0],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "virustotal-api-key",
+          "name": "VirusTotal API Key"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://urlscan.io/api/v1/scan/",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"url\": \"{{ $json.indicators.urls[0] || 'https://example.com' }}\",\n  \"visibility\": \"private\"\n}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "urlscan-check",
+      "name": "URLScan.io Check",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1540, 200],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "urlscan-api-key",
+          "name": "URLScan API Key"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.abuseipdb.com/api/v2/check",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "ipAddress",
+              "value": "={{ $json.indicators.senderIPs[0] || '0.0.0.0' }}"
+            },
+            {
+              "name": "maxAgeInDays",
+              "value": "90"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "abuseipdb-check",
+      "name": "AbuseIPDB Check",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1540, 400],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "abuseipdb-api-key",
+          "name": "AbuseIPDB API Key"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "id": "merge-enrichment",
+      "name": "Merge Enrichment",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [1760, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Compile enrichment results\nconst items = $input.all();\n\n// Get enrichment data from parallel branches\nconst vtData = items[0]?.json || {};\nconst urlscanData = items[1]?.json || {};\nconst abuseData = items[2]?.json || {};\n\n// Get original threat data from Risk Assessment node\nconst threatData = $('Risk Assessment').item.json;\n\n// Parse VirusTotal results\nlet vtSummary = 'N/A';\nlet vtMalicious = 0;\nif (vtData?.data?.attributes?.last_analysis_stats) {\n  const stats = vtData.data.attributes.last_analysis_stats;\n  vtMalicious = stats.malicious || 0;\n  vtSummary = `${vtMalicious} malicious, ${stats.suspicious || 0} suspicious`;\n}\n\n// Parse URLScan results\nlet urlscanSummary = 'Scan submitted';\nlet urlscanResultUrl = '';\nif (urlscanData?.result) {\n  urlscanResultUrl = urlscanData.result;\n  urlscanSummary = `Scan ID: ${urlscanData.uuid || 'pending'}`;\n}\n\n// Parse AbuseIPDB results\nlet abuseSummary = 'N/A';\nlet abuseScore = 0;\nif (abuseData?.data) {\n  abuseScore = abuseData.data.abuseConfidenceScore || 0;\n  const reports = abuseData.data.totalReports || 0;\n  const country = abuseData.data.countryCode || 'Unknown';\n  abuseSummary = `Score: ${abuseScore}% | Reports: ${reports} | Country: ${country}`;\n}\n\n// Update risk if enrichment reveals more maliciousness\nlet updatedRisk = { ...threatData.riskAssessment };\nif (vtMalicious > 3) {\n  updatedRisk.score = Math.min(100, updatedRisk.score + 15);\n  updatedRisk.factors.push(`VirusTotal: ${vtMalicious} engines flagged domain`);\n}\nif (abuseScore > 50) {\n  updatedRisk.score = Math.min(100, updatedRisk.score + 10);\n  updatedRisk.factors.push(`AbuseIPDB: ${abuseScore}% abuse confidence`);\n}\n\n// Recalculate risk level after enrichment\nif (updatedRisk.score >= 70) {\n  updatedRisk.level = 'CRITICAL';\n} else if (updatedRisk.score >= 50) {\n  updatedRisk.level = 'HIGH';\n}\n\nreturn [{\n  json: {\n    ...threatData,\n    riskAssessment: updatedRisk,\n    enrichment: {\n      virustotal: {\n        summary: vtSummary,\n        maliciousCount: vtMalicious,\n        raw: vtData?.data || null\n      },\n      urlscan: {\n        summary: urlscanSummary,\n        resultUrl: urlscanResultUrl,\n        raw: urlscanData || null\n      },\n      abuseipdb: {\n        summary: abuseSummary,\n        abuseScore: abuseScore,\n        raw: abuseData?.data || null\n      }\n    }\n  }\n}];"
+      },
+      "id": "compile-enrichment",
+      "name": "Compile Enrichment",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1980, 200]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "high-confidence-check",
+              "leftValue": "={{ $json.riskAssessment.level }}",
+              "rightValue": "CRITICAL",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "id": "check-auto-remediate",
+      "name": "Auto-Remediate?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [2200, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.abnormalplatform.com/v1/threats/{{ $json.threatId }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"action\": \"remediate\"\n}",
+        "options": {}
+      },
+      "id": "auto-remediate",
+      "name": "Auto-Remediate Threat",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2420, 100],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "abnormal-api-key",
+          "name": "Abnormal Security API Key"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Set remediation status after auto-remediate\nconst item = $input.first().json;\nconst remediateResult = item;\n\nconst threatData = $('Compile Enrichment').item.json;\n\nreturn [{\n  json: {\n    ...threatData,\n    remediationExecuted: true,\n    remediationResult: remediateResult,\n    remediationTimestamp: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "set-remediated",
+      "name": "Set Remediated Status",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2640, 100]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Mark as not auto-remediated, needs investigation\nconst threatData = $input.first().json;\n\nreturn [{\n  json: {\n    ...threatData,\n    remediationExecuted: false,\n    remediationResult: null,\n    remediationTimestamp: null\n  }\n}];"
+      },
+      "id": "set-not-remediated",
+      "name": "Set Investigation Status",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2420, 300]
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineAll",
+        "options": {}
+      },
+      "id": "merge-remediation-paths",
+      "name": "Merge Paths",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [2860, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://xsoar.company.com/incident",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"name\": \"Abnormal Security: {{ $json.attackType }} - {{ $json.subject.substring(0, 50) }}\",\n  \"type\": \"Email Security Incident\",\n  \"severity\": {{ $json.riskAssessment.level === 'CRITICAL' ? 4 : $json.riskAssessment.level === 'HIGH' ? 3 : $json.riskAssessment.level === 'MEDIUM' ? 2 : 1 }},\n  \"details\": {\n    \"threatId\": \"{{ $json.threatId }}\",\n    \"attackType\": \"{{ $json.attackType }}\",\n    \"attackStrategy\": \"{{ $json.attackStrategy }}\",\n    \"sender\": \"{{ $json.fromAddress }}\",\n    \"senderDomain\": \"{{ $json.indicators.senderDomain }}\",\n    \"recipientCount\": {{ $json.recipientCount }},\n    \"riskScore\": {{ $json.riskAssessment.score }},\n    \"riskLevel\": \"{{ $json.riskAssessment.level }}\",\n    \"autoRemediated\": {{ $json.remediationExecuted }},\n    \"enrichment\": {\n      \"virustotal\": \"{{ $json.enrichment.virustotal.summary }}\",\n      \"abuseipdb\": \"{{ $json.enrichment.abuseipdb.summary }}\"\n    }\n  },\n  \"labels\": [\n    {\"type\": \"source\", \"value\": \"Abnormal Security\"},\n    {\"type\": \"attack_type\", \"value\": \"{{ $json.attackType }}\"},\n    {\"type\": \"severity\", \"value\": \"{{ $json.riskAssessment.level }}\"}\n  ]\n}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "create-xsoar-ticket",
+      "name": "Create XSOAR Ticket",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [3080, 200],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "xsoar-api-key",
+          "name": "XSOAR API Key"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Format Webex alert message\nconst item = $input.first().json;\nconst threat = item;\nconst risk = item.riskAssessment;\nconst enrichment = item.enrichment;\nconst indicators = item.indicators;\n\n// Risk level emoji mapping\nconst riskEmoji = {\n  'CRITICAL': '\\u{1F6A8}', // Siren\n  'HIGH': '\\u{1F534}',      // Red circle\n  'MEDIUM': '\\u{1F7E0}',    // Orange circle\n  'LOW': '\\u{1F7E2}'        // Green circle\n};\n\n// Attack type emoji\nconst attackEmoji = {\n  'Phishing': '\\u{1F3A3}',  // Fishing pole\n  'BEC': '\\u{1F4BC}',       // Briefcase\n  'Malware': '\\u{1F41B}',   // Bug\n  'Extortion': '\\u{1F4B0}'  // Money bag\n};\n\nlet typeEmoji = '\\u{2709}\\u{FE0F}'; // Default email\nfor (const [key, emoji] of Object.entries(attackEmoji)) {\n  if (threat.attackType?.includes(key)) {\n    typeEmoji = emoji;\n    break;\n  }\n}\n\n// Format recipients (show first 3)\nconst recipientList = (threat.recipients || []).slice(0, 3).join(', ');\nconst moreRecipients = threat.recipientCount > 3 ? ` (+${threat.recipientCount - 3} more)` : '';\n\n// Format URLs (show first 2)\nconst urlList = (indicators.urls || []).slice(0, 2).map(u => `\\`${u.substring(0, 50)}...\\``).join('\\n  - ') || 'None detected';\n\n// Format attachments\nconst attachmentList = (indicators.attachments || []).slice(0, 3).map(a => `\\`${a.name}\\``).join(', ') || 'None';\n\n// Remediation status\nlet remediationStatus = '';\nif (item.remediationExecuted) {\n  remediationStatus = '\\u{2705} **AUTO-REMEDIATED**';\n} else if (risk.level === 'HIGH' || risk.level === 'CRITICAL') {\n  remediationStatus = '\\u{26A0}\\u{FE0F} **AWAITING MANUAL REVIEW**';\n} else {\n  remediationStatus = '\\u{1F50D} Investigation recommended';\n}\n\n// Enrichment verdicts\nconst vtVerdict = enrichment.virustotal.maliciousCount > 0 ? \n  `\\u{1F534} ${enrichment.virustotal.summary}` : \n  `\\u{1F7E2} ${enrichment.virustotal.summary}`;\n\nconst abuseVerdict = enrichment.abuseipdb.abuseScore > 50 ?\n  `\\u{1F534} ${enrichment.abuseipdb.summary}` :\n  `\\u{1F7E2} ${enrichment.abuseipdb.summary}`;\n\n// Build markdown message\nconst markdown = `${riskEmoji[risk.level] || '\\u{26A0}\\u{FE0F}'} **Abnormal Security Email Threat Alert**\n\n---\n\n${typeEmoji} **Attack Type:** ${threat.attackType}\n**Risk Level:** ${risk.level} (Score: ${risk.score}/100)\n\n---\n\n### Sender Information\n| Field | Value |\n|-------|-------|\n| From | ${threat.fromName || 'Unknown'} <${threat.fromAddress}> |\n| Domain | \\`${indicators.senderDomain}\\` |\n| Strategy | ${threat.attackStrategy || 'N/A'} |\n| Impersonation | ${threat.impersonatedParty || 'None detected'} |\n\n---\n\n### Recipient Information\n**Count:** ${threat.recipientCount}\n**Recipients:** ${recipientList}${moreRecipients}\n${risk.vipRecipients?.length > 0 ? `\\n\\u{1F451} **VIP Recipients:** ${risk.vipRecipients.join(', ')}` : ''}\n\n---\n\n### Indicators Found\n**URLs (${indicators.urlCount}):**\n  - ${urlList}\n\n**Attachments (${indicators.attachmentCount}):** ${attachmentList}\n\n**Sender IPs:** ${indicators.senderIPs?.join(', ') || 'None detected'}\n\n---\n\n### Threat Intelligence\n| Source | Result |\n|--------|--------|\n| VirusTotal | ${vtVerdict} |\n| AbuseIPDB | ${abuseVerdict} |\n| URLScan.io | ${enrichment.urlscan.summary} |\n\n---\n\n### Remediation Status\n${remediationStatus}\n\n---\n\n### Risk Factors\n${risk.factors.map(f => `- ${f}`).join('\\n')}\n\n---\n\n**Subject:** ${threat.subject?.substring(0, 100) || 'N/A'}\n**Received:** ${threat.receivedTime}\n**Threat ID:** \\`${threat.threatId}\\`\n\n[View in Abnormal Console](https://portal.abnormalplatform.com/threats/${threat.threatId})`;\n\n// Compact summary for mobile/notifications\nconst summary = `[${risk.level}] ${threat.attackType}: From ${threat.fromAddress} to ${threat.recipientCount} recipient(s). ${remediationStatus}`;\n\nreturn [{\n  json: {\n    ...item,\n    webexMessage: {\n      markdown: markdown,\n      summary: summary\n    },\n    xsoarTicketCreated: true\n  }\n}];"
+      },
+      "id": "format-webex-alert",
+      "name": "Format Webex Alert",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3300, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://webexapis.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"roomId\": \"{{ $env.WEBEX_SOC_ROOM_ID }}\",\n  \"markdown\": {{ JSON.stringify($json.webexMessage.markdown) }}\n}",
+        "options": {}
+      },
+      "id": "send-webex-alert",
+      "name": "Send to Webex",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [3520, 200],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "webex-bot-token",
+          "name": "Webex Bot Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "notify-users-check",
+              "leftValue": "={{ $json.riskAssessment.level }}",
+              "rightValue": "CRITICAL",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-notify-users",
+      "name": "Notify Affected Users?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [3740, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Prepare notification for affected users (optional - configurable)\n// This could integrate with email, Webex direct messages, or internal notification system\n\nconst item = $input.first().json;\nconst recipients = item.recipients || [];\n\n// Limit to first 10 recipients for notification\nconst notifyList = recipients.slice(0, 10);\n\nconst notification = {\n  subject: `Security Alert: Suspicious Email Blocked`,\n  body: `A suspicious email from ${item.fromAddress} has been identified and blocked by our security systems.\n\nAttack Type: ${item.attackType}\nSubject Line: ${item.subject?.substring(0, 50) || 'N/A'}\n\nNo action is required on your part. This email has been automatically remediated.\n\nIf you have already interacted with this email (clicked links, opened attachments, or replied), please contact the Security team immediately.\n\nReference: ${item.threatId}`,\n  recipients: notifyList\n};\n\nreturn [{\n  json: {\n    ...item,\n    userNotification: notification\n  }\n}];"
+      },
+      "id": "prepare-user-notification",
+      "name": "Prepare User Notification",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3960, 100]
+    },
+    {
+      "parameters": {},
+      "id": "no-user-notification",
+      "name": "Skip User Notification",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [3960, 300]
+    },
+    {
+      "parameters": {},
+      "id": "no-threats",
+      "name": "No New Threats",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [660, 400]
+    }
+  ],
+  "connections": {
+    "Every 5 Minutes": {
+      "main": [
+        [
+          {
+            "node": "Query Abnormal Threats",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Query Abnormal Threats": {
+      "main": [
+        [
+          {
+            "node": "Has New Threats?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has New Threats?": {
+      "main": [
+        [
+          {
+            "node": "Filter by Attack Types",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No New Threats",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter by Attack Types": {
+      "main": [
+        [
+          {
+            "node": "Get Threat Details",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Threat Details": {
+      "main": [
+        [
+          {
+            "node": "Extract Indicators",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Indicators": {
+      "main": [
+        [
+          {
+            "node": "Risk Assessment",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Risk Assessment": {
+      "main": [
+        [
+          {
+            "node": "VirusTotal Domain Check",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "URLScan.io Check",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "AbuseIPDB Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "VirusTotal Domain Check": {
+      "main": [
+        [
+          {
+            "node": "Merge Enrichment",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "URLScan.io Check": {
+      "main": [
+        [
+          {
+            "node": "Merge Enrichment",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "AbuseIPDB Check": {
+      "main": [
+        [
+          {
+            "node": "Merge Enrichment",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Merge Enrichment": {
+      "main": [
+        [
+          {
+            "node": "Compile Enrichment",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compile Enrichment": {
+      "main": [
+        [
+          {
+            "node": "Auto-Remediate?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Auto-Remediate?": {
+      "main": [
+        [
+          {
+            "node": "Auto-Remediate Threat",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Set Investigation Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Auto-Remediate Threat": {
+      "main": [
+        [
+          {
+            "node": "Set Remediated Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Remediated Status": {
+      "main": [
+        [
+          {
+            "node": "Merge Paths",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Investigation Status": {
+      "main": [
+        [
+          {
+            "node": "Merge Paths",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge Paths": {
+      "main": [
+        [
+          {
+            "node": "Create XSOAR Ticket",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create XSOAR Ticket": {
+      "main": [
+        [
+          {
+            "node": "Format Webex Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Webex Alert": {
+      "main": [
+        [
+          {
+            "node": "Send to Webex",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send to Webex": {
+      "main": [
+        [
+          {
+            "node": "Notify Affected Users?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify Affected Users?": {
+      "main": [
+        [
+          {
+            "node": "Prepare User Notification",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Skip User Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "staticData": null,
+  "meta": {
+    "templateId": "abnormal-email-alerts",
+    "instanceId": ""
+  },
+  "tags": [
+    {
+      "id": "soc",
+      "name": "SOC",
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z"
+    },
+    {
+      "id": "abnormal-security",
+      "name": "Abnormal Security",
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z"
+    },
+    {
+      "id": "email-security",
+      "name": "Email Security",
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z"
+    },
+    {
+      "id": "threat-intel",
+      "name": "Threat Intel",
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z"
+    }
+  ],
+  "pinData": {},
+  "versionId": "1.0.0",
+  "triggerCount": 0
+}

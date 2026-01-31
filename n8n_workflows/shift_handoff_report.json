@@ -1,0 +1,1268 @@
+{
+  "name": "SOC Shift Handoff Report",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "30 4,12,20 * * *"
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Shift Change Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [100, 400],
+      "notes": "Triggers at 04:30, 12:30, 20:30 UTC. Adjust timezone in n8n settings or modify cron for ET: 30 8,16,0 * * * (shifts at 04:30, 12:30, 20:30 ET = 08:30, 16:30, 00:30 UTC)"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Determine which shift is ending and which is starting\n// Shift times (ET): Morning 04:30-12:30, Afternoon 12:30-20:30, Night 20:30-04:30\n\nconst now = new Date();\nconst hour = now.getUTCHours();\nconst minute = now.getUTCMinutes();\n\n// Convert to decimal hour for comparison\nconst currentTime = hour + (minute / 60);\n\nlet endingShift, startingShift, shiftHoursBack;\n\n// Determine shifts based on trigger time (UTC)\n// These correspond to ET times: 04:30 (08:30 UTC), 12:30 (16:30 UTC), 20:30 (00:30 UTC next day)\nif (currentTime >= 4 && currentTime < 5) {\n  // 04:30 UTC = Morning shift starting (Night shift ending)\n  endingShift = 'Night';\n  startingShift = 'Morning';\n  shiftHoursBack = 8;\n} else if (currentTime >= 12 && currentTime < 13) {\n  // 12:30 UTC = Afternoon shift starting (Morning shift ending)\n  endingShift = 'Morning';\n  startingShift = 'Afternoon';\n  shiftHoursBack = 8;\n} else if (currentTime >= 20 && currentTime < 21) {\n  // 20:30 UTC = Night shift starting (Afternoon shift ending)\n  endingShift = 'Afternoon';\n  startingShift = 'Night';\n  shiftHoursBack = 8;\n} else {\n  // Default/fallback\n  endingShift = 'Unknown';\n  startingShift = 'Unknown';\n  shiftHoursBack = 8;\n}\n\n// Calculate shift window timestamps\nconst shiftEndTime = now.toISOString();\nconst shiftStartTime = new Date(now.getTime() - (shiftHoursBack * 60 * 60 * 1000)).toISOString();\n\n// Calculate milliseconds for QRadar queries\nconst shiftStartMillis = now.getTime() - (shiftHoursBack * 60 * 60 * 1000);\n\n// Format for display\nconst formatOptions = {\n  timeZone: 'America/New_York',\n  year: 'numeric',\n  month: 'short',\n  day: 'numeric',\n  hour: '2-digit',\n  minute: '2-digit',\n  hour12: true\n};\n\nconst shiftStartDisplay = new Date(shiftStartTime).toLocaleString('en-US', formatOptions);\nconst shiftEndDisplay = now.toLocaleString('en-US', formatOptions);\n\nreturn {\n  json: {\n    endingShift,\n    startingShift,\n    shiftHoursBack,\n    shiftStartTime,\n    shiftEndTime,\n    shiftStartMillis,\n    shiftStartDisplay,\n    shiftEndDisplay,\n    reportGeneratedAt: now.toISOString()\n  }\n};"
+      },
+      "id": "determine-shift",
+      "name": "Determine Current Shift",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [320, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.crowdstrike.com/oauth2/token",
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "client_id",
+              "value": "={{ $credentials.crowdstrike.clientId }}"
+            },
+            {
+              "name": "client_secret",
+              "value": "={{ $credentials.crowdstrike.clientSecret }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "crowdstrike-auth",
+      "name": "CrowdStrike OAuth2",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [540, 200],
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "crowdstrike-creds",
+          "name": "CrowdStrike API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.crowdstrike.com/detects/queries/detects/v1",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "filter",
+              "value": "=created_timestamp:>'{{ $('Determine Current Shift').item.json.shiftStartTime }}'"
+            },
+            {
+              "name": "limit",
+              "value": "500"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('CrowdStrike OAuth2').item.json.access_token }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "crowdstrike-detections",
+      "name": "CrowdStrike Get Detections",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [760, 100],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.crowdstrike.com/incidents/queries/incidents/v1",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "filter",
+              "value": "=created_timestamp:>'{{ $('Determine Current Shift').item.json.shiftStartTime }}'"
+            },
+            {
+              "name": "limit",
+              "value": "500"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('CrowdStrike OAuth2').item.json.access_token }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "crowdstrike-incidents",
+      "name": "CrowdStrike Get Incidents",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [760, 200],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.crowdstrike.com/devices/queries/devices/v1",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "filter",
+              "value": "status:'containment_pending'+last_seen:>='{{ $('Determine Current Shift').item.json.shiftStartTime }}'"
+            },
+            {
+              "name": "limit",
+              "value": "100"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('CrowdStrike OAuth2').item.json.access_token }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "crowdstrike-pending-containment",
+      "name": "CrowdStrike Pending Containment",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [760, 300],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.crowdstrike.com/devices/queries/devices/v1",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "filter",
+              "value": "status:'contained'+containment_status:'contained'"
+            },
+            {
+              "name": "limit",
+              "value": "100"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('CrowdStrike OAuth2').item.json.access_token }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "crowdstrike-contained-hosts",
+      "name": "CrowdStrike Contained Hosts",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [760, 400],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $credentials.qradar.baseUrl }}/api/siem/offenses",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "filter",
+              "value": "=start_time > {{ $('Determine Current Shift').item.json.shiftStartMillis }}"
+            },
+            {
+              "name": "fields",
+              "value": "id,description,offense_type,magnitude,severity,status,start_time,last_updated_time,event_count,categories"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "SEC",
+              "value": "={{ $credentials.qradar.secToken }}"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            },
+            {
+              "name": "Version",
+              "value": "19.0"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "qradar-offenses",
+      "name": "QRadar Get Offenses",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [540, 500],
+      "continueOnFail": true,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "qradar-creds",
+          "name": "QRadar SEC Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $credentials.qradar.baseUrl }}/api/siem/offenses",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "filter",
+              "value": "=magnitude >= 7 AND start_time > {{ $('Determine Current Shift').item.json.shiftStartMillis }}"
+            },
+            {
+              "name": "fields",
+              "value": "id,description,magnitude,status"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "SEC",
+              "value": "={{ $credentials.qradar.secToken }}"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            },
+            {
+              "name": "Version",
+              "value": "19.0"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "qradar-high-magnitude",
+      "name": "QRadar High Magnitude Events",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [540, 600],
+      "continueOnFail": true,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "qradar-creds",
+          "name": "QRadar SEC Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $credentials.xsoar.baseUrl }}/incidents/search",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"filter\": {\n    \"fromDate\": \"{{ $('Determine Current Shift').item.json.shiftStartTime }}\",\n    \"toDate\": \"{{ $('Determine Current Shift').item.json.shiftEndTime }}\"\n  },\n  \"size\": 500\n}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ $credentials.xsoar.apiKey }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "xsoar-new-tickets",
+      "name": "XSOAR New Tickets This Shift",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [540, 700],
+      "continueOnFail": true,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "xsoar-creds",
+          "name": "XSOAR API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $credentials.xsoar.baseUrl }}/incidents/search",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"filter\": {\n    \"fromDateClosed\": \"{{ $('Determine Current Shift').item.json.shiftStartTime }}\",\n    \"toDateClosed\": \"{{ $('Determine Current Shift').item.json.shiftEndTime }}\",\n    \"status\": [\"Done\"]\n  },\n  \"size\": 500\n}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ $credentials.xsoar.apiKey }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "xsoar-closed-tickets",
+      "name": "XSOAR Closed Tickets This Shift",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [540, 800],
+      "continueOnFail": true,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "xsoar-creds",
+          "name": "XSOAR API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $credentials.xsoar.baseUrl }}/incidents/search",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"filter\": {\n    \"status\": [\"Active\", \"Pending\", \"Investigating\"]\n  },\n  \"size\": 500\n}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ $credentials.xsoar.apiKey }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "xsoar-in-progress",
+      "name": "XSOAR In Progress Tickets",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [540, 900],
+      "continueOnFail": true,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "xsoar-creds",
+          "name": "XSOAR API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $credentials.xsoar.baseUrl }}/incidents/search",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"filter\": {\n    \"severity\": [\"High\", \"Critical\"],\n    \"status\": [\"Active\", \"Pending\", \"Investigating\"]\n  },\n  \"size\": 100\n}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ $credentials.xsoar.apiKey }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "xsoar-escalated",
+      "name": "XSOAR Escalated Incidents",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [540, 1000],
+      "continueOnFail": true,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "xsoar-creds",
+          "name": "XSOAR API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $credentials.xsoar.baseUrl }}/incidents/search",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"filter\": {\n    \"status\": [\"Active\", \"Pending\", \"Investigating\"],\n    \"timeToRespond.slaStatus\": \"approaching\"\n  },\n  \"size\": 100\n}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ $credentials.xsoar.apiKey }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "xsoar-sla-approaching",
+      "name": "XSOAR SLA Approaching",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [540, 1100],
+      "continueOnFail": true,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "xsoar-creds",
+          "name": "XSOAR API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $credentials.xsoar.baseUrl }}/incidents/search",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"filter\": {\n    \"CustomFields.assetvip\": true,\n    \"status\": [\"Active\", \"Pending\", \"Investigating\"]\n  },\n  \"size\": 100\n}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ $credentials.xsoar.apiKey }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "xsoar-vip-incidents",
+      "name": "XSOAR VIP/Critical Asset Incidents",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [540, 1200],
+      "continueOnFail": true,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "xsoar-creds",
+          "name": "XSOAR API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combinationMode": "multiplex",
+        "options": {}
+      },
+      "id": "merge-all-data",
+      "name": "Merge All Data",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2.1,
+      "position": [1000, 600]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Comprehensive Shift Handoff Report Generator\n// Processes data from XSOAR, CrowdStrike, and QRadar\n\nconst items = $input.all();\n\n// Get shift context from first node\nconst shiftContext = $('Determine Current Shift').first().json;\n\n// Safely extract arrays from API responses\nfunction safeArray(data, path = 'data') {\n  if (!data) return [];\n  if (Array.isArray(data)) return data;\n  if (data[path] && Array.isArray(data[path])) return data[path];\n  if (data.resources && Array.isArray(data.resources)) return data.resources;\n  if (data.result && Array.isArray(data.result)) return data.result;\n  return [];\n}\n\n// Get data from each source (with error handling)\nlet xsoarNewTickets = [];\nlet xsoarClosedTickets = [];\nlet xsoarInProgress = [];\nlet xsoarEscalated = [];\nlet xsoarSlaApproaching = [];\nlet xsoarVipIncidents = [];\nlet csDetections = [];\nlet csIncidents = [];\nlet csPendingContainment = [];\nlet csContainedHosts = [];\nlet qrOffenses = [];\nlet qrHighMagnitude = [];\n\ntry {\n  xsoarNewTickets = safeArray($('XSOAR New Tickets This Shift').first()?.json);\n} catch(e) { console.log('XSOAR New Tickets error:', e); }\n\ntry {\n  xsoarClosedTickets = safeArray($('XSOAR Closed Tickets This Shift').first()?.json);\n} catch(e) { console.log('XSOAR Closed Tickets error:', e); }\n\ntry {\n  xsoarInProgress = safeArray($('XSOAR In Progress Tickets').first()?.json);\n} catch(e) { console.log('XSOAR In Progress error:', e); }\n\ntry {\n  xsoarEscalated = safeArray($('XSOAR Escalated Incidents').first()?.json);\n} catch(e) { console.log('XSOAR Escalated error:', e); }\n\ntry {\n  xsoarSlaApproaching = safeArray($('XSOAR SLA Approaching').first()?.json);\n} catch(e) { console.log('XSOAR SLA Approaching error:', e); }\n\ntry {\n  xsoarVipIncidents = safeArray($('XSOAR VIP/Critical Asset Incidents').first()?.json);\n} catch(e) { console.log('XSOAR VIP error:', e); }\n\ntry {\n  csDetections = safeArray($('CrowdStrike Get Detections').first()?.json);\n} catch(e) { console.log('CS Detections error:', e); }\n\ntry {\n  csIncidents = safeArray($('CrowdStrike Get Incidents').first()?.json);\n} catch(e) { console.log('CS Incidents error:', e); }\n\ntry {\n  csPendingContainment = safeArray($('CrowdStrike Pending Containment').first()?.json);\n} catch(e) { console.log('CS Pending Containment error:', e); }\n\ntry {\n  csContainedHosts = safeArray($('CrowdStrike Contained Hosts').first()?.json);\n} catch(e) { console.log('CS Contained Hosts error:', e); }\n\ntry {\n  qrOffenses = safeArray($('QRadar Get Offenses').first()?.json);\n} catch(e) { console.log('QRadar Offenses error:', e); }\n\ntry {\n  qrHighMagnitude = safeArray($('QRadar High Magnitude Events').first()?.json);\n} catch(e) { console.log('QRadar High Magnitude error:', e); }\n\n// Calculate summary statistics\nconst totalTicketsHandled = xsoarNewTickets.length + xsoarClosedTickets.length;\nconst ticketsCreated = xsoarNewTickets.length;\nconst ticketsClosed = xsoarClosedTickets.length;\nconst ticketsInProgress = xsoarInProgress.length;\nconst escalatedCount = xsoarEscalated.length;\n\n// Calculate average response time (if available)\nlet avgResponseTimeMinutes = 0;\nlet responseTimeCount = 0;\nxsoarClosedTickets.forEach(ticket => {\n  const ttr = ticket.CustomFields?.timetorespond?.totalDuration || \n              ticket.CustomFields?.responsesla?.totalDuration;\n  if (ttr) {\n    avgResponseTimeMinutes += ttr / 60; // Convert seconds to minutes\n    responseTimeCount++;\n  }\n});\navgResponseTimeMinutes = responseTimeCount > 0 ? \n  Math.round(avgResponseTimeMinutes / responseTimeCount) : 0;\n\n// Format SLA approaching tickets\nconst slaApproachingFormatted = xsoarSlaApproaching.slice(0, 10).map(t => {\n  const timeRemaining = t.CustomFields?.timetorespond?.dueDate ? \n    Math.round((new Date(t.CustomFields.timetorespond.dueDate) - new Date()) / 60000) : 'N/A';\n  return {\n    id: t.id || 'N/A',\n    name: (t.name || 'Unknown').substring(0, 50),\n    timeRemaining: typeof timeRemaining === 'number' ? `${timeRemaining} min` : timeRemaining\n  };\n});\n\n// Format VIP incidents\nconst vipIncidentsFormatted = xsoarVipIncidents.slice(0, 10).map(t => ({\n  id: t.id || 'N/A',\n  name: (t.name || 'Unknown').substring(0, 50),\n  severity: t.severity || 'Unknown',\n  status: t.status || 'Unknown'\n}));\n\n// Format escalated incidents\nconst escalatedFormatted = xsoarEscalated.slice(0, 10).map(t => ({\n  id: t.id || 'N/A',\n  name: (t.name || 'Unknown').substring(0, 50),\n  severity: t.severity || 'Unknown',\n  status: t.status || 'Unknown',\n  owner: t.owner || 'Unassigned'\n}));\n\n// Notable events (High/Critical from any source)\nconst notableEvents = [];\n\n// Add high severity XSOAR tickets\nxsoarNewTickets.filter(t => ['High', 'Critical'].includes(t.severity)).forEach(t => {\n  notableEvents.push({\n    source: 'XSOAR',\n    id: t.id,\n    description: (t.name || 'Unknown').substring(0, 60),\n    severity: t.severity\n  });\n});\n\n// Add high magnitude QRadar offenses\nqrHighMagnitude.slice(0, 5).forEach(o => {\n  notableEvents.push({\n    source: 'QRadar',\n    id: `OFF-${o.id}`,\n    description: (o.description || 'Unknown').substring(0, 60),\n    severity: `Mag ${o.magnitude}`\n  });\n});\n\nreturn {\n  json: {\n    shiftContext,\n    summary: {\n      totalIncidentsHandled: totalTicketsHandled,\n      ticketsCreated,\n      ticketsClosed,\n      ticketsInProgress,\n      escalatedCount,\n      avgResponseTimeMinutes,\n      csDetections: csDetections.length,\n      csIncidents: csIncidents.length,\n      csPendingContainment: csPendingContainment.length,\n      csContainedHosts: csContainedHosts.length,\n      qrOffenses: qrOffenses.length,\n      qrHighMagnitude: qrHighMagnitude.length\n    },\n    carryOver: {\n      ticketsInProgress: xsoarInProgress.slice(0, 20).map(t => ({\n        id: t.id,\n        name: (t.name || '').substring(0, 50),\n        status: t.status,\n        owner: t.owner || 'Unassigned',\n        created: t.created\n      })),\n      slaApproaching: slaApproachingFormatted,\n      pendingApprovals: [], // Placeholder for pending approvals\n      ongoingInvestigations: xsoarInProgress.filter(t => \n        t.status === 'Investigating'\n      ).slice(0, 10).map(t => ({\n        id: t.id,\n        name: (t.name || '').substring(0, 50)\n      }))\n    },\n    escalations: escalatedFormatted,\n    vipIncidents: vipIncidentsFormatted,\n    notableEvents: notableEvents.slice(0, 10),\n    containment: {\n      pending: csPendingContainment.length,\n      active: csContainedHosts.length,\n      pendingIds: csPendingContainment.slice(0, 5)\n    }\n  }\n};"
+      },
+      "id": "calculate-metrics",
+      "name": "Calculate Shift Metrics",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1220, 600]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Format Shift Handoff Report for Webex\n// Matches existing IR repo Webex message style\n\nconst data = $input.first().json;\nconst ctx = data.shiftContext;\nconst summary = data.summary;\nconst carryOver = data.carryOver;\nconst escalations = data.escalations;\nconst vipIncidents = data.vipIncidents;\nconst notableEvents = data.notableEvents;\nconst containment = data.containment;\n\n// Shift emoji mapping\nconst shiftEmoji = {\n  'Morning': '\\u{1F305}',   // sunrise\n  'Afternoon': '\\u{2600}',  // sun\n  'Night': '\\u{1F319}'      // crescent moon\n};\n\nconst endingEmoji = shiftEmoji[ctx.endingShift] || '';\nconst startingEmoji = shiftEmoji[ctx.startingShift] || '';\n\n// Priority indicators\nconst priorityEmoji = {\n  high: '\\u{1F534}',      // red circle\n  medium: '\\u{1F7E1}',    // yellow circle\n  low: '\\u{1F7E2}'        // green circle\n};\n\n// Build the markdown message\nlet markdown = '';\n\n// Header banner\nmarkdown += `## ${endingEmoji} Shift Handoff Report - ${ctx.endingShift} Shift Ending\\n\\n`;\nmarkdown += `---\\n\\n`;\nmarkdown += `**Shift Period:** ${ctx.shiftStartDisplay} - ${ctx.shiftEndDisplay} ET\\n`;\nmarkdown += `**Incoming Shift:** ${startingEmoji} ${ctx.startingShift}\\n\\n`;\n\n// Stats Summary Table\nmarkdown += `### Summary Statistics\\n\\n`;\nmarkdown += `| Metric | Count |\\n`;\nmarkdown += `|--------|-------|\\n`;\nmarkdown += `| **Tickets Created** | ${summary.ticketsCreated} |\\n`;\nmarkdown += `| **Tickets Closed** | ${summary.ticketsClosed} |\\n`;\nmarkdown += `| **Tickets In Progress** | ${summary.ticketsInProgress} |\\n`;\nmarkdown += `| **Escalations** | ${summary.escalatedCount} |\\n`;\nmarkdown += `| **Avg Response Time** | ${summary.avgResponseTimeMinutes} min |\\n`;\nmarkdown += `\\n`;\n\n// CrowdStrike & QRadar Stats\nmarkdown += `### Security Platform Activity\\n\\n`;\nmarkdown += `| Source | Detections | Incidents |\\n`;\nmarkdown += `|--------|------------|-----------|\\n`;\nmarkdown += `| **CrowdStrike** | ${summary.csDetections} | ${summary.csIncidents} |\\n`;\nmarkdown += `| **QRadar Offenses** | ${summary.qrOffenses} | ${summary.qrHighMagnitude} (high mag) |\\n`;\nmarkdown += `\\n`;\n\n// Containment Status\nif (containment.pending > 0 || containment.active > 0) {\n  markdown += `### Containment Status\\n\\n`;\n  markdown += `- **Pending Containment:** ${containment.pending} hosts\\n`;\n  markdown += `- **Currently Contained:** ${containment.active} hosts\\n`;\n  markdown += `\\n`;\n}\n\n// Carry-Over Items\nmarkdown += `---\\n\\n`;\nmarkdown += `### Carry-Over Items Requiring Attention\\n\\n`;\n\n// SLA Approaching\nif (carryOver.slaApproaching && carryOver.slaApproaching.length > 0) {\n  markdown += `**${priorityEmoji.high} Tickets Approaching SLA:**\\n`;\n  carryOver.slaApproaching.forEach(t => {\n    markdown += `- \\`X#${t.id}\\` - ${t.name} (${t.timeRemaining} remaining)\\n`;\n  });\n  markdown += `\\n`;\n} else {\n  markdown += `**${priorityEmoji.low} No tickets approaching SLA breach**\\n\\n`;\n}\n\n// In Progress Tickets\nif (carryOver.ticketsInProgress && carryOver.ticketsInProgress.length > 0) {\n  markdown += `**${priorityEmoji.medium} Open Tickets (${carryOver.ticketsInProgress.length} total):**\\n`;\n  carryOver.ticketsInProgress.slice(0, 10).forEach(t => {\n    markdown += `- \\`X#${t.id}\\` - ${t.name} | ${t.status} | ${t.owner}\\n`;\n  });\n  if (carryOver.ticketsInProgress.length > 10) {\n    markdown += `- _...and ${carryOver.ticketsInProgress.length - 10} more_\\n`;\n  }\n  markdown += `\\n`;\n}\n\n// Ongoing Investigations\nif (carryOver.ongoingInvestigations && carryOver.ongoingInvestigations.length > 0) {\n  markdown += `**Ongoing Investigations:**\\n`;\n  carryOver.ongoingInvestigations.forEach(t => {\n    markdown += `- \\`X#${t.id}\\` - ${t.name}\\n`;\n  });\n  markdown += `\\n`;\n}\n\n// Escalations\nif (escalations && escalations.length > 0) {\n  markdown += `---\\n\\n`;\n  markdown += `### ${priorityEmoji.high} Escalated Incidents\\n\\n`;\n  escalations.forEach(e => {\n    markdown += `- \\`X#${e.id}\\` - **${e.severity}** - ${e.name} | Owner: ${e.owner}\\n`;\n  });\n  markdown += `\\n`;\n}\n\n// VIP/Critical Asset Incidents\nif (vipIncidents && vipIncidents.length > 0) {\n  markdown += `### VIP/Critical Asset Incidents\\n\\n`;\n  vipIncidents.forEach(v => {\n    markdown += `- \\`X#${v.id}\\` - **${v.severity}** - ${v.name}\\n`;\n  });\n  markdown += `\\n`;\n}\n\n// Notable Events\nif (notableEvents && notableEvents.length > 0) {\n  markdown += `---\\n\\n`;\n  markdown += `### Notable Events This Shift\\n\\n`;\n  notableEvents.forEach(e => {\n    markdown += `- **[${e.source}]** \\`${e.id}\\` - ${e.description} (${e.severity})\\n`;\n  });\n  markdown += `\\n`;\n}\n\n// Handoff Notes placeholder\nmarkdown += `---\\n\\n`;\nmarkdown += `### Handoff Notes\\n\\n`;\nmarkdown += `_No handoff notes from outgoing shift. Use the shift handoff form to add notes for the incoming team._\\n\\n`;\n\n// Footer\nmarkdown += `---\\n`;\nmarkdown += `_Report generated at ${ctx.reportGeneratedAt}_\\n`;\nmarkdown += `_Good luck, ${ctx.startingShift} shift!_ ${startingEmoji}\\n`;\n\nreturn {\n  json: {\n    markdown,\n    metrics: data,\n    roomIdPlaceholder: 'webex_room_id_soc_shift_updates'\n  }\n};"
+      },
+      "id": "format-webex-message",
+      "name": "Format Webex Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1440, 600]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://webexapis.com/v1/messages",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"roomId\": \"{{ $credentials.webex.socShiftUpdatesRoomId }}\",\n  \"markdown\": {{ JSON.stringify($json.markdown) }}\n}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $credentials.webex.accessToken }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "webex-post",
+      "name": "Post to Webex SOC Shift Updates",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1660, 600],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "webex-creds",
+          "name": "Webex Bot Token"
+        }
+      },
+      "notes": "Posts to webex_room_id_soc_shift_updates. Configure the room ID in n8n credentials or replace with environment variable."
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "source",
+              "value": "crowdstrike_detections"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-cs-detections-source",
+      "name": "Tag CS Detections",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.3,
+      "position": [980, 100]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "source",
+              "value": "crowdstrike_incidents"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-cs-incidents-source",
+      "name": "Tag CS Incidents",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.3,
+      "position": [980, 200]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "source",
+              "value": "crowdstrike_pending_containment"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-cs-pending-source",
+      "name": "Tag CS Pending",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.3,
+      "position": [980, 300]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "source",
+              "value": "crowdstrike_contained"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-cs-contained-source",
+      "name": "Tag CS Contained",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.3,
+      "position": [980, 400]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "source",
+              "value": "qradar_offenses"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-qr-offenses-source",
+      "name": "Tag QR Offenses",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.3,
+      "position": [760, 500]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "source",
+              "value": "qradar_high_magnitude"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-qr-high-source",
+      "name": "Tag QR High Mag",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.3,
+      "position": [760, 600]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "source",
+              "value": "xsoar_new_tickets"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-xsoar-new-source",
+      "name": "Tag XSOAR New",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.3,
+      "position": [760, 700]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "source",
+              "value": "xsoar_closed_tickets"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-xsoar-closed-source",
+      "name": "Tag XSOAR Closed",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.3,
+      "position": [760, 800]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "source",
+              "value": "xsoar_in_progress"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-xsoar-progress-source",
+      "name": "Tag XSOAR Progress",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.3,
+      "position": [760, 900]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "source",
+              "value": "xsoar_escalated"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-xsoar-escalated-source",
+      "name": "Tag XSOAR Escalated",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.3,
+      "position": [760, 1000]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "source",
+              "value": "xsoar_sla_approaching"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-xsoar-sla-source",
+      "name": "Tag XSOAR SLA",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.3,
+      "position": [760, 1100]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "source",
+              "value": "xsoar_vip"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-xsoar-vip-source",
+      "name": "Tag XSOAR VIP",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.3,
+      "position": [760, 1200]
+    }
+  ],
+  "connections": {
+    "Shift Change Trigger": {
+      "main": [
+        [
+          {
+            "node": "Determine Current Shift",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Determine Current Shift": {
+      "main": [
+        [
+          {
+            "node": "CrowdStrike OAuth2",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "QRadar Get Offenses",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "QRadar High Magnitude Events",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "XSOAR New Tickets This Shift",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "XSOAR Closed Tickets This Shift",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "XSOAR In Progress Tickets",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "XSOAR Escalated Incidents",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "XSOAR SLA Approaching",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "XSOAR VIP/Critical Asset Incidents",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CrowdStrike OAuth2": {
+      "main": [
+        [
+          {
+            "node": "CrowdStrike Get Detections",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "CrowdStrike Get Incidents",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "CrowdStrike Pending Containment",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "CrowdStrike Contained Hosts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CrowdStrike Get Detections": {
+      "main": [
+        [
+          {
+            "node": "Tag CS Detections",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CrowdStrike Get Incidents": {
+      "main": [
+        [
+          {
+            "node": "Tag CS Incidents",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CrowdStrike Pending Containment": {
+      "main": [
+        [
+          {
+            "node": "Tag CS Pending",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CrowdStrike Contained Hosts": {
+      "main": [
+        [
+          {
+            "node": "Tag CS Contained",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "QRadar Get Offenses": {
+      "main": [
+        [
+          {
+            "node": "Tag QR Offenses",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "QRadar High Magnitude Events": {
+      "main": [
+        [
+          {
+            "node": "Tag QR High Mag",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "XSOAR New Tickets This Shift": {
+      "main": [
+        [
+          {
+            "node": "Tag XSOAR New",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "XSOAR Closed Tickets This Shift": {
+      "main": [
+        [
+          {
+            "node": "Tag XSOAR Closed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "XSOAR In Progress Tickets": {
+      "main": [
+        [
+          {
+            "node": "Tag XSOAR Progress",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "XSOAR Escalated Incidents": {
+      "main": [
+        [
+          {
+            "node": "Tag XSOAR Escalated",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "XSOAR SLA Approaching": {
+      "main": [
+        [
+          {
+            "node": "Tag XSOAR SLA",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "XSOAR VIP/Critical Asset Incidents": {
+      "main": [
+        [
+          {
+            "node": "Tag XSOAR VIP",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tag CS Detections": {
+      "main": [
+        [
+          {
+            "node": "Merge All Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tag CS Incidents": {
+      "main": [
+        [
+          {
+            "node": "Merge All Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tag CS Pending": {
+      "main": [
+        [
+          {
+            "node": "Merge All Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tag CS Contained": {
+      "main": [
+        [
+          {
+            "node": "Merge All Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tag QR Offenses": {
+      "main": [
+        [
+          {
+            "node": "Merge All Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tag QR High Mag": {
+      "main": [
+        [
+          {
+            "node": "Merge All Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tag XSOAR New": {
+      "main": [
+        [
+          {
+            "node": "Merge All Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tag XSOAR Closed": {
+      "main": [
+        [
+          {
+            "node": "Merge All Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tag XSOAR Progress": {
+      "main": [
+        [
+          {
+            "node": "Merge All Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tag XSOAR Escalated": {
+      "main": [
+        [
+          {
+            "node": "Merge All Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tag XSOAR SLA": {
+      "main": [
+        [
+          {
+            "node": "Merge All Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tag XSOAR VIP": {
+      "main": [
+        [
+          {
+            "node": "Merge All Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge All Data": {
+      "main": [
+        [
+          {
+            "node": "Calculate Shift Metrics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate Shift Metrics": {
+      "main": [
+        [
+          {
+            "node": "Format Webex Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Webex Message": {
+      "main": [
+        [
+          {
+            "node": "Post to Webex SOC Shift Updates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": "",
+    "timezone": "America/New_York"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "SOC",
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z"
+    },
+    {
+      "name": "Shift Handoff",
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z"
+    },
+    {
+      "name": "Automation",
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z"
+    }
+  ],
+  "triggerCount": 1,
+  "updatedAt": "2024-01-01T00:00:00.000Z",
+  "versionId": "1"
+}

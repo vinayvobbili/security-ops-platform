@@ -15,22 +15,23 @@ from langchain_core.tools import tool
 from services.virustotal import VirusTotalClient
 from src.utils.tool_decorator import log_tool_call
 
-# Initialize VirusTotal client once
+# Lazy-initialized VirusTotal client
 _vt_client: Optional[VirusTotalClient] = None
 
-try:
-    logging.info("Initializing VirusTotal client...")
-    _vt_client = VirusTotalClient()
 
-    if _vt_client.is_configured():
-        logging.info("VirusTotal client initialized successfully.")
-    else:
-        logging.warning("VirusTotal client not configured (missing API key). Tools will be disabled.")
-        _vt_client = None
-
-except Exception as e:
-    logging.error(f"Failed to initialize VirusTotal client: {e}")
-    _vt_client = None
+def _get_vt_client() -> Optional[VirusTotalClient]:
+    """Get VirusTotal client (lazy initialization)."""
+    global _vt_client
+    if _vt_client is None:
+        try:
+            client = VirusTotalClient()
+            if client.is_configured():
+                _vt_client = client
+            else:
+                logging.warning("VirusTotal client not configured (missing API key)")
+        except Exception as e:
+            logging.error(f"Failed to initialize VirusTotal client: {e}")
+    return _vt_client
 
 
 def _format_analysis_date(timestamp: int) -> str:
@@ -190,10 +191,11 @@ def lookup_ip_virustotal(ip_address: str) -> str:
     Args:
         ip_address: The IP address to look up (e.g., "8.8.8.8")
     """
-    if not _vt_client:
-        return "Error: VirusTotal service is not initialized."
+    client = _get_vt_client()
+    if not client:
+        return "Error: VirusTotal service is not available."
 
-    data = _vt_client.lookup_ip(ip_address)
+    data = client.lookup_ip(ip_address)
 
     if "error" in data:
         return f"Error: {data['error']}"
@@ -212,10 +214,11 @@ def lookup_domain_virustotal(domain: str) -> str:
     Args:
         domain: The domain to look up (e.g., "example.com")
     """
-    if not _vt_client:
-        return "Error: VirusTotal service is not initialized."
+    client = _get_vt_client()
+    if not client:
+        return "Error: VirusTotal service is not available."
 
-    data = _vt_client.lookup_domain(domain)
+    data = client.lookup_domain(domain)
 
     if "error" in data:
         return f"Error: {data['error']}"
@@ -234,10 +237,11 @@ def lookup_url_virustotal(url: str) -> str:
     Args:
         url: The full URL to look up (e.g., "https://example.com/page")
     """
-    if not _vt_client:
-        return "Error: VirusTotal service is not initialized."
+    client = _get_vt_client()
+    if not client:
+        return "Error: VirusTotal service is not available."
 
-    data = _vt_client.lookup_url(url)
+    data = client.lookup_url(url)
 
     if "error" in data:
         return f"Error: {data['error']}"
@@ -256,10 +260,11 @@ def lookup_hash_virustotal(file_hash: str) -> str:
     Args:
         file_hash: The file hash to look up (MD5, SHA1, or SHA256)
     """
-    if not _vt_client:
-        return "Error: VirusTotal service is not initialized."
+    client = _get_vt_client()
+    if not client:
+        return "Error: VirusTotal service is not available."
 
-    data = _vt_client.lookup_hash(file_hash)
+    data = client.lookup_hash(file_hash)
 
     if "error" in data:
         return f"Error: {data['error']}"
@@ -330,10 +335,10 @@ def _format_analysis_result(
 def _get_original_analysis_date(indicator: str, indicator_type: str) -> Optional[int]:
     """Get the current last_analysis_date for an indicator."""
     lookup_map = {
-        "ip": _vt_client.lookup_ip,
-        "domain": _vt_client.lookup_domain,
-        "url": _vt_client.lookup_url,
-        "hash": _vt_client.lookup_hash,
+        "ip": client.lookup_ip,
+        "domain": client.lookup_domain,
+        "url": client.lookup_url,
+        "hash": client.lookup_hash,
     }
 
     lookup_fn = lookup_map.get(indicator_type)
@@ -362,8 +367,9 @@ def reanalyze_virustotal(indicator: str) -> str:
     Args:
         indicator: The indicator to reanalyze (IP address, domain, URL, or file hash)
     """
-    if not _vt_client:
-        return "Error: VirusTotal service is not initialized."
+    client = _get_vt_client()
+    if not client:
+        return "Error: VirusTotal service is not available."
 
     indicator = indicator.strip()
     indicator_type = _detect_indicator_type(indicator)
@@ -372,10 +378,10 @@ def reanalyze_virustotal(indicator: str) -> str:
 
     # Map indicator types to reanalyze functions
     reanalyze_map = {
-        "ip": _vt_client.reanalyze_ip,
-        "domain": _vt_client.reanalyze_domain,
-        "url": _vt_client.reanalyze_url,
-        "hash": _vt_client.reanalyze_hash,
+        "ip": client.reanalyze_ip,
+        "domain": client.reanalyze_domain,
+        "url": client.reanalyze_url,
+        "hash": client.reanalyze_hash,
     }
 
     if indicator_type not in reanalyze_map:
@@ -400,7 +406,7 @@ def reanalyze_virustotal(indicator: str) -> str:
     logging.info(f"Waiting for analysis job {analysis_id} to complete...")
 
     # Wait for analysis to complete and get the results directly from the analysis endpoint
-    analysis_result = _vt_client.wait_for_analysis(analysis_id, timeout=180, poll_interval=10)
+    analysis_result = client.wait_for_analysis(analysis_id, timeout=180, poll_interval=10)
 
     if not analysis_result:
         return "Error: Analysis timed out after 3 minutes. Try again later or check VirusTotal directly."

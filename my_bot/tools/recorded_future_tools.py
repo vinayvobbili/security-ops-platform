@@ -13,22 +13,23 @@ from langchain_core.tools import tool
 from services.recorded_future import RecordedFutureClient
 from src.utils.tool_decorator import log_tool_call
 
-# Initialize Recorded Future client once
+# Lazy-initialized Recorded Future client
 _rf_client: Optional[RecordedFutureClient] = None
 
-try:
-    logging.info("Initializing Recorded Future client...")
-    _rf_client = RecordedFutureClient()
 
-    if _rf_client.is_configured():
-        logging.info("Recorded Future client initialized successfully.")
-    else:
-        logging.warning("Recorded Future client not configured (missing API key). Tools will be disabled.")
-        _rf_client = None
-
-except Exception as e:
-    logging.error(f"Failed to initialize Recorded Future client: {e}")
-    _rf_client = None
+def _get_rf_client() -> Optional[RecordedFutureClient]:
+    """Get Recorded Future client (lazy initialization)."""
+    global _rf_client
+    if _rf_client is None:
+        try:
+            client = RecordedFutureClient()
+            if client.is_configured():
+                _rf_client = client
+            else:
+                logging.warning("Recorded Future client not configured (missing API key)")
+        except Exception as e:
+            logging.error(f"Failed to initialize Recorded Future client: {e}")
+    return _rf_client
 
 
 def _format_enrichment_result(data: dict, indicator_type: str, indicator: str) -> str:
@@ -37,7 +38,7 @@ def _format_enrichment_result(data: dict, indicator_type: str, indicator: str) -
         return f"Error: {data['error']}"
 
     # Extract results from response
-    results = _rf_client.extract_enrichment_results(data) if _rf_client else []
+    results = client.extract_enrichment_results(data) if _rf_client else []
 
     if not results:
         return f"No enrichment data found for {indicator_type}: {indicator}"
@@ -203,11 +204,12 @@ def lookup_ip_recorded_future(ip_address: str) -> str:
     Args:
         ip_address: The IP address to look up (e.g., "8.8.8.8")
     """
-    if not _rf_client:
-        return "Error: Recorded Future service is not initialized."
+    client = _get_rf_client()
+    if not client:
+        return "Error: Recorded Future service is not available."
 
     ip_address = ip_address.strip()
-    data = _rf_client.enrich_ips([ip_address])
+    data = client.enrich_ips([ip_address])
 
     return _format_enrichment_result(data, "IP", ip_address)
 
@@ -224,15 +226,16 @@ def lookup_domain_recorded_future(domain: str) -> str:
     Args:
         domain: The domain to look up (e.g., "example.com")
     """
-    if not _rf_client:
-        return "Error: Recorded Future service is not initialized."
+    client = _get_rf_client()
+    if not client:
+        return "Error: Recorded Future service is not available."
 
     # Clean domain
     domain = domain.strip().lower()
     domain = domain.replace("https://", "").replace("http://", "")
     domain = domain.split("/")[0]
 
-    data = _rf_client.enrich_domains([domain])
+    data = client.enrich_domains([domain])
 
     return _format_enrichment_result(data, "Domain", domain)
 
@@ -249,11 +252,12 @@ def lookup_hash_recorded_future(file_hash: str) -> str:
     Args:
         file_hash: The file hash to look up (MD5, SHA1, or SHA256)
     """
-    if not _rf_client:
-        return "Error: Recorded Future service is not initialized."
+    client = _get_rf_client()
+    if not client:
+        return "Error: Recorded Future service is not available."
 
     file_hash = file_hash.strip().lower()
-    data = _rf_client.enrich_hashes([file_hash])
+    data = client.enrich_hashes([file_hash])
 
     return _format_enrichment_result(data, "Hash", file_hash)
 
@@ -270,11 +274,12 @@ def lookup_url_recorded_future(url: str) -> str:
     Args:
         url: The full URL to look up (e.g., "https://example.com/page")
     """
-    if not _rf_client:
-        return "Error: Recorded Future service is not initialized."
+    client = _get_rf_client()
+    if not client:
+        return "Error: Recorded Future service is not available."
 
     url = url.strip()
-    data = _rf_client.enrich_urls([url])
+    data = client.enrich_urls([url])
 
     return _format_enrichment_result(data, "URL", url)
 
@@ -290,11 +295,12 @@ def lookup_cve_recorded_future(cve_id: str) -> str:
     Args:
         cve_id: The CVE ID to look up (e.g., "CVE-2021-44228")
     """
-    if not _rf_client:
-        return "Error: Recorded Future service is not initialized."
+    client = _get_rf_client()
+    if not client:
+        return "Error: Recorded Future service is not available."
 
     cve_id = cve_id.strip().upper()
-    data = _rf_client.enrich(vulnerabilities=[cve_id])
+    data = client.enrich(vulnerabilities=[cve_id])
 
     return _format_enrichment_result(data, "CVE", cve_id)
 
@@ -310,11 +316,12 @@ def search_threat_actor_recorded_future(actor_name: str) -> str:
     Args:
         actor_name: The threat actor name to search (e.g., "APT28", "Fancy Bear", "Lazarus Group")
     """
-    if not _rf_client:
-        return "Error: Recorded Future service is not initialized."
+    client = _get_rf_client()
+    if not client:
+        return "Error: Recorded Future service is not available."
 
     actor_name = actor_name.strip()
-    data = _rf_client.lookup_actor_by_name(actor_name)
+    data = client.lookup_actor_by_name(actor_name)
 
     return _format_actor_result(data)
 
@@ -330,26 +337,27 @@ def triage_for_phishing_recorded_future(indicator: str) -> str:
     Args:
         indicator: Domain, URL, or IP to check for phishing risk
     """
-    if not _rf_client:
-        return "Error: Recorded Future service is not initialized."
+    client = _get_rf_client()
+    if not client:
+        return "Error: Recorded Future service is not available."
 
     indicator = indicator.strip()
 
     # Determine indicator type
     if indicator.startswith("http://") or indicator.startswith("https://"):
-        data = _rf_client.triage_for_phishing(urls=[indicator])
+        data = client.triage_for_phishing(urls=[indicator])
     elif _is_ip_address(indicator):
-        data = _rf_client.triage_for_phishing(ips=[indicator])
+        data = client.triage_for_phishing(ips=[indicator])
     else:
         # Assume domain
         domain = indicator.lower().replace("https://", "").replace("http://", "").split("/")[0]
-        data = _rf_client.triage_for_phishing(domains=[domain])
+        data = client.triage_for_phishing(domains=[domain])
 
     if "error" in data:
         return f"Error: {data['error']}"
 
     # Format triage results
-    results = _rf_client.extract_enrichment_results(data)
+    results = client.extract_enrichment_results(data)
 
     if not results:
         return f"No phishing intelligence found for: {indicator}"

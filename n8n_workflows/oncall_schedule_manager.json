@@ -1,0 +1,1109 @@
+{
+  "name": "On-Call Schedule Manager",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "30 4 * * *"
+            }
+          ]
+        }
+      },
+      "id": "morning-shift-trigger",
+      "name": "Morning Shift Start (04:30 ET)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [240, 100]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "30 12 * * *"
+            }
+          ]
+        }
+      },
+      "id": "afternoon-shift-trigger",
+      "name": "Afternoon Shift Start (12:30 ET)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [240, 200]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "30 20 * * *"
+            }
+          ]
+        }
+      },
+      "id": "night-shift-trigger",
+      "name": "Night Shift Start (20:30 ET)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9 * * 5"
+            }
+          ]
+        }
+      },
+      "id": "weekly-rotation-reminder",
+      "name": "Weekly Rotation Reminder (Fri 9AM)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [240, 500]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "oncall-query",
+        "responseMode": "responseNode",
+        "options": {
+          "rawBody": true
+        }
+      },
+      "id": "oncall-query-webhook",
+      "name": "On-Call Query Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 700],
+      "webhookId": "oncall-query-webhook"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "oncall-swap-request",
+        "responseMode": "responseNode",
+        "options": {
+          "rawBody": true
+        }
+      },
+      "id": "swap-request-webhook",
+      "name": "Swap Request Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 900],
+      "webhookId": "oncall-swap-request-webhook"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "oncall-swap-approval",
+        "responseMode": "responseNode",
+        "options": {
+          "rawBody": true
+        }
+      },
+      "id": "swap-approval-webhook",
+      "name": "Swap Approval Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 1100],
+      "webhookId": "oncall-swap-approval-webhook"
+    },
+    {
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "oncall-export",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "oncall-export-webhook",
+      "name": "On-Call Export (for other workflows)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 1300],
+      "webhookId": "oncall-export-webhook"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Initialize or retrieve on-call schedule from static data\n// This uses n8n's workflow static data for persistence\n// In production, this could be replaced with XSOAR list API calls\n\nconst staticData = $getWorkflowStaticData('global');\n\n// Initialize schedule if not present\nif (!staticData.oncallSchedule) {\n  staticData.oncallSchedule = {\n    analysts: [\n      {\n        id: 'analyst-001',\n        name: 'John Smith',\n        email: 'john.smith@company.com',\n        webexId: 'jsmith@company.com',\n        phone: '+1-555-0101',\n        role: 'Senior Analyst'\n      },\n      {\n        id: 'analyst-002',\n        name: 'Jane Doe',\n        email: 'jane.doe@company.com',\n        webexId: 'jdoe@company.com',\n        phone: '+1-555-0102',\n        role: 'Senior Analyst'\n      },\n      {\n        id: 'analyst-003',\n        name: 'Mike Johnson',\n        email: 'mike.johnson@company.com',\n        webexId: 'mjohnson@company.com',\n        phone: '+1-555-0103',\n        role: 'Senior Analyst'\n      },\n      {\n        id: 'analyst-004',\n        name: 'Sarah Williams',\n        email: 'sarah.williams@company.com',\n        webexId: 'swilliams@company.com',\n        phone: '+1-555-0104',\n        role: 'Analyst'\n      },\n      {\n        id: 'analyst-005',\n        name: 'Robert Brown',\n        email: 'robert.brown@company.com',\n        webexId: 'rbrown@company.com',\n        phone: '+1-555-0105',\n        role: 'Analyst'\n      }\n    ],\n    rotation: [\n      // Weekly rotation entries - Monday_date format YYYY-MM-DD\n      { Monday_date: '2025-01-20', analyst_id: 'analyst-001', backup_id: 'analyst-002' },\n      { Monday_date: '2025-01-27', analyst_id: 'analyst-002', backup_id: 'analyst-003' },\n      { Monday_date: '2025-02-03', analyst_id: 'analyst-003', backup_id: 'analyst-004' },\n      { Monday_date: '2025-02-10', analyst_id: 'analyst-004', backup_id: 'analyst-005' },\n      { Monday_date: '2025-02-17', analyst_id: 'analyst-005', backup_id: 'analyst-001' },\n      { Monday_date: '2025-02-24', analyst_id: 'analyst-001', backup_id: 'analyst-002' }\n    ],\n    holidayOverrides: [\n      // Holiday override entries\n      // { date: '2025-01-20', analyst_id: 'analyst-003', reason: 'MLK Day coverage' }\n    ],\n    escalationPath: [\n      {\n        level: 1,\n        role: 'Primary On-Call',\n        timeoutMinutes: 15\n      },\n      {\n        level: 2,\n        role: 'Backup On-Call',\n        timeoutMinutes: 15\n      },\n      {\n        level: 3,\n        role: 'IR Team Lead',\n        contact: {\n          name: 'Team Lead',\n          email: 'ir.lead@company.com',\n          webexId: 'irlead@company.com',\n          phone: '+1-555-0200'\n        },\n        timeoutMinutes: 30\n      },\n      {\n        level: 4,\n        role: 'Security Manager',\n        contact: {\n          name: 'Security Manager',\n          email: 'security.manager@company.com',\n          webexId: 'secmgr@company.com',\n          phone: '+1-555-0300'\n        },\n        timeoutMinutes: 0\n      }\n    ],\n    pendingSwaps: []\n  };\n}\n\n// Calculate current week's Monday\nconst now = new Date();\nconst dayOfWeek = now.getDay(); // 0 = Sunday, 6 = Saturday\nconst daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;\nconst currentMonday = new Date(now);\ncurrentMonday.setDate(now.getDate() + daysToMonday);\ncurrentMonday.setHours(0, 0, 0, 0);\nconst currentMondayStr = currentMonday.toISOString().split('T')[0];\n\n// Check for holiday override first\nconst todayStr = now.toISOString().split('T')[0];\nconst holidayOverride = staticData.oncallSchedule.holidayOverrides.find(\n  h => h.date === todayStr\n);\n\n// Find current rotation entry\nlet currentRotation = staticData.oncallSchedule.rotation.find(\n  r => r.Monday_date === currentMondayStr\n);\n\n// If no exact match, find the most recent Monday before today\nif (!currentRotation) {\n  const sortedRotation = [...staticData.oncallSchedule.rotation].sort(\n    (a, b) => new Date(b.Monday_date) - new Date(a.Monday_date)\n  );\n  currentRotation = sortedRotation.find(\n    r => new Date(r.Monday_date) <= currentMonday\n  );\n}\n\n// Determine current on-call analyst\nlet primaryAnalystId = holidayOverride \n  ? holidayOverride.analyst_id \n  : (currentRotation ? currentRotation.analyst_id : null);\n\nlet backupAnalystId = currentRotation ? currentRotation.backup_id : null;\n\n// Look up analyst details\nconst primaryAnalyst = staticData.oncallSchedule.analysts.find(\n  a => a.id === primaryAnalystId\n);\nconst backupAnalyst = staticData.oncallSchedule.analysts.find(\n  a => a.id === backupAnalystId\n);\n\n// Determine shift name based on current hour\nconst hour = now.getHours();\nlet currentShift;\nif (hour >= 4 && hour < 12) {\n  currentShift = 'morning';\n} else if (hour >= 12 && hour < 20) {\n  currentShift = 'afternoon';\n} else {\n  currentShift = 'night';\n}\n\nconst shiftTimes = {\n  morning: '04:30 - 12:29 ET',\n  afternoon: '12:30 - 20:29 ET',\n  night: '20:30 - 04:29 ET'\n};\n\nreturn {\n  timestamp: now.toISOString(),\n  currentShift: currentShift,\n  shiftTime: shiftTimes[currentShift],\n  weekOf: currentMondayStr,\n  isHolidayOverride: !!holidayOverride,\n  holidayReason: holidayOverride ? holidayOverride.reason : null,\n  primary: primaryAnalyst || { name: 'Unknown', email: 'unknown@company.com' },\n  backup: backupAnalyst || { name: 'Unknown', email: 'unknown@company.com' },\n  escalationPath: staticData.oncallSchedule.escalationPath,\n  schedule: staticData.oncallSchedule,\n  triggerSource: 'shift_start'\n};"
+      },
+      "id": "load-oncall-data-shift",
+      "name": "Load On-Call Data (Shift)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Format daily on-call announcement message\nconst data = $input.first().json;\n\nconst shiftEmoji = {\n  morning: ':sunrise:',\n  afternoon: ':sun:',\n  night: ':crescent_moon:'\n};\n\nconst shiftCapitalized = data.currentShift.charAt(0).toUpperCase() + data.currentShift.slice(1);\n\nlet markdown = `## ${shiftEmoji[data.currentShift]} ${shiftCapitalized} Shift On-Call Announcement\\n\\n`;\nmarkdown += `**Date:** ${new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}\\n`;\nmarkdown += `**Shift:** ${shiftCapitalized} (${data.shiftTime})\\n`;\nmarkdown += `**Week of:** ${data.weekOf}\\n\\n`;\n\nif (data.isHolidayOverride) {\n  markdown += `> :warning: **Holiday Coverage Override**\\n`;\n  markdown += `> ${data.holidayReason || 'Holiday coverage in effect'}\\n\\n`;\n}\n\nmarkdown += `---\\n\\n`;\n\n// Primary On-Call\nmarkdown += `### :phone: Primary On-Call\\n\\n`;\nmarkdown += `| | |\\n`;\nmarkdown += `|---|---|\\n`;\nmarkdown += `| **Name** | ${data.primary.name} |\\n`;\nmarkdown += `| **Role** | ${data.primary.role || 'Analyst'} |\\n`;\nmarkdown += `| **Webex** | <${data.primary.webexId}> |\\n`;\nmarkdown += `| **Phone** | [${data.primary.phone}](tel:${data.primary.phone}) |\\n\\n`;\n\n// Backup On-Call\nmarkdown += `### :telephone_receiver: Backup On-Call\\n\\n`;\nmarkdown += `| | |\\n`;\nmarkdown += `|---|---|\\n`;\nmarkdown += `| **Name** | ${data.backup.name} |\\n`;\nmarkdown += `| **Role** | ${data.backup.role || 'Analyst'} |\\n`;\nmarkdown += `| **Webex** | <${data.backup.webexId}> |\\n`;\nmarkdown += `| **Phone** | [${data.backup.phone}](tel:${data.backup.phone}) |\\n\\n`;\n\n// Escalation Path\nmarkdown += `### :arrow_up: Escalation Path\\n\\n`;\nmarkdown += `| Level | Role | Timeout |\\n`;\nmarkdown += `|-------|------|---------|\\n`;\n\ndata.escalationPath.forEach(level => {\n  const timeout = level.timeoutMinutes > 0 ? `${level.timeoutMinutes} min` : 'Final';\n  markdown += `| ${level.level} | ${level.role} | ${timeout} |\\n`;\n});\n\nmarkdown += `\\n---\\n`;\nmarkdown += `_For on-call queries or swap requests, contact the SOC channel or use the on-call bot commands._\\n`;\n\nreturn {\n  markdown: markdown,\n  roomId: '{{ $credentials.webex.socShiftUpdatesRoomId }}',\n  oncallData: data\n};"
+      },
+      "id": "format-shift-announcement",
+      "name": "Format Shift Announcement",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [720, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://webexapis.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"roomId\": \"{{ $credentials.webex.socShiftUpdatesRoomId }}\",\n  \"markdown\": {{ JSON.stringify($json.markdown) }}\n}",
+        "options": {}
+      },
+      "id": "post-shift-announcement",
+      "name": "Post Shift Announcement",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [940, 200],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "webex-auth",
+          "name": "Webex API Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Load on-call data and prepare weekly rotation reminder\nconst staticData = $getWorkflowStaticData('global');\n\nif (!staticData.oncallSchedule) {\n  return {\n    error: 'On-call schedule not initialized',\n    timestamp: new Date().toISOString()\n  };\n}\n\n// Calculate next Monday\nconst now = new Date();\nconst dayOfWeek = now.getDay();\nconst daysToNextMonday = dayOfWeek === 0 ? 1 : (8 - dayOfWeek);\nconst nextMonday = new Date(now);\nnextMonday.setDate(now.getDate() + daysToNextMonday);\nnextMonday.setHours(0, 0, 0, 0);\nconst nextMondayStr = nextMonday.toISOString().split('T')[0];\n\n// Current Monday\nconst daysToCurrentMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;\nconst currentMonday = new Date(now);\ncurrentMonday.setDate(now.getDate() + daysToCurrentMonday);\nconst currentMondayStr = currentMonday.toISOString().split('T')[0];\n\n// Find current and next rotation\nconst currentRotation = staticData.oncallSchedule.rotation.find(\n  r => r.Monday_date === currentMondayStr\n);\nconst nextRotation = staticData.oncallSchedule.rotation.find(\n  r => r.Monday_date === nextMondayStr\n);\n\n// Look up analyst details\nconst findAnalyst = (id) => staticData.oncallSchedule.analysts.find(a => a.id === id);\n\nconst currentPrimary = currentRotation ? findAnalyst(currentRotation.analyst_id) : null;\nconst nextPrimary = nextRotation ? findAnalyst(nextRotation.analyst_id) : null;\nconst nextBackup = nextRotation ? findAnalyst(nextRotation.backup_id) : null;\n\nreturn {\n  timestamp: now.toISOString(),\n  currentWeek: currentMondayStr,\n  nextWeek: nextMondayStr,\n  currentPrimary: currentPrimary,\n  nextPrimary: nextPrimary,\n  nextBackup: nextBackup,\n  isRotationChange: currentPrimary && nextPrimary && currentPrimary.id !== nextPrimary.id,\n  hasNextRotation: !!nextRotation,\n  triggerSource: 'weekly_reminder'\n};"
+      },
+      "id": "load-rotation-data",
+      "name": "Load Rotation Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, 500]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "has-next-rotation",
+              "leftValue": "={{ $json.hasNextRotation }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-next-rotation",
+      "name": "Has Next Rotation?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [720, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Format weekly rotation reminder message\nconst data = $input.first().json;\n\nlet markdown = `## :calendar: Weekly On-Call Rotation Reminder\\n\\n`;\nmarkdown += `**Reminder Date:** ${new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}\\n\\n`;\nmarkdown += `---\\n\\n`;\n\nif (data.isRotationChange) {\n  markdown += `### :repeat: Rotation Change Coming\\n\\n`;\n  markdown += `The on-call rotation will change on **Monday, ${data.nextWeek}**.\\n\\n`;\n} else {\n  markdown += `### :clipboard: Rotation Continues\\n\\n`;\n  markdown += `The current on-call will continue through next week.\\n\\n`;\n}\n\n// Outgoing On-Call\nif (data.currentPrimary) {\n  markdown += `#### Outgoing On-Call (This Week)\\n`;\n  markdown += `- **${data.currentPrimary.name}** (<${data.currentPrimary.webexId}>)\\n\\n`;\n}\n\n// Incoming On-Call\nmarkdown += `#### Incoming On-Call (Week of ${data.nextWeek})\\n`;\nmarkdown += `- **Primary:** ${data.nextPrimary.name} (<${data.nextPrimary.webexId}>)\\n`;\nif (data.nextBackup) {\n  markdown += `- **Backup:** ${data.nextBackup.name} (<${data.nextBackup.webexId}>)\\n`;\n}\nmarkdown += `\\n`;\n\n// Handoff Checklist\nmarkdown += `### :white_check_mark: Handoff Checklist\\n\\n`;\nmarkdown += `- [ ] Review any ongoing incidents\\n`;\nmarkdown += `- [ ] Check for scheduled maintenance windows\\n`;\nmarkdown += `- [ ] Verify escalation contact information is current\\n`;\nmarkdown += `- [ ] Review any pending alerts or tickets\\n`;\nmarkdown += `- [ ] Confirm availability for the week\\n`;\nmarkdown += `- [ ] Update any out-of-office settings\\n\\n`;\n\nmarkdown += `---\\n\\n`;\nmarkdown += `**${data.nextPrimary.name}**, please confirm your availability by replying to this message or contacting the SOC lead.\\n\\n`;\nmarkdown += `_If you need to swap shifts, please submit a swap request before Monday._\\n`;\n\nreturn {\n  markdown: markdown,\n  nextPrimary: data.nextPrimary,\n  nextBackup: data.nextBackup\n};"
+      },
+      "id": "format-rotation-reminder",
+      "name": "Format Rotation Reminder",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [940, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://webexapis.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"roomId\": \"{{ $credentials.webex.socShiftUpdatesRoomId }}\",\n  \"markdown\": {{ JSON.stringify($json.markdown) }}\n}",
+        "options": {}
+      },
+      "id": "post-rotation-reminder",
+      "name": "Post Rotation Reminder to Channel",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1160, 400],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "webex-auth",
+          "name": "Webex API Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://webexapis.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"toPersonEmail\": \"{{ $json.nextPrimary.webexId }}\",\n  \"markdown\": \"## :bell: On-Call Reminder\\n\\nYou are scheduled to be the **Primary On-Call** starting **Monday, {{ $('Load Rotation Data').first().json.nextWeek }}**.\\n\\nPlease confirm your availability by replying to this message.\\n\\nIf you need to swap shifts, please submit a request as soon as possible.\\n\\n**Backup:** {{ $json.nextBackup ? $json.nextBackup.name : 'Not assigned' }}\"\n}",
+        "options": {}
+      },
+      "id": "dm-incoming-oncall",
+      "name": "DM Incoming On-Call",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1160, 500],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "webex-auth",
+          "name": "Webex API Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Handle no rotation scheduled error\nreturn {\n  error: 'No rotation scheduled for next week',\n  nextWeek: $input.first().json.nextWeek,\n  message: 'Please update the on-call rotation schedule.',\n  timestamp: new Date().toISOString()\n};"
+      },
+      "id": "no-rotation-error",
+      "name": "No Rotation Scheduled",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [940, 600]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://webexapis.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"roomId\": \"{{ $credentials.webex.socShiftUpdatesRoomId }}\",\n  \"markdown\": \":warning: **On-Call Schedule Warning**\\n\\nNo on-call rotation is scheduled for the week of **{{ $json.nextWeek }}**.\\n\\nPlease update the schedule immediately.\"\n}",
+        "options": {}
+      },
+      "id": "post-no-rotation-warning",
+      "name": "Post No Rotation Warning",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1160, 600],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "webex-auth",
+          "name": "Webex API Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Process on-call query webhook\nconst body = $input.first().json.body || $input.first().json;\n\nconst staticData = $getWorkflowStaticData('global');\n\nif (!staticData.oncallSchedule) {\n  return {\n    error: true,\n    message: 'On-call schedule not initialized',\n    timestamp: new Date().toISOString()\n  };\n}\n\nconst queryType = (body.query_type || body.queryType || 'current').toLowerCase();\nconst requestedDate = body.date; // Optional: specific date to query\n\n// Calculate target Monday\nlet targetMonday;\nif (requestedDate) {\n  const reqDate = new Date(requestedDate);\n  const dayOfWeek = reqDate.getDay();\n  const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;\n  targetMonday = new Date(reqDate);\n  targetMonday.setDate(reqDate.getDate() + daysToMonday);\n} else {\n  const now = new Date();\n  const dayOfWeek = now.getDay();\n  const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;\n  targetMonday = new Date(now);\n  targetMonday.setDate(now.getDate() + daysToMonday);\n}\ntargetMonday.setHours(0, 0, 0, 0);\nconst targetMondayStr = targetMonday.toISOString().split('T')[0];\n\n// Check for holiday override\nconst todayStr = requestedDate || new Date().toISOString().split('T')[0];\nconst holidayOverride = staticData.oncallSchedule.holidayOverrides.find(\n  h => h.date === todayStr\n);\n\n// Find rotation entry\nlet rotation = staticData.oncallSchedule.rotation.find(\n  r => r.Monday_date === targetMondayStr\n);\n\nif (!rotation) {\n  const sortedRotation = [...staticData.oncallSchedule.rotation].sort(\n    (a, b) => new Date(b.Monday_date) - new Date(a.Monday_date)\n  );\n  rotation = sortedRotation.find(\n    r => new Date(r.Monday_date) <= targetMonday\n  );\n}\n\n// Look up analysts\nconst findAnalyst = (id) => staticData.oncallSchedule.analysts.find(a => a.id === id);\n\nconst primaryId = holidayOverride ? holidayOverride.analyst_id : (rotation ? rotation.analyst_id : null);\nconst backupId = rotation ? rotation.backup_id : null;\n\nconst primary = findAnalyst(primaryId);\nconst backup = findAnalyst(backupId);\n\n// Determine current shift\nconst now = new Date();\nconst hour = now.getHours();\nlet currentShift;\nif (hour >= 4 && hour < 12) {\n  currentShift = 'morning';\n} else if (hour >= 12 && hour < 20) {\n  currentShift = 'afternoon';\n} else {\n  currentShift = 'night';\n}\n\nreturn {\n  success: true,\n  queryType: queryType,\n  timestamp: now.toISOString(),\n  weekOf: targetMondayStr,\n  currentShift: currentShift,\n  isHolidayOverride: !!holidayOverride,\n  holidayReason: holidayOverride ? holidayOverride.reason : null,\n  primary: primary ? {\n    name: primary.name,\n    email: primary.email,\n    webexId: primary.webexId,\n    phone: primary.phone,\n    role: primary.role\n  } : null,\n  backup: backup ? {\n    name: backup.name,\n    email: backup.email,\n    webexId: backup.webexId,\n    phone: backup.phone,\n    role: backup.role\n  } : null,\n  escalationPath: staticData.oncallSchedule.escalationPath\n};"
+      },
+      "id": "process-oncall-query",
+      "name": "Process On-Call Query",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, 700]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"success\": {{ $json.success || false }},\n  \"error\": {{ $json.error ? JSON.stringify($json.error) : 'null' }},\n  \"timestamp\": \"{{ $json.timestamp }}\",\n  \"weekOf\": \"{{ $json.weekOf }}\",\n  \"currentShift\": \"{{ $json.currentShift }}\",\n  \"isHolidayOverride\": {{ $json.isHolidayOverride || false }},\n  \"primary\": {{ $json.primary ? JSON.stringify($json.primary) : 'null' }},\n  \"backup\": {{ $json.backup ? JSON.stringify($json.backup) : 'null' }},\n  \"escalationPath\": {{ JSON.stringify($json.escalationPath || []) }}\n}",
+        "options": {
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          }
+        }
+      },
+      "id": "respond-oncall-query",
+      "name": "Respond to On-Call Query",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [720, 700]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Process swap request\nconst body = $input.first().json.body || $input.first().json;\n\nconst staticData = $getWorkflowStaticData('global');\n\nif (!staticData.oncallSchedule) {\n  return {\n    success: false,\n    error: 'On-call schedule not initialized',\n    timestamp: new Date().toISOString()\n  };\n}\n\n// Extract swap request details\nconst requesterId = body.requester_id || body.requesterId;\nconst targetId = body.target_id || body.targetId;\nconst swapDate = body.swap_date || body.swapDate; // YYYY-MM-DD\nconst reason = body.reason || 'No reason provided';\n\n// Validate requester and target exist\nconst requester = staticData.oncallSchedule.analysts.find(a => a.id === requesterId);\nconst target = staticData.oncallSchedule.analysts.find(a => a.id === targetId);\n\nif (!requester || !target) {\n  return {\n    success: false,\n    error: 'Invalid requester or target analyst ID',\n    requesterId: requesterId,\n    targetId: targetId,\n    timestamp: new Date().toISOString()\n  };\n}\n\n// Generate swap request ID\nconst swapRequestId = `SWAP-${Date.now()}`;\n\n// Create pending swap request\nconst swapRequest = {\n  id: swapRequestId,\n  requesterId: requesterId,\n  requesterName: requester.name,\n  requesterEmail: requester.webexId,\n  targetId: targetId,\n  targetName: target.name,\n  targetEmail: target.webexId,\n  swapDate: swapDate,\n  reason: reason,\n  status: 'pending',\n  createdAt: new Date().toISOString(),\n  expiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString() // 48 hours\n};\n\n// Store pending swap\nstaticData.oncallSchedule.pendingSwaps.push(swapRequest);\n\nreturn {\n  success: true,\n  swapRequest: swapRequest,\n  requester: requester,\n  target: target,\n  timestamp: new Date().toISOString()\n};"
+      },
+      "id": "process-swap-request",
+      "name": "Process Swap Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, 900]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "swap-success",
+              "leftValue": "={{ $json.success }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-swap-valid",
+      "name": "Swap Request Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [720, 900]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://webexapis.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"toPersonEmail\": \"{{ $json.target.webexId }}\",\n  \"markdown\": \"## :repeat: On-Call Swap Request\\n\\n**{{ $json.requester.name }}** has requested to swap on-call duty with you.\\n\\n| | |\\n|---|---|\\n| **Request ID** | {{ $json.swapRequest.id }} |\\n| **Date** | {{ $json.swapRequest.swapDate }} |\\n| **Reason** | {{ $json.swapRequest.reason }} |\\n| **Expires** | {{ $json.swapRequest.expiresAt }} |\\n\\n---\\n\\nTo **approve** this swap, reply with: `approve {{ $json.swapRequest.id }}`\\n\\nTo **decline** this swap, reply with: `decline {{ $json.swapRequest.id }}`\"\n}",
+        "options": {}
+      },
+      "id": "notify-swap-target",
+      "name": "Notify Swap Target",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [940, 800],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "webex-auth",
+          "name": "Webex API Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://webexapis.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"toPersonEmail\": \"{{ $json.requester.webexId }}\",\n  \"markdown\": \"## :white_check_mark: Swap Request Submitted\\n\\nYour swap request has been sent to **{{ $json.target.name }}**.\\n\\n| | |\\n|---|---|\\n| **Request ID** | {{ $json.swapRequest.id }} |\\n| **Date** | {{ $json.swapRequest.swapDate }} |\\n| **Status** | Pending approval |\\n| **Expires** | {{ $json.swapRequest.expiresAt }} |\\n\\nYou will be notified when the request is approved or declined.\"\n}",
+        "options": {}
+      },
+      "id": "confirm-swap-requester",
+      "name": "Confirm to Requester",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [940, 900],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "webex-auth",
+          "name": "Webex API Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"success\": true,\n  \"swapRequestId\": \"{{ $json.swapRequest.id }}\",\n  \"status\": \"pending\",\n  \"message\": \"Swap request submitted. Target analyst notified.\",\n  \"expiresAt\": \"{{ $json.swapRequest.expiresAt }}\"\n}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "respond-swap-success",
+      "name": "Respond - Swap Submitted",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1160, 850]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"success\": false,\n  \"error\": \"{{ $json.error }}\",\n  \"message\": \"Swap request failed validation\"\n}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "id": "respond-swap-error",
+      "name": "Respond - Swap Error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [940, 1000]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Process swap approval/rejection\nconst body = $input.first().json.body || $input.first().json;\n\nconst staticData = $getWorkflowStaticData('global');\n\nif (!staticData.oncallSchedule) {\n  return {\n    success: false,\n    error: 'On-call schedule not initialized',\n    timestamp: new Date().toISOString()\n  };\n}\n\nconst swapRequestId = body.swap_request_id || body.swapRequestId;\nconst action = (body.action || 'approve').toLowerCase(); // 'approve' or 'decline'\nconst approverId = body.approver_id || body.approverId;\n\n// Find pending swap request\nconst swapIndex = staticData.oncallSchedule.pendingSwaps.findIndex(\n  s => s.id === swapRequestId && s.status === 'pending'\n);\n\nif (swapIndex === -1) {\n  return {\n    success: false,\n    error: 'Swap request not found or already processed',\n    swapRequestId: swapRequestId,\n    timestamp: new Date().toISOString()\n  };\n}\n\nconst swapRequest = staticData.oncallSchedule.pendingSwaps[swapIndex];\n\n// Verify approver is the target\nif (approverId && approverId !== swapRequest.targetId) {\n  return {\n    success: false,\n    error: 'Only the target analyst can approve or decline this swap',\n    swapRequestId: swapRequestId,\n    timestamp: new Date().toISOString()\n  };\n}\n\n// Check if expired\nif (new Date(swapRequest.expiresAt) < new Date()) {\n  swapRequest.status = 'expired';\n  return {\n    success: false,\n    error: 'Swap request has expired',\n    swapRequestId: swapRequestId,\n    timestamp: new Date().toISOString()\n  };\n}\n\nif (action === 'approve') {\n  // Update the rotation schedule\n  const swapDateMonday = new Date(swapRequest.swapDate);\n  const dayOfWeek = swapDateMonday.getDay();\n  const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;\n  swapDateMonday.setDate(swapDateMonday.getDate() + daysToMonday);\n  const mondayStr = swapDateMonday.toISOString().split('T')[0];\n  \n  // Find and update rotation\n  const rotationIndex = staticData.oncallSchedule.rotation.findIndex(\n    r => r.Monday_date === mondayStr\n  );\n  \n  if (rotationIndex !== -1) {\n    // Update the analyst assignment\n    const rotation = staticData.oncallSchedule.rotation[rotationIndex];\n    if (rotation.analyst_id === swapRequest.requesterId) {\n      rotation.analyst_id = swapRequest.targetId;\n    }\n  } else {\n    // Add a holiday override instead\n    staticData.oncallSchedule.holidayOverrides.push({\n      date: swapRequest.swapDate,\n      analyst_id: swapRequest.targetId,\n      reason: `Swap with ${swapRequest.requesterName}`\n    });\n  }\n  \n  swapRequest.status = 'approved';\n  swapRequest.approvedAt = new Date().toISOString();\n} else {\n  swapRequest.status = 'declined';\n  swapRequest.declinedAt = new Date().toISOString();\n}\n\n// Look up analysts for notification\nconst requester = staticData.oncallSchedule.analysts.find(a => a.id === swapRequest.requesterId);\nconst target = staticData.oncallSchedule.analysts.find(a => a.id === swapRequest.targetId);\n\nreturn {\n  success: true,\n  action: action,\n  swapRequest: swapRequest,\n  requester: requester,\n  target: target,\n  timestamp: new Date().toISOString()\n};"
+      },
+      "id": "process-swap-approval",
+      "name": "Process Swap Approval",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, 1100]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "approval-success",
+              "leftValue": "={{ $json.success }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-approval-valid",
+      "name": "Approval Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [720, 1100]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "is-approved",
+              "leftValue": "={{ $json.action }}",
+              "rightValue": "approve",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-approved-or-declined",
+      "name": "Approved or Declined?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [940, 1100]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://webexapis.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"toPersonEmail\": \"{{ $json.requester.webexId }}\",\n  \"markdown\": \"## :white_check_mark: Swap Request Approved\\n\\n**{{ $json.target.name }}** has approved your swap request.\\n\\n| | |\\n|---|---|\\n| **Request ID** | {{ $json.swapRequest.id }} |\\n| **Date** | {{ $json.swapRequest.swapDate }} |\\n| **New On-Call** | {{ $json.target.name }} |\\n\\nThe on-call schedule has been updated.\"\n}",
+        "options": {}
+      },
+      "id": "notify-swap-approved-requester",
+      "name": "Notify Requester - Approved",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1160, 1000],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "webex-auth",
+          "name": "Webex API Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://webexapis.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"roomId\": \"{{ $credentials.webex.socShiftUpdatesRoomId }}\",\n  \"markdown\": \"## :repeat: On-Call Swap Completed\\n\\n| | |\\n|---|---|\\n| **Date** | {{ $json.swapRequest.swapDate }} |\\n| **Original** | {{ $json.requester.name }} |\\n| **New On-Call** | {{ $json.target.name }} |\\n| **Reason** | {{ $json.swapRequest.reason }} |\\n\\nThe on-call schedule has been updated.\"\n}",
+        "options": {}
+      },
+      "id": "announce-swap-approved",
+      "name": "Announce Swap to Channel",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1380, 1000],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "webex-auth",
+          "name": "Webex API Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://webexapis.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"toPersonEmail\": \"{{ $json.requester.webexId }}\",\n  \"markdown\": \"## :x: Swap Request Declined\\n\\n**{{ $json.target.name }}** has declined your swap request.\\n\\n| | |\\n|---|---|\\n| **Request ID** | {{ $json.swapRequest.id }} |\\n| **Date** | {{ $json.swapRequest.swapDate }} |\\n\\nPlease contact the SOC lead if you need to arrange alternative coverage.\"\n}",
+        "options": {}
+      },
+      "id": "notify-swap-declined-requester",
+      "name": "Notify Requester - Declined",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1160, 1200],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "webex-auth",
+          "name": "Webex API Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"success\": true,\n  \"swapRequestId\": \"{{ $json.swapRequest.id }}\",\n  \"status\": \"{{ $json.swapRequest.status }}\",\n  \"message\": \"Swap request {{ $json.action === 'approve' ? 'approved and schedule updated' : 'declined' }}\"\n}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "respond-approval-success",
+      "name": "Respond - Approval Processed",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1380, 1100]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"success\": false,\n  \"error\": \"{{ $json.error }}\",\n  \"message\": \"Approval processing failed\"\n}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "id": "respond-approval-error",
+      "name": "Respond - Approval Error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [940, 1200]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Export current on-call data for use by other workflows\n// This endpoint is called by incident_escalation and other workflows\n\nconst staticData = $getWorkflowStaticData('global');\n\nif (!staticData.oncallSchedule) {\n  return {\n    success: false,\n    error: 'On-call schedule not initialized',\n    timestamp: new Date().toISOString()\n  };\n}\n\n// Calculate current Monday\nconst now = new Date();\nconst dayOfWeek = now.getDay();\nconst daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;\nconst currentMonday = new Date(now);\ncurrentMonday.setDate(now.getDate() + daysToMonday);\ncurrentMonday.setHours(0, 0, 0, 0);\nconst currentMondayStr = currentMonday.toISOString().split('T')[0];\n\n// Check for holiday override\nconst todayStr = now.toISOString().split('T')[0];\nconst holidayOverride = staticData.oncallSchedule.holidayOverrides.find(\n  h => h.date === todayStr\n);\n\n// Find current rotation\nlet rotation = staticData.oncallSchedule.rotation.find(\n  r => r.Monday_date === currentMondayStr\n);\n\nif (!rotation) {\n  const sortedRotation = [...staticData.oncallSchedule.rotation].sort(\n    (a, b) => new Date(b.Monday_date) - new Date(a.Monday_date)\n  );\n  rotation = sortedRotation.find(\n    r => new Date(r.Monday_date) <= currentMonday\n  );\n}\n\n// Look up analysts\nconst findAnalyst = (id) => staticData.oncallSchedule.analysts.find(a => a.id === id);\n\nconst primaryId = holidayOverride ? holidayOverride.analyst_id : (rotation ? rotation.analyst_id : null);\nconst backupId = rotation ? rotation.backup_id : null;\n\nconst primary = findAnalyst(primaryId);\nconst backup = findAnalyst(backupId);\n\n// Build escalation chain with actual contacts\nconst escalationChain = staticData.oncallSchedule.escalationPath.map((level, index) => {\n  let contact;\n  if (level.level === 1 && primary) {\n    contact = primary;\n  } else if (level.level === 2 && backup) {\n    contact = backup;\n  } else if (level.contact) {\n    contact = level.contact;\n  }\n  \n  return {\n    level: level.level,\n    role: level.role,\n    timeoutMinutes: level.timeoutMinutes,\n    contact: contact ? {\n      name: contact.name,\n      email: contact.email,\n      webexId: contact.webexId,\n      phone: contact.phone\n    } : null\n  };\n});\n\nreturn {\n  success: true,\n  timestamp: now.toISOString(),\n  weekOf: currentMondayStr,\n  isHolidayOverride: !!holidayOverride,\n  primary: primary ? {\n    id: primary.id,\n    name: primary.name,\n    email: primary.email,\n    webexId: primary.webexId,\n    phone: primary.phone,\n    role: primary.role\n  } : null,\n  backup: backup ? {\n    id: backup.id,\n    name: backup.name,\n    email: backup.email,\n    webexId: backup.webexId,\n    phone: backup.phone,\n    role: backup.role\n  } : null,\n  escalationChain: escalationChain,\n  irTeam: staticData.oncallSchedule.analysts.map(a => a.email)\n};"
+      },
+      "id": "export-oncall-data",
+      "name": "Export On-Call Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, 1300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"success\": {{ $json.success }},\n  \"timestamp\": \"{{ $json.timestamp }}\",\n  \"weekOf\": \"{{ $json.weekOf }}\",\n  \"isHolidayOverride\": {{ $json.isHolidayOverride || false }},\n  \"primary\": {{ $json.primary ? JSON.stringify($json.primary) : 'null' }},\n  \"backup\": {{ $json.backup ? JSON.stringify($json.backup) : 'null' }},\n  \"escalationChain\": {{ JSON.stringify($json.escalationChain || []) }},\n  \"irTeam\": {{ JSON.stringify($json.irTeam || []) }}\n}",
+        "options": {
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          }
+        }
+      },
+      "id": "respond-export",
+      "name": "Respond - Export Data",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [720, 1300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Merge shift triggers into single flow\n// This node is just a pass-through to standardize the trigger source\n\nconst triggers = {\n  morning: $('Morning Shift Start (04:30 ET)'),\n  afternoon: $('Afternoon Shift Start (12:30 ET)'),\n  night: $('Night Shift Start (20:30 ET)')\n};\n\nlet triggerSource = 'unknown';\nlet shiftName = 'unknown';\n\n// Determine which trigger fired\nfor (const [shift, node] of Object.entries(triggers)) {\n  try {\n    const items = node.all();\n    if (items && items.length > 0) {\n      triggerSource = `${shift}_shift_start`;\n      shiftName = shift;\n      break;\n    }\n  } catch (e) {\n    // Node didn't trigger\n  }\n}\n\nreturn {\n  triggerSource: triggerSource,\n  shiftName: shiftName,\n  timestamp: new Date().toISOString()\n};"
+      },
+      "id": "merge-shift-triggers",
+      "name": "Merge Shift Triggers",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [360, 200]
+    }
+  ],
+  "connections": {
+    "Morning Shift Start (04:30 ET)": {
+      "main": [
+        [
+          {
+            "node": "Merge Shift Triggers",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Afternoon Shift Start (12:30 ET)": {
+      "main": [
+        [
+          {
+            "node": "Merge Shift Triggers",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Night Shift Start (20:30 ET)": {
+      "main": [
+        [
+          {
+            "node": "Merge Shift Triggers",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Shift Triggers": {
+      "main": [
+        [
+          {
+            "node": "Load On-Call Data (Shift)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load On-Call Data (Shift)": {
+      "main": [
+        [
+          {
+            "node": "Format Shift Announcement",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Shift Announcement": {
+      "main": [
+        [
+          {
+            "node": "Post Shift Announcement",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Weekly Rotation Reminder (Fri 9AM)": {
+      "main": [
+        [
+          {
+            "node": "Load Rotation Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Rotation Data": {
+      "main": [
+        [
+          {
+            "node": "Has Next Rotation?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Next Rotation?": {
+      "main": [
+        [
+          {
+            "node": "Format Rotation Reminder",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Rotation Scheduled",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Rotation Reminder": {
+      "main": [
+        [
+          {
+            "node": "Post Rotation Reminder to Channel",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "DM Incoming On-Call",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "No Rotation Scheduled": {
+      "main": [
+        [
+          {
+            "node": "Post No Rotation Warning",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "On-Call Query Webhook": {
+      "main": [
+        [
+          {
+            "node": "Process On-Call Query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process On-Call Query": {
+      "main": [
+        [
+          {
+            "node": "Respond to On-Call Query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Swap Request Webhook": {
+      "main": [
+        [
+          {
+            "node": "Process Swap Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Swap Request": {
+      "main": [
+        [
+          {
+            "node": "Swap Request Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Swap Request Valid?": {
+      "main": [
+        [
+          {
+            "node": "Notify Swap Target",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Confirm to Requester",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond - Swap Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify Swap Target": {
+      "main": [
+        [
+          {
+            "node": "Respond - Swap Submitted",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Swap Approval Webhook": {
+      "main": [
+        [
+          {
+            "node": "Process Swap Approval",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Swap Approval": {
+      "main": [
+        [
+          {
+            "node": "Approval Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Approval Valid?": {
+      "main": [
+        [
+          {
+            "node": "Approved or Declined?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond - Approval Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Approved or Declined?": {
+      "main": [
+        [
+          {
+            "node": "Notify Requester - Approved",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Notify Requester - Declined",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify Requester - Approved": {
+      "main": [
+        [
+          {
+            "node": "Announce Swap to Channel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Announce Swap to Channel": {
+      "main": [
+        [
+          {
+            "node": "Respond - Approval Processed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify Requester - Declined": {
+      "main": [
+        [
+          {
+            "node": "Respond - Approval Processed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "On-Call Export (for other workflows)": {
+      "main": [
+        [
+          {
+            "node": "Export On-Call Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Export On-Call Data": {
+      "main": [
+        [
+          {
+            "node": "Respond - Export Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": "",
+    "timezone": "America/New_York"
+  },
+  "staticData": {
+    "global": {
+      "oncallSchedule": {
+        "analysts": [
+          {
+            "id": "analyst-001",
+            "name": "John Smith",
+            "email": "john.smith@company.com",
+            "webexId": "jsmith@company.com",
+            "phone": "+1-555-0101",
+            "role": "Senior Analyst"
+          },
+          {
+            "id": "analyst-002",
+            "name": "Jane Doe",
+            "email": "jane.doe@company.com",
+            "webexId": "jdoe@company.com",
+            "phone": "+1-555-0102",
+            "role": "Senior Analyst"
+          },
+          {
+            "id": "analyst-003",
+            "name": "Mike Johnson",
+            "email": "mike.johnson@company.com",
+            "webexId": "mjohnson@company.com",
+            "phone": "+1-555-0103",
+            "role": "Senior Analyst"
+          },
+          {
+            "id": "analyst-004",
+            "name": "Sarah Williams",
+            "email": "sarah.williams@company.com",
+            "webexId": "swilliams@company.com",
+            "phone": "+1-555-0104",
+            "role": "Analyst"
+          },
+          {
+            "id": "analyst-005",
+            "name": "Robert Brown",
+            "email": "robert.brown@company.com",
+            "webexId": "rbrown@company.com",
+            "phone": "+1-555-0105",
+            "role": "Analyst"
+          }
+        ],
+        "rotation": [
+          { "Monday_date": "2025-01-20", "analyst_id": "analyst-001", "backup_id": "analyst-002" },
+          { "Monday_date": "2025-01-27", "analyst_id": "analyst-002", "backup_id": "analyst-003" },
+          { "Monday_date": "2025-02-03", "analyst_id": "analyst-003", "backup_id": "analyst-004" },
+          { "Monday_date": "2025-02-10", "analyst_id": "analyst-004", "backup_id": "analyst-005" },
+          { "Monday_date": "2025-02-17", "analyst_id": "analyst-005", "backup_id": "analyst-001" },
+          { "Monday_date": "2025-02-24", "analyst_id": "analyst-001", "backup_id": "analyst-002" }
+        ],
+        "holidayOverrides": [],
+        "escalationPath": [
+          {
+            "level": 1,
+            "role": "Primary On-Call",
+            "timeoutMinutes": 15
+          },
+          {
+            "level": 2,
+            "role": "Backup On-Call",
+            "timeoutMinutes": 15
+          },
+          {
+            "level": 3,
+            "role": "IR Team Lead",
+            "contact": {
+              "name": "Team Lead",
+              "email": "ir.lead@company.com",
+              "webexId": "irlead@company.com",
+              "phone": "+1-555-0200"
+            },
+            "timeoutMinutes": 30
+          },
+          {
+            "level": 4,
+            "role": "Security Manager",
+            "contact": {
+              "name": "Security Manager",
+              "email": "security.manager@company.com",
+              "webexId": "secmgr@company.com",
+              "phone": "+1-555-0300"
+            },
+            "timeoutMinutes": 0
+          }
+        ],
+        "pendingSwaps": []
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "on-call",
+      "createdAt": "2025-01-01T00:00:00.000Z",
+      "updatedAt": "2025-01-01T00:00:00.000Z"
+    },
+    {
+      "name": "staffing",
+      "createdAt": "2025-01-01T00:00:00.000Z",
+      "updatedAt": "2025-01-01T00:00:00.000Z"
+    },
+    {
+      "name": "SOC",
+      "createdAt": "2025-01-01T00:00:00.000Z",
+      "updatedAt": "2025-01-01T00:00:00.000Z"
+    },
+    {
+      "name": "rotation",
+      "createdAt": "2025-01-01T00:00:00.000Z",
+      "updatedAt": "2025-01-01T00:00:00.000Z"
+    }
+  ],
+  "triggerCount": 4,
+  "updatedAt": "2025-01-01T00:00:00.000Z",
+  "versionId": "1"
+}

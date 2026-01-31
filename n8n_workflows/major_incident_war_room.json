@@ -1,0 +1,1189 @@
+{
+  "name": "Major Incident War Room Automation",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "major-incident-declaration",
+        "responseMode": "responseNode",
+        "options": {
+          "rawBody": true
+        }
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook - Incident Declaration",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 500],
+      "webhookId": "major-incident-war-room"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse and validate incoming major incident declaration\nconst input = $input.first().json.body || $input.first().json;\n\n// Extract incident data with validation\nconst incidentId = input.incident_id || `MI-${Date.now()}`;\nconst severity = input.severity || 'P2';\nconst incidentType = input.incident_type || 'unknown';\nconst affectedSystems = input.affected_systems || [];\nconst incidentCommander = input.incident_commander || {};\nconst initialIndicators = input.initial_indicators || [];\nconst description = input.description || 'No description provided';\nconst sourceTicketId = input.xsoar_ticket_id || input.source_ticket_id || null;\nconst reportedBy = input.reported_by || 'Automated Detection';\n\n// Generate timestamps\nconst declarationTime = new Date();\nconst formattedDate = declarationTime.toISOString().split('T')[0];\nconst formattedTime = declarationTime.toLocaleTimeString('en-US', { hour12: false, timeZone: 'America/New_York' });\n\n// SME mapping based on incident type\nconst smeMapping = {\n  'ransomware': [\n    { email: 'malware-sme@company.com', name: 'Malware Analysis SME', role: 'Malware Analyst' },\n    { email: 'forensics-lead@company.com', name: 'Forensics Lead', role: 'Digital Forensics' },\n    { email: 'recovery-lead@company.com', name: 'Recovery Lead', role: 'System Recovery' }\n  ],\n  'data_breach': [\n    { email: 'privacy-officer@company.com', name: 'Privacy Officer', role: 'Data Privacy' },\n    { email: 'legal-counsel@company.com', name: 'Legal Counsel', role: 'Legal' },\n    { email: 'compliance-lead@company.com', name: 'Compliance Lead', role: 'Compliance' }\n  ],\n  'insider_threat': [\n    { email: 'hr-security@company.com', name: 'HR Security', role: 'HR Liaison' },\n    { email: 'legal-counsel@company.com', name: 'Legal Counsel', role: 'Legal' },\n    { email: 'insider-threat-lead@company.com', name: 'Insider Threat Lead', role: 'Insider Threat' }\n  ],\n  'apt': [\n    { email: 'threat-intel-lead@company.com', name: 'Threat Intel Lead', role: 'Threat Intelligence' },\n    { email: 'hunt-team-lead@company.com', name: 'Hunt Team Lead', role: 'Threat Hunting' },\n    { email: 'network-forensics@company.com', name: 'Network Forensics', role: 'Network Analysis' }\n  ],\n  'ddos': [\n    { email: 'network-ops@company.com', name: 'Network Operations', role: 'Network Ops' },\n    { email: 'cloud-security@company.com', name: 'Cloud Security', role: 'Cloud Security' },\n    { email: 'isp-liaison@company.com', name: 'ISP Liaison', role: 'External Liaison' }\n  ],\n  'supply_chain': [\n    { email: 'vendor-security@company.com', name: 'Vendor Security', role: 'Third Party Risk' },\n    { email: 'procurement-security@company.com', name: 'Procurement Security', role: 'Procurement' },\n    { email: 'legal-counsel@company.com', name: 'Legal Counsel', role: 'Legal' }\n  ],\n  'phishing': [\n    { email: 'email-security@company.com', name: 'Email Security', role: 'Email Security' },\n    { email: 'identity-team@company.com', name: 'Identity Team', role: 'Identity & Access' }\n  ],\n  'unknown': [\n    { email: 'soc-lead@company.com', name: 'SOC Lead', role: 'SOC Leadership' }\n  ]\n};\n\n// Core IR team members (always added)\nconst coreIrTeam = [\n  { email: 'ir-lead@company.com', name: 'IR Team Lead', role: 'IR Leadership', isModerator: true },\n  { email: 'soc-manager@company.com', name: 'SOC Manager', role: 'SOC Management', isModerator: true },\n  { email: 'ir-analyst1@company.com', name: 'IR Analyst 1', role: 'IR Analyst' },\n  { email: 'ir-analyst2@company.com', name: 'IR Analyst 2', role: 'IR Analyst' },\n  { email: 'ir-analyst3@company.com', name: 'IR Analyst 3', role: 'IR Analyst' },\n  { email: 'forensics-analyst@company.com', name: 'Forensics Analyst', role: 'Digital Forensics' }\n];\n\n// Get relevant SMEs based on incident type\nconst relevantSmes = smeMapping[incidentType.toLowerCase()] || smeMapping['unknown'];\n\n// Severity configuration\nconst severityConfig = {\n  'P1': { \n    label: 'Critical', \n    color: 'Attention', \n    escalateExecs: true, \n    updateIntervalMinutes: 15,\n    icon: '🔴'\n  },\n  'P2': { \n    label: 'High', \n    color: 'Warning', \n    escalateExecs: false, \n    updateIntervalMinutes: 30,\n    icon: '🟠'\n  }\n};\n\nconst sevConfig = severityConfig[severity] || severityConfig['P2'];\n\n// Generate war room name\nconst warRoomName = `IR - ${incidentId} - ${formattedDate}`;\n\n// Build console URLs\nconst consoleUrls = {\n  xsoar: sourceTicketId ? `https://xsoar.company.com/incident/${sourceTicketId}` : null,\n  crowdstrike: 'https://falcon.crowdstrike.com/investigate/incidents',\n  qradar: 'https://qradar.company.com/console',\n  tanium: 'https://tanium.company.com/console',\n  servicenow: `https://company.service-now.com/nav_to.do?uri=incident.do?sysparm_query=number=${incidentId}`\n};\n\n// Extract affected host IPs for evidence collection\nconst affectedHostnames = affectedSystems.map(s => s.hostname || s.name || s).filter(Boolean);\nconst affectedIPs = affectedSystems.map(s => s.ip || s.ip_address).filter(Boolean);\n\nreturn {\n  json: {\n    incidentId,\n    severity,\n    severityConfig: sevConfig,\n    incidentType,\n    incidentTypeFriendly: incidentType.replace(/_/g, ' ').toUpperCase(),\n    affectedSystems,\n    affectedHostnames,\n    affectedIPs,\n    incidentCommander,\n    initialIndicators,\n    description,\n    sourceTicketId,\n    reportedBy,\n    declarationTime: declarationTime.toISOString(),\n    formattedDate,\n    formattedTime,\n    warRoomName,\n    coreIrTeam,\n    relevantSmes,\n    consoleUrls,\n    isRansomware: incidentType.toLowerCase() === 'ransomware',\n    timeline: [\n      {\n        timestamp: declarationTime.toISOString(),\n        event: 'Major Incident Declared',\n        actor: reportedBy,\n        details: description\n      }\n    ]\n  }\n};"
+      },
+      "id": "parse-incident-data",
+      "name": "Parse Incident Declaration",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 500]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://webexapis.com/v1/rooms",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"title\": \"{{ $json.warRoomName }}\",\n  \"isLocked\": false\n}",
+        "options": {}
+      },
+      "id": "create-war-room",
+      "name": "Create Webex War Room",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [680, 500],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "webex-auth",
+          "name": "Webex API Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get war room ID and prepare team invitations\nconst warRoomId = $input.first().json.id;\nconst incidentData = $('Parse Incident Declaration').first().json;\n\n// Combine all team members to invite\nconst allMembers = [];\n\n// Add core IR team\nincidentData.coreIrTeam.forEach(member => {\n  allMembers.push({\n    roomId: warRoomId,\n    personEmail: member.email,\n    isModerator: member.isModerator || false,\n    memberType: 'core_ir_team',\n    memberName: member.name,\n    memberRole: member.role\n  });\n});\n\n// Add incident commander if not already in core team\nif (incidentData.incidentCommander?.email) {\n  const cmdEmail = incidentData.incidentCommander.email;\n  if (!allMembers.find(m => m.personEmail === cmdEmail)) {\n    allMembers.push({\n      roomId: warRoomId,\n      personEmail: cmdEmail,\n      isModerator: true,\n      memberType: 'incident_commander',\n      memberName: incidentData.incidentCommander.name || 'Incident Commander',\n      memberRole: 'Incident Commander'\n    });\n  }\n}\n\n// Add relevant SMEs\nincidentData.relevantSmes.forEach(sme => {\n  if (!allMembers.find(m => m.personEmail === sme.email)) {\n    allMembers.push({\n      roomId: warRoomId,\n      personEmail: sme.email,\n      isModerator: false,\n      memberType: 'sme',\n      memberName: sme.name,\n      memberRole: sme.role\n    });\n  }\n});\n\n// Store war room ID in workflow static data for later use\nreturn allMembers.map(member => ({\n  json: {\n    ...member,\n    warRoomId,\n    incidentId: incidentData.incidentId,\n    incidentData\n  }\n}));"
+      },
+      "id": "prepare-team-invites",
+      "name": "Prepare Team Invitations",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 500]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://webexapis.com/v1/memberships",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"roomId\": \"{{ $json.roomId }}\",\n  \"personEmail\": \"{{ $json.personEmail }}\",\n  \"isModerator\": {{ $json.isModerator }}\n}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "add-team-members",
+      "name": "Add Team Members to War Room",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1120, 500],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "webex-auth",
+          "name": "Webex API Token"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get incident data and war room info from earlier nodes\nconst teamInvites = $('Prepare Team Invitations').all();\nconst firstInvite = teamInvites[0].json;\nconst incidentData = firstInvite.incidentData;\nconst warRoomId = firstInvite.warRoomId;\n\n// Build the initial briefing message\nconst severityIcon = incidentData.severityConfig.icon;\nconst sevLabel = incidentData.severityConfig.label;\n\n// Format affected systems\nconst affectedSystemsList = incidentData.affectedSystems\n  .map(sys => {\n    if (typeof sys === 'string') return `- ${sys}`;\n    return `- **${sys.hostname || sys.name}** (${sys.ip || 'IP Unknown'}) - ${sys.os || sys.type || 'Unknown OS'}`;\n  })\n  .join('\\n') || '- No systems specified';\n\n// Format initial indicators\nconst indicatorsList = incidentData.initialIndicators\n  .map(ind => {\n    if (typeof ind === 'string') return `- ${ind}`;\n    return `- **${ind.type || 'IOC'}**: \\`${ind.value}\\` ${ind.description ? `(${ind.description})` : ''}`;\n  })\n  .join('\\n') || '- No indicators available yet';\n\n// Format team roster\nconst teamRoster = teamInvites\n  .map(t => `- **${t.json.memberName}** - ${t.json.memberRole}`)\n  .join('\\n');\n\n// Build console links\nconst consoleLinks = [];\nif (incidentData.consoleUrls.xsoar) consoleLinks.push(`[XSOAR Ticket](${incidentData.consoleUrls.xsoar})`);\nconsoleLinks.push(`[CrowdStrike](${incidentData.consoleUrls.crowdstrike})`);\nconsoleLinks.push(`[QRadar](${incidentData.consoleUrls.qradar})`);\nconsoleLinks.push(`[Tanium](${incidentData.consoleUrls.tanium})`);\nif (incidentData.consoleUrls.servicenow) consoleLinks.push(`[ServiceNow](${incidentData.consoleUrls.servicenow})`);\n\nconst briefingMarkdown = `${severityIcon} **MAJOR INCIDENT - INITIAL BRIEFING** ${severityIcon}\n\n---\n\n## Incident Summary\n\n| Field | Value |\n|-------|-------|\n| **Incident ID** | \\`${incidentData.incidentId}\\` |\n| **Severity** | ${severityIcon} ${incidentData.severity} - ${sevLabel} |\n| **Type** | ${incidentData.incidentTypeFriendly} |\n| **Declared** | ${incidentData.formattedDate} ${incidentData.formattedTime} ET |\n| **Reported By** | ${incidentData.reportedBy} |\n| **Incident Commander** | ${incidentData.incidentCommander?.name || 'TBD'} |\n\n---\n\n## Description\n${incidentData.description}\n\n---\n\n## Affected Systems\n${affectedSystemsList}\n\n---\n\n## Initial Indicators\n${indicatorsList}\n\n---\n\n## Response Team\n${teamRoster}\n\n---\n\n## Quick Links\n${consoleLinks.join(' | ')}\n\n---\n\n## Response Status: **ACTIVE**\n\n**Next Status Update:** ${incidentData.severityConfig.updateIntervalMinutes} minutes\n\n---\n\n*This war room was automatically created. All actions should be logged here for incident timeline tracking.*`;\n\nreturn {\n  json: {\n    warRoomId,\n    incidentId: incidentData.incidentId,\n    incidentData,\n    briefingMarkdown\n  }\n};"
+      },
+      "id": "format-initial-briefing",
+      "name": "Format Initial Briefing",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1340, 500]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://webexapis.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"roomId\": \"{{ $json.warRoomId }}\",\n  \"markdown\": {{ JSON.stringify($json.briefingMarkdown) }}\n}",
+        "options": {}
+      },
+      "id": "post-initial-briefing",
+      "name": "Post Initial Briefing",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1560, 500],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "webex-auth",
+          "name": "Webex API Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Prepare data for parallel evidence collection\nconst incidentData = $('Format Initial Briefing').first().json.incidentData;\nconst warRoomId = $('Format Initial Briefing').first().json.warRoomId;\n\nreturn {\n  json: {\n    incidentId: incidentData.incidentId,\n    warRoomId,\n    affectedHostnames: incidentData.affectedHostnames,\n    affectedIPs: incidentData.affectedIPs,\n    affectedSystems: incidentData.affectedSystems,\n    incidentType: incidentData.incidentType,\n    severity: incidentData.severity,\n    declarationTime: incidentData.declarationTime,\n    incidentData\n  }\n};"
+      },
+      "id": "prepare-evidence-collection",
+      "name": "Prepare Evidence Collection",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1780, 500]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.crowdstrike.com/oauth2/token",
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "client_id",
+              "value": "={{ $credentials.crowdstrike.clientId }}"
+            },
+            {
+              "name": "client_secret",
+              "value": "={{ $credentials.crowdstrike.clientSecret }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "cs-auth",
+      "name": "CrowdStrike Auth",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2000, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build CrowdStrike query filter for affected hostnames\nconst incidentData = $('Prepare Evidence Collection').first().json;\nconst hostnames = incidentData.affectedHostnames || [];\nconst token = $('CrowdStrike Auth').first().json.access_token;\n\nlet filter = '';\nif (hostnames.length > 0) {\n  const hostnameFilters = hostnames.map(h => `device.hostname:'${h}'`).join(',');\n  filter = hostnameFilters;\n} else {\n  // If no hostnames, search by last 24 hours for high severity detections\n  const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();\n  filter = `created_timestamp:>'${yesterday}'+max_severity_displayname:['Critical','High']`;\n}\n\nreturn {\n  json: {\n    filter,\n    token,\n    ...incidentData\n  }\n};"
+      },
+      "id": "prepare-cs-query",
+      "name": "Prepare CS Query",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2220, 200]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.crowdstrike.com/detects/queries/detects/v1",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "filter",
+              "value": "={{ $json.filter }}"
+            },
+            {
+              "name": "limit",
+              "value": "100"
+            },
+            {
+              "name": "sort",
+              "value": "created_timestamp|desc"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "cs-get-detections",
+      "name": "Get CrowdStrike Detections",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2440, 200],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "crowdstrike-bearer",
+          "name": "CrowdStrike Bearer Token"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.crowdstrike.com/detects/entities/summaries/GET/v1",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ ids: ($json.resources || []).slice(0, 50) }) }}",
+        "options": {}
+      },
+      "id": "cs-get-detection-details",
+      "name": "Get Detection Details",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2660, 200],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "crowdstrike-bearer",
+          "name": "CrowdStrike Bearer Token"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://tanium.company.com/api/v2/session/login",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"username\": \"{{ $credentials.tanium.username }}\",\n  \"password\": \"{{ $credentials.tanium.password }}\"\n}",
+        "options": {}
+      },
+      "id": "tanium-auth",
+      "name": "Tanium Auth",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2000, 400],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Prepare Tanium query for endpoint snapshots\nconst incidentData = $('Prepare Evidence Collection').first().json;\nconst hostnames = incidentData.affectedHostnames || [];\n\n// Build computer name filter\nconst computerFilter = hostnames.length > 0 \n  ? hostnames.map(h => `computerName:${h}`).join(' OR ')\n  : '*';\n\nreturn {\n  json: {\n    computerFilter,\n    hostnames,\n    ...incidentData\n  }\n};"
+      },
+      "id": "prepare-tanium-query",
+      "name": "Prepare Tanium Query",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2220, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://tanium.company.com/api/v2/questions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"query_text\": \"Get Computer Name and IP Address and Operating System and Running Processes and Logged In Users from all machines with Computer Name matches {{ $json.computerFilter }}\"\n}",
+        "options": {}
+      },
+      "id": "tanium-get-endpoints",
+      "name": "Get Tanium Endpoint State",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2440, 400],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "tanium-session",
+          "name": "Tanium Session"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://qradar.company.com/api/siem/offenses",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "filter",
+              "value": "=status=OPEN and magnitude>=5"
+            },
+            {
+              "name": "fields",
+              "value": "id,description,magnitude,offense_type,start_time,source_network,categories,offense_source"
+            },
+            {
+              "name": "sort",
+              "value": "-start_time"
+            },
+            {
+              "name": "Range",
+              "value": "items=0-49"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "qradar-get-offenses",
+      "name": "Get QRadar Offenses",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2000, 600],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "qradar-sec-token",
+          "name": "QRadar SEC Token"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build AQL query for network logs related to affected IPs\nconst incidentData = $('Prepare Evidence Collection').first().json;\nconst affectedIPs = incidentData.affectedIPs || [];\nconst declarationTime = new Date(incidentData.declarationTime);\n\n// Look back 24 hours from incident declaration\nconst startTime = new Date(declarationTime.getTime() - 24 * 60 * 60 * 1000);\n\nlet ipFilter = '';\nif (affectedIPs.length > 0) {\n  ipFilter = affectedIPs.map(ip => `sourceIP='${ip}' OR destinationIP='${ip}'`).join(' OR ');\n} else {\n  ipFilter = '1=1'; // Match all if no specific IPs\n}\n\nconst aqlQuery = `SELECT sourceIP, destinationIP, destinationPort, protocolId, eventCount, startTime FROM events WHERE (${ipFilter}) AND startTime >= ${startTime.getTime()} LAST 24 HOURS ORDER BY startTime DESC LIMIT 1000`;\n\nreturn {\n  json: {\n    aqlQuery,\n    affectedIPs,\n    ...incidentData\n  }\n};"
+      },
+      "id": "prepare-network-query",
+      "name": "Prepare Network Log Query",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2000, 800]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://qradar.company.com/api/ariel/searches",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"query_expression\": {{ JSON.stringify($json.aqlQuery) }}\n}",
+        "options": {}
+      },
+      "id": "qradar-network-logs",
+      "name": "Query Network Logs",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2220, 800],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "qradar-sec-token",
+          "name": "QRadar SEC Token"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "id": "merge-evidence",
+      "name": "Merge Evidence",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [2880, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Compile all evidence into an incident timeline document\nconst inputs = $input.all();\nconst incidentData = $('Prepare Evidence Collection').first().json.incidentData;\nconst warRoomId = $('Prepare Evidence Collection').first().json.warRoomId;\n\n// Parse evidence from various sources\nlet csDetections = [];\nlet taniumData = {};\nlet qradarOffenses = [];\nlet networkLogs = {};\n\nfor (const input of inputs) {\n  const data = input.json;\n  if (data.resources && Array.isArray(data.resources) && data.resources[0]?.detection_id) {\n    csDetections = data.resources;\n  } else if (data.data?.columns) {\n    taniumData = data.data;\n  } else if (Array.isArray(data) && data[0]?.offense_type !== undefined) {\n    qradarOffenses = data;\n  } else if (data.search_id) {\n    networkLogs = data;\n  }\n}\n\n// Build timeline document\nconst timestamp = new Date().toISOString();\nconst formattedTimestamp = new Date().toLocaleString('en-US', { timeZone: 'America/New_York' });\n\nconst timelineDocument = {\n  incidentId: incidentData.incidentId,\n  severity: incidentData.severity,\n  incidentType: incidentData.incidentType,\n  generatedAt: timestamp,\n  \n  timeline: [\n    {\n      timestamp: incidentData.declarationTime,\n      event: 'Incident Declared',\n      source: 'Incident Declaration',\n      details: incidentData.description,\n      actor: incidentData.reportedBy\n    },\n    {\n      timestamp: timestamp,\n      event: 'War Room Created',\n      source: 'n8n Automation',\n      details: `War room \"${incidentData.warRoomName}\" created and team assembled`,\n      actor: 'Automation'\n    },\n    {\n      timestamp: timestamp,\n      event: 'Initial Evidence Collection Started',\n      source: 'n8n Automation',\n      details: 'Automated queries initiated for CrowdStrike, Tanium, QRadar, and network logs',\n      actor: 'Automation'\n    }\n  ],\n\n  scopeAssessment: {\n    affectedSystems: incidentData.affectedSystems,\n    affectedHostCount: incidentData.affectedHostnames.length,\n    affectedIPCount: incidentData.affectedIPs.length,\n    crowdstrikeDetectionCount: csDetections.length,\n    qradarOffenseCount: qradarOffenses.length\n  },\n\n  evidenceCollected: {\n    crowdstrike: {\n      detectionsFound: csDetections.length,\n      detections: csDetections.slice(0, 10).map(d => ({\n        id: d.detection_id,\n        description: d.behaviors?.[0]?.description || d.description,\n        severity: d.max_severity_displayname,\n        hostname: d.device?.hostname,\n        timestamp: d.created_timestamp\n      }))\n    },\n    tanium: {\n      endpointsQueried: incidentData.affectedHostnames.length,\n      queryStatus: taniumData.columns ? 'completed' : 'pending'\n    },\n    qradar: {\n      offensesFound: qradarOffenses.length,\n      offenses: qradarOffenses.slice(0, 10).map(o => ({\n        id: o.id,\n        description: o.description,\n        magnitude: o.magnitude,\n        categories: o.categories\n      }))\n    },\n    networkLogs: {\n      searchId: networkLogs.search_id || null,\n      status: networkLogs.status || 'pending'\n    }\n  },\n\n  actionsTaken: [\n    'War room created and team notified',\n    'Initial briefing posted',\n    'CrowdStrike detection query executed',\n    'Tanium endpoint state query executed',\n    'QRadar offense query executed',\n    'Network log query initiated'\n  ],\n\n  nextSteps: [\n    'Review collected evidence',\n    'Determine containment actions',\n    'Identify root cause',\n    'Document findings in timeline',\n    'Prepare status update for stakeholders'\n  ]\n};\n\n// Format timeline summary for Webex\nconst timelineSummary = `## Incident Timeline Document\n\n**Generated:** ${formattedTimestamp} ET\n**Incident:** ${incidentData.incidentId}\n\n---\n\n### Scope Assessment\n- **Affected Systems:** ${incidentData.affectedHostnames.length} hosts\n- **Affected IPs:** ${incidentData.affectedIPs.length}\n- **CrowdStrike Detections:** ${csDetections.length}\n- **QRadar Offenses:** ${qradarOffenses.length}\n\n---\n\n### Evidence Collection Status\n\n| Source | Status | Count |\n|--------|--------|-------|\n| CrowdStrike | Complete | ${csDetections.length} detections |\n| Tanium | ${taniumData.columns ? 'Complete' : 'Pending'} | - |\n| QRadar | Complete | ${qradarOffenses.length} offenses |\n| Network Logs | ${networkLogs.search_id ? 'In Progress' : 'Pending'} | - |\n\n---\n\n### Actions Taken\n${timelineDocument.actionsTaken.map(a => `- ${a}`).join('\\n')}\n\n---\n\n### Recommended Next Steps\n${timelineDocument.nextSteps.map(s => `- ${s}`).join('\\n')}`;\n\nreturn {\n  json: {\n    warRoomId,\n    incidentId: incidentData.incidentId,\n    incidentData,\n    timelineDocument,\n    timelineSummary\n  }\n};"
+      },
+      "id": "create-timeline",
+      "name": "Create Incident Timeline",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3100, 500]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://webexapis.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"roomId\": \"{{ $json.warRoomId }}\",\n  \"markdown\": {{ JSON.stringify($json.timelineSummary) }}\n}",
+        "options": {}
+      },
+      "id": "post-timeline",
+      "name": "Post Timeline to War Room",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [3320, 500],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "webex-auth",
+          "name": "Webex API Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Prepare notification cascade data\nconst incidentData = $('Create Incident Timeline').first().json.incidentData;\nconst warRoomId = $('Create Incident Timeline').first().json.warRoomId;\nconst timelineDocument = $('Create Incident Timeline').first().json.timelineDocument;\n\n// Build notification targets\nconst notifications = [];\n\n// SOC Leadership Webex notification\nnotifications.push({\n  type: 'webex',\n  target: 'soc_leadership',\n  roomId: 'YOUR_SOC_LEADERSHIP_ROOM_ID',\n  message: `${incidentData.severityConfig.icon} **Major Incident Declared**\\n\\n` +\n    `**ID:** ${incidentData.incidentId}\\n` +\n    `**Severity:** ${incidentData.severity} - ${incidentData.severityConfig.label}\\n` +\n    `**Type:** ${incidentData.incidentTypeFriendly}\\n` +\n    `**Commander:** ${incidentData.incidentCommander?.name || 'TBD'}\\n\\n` +\n    `**Affected Systems:** ${incidentData.affectedHostnames.length}\\n\\n` +\n    `War room has been created. [Join here](https://web.webex.com/meet/${warRoomId})`\n});\n\n// Security Management email\nnotifications.push({\n  type: 'email',\n  target: 'security_management',\n  recipients: ['security-management@company.com', 'ciso@company.com'],\n  subject: `[${incidentData.severity}] Major Incident Declared - ${incidentData.incidentId}`,\n  body: `A major incident has been declared.\\n\\n` +\n    `Incident ID: ${incidentData.incidentId}\\n` +\n    `Severity: ${incidentData.severity} - ${incidentData.severityConfig.label}\\n` +\n    `Type: ${incidentData.incidentTypeFriendly}\\n` +\n    `Description: ${incidentData.description}\\n\\n` +\n    `Affected Systems: ${incidentData.affectedHostnames.join(', ') || 'TBD'}\\n\\n` +\n    `Incident Commander: ${incidentData.incidentCommander?.name || 'TBD'}\\n\\n` +\n    `A war room has been established. Please stand by for updates.`\n});\n\n// Executive notification for ransomware\nif (incidentData.isRansomware) {\n  notifications.push({\n    type: 'webex',\n    target: 'executive_team',\n    roomId: 'YOUR_EXECUTIVE_ALERT_ROOM_ID',\n    message: `**CRITICAL ALERT: Ransomware Incident**\\n\\n` +\n      `A ransomware incident has been declared.\\n\\n` +\n      `**Incident ID:** ${incidentData.incidentId}\\n` +\n      `**Affected Systems:** ${incidentData.affectedHostnames.length}\\n\\n` +\n      `The incident response team is actively working on containment and recovery.\\n\\n` +\n      `Please expect updates every ${incidentData.severityConfig.updateIntervalMinutes} minutes.`\n  });\n\n  // Executive email for ransomware\n  notifications.push({\n    type: 'email',\n    target: 'executives',\n    recipients: ['ciso@company.com', 'cto@company.com', 'ceo@company.com'],\n    subject: `URGENT: Ransomware Incident - ${incidentData.incidentId}`,\n    body: `EXECUTIVE BRIEFING - RANSOMWARE INCIDENT\\n\\n` +\n      `A ransomware incident has been declared and the incident response team is actively engaged.\\n\\n` +\n      `Incident ID: ${incidentData.incidentId}\\n` +\n      `Time Declared: ${incidentData.formattedDate} ${incidentData.formattedTime} ET\\n` +\n      `Affected Systems: ${incidentData.affectedHostnames.length}\\n\\n` +\n      `Current Actions:\\n` +\n      `- War room established\\n` +\n      `- Evidence collection in progress\\n` +\n      `- Containment measures being evaluated\\n\\n` +\n      `Next update expected in ${incidentData.severityConfig.updateIntervalMinutes} minutes.\\n\\n` +\n      `This notification is part of our incident response protocol.`\n  });\n}\n\n// PagerDuty escalation for P1\nif (incidentData.severity === 'P1') {\n  notifications.push({\n    type: 'pagerduty',\n    target: 'oncall_team',\n    serviceId: 'YOUR_PAGERDUTY_SERVICE_ID',\n    routingKey: 'YOUR_PAGERDUTY_ROUTING_KEY',\n    summary: `[P1] Major Incident - ${incidentData.incidentId} - ${incidentData.incidentTypeFriendly}`,\n    severity: 'critical',\n    source: 'n8n-incident-automation'\n  });\n}\n\nreturn notifications.map(n => ({ json: n }));"
+      },
+      "id": "prepare-notifications",
+      "name": "Prepare Notification Cascade",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3540, 500]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "is-webex",
+              "leftValue": "={{ $json.type }}",
+              "rightValue": "webex",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "route-webex",
+      "name": "Webex Notification?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [3760, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "is-email",
+              "leftValue": "={{ $json.type }}",
+              "rightValue": "email",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "route-email",
+      "name": "Email Notification?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [3760, 500]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "is-pagerduty",
+              "leftValue": "={{ $json.type }}",
+              "rightValue": "pagerduty",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "route-pagerduty",
+      "name": "PagerDuty Notification?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [3760, 700]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://webexapis.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"roomId\": \"{{ $json.roomId }}\",\n  \"markdown\": {{ JSON.stringify($json.message) }}\n}",
+        "options": {}
+      },
+      "id": "send-webex-notification",
+      "name": "Send Webex Alert",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [3980, 200],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "webex-auth",
+          "name": "Webex API Token"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "fromEmail": "ir-automation@company.com",
+        "toEmail": "={{ $json.recipients.join(', ') }}",
+        "subject": "={{ $json.subject }}",
+        "text": "={{ $json.body }}",
+        "options": {}
+      },
+      "id": "send-email-notification",
+      "name": "Send Email Alert",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [3980, 500],
+      "credentials": {
+        "smtp": {
+          "id": "smtp-credentials",
+          "name": "Company SMTP"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://events.pagerduty.com/v2/enqueue",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"routing_key\": \"{{ $json.routingKey }}\",\n  \"event_action\": \"trigger\",\n  \"payload\": {\n    \"summary\": \"{{ $json.summary }}\",\n    \"severity\": \"{{ $json.severity }}\",\n    \"source\": \"{{ $json.source }}\",\n    \"custom_details\": {\n      \"service_id\": \"{{ $json.serviceId }}\"\n    }\n  }\n}",
+        "options": {}
+      },
+      "id": "send-pagerduty-alert",
+      "name": "Send PagerDuty Alert",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [3980, 700],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Set up status update reminder\nconst incidentData = $('Create Incident Timeline').first().json.incidentData;\nconst warRoomId = $('Create Incident Timeline').first().json.warRoomId;\nconst updateInterval = incidentData.severityConfig.updateIntervalMinutes;\n\nreturn {\n  json: {\n    warRoomId,\n    incidentId: incidentData.incidentId,\n    severity: incidentData.severity,\n    updateIntervalMinutes: updateInterval,\n    nextUpdateTime: new Date(Date.now() + updateInterval * 60 * 1000).toISOString(),\n    reminderMessage: `**STATUS UPDATE REMINDER**\\n\\n` +\n      `This is your ${updateInterval}-minute status update reminder for incident **${incidentData.incidentId}**.\\n\\n` +\n      `Please post an update including:\\n` +\n      `- Current containment status\\n` +\n      `- New findings or evidence\\n` +\n      `- Blockers or escalations needed\\n` +\n      `- Next actions planned\\n\\n` +\n      `*This is an automated reminder. Next update in ${updateInterval} minutes.*`\n  }\n};"
+      },
+      "id": "setup-update-reminder",
+      "name": "Setup Update Reminder",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [4200, 500]
+    },
+    {
+      "parameters": {
+        "amount": "={{ $json.updateIntervalMinutes }}",
+        "unit": "minutes"
+      },
+      "id": "wait-for-update",
+      "name": "Wait for Update Interval",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [4420, 500],
+      "webhookId": "update-reminder-webhook"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://webexapis.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"roomId\": \"{{ $json.warRoomId }}\",\n  \"markdown\": {{ JSON.stringify($json.reminderMessage) }}\n}",
+        "options": {}
+      },
+      "id": "post-update-reminder",
+      "name": "Post Update Reminder",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [4640, 500],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "webex-auth",
+          "name": "Webex API Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Check if incident is still active and loop back for next reminder\nconst warRoomId = $json.warRoomId;\nconst incidentId = $json.incidentId;\nconst updateIntervalMinutes = $json.updateIntervalMinutes;\n\n// In production, this would check XSOAR/ServiceNow for incident status\n// For now, we assume the incident is still active\nconst isStillActive = true;\n\nif (isStillActive) {\n  return {\n    json: {\n      warRoomId,\n      incidentId,\n      updateIntervalMinutes,\n      nextUpdateTime: new Date(Date.now() + updateIntervalMinutes * 60 * 1000).toISOString(),\n      reminderMessage: `**STATUS UPDATE REMINDER**\\n\\n` +\n        `This is your ${updateIntervalMinutes}-minute status update reminder for incident **${incidentId}**.\\n\\n` +\n        `Please post an update including:\\n` +\n        `- Current containment status\\n` +\n        `- New findings or evidence\\n` +\n        `- Blockers or escalations needed\\n` +\n        `- Next actions planned\\n\\n` +\n        `*This is an automated reminder. Next update in ${updateIntervalMinutes} minutes.*`,\n      continueLoop: true\n    }\n  };\n}\n\nreturn {\n  json: {\n    warRoomId,\n    incidentId,\n    continueLoop: false,\n    message: 'Incident closed - stopping reminders'\n  }\n};"
+      },
+      "id": "check-incident-status",
+      "name": "Check Incident Status",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [4860, 500]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "continue-loop",
+              "leftValue": "={{ $json.continueLoop }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "should-continue-reminders",
+      "name": "Continue Reminders?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [5080, 500]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"status\": \"success\",\n  \"incident_id\": \"{{ $('Parse Incident Declaration').first().json.incidentId }}\",\n  \"war_room_id\": \"{{ $('Create Webex War Room').first().json.id }}\",\n  \"war_room_name\": \"{{ $('Parse Incident Declaration').first().json.warRoomName }}\",\n  \"severity\": \"{{ $('Parse Incident Declaration').first().json.severity }}\",\n  \"incident_type\": \"{{ $('Parse Incident Declaration').first().json.incidentType }}\",\n  \"team_members_added\": {{ $('Prepare Team Invitations').all().length }},\n  \"message\": \"War room created and incident response initiated\",\n  \"timestamp\": \"{{ $now.toISOString() }}\"\n}",
+        "options": {}
+      },
+      "id": "respond-success",
+      "name": "Respond - Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [2000, 1000]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Log action in war room for audit trail\nconst warRoomId = $('Create Webex War Room').first().json.id;\nconst incidentId = $('Parse Incident Declaration').first().json.incidentId;\n\nconst logEntry = `**[AUTOMATION LOG]** War room successfully created and all notifications dispatched.\\n\\n` +\n  `- Team members invited\\n` +\n  `- Initial briefing posted\\n` +\n  `- Evidence collection initiated\\n` +\n  `- Timeline document created\\n` +\n  `- Leadership notifications sent\\n\\n` +\n  `*All actions in this room will be logged for incident timeline.*`;\n\nreturn {\n  json: {\n    warRoomId,\n    incidentId,\n    logEntry\n  }\n};"
+      },
+      "id": "prepare-final-log",
+      "name": "Prepare Final Log Entry",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [4200, 800]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://webexapis.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"roomId\": \"{{ $json.warRoomId }}\",\n  \"markdown\": {{ JSON.stringify($json.logEntry) }}\n}",
+        "options": {}
+      },
+      "id": "post-final-log",
+      "name": "Post Automation Log",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [4420, 800],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "webex-auth",
+          "name": "Webex API Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://xsoar.company.com/incident/update",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"id\": \"{{ $('Parse Incident Declaration').first().json.sourceTicketId }}\",\n  \"customFields\": {\n    \"majorincidentdeclared\": true,\n    \"warroomid\": \"{{ $('Create Webex War Room').first().json.id }}\",\n    \"warroomname\": \"{{ $('Parse Incident Declaration').first().json.warRoomName }}\",\n    \"incidentcommander\": \"{{ $('Parse Incident Declaration').first().json.incidentCommander?.name || 'TBD' }}\"\n  },\n  \"notes\": [\n    {\n      \"content\": \"Major Incident War Room created: {{ $('Parse Incident Declaration').first().json.warRoomName }}\",\n      \"type\": \"war_room\"\n    }\n  ]\n}",
+        "options": {}
+      },
+      "id": "update-xsoar-ticket",
+      "name": "Update XSOAR Ticket",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [4420, 1000],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "xsoar-auth",
+          "name": "XSOAR API Key"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {},
+      "id": "reminders-stopped",
+      "name": "Reminders Stopped",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [5300, 600]
+    }
+  ],
+  "connections": {
+    "Webhook - Incident Declaration": {
+      "main": [
+        [
+          {
+            "node": "Parse Incident Declaration",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Incident Declaration": {
+      "main": [
+        [
+          {
+            "node": "Create Webex War Room",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Webex War Room": {
+      "main": [
+        [
+          {
+            "node": "Prepare Team Invitations",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Team Invitations": {
+      "main": [
+        [
+          {
+            "node": "Add Team Members to War Room",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Add Team Members to War Room": {
+      "main": [
+        [
+          {
+            "node": "Format Initial Briefing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Initial Briefing": {
+      "main": [
+        [
+          {
+            "node": "Post Initial Briefing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Post Initial Briefing": {
+      "main": [
+        [
+          {
+            "node": "Prepare Evidence Collection",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Evidence Collection": {
+      "main": [
+        [
+          {
+            "node": "CrowdStrike Auth",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Tanium Auth",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get QRadar Offenses",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Prepare Network Log Query",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Respond - Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CrowdStrike Auth": {
+      "main": [
+        [
+          {
+            "node": "Prepare CS Query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare CS Query": {
+      "main": [
+        [
+          {
+            "node": "Get CrowdStrike Detections",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get CrowdStrike Detections": {
+      "main": [
+        [
+          {
+            "node": "Get Detection Details",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Detection Details": {
+      "main": [
+        [
+          {
+            "node": "Merge Evidence",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tanium Auth": {
+      "main": [
+        [
+          {
+            "node": "Prepare Tanium Query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Tanium Query": {
+      "main": [
+        [
+          {
+            "node": "Get Tanium Endpoint State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Tanium Endpoint State": {
+      "main": [
+        [
+          {
+            "node": "Merge Evidence",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Get QRadar Offenses": {
+      "main": [
+        [
+          {
+            "node": "Merge Evidence",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Prepare Network Log Query": {
+      "main": [
+        [
+          {
+            "node": "Query Network Logs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Query Network Logs": {
+      "main": [
+        [
+          {
+            "node": "Merge Evidence",
+            "type": "main",
+            "index": 3
+          }
+        ]
+      ]
+    },
+    "Merge Evidence": {
+      "main": [
+        [
+          {
+            "node": "Create Incident Timeline",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Incident Timeline": {
+      "main": [
+        [
+          {
+            "node": "Post Timeline to War Room",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Post Timeline to War Room": {
+      "main": [
+        [
+          {
+            "node": "Prepare Notification Cascade",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Notification Cascade": {
+      "main": [
+        [
+          {
+            "node": "Webex Notification?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Email Notification?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "PagerDuty Notification?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webex Notification?": {
+      "main": [
+        [
+          {
+            "node": "Send Webex Alert",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Email Notification?": {
+      "main": [
+        [
+          {
+            "node": "Send Email Alert",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "PagerDuty Notification?": {
+      "main": [
+        [
+          {
+            "node": "Send PagerDuty Alert",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Send Webex Alert": {
+      "main": [
+        [
+          {
+            "node": "Setup Update Reminder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Email Alert": {
+      "main": [
+        [
+          {
+            "node": "Setup Update Reminder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send PagerDuty Alert": {
+      "main": [
+        [
+          {
+            "node": "Setup Update Reminder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Setup Update Reminder": {
+      "main": [
+        [
+          {
+            "node": "Wait for Update Interval",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Prepare Final Log Entry",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Update XSOAR Ticket",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait for Update Interval": {
+      "main": [
+        [
+          {
+            "node": "Post Update Reminder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Post Update Reminder": {
+      "main": [
+        [
+          {
+            "node": "Check Incident Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Incident Status": {
+      "main": [
+        [
+          {
+            "node": "Continue Reminders?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Continue Reminders?": {
+      "main": [
+        [
+          {
+            "node": "Wait for Update Interval",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reminders Stopped",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Final Log Entry": {
+      "main": [
+        [
+          {
+            "node": "Post Automation Log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "incident-response",
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z"
+    },
+    {
+      "name": "major-incident",
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z"
+    },
+    {
+      "name": "war-room",
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z"
+    },
+    {
+      "name": "automation",
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z"
+    }
+  ],
+  "triggerCount": 1,
+  "updatedAt": "2024-01-01T00:00:00.000Z",
+  "versionId": "1",
+  "meta": {
+    "templateId": "major-incident-war-room",
+    "instanceId": "",
+    "templateCredsSetupCompleted": false
+  },
+  "pinData": {}
+}

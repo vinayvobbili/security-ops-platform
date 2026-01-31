@@ -1,33 +1,32 @@
-"""QRadar IOC hunting functions using batched + parallel queries for efficiency."""
+"""QRadar IOC hunting functions using batched queries for efficiency."""
 
 import logging
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
-from typing import List, Dict, Any, Tuple, Callable
+from typing import List, Dict, Any
 
 from ..models import ToolHuntResult
 
 logger = logging.getLogger(__name__)
 
-# Max concurrent QRadar searches (tune based on QRadar capacity)
-MAX_PARALLEL_SEARCHES = 4
-
 
 def hunt_qradar(entities, hours: int) -> ToolHuntResult:
-    """Hunt IOCs in QRadar using batched + parallel queries.
+    """Hunt IOCs in QRadar using batched queries.
 
     Instead of running one query per IOC sequentially (which could take hours),
-    this batches all IOCs into ~10 queries and runs them in parallel:
-    - 4 queries for domains (webproxy, email, O365, PA firewall) - run in parallel
-    - 5 queries for IPs (general, ZPA, Entra, endpoint, PA firewall) - run in parallel
+    this batches IOCs into efficient combined queries:
+    - 1 query for domains (combined search across webproxy, email, O365, PA firewall)
+    - 1 query for IPs (combined search across ZPA, Entra, endpoint, PA firewall)
     - 1 query for hashes (endpoint)
+
+    Both domain and IP searches return context information (threat names, actions,
+    sender info, process info) which is displayed in the hunt results table.
 
     Args:
         entities: ExtractedEntities object from entity_extractor
         hours: Number of hours to search back
 
     Returns:
-        ToolHuntResult with QRadar findings
+        ToolHuntResult with QRadar findings including context for domain and IP hits
     """
     from services.qradar import QRadarClient
 
@@ -54,26 +53,22 @@ def hunt_qradar(entities, hours: int) -> ToolHuntResult:
 
     logger.info(f"[QRadar] Parallel batched hunt: {len(domains)} domains, {len(ips)} IPs, {len(all_hashes)} hashes")
 
-    # ==================== Domain Searches (4 parallel queries) ====================
+    # ==================== Domain Search (single combined query) ====================
     if domains:
         domain_events = {}  # Track events per domain
 
-        # Define search tasks: (search_func, source_name)
-        domain_tasks = [
-            (lambda: qradar.batch_search_domains_webproxy(domains, hours=hours, max_results=500), 'webproxy'),
-            (lambda: qradar.batch_search_domains_email(domains, hours=hours, max_results=500), 'email'),
-            (lambda: qradar.batch_search_domains_o365(domains, hours=hours, max_results=500), 'o365'),
-            (lambda: qradar.batch_search_domains_paloalto(domains, hours=hours, max_results=500), 'paloalto'),
-        ]
+        try:
+            logger.info(f"[QRadar] Running combined domain search across all log sources...")
+            result = qradar.batch_search_domains_combined(domains, hours=hours, max_results=500)
 
-        # Run domain searches in parallel
-        logger.info(f"[QRadar] Running {len(domain_tasks)} domain searches in parallel...")
-        results = _run_searches_parallel(domain_tasks, errors)
-
-        # Aggregate results
-        for result, source in results:
             if result and "error" not in result:
-                _aggregate_domain_hits(result.get('events', []), domains, domain_events, source)
+                _aggregate_domain_hits_with_context(result.get('events', []), domains, domain_events)
+            elif "error" in result:
+                errors.append(f"Domain combined search: {result['error']}")
+
+        except Exception as e:
+            errors.append(f"Domain combined search: {str(e)}")
+            logger.error(f"[QRadar] Domain combined search error: {e}")
 
         # Convert aggregated results to hits
         for domain, data in domain_events.items():
@@ -83,43 +78,56 @@ def hunt_qradar(entities, hours: int) -> ToolHuntResult:
                     'event_count': data['count'],
                     'sources': list(data['sources']),
                     'first_seen': data['first_seen'].strftime("%Y-%m-%d %H:%M") if data['first_seen'] else 'N/A',
-                    'last_seen': data['last_seen'].strftime("%Y-%m-%d %H:%M") if data['last_seen'] else 'N/A'
+                    'last_seen': data['last_seen'].strftime("%Y-%m-%d %H:%M") if data['last_seen'] else 'N/A',
+                    'context': list(data['context'])[:5],
+                    'users': list(data['users'])[:10],
+                    'hosts': list(data['hosts'])[:10],
+                    'recipients': list(data['recipients'])[:10],
                 })
-                logger.info(f"  [QRadar] HIT: Domain {domain} - {data['count']} events from {data['sources']}")
+                logger.info(f"  [QRadar] HIT: Domain {domain} - {data['count']} events, {len(data['users'])} users, {len(data['hosts'])} hosts")
 
-    # ==================== IP Searches (5 parallel queries) ====================
+    # ==================== IP Search (single combined query) ====================
     if ips:
         ip_events = {}  # Track events per IP
 
-        # Define search tasks
-        ip_tasks = [
-            (lambda: qradar.batch_search_ips_general(ips, hours=hours, max_results=500), 'general'),
-            (lambda: qradar.batch_search_ips_zpa(ips, hours=hours, max_results=500), 'zpa'),
-            (lambda: qradar.batch_search_ips_entra(ips, hours=hours, max_results=500), 'entra'),
-            (lambda: qradar.batch_search_ips_endpoint(ips, hours=hours, max_results=500), 'endpoint'),
-            (lambda: qradar.batch_search_ips_paloalto(ips, hours=hours, max_results=500), 'paloalto'),
-        ]
+        try:
+            logger.info(f"[QRadar] Running combined IP search across all log sources...")
+            result = qradar.batch_search_ips_combined(ips, hours=hours, max_results=500)
 
-        # Run IP searches in parallel
-        logger.info(f"[QRadar] Running {len(ip_tasks)} IP searches in parallel...")
-        results = _run_searches_parallel(ip_tasks, errors)
-
-        # Aggregate results
-        for result, source in results:
             if result and "error" not in result:
-                _aggregate_ip_hits(result.get('events', []), ips, ip_events, source)
+                _aggregate_ip_hits_with_context(result.get('events', []), ips, ip_events)
+            elif "error" in result:
+                errors.append(f"IP combined search: {result['error']}")
+
+        except Exception as e:
+            errors.append(f"IP combined search: {str(e)}")
+            logger.error(f"[QRadar] IP combined search error: {e}")
 
         # Convert aggregated results to hits
         for ip, data in ip_events.items():
             if data['count'] > 0:
+                # Determine primary direction
+                inbound = data['inbound']
+                outbound = data['outbound']
+                if outbound > inbound:
+                    direction = f"→ Outbound ({outbound})"
+                elif inbound > outbound:
+                    direction = f"← Inbound ({inbound})"
+                else:
+                    direction = f"↔ Both ({inbound}/{outbound})"
+
                 ip_hits.append({
                     'ip': ip,
                     'event_count': data['count'],
                     'sources': list(data['sources']),
                     'first_seen': data['first_seen'].strftime("%Y-%m-%d %H:%M") if data['first_seen'] else 'N/A',
-                    'last_seen': data['last_seen'].strftime("%Y-%m-%d %H:%M") if data['last_seen'] else 'N/A'
+                    'last_seen': data['last_seen'].strftime("%Y-%m-%d %H:%M") if data['last_seen'] else 'N/A',
+                    'context': list(data['context'])[:5],
+                    'users': list(data['users'])[:10],
+                    'hosts': list(data['hosts'])[:10],
+                    'direction': direction,
                 })
-                logger.info(f"  [QRadar] HIT: IP {ip} - {data['count']} events from {data['sources']}")
+                logger.info(f"  [QRadar] HIT: IP {ip} - {data['count']} events, {len(data['users'])} users, {len(data['hosts'])} hosts, {direction}")
 
     # ==================== Hash Search (1 query) ====================
     if all_hashes:
@@ -166,60 +174,30 @@ def hunt_qradar(entities, hours: int) -> ToolHuntResult:
     )
 
 
-def _run_searches_parallel(
-    tasks: List[Tuple[Callable, str]],
-    errors: List[str]
-) -> List[Tuple[Dict[str, Any], str]]:
-    """Run multiple QRadar searches in parallel.
-
-    Args:
-        tasks: List of (search_function, source_name) tuples
-        errors: List to append errors to
-
-    Returns:
-        List of (result, source_name) tuples
-    """
-    results = []
-
-    with ThreadPoolExecutor(max_workers=MAX_PARALLEL_SEARCHES) as executor:
-        # Submit all tasks
-        future_to_source = {
-            executor.submit(search_func): source
-            for search_func, source in tasks
-        }
-
-        # Collect results as they complete
-        for future in as_completed(future_to_source):
-            source = future_to_source[future]
-            try:
-                result = future.result()
-                results.append((result, source))
-                logger.info(f"[QRadar] {source} search completed")
-            except Exception as e:
-                errors.append(f"{source} batch: {str(e)}")
-                logger.error(f"[QRadar] {source} batch error: {e}")
-                results.append((None, source))
-
-    return results
-
-
-def _aggregate_domain_hits(
+def _aggregate_domain_hits_with_context(
     events: List[Dict[str, Any]],
     domains: List[str],
-    domain_events: Dict[str, Dict],
-    source: str
+    domain_events: Dict[str, Dict]
 ) -> None:
-    """Aggregate events by matching domain.
+    """Aggregate events by matching domain, extracting source, context, users, hosts, and recipients.
 
     Args:
-        events: List of events from QRadar
+        events: List of events from QRadar (from combined query)
         domains: List of domains we searched for
-        domain_events: Dict to accumulate results {domain: {count, sources, first_seen, last_seen}}
-        source: Source identifier (webproxy, email, o365, paloalto)
+        domain_events: Dict to accumulate results
     """
+    # Map QRadar log source names to short labels
+    source_map = {
+        'Zscaler Nss': 'Zscaler',
+        'Blue Coat Web Security Service': 'BlueCoat',
+        'Area1 Security': 'Area1',
+        'Abnormal Security': 'Abnormal',
+        'Palo Alto PA Series': 'PaloAlto',
+    }
+
     for event in events:
-        # Check URL, Subject, sender fields for domain matches
-        url = event.get('URL', '') or event.get('url', '') or ''
+        # Check URL, Subject, sender, TSLD fields for domain matches
+        url = event.get('URL', '') or ''
         subject = event.get('Subject', '') or ''
         sender = event.get('sender', '') or ''
         tsld = event.get('TSLD', '') or ''
@@ -233,11 +211,46 @@ def _aggregate_domain_hits(
                         'count': 0,
                         'sources': set(),
                         'first_seen': None,
-                        'last_seen': None
+                        'last_seen': None,
+                        'context': set(),
+                        'users': set(),
+                        'hosts': set(),
+                        'recipients': set(),  # Email recipients for phishing containment
                     }
 
                 domain_events[domain]['count'] += 1
+
+                # Get source from event
+                raw_source = event.get('source', '')
+                # Handle O365 (deviceType 397) which may not have logsourcetypename
+                if not raw_source and event.get('eventName'):
+                    event_name = event.get('eventName', '')
+                    if 'TI' in event_name or 'Air' in event_name:
+                        raw_source = 'O365'
+                source = source_map.get(raw_source, raw_source or 'Unknown')
                 domain_events[domain]['sources'].add(source)
+
+                # Track affected users and hosts
+                username = event.get('username', '')
+                hostname = event.get('Computer Hostname', '')
+                if username and username not in ('-', 'N/A', 'unknown'):
+                    domain_events[domain]['users'].add(username)
+                if hostname and hostname not in ('-', 'N/A', 'unknown'):
+                    domain_events[domain]['hosts'].add(hostname)
+
+                # Track email recipients (critical for phishing containment)
+                recipient = event.get('recipient', '')
+                if recipient and recipient not in ('-', 'N/A', 'unknown'):
+                    # Could be comma-separated list
+                    for r in recipient.split(','):
+                        r = r.strip()
+                        if r and '@' in r:
+                            domain_events[domain]['recipients'].add(r)
+
+                # Extract context based on source type
+                context = _extract_domain_event_context(event, source)
+                if context:
+                    domain_events[domain]['context'].add(context)
 
                 # Track timestamps
                 ts = _parse_timestamp(event.get('starttime'))
@@ -248,20 +261,92 @@ def _aggregate_domain_hits(
                         domain_events[domain]['last_seen'] = ts
 
 
-def _aggregate_ip_hits(
-    events: List[Dict[str, Any]],
-    ips: List[str],
-    ip_events: Dict[str, Dict],
-    source: str
-) -> None:
-    """Aggregate events by matching IP.
+def _extract_domain_event_context(event: Dict[str, Any], source: str) -> str:
+    """Extract meaningful context string from a domain event based on its source.
 
     Args:
-        events: List of events from QRadar
-        ips: List of IPs we searched for
-        ip_events: Dict to accumulate results {ip: {count, sources, first_seen, last_seen}}
-        source: Source identifier (general, zpa, entra, endpoint, paloalto)
+        event: Event dict from QRadar
+        source: Short source label (Zscaler, PaloAlto, Area1, etc.)
+
+    Returns:
+        Context string or empty string if no meaningful context
     """
+    parts = []
+
+    if source == 'PaloAlto':
+        threat = event.get('Threat Name', '')
+        action = event.get('Action', '')
+        subtype = event.get('PAN Log SubType', '')
+        if threat:
+            parts.append(f"Threat: {threat}")
+        if action:
+            parts.append(action)
+        elif subtype:
+            parts.append(subtype)
+
+    elif source in ('Area1', 'Abnormal'):
+        sender = event.get('sender', '')
+        subject = event.get('Subject', '')
+        if sender:
+            # Extract just the domain part of sender
+            if '@' in sender:
+                parts.append(f"From: {sender.split('@')[1]}")
+            else:
+                parts.append(f"From: {sender[:30]}")
+        if subject:
+            parts.append(f"Subj: {subject[:40]}")
+
+    elif source in ('Zscaler', 'BlueCoat'):
+        user_agent = event.get('User Agent', '')
+        action = event.get('Action', '')
+        filename = event.get('filename', '')
+        if action:
+            parts.append(action)
+        if filename:
+            parts.append(f"File: {filename[:30]}")
+        elif user_agent and len(user_agent) < 40:
+            parts.append(user_agent)
+
+    elif source == 'O365':
+        event_name = event.get('eventName', '')
+        filename = event.get('Filename', '')
+        if event_name:
+            parts.append(event_name)
+        if filename:
+            parts.append(f"File: {filename[:30]}")
+
+    else:
+        # Generic fallback
+        event_name = event.get('eventName', '')
+        if event_name:
+            parts.append(event_name[:40])
+
+    if parts:
+        return f"{source}: {', '.join(parts)}"
+    return ""
+
+
+def _aggregate_ip_hits_with_context(
+    events: List[Dict[str, Any]],
+    ips: List[str],
+    ip_events: Dict[str, Dict]
+) -> None:
+    """Aggregate events by matching IP, extracting source, context, users, hosts, and direction.
+
+    Args:
+        events: List of events from QRadar (from combined query)
+        ips: List of IPs we searched for
+        ip_events: Dict to accumulate results
+    """
+    # Map QRadar log source names to short labels
+    source_map = {
+        'Zscaler Private Access': 'ZPA',
+        'Microsoft Entra ID': 'Entra',
+        'CrowdStrikeEndpoint': 'CrowdStrike',
+        'Tanium HTTP': 'Tanium',
+        'Palo Alto PA Series': 'PaloAlto',
+    }
+
     for event in events:
         src_ip = event.get('sourceip', '')
         dst_ip = event.get('destinationip', '')
@@ -273,11 +358,39 @@ def _aggregate_ip_hits(
                         'count': 0,
                         'sources': set(),
                         'first_seen': None,
-                        'last_seen': None
+                        'last_seen': None,
+                        'context': set(),
+                        'users': set(),
+                        'hosts': set(),
+                        'inbound': 0,   # IOC is sourceip (external -> internal)
+                        'outbound': 0,  # IOC is destinationip (internal -> external)
                     }
 
                 ip_events[ip]['count'] += 1
+
+                # Track direction
+                if ip == src_ip:
+                    ip_events[ip]['inbound'] += 1
+                else:
+                    ip_events[ip]['outbound'] += 1
+
+                # Track affected users and hosts
+                username = event.get('username', '')
+                hostname = event.get('Computer Hostname', '')
+                if username and username not in ('-', 'N/A', 'unknown'):
+                    ip_events[ip]['users'].add(username)
+                if hostname and hostname not in ('-', 'N/A', 'unknown'):
+                    ip_events[ip]['hosts'].add(hostname)
+
+                # Get source from event
+                raw_source = event.get('source', 'Unknown')
+                source = source_map.get(raw_source, raw_source)
                 ip_events[ip]['sources'].add(source)
+
+                # Extract context based on source type
+                context = _extract_event_context(event, source)
+                if context:
+                    ip_events[ip]['context'].add(context)
 
                 # Track timestamps
                 ts = _parse_timestamp(event.get('starttime'))
@@ -286,6 +399,64 @@ def _aggregate_ip_hits(
                         ip_events[ip]['first_seen'] = ts
                     if ip_events[ip]['last_seen'] is None or ts > ip_events[ip]['last_seen']:
                         ip_events[ip]['last_seen'] = ts
+
+
+def _extract_event_context(event: Dict[str, Any], source: str) -> str:
+    """Extract meaningful context string from an event based on its source.
+
+    Args:
+        event: Event dict from QRadar
+        source: Short source label (ZPA, Entra, CrowdStrike, PaloAlto, etc.)
+
+    Returns:
+        Context string or empty string if no meaningful context
+    """
+    parts = []
+
+    if source == 'PaloAlto':
+        threat = event.get('Threat Name', '')
+        action = event.get('Action', '')
+        subtype = event.get('PAN Log SubType', '')
+        if threat:
+            parts.append(f"Threat: {threat}")
+        if action:
+            parts.append(action)
+        elif subtype:
+            parts.append(subtype)
+
+    elif source in ('CrowdStrike', 'Tanium'):
+        process = event.get('Process Name', '')
+        action = event.get('Action', '')
+        command = event.get('Command', '')
+        if process:
+            parts.append(f"Process: {process}")
+        if action:
+            parts.append(action)
+        if command and len(command) < 50:
+            parts.append(f"Cmd: {command}")
+
+    elif source == 'Entra':
+        status = event.get('Conditional Access Status', '')
+        event_name = event.get('eventName', '')
+        if status:
+            parts.append(f"CA: {status}")
+        if event_name and 'sign' in event_name.lower():
+            parts.append(event_name)
+
+    elif source == 'ZPA':
+        status = event.get('ZPN-Sess-Status', '')
+        if status:
+            parts.append(f"Session: {status}")
+
+    else:
+        # Generic fallback
+        event_name = event.get('eventName', '')
+        if event_name:
+            parts.append(event_name[:40])
+
+    if parts:
+        return f"{source}: {', '.join(parts)}"
+    return ""
 
 
 def _parse_timestamp(ts_value) -> datetime:

@@ -13,22 +13,23 @@ from langchain_core.tools import tool
 from services.vectra import VectraClient
 from src.utils.tool_decorator import log_tool_call
 
-# Initialize Vectra client once
+# Lazy-initialized Vectra client
 _vectra_client: Optional[VectraClient] = None
 
-try:
-    logging.info("Initializing Vectra client...")
-    _vectra_client = VectraClient()
 
-    if _vectra_client.is_configured():
-        logging.info("Vectra client initialized successfully.")
-    else:
-        logging.warning("Vectra client not configured (missing credentials). Tools will be disabled.")
-        _vectra_client = None
-
-except Exception as e:
-    logging.error(f"Failed to initialize Vectra client: {e}")
-    _vectra_client = None
+def _get_vectra_client() -> Optional[VectraClient]:
+    """Get Vectra client (lazy initialization)."""
+    global _vectra_client
+    if _vectra_client is None:
+        try:
+            client = VectraClient()
+            if client.is_configured():
+                _vectra_client = client
+            else:
+                logging.warning("Vectra client not configured (missing credentials)")
+        except Exception as e:
+            logging.error(f"Failed to initialize Vectra client: {e}")
+    return _vectra_client
 
 
 def _format_detection_result(detections: list) -> str:
@@ -219,13 +220,14 @@ def get_vectra_detections(
         state: Filter by state - "active" (default) or "inactive"
         min_threat: Minimum threat score to filter by (0-100, default 0)
     """
-    if not _vectra_client:
-        return "Error: Vectra service is not initialized."
+    client = _get_vectra_client()
+    if not client:
+        return "Error: Vectra service is not available."
 
     # Validate and cap limit
     limit = min(max(1, limit), 100)
 
-    data = _vectra_client.get_detections(
+    data = client.get_detections(
         limit=limit,
         state=state,
         threat_gte=min_threat if min_threat > 0 else None
@@ -249,10 +251,11 @@ def get_vectra_detection_details(detection_id: int) -> str:
     Args:
         detection_id: The numeric ID of the detection to retrieve
     """
-    if not _vectra_client:
-        return "Error: Vectra service is not initialized."
+    client = _get_vectra_client()
+    if not client:
+        return "Error: Vectra service is not available."
 
-    data = _vectra_client.get_detection_by_id(detection_id)
+    data = client.get_detection_by_id(detection_id)
 
     if "error" in data:
         return f"Error: {data['error']}"
@@ -272,14 +275,15 @@ def get_high_threat_detections(min_threat: int = 50, limit: int = 10) -> str:
         min_threat: Minimum threat score threshold (default 50, range 0-100)
         limit: Maximum number of results (default 10, max 50)
     """
-    if not _vectra_client:
-        return "Error: Vectra service is not initialized."
+    client = _get_vectra_client()
+    if not client:
+        return "Error: Vectra service is not available."
 
     # Validate inputs
     min_threat = max(0, min(100, min_threat))
     limit = min(max(1, limit), 50)
 
-    data = _vectra_client.get_high_threat_detections(min_threat=min_threat, limit=limit)
+    data = client.get_high_threat_detections(min_threat=min_threat, limit=limit)
 
     if "error" in data:
         return f"Error: {data['error']}"
@@ -303,11 +307,12 @@ def search_vectra_entity_by_hostname(hostname: str) -> str:
     Args:
         hostname: The hostname to search for (e.g., "WORKSTATION01")
     """
-    if not _vectra_client:
-        return "Error: Vectra service is not initialized."
+    client = _get_vectra_client()
+    if not client:
+        return "Error: Vectra service is not available."
 
     hostname = hostname.strip()
-    data = _vectra_client.search_entity_by_name(hostname, entity_type="host")
+    data = client.search_entity_by_name(hostname, entity_type="host")
 
     if "error" in data:
         return f"Error: {data['error']}"
@@ -331,11 +336,12 @@ def search_vectra_entity_by_ip(ip_address: str) -> str:
     Args:
         ip_address: The IP address to search for (e.g., "10.0.1.50")
     """
-    if not _vectra_client:
-        return "Error: Vectra service is not initialized."
+    client = _get_vectra_client()
+    if not client:
+        return "Error: Vectra service is not available."
 
     ip_address = ip_address.strip()
-    data = _vectra_client.search_entity_by_ip(ip_address)
+    data = client.search_entity_by_ip(ip_address)
 
     if "error" in data:
         return f"Error: {data['error']}"
@@ -359,10 +365,11 @@ def get_vectra_entity_details(entity_id: int) -> str:
     Args:
         entity_id: The numeric ID of the entity to retrieve
     """
-    if not _vectra_client:
-        return "Error: Vectra service is not initialized."
+    client = _get_vectra_client()
+    if not client:
+        return "Error: Vectra service is not available."
 
-    data = _vectra_client.get_entity_by_id(entity_id)
+    data = client.get_entity_by_id(entity_id)
 
     if "error" in data:
         return f"Error: {data['error']}"
@@ -381,11 +388,12 @@ def get_prioritized_vectra_entities(limit: int = 10) -> str:
     Args:
         limit: Maximum number of entities to return (default 10, max 50)
     """
-    if not _vectra_client:
-        return "Error: Vectra service is not initialized."
+    client = _get_vectra_client()
+    if not client:
+        return "Error: Vectra service is not available."
 
     limit = min(max(1, limit), 50)
-    data = _vectra_client.get_prioritized_entities(limit=limit)
+    data = client.get_prioritized_entities(limit=limit)
 
     if "error" in data:
         return f"Error: {data['error']}"

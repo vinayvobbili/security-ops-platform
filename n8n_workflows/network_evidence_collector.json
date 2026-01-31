@@ -1,0 +1,1023 @@
+{
+  "name": "Network Evidence Collector",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "network-evidence-collector",
+        "responseMode": "responseNode",
+        "options": {
+          "responseContentType": "application/json"
+        }
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [240, 400],
+      "webhookId": "network-evidence-collector"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Validate and parse incoming evidence collection request\nconst body = $input.first().json.body || $input.first().json;\n\n// Validate required fields\nconst requiredFields = ['incident_id', 'time_range'];\nconst missingFields = requiredFields.filter(field => !body[field]);\n\nif (missingFields.length > 0) {\n  throw new Error(`Missing required fields: ${missingFields.join(', ')}`);\n}\n\n// Must have either target_ip or hostname\nif (!body.target_ip && !body.hostname) {\n  throw new Error('Either target_ip or hostname must be provided');\n}\n\n// Parse time range\nconst timeRange = body.time_range;\nlet startTime, endTime;\n\nif (typeof timeRange === 'object') {\n  startTime = new Date(timeRange.start).getTime();\n  endTime = new Date(timeRange.end).getTime();\n} else {\n  // Assume ISO format strings\n  startTime = new Date(timeRange.start || timeRange).getTime();\n  endTime = new Date(timeRange.end || Date.now()).getTime();\n}\n\n// Validate time range\nif (isNaN(startTime) || isNaN(endTime)) {\n  throw new Error('Invalid time_range format. Use {start: ISO_DATE, end: ISO_DATE}');\n}\n\n// Default evidence types if not specified\nconst evidenceTypes = body.evidence_types || ['pcap', 'netflow', 'dns', 'proxy'];\nconst validTypes = ['pcap', 'netflow', 'dns', 'proxy', 'firewall'];\nconst invalidTypes = evidenceTypes.filter(t => !validTypes.includes(t));\n\nif (invalidTypes.length > 0) {\n  console.log(`Warning: Unknown evidence types will be skipped: ${invalidTypes.join(', ')}`);\n}\n\n// Generate collection job ID\nconst jobId = `NET-${body.incident_id}-${Date.now()}`;\n\nreturn {\n  json: {\n    job_id: jobId,\n    incident_id: body.incident_id,\n    target_ip: body.target_ip || null,\n    hostname: body.hostname || null,\n    target_identifier: body.target_ip || body.hostname,\n    time_range: {\n      start: startTime,\n      end: endTime,\n      start_iso: new Date(startTime).toISOString(),\n      end_iso: new Date(endTime).toISOString(),\n      duration_hours: Math.round((endTime - startTime) / 3600000 * 100) / 100\n    },\n    evidence_types: evidenceTypes.filter(t => validTypes.includes(t)),\n    requester: body.requester || 'unknown',\n    requester_email: body.requester_email || null,\n    webex_room_id: body.webex_room_id || null,\n    xsoar_ticket_id: body.xsoar_ticket_id || null,\n    collection_started: new Date().toISOString(),\n    status: 'in_progress'\n  }\n};"
+      },
+      "id": "validate-request",
+      "name": "Validate Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Prepare parallel collection jobs for each evidence source\nconst request = $input.first().json;\n\n// Pass through to parallel branches\nreturn {\n  json: {\n    ...request,\n    collect_qradar: request.evidence_types.some(t => ['pcap', 'netflow', 'firewall'].includes(t)),\n    collect_zscaler: request.evidence_types.includes('proxy'),\n    collect_dns: request.evidence_types.includes('dns'),\n    collect_firewall: request.evidence_types.includes('firewall')\n  }\n};"
+      },
+      "id": "prepare-parallel-collection",
+      "name": "Prepare Parallel Collection",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://YOUR_QRADAR_HOST/api/ariel/searches",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "SEC",
+              "value": "YOUR_QRADAR_API_TOKEN"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Version",
+              "value": "19.0"
+            }
+          ]
+        },
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "query_expression",
+              "value": "=SELECT QIDNAME(qid) as event_name, sourceip, destinationip, sourceport, destinationport, protocol, LOGSOURCENAME(logsourceid) as log_source, category, magnitude, CATEGORYNAME(category) as category_name, PROTOCOLNAME(protocolid) as protocol_name, eventcount, username, UTF8(payload) as payload_sample, starttime, endtime FROM events WHERE (sourceip = '{{ $json.target_ip }}' OR destinationip = '{{ $json.target_ip }}' OR sourceip = '{{ $json.hostname }}' OR destinationip = '{{ $json.hostname }}') AND starttime >= {{ $json.time_range.start }} AND endtime <= {{ $json.time_range.end }} ORDER BY starttime DESC LIMIT 5000"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "qradar-search",
+      "name": "QRadar Network Events Search",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [900, 100],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://YOUR_QRADAR_HOST/api/ariel/searches/{{ $json.search_id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "SEC",
+              "value": "YOUR_QRADAR_API_TOKEN"
+            },
+            {
+              "name": "Version",
+              "value": "19.0"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "qradar-wait-results",
+      "name": "Wait for QRadar Results",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1120, 100],
+      "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "waitBetweenTries": 3000,
+      "maxTries": 10
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://YOUR_QRADAR_HOST/api/ariel/searches/{{ $('QRadar Network Events Search').first().json.search_id }}/results",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "SEC",
+              "value": "YOUR_QRADAR_API_TOKEN"
+            },
+            {
+              "name": "Version",
+              "value": "19.0"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "qradar-get-results",
+      "name": "Get QRadar Search Results",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1340, 100],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Process QRadar network events\nconst searchResults = $input.first().json;\nconst request = $('Prepare Parallel Collection').first().json;\n\nconst events = searchResults.events || searchResults.flows || [];\n\n// Aggregate statistics\nconst stats = {\n  total_events: events.length,\n  unique_source_ips: [...new Set(events.map(e => e.sourceip).filter(Boolean))],\n  unique_dest_ips: [...new Set(events.map(e => e.destinationip).filter(Boolean))],\n  unique_ports: [...new Set(events.flatMap(e => [e.sourceport, e.destinationport]).filter(Boolean))],\n  protocols: [...new Set(events.map(e => e.protocol_name || e.protocol).filter(Boolean))],\n  categories: [...new Set(events.map(e => e.category_name || e.category).filter(Boolean))],\n  log_sources: [...new Set(events.map(e => e.log_source).filter(Boolean))]\n};\n\n// Calculate data transfer volumes\nlet totalBytes = 0;\nlet inboundBytes = 0;\nlet outboundBytes = 0;\n\nfor (const event of events) {\n  const bytes = event.bytes || event.eventcount || 0;\n  totalBytes += bytes;\n  if (event.destinationip === request.target_ip) {\n    inboundBytes += bytes;\n  } else {\n    outboundBytes += bytes;\n  }\n}\n\n// Identify potentially suspicious connections\nconst suspiciousEvents = events.filter(e => {\n  const magnitude = e.magnitude || 0;\n  const category = (e.category_name || '').toLowerCase();\n  return magnitude >= 5 || \n         category.includes('malware') ||\n         category.includes('suspicious') ||\n         category.includes('attack') ||\n         category.includes('exploit') ||\n         category.includes('reconnaissance');\n});\n\n// Create timeline entries\nconst timeline = events.slice(0, 100).map(e => ({\n  timestamp: new Date(e.starttime).toISOString(),\n  event_name: e.event_name || 'Unknown Event',\n  source: `${e.sourceip}:${e.sourceport || '-'}`,\n  destination: `${e.destinationip}:${e.destinationport || '-'}`,\n  protocol: e.protocol_name || e.protocol || 'N/A',\n  category: e.category_name || e.category || 'N/A',\n  magnitude: e.magnitude || 0\n}));\n\nreturn {\n  json: {\n    source: 'qradar',\n    status: 'success',\n    job_id: request.job_id,\n    incident_id: request.incident_id,\n    target: request.target_identifier,\n    time_range: request.time_range,\n    statistics: stats,\n    data_transfer: {\n      total_bytes: totalBytes,\n      inbound_bytes: inboundBytes,\n      outbound_bytes: outboundBytes,\n      total_formatted: formatBytes(totalBytes),\n      inbound_formatted: formatBytes(inboundBytes),\n      outbound_formatted: formatBytes(outboundBytes)\n    },\n    suspicious_events: {\n      count: suspiciousEvents.length,\n      events: suspiciousEvents.slice(0, 50)\n    },\n    timeline: timeline,\n    raw_event_count: events.length,\n    collected_at: new Date().toISOString()\n  }\n};\n\nfunction formatBytes(bytes) {\n  if (bytes === 0) return '0 Bytes';\n  const k = 1024;\n  const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];\n  const i = Math.floor(Math.log(bytes) / Math.log(k));\n  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];\n}"
+      },
+      "id": "process-qradar-results",
+      "name": "Process QRadar Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1560, 100]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.zscaler.net/api/v1/webApplicationRules/urlLookup",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer YOUR_ZSCALER_API_TOKEN"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"searchType\": \"IP\",\n  \"values\": [\"{{ $json.target_ip || $json.hostname }}\"]\n}",
+        "options": {}
+      },
+      "id": "zscaler-lookup",
+      "name": "Zscaler Target Lookup",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [900, 300],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.zscaler.net/api/v1/webApplicationActivity",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer YOUR_ZSCALER_API_TOKEN"
+            }
+          ]
+        },
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "startTime",
+              "value": "={{ $('Prepare Parallel Collection').first().json.time_range.start_iso }}"
+            },
+            {
+              "name": "endTime",
+              "value": "={{ $('Prepare Parallel Collection').first().json.time_range.end_iso }}"
+            },
+            {
+              "name": "srcIp",
+              "value": "={{ $('Prepare Parallel Collection').first().json.target_ip || $('Prepare Parallel Collection').first().json.hostname }}"
+            },
+            {
+              "name": "limit",
+              "value": "5000"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "zscaler-web-activity",
+      "name": "Zscaler Web Activity",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1120, 300],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Process Zscaler web activity logs\nconst lookupResult = $('Zscaler Target Lookup').first().json;\nconst activityResult = $input.first().json;\nconst request = $('Prepare Parallel Collection').first().json;\n\nconst activities = activityResult.data || activityResult.webActivity || activityResult || [];\nconst activityList = Array.isArray(activities) ? activities : [activities];\n\n// Aggregate web activity statistics\nconst stats = {\n  total_requests: activityList.length,\n  unique_domains: [...new Set(activityList.map(a => a.hostname || a.url || a.domain).filter(Boolean))],\n  unique_urls: [...new Set(activityList.map(a => a.url).filter(Boolean))],\n  categories: [...new Set(activityList.map(a => a.urlCategory || a.category).filter(Boolean))],\n  actions: [...new Set(activityList.map(a => a.action).filter(Boolean))],\n  departments: [...new Set(activityList.map(a => a.department).filter(Boolean))]\n};\n\n// Calculate traffic statistics\nlet totalBytes = 0;\nlet uploadBytes = 0;\nlet downloadBytes = 0;\n\nfor (const activity of activityList) {\n  const reqBytes = activity.requestSize || 0;\n  const respBytes = activity.responseSize || 0;\n  uploadBytes += reqBytes;\n  downloadBytes += respBytes;\n  totalBytes += reqBytes + respBytes;\n}\n\n// Identify blocked/suspicious activity\nconst blockedActivity = activityList.filter(a => {\n  const action = (a.action || '').toLowerCase();\n  return action.includes('block') || action.includes('deny') || action.includes('isolate');\n});\n\nconst suspiciousCategories = ['malware', 'phishing', 'botnet', 'spam', 'adult', 'gambling', 'proxy', 'anonymizer', 'hacking'];\nconst suspiciousActivity = activityList.filter(a => {\n  const category = (a.urlCategory || a.category || '').toLowerCase();\n  return suspiciousCategories.some(sc => category.includes(sc));\n});\n\n// Create timeline entries\nconst timeline = activityList.slice(0, 100).map(a => ({\n  timestamp: a.datetime || a.timestamp || new Date().toISOString(),\n  url: a.url || a.hostname || 'N/A',\n  category: a.urlCategory || a.category || 'N/A',\n  action: a.action || 'allowed',\n  user: a.user || a.username || 'N/A',\n  bytes: (a.requestSize || 0) + (a.responseSize || 0)\n}));\n\nreturn {\n  json: {\n    source: 'zscaler',\n    status: 'success',\n    job_id: request.job_id,\n    incident_id: request.incident_id,\n    target: request.target_identifier,\n    time_range: request.time_range,\n    statistics: stats,\n    data_transfer: {\n      total_bytes: totalBytes,\n      upload_bytes: uploadBytes,\n      download_bytes: downloadBytes,\n      total_formatted: formatBytes(totalBytes),\n      upload_formatted: formatBytes(uploadBytes),\n      download_formatted: formatBytes(downloadBytes)\n    },\n    blocked_activity: {\n      count: blockedActivity.length,\n      activities: blockedActivity.slice(0, 50)\n    },\n    suspicious_activity: {\n      count: suspiciousActivity.length,\n      activities: suspiciousActivity.slice(0, 50)\n    },\n    timeline: timeline,\n    raw_activity_count: activityList.length,\n    collected_at: new Date().toISOString()\n  }\n};\n\nfunction formatBytes(bytes) {\n  if (bytes === 0) return '0 Bytes';\n  const k = 1024;\n  const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];\n  const i = Math.floor(Math.log(bytes) / Math.log(k));\n  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];\n}"
+      },
+      "id": "process-zscaler-results",
+      "name": "Process Zscaler Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1560, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://YOUR_QRADAR_HOST/api/ariel/searches",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "SEC",
+              "value": "YOUR_QRADAR_API_TOKEN"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Version",
+              "value": "19.0"
+            }
+          ]
+        },
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "query_expression",
+              "value": "=SELECT sourceip, destinationip, DOMAINNAME(dnsdomainid) as dns_domain, DNS as query_name, QIDNAME(qid) as event_name, LOGSOURCENAME(logsourceid) as log_source, starttime, eventcount, category FROM events WHERE category = 18 AND (sourceip = '{{ $json.target_ip }}' OR sourceip = '{{ $json.hostname }}') AND starttime >= {{ $json.time_range.start }} AND endtime <= {{ $json.time_range.end }} ORDER BY starttime DESC LIMIT 5000"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "dns-query-qradar",
+      "name": "DNS Logs Query (QRadar)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [900, 500],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://YOUR_QRADAR_HOST/api/ariel/searches/{{ $json.search_id }}/results",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "SEC",
+              "value": "YOUR_QRADAR_API_TOKEN"
+            },
+            {
+              "name": "Version",
+              "value": "19.0"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "get-dns-results",
+      "name": "Get DNS Query Results",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1120, 500],
+      "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "waitBetweenTries": 3000,
+      "maxTries": 10
+    },
+    {
+      "parameters": {
+        "jsCode": "// Process DNS query logs\nconst dnsResults = $input.first().json;\nconst request = $('Prepare Parallel Collection').first().json;\n\nconst events = dnsResults.events || dnsResults || [];\nconst eventList = Array.isArray(events) ? events : [events];\n\n// Aggregate DNS statistics\nconst uniqueDomains = [...new Set(eventList.map(e => e.dns_domain || e.query_name || e.DNS).filter(Boolean))];\nconst uniqueResolvers = [...new Set(eventList.map(e => e.destinationip).filter(Boolean))];\n\nconst stats = {\n  total_queries: eventList.length,\n  unique_domains: uniqueDomains,\n  unique_resolvers: uniqueResolvers,\n  domain_count: uniqueDomains.length\n};\n\n// Identify suspicious DNS activity\n// DGA detection: domains with high entropy or unusual patterns\nfunction calculateEntropy(str) {\n  const len = str.length;\n  if (len === 0) return 0;\n  const freq = {};\n  for (const char of str) {\n    freq[char] = (freq[char] || 0) + 1;\n  }\n  let entropy = 0;\n  for (const char in freq) {\n    const p = freq[char] / len;\n    entropy -= p * Math.log2(p);\n  }\n  return entropy;\n}\n\nconst suspiciousDomains = uniqueDomains.filter(domain => {\n  if (!domain) return false;\n  const parts = domain.split('.');\n  const mainPart = parts[0];\n  \n  // Check for DGA-like patterns\n  const entropy = calculateEntropy(mainPart);\n  const hasNumbers = /\\d{4,}/.test(mainPart);\n  const tooLong = mainPart.length > 25;\n  const randomLooking = entropy > 4.0 && mainPart.length > 10;\n  \n  return hasNumbers || tooLong || randomLooking;\n});\n\n// Group queries by domain for frequency analysis\nconst domainFrequency = {};\nfor (const event of eventList) {\n  const domain = event.dns_domain || event.query_name || event.DNS;\n  if (domain) {\n    domainFrequency[domain] = (domainFrequency[domain] || 0) + 1;\n  }\n}\n\n// Sort by frequency\nconst topDomains = Object.entries(domainFrequency)\n  .sort((a, b) => b[1] - a[1])\n  .slice(0, 50)\n  .map(([domain, count]) => ({ domain, query_count: count }));\n\n// Create timeline entries\nconst timeline = eventList.slice(0, 100).map(e => ({\n  timestamp: new Date(e.starttime).toISOString(),\n  query: e.dns_domain || e.query_name || e.DNS || 'N/A',\n  resolver: e.destinationip || 'N/A',\n  source: e.sourceip || 'N/A',\n  event_type: e.event_name || 'DNS Query'\n}));\n\nreturn {\n  json: {\n    source: 'dns',\n    status: 'success',\n    job_id: request.job_id,\n    incident_id: request.incident_id,\n    target: request.target_identifier,\n    time_range: request.time_range,\n    statistics: stats,\n    suspicious_domains: {\n      count: suspiciousDomains.length,\n      domains: suspiciousDomains.slice(0, 50)\n    },\n    top_domains: topDomains,\n    timeline: timeline,\n    raw_query_count: eventList.length,\n    collected_at: new Date().toISOString()\n  }\n};"
+      },
+      "id": "process-dns-results",
+      "name": "Process DNS Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1560, 500]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://YOUR_FIREWALL_API/api/v1/logs/search",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer YOUR_FIREWALL_API_TOKEN"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"query\": {\n    \"$or\": [\n      {\"srcip\": \"{{ $json.target_ip || $json.hostname }}\"},\n      {\"dstip\": \"{{ $json.target_ip || $json.hostname }}\"}\n    ],\n    \"timestamp\": {\n      \"$gte\": {{ $json.time_range.start }},\n      \"$lte\": {{ $json.time_range.end }}\n    }\n  },\n  \"limit\": 5000,\n  \"fields\": [\"timestamp\", \"srcip\", \"dstip\", \"srcport\", \"dstport\", \"proto\", \"action\", \"bytes_sent\", \"bytes_recv\", \"policy_name\", \"app\", \"user\"]\n}",
+        "options": {}
+      },
+      "id": "firewall-logs-query",
+      "name": "Firewall Logs Query",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [900, 700],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Process firewall connection logs\nconst fwResults = $input.first().json;\nconst request = $('Prepare Parallel Collection').first().json;\n\nconst logs = fwResults.logs || fwResults.data || fwResults || [];\nconst logList = Array.isArray(logs) ? logs : [logs];\n\n// Aggregate firewall statistics\nconst stats = {\n  total_connections: logList.length,\n  unique_source_ips: [...new Set(logList.map(l => l.srcip).filter(Boolean))],\n  unique_dest_ips: [...new Set(logList.map(l => l.dstip).filter(Boolean))],\n  unique_dest_ports: [...new Set(logList.map(l => l.dstport).filter(Boolean))],\n  protocols: [...new Set(logList.map(l => l.proto).filter(Boolean))],\n  actions: [...new Set(logList.map(l => l.action).filter(Boolean))],\n  policies: [...new Set(logList.map(l => l.policy_name).filter(Boolean))],\n  applications: [...new Set(logList.map(l => l.app).filter(Boolean))]\n};\n\n// Calculate traffic volumes\nlet totalBytesSent = 0;\nlet totalBytesRecv = 0;\n\nfor (const log of logList) {\n  totalBytesSent += log.bytes_sent || 0;\n  totalBytesRecv += log.bytes_recv || 0;\n}\n\n// Identify blocked connections\nconst blockedConnections = logList.filter(l => {\n  const action = (l.action || '').toLowerCase();\n  return action.includes('deny') || action.includes('block') || action.includes('drop') || action.includes('reject');\n});\n\n// Identify connections to unusual ports\nconst unusualPorts = [4444, 5555, 6666, 8888, 9999, 1337, 31337, 12345, 54321];\nconst suspiciousConnections = logList.filter(l => {\n  const dstPort = l.dstport || 0;\n  return unusualPorts.includes(dstPort) || (dstPort > 49152 && dstPort < 65535);\n});\n\n// Port frequency analysis\nconst portFrequency = {};\nfor (const log of logList) {\n  const port = log.dstport;\n  if (port) {\n    portFrequency[port] = (portFrequency[port] || 0) + 1;\n  }\n}\n\nconst topPorts = Object.entries(portFrequency)\n  .sort((a, b) => b[1] - a[1])\n  .slice(0, 20)\n  .map(([port, count]) => ({ port: parseInt(port), connection_count: count }));\n\n// Create timeline entries\nconst timeline = logList.slice(0, 100).map(l => ({\n  timestamp: new Date(l.timestamp).toISOString(),\n  source: `${l.srcip}:${l.srcport || '-'}`,\n  destination: `${l.dstip}:${l.dstport || '-'}`,\n  protocol: l.proto || 'N/A',\n  action: l.action || 'N/A',\n  application: l.app || 'N/A',\n  bytes: (l.bytes_sent || 0) + (l.bytes_recv || 0)\n}));\n\nreturn {\n  json: {\n    source: 'firewall',\n    status: 'success',\n    job_id: request.job_id,\n    incident_id: request.incident_id,\n    target: request.target_identifier,\n    time_range: request.time_range,\n    statistics: stats,\n    data_transfer: {\n      bytes_sent: totalBytesSent,\n      bytes_recv: totalBytesRecv,\n      total_bytes: totalBytesSent + totalBytesRecv,\n      sent_formatted: formatBytes(totalBytesSent),\n      recv_formatted: formatBytes(totalBytesRecv),\n      total_formatted: formatBytes(totalBytesSent + totalBytesRecv)\n    },\n    blocked_connections: {\n      count: blockedConnections.length,\n      connections: blockedConnections.slice(0, 50)\n    },\n    suspicious_connections: {\n      count: suspiciousConnections.length,\n      connections: suspiciousConnections.slice(0, 50)\n    },\n    top_destination_ports: topPorts,\n    timeline: timeline,\n    raw_log_count: logList.length,\n    collected_at: new Date().toISOString()\n  }\n};\n\nfunction formatBytes(bytes) {\n  if (bytes === 0) return '0 Bytes';\n  const k = 1024;\n  const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];\n  const i = Math.floor(Math.log(bytes) / Math.log(k));\n  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];\n}"
+      },
+      "id": "process-firewall-results",
+      "name": "Process Firewall Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1560, 700]
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "mergeByFields": {
+          "values": []
+        },
+        "options": {}
+      },
+      "id": "merge-all-evidence",
+      "name": "Merge All Evidence",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2.1,
+      "position": [1780, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Compile comprehensive evidence package\nconst inputs = $input.all();\nconst request = $('Prepare Parallel Collection').first().json;\n\n// Gather all evidence data\nlet qradarEvidence = null;\nlet zscalerEvidence = null;\nlet dnsEvidence = null;\nlet firewallEvidence = null;\n\nfor (const input of inputs) {\n  const data = input.json;\n  switch (data.source) {\n    case 'qradar':\n      qradarEvidence = data;\n      break;\n    case 'zscaler':\n      zscalerEvidence = data;\n      break;\n    case 'dns':\n      dnsEvidence = data;\n      break;\n    case 'firewall':\n      firewallEvidence = data;\n      break;\n  }\n}\n\n// Generate unified timeline\nconst allTimelineEntries = [];\n\nif (qradarEvidence?.timeline) {\n  allTimelineEntries.push(...qradarEvidence.timeline.map(e => ({ ...e, source: 'QRadar' })));\n}\nif (zscalerEvidence?.timeline) {\n  allTimelineEntries.push(...zscalerEvidence.timeline.map(e => ({ ...e, source: 'Zscaler' })));\n}\nif (dnsEvidence?.timeline) {\n  allTimelineEntries.push(...dnsEvidence.timeline.map(e => ({ ...e, source: 'DNS' })));\n}\nif (firewallEvidence?.timeline) {\n  allTimelineEntries.push(...firewallEvidence.timeline.map(e => ({ ...e, source: 'Firewall' })));\n}\n\n// Sort timeline by timestamp\nallTimelineEntries.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));\n\n// Calculate total data transfer\nconst totalDataTransfer = {\n  total_bytes: 0,\n  inbound_bytes: 0,\n  outbound_bytes: 0\n};\n\nif (qradarEvidence?.data_transfer) {\n  totalDataTransfer.total_bytes += qradarEvidence.data_transfer.total_bytes || 0;\n  totalDataTransfer.inbound_bytes += qradarEvidence.data_transfer.inbound_bytes || 0;\n  totalDataTransfer.outbound_bytes += qradarEvidence.data_transfer.outbound_bytes || 0;\n}\nif (zscalerEvidence?.data_transfer) {\n  totalDataTransfer.total_bytes += zscalerEvidence.data_transfer.total_bytes || 0;\n  totalDataTransfer.inbound_bytes += zscalerEvidence.data_transfer.download_bytes || 0;\n  totalDataTransfer.outbound_bytes += zscalerEvidence.data_transfer.upload_bytes || 0;\n}\nif (firewallEvidence?.data_transfer) {\n  totalDataTransfer.total_bytes += firewallEvidence.data_transfer.total_bytes || 0;\n  totalDataTransfer.inbound_bytes += firewallEvidence.data_transfer.bytes_recv || 0;\n  totalDataTransfer.outbound_bytes += firewallEvidence.data_transfer.bytes_sent || 0;\n}\n\n// Compile all suspicious findings\nconst suspiciousFindings = [];\n\nif (qradarEvidence?.suspicious_events?.count > 0) {\n  suspiciousFindings.push({\n    source: 'QRadar',\n    type: 'Network Events',\n    count: qradarEvidence.suspicious_events.count,\n    details: qradarEvidence.suspicious_events.events.slice(0, 10)\n  });\n}\nif (zscalerEvidence?.suspicious_activity?.count > 0) {\n  suspiciousFindings.push({\n    source: 'Zscaler',\n    type: 'Web Activity',\n    count: zscalerEvidence.suspicious_activity.count,\n    details: zscalerEvidence.suspicious_activity.activities.slice(0, 10)\n  });\n}\nif (zscalerEvidence?.blocked_activity?.count > 0) {\n  suspiciousFindings.push({\n    source: 'Zscaler',\n    type: 'Blocked Requests',\n    count: zscalerEvidence.blocked_activity.count,\n    details: zscalerEvidence.blocked_activity.activities.slice(0, 10)\n  });\n}\nif (dnsEvidence?.suspicious_domains?.count > 0) {\n  suspiciousFindings.push({\n    source: 'DNS',\n    type: 'Suspicious Domains',\n    count: dnsEvidence.suspicious_domains.count,\n    details: dnsEvidence.suspicious_domains.domains.slice(0, 10)\n  });\n}\nif (firewallEvidence?.blocked_connections?.count > 0) {\n  suspiciousFindings.push({\n    source: 'Firewall',\n    type: 'Blocked Connections',\n    count: firewallEvidence.blocked_connections.count,\n    details: firewallEvidence.blocked_connections.connections.slice(0, 10)\n  });\n}\nif (firewallEvidence?.suspicious_connections?.count > 0) {\n  suspiciousFindings.push({\n    source: 'Firewall',\n    type: 'Suspicious Port Connections',\n    count: firewallEvidence.suspicious_connections.count,\n    details: firewallEvidence.suspicious_connections.connections.slice(0, 10)\n  });\n}\n\n// Determine overall risk level\nlet riskLevel = 'LOW';\nlet riskScore = 0;\n\nfor (const finding of suspiciousFindings) {\n  riskScore += finding.count;\n}\n\nif (riskScore >= 20) riskLevel = 'CRITICAL';\nelse if (riskScore >= 10) riskLevel = 'HIGH';\nelse if (riskScore >= 5) riskLevel = 'MEDIUM';\n\n// Format data transfer\nfunction formatBytes(bytes) {\n  if (bytes === 0) return '0 Bytes';\n  const k = 1024;\n  const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];\n  const i = Math.floor(Math.log(bytes) / Math.log(k));\n  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];\n}\n\nreturn {\n  json: {\n    job_id: request.job_id,\n    incident_id: request.incident_id,\n    target: request.target_identifier,\n    time_range: request.time_range,\n    requester: request.requester,\n    collection_started: request.collection_started,\n    collection_completed: new Date().toISOString(),\n    status: 'completed',\n    risk_assessment: {\n      level: riskLevel,\n      score: riskScore,\n      suspicious_finding_count: suspiciousFindings.length\n    },\n    data_transfer_summary: {\n      ...totalDataTransfer,\n      total_formatted: formatBytes(totalDataTransfer.total_bytes),\n      inbound_formatted: formatBytes(totalDataTransfer.inbound_bytes),\n      outbound_formatted: formatBytes(totalDataTransfer.outbound_bytes)\n    },\n    evidence_sources: {\n      qradar: qradarEvidence ? 'collected' : 'not_available',\n      zscaler: zscalerEvidence ? 'collected' : 'not_available',\n      dns: dnsEvidence ? 'collected' : 'not_available',\n      firewall: firewallEvidence ? 'collected' : 'not_available'\n    },\n    suspicious_findings: suspiciousFindings,\n    unified_timeline: allTimelineEntries.slice(0, 200),\n    evidence_details: {\n      qradar: qradarEvidence,\n      zscaler: zscalerEvidence,\n      dns: dnsEvidence,\n      firewall: firewallEvidence\n    },\n    xsoar_ticket_id: request.xsoar_ticket_id,\n    webex_room_id: request.webex_room_id\n  }\n};"
+      },
+      "id": "compile-evidence-package",
+      "name": "Compile Evidence Package",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2000, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Generate summary report\nconst evidence = $input.first().json;\n\nlet report = `# Network Evidence Collection Report\\n\\n`;\nreport += `**Job ID:** ${evidence.job_id}\\n`;\nreport += `**Incident ID:** ${evidence.incident_id}\\n`;\nreport += `**Target:** ${evidence.target}\\n`;\nreport += `**Time Range:** ${evidence.time_range.start_iso} to ${evidence.time_range.end_iso}\\n`;\nreport += `**Collection Duration:** ${evidence.time_range.duration_hours} hours\\n`;\nreport += `**Requester:** ${evidence.requester}\\n\\n`;\n\nreport += `---\\n\\n`;\n\nreport += `## Risk Assessment\\n\\n`;\nreport += `**Risk Level:** ${evidence.risk_assessment.level}\\n`;\nreport += `**Risk Score:** ${evidence.risk_assessment.score}\\n`;\nreport += `**Suspicious Findings:** ${evidence.risk_assessment.suspicious_finding_count}\\n\\n`;\n\nreport += `## Data Transfer Summary\\n\\n`;\nreport += `| Metric | Value |\\n`;\nreport += `|--------|-------|\\n`;\nreport += `| Total Data | ${evidence.data_transfer_summary.total_formatted} |\\n`;\nreport += `| Inbound | ${evidence.data_transfer_summary.inbound_formatted} |\\n`;\nreport += `| Outbound | ${evidence.data_transfer_summary.outbound_formatted} |\\n\\n`;\n\nreport += `## Evidence Collection Status\\n\\n`;\nreport += `| Source | Status |\\n`;\nreport += `|--------|--------|\\n`;\nfor (const [source, status] of Object.entries(evidence.evidence_sources)) {\n  const statusIcon = status === 'collected' ? 'Collected' : 'Not Available';\n  report += `| ${source.charAt(0).toUpperCase() + source.slice(1)} | ${statusIcon} |\\n`;\n}\nreport += `\\n`;\n\nif (evidence.suspicious_findings.length > 0) {\n  report += `## Suspicious Findings\\n\\n`;\n  for (const finding of evidence.suspicious_findings) {\n    report += `### ${finding.source}: ${finding.type}\\n`;\n    report += `**Count:** ${finding.count}\\n\\n`;\n  }\n}\n\nif (evidence.unified_timeline.length > 0) {\n  report += `## Activity Timeline (First 20 Events)\\n\\n`;\n  report += `| Timestamp | Source | Event |\\n`;\n  report += `|-----------|--------|-------|\\n`;\n  for (const event of evidence.unified_timeline.slice(0, 20)) {\n    const eventDesc = event.event_name || event.url || event.query || event.destination || 'N/A';\n    report += `| ${event.timestamp} | ${event.source} | ${eventDesc.substring(0, 50)} |\\n`;\n  }\n}\n\nreport += `\\n\\n---\\n`;\nreport += `*Report generated: ${evidence.collection_completed}*\\n`;\n\nreturn {\n  json: {\n    ...evidence,\n    summary_report: report\n  }\n};"
+      },
+      "id": "generate-report",
+      "name": "Generate Summary Report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2220, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://YOUR_STORAGE_API/api/v1/evidence",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer YOUR_STORAGE_API_TOKEN"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"job_id\": \"{{ $json.job_id }}\",\n  \"incident_id\": \"{{ $json.incident_id }}\",\n  \"target\": \"{{ $json.target }}\",\n  \"evidence_type\": \"network\",\n  \"collection_timestamp\": \"{{ $json.collection_completed }}\",\n  \"risk_level\": \"{{ $json.risk_assessment.level }}\",\n  \"data\": {{ JSON.stringify($json) }}\n}",
+        "options": {}
+      },
+      "id": "save-to-storage",
+      "name": "Save to Secure Storage",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2440, 200],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "check-xsoar-id",
+              "leftValue": "={{ $json.xsoar_ticket_id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-xsoar-ticket",
+      "name": "Has XSOAR Ticket?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [2440, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://xsoar.company.com/incident/{{ $json.xsoar_ticket_id }}/note",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "YOUR_XSOAR_API_KEY"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"data\": {{ JSON.stringify($json.summary_report) }},\n  \"investigationId\": \"{{ $json.xsoar_ticket_id }}\",\n  \"version\": 1\n}",
+        "options": {}
+      },
+      "id": "attach-to-xsoar",
+      "name": "Attach to XSOAR Ticket",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2660, 300],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {},
+      "id": "no-xsoar-ticket",
+      "name": "No XSOAR Ticket",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [2660, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Format Webex notification message\nconst evidence = $input.first().json;\n\nlet message = `## Network Evidence Collection Complete\\n\\n`;\nmessage += `**Job ID:** ${evidence.job_id}\\n`;\nmessage += `**Incident ID:** ${evidence.incident_id}\\n`;\nmessage += `**Target:** ${evidence.target}\\n\\n`;\n\nmessage += `---\\n\\n`;\n\nmessage += `### Risk Assessment\\n`;\nmessage += `**Risk Level:** ${evidence.risk_assessment.level}\\n`;\nmessage += `**Suspicious Findings:** ${evidence.risk_assessment.suspicious_finding_count}\\n\\n`;\n\nmessage += `### Summary\\n`;\nmessage += `| Source | Status |\\n`;\nmessage += `|--------|--------|\\n`;\nfor (const [source, status] of Object.entries(evidence.evidence_sources)) {\n  const emoji = status === 'collected' ? 'Collected' : 'N/A';\n  message += `| ${source.charAt(0).toUpperCase() + source.slice(1)} | ${emoji} |\\n`;\n}\nmessage += `\\n`;\n\nmessage += `### Data Transfer\\n`;\nmessage += `- **Total:** ${evidence.data_transfer_summary.total_formatted}\\n`;\nmessage += `- **Inbound:** ${evidence.data_transfer_summary.inbound_formatted}\\n`;\nmessage += `- **Outbound:** ${evidence.data_transfer_summary.outbound_formatted}\\n\\n`;\n\nif (evidence.suspicious_findings.length > 0) {\n  message += `### Key Findings\\n`;\n  for (const finding of evidence.suspicious_findings.slice(0, 5)) {\n    message += `- **${finding.source}:** ${finding.count} ${finding.type}\\n`;\n  }\n  message += `\\n`;\n}\n\nmessage += `---\\n`;\nmessage += `**Collection Period:** ${evidence.time_range.start_iso} to ${evidence.time_range.end_iso}\\n`;\nmessage += `**Completed:** ${evidence.collection_completed}\\n\\n`;\n\nif (evidence.xsoar_ticket_id) {\n  message += `[View in XSOAR](https://xsoar.company.com/incident/${evidence.xsoar_ticket_id})\\n`;\n}\n\nmessage += `[Download Full Evidence Package](https://YOUR_STORAGE_API/evidence/${evidence.job_id})`;\n\nreturn {\n  json: {\n    ...evidence,\n    webex_notification: message\n  }\n};"
+      },
+      "id": "format-webex-notification",
+      "name": "Format Webex Notification",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2880, 400]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "check-webex-room",
+              "leftValue": "={{ $json.webex_room_id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-webex-room",
+      "name": "Has Webex Room?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [3100, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://webexapis.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer YOUR_WEBEX_BOT_TOKEN"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"roomId\": \"{{ $json.webex_room_id }}\",\n  \"markdown\": {{ JSON.stringify($json.webex_notification) }}\n}",
+        "options": {}
+      },
+      "id": "post-to-webex",
+      "name": "Notify via Webex",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [3320, 300],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {},
+      "id": "no-webex-notification",
+      "name": "No Webex Notification",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [3320, 500]
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "mergeByFields": {
+          "values": []
+        },
+        "options": {}
+      },
+      "id": "merge-outputs",
+      "name": "Merge Outputs",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2.1,
+      "position": [3540, 400]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"status\": \"success\",\n  \"job_id\": \"{{ $json.job_id }}\",\n  \"incident_id\": \"{{ $json.incident_id }}\",\n  \"target\": \"{{ $json.target }}\",\n  \"risk_level\": \"{{ $json.risk_assessment.level }}\",\n  \"risk_score\": {{ $json.risk_assessment.score }},\n  \"evidence_sources\": {{ JSON.stringify($json.evidence_sources) }},\n  \"data_transfer\": {\n    \"total\": \"{{ $json.data_transfer_summary.total_formatted }}\",\n    \"inbound\": \"{{ $json.data_transfer_summary.inbound_formatted }}\",\n    \"outbound\": \"{{ $json.data_transfer_summary.outbound_formatted }}\"\n  },\n  \"suspicious_finding_count\": {{ $json.risk_assessment.suspicious_finding_count }},\n  \"collection_started\": \"{{ $json.collection_started }}\",\n  \"collection_completed\": \"{{ $json.collection_completed }}\",\n  \"evidence_url\": \"https://YOUR_STORAGE_API/evidence/{{ $json.job_id }}\"\n}",
+        "options": {}
+      },
+      "id": "respond-webhook",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [3760, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Handle QRadar error - return empty result\nconst request = $('Prepare Parallel Collection').first().json;\n\nreturn {\n  json: {\n    source: 'qradar',\n    status: 'error',\n    job_id: request.job_id,\n    incident_id: request.incident_id,\n    target: request.target_identifier,\n    time_range: request.time_range,\n    error: 'Failed to collect QRadar evidence',\n    statistics: {},\n    data_transfer: { total_bytes: 0, inbound_bytes: 0, outbound_bytes: 0 },\n    suspicious_events: { count: 0, events: [] },\n    timeline: [],\n    raw_event_count: 0,\n    collected_at: new Date().toISOString()\n  }\n};"
+      },
+      "id": "qradar-error-handler",
+      "name": "QRadar Error Handler",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1560, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Handle Zscaler error - return empty result\nconst request = $('Prepare Parallel Collection').first().json;\n\nreturn {\n  json: {\n    source: 'zscaler',\n    status: 'error',\n    job_id: request.job_id,\n    incident_id: request.incident_id,\n    target: request.target_identifier,\n    time_range: request.time_range,\n    error: 'Failed to collect Zscaler evidence',\n    statistics: {},\n    data_transfer: { total_bytes: 0, upload_bytes: 0, download_bytes: 0 },\n    blocked_activity: { count: 0, activities: [] },\n    suspicious_activity: { count: 0, activities: [] },\n    timeline: [],\n    raw_activity_count: 0,\n    collected_at: new Date().toISOString()\n  }\n};"
+      },
+      "id": "zscaler-error-handler",
+      "name": "Zscaler Error Handler",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1560, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Handle DNS query error - return empty result\nconst request = $('Prepare Parallel Collection').first().json;\n\nreturn {\n  json: {\n    source: 'dns',\n    status: 'error',\n    job_id: request.job_id,\n    incident_id: request.incident_id,\n    target: request.target_identifier,\n    time_range: request.time_range,\n    error: 'Failed to collect DNS evidence',\n    statistics: {},\n    suspicious_domains: { count: 0, domains: [] },\n    top_domains: [],\n    timeline: [],\n    raw_query_count: 0,\n    collected_at: new Date().toISOString()\n  }\n};"
+      },
+      "id": "dns-error-handler",
+      "name": "DNS Error Handler",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1560, 600]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Handle Firewall error - return empty result\nconst request = $('Prepare Parallel Collection').first().json;\n\nreturn {\n  json: {\n    source: 'firewall',\n    status: 'error',\n    job_id: request.job_id,\n    incident_id: request.incident_id,\n    target: request.target_identifier,\n    time_range: request.time_range,\n    error: 'Failed to collect firewall evidence',\n    statistics: {},\n    data_transfer: { bytes_sent: 0, bytes_recv: 0, total_bytes: 0 },\n    blocked_connections: { count: 0, connections: [] },\n    suspicious_connections: { count: 0, connections: [] },\n    top_destination_ports: [],\n    timeline: [],\n    raw_log_count: 0,\n    collected_at: new Date().toISOString()\n  }\n};"
+      },
+      "id": "firewall-error-handler",
+      "name": "Firewall Error Handler",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1560, 800]
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Validate Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Request": {
+      "main": [
+        [
+          {
+            "node": "Prepare Parallel Collection",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Parallel Collection": {
+      "main": [
+        [
+          {
+            "node": "QRadar Network Events Search",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Zscaler Target Lookup",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "DNS Logs Query (QRadar)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Firewall Logs Query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "QRadar Network Events Search": {
+      "main": [
+        [
+          {
+            "node": "Wait for QRadar Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait for QRadar Results": {
+      "main": [
+        [
+          {
+            "node": "Get QRadar Search Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get QRadar Search Results": {
+      "main": [
+        [
+          {
+            "node": "Process QRadar Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process QRadar Results": {
+      "main": [
+        [
+          {
+            "node": "Merge All Evidence",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Zscaler Target Lookup": {
+      "main": [
+        [
+          {
+            "node": "Zscaler Web Activity",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Zscaler Web Activity": {
+      "main": [
+        [
+          {
+            "node": "Process Zscaler Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Zscaler Results": {
+      "main": [
+        [
+          {
+            "node": "Merge All Evidence",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DNS Logs Query (QRadar)": {
+      "main": [
+        [
+          {
+            "node": "Get DNS Query Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get DNS Query Results": {
+      "main": [
+        [
+          {
+            "node": "Process DNS Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process DNS Results": {
+      "main": [
+        [
+          {
+            "node": "Merge All Evidence",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Firewall Logs Query": {
+      "main": [
+        [
+          {
+            "node": "Process Firewall Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Firewall Results": {
+      "main": [
+        [
+          {
+            "node": "Merge All Evidence",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge All Evidence": {
+      "main": [
+        [
+          {
+            "node": "Compile Evidence Package",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compile Evidence Package": {
+      "main": [
+        [
+          {
+            "node": "Generate Summary Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Summary Report": {
+      "main": [
+        [
+          {
+            "node": "Save to Secure Storage",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Check XSOAR Ticket?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save to Secure Storage": {
+      "main": [
+        [
+          {
+            "node": "Format Webex Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check XSOAR Ticket?": {
+      "main": [
+        [
+          {
+            "node": "Attach to XSOAR Ticket",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No XSOAR Ticket",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Attach to XSOAR Ticket": {
+      "main": [
+        [
+          {
+            "node": "Format Webex Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "No XSOAR Ticket": {
+      "main": [
+        [
+          {
+            "node": "Format Webex Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Webex Notification": {
+      "main": [
+        [
+          {
+            "node": "Check Webex Room?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Webex Room?": {
+      "main": [
+        [
+          {
+            "node": "Notify via Webex",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Webex Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify via Webex": {
+      "main": [
+        [
+          {
+            "node": "Merge Outputs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "No Webex Notification": {
+      "main": [
+        [
+          {
+            "node": "Merge Outputs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Outputs": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  },
+  "versionId": "1",
+  "meta": {
+    "templateId": "network-evidence-collector",
+    "instanceId": ""
+  },
+  "tags": [
+    {
+      "name": "Security",
+      "id": "security"
+    },
+    {
+      "name": "IR",
+      "id": "incident-response"
+    },
+    {
+      "name": "Evidence",
+      "id": "evidence-collection"
+    },
+    {
+      "name": "Network",
+      "id": "network"
+    }
+  ],
+  "pinData": {}
+}

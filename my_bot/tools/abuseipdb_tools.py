@@ -17,22 +17,23 @@ from src.utils.tool_decorator import log_tool_call
 
 logger = logging.getLogger(__name__)
 
-# Initialize AbuseIPDB client once
+# Lazy-initialized AbuseIPDB client
 _abuseipdb_client: Optional[AbuseIPDBClient] = None
 
-try:
-    logger.info("Initializing AbuseIPDB client...")
-    _abuseipdb_client = AbuseIPDBClient()
 
-    if _abuseipdb_client.is_configured():
-        logger.info("AbuseIPDB client initialized successfully.")
-    else:
-        logger.warning("AbuseIPDB client not configured (missing API key). Tools will be disabled.")
-        _abuseipdb_client = None
-
-except Exception as e:
-    logger.error(f"Failed to initialize AbuseIPDB client: {e}")
-    _abuseipdb_client = None
+def _get_abuseipdb_client() -> Optional[AbuseIPDBClient]:
+    """Get AbuseIPDB client (lazy initialization)."""
+    global _abuseipdb_client
+    if _abuseipdb_client is None:
+        try:
+            client = AbuseIPDBClient()
+            if client.is_configured():
+                _abuseipdb_client = client
+            else:
+                logger.warning("AbuseIPDB client not configured (missing API key)")
+        except Exception as e:
+            logger.error(f"Failed to initialize AbuseIPDB client: {e}")
+    return _abuseipdb_client
 
 
 def _get_category_names(category_ids: list) -> list[str]:
@@ -169,11 +170,12 @@ def lookup_ip_abuseipdb(ip_address: str) -> str:
     Args:
         ip_address: The IP address to look up (e.g., "192.168.1.1" or "8.8.8.8")
     """
-    if not _abuseipdb_client:
-        return "Error: AbuseIPDB service is not configured. Missing API key."
+    client = _get_abuseipdb_client()
+    if not client:
+        return "Error: AbuseIPDB service is not available."
 
     try:
-        data = _abuseipdb_client.check_ip(ip_address.strip())
+        data = client.check_ip(ip_address.strip())
         return _format_ip_result(data)
     except Exception as e:
         logger.error(f"AbuseIPDB IP lookup failed: {e}")
@@ -199,8 +201,9 @@ def lookup_domain_abuseipdb(domain: str) -> str:
     Args:
         domain: The domain to look up (e.g., "example.com")
     """
-    if not _abuseipdb_client:
-        return "Error: AbuseIPDB service is not configured. Missing API key."
+    client = _get_abuseipdb_client()
+    if not client:
+        return "Error: AbuseIPDB service is not available."
 
     try:
         # Remove protocol if present
@@ -210,7 +213,7 @@ def lookup_domain_abuseipdb(domain: str) -> str:
         if "/" in domain:
             domain = domain.split("/", 1)[0]
 
-        data = _abuseipdb_client.check_domain(domain)
+        data = client.check_domain(domain)
         return _format_domain_result(data)
     except Exception as e:
         logger.error(f"AbuseIPDB domain lookup failed: {e}")

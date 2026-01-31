@@ -1,4 +1,4 @@
-"""Domain Lookalike Detection Service using dnstwist."""
+"""Domain Lookalike Detection Service using dnstwist and Censys CT logs."""
 
 import logging
 import subprocess
@@ -14,6 +14,22 @@ import whois
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
+
+# Lazy import for Censys to avoid circular imports
+_censys_module = None
+
+
+def _get_censys_module():
+    """Lazy load Censys CT module."""
+    global _censys_module
+    if _censys_module is None:
+        try:
+            from services import censys_ct
+            _censys_module = censys_ct
+        except ImportError:
+            logger.debug("Censys CT module not available")
+            _censys_module = False
+    return _censys_module if _censys_module else None
 
 # Get dnstwist path from the same venv as the running Python interpreter
 # This ensures subprocess finds dnstwist even when PATH doesn't include the venv
@@ -676,13 +692,23 @@ def generate_tld_variations(domain: str) -> List[Dict[str, Any]]:
     return variations
 
 
-def get_domain_lookalikes(domain: str, registered_only: bool = False, include_malicious_tlds: bool = False) -> Dict[str, Any]:
-    """Get lookalike domains using dnstwist.
+def get_domain_lookalikes(
+    domain: str,
+    registered_only: bool = False,
+    include_malicious_tlds: bool = False,
+    include_censys_impersonation: bool = True,
+    legitimate_domains: Optional[List[str]] = None,
+) -> Dict[str, Any]:
+    """Get lookalike domains using dnstwist and Censys CT log search.
 
     Args:
         domain: The domain to check for lookalikes
         registered_only: If True, only return registered domains (with DNS records)
         include_malicious_tlds: If True, also generate variations using known malicious TLDs
+        include_censys_impersonation: If True, search Censys CT logs for brand impersonation
+            domains (e.g., acme-loan.com). Requires CENSYS_API_ID/SECRET. Default True.
+        legitimate_domains: List of legitimate domains to exclude from Censys results.
+            If None, only the monitored domain is excluded.
 
     Returns:
         Dictionary containing lookalike domains and metadata
@@ -782,15 +808,80 @@ def get_domain_lookalikes(domain: str, registered_only: bool = False, include_ma
 
             logger.info(f"Added {added_count} TLD variations from {len(MALICIOUS_TLDS)} malicious TLDs")
 
-        logger.info(f"Found {len(processed_domains)} lookalike domains")
+        # Add Censys brand impersonation domains
+        # These are semantic attacks like "acme-loan.com" that dnstwist cannot detect
+        censys_count = 0
+        censys_error = None
+        if include_censys_impersonation:
+            censys_module = _get_censys_module()
+            if censys_module and censys_module.is_configured():
+                # Extract brand name from domain
+                brand_name = domain.split('.')[0]
 
-        return {
+                # Build list of legitimate domains to exclude
+                legit_domains = legitimate_domains or []
+                if domain not in legit_domains:
+                    legit_domains = [domain] + list(legit_domains)
+
+                logger.info(f"Searching Censys CT logs for '{brand_name}' brand impersonation")
+                try:
+                    censys_result = censys_module.search_brand_impersonation(
+                        brand=brand_name,
+                        legitimate_domains=legit_domains,
+                        max_results=100,
+                    )
+
+                    if censys_result.get("success"):
+                        existing_domains = {d['domain'].lower() for d in processed_domains}
+                        for imp in censys_result.get("impersonation_domains", []):
+                            imp_domain = imp.get("domain", "").lower()
+                            if imp_domain and imp_domain not in existing_domains:
+                                # Convert Censys result to lookalike format
+                                processed_domains.append({
+                                    'domain': imp_domain,
+                                    'fuzzer': 'censys-brand-impersonation',
+                                    'dns_a': [],  # Censys doesn't provide DNS
+                                    'dns_aaaa': [],
+                                    'dns_mx': [],
+                                    'dns_ns': [],
+                                    'geoip': '',
+                                    'registered': True,  # Has SSL cert = registered
+                                    'censys_issuer': imp.get('issuer_org', ''),
+                                    'censys_link': imp.get('censys_link', ''),
+                                    'cert_not_before': imp.get('not_before', ''),
+                                    'cert_not_after': imp.get('not_after', ''),
+                                })
+                                existing_domains.add(imp_domain)
+                                censys_count += 1
+
+                        logger.info(f"Added {censys_count} brand impersonation domains from Censys CT logs")
+                    else:
+                        censys_error = censys_result.get("error", "Unknown error")
+                        logger.warning(f"Censys search failed: {censys_error}")
+
+                except Exception as e:
+                    censys_error = str(e)
+                    logger.error(f"Censys brand search error: {e}")
+            elif censys_module is None:
+                logger.debug("Censys module not available")
+            else:
+                logger.info("Censys not configured (CENSYS_API_ID/SECRET), skipping brand impersonation search")
+
+        logger.info(f"Found {len(processed_domains)} total lookalike domains")
+
+        result = {
             'success': True,
             'original_domain': domain,
             'total_count': len(processed_domains),
             'registered_count': sum(1 for d in processed_domains if d['registered']),
+            'censys_impersonation_count': censys_count,
             'domains': processed_domains
         }
+
+        if censys_error:
+            result['censys_error'] = censys_error
+
+        return result
 
     except subprocess.TimeoutExpired:
         logger.error(f"dnstwist timed out after {timeout_seconds}s")

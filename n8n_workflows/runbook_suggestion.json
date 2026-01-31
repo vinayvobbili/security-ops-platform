@@ -1,0 +1,477 @@
+{
+  "name": "Runbook Suggestion Workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "runbook-suggestion",
+        "responseMode": "responseNode",
+        "options": {
+          "rawBody": true
+        }
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 400],
+      "webhookId": "runbook-suggestion-webhook"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse and validate incoming incident data\nconst input = $input.first().json.body || $input.first().json;\n\n// Extract incident data with defaults\nconst incidentData = {\n  incident_id: input.incident_id || `INC-${Date.now()}`,\n  incident_type: (input.incident_type || 'unknown').toLowerCase(),\n  detection_source: (input.detection_source || 'unknown').toLowerCase(),\n  indicators: {\n    hostname: input.indicators?.hostname || null,\n    ip: input.indicators?.ip || null,\n    user: input.indicators?.user || null,\n    domain: input.indicators?.domain || null,\n    hash: input.indicators?.hash || null,\n    email: input.indicators?.email || null,\n    url: input.indicators?.url || null,\n    process: input.indicators?.process || null,\n    file_path: input.indicators?.file_path || null\n  },\n  mitre_techniques: input.mitre_techniques || [],\n  severity: input.severity || 'medium',\n  description: input.description || '',\n  containment_status: input.containment_status || 'not_started',\n  evidence_collected: input.evidence_collected || false,\n  escalation_required: input.escalation_required || false,\n  timestamp: new Date().toISOString()\n};\n\n// Normalize MITRE techniques (accept both T1xxx and full names)\nconst normalizedTechniques = incidentData.mitre_techniques.map(t => {\n  if (typeof t === 'string') {\n    return t.toUpperCase().replace(/\\s+/g, '_');\n  }\n  return t;\n});\nincidentData.mitre_techniques = normalizedTechniques;\n\nreturn { json: incidentData };"
+      },
+      "id": "parse-incident-data",
+      "name": "Parse Incident Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// GDnR (General Distribute & Respond) Runbook Mappings\n// These are placeholder mappings that can be customized with actual runbook content\n\nconst RUNBOOK_DATABASE = {\n  // Incident Type to Runbook Category Mapping\n  incident_type_mappings: {\n    'malware': {\n      primary_runbook: 'GDnR-MAL-001',\n      name: 'Malware Incident Response',\n      category: 'Malware',\n      link: 'https://confluence.company.com/gdnr/malware-response',\n      related_runbooks: ['GDnR-MAL-002', 'GDnR-FOR-001', 'GDnR-CON-001']\n    },\n    'ransomware': {\n      primary_runbook: 'GDnR-RAN-001',\n      name: 'Ransomware Incident Response',\n      category: 'Ransomware',\n      link: 'https://confluence.company.com/gdnr/ransomware-response',\n      related_runbooks: ['GDnR-RAN-002', 'GDnR-CON-002', 'GDnR-REC-001']\n    },\n    'phishing': {\n      primary_runbook: 'GDnR-PHI-001',\n      name: 'Phishing Incident Response',\n      category: 'Phishing/Social Engineering',\n      link: 'https://confluence.company.com/gdnr/phishing-response',\n      related_runbooks: ['GDnR-PHI-002', 'GDnR-EML-001', 'GDnR-USR-001']\n    },\n    'bec': {\n      primary_runbook: 'GDnR-BEC-001',\n      name: 'Business Email Compromise Response',\n      category: 'BEC',\n      link: 'https://confluence.company.com/gdnr/bec-response',\n      related_runbooks: ['GDnR-BEC-002', 'GDnR-EML-001', 'GDnR-FIN-001']\n    },\n    'unauthorized_access': {\n      primary_runbook: 'GDnR-UAC-001',\n      name: 'Unauthorized Access Response',\n      category: 'Access Control',\n      link: 'https://confluence.company.com/gdnr/unauthorized-access-response',\n      related_runbooks: ['GDnR-UAC-002', 'GDnR-IDM-001', 'GDnR-LOG-001']\n    },\n    'data_exfiltration': {\n      primary_runbook: 'GDnR-DEX-001',\n      name: 'Data Exfiltration Response',\n      category: 'Data Loss',\n      link: 'https://confluence.company.com/gdnr/data-exfiltration-response',\n      related_runbooks: ['GDnR-DEX-002', 'GDnR-DLP-001', 'GDnR-FOR-002']\n    },\n    'lateral_movement': {\n      primary_runbook: 'GDnR-LAT-001',\n      name: 'Lateral Movement Response',\n      category: 'Network Intrusion',\n      link: 'https://confluence.company.com/gdnr/lateral-movement-response',\n      related_runbooks: ['GDnR-LAT-002', 'GDnR-NET-001', 'GDnR-CON-001']\n    },\n    'c2_communication': {\n      primary_runbook: 'GDnR-C2C-001',\n      name: 'Command and Control Response',\n      category: 'C2/Beaconing',\n      link: 'https://confluence.company.com/gdnr/c2-response',\n      related_runbooks: ['GDnR-C2C-002', 'GDnR-NET-002', 'GDnR-MAL-001']\n    },\n    'insider_threat': {\n      primary_runbook: 'GDnR-INT-001',\n      name: 'Insider Threat Response',\n      category: 'Insider Threat',\n      link: 'https://confluence.company.com/gdnr/insider-threat-response',\n      related_runbooks: ['GDnR-INT-002', 'GDnR-USR-001', 'GDnR-DLP-001']\n    },\n    'ddos': {\n      primary_runbook: 'GDnR-DOS-001',\n      name: 'DDoS Attack Response',\n      category: 'Availability',\n      link: 'https://confluence.company.com/gdnr/ddos-response',\n      related_runbooks: ['GDnR-DOS-002', 'GDnR-NET-003', 'GDnR-CDN-001']\n    },\n    'credential_theft': {\n      primary_runbook: 'GDnR-CRD-001',\n      name: 'Credential Theft Response',\n      category: 'Identity',\n      link: 'https://confluence.company.com/gdnr/credential-theft-response',\n      related_runbooks: ['GDnR-CRD-002', 'GDnR-IDM-001', 'GDnR-PWD-001']\n    },\n    'web_attack': {\n      primary_runbook: 'GDnR-WEB-001',\n      name: 'Web Application Attack Response',\n      category: 'Application Security',\n      link: 'https://confluence.company.com/gdnr/web-attack-response',\n      related_runbooks: ['GDnR-WEB-002', 'GDnR-WAF-001', 'GDnR-APP-001']\n    },\n    'cryptomining': {\n      primary_runbook: 'GDnR-CRY-001',\n      name: 'Cryptomining Incident Response',\n      category: 'Resource Abuse',\n      link: 'https://confluence.company.com/gdnr/cryptomining-response',\n      related_runbooks: ['GDnR-CRY-002', 'GDnR-MAL-001', 'GDnR-CLD-001']\n    },\n    'unknown': {\n      primary_runbook: 'GDnR-GEN-001',\n      name: 'General Incident Response',\n      category: 'General',\n      link: 'https://confluence.company.com/gdnr/general-response',\n      related_runbooks: ['GDnR-TRI-001', 'GDnR-FOR-001']\n    }\n  },\n\n  // Detection Source to Additional Context\n  detection_source_context: {\n    'crowdstrike': {\n      platform: 'CrowdStrike Falcon',\n      data_sources: ['Process execution', 'File writes', 'Network connections', 'Registry changes'],\n      collection_guidance: 'Use RTR for live response, pull detection timeline from console',\n      additional_runbooks: ['GDnR-CS-001', 'GDnR-EDR-001']\n    },\n    'qradar': {\n      platform: 'IBM QRadar SIEM',\n      data_sources: ['Log correlation', 'Network flows', 'User behavior'],\n      collection_guidance: 'Export offense data, review correlated events, pull raw logs',\n      additional_runbooks: ['GDnR-SIEM-001', 'GDnR-LOG-001']\n    },\n    'vectra': {\n      platform: 'Vectra AI',\n      data_sources: ['Network traffic analysis', 'Behavioral analytics', 'Threat scoring'],\n      collection_guidance: 'Review detection details, check host and account scores, export PCAP if available',\n      additional_runbooks: ['GDnR-NDR-001', 'GDnR-NET-001']\n    },\n    'abnormal': {\n      platform: 'Abnormal Security',\n      data_sources: ['Email analysis', 'Behavioral profiling', 'Vendor impersonation detection'],\n      collection_guidance: 'Export email headers and body, check similar messages, review sender reputation',\n      additional_runbooks: ['GDnR-EML-001', 'GDnR-PHI-001']\n    },\n    'zscaler': {\n      platform: 'Zscaler',\n      data_sources: ['Web traffic', 'Cloud application usage', 'DLP events'],\n      collection_guidance: 'Pull transaction logs, review blocked/allowed URLs, check user activity',\n      additional_runbooks: ['GDnR-PROXY-001', 'GDnR-WEB-001']\n    },\n    'tanium': {\n      platform: 'Tanium',\n      data_sources: ['Endpoint inventory', 'Process listing', 'File integrity'],\n      collection_guidance: 'Run live queries for IOCs, collect endpoint details, check installed software',\n      additional_runbooks: ['GDnR-TAN-001', 'GDnR-EDR-001']\n    },\n    'servicenow': {\n      platform: 'ServiceNow',\n      data_sources: ['Ticket data', 'User reports', 'Change records'],\n      collection_guidance: 'Review ticket history, check related incidents, pull user-reported details',\n      additional_runbooks: ['GDnR-TKT-001']\n    },\n    'user_report': {\n      platform: 'User Reported',\n      data_sources: ['User testimony', 'Screenshots', 'Email samples'],\n      collection_guidance: 'Interview user, collect any evidence they have, verify with technical data',\n      additional_runbooks: ['GDnR-USR-001', 'GDnR-TRI-001']\n    },\n    'unknown': {\n      platform: 'Unknown Source',\n      data_sources: ['Varies'],\n      collection_guidance: 'Identify source platform and follow appropriate collection procedures',\n      additional_runbooks: ['GDnR-TRI-001']\n    }\n  },\n\n  // MITRE ATT&CK Technique to Response Procedures\n  mitre_technique_mappings: {\n    // Initial Access\n    'T1566': { name: 'Phishing', procedures: ['GDnR-PHI-001', 'GDnR-EML-001'], priority: 'high' },\n    'T1566.001': { name: 'Spearphishing Attachment', procedures: ['GDnR-PHI-002', 'GDnR-MAL-001'], priority: 'high' },\n    'T1566.002': { name: 'Spearphishing Link', procedures: ['GDnR-PHI-003', 'GDnR-URL-001'], priority: 'high' },\n    'T1190': { name: 'Exploit Public-Facing Application', procedures: ['GDnR-WEB-001', 'GDnR-VUL-001'], priority: 'critical' },\n    'T1133': { name: 'External Remote Services', procedures: ['GDnR-VPN-001', 'GDnR-UAC-001'], priority: 'high' },\n    'T1078': { name: 'Valid Accounts', procedures: ['GDnR-CRD-001', 'GDnR-IDM-001'], priority: 'high' },\n    \n    // Execution\n    'T1059': { name: 'Command and Scripting Interpreter', procedures: ['GDnR-SCR-001', 'GDnR-MAL-001'], priority: 'high' },\n    'T1059.001': { name: 'PowerShell', procedures: ['GDnR-PS-001', 'GDnR-SCR-001'], priority: 'high' },\n    'T1204': { name: 'User Execution', procedures: ['GDnR-USR-002', 'GDnR-MAL-001'], priority: 'medium' },\n    'T1047': { name: 'WMI', procedures: ['GDnR-WMI-001', 'GDnR-LAT-001'], priority: 'high' },\n    \n    // Persistence\n    'T1547': { name: 'Boot or Logon Autostart Execution', procedures: ['GDnR-PER-001', 'GDnR-REG-001'], priority: 'high' },\n    'T1053': { name: 'Scheduled Task/Job', procedures: ['GDnR-TSK-001', 'GDnR-PER-001'], priority: 'medium' },\n    'T1136': { name: 'Create Account', procedures: ['GDnR-ACC-001', 'GDnR-IDM-001'], priority: 'high' },\n    \n    // Privilege Escalation\n    'T1068': { name: 'Exploitation for Privilege Escalation', procedures: ['GDnR-PRV-001', 'GDnR-VUL-001'], priority: 'critical' },\n    'T1548': { name: 'Abuse Elevation Control Mechanism', procedures: ['GDnR-PRV-002', 'GDnR-UAC-001'], priority: 'high' },\n    \n    // Defense Evasion\n    'T1562': { name: 'Impair Defenses', procedures: ['GDnR-DEF-001', 'GDnR-AV-001'], priority: 'critical' },\n    'T1070': { name: 'Indicator Removal', procedures: ['GDnR-EVD-001', 'GDnR-FOR-001'], priority: 'high' },\n    'T1027': { name: 'Obfuscated Files or Information', procedures: ['GDnR-OBF-001', 'GDnR-MAL-002'], priority: 'medium' },\n    \n    // Credential Access\n    'T1003': { name: 'OS Credential Dumping', procedures: ['GDnR-CRD-002', 'GDnR-MIM-001'], priority: 'critical' },\n    'T1110': { name: 'Brute Force', procedures: ['GDnR-BRU-001', 'GDnR-ACC-001'], priority: 'high' },\n    'T1555': { name: 'Credentials from Password Stores', procedures: ['GDnR-PWD-001', 'GDnR-CRD-001'], priority: 'high' },\n    \n    // Discovery\n    'T1087': { name: 'Account Discovery', procedures: ['GDnR-REC-001'], priority: 'medium' },\n    'T1082': { name: 'System Information Discovery', procedures: ['GDnR-REC-001'], priority: 'low' },\n    'T1018': { name: 'Remote System Discovery', procedures: ['GDnR-LAT-001'], priority: 'medium' },\n    \n    // Lateral Movement\n    'T1021': { name: 'Remote Services', procedures: ['GDnR-LAT-001', 'GDnR-RDP-001'], priority: 'high' },\n    'T1021.001': { name: 'Remote Desktop Protocol', procedures: ['GDnR-RDP-001', 'GDnR-LAT-001'], priority: 'high' },\n    'T1021.002': { name: 'SMB/Windows Admin Shares', procedures: ['GDnR-SMB-001', 'GDnR-LAT-001'], priority: 'high' },\n    'T1550': { name: 'Use Alternate Authentication Material', procedures: ['GDnR-PTH-001', 'GDnR-CRD-002'], priority: 'critical' },\n    \n    // Collection\n    'T1560': { name: 'Archive Collected Data', procedures: ['GDnR-DEX-001'], priority: 'high' },\n    'T1114': { name: 'Email Collection', procedures: ['GDnR-EML-002', 'GDnR-DEX-001'], priority: 'high' },\n    \n    // Command and Control\n    'T1071': { name: 'Application Layer Protocol', procedures: ['GDnR-C2C-001', 'GDnR-NET-001'], priority: 'high' },\n    'T1105': { name: 'Ingress Tool Transfer', procedures: ['GDnR-C2C-002', 'GDnR-MAL-001'], priority: 'high' },\n    'T1572': { name: 'Protocol Tunneling', procedures: ['GDnR-TUN-001', 'GDnR-C2C-001'], priority: 'high' },\n    \n    // Exfiltration\n    'T1041': { name: 'Exfiltration Over C2 Channel', procedures: ['GDnR-DEX-001', 'GDnR-C2C-001'], priority: 'critical' },\n    'T1567': { name: 'Exfiltration Over Web Service', procedures: ['GDnR-DEX-002', 'GDnR-CLD-001'], priority: 'critical' },\n    'T1048': { name: 'Exfiltration Over Alternative Protocol', procedures: ['GDnR-DEX-003', 'GDnR-NET-001'], priority: 'critical' },\n    \n    // Impact\n    'T1486': { name: 'Data Encrypted for Impact', procedures: ['GDnR-RAN-001', 'GDnR-REC-001'], priority: 'critical' },\n    'T1489': { name: 'Service Stop', procedures: ['GDnR-SVC-001', 'GDnR-RAN-001'], priority: 'high' },\n    'T1490': { name: 'Inhibit System Recovery', procedures: ['GDnR-RAN-002', 'GDnR-REC-001'], priority: 'critical' }\n  },\n\n  // Runbook Details Database\n  runbook_details: {\n    'GDnR-MAL-001': {\n      name: 'Malware Incident Response',\n      description: 'Standard procedures for responding to malware incidents',\n      checklist: [\n        'Identify affected systems and scope of infection',\n        'Isolate compromised hosts from network',\n        'Collect malware samples and forensic artifacts',\n        'Identify malware family and capabilities',\n        'Determine initial infection vector',\n        'Search for additional IOCs across environment',\n        'Remediate: Remove malware and persistence mechanisms',\n        'Verify successful remediation',\n        'Monitor for reinfection'\n      ],\n      containment_steps: [\n        'Network isolate affected hosts via CrowdStrike or switch',\n        'Disable user accounts if credentials compromised',\n        'Block malicious IPs/domains at firewall/proxy',\n        'Quarantine malicious files'\n      ],\n      evidence_collection: [\n        'Memory dump from affected systems',\n        'Malware samples (quarantined)',\n        'Process execution logs',\n        'Network connection logs',\n        'Registry hive exports'\n      ],\n      escalation_criteria: [\n        'Ransomware detected',\n        'Data exfiltration confirmed',\n        'Multiple systems affected (>5)',\n        'Critical systems compromised',\n        'APT indicators present'\n      ]\n    },\n    'GDnR-RAN-001': {\n      name: 'Ransomware Incident Response',\n      description: 'Emergency procedures for ransomware attacks',\n      checklist: [\n        'IMMEDIATELY isolate affected systems',\n        'Notify management and legal',\n        'Determine ransomware variant',\n        'Identify encryption scope',\n        'Check for decryption tool availability',\n        'Assess backup integrity',\n        'Preserve encrypted samples for potential decryption',\n        'Begin recovery from clean backups',\n        'Conduct root cause analysis'\n      ],\n      containment_steps: [\n        'Disconnect affected systems from network IMMEDIATELY',\n        'Shut down shares to prevent spread',\n        'Disable affected user accounts',\n        'Block C2 infrastructure',\n        'Consider enterprise-wide network segmentation'\n      ],\n      evidence_collection: [\n        'Ransom note screenshots',\n        'Encrypted file samples',\n        'Ransomware executable',\n        'Event logs from affected systems',\n        'Network traffic captures'\n      ],\n      escalation_criteria: [\n        'Any ransomware = IMMEDIATE escalation',\n        'Executive involvement required',\n        'Legal notification required',\n        'Consider FBI/law enforcement notification'\n      ]\n    },\n    'GDnR-PHI-001': {\n      name: 'Phishing Incident Response',\n      description: 'Procedures for phishing and social engineering incidents',\n      checklist: [\n        'Identify all recipients of phishing email',\n        'Determine who clicked/interacted',\n        'Collect email headers and content',\n        'Block sender and malicious URLs',\n        'Remove emails from all mailboxes',\n        'Check for credential submission',\n        'Reset passwords if credentials compromised',\n        'Scan endpoints of users who clicked',\n        'User awareness follow-up'\n      ],\n      containment_steps: [\n        'Block sender domain/address',\n        'Block malicious URLs at proxy',\n        'Purge emails from mailboxes',\n        'Reset compromised credentials',\n        'Revoke OAuth tokens if applicable'\n      ],\n      evidence_collection: [\n        'Original email with full headers',\n        'Phishing page screenshots',\n        'URL and domain information',\n        'List of affected users',\n        'Submission timestamps'\n      ],\n      escalation_criteria: [\n        'Executive targeted (spearphishing)',\n        'Credentials successfully harvested',\n        'Malware delivered',\n        'Multiple users compromised',\n        'BEC indicators present'\n      ]\n    },\n    'GDnR-UAC-001': {\n      name: 'Unauthorized Access Response',\n      description: 'Response procedures for unauthorized system access',\n      checklist: [\n        'Identify compromised account(s)',\n        'Determine access scope and timeline',\n        'Review authentication logs',\n        'Check for data access/exfiltration',\n        'Identify authentication method used',\n        'Reset affected credentials',\n        'Revoke active sessions',\n        'Review and harden access controls',\n        'Monitor for continued access attempts'\n      ],\n      containment_steps: [\n        'Disable compromised accounts',\n        'Revoke all active sessions/tokens',\n        'Block source IP addresses',\n        'Enable additional authentication factors',\n        'Review and revoke excessive permissions'\n      ],\n      evidence_collection: [\n        'Authentication logs',\n        'Access logs for affected systems',\n        'Session data',\n        'Source IP information',\n        'Timeline of access activities'\n      ],\n      escalation_criteria: [\n        'Admin/privileged account compromised',\n        'Access to sensitive data confirmed',\n        'Multiple accounts compromised',\n        'Persistence mechanisms found',\n        'Signs of insider threat'\n      ]\n    },\n    'GDnR-DEX-001': {\n      name: 'Data Exfiltration Response',\n      description: 'Response procedures for data exfiltration incidents',\n      checklist: [\n        'Identify data exfiltration method',\n        'Determine what data was exfiltrated',\n        'Identify source system(s)',\n        'Block exfiltration channels',\n        'Assess data classification impact',\n        'Notify data owners and legal',\n        'Preserve forensic evidence',\n        'Determine regulatory notification requirements',\n        'Implement DLP improvements'\n      ],\n      containment_steps: [\n        'Block destination IPs/domains',\n        'Disable involved user accounts',\n        'Block exfiltration protocol/port',\n        'Isolate source systems',\n        'Revoke cloud application access'\n      ],\n      evidence_collection: [\n        'Network flow data',\n        'DLP alerts and logs',\n        'File access logs',\n        'Cloud application logs',\n        'Proxy/firewall logs'\n      ],\n      escalation_criteria: [\n        'PII/PHI data involved',\n        'Large data volume (>1GB)',\n        'Intentional exfiltration confirmed',\n        'Customer data affected',\n        'Regulatory notification required'\n      ]\n    },\n    'GDnR-LAT-001': {\n      name: 'Lateral Movement Response',\n      description: 'Response to detected lateral movement activity',\n      checklist: [\n        'Identify lateral movement technique used',\n        'Map affected systems',\n        'Identify compromised credentials',\n        'Block lateral movement paths',\n        'Isolate affected network segments',\n        'Reset all potentially compromised credentials',\n        'Review network segmentation',\n        'Hunt for additional compromised systems',\n        'Implement network monitoring improvements'\n      ],\n      containment_steps: [\n        'Network isolate source and destination hosts',\n        'Disable accounts used for lateral movement',\n        'Block SMB/RDP/WinRM between segments',\n        'Enable enhanced logging on DCs',\n        'Deploy honeypots/canaries'\n      ],\n      evidence_collection: [\n        'Windows Security event logs (4624, 4625, 4648)',\n        'Network connection logs',\n        'Authentication logs',\n        'Process execution logs',\n        'Vectra/NDR detection data'\n      ],\n      escalation_criteria: [\n        'Domain admin credentials compromised',\n        'Domain controller accessed',\n        'More than 3 systems affected',\n        'Critical infrastructure accessed',\n        'Active adversary confirmed'\n      ]\n    },\n    'GDnR-C2C-001': {\n      name: 'Command and Control Response',\n      description: 'Response to C2/beaconing activity',\n      checklist: [\n        'Identify C2 infrastructure',\n        'Determine beacon interval and protocol',\n        'Identify all beaconing hosts',\n        'Block C2 at network level',\n        'Analyze implant/malware',\n        'Determine data exfiltration scope',\n        'Remove implant from all affected hosts',\n        'Monitor for fallback C2 channels',\n        'Update threat intelligence'\n      ],\n      containment_steps: [\n        'Block C2 IPs/domains at firewall and proxy',\n        'Sinkhole C2 domains if possible',\n        'Network isolate beaconing hosts',\n        'Block associated protocols/ports',\n        'Implement DNS filtering'\n      ],\n      evidence_collection: [\n        'Network traffic captures',\n        'Proxy logs showing C2 communication',\n        'DNS query logs',\n        'Malware/implant samples',\n        'Beacon timing analysis'\n      ],\n      escalation_criteria: [\n        'Known APT infrastructure',\n        'Multiple beaconing hosts',\n        'Data exfiltration observed',\n        'C2 channel encrypted/difficult to block',\n        'Persistence mechanisms with C2'\n      ]\n    },\n    'GDnR-CRD-001': {\n      name: 'Credential Theft Response',\n      description: 'Response to credential theft/compromise',\n      checklist: [\n        'Identify stolen credential scope',\n        'Determine theft method',\n        'Force password reset for affected accounts',\n        'Revoke all active sessions',\n        'Review account activity for misuse',\n        'Enable MFA if not present',\n        'Check for credential reuse',\n        'Hunt for credential access tools',\n        'User awareness communication'\n      ],\n      containment_steps: [\n        'Force immediate password reset',\n        'Revoke OAuth tokens and sessions',\n        'Enable MFA requirements',\n        'Block suspicious authentication sources',\n        'Disable accounts if actively misused'\n      ],\n      evidence_collection: [\n        'Authentication logs',\n        'Credential access tool artifacts',\n        'LSASS access logs',\n        'Browser credential stores',\n        'Password manager logs'\n      ],\n      escalation_criteria: [\n        'Privileged credentials stolen',\n        'Service account compromised',\n        'Mass credential theft',\n        'Active misuse detected',\n        'MFA bypass observed'\n      ]\n    },\n    'GDnR-GEN-001': {\n      name: 'General Incident Response',\n      description: 'Generic incident response procedures',\n      checklist: [\n        'Gather initial incident information',\n        'Classify incident type and severity',\n        'Identify affected assets',\n        'Implement initial containment',\n        'Begin evidence collection',\n        'Notify appropriate stakeholders',\n        'Apply specific runbook procedures',\n        'Document all actions taken',\n        'Conduct post-incident review'\n      ],\n      containment_steps: [\n        'Assess and implement appropriate containment',\n        'Consider network isolation',\n        'Consider account disablement',\n        'Consider system isolation',\n        'Preserve system state before changes'\n      ],\n      evidence_collection: [\n        'System logs',\n        'Network logs',\n        'Application logs',\n        'User activity logs',\n        'Screenshots and documentation'\n      ],\n      escalation_criteria: [\n        'Unable to determine incident scope',\n        'Incident affects critical systems',\n        'Data breach suspected',\n        'Attack ongoing and spreading',\n        'Need additional expertise'\n      ]\n    }\n  }\n};\n\nreturn { json: { runbook_database: RUNBOOK_DATABASE } };"
+      },
+      "id": "load-runbook-database",
+      "name": "Load Runbook Database",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Match incident to runbooks\nconst incidentData = $('Parse Incident Data').first().json;\nconst runbookDb = $('Load Runbook Database').first().json.runbook_database;\n\n// Get primary runbook based on incident type\nconst incidentType = incidentData.incident_type;\nconst typeMapping = runbookDb.incident_type_mappings[incidentType] || runbookDb.incident_type_mappings['unknown'];\n\n// Get detection source context\nconst detectionSource = incidentData.detection_source;\nconst sourceContext = runbookDb.detection_source_context[detectionSource] || runbookDb.detection_source_context['unknown'];\n\n// Get MITRE technique mappings\nconst mitreMappings = [];\nconst mitreProcedures = new Set();\nlet highestMitrePriority = 'low';\n\nfor (const technique of incidentData.mitre_techniques) {\n  const mapping = runbookDb.mitre_technique_mappings[technique];\n  if (mapping) {\n    mitreMappings.push({\n      technique_id: technique,\n      technique_name: mapping.name,\n      procedures: mapping.procedures,\n      priority: mapping.priority\n    });\n    mapping.procedures.forEach(p => mitreProcedures.add(p));\n    \n    // Track highest priority\n    const priorityOrder = { 'low': 0, 'medium': 1, 'high': 2, 'critical': 3 };\n    if (priorityOrder[mapping.priority] > priorityOrder[highestMitrePriority]) {\n      highestMitrePriority = mapping.priority;\n    }\n  }\n}\n\n// Compile all related runbooks (deduplicated)\nconst allRelatedRunbooks = new Set([\n  ...typeMapping.related_runbooks,\n  ...sourceContext.additional_runbooks,\n  ...mitreProcedures\n]);\n\n// Get primary runbook details\nconst primaryRunbookId = typeMapping.primary_runbook;\nconst primaryRunbookDetails = runbookDb.runbook_details[primaryRunbookId] || runbookDb.runbook_details['GDnR-GEN-001'];\n\n// Build related runbooks with details\nconst relatedRunbooksWithDetails = [];\nfor (const runbookId of allRelatedRunbooks) {\n  if (runbookId !== primaryRunbookId) {\n    const details = runbookDb.runbook_details[runbookId];\n    relatedRunbooksWithDetails.push({\n      id: runbookId,\n      name: details?.name || runbookId,\n      description: details?.description || 'No description available'\n    });\n  }\n}\n\nreturn {\n  json: {\n    incident: incidentData,\n    matching_result: {\n      primary_runbook: {\n        id: primaryRunbookId,\n        name: typeMapping.name,\n        category: typeMapping.category,\n        link: typeMapping.link,\n        details: primaryRunbookDetails\n      },\n      related_runbooks: relatedRunbooksWithDetails.slice(0, 5), // Limit to top 5\n      detection_source_context: sourceContext,\n      mitre_mappings: mitreMappings,\n      mitre_priority: highestMitrePriority\n    }\n  }\n};"
+      },
+      "id": "match-runbooks",
+      "name": "Match Runbooks",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Generate context-aware suggestions based on current incident state\nconst data = $input.first().json;\nconst incident = data.incident;\nconst primaryRunbook = data.matching_result.primary_runbook;\nconst runbookDetails = primaryRunbook.details;\n\nconst contextSuggestions = [];\n\n// Check containment status\nif (incident.containment_status === 'not_started' || incident.containment_status === 'pending') {\n  contextSuggestions.push({\n    type: 'containment',\n    priority: 'high',\n    title: 'Containment Required',\n    message: 'Containment has not been completed. Review and execute containment steps.',\n    steps: runbookDetails.containment_steps || [],\n    action_required: true\n  });\n}\n\n// Check evidence collection status\nif (!incident.evidence_collected) {\n  contextSuggestions.push({\n    type: 'evidence',\n    priority: 'medium',\n    title: 'Evidence Collection Needed',\n    message: 'Ensure evidence is collected before remediation to preserve forensic integrity.',\n    steps: runbookDetails.evidence_collection || [],\n    action_required: true\n  });\n}\n\n// Check escalation criteria\nconst escalationNeeded = [];\nif (runbookDetails.escalation_criteria) {\n  // Check for specific conditions that might match\n  const incidentKeywords = incident.description.toLowerCase();\n  \n  if (incident.severity === 'critical' || incident.severity === 'high') {\n    escalationNeeded.push('High/Critical severity incident');\n  }\n  \n  if (incident.incident_type === 'ransomware') {\n    escalationNeeded.push('Ransomware detected - immediate escalation required');\n  }\n  \n  if (incidentKeywords.includes('data breach') || incidentKeywords.includes('exfiltration')) {\n    escalationNeeded.push('Potential data breach');\n  }\n  \n  if (incidentKeywords.includes('pii') || incidentKeywords.includes('phi') || incidentKeywords.includes('personal data')) {\n    escalationNeeded.push('Regulated data potentially affected');\n  }\n}\n\nif (escalationNeeded.length > 0 || incident.escalation_required) {\n  contextSuggestions.push({\n    type: 'escalation',\n    priority: 'critical',\n    title: 'Escalation Required',\n    message: 'This incident meets escalation criteria.',\n    reasons: escalationNeeded,\n    escalation_criteria: runbookDetails.escalation_criteria || [],\n    action_required: true\n  });\n}\n\n// Add MITRE-based suggestions if high priority techniques detected\nconst mitreMappings = data.matching_result.mitre_mappings;\nif (data.matching_result.mitre_priority === 'critical') {\n  const criticalTechniques = mitreMappings.filter(m => m.priority === 'critical');\n  contextSuggestions.push({\n    type: 'mitre_alert',\n    priority: 'critical',\n    title: 'Critical MITRE Techniques Detected',\n    message: 'High-severity attack techniques have been identified.',\n    techniques: criticalTechniques.map(t => `${t.technique_id}: ${t.technique_name}`),\n    action_required: true\n  });\n}\n\n// Detection source specific guidance\nconst sourceContext = data.matching_result.detection_source_context;\nif (sourceContext.platform !== 'Unknown Source') {\n  contextSuggestions.push({\n    type: 'source_guidance',\n    priority: 'info',\n    title: `${sourceContext.platform} Investigation Guidance`,\n    message: sourceContext.collection_guidance,\n    data_sources: sourceContext.data_sources,\n    action_required: false\n  });\n}\n\nreturn {\n  json: {\n    ...data,\n    context_suggestions: contextSuggestions\n  }\n};"
+      },
+      "id": "generate-context-suggestions",
+      "name": "Generate Context Suggestions",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Format the final runbook recommendation response\nconst data = $input.first().json;\nconst incident = data.incident;\nconst matching = data.matching_result;\nconst suggestions = data.context_suggestions;\n\nconst primaryRunbook = matching.primary_runbook;\nconst runbookDetails = primaryRunbook.details;\n\n// Build formatted response\nconst response = {\n  status: 'success',\n  incident_id: incident.incident_id,\n  timestamp: new Date().toISOString(),\n  \n  // Primary Runbook Recommendation\n  recommended_runbook: {\n    id: primaryRunbook.id,\n    name: primaryRunbook.name,\n    category: primaryRunbook.category,\n    link: primaryRunbook.link,\n    description: runbookDetails.description\n  },\n  \n  // Key steps extracted from runbook\n  key_steps: runbookDetails.checklist || [],\n  \n  // Immediate action checklist (prioritized)\n  immediate_actions: [],\n  \n  // Related runbooks for additional context\n  related_runbooks: matching.related_runbooks.map(r => ({\n    id: r.id,\n    name: r.name,\n    description: r.description\n  })),\n  \n  // MITRE ATT&CK mapping\n  mitre_techniques: matching.mitre_mappings.map(m => ({\n    id: m.technique_id,\n    name: m.technique_name,\n    priority: m.priority,\n    response_procedures: m.procedures\n  })),\n  \n  // Detection source context\n  detection_source: {\n    platform: matching.detection_source_context.platform,\n    guidance: matching.detection_source_context.collection_guidance,\n    data_sources: matching.detection_source_context.data_sources\n  },\n  \n  // Context-aware suggestions\n  context_alerts: suggestions.filter(s => s.action_required).map(s => ({\n    type: s.type,\n    priority: s.priority,\n    title: s.title,\n    message: s.message,\n    steps: s.steps || s.reasons || s.techniques || []\n  })),\n  \n  // Escalation criteria from runbook\n  escalation_criteria: runbookDetails.escalation_criteria || [],\n  \n  // Containment steps\n  containment_steps: runbookDetails.containment_steps || [],\n  \n  // Evidence collection requirements\n  evidence_requirements: runbookDetails.evidence_collection || []\n};\n\n// Build immediate actions based on context\nconst immediateActions = [];\n\n// Add containment if needed\nif (suggestions.find(s => s.type === 'containment')) {\n  immediateActions.push({\n    order: 1,\n    action: 'Execute containment procedures',\n    status: 'pending',\n    steps: runbookDetails.containment_steps?.slice(0, 3) || []\n  });\n}\n\n// Add evidence collection if needed\nif (suggestions.find(s => s.type === 'evidence')) {\n  immediateActions.push({\n    order: 2,\n    action: 'Collect forensic evidence',\n    status: 'pending',\n    steps: runbookDetails.evidence_collection?.slice(0, 3) || []\n  });\n}\n\n// Add escalation if needed\nif (suggestions.find(s => s.type === 'escalation')) {\n  immediateActions.push({\n    order: 0, // Highest priority\n    action: 'Escalate incident to management',\n    status: 'pending',\n    steps: ['Notify IR team lead', 'Contact on-call manager', 'Document escalation reason']\n  });\n}\n\n// Add MITRE-based actions\nif (suggestions.find(s => s.type === 'mitre_alert')) {\n  const mitreSuggestion = suggestions.find(s => s.type === 'mitre_alert');\n  immediateActions.push({\n    order: 1,\n    action: 'Address critical attack techniques',\n    status: 'pending',\n    steps: mitreSuggestion.techniques || []\n  });\n}\n\n// Sort by order and add to response\nresponse.immediate_actions = immediateActions.sort((a, b) => a.order - b.order);\n\nreturn { json: response };"
+      },
+      "id": "format-response",
+      "name": "Format Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1340, 400]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "has-critical-alerts",
+              "leftValue": "={{ $json.context_alerts.filter(a => a.priority === 'critical').length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "id": "check-critical-alerts",
+      "name": "Has Critical Alerts?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1560, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build XSOAR ticket note with runbook recommendations\nconst data = $input.first().json;\n\nlet note = `## Automated Runbook Recommendation\\n\\n`;\nnote += `**Generated:** ${data.timestamp}\\n\\n`;\n\n// Primary runbook\nnote += `### Recommended Runbook\\n`;\nnote += `**${data.recommended_runbook.name}** (${data.recommended_runbook.id})\\n`;\nnote += `- Category: ${data.recommended_runbook.category}\\n`;\nnote += `- [View Full Runbook](${data.recommended_runbook.link})\\n\\n`;\n\n// Critical alerts\nif (data.context_alerts.length > 0) {\n  note += `### Action Required\\n`;\n  for (const alert of data.context_alerts) {\n    const icon = alert.priority === 'critical' ? '' : alert.priority === 'high' ? '' : '';\n    note += `**${icon} ${alert.title}** (${alert.priority})\\n`;\n    note += `${alert.message}\\n`;\n    if (alert.steps && alert.steps.length > 0) {\n      note += `Steps:\\n`;\n      alert.steps.slice(0, 3).forEach(step => {\n        note += `- ${step}\\n`;\n      });\n    }\n    note += `\\n`;\n  }\n}\n\n// Immediate actions checklist\nif (data.immediate_actions.length > 0) {\n  note += `### Immediate Actions Checklist\\n`;\n  for (const action of data.immediate_actions) {\n    note += `- [ ] ${action.action}\\n`;\n  }\n  note += `\\n`;\n}\n\n// Key steps from runbook\nnote += `### Key Runbook Steps\\n`;\ndata.key_steps.slice(0, 5).forEach((step, i) => {\n  note += `${i + 1}. ${step}\\n`;\n});\n\n// MITRE techniques\nif (data.mitre_techniques.length > 0) {\n  note += `\\n### MITRE ATT&CK Techniques Identified\\n`;\n  data.mitre_techniques.forEach(t => {\n    note += `- **${t.id}**: ${t.name} (${t.priority})\\n`;\n  });\n}\n\n// Detection source guidance\nnote += `\\n### ${data.detection_source.platform} Collection Guidance\\n`;\nnote += `${data.detection_source.guidance}\\n`;\n\nreturn {\n  json: {\n    ...data,\n    xsoar_note: note\n  }\n};"
+      },
+      "id": "build-xsoar-note",
+      "name": "Build XSOAR Note",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1780, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build Webex message for analyst notification\nconst data = $input.first().json;\n\nlet message = `**Runbook Recommendation Alert**\\n\\n`;\n\n// Incident info\nmessage += `**Incident:** ${data.incident_id}\\n`;\nmessage += `**Type:** ${data.recommended_runbook.category}\\n\\n`;\n\n// Critical alerts\nif (data.context_alerts.length > 0) {\n  message += `**Alerts:**\\n`;\n  for (const alert of data.context_alerts) {\n    message += `- ${alert.title} (${alert.priority})\\n`;\n  }\n  message += `\\n`;\n}\n\n// Recommended runbook\nmessage += `**Recommended Runbook:** ${data.recommended_runbook.name}\\n`;\nmessage += `[View Runbook](${data.recommended_runbook.link})\\n\\n`;\n\n// Immediate actions\nif (data.immediate_actions.length > 0) {\n  message += `**Immediate Actions:**\\n`;\n  data.immediate_actions.slice(0, 3).forEach(action => {\n    message += `- ${action.action}\\n`;\n  });\n}\n\nreturn {\n  json: {\n    ...data,\n    webex_message: message\n  }\n};"
+      },
+      "id": "build-webex-message",
+      "name": "Build Webex Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1780, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://xsoar.company.com/incident/{{ $json.incident_id }}/note",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "YOUR_XSOAR_API_KEY"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"data\": \"{{ $json.xsoar_note.replace(/\\n/g, '\\\\n').replace(/\"/g, '\\\\\"') }}\",\n  \"investigationId\": \"{{ $json.incident_id }}\",\n  \"version\": 1,\n  \"category\": \"runbook_recommendation\"\n}",
+        "options": {}
+      },
+      "id": "post-xsoar-note",
+      "name": "Post XSOAR Ticket Note",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2000, 100]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://webexapis.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer YOUR_WEBEX_BOT_TOKEN"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"roomId\": \"YOUR_SOC_ALERTS_ROOM_ID\",\n  \"markdown\": \"{{ $json.webex_message.replace(/\\n/g, '\\\\n').replace(/\"/g, '\\\\\"') }}\"\n}",
+        "options": {}
+      },
+      "id": "send-webex-alert",
+      "name": "Send Webex Alert",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2000, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build enrichment data to include in alert response\nconst data = $input.first().json;\n\nconst enrichmentData = {\n  runbook_suggestion: {\n    id: data.recommended_runbook.id,\n    name: data.recommended_runbook.name,\n    link: data.recommended_runbook.link\n  },\n  immediate_actions: data.immediate_actions.map(a => a.action),\n  escalation_required: data.context_alerts.some(a => a.type === 'escalation'),\n  containment_required: data.context_alerts.some(a => a.type === 'containment'),\n  mitre_techniques: data.mitre_techniques.map(t => t.id),\n  key_steps: data.key_steps.slice(0, 5)\n};\n\nreturn {\n  json: {\n    ...data,\n    enrichment_data: enrichmentData\n  }\n};"
+      },
+      "id": "build-enrichment-data",
+      "name": "Build Enrichment Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2000, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build simple response for non-critical cases\nconst data = $input.first().json;\n\nreturn {\n  json: {\n    ...data,\n    notifications_sent: false,\n    notification_reason: 'No critical alerts - response returned to caller only'\n  }\n};"
+      },
+      "id": "skip-notifications",
+      "name": "Skip Notifications",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1780, 600]
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "mergeByFields": {
+          "values": []
+        },
+        "options": {}
+      },
+      "id": "merge-responses",
+      "name": "Merge Responses",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2.1,
+      "position": [2220, 400]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"status\": \"{{ $json.status || 'success' }}\",\n  \"incident_id\": \"{{ $json.incident_id }}\",\n  \"timestamp\": \"{{ $json.timestamp }}\",\n  \"recommended_runbook\": {\n    \"id\": \"{{ $json.recommended_runbook.id }}\",\n    \"name\": \"{{ $json.recommended_runbook.name }}\",\n    \"category\": \"{{ $json.recommended_runbook.category }}\",\n    \"link\": \"{{ $json.recommended_runbook.link }}\"\n  },\n  \"immediate_actions\": {{ JSON.stringify($json.immediate_actions) }},\n  \"context_alerts\": {{ JSON.stringify($json.context_alerts) }},\n  \"key_steps\": {{ JSON.stringify($json.key_steps.slice(0, 5)) }},\n  \"related_runbooks\": {{ JSON.stringify($json.related_runbooks) }},\n  \"mitre_techniques\": {{ JSON.stringify($json.mitre_techniques) }},\n  \"containment_steps\": {{ JSON.stringify($json.containment_steps) }},\n  \"evidence_requirements\": {{ JSON.stringify($json.evidence_requirements) }},\n  \"escalation_criteria\": {{ JSON.stringify($json.escalation_criteria) }},\n  \"detection_source\": {{ JSON.stringify($json.detection_source) }},\n  \"enrichment_data\": {{ JSON.stringify($json.enrichment_data || {}) }},\n  \"notifications_sent\": {{ $json.notifications_sent !== false }}\n}",
+        "options": {}
+      },
+      "id": "respond-webhook",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [2440, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Error handler - return graceful error response\nconst error = $input.first().json.error || 'Unknown error occurred';\n\nreturn {\n  json: {\n    status: 'error',\n    error: error,\n    timestamp: new Date().toISOString(),\n    recommended_runbook: {\n      id: 'GDnR-GEN-001',\n      name: 'General Incident Response',\n      category: 'General',\n      link: 'https://confluence.company.com/gdnr/general-response'\n    },\n    message: 'An error occurred during runbook matching. Please refer to the General Incident Response runbook.',\n    fallback_steps: [\n      'Gather initial incident information',\n      'Classify incident type and severity',\n      'Identify affected assets',\n      'Implement initial containment',\n      'Notify appropriate stakeholders'\n    ]\n  }\n};"
+      },
+      "id": "error-handler",
+      "name": "Error Handler",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 600]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"status\": \"error\",\n  \"error\": \"{{ $json.error }}\",\n  \"timestamp\": \"{{ $json.timestamp }}\",\n  \"recommended_runbook\": {{ JSON.stringify($json.recommended_runbook) }},\n  \"message\": \"{{ $json.message }}\",\n  \"fallback_steps\": {{ JSON.stringify($json.fallback_steps) }}\n}",
+        "options": {
+          "responseCode": 500
+        }
+      },
+      "id": "respond-error",
+      "name": "Respond with Error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1340, 600]
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Parse Incident Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Incident Data": {
+      "main": [
+        [
+          {
+            "node": "Load Runbook Database",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Runbook Database": {
+      "main": [
+        [
+          {
+            "node": "Match Runbooks",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Match Runbooks": {
+      "main": [
+        [
+          {
+            "node": "Generate Context Suggestions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Context Suggestions": {
+      "main": [
+        [
+          {
+            "node": "Format Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Response": {
+      "main": [
+        [
+          {
+            "node": "Has Critical Alerts?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Critical Alerts?": {
+      "main": [
+        [
+          {
+            "node": "Build XSOAR Note",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Build Webex Message",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Build Enrichment Data",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Skip Notifications",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build XSOAR Note": {
+      "main": [
+        [
+          {
+            "node": "Post XSOAR Ticket Note",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Webex Message": {
+      "main": [
+        [
+          {
+            "node": "Send Webex Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Post XSOAR Ticket Note": {
+      "main": [
+        [
+          {
+            "node": "Merge Responses",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Webex Alert": {
+      "main": [
+        [
+          {
+            "node": "Merge Responses",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Enrichment Data": {
+      "main": [
+        [
+          {
+            "node": "Merge Responses",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Skip Notifications": {
+      "main": [
+        [
+          {
+            "node": "Merge Responses",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Responses": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error Handler": {
+      "main": [
+        [
+          {
+            "node": "Respond with Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  },
+  "versionId": "1",
+  "meta": {
+    "templateId": "runbook-suggestion",
+    "instanceId": "",
+    "templateCredsSetupCompleted": false
+  },
+  "tags": [
+    {
+      "name": "Security",
+      "id": "security"
+    },
+    {
+      "name": "Incident Response",
+      "id": "incident-response"
+    },
+    {
+      "name": "Runbook",
+      "id": "runbook"
+    },
+    {
+      "name": "GDnR",
+      "id": "gdnr"
+    },
+    {
+      "name": "Automation",
+      "id": "automation"
+    }
+  ],
+  "pinData": {},
+  "notes": {
+    "note1": {
+      "id": "note1",
+      "position": [240, 200],
+      "content": "## Runbook Suggestion Workflow\n\nThis workflow automates GDnR (General Distribute & Respond) guide lookups for incident response.\n\n### Webhook Input Format\n```json\n{\n  \"incident_id\": \"INC-12345\",\n  \"incident_type\": \"malware\",\n  \"detection_source\": \"crowdstrike\",\n  \"indicators\": {\n    \"hostname\": \"WORKSTATION-001\",\n    \"ip\": \"192.168.1.100\",\n    \"user\": \"jdoe\"\n  },\n  \"mitre_techniques\": [\"T1059.001\", \"T1547\"],\n  \"severity\": \"high\",\n  \"containment_status\": \"not_started\",\n  \"evidence_collected\": false\n}\n```\n\n### Supported Incident Types\n- malware, ransomware, phishing, bec\n- unauthorized_access, data_exfiltration\n- lateral_movement, c2_communication\n- insider_threat, ddos, credential_theft\n- web_attack, cryptomining\n\n### Detection Sources\n- crowdstrike, qradar, vectra\n- abnormal, zscaler, tanium\n- servicenow, user_report"
+    }
+  }
+}

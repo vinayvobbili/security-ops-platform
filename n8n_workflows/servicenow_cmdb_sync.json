@@ -1,0 +1,1263 @@
+{
+  "name": "ServiceNow CMDB Asset Sync",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 0,
+              "triggerAtMinute": 0
+            },
+            {
+              "triggerAtHour": 4,
+              "triggerAtMinute": 0
+            },
+            {
+              "triggerAtHour": 8,
+              "triggerAtMinute": 0
+            },
+            {
+              "triggerAtHour": 12,
+              "triggerAtMinute": 0
+            },
+            {
+              "triggerAtHour": 16,
+              "triggerAtMinute": 0
+            },
+            {
+              "triggerAtHour": 20,
+              "triggerAtMinute": 0
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Every 4 Hours",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [100, 500]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SERVICENOW_INSTANCE }}/oauth_token.do",
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "grant_type",
+              "value": "password"
+            },
+            {
+              "name": "client_id",
+              "value": "={{ $env.SERVICENOW_CLIENT_ID }}"
+            },
+            {
+              "name": "client_secret",
+              "value": "={{ $env.SERVICENOW_CLIENT_SECRET }}"
+            },
+            {
+              "name": "username",
+              "value": "={{ $env.SERVICENOW_USERNAME }}"
+            },
+            {
+              "name": "password",
+              "value": "={{ $env.SERVICENOW_PASSWORD }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "snow-auth",
+      "name": "ServiceNow OAuth",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [300, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Store auth token and calculate time window\nconst token = $input.first().json.access_token;\nconst now = new Date();\nconst fourHoursAgo = new Date(now.getTime() - (4 * 60 * 60 * 1000));\n\n// ServiceNow datetime format: YYYY-MM-DD HH:MM:SS\nconst formatSnowDate = (date) => {\n  return date.toISOString().replace('T', ' ').substring(0, 19);\n};\n\nreturn [{\n  json: {\n    access_token: token,\n    sync_window_start: formatSnowDate(fourHoursAgo),\n    sync_window_end: formatSnowDate(now),\n    sync_timestamp: now.toISOString()\n  }\n}];"
+      },
+      "id": "init-sync",
+      "name": "Initialize Sync Window",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, 500]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.SERVICENOW_INSTANCE }}/api/now/table/cmdb_ci_computer",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "sysparm_query",
+              "value": "=sys_updated_on>=javascript:gs.dateGenerate('{{ $json.sync_window_start.split(' ')[0] }}','{{ $json.sync_window_start.split(' ')[1] }}')"
+            },
+            {
+              "name": "sysparm_fields",
+              "value": "sys_id,name,asset_tag,serial_number,ip_address,os,os_version,sys_class_name,operational_status,install_status,sys_created_on,sys_updated_on,owned_by,managed_by,department,location,u_criticality,u_environment,support_group"
+            },
+            {
+              "name": "sysparm_display_value",
+              "value": "true"
+            },
+            {
+              "name": "sysparm_limit",
+              "value": "1000"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "query-modified-cis",
+      "name": "Query Modified CIs",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [700, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "snow-bearer",
+          "name": "ServiceNow Bearer Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.SERVICENOW_INSTANCE }}/api/now/table/cmdb_ci_computer",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "sysparm_query",
+              "value": "=sys_created_on>=javascript:gs.dateGenerate('{{ $json.sync_window_start.split(' ')[0] }}','{{ $json.sync_window_start.split(' ')[1] }}')"
+            },
+            {
+              "name": "sysparm_fields",
+              "value": "sys_id,name,asset_tag,serial_number,ip_address,os,os_version,sys_class_name,operational_status,install_status,sys_created_on,sys_updated_on,owned_by,managed_by,department,location,u_criticality,u_environment,support_group"
+            },
+            {
+              "name": "sysparm_display_value",
+              "value": "true"
+            },
+            {
+              "name": "sysparm_limit",
+              "value": "500"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "query-new-assets",
+      "name": "Query New Assets",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [700, 500],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "snow-bearer",
+          "name": "ServiceNow Bearer Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.SERVICENOW_INSTANCE }}/api/now/table/cmdb_ci_computer",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "sysparm_query",
+              "value": "=install_statusIN7,8^sys_updated_on>=javascript:gs.dateGenerate('{{ $json.sync_window_start.split(' ')[0] }}','{{ $json.sync_window_start.split(' ')[1] }}')"
+            },
+            {
+              "name": "sysparm_fields",
+              "value": "sys_id,name,asset_tag,serial_number,ip_address,os,install_status,operational_status,sys_updated_on,owned_by,department,u_decommission_date"
+            },
+            {
+              "name": "sysparm_display_value",
+              "value": "true"
+            },
+            {
+              "name": "sysparm_limit",
+              "value": "500"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "query-decommissioned",
+      "name": "Query Decommissioned Assets",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [700, 700],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "snow-bearer",
+          "name": "ServiceNow Bearer Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineAll",
+        "options": {}
+      },
+      "id": "merge-cmdb-queries",
+      "name": "Merge CMDB Results",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [900, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse and categorize CMDB results\nconst items = $input.all();\n\nconst modifiedCIs = items[0]?.json?.result || [];\nconst newAssets = items[1]?.json?.result || [];\nconst decommissioned = items[2]?.json?.result || [];\n\n// Create sets to track unique assets\nconst newAssetIds = new Set(newAssets.map(a => a.sys_id));\n\n// Categorize modified CIs (exclude new assets)\nconst modifiedOnly = modifiedCIs.filter(ci => !newAssetIds.has(ci.sys_id));\n\n// Parse lifecycle status from install_status\n// ServiceNow install_status values:\n// 1=Installed, 2=In Stock, 3=On Order, 4=In Maintenance, 5=In Transit\n// 6=Pending Install, 7=Retired, 8=Disposed, 9=Absent\nconst lifecycleMap = {\n  '1': 'Active',\n  '2': 'In Stock',\n  '3': 'On Order',\n  '4': 'Maintenance',\n  '5': 'In Transit',\n  '6': 'Pending Install',\n  '7': 'Retired',\n  '8': 'Disposed',\n  '9': 'Absent'\n};\n\n// Map criticality values\nconst criticalityMap = {\n  '1': 'Critical',\n  '2': 'High',\n  '3': 'Medium',\n  '4': 'Low',\n  '5': 'Very Low'\n};\n\n// Normalize asset data\nconst normalizeAsset = (asset) => ({\n  sys_id: asset.sys_id,\n  hostname: asset.name || '',\n  asset_tag: asset.asset_tag || '',\n  serial_number: asset.serial_number || '',\n  ip_address: asset.ip_address || '',\n  os: asset.os || '',\n  os_version: asset.os_version || '',\n  ci_class: asset.sys_class_name || 'cmdb_ci_computer',\n  operational_status: asset.operational_status || '',\n  lifecycle_status: lifecycleMap[asset.install_status] || asset.install_status || 'Unknown',\n  created_on: asset.sys_created_on || '',\n  updated_on: asset.sys_updated_on || '',\n  owner: asset.owned_by || '',\n  managed_by: asset.managed_by || '',\n  department: asset.department || '',\n  location: asset.location || '',\n  criticality: criticalityMap[asset.u_criticality] || asset.u_criticality || 'Unknown',\n  environment: asset.u_environment || '',\n  support_group: asset.support_group || '',\n  decommission_date: asset.u_decommission_date || null\n});\n\n// Process all categories\nconst allAssets = {\n  new_assets: newAssets.map(normalizeAsset),\n  modified_assets: modifiedOnly.map(normalizeAsset),\n  decommissioned_assets: decommissioned.map(normalizeAsset)\n};\n\n// Build hostname list for security tool lookup\nconst allHostnames = [\n  ...allAssets.new_assets,\n  ...allAssets.modified_assets\n].map(a => a.hostname).filter(h => h);\n\nreturn [{\n  json: {\n    cmdb_data: allAssets,\n    hostnames_for_lookup: allHostnames,\n    stats: {\n      new_assets_count: allAssets.new_assets.length,\n      modified_assets_count: allAssets.modified_assets.length,\n      decommissioned_count: allAssets.decommissioned_assets.length,\n      total_hostnames: allHostnames.length\n    },\n    sync_timestamp: $('Initialize Sync Window').first().json.sync_timestamp\n  }\n}];"
+      },
+      "id": "parse-cmdb-data",
+      "name": "Parse CMDB Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, 500]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.SERVICENOW_INSTANCE }}/api/now/table/cmdb_rel_ci",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "sysparm_query",
+              "value": "=type.name=Depends on::Used by^child.sys_class_name=cmdb_ci_service"
+            },
+            {
+              "name": "sysparm_fields",
+              "value": "parent.name,child.name,type.name"
+            },
+            {
+              "name": "sysparm_display_value",
+              "value": "true"
+            },
+            {
+              "name": "sysparm_limit",
+              "value": "5000"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "query-service-mappings",
+      "name": "Query Business Service Mappings",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1300, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "snow-bearer",
+          "name": "ServiceNow Bearer Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.us-2.crowdstrike.com/oauth2/token",
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "client_id",
+              "value": "={{ $env.CROWDSTRIKE_CLIENT_ID }}"
+            },
+            {
+              "name": "client_secret",
+              "value": "={{ $env.CROWDSTRIKE_CLIENT_SECRET }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "cs-auth",
+      "name": "CrowdStrike Auth",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1300, 500]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://tanium.company.com/api/v2/session/login",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"username\": \"{{ $env.TANIUM_USERNAME }}\",\n  \"password\": \"{{ $env.TANIUM_PASSWORD }}\"\n}",
+        "options": {}
+      },
+      "id": "tanium-auth",
+      "name": "Tanium Auth",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1300, 700]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Prepare batch query for CrowdStrike\nconst cmdbData = $('Parse CMDB Data').first().json;\nconst hostnames = cmdbData.hostnames_for_lookup;\n\n// CrowdStrike API supports FQL queries with hostname filter\n// Batch hostnames into groups of 100 for efficient querying\nconst batchSize = 100;\nconst batches = [];\n\nfor (let i = 0; i < hostnames.length; i += batchSize) {\n  const batch = hostnames.slice(i, i + batchSize);\n  // Build FQL filter: hostname:['HOST1','HOST2',...]\n  const fqlFilter = `hostname:['${batch.join(\"','\")}'`];\n  batches.push({\n    batch_index: Math.floor(i / batchSize),\n    hostnames: batch,\n    fql_filter: fqlFilter\n  });\n}\n\nreturn batches.map(b => ({ json: b }));"
+      },
+      "id": "prepare-cs-query",
+      "name": "Prepare CrowdStrike Query",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1500, 500]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.us-2.crowdstrike.com/devices/queries/devices/v1",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "filter",
+              "value": "={{ $json.fql_filter }}"
+            },
+            {
+              "name": "limit",
+              "value": "500"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "cs-query-devices",
+      "name": "Query CrowdStrike Devices",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1700, 400],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "cs-bearer",
+          "name": "CrowdStrike Bearer Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "has-cs-devices",
+              "leftValue": "={{ $json.resources?.length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-cs-results",
+      "name": "Has CrowdStrike Devices?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1900, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.us-2.crowdstrike.com/devices/entities/devices/v2",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ ids: $json.resources }) }}",
+        "options": {}
+      },
+      "id": "cs-get-device-details",
+      "name": "Get CrowdStrike Device Details",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2100, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "cs-bearer",
+          "name": "CrowdStrike Bearer Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse CrowdStrike device details\nconst csResponse = $input.first().json;\nconst devices = csResponse.resources || [];\n\n// Build hostname to device mapping\nconst csDeviceMap = {};\n\ndevices.forEach(device => {\n  const hostname = (device.hostname || '').toLowerCase();\n  if (hostname) {\n    csDeviceMap[hostname] = {\n      device_id: device.device_id,\n      hostname: device.hostname,\n      agent_version: device.agent_version,\n      platform_name: device.platform_name,\n      os_version: device.os_version,\n      last_seen: device.last_seen,\n      tags: device.tags || [],\n      groups: device.groups || [],\n      sensor_status: device.status,\n      prevention_policy: device.device_policies?.prevention?.policy_type || '',\n      sensor_policy: device.device_policies?.sensor_update?.policy_type || '',\n      has_ring_tag: (device.tags || []).some(t => t.toLowerCase().includes('ring')),\n      ring_tag_value: (device.tags || []).find(t => t.toLowerCase().includes('ring')) || null\n    };\n  }\n});\n\nreturn [{ json: { crowdstrike_devices: csDeviceMap, device_count: Object.keys(csDeviceMap).length } }];"
+      },
+      "id": "parse-cs-devices",
+      "name": "Parse CrowdStrike Devices",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2300, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// No CrowdStrike devices found for this batch\nreturn [{ json: { crowdstrike_devices: {}, device_count: 0 } }];"
+      },
+      "id": "empty-cs-result",
+      "name": "Empty CrowdStrike Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2100, 500]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://tanium.company.com/api/v2/questions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "session",
+              "value": "={{ $('Tanium Auth').first().json.data.session }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"question_text\": \"Get Computer Name and Tanium Client IP Address and Operating System and Tanium Server Name and Is Virtual from all machines\"\n}",
+        "options": {}
+      },
+      "id": "tanium-query",
+      "name": "Query Tanium Endpoints",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1700, 700]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Initialize polling for Tanium results\nconst questionId = $input.first().json.data.id;\nconst sessionToken = $('Tanium Auth').first().json.data.session;\n\nreturn [{\n  json: {\n    question_id: questionId,\n    session_token: sessionToken,\n    poll_count: 0,\n    max_polls: 20\n  }\n}];"
+      },
+      "id": "init-tanium-poll",
+      "name": "Initialize Tanium Polling",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1900, 700]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://tanium.company.com/api/v2/result_data/question/{{ $json.question_id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "session",
+              "value": "={{ $json.session_token }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "poll-tanium",
+      "name": "Poll Tanium Results",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2100, 700]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Check if Tanium results are complete\nconst data = $input.first().json;\nconst prevData = $('Initialize Tanium Polling').first().json;\n\nconst estimatedTotal = data.data?.result_sets?.[0]?.estimated_total || 0;\nconst rowCount = data.data?.result_sets?.[0]?.row_count || 0;\nconst pollCount = prevData.poll_count + 1;\n\n// Results are ready when row_count approaches estimated_total or after max polls\nconst isComplete = (rowCount >= estimatedTotal * 0.90) || pollCount >= prevData.max_polls;\n\nreturn [{\n  json: {\n    ...data,\n    question_id: prevData.question_id,\n    session_token: prevData.session_token,\n    poll_count: pollCount,\n    max_polls: prevData.max_polls,\n    is_complete: isComplete,\n    estimated_total: estimatedTotal,\n    row_count: rowCount\n  }\n}];"
+      },
+      "id": "check-tanium-results",
+      "name": "Check Tanium Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2300, 700]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "tanium-complete",
+              "leftValue": "={{ $json.is_complete }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-tanium-complete",
+      "name": "Tanium Results Complete?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [2500, 700]
+    },
+    {
+      "parameters": {
+        "amount": 5,
+        "unit": "seconds"
+      },
+      "id": "wait-tanium",
+      "name": "Wait for Tanium",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [2700, 800]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse Tanium results into hostname map\nconst resultData = $input.first().json;\nconst resultSets = resultData.data?.result_sets || [];\n\nconst taniumDeviceMap = {};\n\nif (resultSets.length > 0 && resultSets[0].rows) {\n  const columns = resultSets[0].columns || [];\n  const rows = resultSets[0].rows || [];\n  \n  // Map column names to indices\n  const colMap = {};\n  columns.forEach((col, idx) => {\n    const name = col.name.toLowerCase();\n    if (name.includes('computer name')) colMap.hostname = idx;\n    else if (name.includes('ip address')) colMap.ip_address = idx;\n    else if (name.includes('operating system')) colMap.os = idx;\n    else if (name.includes('server name')) colMap.server = idx;\n    else if (name.includes('is virtual')) colMap.is_virtual = idx;\n  });\n  \n  rows.forEach(row => {\n    const values = row.data || [];\n    \n    const getValue = (idx) => {\n      if (idx === undefined || !values[idx]) return '';\n      const cell = values[idx];\n      if (Array.isArray(cell)) {\n        return cell.map(c => c.text || c).join(', ');\n      }\n      return cell.text || cell || '';\n    };\n    \n    const hostname = getValue(colMap.hostname).toLowerCase();\n    if (hostname) {\n      taniumDeviceMap[hostname] = {\n        hostname: getValue(colMap.hostname),\n        ip_address: getValue(colMap.ip_address),\n        os: getValue(colMap.os),\n        tanium_server: getValue(colMap.server),\n        is_virtual: getValue(colMap.is_virtual),\n        registered: true\n      };\n    }\n  });\n}\n\nreturn [{ json: { tanium_devices: taniumDeviceMap, device_count: Object.keys(taniumDeviceMap).length } }];"
+      },
+      "id": "parse-tanium-results",
+      "name": "Parse Tanium Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2700, 600]
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineAll",
+        "options": {}
+      },
+      "id": "merge-security-data",
+      "name": "Merge Security Tool Data",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [2900, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Cross-reference CMDB data with security tools and identify gaps\nconst items = $input.all();\n\n// Collect all security tool data\nlet csDevices = {};\nlet taniumDevices = {};\n\nitems.forEach(item => {\n  if (item.json.crowdstrike_devices) {\n    csDevices = { ...csDevices, ...item.json.crowdstrike_devices };\n  }\n  if (item.json.tanium_devices) {\n    taniumDevices = { ...taniumDevices, ...item.json.tanium_devices };\n  }\n});\n\nconst cmdbData = $('Parse CMDB Data').first().json.cmdb_data;\nconst serviceMappings = $('Query Business Service Mappings').first().json?.result || [];\n\n// Build service mapping lookup\nconst serviceMap = {};\nserviceMappings.forEach(mapping => {\n  const ciName = (mapping['parent.name'] || '').toLowerCase();\n  const serviceName = mapping['child.name'] || '';\n  if (ciName && serviceName) {\n    if (!serviceMap[ciName]) serviceMap[ciName] = [];\n    serviceMap[ciName].push(serviceName);\n  }\n});\n\n// Analyze each asset category\nconst analyzeAsset = (asset) => {\n  const hostname = (asset.hostname || '').toLowerCase();\n  const csDevice = csDevices[hostname];\n  const taniumDevice = taniumDevices[hostname];\n  \n  return {\n    ...asset,\n    // CrowdStrike status\n    has_crowdstrike: !!csDevice,\n    crowdstrike_agent_version: csDevice?.agent_version || null,\n    crowdstrike_last_seen: csDevice?.last_seen || null,\n    crowdstrike_tags: csDevice?.tags || [],\n    crowdstrike_has_ring_tag: csDevice?.has_ring_tag || false,\n    crowdstrike_ring_tag: csDevice?.ring_tag_value || null,\n    \n    // Tanium status\n    has_tanium: !!taniumDevice,\n    tanium_server: taniumDevice?.tanium_server || null,\n    tanium_ip: taniumDevice?.ip_address || null,\n    \n    // Business services\n    business_services: serviceMap[hostname] || [],\n    \n    // Gap analysis\n    missing_security_agent: !csDevice && !taniumDevice,\n    missing_crowdstrike: !csDevice,\n    missing_tanium: !taniumDevice,\n    missing_owner: !asset.owner || asset.owner === '',\n    \n    // Critical asset flagging\n    is_critical: asset.criticality === 'Critical' || asset.criticality === 'High',\n    needs_ring0: asset.criticality === 'Critical' && (!csDevice?.has_ring_tag)\n  };\n};\n\n// Process all asset categories\nconst analyzedAssets = {\n  new_assets: cmdbData.new_assets.map(analyzeAsset),\n  modified_assets: cmdbData.modified_assets.map(analyzeAsset),\n  decommissioned_assets: cmdbData.decommissioned_assets.map(analyzeAsset)\n};\n\n// Generate gap analysis\nconst gaps = {\n  // Assets needing security agent deployment\n  missing_all_security: [\n    ...analyzedAssets.new_assets.filter(a => a.missing_security_agent),\n    ...analyzedAssets.modified_assets.filter(a => a.missing_security_agent)\n  ],\n  \n  // Assets missing CrowdStrike only\n  missing_crowdstrike: [\n    ...analyzedAssets.new_assets.filter(a => a.missing_crowdstrike && !a.missing_tanium),\n    ...analyzedAssets.modified_assets.filter(a => a.missing_crowdstrike && !a.missing_tanium)\n  ],\n  \n  // Assets missing Tanium only\n  missing_tanium: [\n    ...analyzedAssets.new_assets.filter(a => a.missing_tanium && !a.missing_crowdstrike),\n    ...analyzedAssets.modified_assets.filter(a => a.missing_tanium && !a.missing_crowdstrike)\n  ],\n  \n  // Decommissioned assets still in security tools\n  decommissioned_with_agents: analyzedAssets.decommissioned_assets.filter(a => \n    a.has_crowdstrike || a.has_tanium\n  ),\n  \n  // Assets missing owner info\n  missing_owner: [\n    ...analyzedAssets.new_assets.filter(a => a.missing_owner),\n    ...analyzedAssets.modified_assets.filter(a => a.missing_owner)\n  ],\n  \n  // Critical assets needing ring0 classification\n  needs_ring0_classification: [\n    ...analyzedAssets.new_assets.filter(a => a.needs_ring0),\n    ...analyzedAssets.modified_assets.filter(a => a.needs_ring0)\n  ]\n};\n\nreturn [{\n  json: {\n    analyzed_assets: analyzedAssets,\n    gaps: gaps,\n    security_tool_summary: {\n      crowdstrike_matched: Object.keys(csDevices).length,\n      tanium_matched: Object.keys(taniumDevices).length\n    },\n    sync_timestamp: $('Initialize Sync Window').first().json.sync_timestamp\n  }\n}];"
+      },
+      "id": "analyze-gaps",
+      "name": "Analyze Security Gaps",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3100, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Generate sync report\nconst data = $input.first().json;\nconst gaps = data.gaps;\nconst analyzedAssets = data.analyzed_assets;\n\nconst report = {\n  report_id: `CMDB-SYNC-${Date.now()}`,\n  generated_at: new Date().toISOString(),\n  sync_timestamp: data.sync_timestamp,\n  \n  // Summary counts\n  summary: {\n    new_assets_processed: analyzedAssets.new_assets.length,\n    modified_assets_processed: analyzedAssets.modified_assets.length,\n    decommissioned_assets_processed: analyzedAssets.decommissioned_assets.length,\n    \n    // Gap counts\n    assets_missing_all_security: gaps.missing_all_security.length,\n    assets_missing_crowdstrike: gaps.missing_crowdstrike.length,\n    assets_missing_tanium: gaps.missing_tanium.length,\n    decommissioned_with_active_agents: gaps.decommissioned_with_agents.length,\n    assets_missing_owner: gaps.missing_owner.length,\n    critical_assets_needing_ring0: gaps.needs_ring0_classification.length\n  },\n  \n  // Detailed gap lists (limited to top 50 for each)\n  details: {\n    new_assets_requiring_deployment: gaps.missing_all_security.slice(0, 50).map(a => ({\n      hostname: a.hostname,\n      ip_address: a.ip_address,\n      os: a.os,\n      department: a.department,\n      criticality: a.criticality,\n      owner: a.owner || 'MISSING'\n    })),\n    \n    decommissioned_still_in_security: gaps.decommissioned_with_agents.slice(0, 50).map(a => ({\n      hostname: a.hostname,\n      lifecycle_status: a.lifecycle_status,\n      decommission_date: a.decommission_date,\n      has_crowdstrike: a.has_crowdstrike,\n      has_tanium: a.has_tanium\n    })),\n    \n    missing_owner_info: gaps.missing_owner.slice(0, 50).map(a => ({\n      hostname: a.hostname,\n      department: a.department,\n      criticality: a.criticality,\n      business_services: a.business_services\n    })),\n    \n    critical_assets_ring0_needed: gaps.needs_ring0_classification.slice(0, 50).map(a => ({\n      hostname: a.hostname,\n      criticality: a.criticality,\n      current_cs_tags: a.crowdstrike_tags,\n      business_services: a.business_services\n    }))\n  },\n  \n  // Action recommendations\n  recommendations: {\n    immediate_actions: [],\n    follow_up_actions: []\n  }\n};\n\n// Build action recommendations\nif (gaps.missing_all_security.length > 0) {\n  report.recommendations.immediate_actions.push({\n    action: 'Deploy security agents',\n    count: gaps.missing_all_security.length,\n    priority: 'High',\n    description: `${gaps.missing_all_security.length} assets in CMDB have no security agent (CrowdStrike or Tanium)`\n  });\n}\n\nif (gaps.decommissioned_with_agents.length > 0) {\n  report.recommendations.immediate_actions.push({\n    action: 'Remove decommissioned assets from security tools',\n    count: gaps.decommissioned_with_agents.length,\n    priority: 'Medium',\n    description: `${gaps.decommissioned_with_agents.length} decommissioned assets still have active security agents`\n  });\n}\n\nif (gaps.needs_ring0_classification.length > 0) {\n  report.recommendations.immediate_actions.push({\n    action: 'Apply ring0 classification',\n    count: gaps.needs_ring0_classification.length,\n    priority: 'High',\n    description: `${gaps.needs_ring0_classification.length} critical assets need ring0 tag in CrowdStrike`\n  });\n}\n\nif (gaps.missing_owner.length > 0) {\n  report.recommendations.follow_up_actions.push({\n    action: 'Update asset ownership',\n    count: gaps.missing_owner.length,\n    priority: 'Low',\n    description: `${gaps.missing_owner.length} assets have missing owner information in CMDB`\n  });\n}\n\nreturn [{ json: report }];"
+      },
+      "id": "generate-report",
+      "name": "Generate Sync Report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3300, 500]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "has-gaps",
+              "leftValue": "={{ $json.summary.assets_missing_all_security + $json.summary.decommissioned_with_active_agents }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-gaps-exist",
+      "name": "Gaps Found?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [3500, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Prepare ServiceNow tickets for agent deployment\nconst report = $input.first().json;\nconst assetsNeedingDeployment = report.details.new_assets_requiring_deployment;\n\n// Group by department for batch ticket creation\nconst byDepartment = {};\nassetsNeedingDeployment.forEach(asset => {\n  const dept = asset.department || 'Unknown';\n  if (!byDepartment[dept]) byDepartment[dept] = [];\n  byDepartment[dept].push(asset);\n});\n\n// Create ticket data for each department batch\nconst tickets = Object.entries(byDepartment).map(([dept, assets]) => ({\n  ticket_type: 'security_agent_deployment',\n  department: dept,\n  asset_count: assets.length,\n  short_description: `Security Agent Deployment Required - ${dept} (${assets.length} assets)`,\n  description: `The following ${assets.length} assets in ${dept} require security agent deployment:\\n\\n` +\n    assets.map(a => `- ${a.hostname} (${a.ip_address || 'No IP'}) - ${a.os || 'Unknown OS'} - Criticality: ${a.criticality}`).join('\\n') +\n    `\\n\\nIdentified by CMDB Sync workflow on ${report.generated_at}`,\n  priority: assets.some(a => a.criticality === 'Critical' || a.criticality === 'High') ? '2' : '3',\n  category: 'Security',\n  subcategory: 'Endpoint Protection',\n  assignment_group: 'Security Operations',\n  assets: assets\n}));\n\nreturn tickets.map(t => ({ json: t }));"
+      },
+      "id": "prepare-deployment-tickets",
+      "name": "Prepare Deployment Tickets",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3700, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SERVICENOW_INSTANCE }}/api/now/table/incident",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"short_description\": \"{{ $json.short_description }}\",\n  \"description\": {{ JSON.stringify($json.description) }},\n  \"priority\": \"{{ $json.priority }}\",\n  \"category\": \"{{ $json.category }}\",\n  \"subcategory\": \"{{ $json.subcategory }}\",\n  \"assignment_group\": \"{{ $json.assignment_group }}\",\n  \"u_ticket_type\": \"Security Agent Deployment\"\n}",
+        "options": {}
+      },
+      "id": "create-snow-tickets",
+      "name": "Create ServiceNow Tickets",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [3900, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "snow-bearer",
+          "name": "ServiceNow Bearer Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Prepare decommissioned asset flags for removal from security tools\nconst report = $('Generate Sync Report').first().json;\nconst decommissionedAssets = report.details.decommissioned_still_in_security;\n\nconst removalRequests = decommissionedAssets.map(asset => ({\n  hostname: asset.hostname,\n  lifecycle_status: asset.lifecycle_status,\n  decommission_date: asset.decommission_date,\n  actions: {\n    remove_from_crowdstrike: asset.has_crowdstrike,\n    remove_from_tanium: asset.has_tanium\n  },\n  request_type: 'decommission_cleanup',\n  created_at: new Date().toISOString()\n}));\n\nreturn [{ json: { removal_requests: removalRequests, count: removalRequests.length } }];"
+      },
+      "id": "flag-decommissioned",
+      "name": "Flag Decommissioned for Removal",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3700, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Prepare Tanium tag updates based on CMDB criticality\nconst gapData = $('Analyze Security Gaps').first().json;\nconst criticalAssets = gapData.gaps.needs_ring0_classification;\n\n// Build tag update requests for Tanium\nconst tagUpdates = criticalAssets.map(asset => ({\n  hostname: asset.hostname,\n  current_criticality: asset.criticality,\n  proposed_tags: ['ring0', `criticality-${asset.criticality.toLowerCase()}`],\n  business_services: asset.business_services,\n  update_type: 'criticality_tag_sync'\n}));\n\nreturn [{ json: { tag_updates: tagUpdates, count: tagUpdates.length } }];"
+      },
+      "id": "prepare-tanium-tags",
+      "name": "Prepare Tanium Tag Updates",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3700, 700]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Format comprehensive Webex summary message\nconst report = $('Generate Sync Report').first().json;\nconst ticketResults = $('Create ServiceNow Tickets').all().map(i => i.json);\nconst removalData = $('Flag Decommissioned for Removal').first().json;\nconst tagData = $('Prepare Tanium Tag Updates').first().json;\n\nconst summary = report.summary;\nconst recommendations = report.recommendations;\n\n// Status indicator\nconst hasIssues = summary.assets_missing_all_security > 0 || \n                  summary.decommissioned_with_active_agents > 0 ||\n                  summary.critical_assets_needing_ring0 > 0;\nconst statusEmoji = hasIssues ? 'Warning' : 'Success';\nconst statusText = hasIssues ? 'Action Required' : 'All Clear';\n\n// Build markdown message\nconst markdown = `## ServiceNow CMDB Sync Report\n\n**Status:** ${statusText}\n**Sync Time:** ${new Date(report.sync_timestamp).toLocaleString('en-US', { timeZone: 'America/Chicago' })} CT\n**Report ID:** \\`${report.report_id}\\`\n\n---\n\n### Assets Processed\n| Category | Count |\n|----------|-------|\n| New Assets | ${summary.new_assets_processed} |\n| Modified Assets | ${summary.modified_assets_processed} |\n| Decommissioned | ${summary.decommissioned_assets_processed} |\n\n---\n\n### Security Coverage Gaps\n| Gap Type | Count | Priority |\n|----------|-------|----------|\n| Missing All Security Agents | ${summary.assets_missing_all_security} | ${summary.assets_missing_all_security > 0 ? 'HIGH' : '-'} |\n| Missing CrowdStrike Only | ${summary.assets_missing_crowdstrike} | ${summary.assets_missing_crowdstrike > 0 ? 'Medium' : '-'} |\n| Missing Tanium Only | ${summary.assets_missing_tanium} | ${summary.assets_missing_tanium > 0 ? 'Medium' : '-'} |\n| Decommissioned with Active Agents | ${summary.decommissioned_with_active_agents} | ${summary.decommissioned_with_active_agents > 0 ? 'Medium' : '-'} |\n| Missing Owner Info | ${summary.assets_missing_owner} | Low |\n| Critical Assets Needing Ring0 | ${summary.critical_assets_needing_ring0} | ${summary.critical_assets_needing_ring0 > 0 ? 'HIGH' : '-'} |\n\n---\n\n### Actions Taken\n- **Deployment Tickets Created:** ${ticketResults.length > 0 ? ticketResults.length : 0}\n- **Assets Flagged for Agent Removal:** ${removalData.count}\n- **Tanium Tag Updates Prepared:** ${tagData.count}\n\n---\n\n### Recommendations\n${recommendations.immediate_actions.length > 0 ? \n  '**Immediate Actions:**\\n' + recommendations.immediate_actions.map(a => \n    `- ${a.action}: ${a.count} items (${a.priority} priority)`\n  ).join('\\n') : \n  '**No immediate actions required.**'}\n\n${recommendations.follow_up_actions.length > 0 ?\n  '\\n**Follow-up Actions:**\\n' + recommendations.follow_up_actions.map(a =>\n    `- ${a.action}: ${a.count} items`\n  ).join('\\n') :\n  ''}\n\n---\n*Generated by n8n ServiceNow CMDB Sync Workflow*`;\n\nreturn [{ json: { markdown, report_id: report.report_id } }];"
+      },
+      "id": "format-webex-message",
+      "name": "Format Webex Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [4100, 500]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://webexapis.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"roomId\": \"{{ $env.WEBEX_CMDB_SYNC_ROOM_ID }}\",\n  \"markdown\": {{ JSON.stringify($json.markdown) }}\n}",
+        "options": {}
+      },
+      "id": "post-webex",
+      "name": "Post to Webex",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [4300, 500],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "webex-token",
+          "name": "Webex Bot Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// No significant gaps found - send simple status update\nconst report = $input.first().json;\nconst summary = report.summary;\n\nconst markdown = `## ServiceNow CMDB Sync - All Clear\n\n**Sync Time:** ${new Date(report.sync_timestamp).toLocaleString('en-US', { timeZone: 'America/Chicago' })} CT\n\n### Summary\n- New Assets: ${summary.new_assets_processed}\n- Modified Assets: ${summary.modified_assets_processed}\n- Decommissioned: ${summary.decommissioned_assets_processed}\n\n**Status:** No significant security gaps identified. All assets have proper coverage.\n\n---\n*Generated by n8n ServiceNow CMDB Sync Workflow*`;\n\nreturn [{ json: { markdown, report_id: report.report_id } }];"
+      },
+      "id": "format-no-gaps-message",
+      "name": "Format No Gaps Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3700, 900]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://webexapis.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"roomId\": \"{{ $env.WEBEX_CMDB_SYNC_ROOM_ID }}\",\n  \"markdown\": {{ JSON.stringify($json.markdown) }}\n}",
+        "options": {}
+      },
+      "id": "post-webex-no-gaps",
+      "name": "Post No Gaps to Webex",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [3900, 900],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "webex-token",
+          "name": "Webex Bot Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "write",
+        "fileName": "=/data/exports/cmdb_sync_{{ $now.format('yyyy-MM-dd_HH-mm') }}.json",
+        "options": {
+          "encoding": "utf8"
+        }
+      },
+      "id": "export-report",
+      "name": "Export Sync Report",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [4300, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Final workflow status\nconst report = $('Generate Sync Report').first().json;\n\nreturn [{\n  json: {\n    status: 'completed',\n    report_id: report.report_id,\n    sync_timestamp: report.sync_timestamp,\n    summary: report.summary,\n    workflow: 'servicenow_cmdb_sync'\n  }\n}];"
+      },
+      "id": "final-status",
+      "name": "Final Status",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [4500, 500]
+    }
+  ],
+  "connections": {
+    "Every 4 Hours": {
+      "main": [
+        [
+          {
+            "node": "ServiceNow OAuth",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ServiceNow OAuth": {
+      "main": [
+        [
+          {
+            "node": "Initialize Sync Window",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Initialize Sync Window": {
+      "main": [
+        [
+          {
+            "node": "Query Modified CIs",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Query New Assets",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Query Decommissioned Assets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Query Modified CIs": {
+      "main": [
+        [
+          {
+            "node": "Merge CMDB Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Query New Assets": {
+      "main": [
+        [
+          {
+            "node": "Merge CMDB Results",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Query Decommissioned Assets": {
+      "main": [
+        [
+          {
+            "node": "Merge CMDB Results",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Merge CMDB Results": {
+      "main": [
+        [
+          {
+            "node": "Parse CMDB Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse CMDB Data": {
+      "main": [
+        [
+          {
+            "node": "Query Business Service Mappings",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "CrowdStrike Auth",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Tanium Auth",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Query Business Service Mappings": {
+      "main": [
+        [
+          {
+            "node": "Merge Security Tool Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CrowdStrike Auth": {
+      "main": [
+        [
+          {
+            "node": "Prepare CrowdStrike Query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare CrowdStrike Query": {
+      "main": [
+        [
+          {
+            "node": "Query CrowdStrike Devices",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Query CrowdStrike Devices": {
+      "main": [
+        [
+          {
+            "node": "Has CrowdStrike Devices?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has CrowdStrike Devices?": {
+      "main": [
+        [
+          {
+            "node": "Get CrowdStrike Device Details",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Empty CrowdStrike Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get CrowdStrike Device Details": {
+      "main": [
+        [
+          {
+            "node": "Parse CrowdStrike Devices",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse CrowdStrike Devices": {
+      "main": [
+        [
+          {
+            "node": "Merge Security Tool Data",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Empty CrowdStrike Result": {
+      "main": [
+        [
+          {
+            "node": "Merge Security Tool Data",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Tanium Auth": {
+      "main": [
+        [
+          {
+            "node": "Query Tanium Endpoints",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Query Tanium Endpoints": {
+      "main": [
+        [
+          {
+            "node": "Initialize Tanium Polling",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Initialize Tanium Polling": {
+      "main": [
+        [
+          {
+            "node": "Poll Tanium Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Poll Tanium Results": {
+      "main": [
+        [
+          {
+            "node": "Check Tanium Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Tanium Results": {
+      "main": [
+        [
+          {
+            "node": "Tanium Results Complete?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tanium Results Complete?": {
+      "main": [
+        [
+          {
+            "node": "Parse Tanium Results",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Wait for Tanium",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait for Tanium": {
+      "main": [
+        [
+          {
+            "node": "Poll Tanium Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Tanium Results": {
+      "main": [
+        [
+          {
+            "node": "Merge Security Tool Data",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Merge Security Tool Data": {
+      "main": [
+        [
+          {
+            "node": "Analyze Security Gaps",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze Security Gaps": {
+      "main": [
+        [
+          {
+            "node": "Generate Sync Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Sync Report": {
+      "main": [
+        [
+          {
+            "node": "Gaps Found?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gaps Found?": {
+      "main": [
+        [
+          {
+            "node": "Prepare Deployment Tickets",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Flag Decommissioned for Removal",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Prepare Tanium Tag Updates",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Format No Gaps Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Deployment Tickets": {
+      "main": [
+        [
+          {
+            "node": "Create ServiceNow Tickets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create ServiceNow Tickets": {
+      "main": [
+        [
+          {
+            "node": "Format Webex Message",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Export Sync Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Flag Decommissioned for Removal": {
+      "main": [
+        [
+          {
+            "node": "Format Webex Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Tanium Tag Updates": {
+      "main": [
+        [
+          {
+            "node": "Format Webex Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Webex Message": {
+      "main": [
+        [
+          {
+            "node": "Post to Webex",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Post to Webex": {
+      "main": [
+        [
+          {
+            "node": "Final Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format No Gaps Message": {
+      "main": [
+        [
+          {
+            "node": "Post No Gaps to Webex",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Post No Gaps to Webex": {
+      "main": [
+        [
+          {
+            "node": "Final Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Export Sync Report": {
+      "main": [
+        [
+          {
+            "node": "Final Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "cmdb",
+      "id": "tag-cmdb"
+    },
+    {
+      "name": "servicenow",
+      "id": "tag-servicenow"
+    },
+    {
+      "name": "asset-management",
+      "id": "tag-asset"
+    },
+    {
+      "name": "scheduled",
+      "id": "tag-scheduled"
+    },
+    {
+      "name": "security-tools",
+      "id": "tag-security"
+    }
+  ],
+  "pinData": {},
+  "meta": {
+    "templateId": "servicenow-cmdb-sync-v1",
+    "instanceId": "n8n-instance"
+  }
+}

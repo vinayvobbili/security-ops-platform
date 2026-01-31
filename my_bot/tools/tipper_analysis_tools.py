@@ -145,10 +145,37 @@ def analyze_tipper_novelty(tipper_id: str, post_to_azdo: bool = False) -> str:
 
         # If post_to_azdo=True, use the full flow (analyze + post + IOC hunt + post)
         if post_to_azdo:
-            result = analyzer.analyze_and_post(tipper_id, source="tool")
+            # Pass room_id so IOC hunt follow-up is sent to Webex
+            result = analyzer.analyze_and_post(
+                tipper_id, source="tool", room_id=TIPPER_ANALYSIS_ROOM_ID
+            )
             config = get_config()
             azdo_url = f"https://dev.azure.com/{config.azdo_org}/{config.azdo_de_project}/_workitems/edit/{tipper_id}"
-            return result['content'] + f"\n\n🔗 [View Tipper]({azdo_url})"
+
+            # Send analysis directly to Webex (tool sends it, LLM shouldn't duplicate)
+            try:
+                from webexpythonsdk import WebexAPI
+                webex_api = WebexAPI(access_token=CONFIG.webex_bot_access_token_pokedex)
+
+                # Linkify work item references for Webex markdown
+                webex_markdown = _linkify_work_items_markdown(
+                    result['content'],
+                    config.azdo_org,
+                    config.azdo_de_project
+                )
+                webex_api.messages.create(
+                    roomId=TIPPER_ANALYSIS_ROOM_ID,
+                    markdown=webex_markdown
+                )
+                logger.info(f"Sent tipper analysis to Webex for #{tipper_id}")
+
+                # Return minimal confirmation so LLM doesn't duplicate the output
+                return f"✅ Analysis written to tipper #{tipper_id}\n🔗 [View Tipper in AZDO]({azdo_url})"
+
+            except Exception as webex_error:
+                logger.error(f"Failed to send to Webex: {webex_error}")
+                # Fall back to returning content for LLM to send
+                return result['content'] + f"\n\n🔗 [View Tipper]({azdo_url})"
 
         # Otherwise, just analyze without posting
         analysis = analyzer.analyze_tipper(tipper_id=tipper_id)

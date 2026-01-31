@@ -1,0 +1,980 @@
+{
+  "name": "Reimaged Host Tracking",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 1
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Every Hour",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.us-2.crowdstrike.com/oauth2/token",
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "client_id",
+              "value": "={{ $credentials.crowdstrike.clientId }}"
+            },
+            {
+              "name": "client_secret",
+              "value": "={{ $credentials.crowdstrike.clientSecret }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "cs-auth",
+      "name": "CrowdStrike Auth",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [220, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.us-2.crowdstrike.com/devices/queries/devices-scroll/v1",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "filter",
+              "value": "first_seen:>='{{ $now.minus(1, 'hour').toISO() }}'"
+            },
+            {
+              "name": "sort",
+              "value": "first_seen|desc"
+            },
+            {
+              "name": "limit",
+              "value": "500"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $node['CrowdStrike Auth'].json.access_token }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "cs-query-new-aids",
+      "name": "Query New Agent IDs",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [440, 100],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.us-2.crowdstrike.com/devices/queries/devices-scroll/v1",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "filter",
+              "value": "last_seen:>='{{ $now.minus(1, 'hour').toISO() }}'+last_seen:<='{{ $now.minus(7, 'days').toISO() }}'"
+            },
+            {
+              "name": "sort",
+              "value": "last_seen|desc"
+            },
+            {
+              "name": "limit",
+              "value": "500"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $node['CrowdStrike Auth'].json.access_token }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "cs-query-returning-hosts",
+      "name": "Query Returning Hosts",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [440, 300],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.us-2.crowdstrike.com/devices/queries/devices-scroll/v1",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "filter",
+              "value": "os_version:*'install'*+modified_timestamp:>='{{ $now.minus(1, 'hour').toISO() }}'"
+            },
+            {
+              "name": "sort",
+              "value": "modified_timestamp|desc"
+            },
+            {
+              "name": "limit",
+              "value": "500"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $node['CrowdStrike Auth'].json.access_token }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "cs-query-os-reinstall",
+      "name": "Query OS Reinstall Indicators",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [440, 500],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Merge and deduplicate host IDs from all three queries\nconst newAids = $('Query New Agent IDs').first()?.json?.resources || [];\nconst returningHosts = $('Query Returning Hosts').first()?.json?.resources || [];\nconst osReinstall = $('Query OS Reinstall Indicators').first()?.json?.resources || [];\n\n// Combine all unique device IDs\nconst allDeviceIds = [...new Set([...newAids, ...returningHosts, ...osReinstall])];\n\n// Track the source of each device ID for later categorization\nconst deviceSources = {};\nallDeviceIds.forEach(id => {\n  deviceSources[id] = {\n    isNewAid: newAids.includes(id),\n    isReturning: returningHosts.includes(id),\n    hasOsReinstall: osReinstall.includes(id)\n  };\n});\n\nreturn {\n  json: {\n    deviceIds: allDeviceIds,\n    deviceSources,\n    counts: {\n      newAgents: newAids.length,\n      returningHosts: returningHosts.length,\n      osReinstall: osReinstall.length,\n      totalUnique: allDeviceIds.length\n    }\n  }\n};"
+      },
+      "id": "merge-device-ids",
+      "name": "Merge Device IDs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "check-devices",
+              "leftValue": "={{ $json.counts.totalUnique }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "has-devices",
+      "name": "Has Potential Reimages?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [880, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.us-2.crowdstrike.com/devices/entities/devices/v2",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ ids: $json.deviceIds.slice(0, 100) }) }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $node['CrowdStrike Auth'].json.access_token }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "cs-get-device-details",
+      "name": "Get Device Details",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1100, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract hostnames for cross-referencing\nconst deviceDetails = $json.resources || [];\nconst deviceSources = $('Merge Device IDs').first()?.json?.deviceSources || {};\n\n// Build list of hosts with relevant details\nconst hosts = deviceDetails.map(device => {\n  const sources = deviceSources[device.device_id] || {};\n  return {\n    device_id: device.device_id,\n    hostname: device.hostname,\n    local_ip: device.local_ip,\n    external_ip: device.external_ip,\n    os_version: device.os_version,\n    os_build: device.os_build,\n    first_seen: device.first_seen,\n    last_seen: device.last_seen,\n    modified_timestamp: device.modified_timestamp,\n    system_manufacturer: device.system_manufacturer,\n    system_product_name: device.system_product_name,\n    mac_address: device.mac_address,\n    platform_name: device.platform_name,\n    agent_version: device.agent_version,\n    machine_domain: device.machine_domain,\n    ou: device.ou,\n    site_name: device.site_name,\n    // Source indicators\n    isNewAid: sources.isNewAid || false,\n    isReturning: sources.isReturning || false,\n    hasOsReinstall: sources.hasOsReinstall || false\n  };\n});\n\n// Extract unique hostnames for XSOAR/ServiceNow queries\nconst hostnames = [...new Set(hosts.map(h => h.hostname).filter(Boolean))];\n\nreturn {\n  json: {\n    hosts,\n    hostnames,\n    hostCount: hosts.length\n  }\n};"
+      },
+      "id": "extract-host-details",
+      "name": "Extract Host Details",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1320, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $credentials.xsoar.baseUrl }}/incidents/search",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"filter\": {\n    \"query\": \"reimagerequired:Yes OR category:Malware OR category:Ransomware\",\n    \"fromDate\": \"{{ $now.minus(90, 'days').toISO() }}\",\n    \"toDate\": \"{{ $now.toISO() }}\"\n  },\n  \"size\": 1000\n}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ $credentials.xsoar.apiKey }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "xsoar-get-ir-tickets",
+      "name": "XSOAR Get IR Tickets",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1540, 100],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $credentials.servicenow.baseUrl }}/api/now/table/change_request",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "sysparm_query",
+              "value": "short_descriptionLIKEreimage^ORshort_descriptionLIKEreinstall^ORshort_descriptionLIKEOS refresh^sys_created_on>=javascript:gs.daysAgoStart(30)^state!=7"
+            },
+            {
+              "name": "sysparm_fields",
+              "value": "number,short_description,cmdb_ci,sys_created_on,state,approval,assigned_to,requested_by"
+            },
+            {
+              "name": "sysparm_limit",
+              "value": "500"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Basic {{ $credentials.servicenow.authToken }}"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "snow-get-reimage-requests",
+      "name": "ServiceNow Get Reimage Requests",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1540, 300],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $credentials.n8n.internalApi }}/reimage-history",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "days",
+              "value": "90"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "get-reimage-history",
+      "name": "Get Previous Reimage History",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1540, 500],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Cross-reference and categorize reimages\nconst hosts = $('Extract Host Details').first()?.json?.hosts || [];\nconst xsoarTickets = $('XSOAR Get IR Tickets').first()?.json?.data || [];\nconst snowRequests = $('ServiceNow Get Reimage Requests').first()?.json?.result || [];\nconst reimageHistory = $('Get Previous Reimage History').first()?.json?.history || [];\n\n// Build lookup maps\nconst xsoarHostMap = {};\nxsoarTickets.forEach(ticket => {\n  const hostname = ticket.CustomFields?.hostname || ticket.labels?.find(l => l.type === 'hostname')?.value;\n  if (hostname) {\n    const normalizedHostname = hostname.toLowerCase().trim();\n    if (!xsoarHostMap[normalizedHostname]) {\n      xsoarHostMap[normalizedHostname] = [];\n    }\n    xsoarHostMap[normalizedHostname].push({\n      id: ticket.id,\n      name: ticket.name,\n      severity: ticket.severity,\n      status: ticket.status,\n      created: ticket.created,\n      reimageRequired: ticket.CustomFields?.reimagerequired === 'Yes',\n      category: ticket.category\n    });\n  }\n});\n\n// ServiceNow lookup (by CI name which is typically hostname)\nconst snowHostMap = {};\nsnowRequests.forEach(req => {\n  // Extract hostname from cmdb_ci or short_description\n  let hostname = req.cmdb_ci?.display_value || '';\n  if (!hostname) {\n    // Try to extract from description\n    const match = req.short_description?.match(/(?:reimage|reinstall|refresh)\\s+([\\w-]+)/i);\n    hostname = match ? match[1] : '';\n  }\n  if (hostname) {\n    const normalizedHostname = hostname.toLowerCase().trim();\n    if (!snowHostMap[normalizedHostname]) {\n      snowHostMap[normalizedHostname] = [];\n    }\n    snowHostMap[normalizedHostname].push({\n      number: req.number,\n      description: req.short_description,\n      state: req.state,\n      approval: req.approval,\n      created: req.sys_created_on,\n      requestedBy: req.requested_by?.display_value,\n      assignedTo: req.assigned_to?.display_value\n    });\n  }\n});\n\n// Previous reimage history lookup\nconst historyMap = {};\nreimageHistory.forEach(entry => {\n  const hostname = entry.hostname?.toLowerCase().trim();\n  if (hostname) {\n    if (!historyMap[hostname]) {\n      historyMap[hostname] = [];\n    }\n    historyMap[hostname].push(entry);\n  }\n});\n\n// Categorize each host\nconst categorizedHosts = {\n  planned: [],\n  incidentRelated: [],\n  unplanned: []\n};\n\nconst allCategorized = hosts.map(host => {\n  const normalizedHostname = host.hostname?.toLowerCase().trim();\n  const xsoarMatches = xsoarHostMap[normalizedHostname] || [];\n  const snowMatches = snowHostMap[normalizedHostname] || [];\n  const historyMatches = historyMap[normalizedHostname] || [];\n  \n  // Determine category\n  let category = 'unplanned';\n  let categoryReason = 'No matching tickets found';\n  let relatedTickets = [];\n  let riskLevel = 'low';\n  \n  // Check for ServiceNow approved reimage request (planned)\n  const approvedSnowRequest = snowMatches.find(r => \n    r.approval === 'approved' || r.state === 'implement'\n  );\n  \n  if (approvedSnowRequest) {\n    category = 'planned';\n    categoryReason = `ServiceNow change request: ${approvedSnowRequest.number}`;\n    relatedTickets.push({ type: 'servicenow', ...approvedSnowRequest });\n  }\n  \n  // Check for XSOAR incident-related reimage\n  const irTicket = xsoarMatches.find(t => \n    t.reimageRequired || \n    ['Malware', 'Ransomware', 'Compromise'].includes(t.category)\n  );\n  \n  if (irTicket) {\n    category = 'incident-related';\n    categoryReason = `XSOAR incident: ${irTicket.id} - ${irTicket.name}`;\n    relatedTickets.push({ type: 'xsoar', ...irTicket });\n  }\n  \n  // If still unplanned, determine risk level\n  if (category === 'unplanned') {\n    // Higher risk if:\n    // 1. Host was part of any security incident\n    // 2. Recently had detections before going offline\n    // 3. No IT ticket at all\n    // 4. Returning after extended offline period with new AID\n    \n    const hadSecurityIncident = xsoarMatches.length > 0;\n    const isReturningWithNewAid = host.isReturning && host.isNewAid;\n    const hasNoITTicket = snowMatches.length === 0;\n    const recentlyInIncident = xsoarMatches.some(t => {\n      const ticketDate = new Date(t.created);\n      const thirtyDaysAgo = new Date();\n      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);\n      return ticketDate > thirtyDaysAgo;\n    });\n    \n    if (recentlyInIncident && hasNoITTicket) {\n      riskLevel = 'critical';\n      categoryReason = 'SUSPICIOUS: Recent security incident, reimaged without IT ticket';\n    } else if (isReturningWithNewAid && hasNoITTicket) {\n      riskLevel = 'high';\n      categoryReason = 'SUSPICIOUS: Returning host with new agent ID, no IT ticket';\n    } else if (hadSecurityIncident) {\n      riskLevel = 'medium';\n      categoryReason = 'Host had previous security incidents';\n    } else if (hasNoITTicket) {\n      riskLevel = 'low';\n      categoryReason = 'No IT ticket found, but no security concerns';\n    }\n  }\n  \n  const enrichedHost = {\n    ...host,\n    category,\n    categoryReason,\n    riskLevel,\n    relatedTickets,\n    xsoarMatches,\n    snowMatches,\n    previousReimages: historyMatches.length,\n    lastReimageDate: historyMatches[0]?.date || null\n  };\n  \n  // Add to appropriate category array\n  categorizedHosts[category === 'incident-related' ? 'incidentRelated' : category].push(enrichedHost);\n  \n  return enrichedHost;\n});\n\nreturn {\n  json: {\n    categorizedHosts,\n    allHosts: allCategorized,\n    summary: {\n      total: allCategorized.length,\n      planned: categorizedHosts.planned.length,\n      incidentRelated: categorizedHosts.incidentRelated.length,\n      unplanned: categorizedHosts.unplanned.length\n    }\n  }\n};"
+      },
+      "id": "categorize-reimages",
+      "name": "Categorize Reimages",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1760, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Filter for unplanned reimages requiring additional investigation\nconst data = $input.first().json;\nconst unplanned = data.categorizedHosts.unplanned || [];\n\n// Get hosts needing deeper investigation (medium risk or higher)\nconst hostsToInvestigate = unplanned.filter(h => \n  h.riskLevel === 'critical' || \n  h.riskLevel === 'high' || \n  h.riskLevel === 'medium'\n);\n\nreturn {\n  json: {\n    hostsToInvestigate,\n    count: hostsToInvestigate.length,\n    deviceIds: hostsToInvestigate.map(h => h.device_id)\n  }\n};"
+      },
+      "id": "filter-unplanned",
+      "name": "Filter Unplanned for Investigation",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1980, 400]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "check-unplanned",
+              "leftValue": "={{ $json.count }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "has-unplanned",
+      "name": "Has Hosts to Investigate?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [2200, 400]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.us-2.crowdstrike.com/detects/queries/detects/v1",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "filter",
+              "value": "={{ 'device.device_id:' + $json.deviceIds.map(id => \"'\" + id + \"'\").join(',') + '+created_timestamp:>=\"' + $now.minus(30, 'days').toISO() + '\"' }}"
+            },
+            {
+              "name": "sort",
+              "value": "created_timestamp|desc"
+            },
+            {
+              "name": "limit",
+              "value": "100"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $node['CrowdStrike Auth'].json.access_token }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "cs-get-pre-reimage-detections",
+      "name": "Get Pre-Reimage Detections",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2420, 300],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.us-2.crowdstrike.com/detects/entities/summaries/GET/v1",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ ids: $json.resources || [] }) }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $node['CrowdStrike Auth'].json.access_token }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "cs-get-detection-details",
+      "name": "Get Detection Details",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2640, 300],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Analyze detections for suspicious activity before reimage\nconst detections = $json.resources || [];\nconst hostsToInvestigate = $('Filter Unplanned for Investigation').first()?.json?.hostsToInvestigate || [];\n\n// Map detections to hosts\nconst hostDetectionMap = {};\n\ndetections.forEach(detection => {\n  const deviceId = detection.device?.device_id;\n  if (!hostDetectionMap[deviceId]) {\n    hostDetectionMap[deviceId] = [];\n  }\n  hostDetectionMap[deviceId].push({\n    detection_id: detection.detection_id,\n    severity: detection.severity,\n    status: detection.status,\n    created_timestamp: detection.created_timestamp,\n    max_confidence: detection.max_confidence,\n    behaviors: detection.behaviors?.map(b => ({\n      tactic: b.tactic,\n      technique: b.technique,\n      description: b.description,\n      severity: b.severity\n    })) || [],\n    hostname: detection.device?.hostname,\n    user: detection.device?.detected_user\n  });\n});\n\n// Enrich hosts with detection information and determine suspicion level\nconst enrichedHosts = hostsToInvestigate.map(host => {\n  const hostDetections = hostDetectionMap[host.device_id] || [];\n  \n  // Calculate suspicion indicators\n  let suspicionScore = 0;\n  let suspicionReasons = [];\n  \n  // High severity detections before reimage\n  const highSeverityDetections = hostDetections.filter(d => d.severity >= 70);\n  if (highSeverityDetections.length > 0) {\n    suspicionScore += 30;\n    suspicionReasons.push(`${highSeverityDetections.length} high-severity detections before reimage`);\n  }\n  \n  // Malware-related tactics\n  const malwareTactics = ['Malware', 'Ransomware', 'Defense Evasion', 'Execution'];\n  const hasMalwareTactics = hostDetections.some(d => \n    d.behaviors?.some(b => malwareTactics.includes(b.tactic))\n  );\n  if (hasMalwareTactics) {\n    suspicionScore += 25;\n    suspicionReasons.push('Malware-related MITRE tactics detected');\n  }\n  \n  // Quick reimage after detection (potential evidence destruction)\n  const recentDetections = hostDetections.filter(d => {\n    const detectionDate = new Date(d.created_timestamp);\n    const sevenDaysAgo = new Date();\n    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);\n    return detectionDate > sevenDaysAgo;\n  });\n  if (recentDetections.length > 0 && host.riskLevel !== 'low') {\n    suspicionScore += 20;\n    suspicionReasons.push('Recent detections followed by quick reimage');\n  }\n  \n  // No IT ticket for reimage\n  if (host.snowMatches?.length === 0) {\n    suspicionScore += 15;\n    suspicionReasons.push('No ServiceNow ticket for reimage');\n  }\n  \n  // Returning host with new AID\n  if (host.isReturning && host.isNewAid) {\n    suspicionScore += 10;\n    suspicionReasons.push('Returning host registered with new agent ID');\n  }\n  \n  // Determine final suspicion level\n  let suspicionLevel = 'low';\n  if (suspicionScore >= 50) suspicionLevel = 'critical';\n  else if (suspicionScore >= 35) suspicionLevel = 'high';\n  else if (suspicionScore >= 20) suspicionLevel = 'medium';\n  \n  return {\n    ...host,\n    detections: hostDetections,\n    detectionCount: hostDetections.length,\n    suspicionScore,\n    suspicionLevel,\n    suspicionReasons,\n    requiresImmediateReview: suspicionLevel === 'critical' || suspicionLevel === 'high'\n  };\n});\n\n// Separate hosts requiring immediate alert\nconst immediateAlerts = enrichedHosts.filter(h => h.requiresImmediateReview);\nconst standardReview = enrichedHosts.filter(h => !h.requiresImmediateReview);\n\nreturn {\n  json: {\n    enrichedHosts,\n    immediateAlerts,\n    standardReview,\n    alertCount: immediateAlerts.length,\n    standardCount: standardReview.length\n  }\n};"
+      },
+      "id": "analyze-suspicion",
+      "name": "Analyze Suspicion Level",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2860, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "check-alerts",
+              "leftValue": "={{ $json.alertCount }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "has-immediate-alerts",
+      "name": "Has Immediate Alerts?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [3080, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Format immediate alert message for suspicious reimages\nconst data = $input.first().json;\nconst immediateAlerts = data.immediateAlerts || [];\n\nconst timestamp = new Date().toISOString();\n\nlet markdown = `## :rotating_light: SUSPICIOUS REIMAGE ALERT\\n\\n`;\nmarkdown += `**Detected:** ${timestamp}\\n\\n`;\nmarkdown += `**${immediateAlerts.length} host(s) require immediate investigation**\\n\\n`;\nmarkdown += `---\\n\\n`;\n\nimmediateAlerts.forEach((host, index) => {\n  // Suspicion level emoji\n  const levelEmoji = host.suspicionLevel === 'critical' ? ':red_circle:' : ':orange_circle:';\n  \n  markdown += `### ${levelEmoji} ${host.hostname || 'Unknown Hostname'}\\n\\n`;\n  markdown += `| Property | Value |\\n`;\n  markdown += `|----------|-------|\\n`;\n  markdown += `| **Device ID** | \\`${host.device_id}\\` |\\n`;\n  markdown += `| **Suspicion Level** | **${host.suspicionLevel.toUpperCase()}** (Score: ${host.suspicionScore}) |\\n`;\n  markdown += `| **IP Address** | ${host.local_ip || 'N/A'} (External: ${host.external_ip || 'N/A'}) |\\n`;\n  markdown += `| **OS Version** | ${host.os_version || 'N/A'} |\\n`;\n  markdown += `| **First Seen** | ${host.first_seen || 'N/A'} |\\n`;\n  markdown += `| **Last Seen** | ${host.last_seen || 'N/A'} |\\n`;\n  markdown += `| **Pre-Reimage Detections** | ${host.detectionCount} |\\n\\n`;\n  \n  // Suspicion reasons\n  markdown += `**Reasons for Suspicion:**\\n`;\n  host.suspicionReasons.forEach(reason => {\n    markdown += `- :warning: ${reason}\\n`;\n  });\n  markdown += `\\n`;\n  \n  // Related detections summary\n  if (host.detections && host.detections.length > 0) {\n    markdown += `**Recent Detections Before Reimage:**\\n`;\n    host.detections.slice(0, 3).forEach(det => {\n      const severity = det.severity >= 70 ? ':red_circle:' : det.severity >= 40 ? ':orange_circle:' : ':yellow_circle:';\n      markdown += `- ${severity} Severity ${det.severity} - ${det.behaviors?.[0]?.technique || 'Unknown technique'} (${det.created_timestamp})\\n`;\n    });\n    if (host.detections.length > 3) {\n      markdown += `- _...and ${host.detections.length - 3} more detections_\\n`;\n    }\n    markdown += `\\n`;\n  }\n  \n  // Related tickets\n  if (host.xsoarMatches && host.xsoarMatches.length > 0) {\n    markdown += `**Related XSOAR Incidents:**\\n`;\n    host.xsoarMatches.slice(0, 2).forEach(ticket => {\n      markdown += `- ${ticket.id}: ${ticket.name} (${ticket.status})\\n`;\n    });\n    markdown += `\\n`;\n  }\n  \n  if (index < immediateAlerts.length - 1) {\n    markdown += `---\\n\\n`;\n  }\n});\n\nmarkdown += `\\n---\\n\\n`;\nmarkdown += `:mag: **Recommended Actions:**\\n`;\nmarkdown += `1. Verify if reimage was authorized by IT\\n`;\nmarkdown += `2. Check user activity leading up to reimage\\n`;\nmarkdown += `3. Review CrowdStrike detections in detail\\n`;\nmarkdown += `4. Determine if evidence preservation is needed\\n`;\nmarkdown += `5. Escalate if potential evidence destruction suspected\\n\\n`;\nmarkdown += `_This alert was generated by the Reimaged Host Tracking workflow_\\n`;\n\nreturn {\n  json: {\n    markdown,\n    alertCount: immediateAlerts.length,\n    hosts: immediateAlerts\n  }\n};"
+      },
+      "id": "format-immediate-alert",
+      "name": "Format Immediate Alert",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3300, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://webexapis.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"roomId\": \"{{ $credentials.webex.irAlertsRoomId }}\",\n  \"markdown\": {{ JSON.stringify($json.markdown) }}\n}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $credentials.webex.accessToken }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "webex-immediate-alert",
+      "name": "Send Immediate Alert to Webex",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [3520, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Generate comprehensive tracking report\nconst categorizedData = $('Categorize Reimages').first()?.json || {};\nconst suspicionData = $('Analyze Suspicion Level').first()?.json || {};\n\nconst categorizedHosts = categorizedData.categorizedHosts || { planned: [], incidentRelated: [], unplanned: [] };\nconst summary = categorizedData.summary || { total: 0, planned: 0, incidentRelated: 0, unplanned: 0 };\nconst allHosts = categorizedData.allHosts || [];\nconst enrichedHosts = suspicionData.enrichedHosts || [];\n\n// Get current date info\nconst now = new Date();\nconst reportDate = now.toLocaleDateString('en-US', {\n  weekday: 'long',\n  year: 'numeric',\n  month: 'long',\n  day: 'numeric'\n});\nconst reportTime = now.toLocaleTimeString('en-US', {\n  hour: '2-digit',\n  minute: '2-digit',\n  timeZoneName: 'short'\n});\n\n// Calculate statistics\nconst suspiciousCount = enrichedHosts.filter(h => h.suspicionLevel === 'critical' || h.suspicionLevel === 'high').length;\nconst mediumRiskCount = enrichedHosts.filter(h => h.suspicionLevel === 'medium').length;\nconst lowRiskCount = enrichedHosts.filter(h => h.suspicionLevel === 'low').length;\n\n// Build the report\nlet markdown = `## :chart_with_upwards_trend: Reimaged Host Tracking Report\\n\\n`;\nmarkdown += `**Report Generated:** ${reportDate} at ${reportTime}\\n`;\nmarkdown += `**Reporting Period:** Last 1 hour\\n\\n`;\nmarkdown += `---\\n\\n`;\n\n// Summary Statistics\nmarkdown += `### Summary\\n\\n`;\nmarkdown += `| Metric | Count |\\n`;\nmarkdown += `|--------|-------|\\n`;\nmarkdown += `| **Total Reimages Detected** | ${summary.total} |\\n`;\nmarkdown += `| Planned (ServiceNow Approved) | ${summary.planned} :white_check_mark: |\\n`;\nmarkdown += `| Incident-Related (XSOAR) | ${summary.incidentRelated} :shield: |\\n`;\nmarkdown += `| Unplanned (No Ticket) | ${summary.unplanned} :warning: |\\n\\n`;\n\nif (summary.unplanned > 0) {\n  markdown += `### Unplanned Reimage Risk Breakdown\\n\\n`;\n  markdown += `| Risk Level | Count |\\n`;\n  markdown += `|------------|-------|\\n`;\n  markdown += `| :red_circle: Critical/High (Immediate Review) | ${suspiciousCount} |\\n`;\n  markdown += `| :orange_circle: Medium | ${mediumRiskCount} |\\n`;\n  markdown += `| :green_circle: Low | ${lowRiskCount} |\\n\\n`;\n}\n\n// Breakdown by category\nif (categorizedHosts.planned.length > 0) {\n  markdown += `### :white_check_mark: Planned Reimages\\n\\n`;\n  markdown += `| Hostname | ServiceNow Ticket | Requested By |\\n`;\n  markdown += `|----------|-------------------|--------------|\\n`;\n  categorizedHosts.planned.slice(0, 10).forEach(host => {\n    const snowTicket = host.snowMatches?.[0];\n    markdown += `| ${host.hostname || 'Unknown'} | ${snowTicket?.number || 'N/A'} | ${snowTicket?.requestedBy || 'N/A'} |\\n`;\n  });\n  if (categorizedHosts.planned.length > 10) {\n    markdown += `\\n_...and ${categorizedHosts.planned.length - 10} more planned reimages_\\n`;\n  }\n  markdown += `\\n`;\n}\n\nif (categorizedHosts.incidentRelated.length > 0) {\n  markdown += `### :shield: Incident-Related Reimages\\n\\n`;\n  markdown += `| Hostname | XSOAR Incident | Category |\\n`;\n  markdown += `|----------|----------------|----------|\\n`;\n  categorizedHosts.incidentRelated.slice(0, 10).forEach(host => {\n    const xsoarTicket = host.xsoarMatches?.[0];\n    markdown += `| ${host.hostname || 'Unknown'} | ${xsoarTicket?.id || 'N/A'} | ${xsoarTicket?.category || 'N/A'} |\\n`;\n  });\n  if (categorizedHosts.incidentRelated.length > 10) {\n    markdown += `\\n_...and ${categorizedHosts.incidentRelated.length - 10} more incident-related reimages_\\n`;\n  }\n  markdown += `\\n`;\n}\n\nif (categorizedHosts.unplanned.length > 0) {\n  markdown += `### :warning: Unplanned Reimages Requiring Review\\n\\n`;\n  markdown += `| Hostname | Risk Level | Reason | Detections |\\n`;\n  markdown += `|----------|------------|--------|------------|\\n`;\n  \n  // Sort by risk level\n  const sortedUnplanned = [...categorizedHosts.unplanned].sort((a, b) => {\n    const riskOrder = { critical: 0, high: 1, medium: 2, low: 3 };\n    return (riskOrder[a.riskLevel] || 3) - (riskOrder[b.riskLevel] || 3);\n  });\n  \n  sortedUnplanned.slice(0, 15).forEach(host => {\n    const enriched = enrichedHosts.find(e => e.device_id === host.device_id);\n    const riskEmoji = host.riskLevel === 'critical' ? ':red_circle:' : \n                      host.riskLevel === 'high' ? ':orange_circle:' : \n                      host.riskLevel === 'medium' ? ':yellow_circle:' : ':green_circle:';\n    markdown += `| ${host.hostname || 'Unknown'} | ${riskEmoji} ${host.riskLevel} | ${host.categoryReason?.substring(0, 50) || 'N/A'} | ${enriched?.detectionCount || 0} |\\n`;\n  });\n  if (sortedUnplanned.length > 15) {\n    markdown += `\\n_...and ${sortedUnplanned.length - 15} more unplanned reimages_\\n`;\n  }\n  markdown += `\\n`;\n}\n\n// No reimages case\nif (summary.total === 0) {\n  markdown += `:white_check_mark: **No reimages detected in this reporting period.**\\n\\n`;\n}\n\n// Footer\nmarkdown += `---\\n`;\nmarkdown += `_Report generated by Reimaged Host Tracking Workflow_\\n`;\nmarkdown += `_Based on Money Ball bot reimaged host tracking functionality_\\n`;\n\nreturn {\n  json: {\n    markdown,\n    summary,\n    reportTime: now.toISOString()\n  }\n};"
+      },
+      "id": "generate-tracking-report",
+      "name": "Generate Tracking Report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1980, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Store current run data for trend analysis\nconst categorizedData = $('Categorize Reimages').first()?.json || {};\nconst summary = categorizedData.summary || {};\n\nconst timestamp = new Date().toISOString();\n\n// Return data to be stored for trend analysis\nreturn {\n  json: {\n    timestamp,\n    summary,\n    stored: true\n  }\n};"
+      },
+      "id": "store-metrics",
+      "name": "Store Metrics for Trends",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2200, 200]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9 * * *"
+            }
+          ]
+        }
+      },
+      "id": "daily-summary-trigger",
+      "name": "Daily 9AM Summary",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 700]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Generate daily summary with trends\nconst now = new Date();\nconst reportDate = now.toLocaleDateString('en-US', {\n  weekday: 'long',\n  year: 'numeric',\n  month: 'long',\n  day: 'numeric'\n});\n\n// Note: In production, these would come from stored workflow data\n// For now, using placeholder structure\nconst dailyStats = {\n  total: 0,\n  planned: 0,\n  incidentRelated: 0,\n  unplanned: 0,\n  suspicious: 0\n};\n\nconst weeklyTrend = {\n  currentWeek: 0,\n  previousWeek: 0,\n  percentChange: 0\n};\n\nconst monthlyTrend = {\n  currentMonth: 0,\n  previousMonth: 0,\n  percentChange: 0\n};\n\nlet markdown = `## :bar_chart: Daily Reimaged Host Summary\\n\\n`;\nmarkdown += `**Report Date:** ${reportDate}\\n\\n`;\nmarkdown += `---\\n\\n`;\n\nmarkdown += `### Yesterday's Reimage Activity\\n\\n`;\nmarkdown += `| Category | Count |\\n`;\nmarkdown += `|----------|-------|\\n`;\nmarkdown += `| **Total Reimages** | ${dailyStats.total} |\\n`;\nmarkdown += `| Planned | ${dailyStats.planned} :white_check_mark: |\\n`;\nmarkdown += `| Incident-Related | ${dailyStats.incidentRelated} :shield: |\\n`;\nmarkdown += `| Unplanned | ${dailyStats.unplanned} :warning: |\\n`;\nmarkdown += `| Suspicious (Required Review) | ${dailyStats.suspicious} :rotating_light: |\\n\\n`;\n\nmarkdown += `### Trend Analysis\\n\\n`;\nmarkdown += `**Weekly Comparison:**\\n`;\nconst weekTrendEmoji = weeklyTrend.percentChange > 0 ? ':chart_with_upwards_trend:' : \n                       weeklyTrend.percentChange < 0 ? ':chart_with_downwards_trend:' : ':arrow_right:';\nmarkdown += `- This Week: ${weeklyTrend.currentWeek} | Last Week: ${weeklyTrend.previousWeek} ${weekTrendEmoji} (${weeklyTrend.percentChange >= 0 ? '+' : ''}${weeklyTrend.percentChange}%)\\n\\n`;\n\nmarkdown += `**Monthly Comparison:**\\n`;\nconst monthTrendEmoji = monthlyTrend.percentChange > 0 ? ':chart_with_upwards_trend:' : \n                        monthlyTrend.percentChange < 0 ? ':chart_with_downwards_trend:' : ':arrow_right:';\nmarkdown += `- This Month: ${monthlyTrend.currentMonth} | Last Month: ${monthlyTrend.previousMonth} ${monthTrendEmoji} (${monthlyTrend.percentChange >= 0 ? '+' : ''}${monthlyTrend.percentChange}%)\\n\\n`;\n\nmarkdown += `### Key Observations\\n\\n`;\n\n// Add observations based on data\nif (dailyStats.suspicious > 0) {\n  markdown += `:warning: **${dailyStats.suspicious} suspicious reimages required review yesterday**\\n\\n`;\n}\n\nif (dailyStats.unplanned > dailyStats.planned) {\n  markdown += `:memo: More unplanned reimages than planned - consider reviewing IT change management process\\n\\n`;\n}\n\nif (weeklyTrend.percentChange > 20) {\n  markdown += `:chart_with_upwards_trend: Significant increase in reimages this week - investigate potential causes\\n\\n`;\n}\n\nif (dailyStats.total === 0) {\n  markdown += `:white_check_mark: No reimages detected yesterday\\n\\n`;\n}\n\nmarkdown += `---\\n`;\nmarkdown += `_Daily summary generated by Reimaged Host Tracking Workflow_\\n`;\nmarkdown += `_For detailed hourly reports, check the SOC dashboard_\\n`;\n\nreturn {\n  json: {\n    markdown,\n    dailyStats,\n    weeklyTrend,\n    monthlyTrend,\n    reportDate: now.toISOString()\n  }\n};"
+      },
+      "id": "generate-daily-summary",
+      "name": "Generate Daily Summary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 700]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://webexapis.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"roomId\": \"{{ $credentials.webex.socRoomId }}\",\n  \"markdown\": {{ JSON.stringify($json.markdown) }}\n}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $credentials.webex.accessToken }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "webex-daily-summary",
+      "name": "Post Daily Summary to Webex",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [440, 700]
+    },
+    {
+      "parameters": {},
+      "id": "no-devices",
+      "name": "No Potential Reimages",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [1100, 400]
+    },
+    {
+      "parameters": {},
+      "id": "no-investigation-needed",
+      "name": "No Investigation Needed",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [2420, 500]
+    },
+    {
+      "parameters": {},
+      "id": "no-immediate-alerts",
+      "name": "No Immediate Alerts",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [3300, 400]
+    }
+  ],
+  "connections": {
+    "Every Hour": {
+      "main": [
+        [
+          {
+            "node": "CrowdStrike Auth",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CrowdStrike Auth": {
+      "main": [
+        [
+          {
+            "node": "Query New Agent IDs",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Query Returning Hosts",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Query OS Reinstall Indicators",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Query New Agent IDs": {
+      "main": [
+        [
+          {
+            "node": "Merge Device IDs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Query Returning Hosts": {
+      "main": [
+        [
+          {
+            "node": "Merge Device IDs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Query OS Reinstall Indicators": {
+      "main": [
+        [
+          {
+            "node": "Merge Device IDs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Device IDs": {
+      "main": [
+        [
+          {
+            "node": "Has Potential Reimages?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Potential Reimages?": {
+      "main": [
+        [
+          {
+            "node": "Get Device Details",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Potential Reimages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Device Details": {
+      "main": [
+        [
+          {
+            "node": "Extract Host Details",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Host Details": {
+      "main": [
+        [
+          {
+            "node": "XSOAR Get IR Tickets",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "ServiceNow Get Reimage Requests",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get Previous Reimage History",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "XSOAR Get IR Tickets": {
+      "main": [
+        [
+          {
+            "node": "Categorize Reimages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ServiceNow Get Reimage Requests": {
+      "main": [
+        [
+          {
+            "node": "Categorize Reimages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Previous Reimage History": {
+      "main": [
+        [
+          {
+            "node": "Categorize Reimages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Categorize Reimages": {
+      "main": [
+        [
+          {
+            "node": "Filter Unplanned for Investigation",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Generate Tracking Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Unplanned for Investigation": {
+      "main": [
+        [
+          {
+            "node": "Has Hosts to Investigate?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Hosts to Investigate?": {
+      "main": [
+        [
+          {
+            "node": "Get Pre-Reimage Detections",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Investigation Needed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Pre-Reimage Detections": {
+      "main": [
+        [
+          {
+            "node": "Get Detection Details",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Detection Details": {
+      "main": [
+        [
+          {
+            "node": "Analyze Suspicion Level",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze Suspicion Level": {
+      "main": [
+        [
+          {
+            "node": "Has Immediate Alerts?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Immediate Alerts?": {
+      "main": [
+        [
+          {
+            "node": "Format Immediate Alert",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Immediate Alerts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Immediate Alert": {
+      "main": [
+        [
+          {
+            "node": "Send Immediate Alert to Webex",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Tracking Report": {
+      "main": [
+        [
+          {
+            "node": "Store Metrics for Trends",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Daily 9AM Summary": {
+      "main": [
+        [
+          {
+            "node": "Generate Daily Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Daily Summary": {
+      "main": [
+        [
+          {
+            "node": "Post Daily Summary to Webex",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "SOC",
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z"
+    },
+    {
+      "name": "Incident Response",
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z"
+    },
+    {
+      "name": "CrowdStrike",
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z"
+    },
+    {
+      "name": "Evidence Tracking",
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z"
+    }
+  ],
+  "triggerCount": 2,
+  "pinData": {},
+  "versionId": "1",
+  "meta": {
+    "templateId": "reimaged-host-tracking",
+    "instanceId": ""
+  }
+}

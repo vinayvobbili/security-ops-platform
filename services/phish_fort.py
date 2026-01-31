@@ -26,7 +26,14 @@ webex_api = WebexAPI(access_token=CONFIG.webex_bot_access_token_soar)
 # Constants
 PHISHFORT_API_URL = "https://capi.phishfort.com/v1/incidents"
 PHISHFORT_API_KEY = CONFIG.phish_fort_api_key
-WEBEX_ROOM_ID = CONFIG.webex_room_id_phish_fort
+
+# Debug logging for API key
+if PHISHFORT_API_KEY:
+    logger.debug(f"PhishFort API key loaded: length={len(PHISHFORT_API_KEY)}, "
+                 f"first_4_chars='{PHISHFORT_API_KEY[:4]}...', "
+                 f"last_4_chars='...{PHISHFORT_API_KEY[-4:]}'")
+else:
+    logger.warning("PhishFort API key is empty or None!")
 WEBEX_MESSAGE_BATCH_SIZE = 7000
 
 # List of incident statuses to fetch
@@ -35,19 +42,17 @@ INCIDENT_STATUSES = [
     "Pending Review",
     "Takedown Failed",
     "Takedown Pending",
-    "Blocklisted",
-    "Action Required"
 ]
 
 # Define column order for the final display
 COLUMN_ORDER = [
-    "PF Incident No.",
+    "ID",
     "Type",
-    "Classification",
+    "Class",
     "Status",
     "Subject",
-    "Submitted on",
-    "Submitted by"
+    "Submitted On",
+    "Reporter",
 ]
 
 # DataFrame columns to display in the report (expanded based on sample data)
@@ -65,16 +70,27 @@ DISPLAY_COLUMNS = [
 
 # Column name mappings for better readability
 COLUMN_MAPPINGS = {
-    "id": "PF Incident No.",
+    "id": "ID",
     "domain": "Domain",
     "url": "URL",
     "subject": "Subject",
     "incidentType": "Type",
-    "timestamp": "Submitted on",
+    "timestamp": "Submitted On",
     "statusVerbose": "Status",
-    "incidentClass": "Classification",
-    "reportedBy": "Submitted by"
+    "incidentClass": "Class",
+    "reportedBy": "Reporter",
 }
+
+# Status display with visual indicators
+STATUS_ICONS = {
+    "Takedown Failed": "🔴",
+    "Takedown Pending": "🟡",
+    "Pending Review": "🟢",
+    "Case Building": "🔵",
+}
+
+# Priority order for statuses (most urgent first)
+STATUS_PRIORITY = ["Takedown Failed", "Takedown Pending", "Pending Review", "Case Building"]
 
 
 def contact_phishfort_api(status: str) -> Optional[Dict]:
@@ -95,12 +111,18 @@ def contact_phishfort_api(status: str) -> Optional[Dict]:
         }
 
         logger.info(f"Fetching incidents with status '{status}'")
+        # Debug: Log API key info (without exposing full key)
+        if PHISHFORT_API_KEY:
+            logger.info(f"API key present: length={len(PHISHFORT_API_KEY)}, "
+                        f"starts_with='{PHISHFORT_API_KEY[:4]}...', "
+                        f"ends_with='...{PHISHFORT_API_KEY[-4:]}'")
+        else:
+            logger.error("API key is None or empty!")
         response = requests.get(
             PHISHFORT_API_URL,
             params=payload,
             headers=headers,
             timeout=30,
-            verify=False
         )
         response.raise_for_status()
         return response.json()
@@ -117,9 +139,10 @@ def contact_phishfort_api(status: str) -> Optional[Dict]:
         return None
 
 
-def send_webex_notification_in_batches(message: str, batch_size: int = WEBEX_MESSAGE_BATCH_SIZE) -> None:
+def send_webex_notification_in_batches(message: str, batch_size: int = WEBEX_MESSAGE_BATCH_SIZE, room_id=CONFIG.webex_room_id_vinay_test_space) -> None:
     """
     Send a large Webex message in batches if it exceeds the size limit.
+    Splits on-line boundaries and preserves table headers in continuations.
 
     Args:
         message: The message to send
@@ -129,69 +152,147 @@ def send_webex_notification_in_batches(message: str, batch_size: int = WEBEX_MES
         logger.warning("Attempted to send empty message to Webex")
         return
 
-    # Split the message into smaller chunks
-    for i in range(0, len(message), batch_size):
-        batch_message = message[i:i + batch_size]
-
-        # Add continuation notice if the message is split
-        if i > 0:
-            batch_message = "**CONTINUED FROM PREVIOUS MESSAGE**\n\n" + batch_message
-
-        if i + batch_size < len(message):
-            batch_message += "\n\n**(Continued in next message)**"
-
-        payload = {
-            'roomId': WEBEX_ROOM_ID,
-            'markdown': batch_message
-        }
-
-        for attempt in range(3):  # Retry up to 3 times
+    # If message fits in one batch, send it directly
+    if len(message) <= batch_size:
+        payload = {'roomId': room_id, 'markdown': message}
+        for attempt in range(3):
             try:
                 webex_api.messages.create(**payload)
-                logger.info(f"Webex notification part {i // batch_size + 1} sent successfully")
-                break  # Exit retry loop on success
+                logger.info("Webex notification sent successfully")
+                return
+            except Exception as e:
+                logger.error(f"Error sending Webex notification (attempt {attempt + 1}/3): {e}")
+                if attempt == 2:
+                    logger.error("Failed to send message after 3 attempts")
+        return
+
+    # Split message into lines for smarter batching
+    lines = message.split('\n')
+
+    # Extract table header if present (header row + separator row after ```)
+    table_header_lines: list[str] = []
+    in_code_block = False
+    for i, line in enumerate(lines):
+        if line.strip().startswith('```'):
+            in_code_block = not in_code_block
+            if in_code_block and i + 2 < len(lines):
+                # Capture the header row and separator row
+                table_header_lines = [line, lines[i + 1], lines[i + 2]]
+            break
+
+    batches: list[str] = []
+    current_batch_lines: list[str] = []
+    current_size = 0
+
+    for line in lines:
+        line_size = len(line) + 1  # +1 for newline
+        if current_size + line_size > batch_size and current_batch_lines:
+            # Close current batch
+            batches.append('\n'.join(current_batch_lines))
+            current_batch_lines = []
+            current_size = 0
+        current_batch_lines.append(line)
+        current_size += line_size
+
+    # Add remaining lines as final batch
+    if current_batch_lines:
+        batches.append('\n'.join(current_batch_lines))
+
+    # Send each batch with proper headers
+    for i, batch_message in enumerate(batches):
+        if i > 0:
+            # Add continuation header and repeat table header if applicable
+            if table_header_lines:
+                batch_message = (
+                    "**CONTINUED FROM PREVIOUS MESSAGE**\n\n"
+                    f"{table_header_lines[0]}\n{table_header_lines[1]}\n{table_header_lines[2]}\n"
+                    f"{batch_message}"
+                )
+            else:
+                batch_message = "**CONTINUED FROM PREVIOUS MESSAGE**\n\n" + batch_message
+
+        if i < len(batches) - 1:
+            batch_message += "\n\n**(Continued in next message)**"
+            # Close the code block if we're in one
+            if table_header_lines and '```' not in batch_message.split('\n')[-1]:
+                batch_message += "\n```"
+
+        payload = {'roomId': room_id, 'markdown': batch_message}
+
+        for attempt in range(3):
+            try:
+                webex_api.messages.create(**payload)
+                logger.info(f"Webex notification part {i + 1}/{len(batches)} sent successfully")
+                break
             except Exception as e:
                 logger.error(f"Error sending Webex notification batch (attempt {attempt + 1}/3): {e}")
-                if attempt == 2:  # The Last attempt failed
+                if attempt == 2:
                     logger.error("Failed to send message after 3 attempts")
 
 
-def generate_incident_statistics(df: pd.DataFrame) -> str:
+def generate_incident_statistics(df: pd.DataFrame, raw_df: pd.DataFrame = None) -> str:
     """
-    Generate statistics about the incidents.
+    Generate statistics about the incidents with visual indicators and insights.
 
     Args:
-        df: DataFrame containing incident data
+        df: DataFrame containing incident data (with renamed columns)
+        raw_df: Original DataFrame with raw timestamp for age calculations
 
     Returns:
         Markdown formatted string with statistics
     """
     stats = []
-
-    # Total incidents
     total = len(df)
-    stats.append(f"**Total incidents:** {total}")
 
-    # By incident type
+    # Quick summary line
+    failed_count = len(df[df['Status'] == 'Takedown Failed']) if 'Status' in df.columns else 0
+    pending_count = len(df[df['Status'] == 'Takedown Pending']) if 'Status' in df.columns else 0
+
+    if failed_count > 0:
+        stats.append(f"📊 **{total} active incidents** — {failed_count} failed takedowns need attention")
+    elif pending_count > 0:
+        stats.append(f"📊 **{total} active incidents** — {pending_count} takedowns in progress")
+    else:
+        stats.append(f"📊 **{total} active incidents** being tracked")
+
+    # Aging alerts if we have timestamp data
+    if raw_df is not None and 'timestamp' in raw_df.columns:
+        try:
+            timestamps = pd.to_datetime(raw_df['timestamp'], errors='coerce', utc=True)
+            now = pd.Timestamp.now(tz='UTC')
+            ages = (now - timestamps).dt.days  # type: ignore[union-attr]
+            old_incidents = int((ages > 90).sum())  # type: ignore[call-overload]
+            very_old = int((ages > 180).sum())  # type: ignore[call-overload]
+            oldest_days = ages.max()  # type: ignore[union-attr]
+
+            if very_old > 0 and pd.notna(oldest_days):
+                stats.append(f"⚠️ **{very_old} incidents older than 180 days** — oldest is {int(oldest_days)} days")
+            elif old_incidents > 0:
+                stats.append(f"⏰ **{old_incidents} incidents older than 90 days** — consider escalation")
+        except (ValueError, TypeError):
+            pass  # Skip aging alerts if timestamp parsing fails
+
+    # Status breakdown with icons (in priority order)
+    if 'Status' in df.columns:
+        stats.append("\n**By Status:**")
+        status_counts = df['Status'].value_counts()
+        for status in STATUS_PRIORITY:
+            if status in status_counts.index:
+                count = status_counts[status]
+                icon = STATUS_ICONS.get(status, "")
+                stats.append(f"  {icon} {status}: {count} ({round(count / total * 100, 1)}%)")
+
+    # Classification breakdown (compact)
+    if 'Class' in df.columns:
+        class_counts = df['Class'].value_counts()
+        class_summary = " · ".join([f"{idx}: {count}" for idx, count in class_counts.head(4).items()])
+        stats.append(f"\n**By Classification:** {class_summary}")
+
+    # Type breakdown (compact)
     if 'Type' in df.columns:
         type_counts = df['Type'].value_counts()
-        stats.append("\n**Incidents by type:**")
-        for idx, count in type_counts.items():
-            stats.append(f"- {idx}: {count} ({round(count / total * 100, 1)}%)")
-
-    # By classification
-    if 'Classification' in df.columns:
-        class_counts = df['Classification'].value_counts()
-        stats.append("\n**Incidents by classification:**")
-        for idx, count in class_counts.items():
-            stats.append(f"- {idx}: {count} ({round(count / total * 100, 1)}%)")
-
-    # By status
-    if 'Status' in df.columns:
-        status_counts = df['Status'].value_counts()
-        stats.append("\n**Incidents by status:**")
-        for idx, count in status_counts.items():
-            stats.append(f"- {idx}: {count} ({round(count / total * 100, 1)}%)")
+        type_summary = " · ".join([f"{idx}: {count}" for idx, count in type_counts.head(4).items()])
+        stats.append(f"**By Type:** {type_summary}")
 
     return "\n".join(stats)
 
@@ -263,16 +364,18 @@ def format_phishfort_data(status: str) -> Optional[pd.DataFrame]:
 
         formatted_df = df[available_columns].copy()
 
-        # Convert timestamp to datetime if it exists
+        # Convert timestamp to readable date format
         if 'timestamp' in formatted_df.columns:
-            formatted_df['timestamp'] = pd.to_datetime(
-                formatted_df['timestamp'],
-                errors='coerce'
-            ).dt.strftime('%m/%d/%Y')
+            timestamps = pd.to_datetime(formatted_df['timestamp'], errors='coerce', utc=True)
+            formatted_df['timestamp'] = timestamps.dt.strftime('%m/%d/%Y')  # type: ignore[union-attr]
 
-        # Remove email domain from reporter names if column exists
+        # Clean up reporter names - show just the username part
         if 'reportedBy' in formatted_df.columns:
-            formatted_df['reportedBy'] = formatted_df['reportedBy'].fillna('').str.replace(f'@{CONFIG.my_web_domain}', '')
+            formatted_df['reportedBy'] = (
+                formatted_df['reportedBy']
+                .fillna('')
+                .str.replace(r'@.*$', '', regex=True)  # Remove email domain
+            )
 
         # Update column mappings with the consolidated subject
         column_mappings_updated = COLUMN_MAPPINGS.copy()
@@ -295,36 +398,50 @@ def format_phishfort_data(status: str) -> Optional[pd.DataFrame]:
         return None
 
 
-def fetch_and_report_incidents() -> None:
+def fetch_and_report_incidents(room_id: str = None) -> None:
     """
     Fetch incidents from PhishFort and send a Webex notification with the report.
+
+    Args:
+        room_id: Webex room ID to send the report to. Defaults to test space if not provided.
     """
+    if room_id is None:
+        room_id = CONFIG.webex_room_id_vinay_test_space
+
     try:
         all_frames = []
-        status_counts = {}
 
-        # Fetch and process incidents for each status in the list
-        for status in INCIDENT_STATUSES:
-            df = format_phishfort_data(status)
-            if df is not None and not df.empty:
-                all_frames.append(df)
-                status_counts[status] = len(df)
+        # Fetch and process incidents for each status in priority order
+        for status in STATUS_PRIORITY:
+            if status in INCIDENT_STATUSES:
+                df = format_phishfort_data(status)
+                if df is not None and not df.empty:
+                    all_frames.append(df)
 
         # Handle the case where no incidents are found
         if not all_frames:
             logger.info("No incidents found to report")
-            send_webex_notification_in_batches("**PhishFort Incident Report**\n\nNo incidents found to report.")
+            send_webex_notification_in_batches("🛡️ **PhishFort Incident Report**\n\n✅ No active incidents to report.", room_id=room_id)
             return
 
         # Combine all dataframes
-        result = pd.concat(all_frames, ignore_index=True)
+        result: pd.DataFrame = pd.concat(all_frames, ignore_index=True)
 
-        # Sort by submission date if possible - oldest first
-        submission_col = COLUMN_MAPPINGS.get("timestamp")
+        # Sort by status priority, then by date (oldest first within each status)
+        if 'Status' in result.columns:
+            result['_status_priority'] = result['Status'].map(
+                {s: i for i, s in enumerate(STATUS_PRIORITY)}
+            ).fillna(999)
+
+        submission_col = COLUMN_MAPPINGS.get("timestamp")  # "Submitted On"
         if submission_col and submission_col in result.columns:
-            result[submission_col] = pd.to_datetime(result[submission_col], errors='coerce')
-            result.sort_values(by=submission_col, ascending=True, inplace=True)  # Oldest first
-            result[submission_col] = result[submission_col].dt.strftime('%m/%d/%Y')
+            # Convert to datetime for sorting, then sort by priority + date
+            result['_sort_date'] = pd.to_datetime(result[submission_col], format='%m/%d/%Y', errors='coerce')
+            result.sort_values(by=['_status_priority', '_sort_date'], ascending=[True, True], inplace=True)
+            result.drop(columns=['_status_priority', '_sort_date'], inplace=True, errors='ignore')
+        elif '_status_priority' in result.columns:
+            result.sort_values(by='_status_priority', inplace=True)
+            result.drop(columns=['_status_priority'], inplace=True, errors='ignore')
 
         # Generate statistics
         stats_text = generate_incident_statistics(result)
@@ -334,23 +451,31 @@ def fetch_and_report_incidents() -> None:
         if available_columns:
             result = result[available_columns]
 
-        # Convert dataframe to a markdown-like string format for Webex
-        table = tabulate(result, headers="keys", tablefmt="pipe", showindex=False)
+        # Add status icons to the Status column for visual clarity
+        if 'Status' in result.columns:
+            result['Status'] = result['Status'].apply(
+                lambda s: f"{STATUS_ICONS.get(s, '')} {s}" if s in STATUS_ICONS else s
+            )
+
+        # Convert dataframe to a Markdown table for Webex
+        table = tabulate(result, headers="keys", tablefmt="github", showindex=False)
 
         # Format the current time for the report
         current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
         # Build the full report message
         report_message = (
-            f"**PhishFort Incident Report** (Generated: {current_time})\n\n"
+            f"🛡️ **PhishFort Incident Report**\n"
+            f"_{current_time}_\n\n"
             f"{stats_text}\n\n"
+            f"---\n\n"
             f"**Detailed Incident List:**\n\n"
             f"```\n{table}\n```"
         )
 
         # Send the report
         logger.info(f"Sending report with {len(result)} incidents")
-        send_webex_notification_in_batches(report_message)
+        send_webex_notification_in_batches(report_message, room_id=room_id)
 
     except Exception as e:
         logger.error(f"Unexpected error in fetch_and_report_incidents: {e}", exc_info=True)
@@ -358,7 +483,8 @@ def fetch_and_report_incidents() -> None:
             # Attempt to notify about the error
             send_webex_notification_in_batches(
                 f"**ERROR: PhishFort Incident Report Failed**\n\n"
-                f"The automated report encountered an error: {str(e)}"
+                f"The automated report encountered an error: {str(e)}",
+                room_id=room_id
             )
         except Exception as e_notify:
             logger.critical(f"Error during error notification: {e_notify}", exc_info=True)

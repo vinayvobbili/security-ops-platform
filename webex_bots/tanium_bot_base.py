@@ -533,7 +533,7 @@ def apply_tags_to_hosts(config: TaniumBotConfig, room_id, batch_size=None, run_b
         # Generate summary and send notification first (before DB write to reduce user wait time)
         summary_md = f"## 🎉 Tanium {config.display_name} Ring Tagging Complete!\n\n"
         summary_md += f"**Summary:**\n"
-        summary_md += f"- Total hosts in report: {total_hosts_in_report:,}\n"
+        summary_md += f"- Hosts without ring tag: {total_hosts_in_report:,}\n"
         summary_md += f"- Hosts eligible for tagging: {total_eligible_hosts:,}\n"
         if batch_size is not None and batch_size < total_eligible_hosts:
             summary_md += f"- 🧪 **Batch mode**: Randomly sampled {num_to_tag:,} hosts (requested: {batch_size:,})\n"
@@ -772,6 +772,7 @@ def run_automated_ring_tagging_workflow(config: TaniumBotConfig, room_id: str, s
                 return
 
             hosts_df = pd.read_excel(report_path)
+            total_hosts_without_ring_tag = len(hosts_df)
 
             # Filter to hosts with successfully generated tags
             hosts_with_generated_tags = hosts_df[
@@ -835,7 +836,8 @@ def run_automated_ring_tagging_workflow(config: TaniumBotConfig, room_id: str, s
         tz_name = "EST" if current_time.dst().total_seconds() == 0 else "EDT"
 
         report_text = f"📊 **Automated Tanium {config.display_name} Ring Tagging Report**\n\n"
-        report_text += f"📈 **Count:** {hosts_count:,} hosts\n"
+        report_text += f"📈 **Hosts currently without a Ring tag:** {total_hosts_without_ring_tag:,}\n"
+        report_text += f"🟢 **Hosts online in last 2 hours (eligible):** {hosts_count:,}\n"
         report_text += f"📅 **Generated:** {current_time.strftime(f'%Y-%m-%d %H:%M:%S {tz_name}')}\n"
         report_text += f"📦 **File Size:** {file_size_mb:.2f} MB\n"
 

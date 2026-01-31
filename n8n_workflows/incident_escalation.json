@@ -1,0 +1,779 @@
+{
+  "name": "Incident Escalation Workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "incident-escalation",
+        "responseMode": "responseNode",
+        "options": {
+          "rawBody": true
+        }
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "incident-escalation-webhook"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract incident data from webhook\nconst incident = $input.first().json.body || $input.first().json;\n\n// Ensure all required fields exist with defaults\nconst incidentData = {\n  id: incident.id || `INC-${Date.now()}`,\n  title: incident.title || 'Unknown Incident',\n  description: incident.description || '',\n  severity: parseInt(incident.severity) || 0,\n  keywords: (incident.keywords || incident.description || '').toLowerCase(),\n  affectedUser: incident.affectedUser || {},\n  isVipUser: incident.affectedUser?.isVip || incident.isVipUser || false,\n  responseTime: incident.responseTime || null,\n  lastResponseMinutes: incident.lastResponseMinutes || 0,\n  createdAt: incident.createdAt || new Date().toISOString(),\n  source: incident.source || 'webhook',\n  assignee: incident.assignee || null\n};\n\n// Check business hours\nconst now = new Date();\nconst hour = now.getHours();\nconst dayOfWeek = now.getDay(); // 0 = Sunday, 6 = Saturday\n\nconst isWeekend = dayOfWeek === 0 || dayOfWeek === 6;\nconst isAfterHours = hour < 8 || hour >= 18; // Before 8 AM or after 6 PM\nconst isOutsideBusinessHours = isWeekend || isAfterHours;\n\n// Determine escalation rules\nconst escalationFlags = {\n  immediateEscalation: incidentData.severity >= 80,\n  delayedEscalation: incidentData.severity >= 50 && incidentData.lastResponseMinutes >= 30,\n  ransomwareDetected: incidentData.keywords.includes('ransomware'),\n  vipUserAffected: incidentData.isVipUser,\n  isOutsideBusinessHours: isOutsideBusinessHours,\n  isMajorIncident: incidentData.severity >= 80 || incidentData.keywords.includes('ransomware')\n};\n\n// Determine if any escalation is needed\nconst needsEscalation = escalationFlags.immediateEscalation || \n                        escalationFlags.delayedEscalation || \n                        escalationFlags.ransomwareDetected || \n                        escalationFlags.vipUserAffected;\n\n// Build escalation reasons array\nconst escalationReasons = [];\nif (escalationFlags.immediateEscalation) escalationReasons.push('High severity (>= 80)');\nif (escalationFlags.delayedEscalation) escalationReasons.push('No response in 30 minutes (severity >= 50)');\nif (escalationFlags.ransomwareDetected) escalationReasons.push('Ransomware keyword detected');\nif (escalationFlags.vipUserAffected) escalationReasons.push('VIP user affected');\n\nreturn {\n  incident: incidentData,\n  escalation: escalationFlags,\n  needsEscalation: needsEscalation,\n  escalationReasons: escalationReasons,\n  timestamp: now.toISOString(),\n  businessHoursInfo: {\n    currentHour: hour,\n    dayOfWeek: dayOfWeek,\n    isWeekend: isWeekend,\n    isAfterHours: isAfterHours,\n    isOutsideBusinessHours: isOutsideBusinessHours\n  }\n};"
+      },
+      "id": "process-incident",
+      "name": "Process Incident Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "needs-escalation",
+              "leftValue": "={{ $json.needsEscalation }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-escalation-needed",
+      "name": "Escalation Needed?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// On-Call Configuration\n// This would typically be fetched from PagerDuty API or a configuration database\n\nconst onCallConfig = {\n  primary: {\n    id: 'analyst-001',\n    name: 'John Smith',\n    email: 'john.smith@company.com',\n    webexId: 'jsmith@company.com',\n    phone: '+1-555-0101',\n    role: 'Primary On-Call Analyst'\n  },\n  backup: {\n    id: 'analyst-002',\n    name: 'Jane Doe',\n    email: 'jane.doe@company.com',\n    webexId: 'jdoe@company.com',\n    phone: '+1-555-0102',\n    role: 'Backup On-Call Analyst'\n  },\n  teamLead: {\n    id: 'lead-001',\n    name: 'Mike Johnson',\n    email: 'mike.johnson@company.com',\n    webexId: 'mjohnson@company.com',\n    phone: '+1-555-0201',\n    role: 'IR Team Lead'\n  },\n  management: {\n    id: 'mgmt-001',\n    name: 'Sarah Williams',\n    email: 'sarah.williams@company.com',\n    webexId: 'swilliams@company.com',\n    phone: '+1-555-0301',\n    role: 'Security Manager'\n  },\n  executives: [\n    {\n      id: 'exec-001',\n      name: 'Robert Brown',\n      email: 'robert.brown@company.com',\n      webexId: 'rbrown@company.com',\n      role: 'CISO'\n    },\n    {\n      id: 'exec-002',\n      name: 'Emily Davis',\n      email: 'emily.davis@company.com',\n      webexId: 'edavis@company.com',\n      role: 'CTO'\n    }\n  ],\n  irTeam: [\n    'jsmith@company.com',\n    'jdoe@company.com',\n    'mjohnson@company.com',\n    'analyst3@company.com',\n    'analyst4@company.com'\n  ]\n};\n\n// Determine who to notify based on escalation flags\nconst incident = $input.first().json.incident;\nconst escalation = $input.first().json.escalation;\nconst escalationReasons = $input.first().json.escalationReasons;\n\nconst notificationTargets = [];\n\n// Always notify primary on-call for any escalation\nnotificationTargets.push({\n  ...onCallConfig.primary,\n  notificationType: 'primary',\n  priority: 'high'\n});\n\n// Delayed escalation - notify team lead\nif (escalation.delayedEscalation) {\n  notificationTargets.push({\n    ...onCallConfig.teamLead,\n    notificationType: 'team_lead',\n    priority: 'high'\n  });\n}\n\n// VIP user - escalate to management\nif (escalation.vipUserAffected) {\n  notificationTargets.push({\n    ...onCallConfig.management,\n    notificationType: 'management',\n    priority: 'high'\n  });\n}\n\n// Ransomware - notify executives\nif (escalation.ransomwareDetected) {\n  onCallConfig.executives.forEach(exec => {\n    notificationTargets.push({\n      ...exec,\n      notificationType: 'executive',\n      priority: 'critical'\n    });\n  });\n}\n\nreturn {\n  ...$input.first().json,\n  onCallConfig: onCallConfig,\n  notificationTargets: notificationTargets,\n  escalationStartTime: new Date().toISOString()\n};"
+      },
+      "id": "get-oncall-info",
+      "name": "Get On-Call Info",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://webexapis.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"toPersonEmail\": \"{{ $json.onCallConfig.primary.webexId }}\",\n  \"markdown\": \"## Incident Escalation Alert\\n\\n**Incident ID:** {{ $json.incident.id }}\\n\\n**Title:** {{ $json.incident.title }}\\n\\n**Severity:** {{ $json.incident.severity }}\\n\\n**Description:** {{ $json.incident.description }}\\n\\n---\\n\\n**Escalation Reasons:**\\n{{ $json.escalationReasons.join('\\\\n- ') }}\\n\\n---\\n\\n**Time:** {{ $json.timestamp }}\\n\\n**Action Required:** Please acknowledge this incident within 15 minutes.\\n\\n[Acknowledge Incident](https://your-company.com/incidents/{{ $json.incident.id }}/acknowledge)\"\n}",
+        "options": {}
+      },
+      "id": "send-webex-dm",
+      "name": "Send Webex DM to On-Call",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1120, 100],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "webex-auth",
+          "name": "Webex API Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "is-major-incident",
+              "leftValue": "={{ $json.escalation.isMajorIncident }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-major-incident",
+      "name": "Is Major Incident?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://webexapis.com/v1/rooms",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"title\": \"IR: {{ $json.incident.id }} - {{ $json.incident.title }}\",\n  \"isLocked\": false\n}",
+        "options": {}
+      },
+      "id": "create-webex-space",
+      "name": "Create Webex Space",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1340, 200],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "webex-auth",
+          "name": "Webex API Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get the room ID from the created space\nconst roomId = $input.first().json.id;\nconst previousData = $('Get On-Call Info').first().json;\nconst irTeam = previousData.onCallConfig.irTeam;\n\n// Create membership invitations for IR team\nconst memberships = irTeam.map(email => ({\n  roomId: roomId,\n  personEmail: email,\n  isModerator: email === previousData.onCallConfig.teamLead.email\n}));\n\nreturn memberships.map(m => ({ json: m }));"
+      },
+      "id": "prepare-invites",
+      "name": "Prepare Team Invites",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1560, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://webexapis.com/v1/memberships",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"roomId\": \"{{ $json.roomId }}\",\n  \"personEmail\": \"{{ $json.personEmail }}\",\n  \"isModerator\": {{ $json.isModerator }}\n}",
+        "options": {}
+      },
+      "id": "invite-ir-team",
+      "name": "Invite IR Team to Space",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1780, 200],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "webex-auth",
+          "name": "Webex API Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "is-after-hours",
+              "leftValue": "={{ $json.escalation.isOutsideBusinessHours }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-after-hours",
+      "name": "Is After Hours?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1120, 500]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://webexapis.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"toPersonEmail\": \"{{ $json.onCallConfig.backup.webexId }}\",\n  \"markdown\": \"## After-Hours Incident Alert\\n\\n**ATTENTION:** This incident occurred outside business hours.\\n\\n**Incident ID:** {{ $json.incident.id }}\\n\\n**Title:** {{ $json.incident.title }}\\n\\n**Severity:** {{ $json.incident.severity }}\\n\\n---\\n\\nPrimary on-call has been notified. Please be on standby as backup.\\n\\n**Time:** {{ $json.timestamp }}\"\n}",
+        "options": {}
+      },
+      "id": "send-after-hours-notification",
+      "name": "Send After-Hours Notification",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1340, 500],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "webex-auth",
+          "name": "Webex API Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Log escalation details\nconst escalationLog = {\n  logId: `ESC-${Date.now()}`,\n  incidentId: $('Get On-Call Info').first().json.incident.id,\n  escalationTime: new Date().toISOString(),\n  escalationReasons: $('Get On-Call Info').first().json.escalationReasons,\n  notifiedPersons: $('Get On-Call Info').first().json.notificationTargets.map(t => ({\n    name: t.name,\n    role: t.role,\n    type: t.notificationType\n  })),\n  businessHoursInfo: $('Get On-Call Info').first().json.businessHoursInfo,\n  isMajorIncident: $('Get On-Call Info').first().json.escalation.isMajorIncident,\n  webexSpaceCreated: $('Get On-Call Info').first().json.escalation.isMajorIncident,\n  status: 'pending_acknowledgment'\n};\n\nreturn {\n  escalationLog: escalationLog,\n  incident: $('Get On-Call Info').first().json.incident,\n  onCallConfig: $('Get On-Call Info').first().json.onCallConfig\n};"
+      },
+      "id": "log-escalation",
+      "name": "Log Escalation Time",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1560, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://your-xsoar-instance.com/incident/update",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"id\": \"{{ $json.incident.id }}\",\n  \"customFields\": {\n    \"escalationtime\": \"{{ $json.escalationLog.escalationTime }}\",\n    \"escalationreasons\": \"{{ $json.escalationLog.escalationReasons.join(', ') }}\",\n    \"escalationstatus\": \"pending_acknowledgment\",\n    \"notifiedpersons\": \"{{ $json.escalationLog.notifiedPersons.map(p => p.name + ' (' + p.role + ')').join(', ') }}\",\n    \"ismajorincident\": {{ $json.escalationLog.isMajorIncident }}\n  },\n  \"notes\": [\n    {\n      \"content\": \"Incident escalated at {{ $json.escalationLog.escalationTime }}. Reasons: {{ $json.escalationLog.escalationReasons.join(', ') }}. Awaiting acknowledgment.\",\n      \"type\": \"escalation\"\n    }\n  ]\n}",
+        "options": {}
+      },
+      "id": "update-xsoar-ticket",
+      "name": "Update XSOAR Ticket",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1780, 400],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "xsoar-auth",
+          "name": "XSOAR API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "amount": 15,
+        "unit": "minutes"
+      },
+      "id": "wait-for-ack",
+      "name": "Wait for Acknowledgment",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [2000, 400],
+      "webhookId": "ack-webhook"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://your-xsoar-instance.com/incident/{{ $json.incident.id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "id": "check-ack-status",
+      "name": "Check Acknowledgment Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2220, 400],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "xsoar-auth",
+          "name": "XSOAR API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "not-acknowledged",
+              "leftValue": "={{ $json.customFields?.escalationstatus }}",
+              "rightValue": "acknowledged",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-if-acked",
+      "name": "Was Acknowledged?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [2440, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://webexapis.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"toPersonEmail\": \"{{ $('Get On-Call Info').first().json.onCallConfig.backup.webexId }}\",\n  \"markdown\": \"## URGENT: Backup Escalation Required\\n\\n**Primary on-call did not acknowledge within 15 minutes.**\\n\\n**Incident ID:** {{ $('Get On-Call Info').first().json.incident.id }}\\n\\n**Title:** {{ $('Get On-Call Info').first().json.incident.title }}\\n\\n**Severity:** {{ $('Get On-Call Info').first().json.incident.severity }}\\n\\n---\\n\\n**Original Escalation Time:** {{ $('Log Escalation Time').first().json.escalationLog.escalationTime }}\\n\\n**Action Required:** You are now the primary responder. Please acknowledge immediately.\\n\\n[Acknowledge Incident](https://your-company.com/incidents/{{ $('Get On-Call Info').first().json.incident.id }}/acknowledge)\"\n}",
+        "options": {}
+      },
+      "id": "escalate-to-backup",
+      "name": "Escalate to Backup",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2660, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "webex-auth",
+          "name": "Webex API Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://your-xsoar-instance.com/incident/update",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"id\": \"{{ $('Get On-Call Info').first().json.incident.id }}\",\n  \"customFields\": {\n    \"escalationstatus\": \"escalated_to_backup\",\n    \"backupescalationtime\": \"{{ $now.toISOString() }}\"\n  },\n  \"notes\": [\n    {\n      \"content\": \"Primary on-call did not acknowledge within 15 minutes. Escalated to backup: {{ $('Get On-Call Info').first().json.onCallConfig.backup.name }}\",\n      \"type\": \"escalation\"\n    }\n  ]\n}",
+        "options": {}
+      },
+      "id": "update-xsoar-backup-escalation",
+      "name": "Update XSOAR - Backup Escalation",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2880, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "xsoar-auth",
+          "name": "XSOAR API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Incident was acknowledged successfully\nreturn {\n  status: 'acknowledged',\n  incidentId: $('Get On-Call Info').first().json.incident.id,\n  acknowledgedAt: new Date().toISOString(),\n  message: 'Incident acknowledgment confirmed'\n};"
+      },
+      "id": "ack-confirmed",
+      "name": "Acknowledgment Confirmed",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2660, 500]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"status\": \"no_escalation_required\",\n  \"incidentId\": \"{{ $json.incident.id }}\",\n  \"severity\": {{ $json.incident.severity }},\n  \"message\": \"Incident does not meet escalation criteria\",\n  \"timestamp\": \"{{ $json.timestamp }}\"\n}",
+        "options": {}
+      },
+      "id": "respond-no-escalation",
+      "name": "Respond - No Escalation",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [900, 400]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"status\": \"escalation_initiated\",\n  \"incidentId\": \"{{ $('Get On-Call Info').first().json.incident.id }}\",\n  \"escalationReasons\": {{ JSON.stringify($('Get On-Call Info').first().json.escalationReasons) }},\n  \"notificationsSent\": {{ $('Get On-Call Info').first().json.notificationTargets.length }},\n  \"majorIncident\": {{ $('Get On-Call Info').first().json.escalation.isMajorIncident }},\n  \"afterHoursNotification\": {{ $('Get On-Call Info').first().json.escalation.isOutsideBusinessHours }},\n  \"message\": \"Escalation workflow initiated. Awaiting acknowledgment.\",\n  \"timestamp\": \"{{ $now.toISOString() }}\"\n}",
+        "options": {}
+      },
+      "id": "respond-escalation-started",
+      "name": "Respond - Escalation Started",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [2000, 600]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "ransomware-check",
+              "leftValue": "={{ $json.escalation.ransomwareDetected }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-ransomware",
+      "name": "Ransomware Detected?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1340, 700]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get executive list for ransomware notification\nconst executives = $('Get On-Call Info').first().json.onCallConfig.executives;\nreturn executives.map(exec => ({ json: exec }));"
+      },
+      "id": "prepare-exec-notifications",
+      "name": "Prepare Exec Notifications",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1560, 700]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://webexapis.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"toPersonEmail\": \"{{ $json.webexId }}\",\n  \"markdown\": \"## CRITICAL: Ransomware Incident Alert\\n\\n**IMMEDIATE ATTENTION REQUIRED**\\n\\n**Incident ID:** {{ $('Get On-Call Info').first().json.incident.id }}\\n\\n**Title:** {{ $('Get On-Call Info').first().json.incident.title }}\\n\\n**Severity:** {{ $('Get On-Call Info').first().json.incident.severity }}\\n\\n---\\n\\n**Description:** {{ $('Get On-Call Info').first().json.incident.description }}\\n\\n---\\n\\nThis incident has been flagged as a potential ransomware attack. The IR team has been mobilized.\\n\\n**Time:** {{ $now.toISOString() }}\"\n}",
+        "options": {}
+      },
+      "id": "notify-executives",
+      "name": "Notify Executives",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1780, 700],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "webex-auth",
+          "name": "Webex API Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "vip-check",
+              "leftValue": "={{ $json.escalation.vipUserAffected }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-vip",
+      "name": "VIP User Affected?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1340, 900]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://webexapis.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"toPersonEmail\": \"{{ $('Get On-Call Info').first().json.onCallConfig.management.webexId }}\",\n  \"markdown\": \"## VIP User Incident Alert\\n\\n**Management Notification**\\n\\n**Incident ID:** {{ $('Get On-Call Info').first().json.incident.id }}\\n\\n**Title:** {{ $('Get On-Call Info').first().json.incident.title }}\\n\\n**Severity:** {{ $('Get On-Call Info').first().json.incident.severity }}\\n\\n---\\n\\n**Affected VIP User:** {{ $('Get On-Call Info').first().json.incident.affectedUser.name || 'VIP User' }}\\n\\n**Description:** {{ $('Get On-Call Info').first().json.incident.description }}\\n\\n---\\n\\nThis incident affects a VIP user and requires management awareness.\\n\\n**Time:** {{ $now.toISOString() }}\"\n}",
+        "options": {}
+      },
+      "id": "notify-management",
+      "name": "Notify Management",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1560, 900],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "webex-auth",
+          "name": "Webex API Token"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Process Incident Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Incident Data": {
+      "main": [
+        [
+          {
+            "node": "Escalation Needed?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Escalation Needed?": {
+      "main": [
+        [
+          {
+            "node": "Get On-Call Info",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond - No Escalation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get On-Call Info": {
+      "main": [
+        [
+          {
+            "node": "Send Webex DM to On-Call",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Is Major Incident?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Is After Hours?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Log Escalation Time",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Ransomware Detected?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "VIP User Affected?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Major Incident?": {
+      "main": [
+        [
+          {
+            "node": "Create Webex Space",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Create Webex Space": {
+      "main": [
+        [
+          {
+            "node": "Prepare Team Invites",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Team Invites": {
+      "main": [
+        [
+          {
+            "node": "Invite IR Team to Space",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is After Hours?": {
+      "main": [
+        [
+          {
+            "node": "Send After-Hours Notification",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Log Escalation Time": {
+      "main": [
+        [
+          {
+            "node": "Update XSOAR Ticket",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update XSOAR Ticket": {
+      "main": [
+        [
+          {
+            "node": "Wait for Acknowledgment",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Respond - Escalation Started",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait for Acknowledgment": {
+      "main": [
+        [
+          {
+            "node": "Check Acknowledgment Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Acknowledgment Status": {
+      "main": [
+        [
+          {
+            "node": "Was Acknowledged?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Was Acknowledged?": {
+      "main": [
+        [
+          {
+            "node": "Escalate to Backup",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Acknowledgment Confirmed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Escalate to Backup": {
+      "main": [
+        [
+          {
+            "node": "Update XSOAR - Backup Escalation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ransomware Detected?": {
+      "main": [
+        [
+          {
+            "node": "Prepare Exec Notifications",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Prepare Exec Notifications": {
+      "main": [
+        [
+          {
+            "node": "Notify Executives",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "VIP User Affected?": {
+      "main": [
+        [
+          {
+            "node": "Notify Management",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "incident-response",
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z"
+    },
+    {
+      "name": "escalation",
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z"
+    },
+    {
+      "name": "automation",
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z"
+    }
+  ],
+  "triggerCount": 1,
+  "updatedAt": "2024-01-01T00:00:00.000Z",
+  "versionId": "1"
+}

@@ -221,7 +221,7 @@ class RulesCatalog:
             rule_id=metadata.get("rule_id", ""),
             platform=metadata.get("platform", ""),
             name=metadata.get("name", ""),
-            description="",  # Not stored in metadata to save space
+            description=metadata.get("description", ""),
             rule_type=metadata.get("rule_type", ""),
             enabled=metadata.get("enabled", "True") == "True",
             severity=metadata.get("severity", ""),
@@ -232,6 +232,36 @@ class RulesCatalog:
             created_date=metadata.get("created_date", ""),
             modified_date=metadata.get("modified_date", ""),
         )
+
+    def get_covered_techniques(self) -> set:
+        """Get set of all MITRE techniques covered by rules in the catalog.
+
+        Returns:
+            Set of technique IDs (e.g., {'T1005', 'T1059.001', ...})
+        """
+        if self.collection.count() == 0:
+            return set()
+
+        try:
+            all_docs = self.collection.get(
+                include=["metadatas"],
+                limit=self.collection.count(),
+            )
+        except Exception as e:
+            logger.warning(f"Failed to get techniques from catalog: {e}")
+            return set()
+
+        covered = set()
+        if all_docs and all_docs.get("metadatas"):
+            for metadata in all_docs["metadatas"]:
+                techniques_str = metadata.get("mitre_techniques", "")
+                for tech in techniques_str.split(","):
+                    tech = tech.strip().upper()
+                    if tech:
+                        covered.add(tech)
+
+        logger.info(f"Rules catalog covers {len(covered)} unique MITRE techniques")
+        return covered
 
     def rebuild(self, rules: List[DetectionRule]) -> int:
         """Full collection rebuild (delete and recreate).

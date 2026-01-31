@@ -410,6 +410,107 @@ class VirusTotalClient:
 
         return results
 
+    def is_ioc_huntworthy(self, ioc: str, ioc_type: str = "domain") -> bool:
+        """Check if an IOC has any malicious/suspicious detections on VT.
+
+        Use this to filter out benign domains/IPs that appear in tippers as
+        references (e.g., security vendor sites, news sites).
+
+        Args:
+            ioc: The IOC value (domain, IP, or hash)
+            ioc_type: Type of IOC - "domain", "ip", or "hash"
+
+        Returns:
+            True if the IOC has any malicious/suspicious detections,
+            False if it's clean or unknown.
+        """
+        try:
+            if ioc_type == "domain":
+                result = self.lookup_domain(ioc)
+            elif ioc_type == "ip":
+                result = self.lookup_ip(ioc)
+            elif ioc_type == "hash":
+                result = self.lookup_hash(ioc)
+            else:
+                return True  # Unknown type, assume huntworthy
+
+            if "error" in result:
+                # If VT doesn't know about it, it might be worth hunting
+                return True
+
+            stats = result.get("data", {}).get("attributes", {}).get("last_analysis_stats", {})
+            malicious = stats.get("malicious", 0)
+            suspicious = stats.get("suspicious", 0)
+
+            # Huntworthy if any vendor flagged it
+            return malicious > 0 or suspicious > 0
+
+        except Exception as e:
+            logger.debug(f"VT huntworthy check failed for {ioc}: {e}")
+            return True  # On error, assume huntworthy to be safe
+
+    def filter_huntworthy_iocs(
+        self,
+        domains: list = None,
+        ips: list = None,
+        hashes: list = None,
+        max_checks: int = 50,
+    ) -> dict:
+        """Filter IOCs to only those with VT detections (worth hunting).
+
+        Args:
+            domains: List of domains to check
+            ips: List of IPs to check
+            hashes: List of hashes to check
+            max_checks: Maximum total IOCs to check (to limit API calls)
+
+        Returns:
+            Dict with 'domains', 'ips', 'hashes' keys containing only huntworthy IOCs
+        """
+        result = {"domains": [], "ips": [], "hashes": []}
+
+        if not self.is_configured():
+            # If VT not configured, return all IOCs (can't filter)
+            return {
+                "domains": domains or [],
+                "ips": ips or [],
+                "hashes": hashes or [],
+            }
+
+        checks_done = 0
+
+        # Check domains
+        for domain in (domains or []):
+            if checks_done >= max_checks:
+                break
+            if self.is_ioc_huntworthy(domain, "domain"):
+                result["domains"].append(domain)
+            checks_done += 1
+
+        # Check IPs
+        for ip in (ips or []):
+            if checks_done >= max_checks:
+                break
+            if self.is_ioc_huntworthy(ip, "ip"):
+                result["ips"].append(ip)
+            checks_done += 1
+
+        # Check hashes
+        for hash_val in (hashes or []):
+            if checks_done >= max_checks:
+                break
+            if self.is_ioc_huntworthy(hash_val, "hash"):
+                result["hashes"].append(hash_val)
+            checks_done += 1
+
+        logger.info(
+            f"VT huntworthy filter: {checks_done} IOCs checked, "
+            f"{len(result['domains'])} domains, {len(result['ips'])} IPs, "
+            f"{len(result['hashes'])} hashes are huntworthy"
+        )
+
+        return result
+
 
 if __name__ == "__main__":
     # Quick test for VirusTotal client

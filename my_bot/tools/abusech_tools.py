@@ -26,16 +26,19 @@ from src.utils.tool_decorator import log_tool_call
 
 logger = logging.getLogger(__name__)
 
-# Initialize AbuseCH client once (no API key needed - free!)
+# Lazy-initialized abuse.ch client (no API key needed - free!)
 _abusech_client: Optional[AbuseCHClient] = None
 
-try:
-    logger.info("Initializing abuse.ch client...")
-    _abusech_client = AbuseCHClient()
-    logger.info("abuse.ch client initialized (free service - no API key required).")
-except Exception as e:
-    logger.error(f"Failed to initialize abuse.ch client: {e}")
-    _abusech_client = None
+
+def _get_abusech_client() -> Optional[AbuseCHClient]:
+    """Get abuse.ch client (lazy initialization)."""
+    global _abusech_client
+    if _abusech_client is None:
+        try:
+            _abusech_client = AbuseCHClient()
+        except Exception as e:
+            logger.error(f"Failed to initialize abuse.ch client: {e}")
+    return _abusech_client
 
 
 def _format_domain_result(data: dict) -> str:
@@ -218,8 +221,9 @@ def check_domain_abusech(domain: str) -> str:
     Args:
         domain: The domain to check (e.g., "malicious-site.com")
     """
-    if not _abusech_client:
-        return "Error: abuse.ch service is not initialized."
+    client = _get_abusech_client()
+    if not client:
+        return "Error: abuse.ch service is not available."
 
     try:
         # Clean up domain input
@@ -229,7 +233,7 @@ def check_domain_abusech(domain: str) -> str:
         if "/" in domain:
             domain = domain.split("/", 1)[0]
 
-        data = _abusech_client.check_domain_all(domain)
+        data = client.check_domain_all(domain)
         return _format_domain_result(data)
     except Exception as e:
         logger.error(f"abuse.ch domain check failed: {e}")
@@ -257,11 +261,12 @@ def check_ip_abusech(ip_address: str) -> str:
     Args:
         ip_address: The IP address to check (e.g., "192.168.1.1")
     """
-    if not _abusech_client:
-        return "Error: abuse.ch service is not initialized."
+    client = _get_abusech_client()
+    if not client:
+        return "Error: abuse.ch service is not available."
 
     try:
-        data = _abusech_client.check_ip_all(ip_address.strip())
+        data = client.check_ip_all(ip_address.strip())
         return _format_ip_result(data)
     except Exception as e:
         logger.error(f"abuse.ch IP check failed: {e}")

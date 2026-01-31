@@ -107,6 +107,50 @@ async function loadHistory() {
     }
 }
 
+async function acknowledgeThreat(domain) {
+    if (!confirm(`Acknowledge threat: ${domain}?\n\nThis will remove it from daily alerts.`)) {
+        return;
+    }
+    try {
+        const response = await fetch('/api/domain-monitoring/threats/acknowledge', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({domain: domain})
+        });
+        const data = await response.json();
+        if (data.success) {
+            alert(`Acknowledged: ${domain}`);
+            loadReport();  // Refresh the report
+        } else {
+            alert(`Error: ${data.error}`);
+        }
+    } catch (e) {
+        alert(`Failed to acknowledge: ${e.message}`);
+    }
+}
+
+async function acknowledgeAllThreats() {
+    if (!confirm('Acknowledge ALL outstanding threats?\n\nThis will remove them from daily alerts.')) {
+        return;
+    }
+    try {
+        const response = await fetch('/api/domain-monitoring/threats/acknowledge', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({all: true})
+        });
+        const data = await response.json();
+        if (data.success) {
+            alert(data.message);
+            loadReport();  // Refresh the report
+        } else {
+            alert(`Error: ${data.error}`);
+        }
+    } catch (e) {
+        alert(`Failed to acknowledge: ${e.message}`);
+    }
+}
+
 async function loadReport(filename) {
     document.getElementById('loadingIndicator').style.display = 'block';
     document.getElementById('reportContent').style.display = 'none';
@@ -135,43 +179,41 @@ async function loadReport(filename) {
     }
 }
 
-function renderReport(results) {
+async function renderReport(results) {
     // Scan metadata
     document.getElementById('scanMeta').innerHTML = `
         <strong>Scan Time:</strong> ${new Date(results.scan_time).toLocaleString()} |
         <strong>Alerts Sent:</strong> ${results.alerts_sent || 0}
     `;
 
-    // Summary cards
-    // Count various metrics across all domains
-    let highRiskCount = 0;
-    let ctFindings = 0;
-    let whoisChanges = 0;
-    let vtHighRisk = 0;
-    let hibpBreaches = 0;
-    let shodanExposures = 0;
-    let abusechMalicious = 0;
-    let abuseipdbMalicious = 0;
+    // Summary cards - use pre-computed totals from results
+    // Fetch outstanding threats count (for Outstanding Threats card)
+    let outstandingThreatsCount = 0;
+    try {
+        const threatsResponse = await fetch('/api/domain-monitoring/threats');
+        const threatsData = await threatsResponse.json();
+        if (threatsData.success) {
+            outstandingThreatsCount = threatsData.count || 0;
+        }
+    } catch (e) {
+        console.error('Failed to fetch outstanding threats count:', e);
+    }
 
-    Object.values(results.domains || {}).forEach(d => {
-        highRiskCount += (d.dark_web?.high_risk_findings?.length || 0);
-        ctFindings += (d.ct_logs?.high_risk_domains?.length || 0);
-        whoisChanges += (d.whois?.high_severity_changes?.length || 0);
-        whoisChanges += (d.whois?.newly_registered?.length || 0);
-        vtHighRisk += (d.virustotal?.high_risk?.length || 0);
-        hibpBreaches += (d.hibp?.emails_breached || 0);
-        // Only count actual risks: vulnerabilities + risky services (not normal web ports like 80/443)
-        shodanExposures += (d.shodan?.total_vulns || 0);
-        shodanExposures += (d.shodan?.exposed_services?.length || 0);
-        abusechMalicious += (d.abusech?.malicious_domains?.length || 0);
-        abuseipdbMalicious += (d.abuseipdb?.domains_with_malicious_ips?.length || 0);
-    });
+    // Use pre-computed totals from the results JSON
+    const newLookalikes = results.total_new_lookalikes || 0;
+    const becameActive = results.total_became_active || 0;
+    const darkWebFindings = results.total_dark_web_findings || 0;
+    const intelxDarkweb = results.total_intelx_findings || 0;
+    const whoisChanges = results.total_whois_changes || 0;
+    const vtHighRisk = results.total_vt_high_risk || 0;
+    const hibpBreaches = results.total_hibp_breaches || 0;
+    const shodanExposures = results.total_shodan_exposures || 0;
+    const abusechMalicious = results.total_abusech_malicious || 0;
+    const abuseipdbMalicious = results.total_abuseipdb_malicious || 0;
+    const ctFindings = outstandingThreatsCount;
 
-    // Count IntelX findings
-    let intelxDarkweb = 0;
-    Object.values(results.domains || {}).forEach(d => {
-        intelxDarkweb += (d.intelx?.darkweb_findings?.length || 0);
-    });
+    // High risk = became active + abuse.ch malicious + abuseIPDB malicious
+    const highRiskCount = becameActive + abusechMalicious + abuseipdbMalicious;
 
     const cardStyle = 'cursor:pointer;transition:transform 0.2s;';
     let cardsHtml = `
@@ -191,9 +233,9 @@ function renderReport(results) {
             <div class="value">${highRiskCount}</div>
             <div class="label">High Risk Findings</div>
         </div>
-        <div class="summary-card ${ctFindings > 0 ? 'warning' : 'success'}" onclick="showTab('ctlogs', true)" style="${cardStyle}" title="View SSL Certificates">
+        <div class="summary-card ${ctFindings > 0 ? 'alert' : 'success'}" onclick="showTab('ctlogs', true)" style="${cardStyle}" title="View Outstanding Threats">
             <div class="value">${ctFindings}</div>
-            <div class="label">New SSL Certs</div>
+            <div class="label">Outstanding Threats</div>
         </div>
         <div class="summary-card ${whoisChanges > 0 ? 'warning' : 'success'}" onclick="showTab('whois', true)" style="${cardStyle}" title="View WHOIS Changes">
             <div class="value">${whoisChanges}</div>
@@ -240,7 +282,7 @@ function renderReport(results) {
     renderIntelX(results.domains);
 
     // CT logs tab
-    renderCTLogs(results.domains);
+    await renderCTLogs(results.domains);
 
     // WHOIS tab
     renderWhois(results.domains);
@@ -1387,27 +1429,111 @@ function renderIntelX(domains) {
     document.getElementById('intelx').innerHTML = html || '<div class="no-data">No domains monitored.</div>';
 }
 
-function renderCTLogs(domains) {
+async function renderCTLogs(domains) {
     let html = '';
+
+    // Outstanding Threats section - persists until acknowledged
+    try {
+        const response = await fetch('/api/domain-monitoring/threats');
+        const data = await response.json();
+        if (data.success && data.threats && data.threats.length > 0) {
+            html += `<div class="domain-section" style="border-left:4px solid #dc2626;background:rgba(220,38,38,0.05);">
+                <div class="domain-title" style="color:#dc2626;">⚠️ Outstanding Threats (${data.threats.length})</div>
+                <p style="color:#666;margin-bottom:10px;">These threats persist in daily alerts until acknowledged. Acknowledge after investigation.</p>
+                <table class="findings-table">
+                    <thead><tr><th>Domain</th><th>Brand</th><th>Issuer</th><th>Discovered</th><th>Actions</th></tr></thead>
+                    <tbody>`;
+
+            data.threats.forEach(threat => {
+                const discovered = threat.discovered_at ? new Date(threat.discovered_at).toLocaleDateString() : '-';
+                html += `<tr style="background:rgba(220,38,38,0.1);">
+                    <td><code>${threat.domain}</code></td>
+                    <td>${threat.brand || '-'}</td>
+                    <td>${threat.issuer ? threat.issuer.substring(0, 30) + '...' : '-'}</td>
+                    <td>${discovered}</td>
+                    <td>
+                        <a href="${threat.crt_sh_link || '#'}" target="_blank" class="btn-view btn-external" style="margin-right:5px;">View</a>
+                        <button onclick="acknowledgeThreat('${threat.domain}')" class="btn-view" style="background:#16a34a;cursor:pointer;">✓ Ack</button>
+                    </td>
+                </tr>`;
+            });
+
+            html += `</tbody></table>
+                <div style="margin-top:10px;">
+                    <button onclick="acknowledgeAllThreats()" class="btn-view" style="background:#6b7280;cursor:pointer;">Acknowledge All</button>
+                </div>
+            </div>`;
+        }
+    } catch (e) {
+        console.error('Failed to load outstanding threats:', e);
+    }
 
     Object.entries(domains || {}).forEach(([domain, data]) => {
         const ctData = data.ct_logs || {};
+        const watchlistData = data.watchlist || {};
+        const brandCtData = data.brand_ct_search || {};
 
         html += `<div class="domain-section">
             <div class="domain-title">🔐 ${domain}</div>`;
 
+        // Brand Impersonation Discovery (from crt.sh CT search)
+        const brandNewDomains = brandCtData.new_domains || [];
+        if (brandNewDomains.length > 0) {
+            html += `<h4 style="color:#dc2626;margin-bottom:10px;">🎣 NEW Brand Impersonation Domains Discovered</h4>
+            <p style="color:#666;margin-bottom:10px;">These domains contain "${domain.split('.')[0]}" and were just issued SSL certificates:</p>
+            <table class="findings-table">
+                <thead><tr><th>Domain</th><th>Issuer</th><th>Issued</th><th>Action</th></tr></thead>
+                <tbody>`;
+
+            brandNewDomains.forEach(item => {
+                html += `<tr style="background:rgba(220,38,38,0.15);">
+                    <td><code>${item.domain}</code></td>
+                    <td>${item.issuer ? item.issuer.substring(0, 40) + '...' : '-'}</td>
+                    <td>${item.not_before ? new Date(item.not_before).toLocaleDateString() : '-'}</td>
+                    <td><a href="${item.crt_sh_link}" target="_blank" class="btn-view btn-external">View on crt.sh</a></td>
+                </tr>`;
+            });
+
+            html += `</tbody></table>`;
+        } else if (brandCtData.error) {
+            html += `<p style="color:#888;margin-bottom:15px;">Brand CT search: ${brandCtData.error}</p>`;
+        }
+
+        // Watchlist Domains with Certs
+        const watchlistWithCerts = watchlistData.domains_with_certs || [];
+        if (watchlistWithCerts.length > 0) {
+            html += `<h4 style="color:#dc2626;margin-bottom:10px;">🎯 Watchlist Domains with SSL Certificates</h4>
+            <p style="color:#666;margin-bottom:10px;">Manually monitored suspicious domains that have active SSL certs:</p>
+            <table class="findings-table">
+                <thead><tr><th>Domain</th><th>Cert Count</th><th>Issuer</th><th>Valid Until</th><th>Action</th></tr></thead>
+                <tbody>`;
+
+            watchlistWithCerts.forEach(item => {
+                const recent = item.most_recent || {};
+                html += `<tr style="background:rgba(220,38,38,0.15);">
+                    <td><code>${item.domain}</code></td>
+                    <td><span class="badge badge-warning">${item.cert_count} cert(s)</span></td>
+                    <td>${recent.issuer ? recent.issuer.substring(0, 40) + '...' : '-'}</td>
+                    <td>${recent.not_after ? new Date(recent.not_after).toLocaleDateString() : '-'}</td>
+                    <td><a href="${item.crt_sh_link}" target="_blank" class="btn-view btn-external">View on crt.sh</a></td>
+                </tr>`;
+            });
+
+            html += `</tbody></table>`;
+        }
+
+        // Lookalike CT Logs (dnstwist-generated domains)
         if (!ctData.success) {
             if (ctData.error) {
-                html += `<div class="no-data">Scan failed: ${ctData.error}</div>`;
-            } else {
-                html += `<div class="no-data">No CT log data available</div>`;
+                html += `<div class="no-data">Lookalike CT scan failed: ${ctData.error}</div>`;
             }
         } else {
             const highRisk = ctData.high_risk_domains || [];
             const totalCerts = ctData.total_new_certs || 0;
             const domainsChecked = ctData.domains_checked || 0;
 
-            html += `<p style="margin-bottom:15px;color:#666;">
+            html += `<h4 style="margin-top:20px;margin-bottom:10px;">📋 Lookalike Domain CT Scan</h4>
+            <p style="margin-bottom:15px;color:#666;">
                 Domains checked: <strong>${domainsChecked}</strong> |
                 Domains with new certs: <strong>${ctData.domains_with_certs || 0}</strong> |
                 Total new certificates: <strong>${totalCerts}</strong>
@@ -1437,7 +1563,7 @@ function renderCTLogs(domains) {
                 });
 
                 html += `</tbody></table>`;
-            } else {
+            } else if (brandNewDomains.length === 0 && watchlistWithCerts.length === 0) {
                 html += `<div class="no-data" style="padding:20px;">No new SSL certificates detected for lookalike domains in the past ${ctData.days_searched || 7} days.</div>`;
             }
         }

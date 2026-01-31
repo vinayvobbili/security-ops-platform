@@ -1,0 +1,1062 @@
+{
+  "name": "SLA Risk Smart Escalation",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 5
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Every 5 Minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $credentials.xsoar.baseUrl }}/incidents/search",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"filter\": {\n    \"query\": \"-category:job -status:closed type:{{ $credentials.xsoar.teamName }} timetorespond.runStatus:running (timetorespond.slaStatus:risk OR timetorespond.slaStatus:2)\",\n    \"page\": 0,\n    \"size\": 100,\n    \"sort\": [{\"field\": \"created\", \"asc\": false}]\n  }\n}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "query-response-sla-risk",
+      "name": "Query Response SLA Risk",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [220, 100],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "xsoar-auth",
+          "name": "XSOAR API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $credentials.xsoar.baseUrl }}/incidents/search",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"filter\": {\n    \"query\": \"-category:job -status:closed type:{{ $credentials.xsoar.teamName }} timetocontain.runStatus:running (timetocontain.slaStatus:risk OR timetocontain.slaStatus:2) -hostname:\\\"\\\"\",\n    \"page\": 0,\n    \"size\": 100,\n    \"sort\": [{\"field\": \"created\", \"asc\": false}]\n  }\n}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "query-containment-sla-risk",
+      "name": "Query Containment SLA Risk",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [220, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "xsoar-auth",
+          "name": "XSOAR API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $credentials.xsoar.baseUrl }}/incidents/search",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"filter\": {\n    \"query\": \"-category:job -status:closed type:{{ $credentials.xsoar.teamName }} timetoresolve.runStatus:running (timetoresolve.slaStatus:risk OR timetoresolve.slaStatus:2)\",\n    \"page\": 0,\n    \"size\": 100,\n    \"sort\": [{\"field\": \"created\", \"asc\": false}]\n  }\n}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "query-resolution-sla-risk",
+      "name": "Query Resolution SLA Risk",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [220, 500],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "xsoar-auth",
+          "name": "XSOAR API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Process Response SLA Risk Tickets\nconst response = $input.first().json;\nconst tickets = response.data || [];\n\nif (!tickets || tickets.length === 0) {\n  return [{ json: { hasTickets: false, slaType: 'response', tickets: [] } }];\n}\n\nconst now = new Date();\nconst processedTickets = [];\n\nfor (const ticket of tickets) {\n  const ticketId = ticket.id;\n  const ticketName = ticket.name || ticket.title || 'No Title';\n  const owner = ticket.owner || '';\n  const timetorespond = ticket.CustomFields?.timetorespond || {};\n  const dueDate = timetorespond.dueDate;\n  const breachTriggered = timetorespond.breachTriggered || false;\n  const runStatus = timetorespond.runStatus || '';\n  \n  // Skip already breached tickets\n  if (breachTriggered || runStatus === 'ended') {\n    continue;\n  }\n  \n  // Calculate seconds remaining\n  let secondsRemaining = 0;\n  let dueDateFormatted = 'N/A';\n  \n  if (dueDate) {\n    try {\n      // Parse due date (handle nanoseconds)\n      let dateStr = dueDate;\n      if (dateStr.includes('.')) {\n        const [datePart, fracPart] = dateStr.split('.');\n        if (fracPart.includes('Z')) {\n          const [frac] = fracPart.split('Z');\n          const truncatedFrac = (frac + '000000').slice(0, 6);\n          dateStr = `${datePart}.${truncatedFrac}Z`;\n        }\n      }\n      \n      const dueDateObj = new Date(dateStr);\n      secondsRemaining = Math.max(0, Math.floor((dueDateObj - now) / 1000));\n      \n      // Format for display (Eastern Time)\n      dueDateFormatted = dueDateObj.toLocaleString('en-US', {\n        timeZone: 'America/New_York',\n        year: 'numeric',\n        month: '2-digit',\n        day: '2-digit',\n        hour: '2-digit',\n        minute: '2-digit',\n        second: '2-digit'\n      }) + ' ET';\n    } catch (e) {\n      secondsRemaining = 0;\n    }\n  }\n  \n  // Get blocking reason from custom fields\n  const blockingReason = ticket.CustomFields?.blockingreason || \n                         ticket.CustomFields?.waitingreason || \n                         '';\n  \n  // Get last activity time\n  const lastModified = ticket.modified || ticket.lastModified;\n  let minutesSinceActivity = 0;\n  if (lastModified) {\n    const lastModifiedDate = new Date(lastModified);\n    minutesSinceActivity = Math.floor((now - lastModifiedDate) / (1000 * 60));\n  }\n  \n  // Get hostname for containment check\n  const hostname = ticket.CustomFields?.hostname || '';\n  \n  processedTickets.push({\n    ticketId,\n    ticketName,\n    owner,\n    secondsRemaining,\n    dueDateFormatted,\n    blockingReason,\n    minutesSinceActivity,\n    hostname,\n    slaType: 'response',\n    rawTicket: ticket\n  });\n}\n\n// Sort by urgency (least time remaining first)\nprocessedTickets.sort((a, b) => a.secondsRemaining - b.secondsRemaining);\n\nreturn [{\n  json: {\n    hasTickets: processedTickets.length > 0,\n    slaType: 'response',\n    tickets: processedTickets,\n    ticketCount: processedTickets.length\n  }\n}];"
+      },
+      "id": "process-response-sla",
+      "name": "Process Response SLA Tickets",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 100]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Process Containment SLA Risk Tickets\nconst response = $input.first().json;\nconst tickets = response.data || [];\n\nif (!tickets || tickets.length === 0) {\n  return [{ json: { hasTickets: false, slaType: 'containment', tickets: [] } }];\n}\n\nconst now = new Date();\nconst processedTickets = [];\n\nfor (const ticket of tickets) {\n  const ticketId = ticket.id;\n  const ticketName = ticket.name || ticket.title || 'No Title';\n  const owner = ticket.owner || '';\n  const timetocontain = ticket.CustomFields?.timetocontain || {};\n  const dueDate = timetocontain.dueDate;\n  const breachTriggered = timetocontain.breachTriggered || false;\n  const runStatus = timetocontain.runStatus || '';\n  \n  // Skip already breached tickets\n  if (breachTriggered || runStatus === 'ended') {\n    continue;\n  }\n  \n  // Calculate seconds remaining\n  let secondsRemaining = 0;\n  let dueDateFormatted = 'N/A';\n  \n  if (dueDate) {\n    try {\n      let dateStr = dueDate;\n      if (dateStr.includes('.')) {\n        const [datePart, fracPart] = dateStr.split('.');\n        if (fracPart.includes('Z')) {\n          const [frac] = fracPart.split('Z');\n          const truncatedFrac = (frac + '000000').slice(0, 6);\n          dateStr = `${datePart}.${truncatedFrac}Z`;\n        }\n      }\n      \n      const dueDateObj = new Date(dateStr);\n      secondsRemaining = Math.max(0, Math.floor((dueDateObj - now) / 1000));\n      \n      dueDateFormatted = dueDateObj.toLocaleString('en-US', {\n        timeZone: 'America/New_York',\n        year: 'numeric',\n        month: '2-digit',\n        day: '2-digit',\n        hour: '2-digit',\n        minute: '2-digit',\n        second: '2-digit'\n      }) + ' ET';\n    } catch (e) {\n      secondsRemaining = 0;\n    }\n  }\n  \n  const blockingReason = ticket.CustomFields?.blockingreason || \n                         ticket.CustomFields?.waitingreason || \n                         '';\n  \n  const lastModified = ticket.modified || ticket.lastModified;\n  let minutesSinceActivity = 0;\n  if (lastModified) {\n    const lastModifiedDate = new Date(lastModified);\n    minutesSinceActivity = Math.floor((now - lastModifiedDate) / (1000 * 60));\n  }\n  \n  const hostname = ticket.CustomFields?.hostname || '';\n  \n  processedTickets.push({\n    ticketId,\n    ticketName,\n    owner,\n    secondsRemaining,\n    dueDateFormatted,\n    blockingReason,\n    minutesSinceActivity,\n    hostname,\n    slaType: 'containment',\n    rawTicket: ticket\n  });\n}\n\nprocessedTickets.sort((a, b) => a.secondsRemaining - b.secondsRemaining);\n\nreturn [{\n  json: {\n    hasTickets: processedTickets.length > 0,\n    slaType: 'containment',\n    tickets: processedTickets,\n    ticketCount: processedTickets.length\n  }\n}];"
+      },
+      "id": "process-containment-sla",
+      "name": "Process Containment SLA Tickets",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Process Resolution SLA Risk Tickets (Aging Tickets)\nconst response = $input.first().json;\nconst tickets = response.data || [];\n\nif (!tickets || tickets.length === 0) {\n  return [{ json: { hasTickets: false, slaType: 'resolution', tickets: [] } }];\n}\n\nconst now = new Date();\nconst processedTickets = [];\n\nfor (const ticket of tickets) {\n  const ticketId = ticket.id;\n  const ticketName = ticket.name || ticket.title || 'No Title';\n  const owner = ticket.owner || '';\n  const timetoresolve = ticket.CustomFields?.timetoresolve || {};\n  const dueDate = timetoresolve.dueDate;\n  const breachTriggered = timetoresolve.breachTriggered || false;\n  const runStatus = timetoresolve.runStatus || '';\n  \n  if (breachTriggered || runStatus === 'ended') {\n    continue;\n  }\n  \n  let secondsRemaining = 0;\n  let dueDateFormatted = 'N/A';\n  \n  if (dueDate) {\n    try {\n      let dateStr = dueDate;\n      if (dateStr.includes('.')) {\n        const [datePart, fracPart] = dateStr.split('.');\n        if (fracPart.includes('Z')) {\n          const [frac] = fracPart.split('Z');\n          const truncatedFrac = (frac + '000000').slice(0, 6);\n          dateStr = `${datePart}.${truncatedFrac}Z`;\n        }\n      }\n      \n      const dueDateObj = new Date(dateStr);\n      secondsRemaining = Math.max(0, Math.floor((dueDateObj - now) / 1000));\n      \n      dueDateFormatted = dueDateObj.toLocaleString('en-US', {\n        timeZone: 'America/New_York',\n        year: 'numeric',\n        month: '2-digit',\n        day: '2-digit',\n        hour: '2-digit',\n        minute: '2-digit',\n        second: '2-digit'\n      }) + ' ET';\n    } catch (e) {\n      secondsRemaining = 0;\n    }\n  }\n  \n  const blockingReason = ticket.CustomFields?.blockingreason || \n                         ticket.CustomFields?.waitingreason || \n                         '';\n  \n  const lastModified = ticket.modified || ticket.lastModified;\n  let minutesSinceActivity = 0;\n  if (lastModified) {\n    const lastModifiedDate = new Date(lastModified);\n    minutesSinceActivity = Math.floor((now - lastModifiedDate) / (1000 * 60));\n  }\n  \n  const hostname = ticket.CustomFields?.hostname || '';\n  \n  processedTickets.push({\n    ticketId,\n    ticketName,\n    owner,\n    secondsRemaining,\n    dueDateFormatted,\n    blockingReason,\n    minutesSinceActivity,\n    hostname,\n    slaType: 'resolution',\n    rawTicket: ticket\n  });\n}\n\nprocessedTickets.sort((a, b) => a.secondsRemaining - b.secondsRemaining);\n\nreturn [{\n  json: {\n    hasTickets: processedTickets.length > 0,\n    slaType: 'resolution',\n    tickets: processedTickets,\n    ticketCount: processedTickets.length\n  }\n}];"
+      },
+      "id": "process-resolution-sla",
+      "name": "Process Resolution SLA Tickets",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 500]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "has-response-tickets",
+              "leftValue": "={{ $json.hasTickets }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-response-tickets",
+      "name": "Has Response SLA Tickets?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [660, 100]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "has-containment-tickets",
+              "leftValue": "={{ $json.hasTickets }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-containment-tickets",
+      "name": "Has Containment SLA Tickets?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [660, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "has-resolution-tickets",
+              "leftValue": "={{ $json.hasTickets }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-resolution-tickets",
+      "name": "Has Resolution SLA Tickets?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [660, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Prepare tickets for CrowdStrike containment status check\nconst data = $input.first().json;\nconst tickets = data.tickets || [];\n\n// Filter tickets that have hostnames\nconst ticketsWithHostnames = tickets.filter(t => t.hostname && t.hostname.trim() !== '');\n\nreturn ticketsWithHostnames.map(ticket => ({\n  json: {\n    ...ticket,\n    checkContainment: true\n  }\n}));"
+      },
+      "id": "prepare-containment-check",
+      "name": "Prepare Containment Check",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [880, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.us-2.crowdstrike.com/oauth2/token",
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "client_id",
+              "value": "={{ $credentials.crowdstrike.clientId }}"
+            },
+            {
+              "name": "client_secret",
+              "value": "={{ $credentials.crowdstrike.clientSecret }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "cs-auth",
+      "name": "CrowdStrike Auth",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1100, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.us-2.crowdstrike.com/devices/queries/devices/v1",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "filter",
+              "value": "=hostname:'{{ $('Prepare Containment Check').item.json.hostname }}'"
+            },
+            {
+              "name": "limit",
+              "value": "1"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "cs-query-device",
+      "name": "Query CrowdStrike Device",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1320, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "crowdstrike-auth",
+          "name": "CrowdStrike Bearer Token"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.us-2.crowdstrike.com/devices/entities/devices/v2",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "ids",
+              "value": "={{ $json.resources?.[0] || '' }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "cs-get-device-details",
+      "name": "Get Device Details",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1540, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "crowdstrike-auth",
+          "name": "CrowdStrike Bearer Token"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Merge CrowdStrike containment status with ticket data\nconst ticketData = $('Prepare Containment Check').item.json;\nconst csDeviceResponse = $input.first().json;\n\nlet containmentStatus = 'unknown';\nlet deviceFound = false;\n\nif (csDeviceResponse.resources && csDeviceResponse.resources.length > 0) {\n  const device = csDeviceResponse.resources[0];\n  containmentStatus = device.status || 'normal';\n  deviceFound = true;\n}\n\nreturn {\n  json: {\n    ...ticketData,\n    csContainmentStatus: containmentStatus,\n    csDeviceFound: deviceFound,\n    isContained: containmentStatus === 'contained' || containmentStatus === 'containment_pending'\n  }\n};"
+      },
+      "id": "merge-cs-status",
+      "name": "Merge CS Status",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1760, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Smart Escalation Logic for Response SLA\nconst data = $input.first().json;\nconst tickets = data.tickets || [];\n\nif (tickets.length === 0) {\n  return [{ json: { escalations: [], slaType: 'response' } }];\n}\n\nconst escalations = [];\n\nfor (const ticket of tickets) {\n  const escalation = {\n    ...ticket,\n    escalationType: 'standard',\n    escalationTarget: 'shift_lead',\n    suggestedAction: 'Review and respond to ticket',\n    priority: 'high'\n  };\n  \n  const blockingReason = (ticket.blockingReason || '').toLowerCase();\n  const owner = ticket.owner || '';\n  const minutesSinceActivity = ticket.minutesSinceActivity || 0;\n  const secondsRemaining = ticket.secondsRemaining || 0;\n  \n  // Determine escalation type based on blocking reason\n  if (blockingReason.includes('approval') || blockingReason.includes('pending approval')) {\n    escalation.escalationType = 'approval_needed';\n    escalation.escalationTarget = 'approver';\n    escalation.suggestedAction = 'Expedite approval process';\n  } else if (blockingReason.includes('waiting for user') || blockingReason.includes('user response')) {\n    escalation.escalationType = 'user_reminder';\n    escalation.escalationTarget = 'user';\n    escalation.suggestedAction = 'Send reminder to user for response';\n  } else if (!owner || owner.trim() === '') {\n    escalation.escalationType = 'unassigned';\n    escalation.escalationTarget = 'on_call';\n    escalation.suggestedAction = 'Assign to on-call analyst immediately';\n    escalation.priority = 'critical';\n  } else if (minutesSinceActivity >= 120) {\n    // No activity in 2 hours\n    escalation.escalationType = 'stale';\n    escalation.escalationTarget = 'team_lead';\n    escalation.suggestedAction = 'Escalate to team lead - no analyst activity in 2+ hours';\n    escalation.priority = 'critical';\n  }\n  \n  // Adjust priority based on time remaining\n  if (secondsRemaining <= 60) {\n    escalation.priority = 'critical';\n  } else if (secondsRemaining <= 120) {\n    escalation.priority = 'high';\n  }\n  \n  escalations.push(escalation);\n}\n\nreturn [{\n  json: {\n    escalations,\n    slaType: 'response',\n    totalCount: escalations.length\n  }\n}];"
+      },
+      "id": "smart-escalation-response",
+      "name": "Smart Escalation - Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [880, 100]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Smart Escalation Logic for Containment SLA with CS status\nconst items = $input.all();\n\nif (items.length === 0) {\n  return [{ json: { escalations: [], slaType: 'containment' } }];\n}\n\nconst escalations = [];\n\nfor (const item of items) {\n  const ticket = item.json;\n  \n  const escalation = {\n    ...ticket,\n    escalationType: 'standard',\n    escalationTarget: 'assigned_analyst',\n    suggestedAction: 'Contain host immediately',\n    priority: 'high'\n  };\n  \n  const blockingReason = (ticket.blockingReason || '').toLowerCase();\n  const owner = ticket.owner || '';\n  const minutesSinceActivity = ticket.minutesSinceActivity || 0;\n  const secondsRemaining = ticket.secondsRemaining || 0;\n  const isContained = ticket.isContained || false;\n  const csDeviceFound = ticket.csDeviceFound || false;\n  \n  // Check if already contained in CrowdStrike\n  if (isContained) {\n    escalation.escalationType = 'already_contained';\n    escalation.escalationTarget = 'assigned_analyst';\n    escalation.suggestedAction = 'Host already contained - update ticket status';\n    escalation.priority = 'medium';\n  } else if (blockingReason.includes('approval') || blockingReason.includes('pending approval')) {\n    escalation.escalationType = 'approval_needed';\n    escalation.escalationTarget = 'approver';\n    escalation.suggestedAction = 'Expedite containment approval';\n    escalation.priority = 'critical';\n  } else if (blockingReason.includes('waiting for user') || blockingReason.includes('user response')) {\n    escalation.escalationType = 'user_reminder';\n    escalation.escalationTarget = 'user';\n    escalation.suggestedAction = 'Send urgent reminder - containment SLA at risk';\n  } else if (!owner || owner.trim() === '') {\n    escalation.escalationType = 'unassigned';\n    escalation.escalationTarget = 'on_call';\n    escalation.suggestedAction = 'Assign to on-call analyst for immediate containment';\n    escalation.priority = 'critical';\n  } else if (minutesSinceActivity >= 120) {\n    escalation.escalationType = 'stale';\n    escalation.escalationTarget = 'team_lead';\n    escalation.suggestedAction = 'Escalate to team lead - containment stalled for 2+ hours';\n    escalation.priority = 'critical';\n  } else if (!csDeviceFound && ticket.hostname) {\n    escalation.escalationType = 'device_not_found';\n    escalation.escalationTarget = 'assigned_analyst';\n    escalation.suggestedAction = 'Verify hostname - device not found in CrowdStrike';\n  }\n  \n  // Adjust priority based on time remaining\n  if (secondsRemaining <= 60) {\n    escalation.priority = 'critical';\n  } else if (secondsRemaining <= 180) {\n    escalation.priority = 'high';\n  }\n  \n  escalations.push(escalation);\n}\n\nreturn [{\n  json: {\n    escalations,\n    slaType: 'containment',\n    totalCount: escalations.length\n  }\n}];"
+      },
+      "id": "smart-escalation-containment",
+      "name": "Smart Escalation - Containment",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1980, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Smart Escalation Logic for Resolution SLA\nconst data = $input.first().json;\nconst tickets = data.tickets || [];\n\nif (tickets.length === 0) {\n  return [{ json: { escalations: [], slaType: 'resolution' } }];\n}\n\nconst escalations = [];\n\nfor (const ticket of tickets) {\n  const escalation = {\n    ...ticket,\n    escalationType: 'standard',\n    escalationTarget: 'assigned_analyst',\n    suggestedAction: 'Expedite resolution',\n    priority: 'medium'\n  };\n  \n  const blockingReason = (ticket.blockingReason || '').toLowerCase();\n  const owner = ticket.owner || '';\n  const minutesSinceActivity = ticket.minutesSinceActivity || 0;\n  const secondsRemaining = ticket.secondsRemaining || 0;\n  \n  if (blockingReason.includes('approval') || blockingReason.includes('pending approval')) {\n    escalation.escalationType = 'approval_needed';\n    escalation.escalationTarget = 'approver';\n    escalation.suggestedAction = 'Approval blocking resolution - expedite';\n  } else if (blockingReason.includes('waiting for user') || blockingReason.includes('user response')) {\n    escalation.escalationType = 'user_reminder';\n    escalation.escalationTarget = 'user';\n    escalation.suggestedAction = 'Send reminder to user for information needed to close';\n  } else if (!owner || owner.trim() === '') {\n    escalation.escalationType = 'unassigned';\n    escalation.escalationTarget = 'on_call';\n    escalation.suggestedAction = 'Assign to on-call analyst to complete resolution';\n    escalation.priority = 'high';\n  } else if (minutesSinceActivity >= 120) {\n    escalation.escalationType = 'stale';\n    escalation.escalationTarget = 'team_lead';\n    escalation.suggestedAction = 'Escalate to team lead - ticket stalled for 2+ hours';\n    escalation.priority = 'high';\n  }\n  \n  // Adjust priority based on time remaining\n  if (secondsRemaining <= 3600) { // 1 hour\n    escalation.priority = 'critical';\n  } else if (secondsRemaining <= 7200) { // 2 hours\n    escalation.priority = 'high';\n  }\n  \n  escalations.push(escalation);\n}\n\nreturn [{\n  json: {\n    escalations,\n    slaType: 'resolution',\n    totalCount: escalations.length\n  }\n}];"
+      },
+      "id": "smart-escalation-resolution",
+      "name": "Smart Escalation - Resolution",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [880, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Format Webex Alert for Response SLA Risk\nconst data = $input.first().json;\nconst escalations = data.escalations || [];\n\nif (escalations.length === 0) {\n  return [{ json: { skip: true } }];\n}\n\nconst xsoarBaseUrl = $credentials.xsoar?.uiBaseUrl || 'https://xsoar.company.com';\n\n// Helper function to format time remaining\nfunction formatTimeRemaining(seconds) {\n  if (seconds <= 0) return 'BREACHED';\n  const minutes = Math.floor(seconds / 60);\n  const secs = seconds % 60;\n  if (minutes > 0) {\n    return `${minutes} min${minutes !== 1 ? 's' : ''} ${secs} sec${secs !== 1 ? 's' : ''}`;\n  }\n  return `${secs} sec${secs !== 1 ? 's' : ''}`;\n}\n\n// Helper function to get severity emoji\nfunction getSeverityEmoji(priority, secondsRemaining) {\n  if (priority === 'critical' || secondsRemaining <= 60) return '\\u{1F534}'; // Red circle\n  if (priority === 'high' || secondsRemaining <= 120) return '\\u{1F7E0}'; // Orange circle\n  return '\\u{1F7E2}'; // Green circle\n}\n\n// Build markdown message\nlet markdown = '\\u{1F6A8} **Tickets at risk of breaching Response SLA** \\u{23F0}\\n\\n';\n\nescalations.forEach((esc, index) => {\n  const emoji = getSeverityEmoji(esc.priority, esc.secondsRemaining);\n  const timeRemaining = formatTimeRemaining(esc.secondsRemaining);\n  const incidentUrl = `${xsoarBaseUrl}/Custom/caseinfoid/${esc.ticketId}`;\n  \n  // Determine who to mention based on escalation type\n  let ownerText = '';\n  if (esc.owner && esc.owner.includes('@')) {\n    ownerText = `<@personEmail:${esc.owner}>`;\n  } else if (esc.owner) {\n    ownerText = `**${esc.owner}**`;\n  } else {\n    ownerText = '**Unassigned**';\n  }\n  \n  markdown += `${index + 1}. ${emoji} [${esc.ticketId}](${incidentUrl}) - ${esc.ticketName}\\n`;\n  markdown += `   ${ownerText}, act within the next **${timeRemaining}**`;\n  if (esc.dueDateFormatted !== 'N/A') {\n    markdown += ` (SLA due: ${esc.dueDateFormatted})`;\n  }\n  markdown += '\\n';\n  \n  // Add suggested action based on escalation type\n  if (esc.escalationType !== 'standard') {\n    markdown += `   \\u{27A1}\\u{FE0F} **Action:** ${esc.suggestedAction}\\n`;\n  }\n  \n  if (esc.blockingReason) {\n    markdown += `   \\u{26A0}\\u{FE0F} **Blocking:** ${esc.blockingReason}\\n`;\n  }\n  \n  markdown += '\\n';\n});\n\nreturn [{\n  json: {\n    markdown,\n    ticketCount: escalations.length,\n    slaType: 'response',\n    roomId: '{{ $credentials.webex.responseSlARoomId }}'\n  }\n}];"
+      },
+      "id": "format-response-alert",
+      "name": "Format Response SLA Alert",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, 100]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Format Webex Alert for Containment SLA Risk\nconst data = $input.first().json;\nconst escalations = data.escalations || [];\n\nif (escalations.length === 0) {\n  return [{ json: { skip: true } }];\n}\n\nconst xsoarBaseUrl = $credentials.xsoar?.uiBaseUrl || 'https://xsoar.company.com';\n\nfunction formatTimeRemaining(seconds) {\n  if (seconds <= 0) return 'BREACHED';\n  const minutes = Math.floor(seconds / 60);\n  const secs = seconds % 60;\n  if (minutes > 0) {\n    return `${minutes} min${minutes !== 1 ? 's' : ''} ${secs} sec${secs !== 1 ? 's' : ''}`;\n  }\n  return `${secs} sec${secs !== 1 ? 's' : ''}`;\n}\n\nfunction getSeverityEmoji(priority, secondsRemaining) {\n  if (priority === 'critical' || secondsRemaining <= 60) return '\\u{1F534}';\n  if (priority === 'high' || secondsRemaining <= 180) return '\\u{1F7E0}';\n  return '\\u{1F7E2}';\n}\n\nfunction getContainmentStatusEmoji(status, isContained) {\n  if (isContained) return '\\u{1F512}'; // Lock - contained\n  if (status === 'containment_pending') return '\\u{23F3}'; // Hourglass - pending\n  return '\\u{1F513}'; // Unlock - not contained\n}\n\nlet markdown = '\\u{1F6A8} **Tickets at risk of breaching Containment SLA** \\u{23F0}\\n\\n';\n\nescalations.forEach((esc, index) => {\n  const emoji = getSeverityEmoji(esc.priority, esc.secondsRemaining);\n  const containmentEmoji = getContainmentStatusEmoji(esc.csContainmentStatus, esc.isContained);\n  const timeRemaining = formatTimeRemaining(esc.secondsRemaining);\n  const incidentUrl = `${xsoarBaseUrl}/Custom/caseinfoid/${esc.ticketId}`;\n  \n  let ownerText = '';\n  if (esc.owner && esc.owner.includes('@')) {\n    ownerText = `<@personEmail:${esc.owner}>`;\n  } else if (esc.owner) {\n    ownerText = `**${esc.owner}**`;\n  } else {\n    ownerText = '**Unassigned**';\n  }\n  \n  markdown += `${index + 1}. ${emoji} [${esc.ticketId}](${incidentUrl}) - ${esc.ticketName}\\n`;\n  markdown += `   ${ownerText}, act within the next **${timeRemaining}**`;\n  if (esc.dueDateFormatted !== 'N/A') {\n    markdown += ` (SLA due: ${esc.dueDateFormatted})`;\n  }\n  markdown += '\\n';\n  \n  // Show hostname and containment status\n  if (esc.hostname) {\n    markdown += `   \\u{1F4BB} **Host:** \\`${esc.hostname}\\` ${containmentEmoji} `;\n    if (esc.isContained) {\n      markdown += '(Already contained in CrowdStrike)';\n    } else if (esc.csDeviceFound) {\n      markdown += `(Status: ${esc.csContainmentStatus || 'normal'})`;\n    } else {\n      markdown += '(Device not found in CrowdStrike)';\n    }\n    markdown += '\\n';\n  }\n  \n  if (esc.escalationType !== 'standard') {\n    markdown += `   \\u{27A1}\\u{FE0F} **Action:** ${esc.suggestedAction}\\n`;\n  }\n  \n  if (esc.blockingReason) {\n    markdown += `   \\u{26A0}\\u{FE0F} **Blocking:** ${esc.blockingReason}\\n`;\n  }\n  \n  markdown += '\\n';\n});\n\nreturn [{\n  json: {\n    markdown,\n    ticketCount: escalations.length,\n    slaType: 'containment',\n    roomId: '{{ $credentials.webex.containmentSlaRoomId }}'\n  }\n}];"
+      },
+      "id": "format-containment-alert",
+      "name": "Format Containment SLA Alert",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2200, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Format Webex Alert for Resolution SLA Risk\nconst data = $input.first().json;\nconst escalations = data.escalations || [];\n\nif (escalations.length === 0) {\n  return [{ json: { skip: true } }];\n}\n\nconst xsoarBaseUrl = $credentials.xsoar?.uiBaseUrl || 'https://xsoar.company.com';\n\nfunction formatTimeRemaining(seconds) {\n  if (seconds <= 0) return 'BREACHED';\n  const hours = Math.floor(seconds / 3600);\n  const minutes = Math.floor((seconds % 3600) / 60);\n  if (hours > 0) {\n    return `${hours} hr${hours !== 1 ? 's' : ''} ${minutes} min${minutes !== 1 ? 's' : ''}`;\n  }\n  return `${minutes} min${minutes !== 1 ? 's' : ''}`;\n}\n\nfunction getSeverityEmoji(priority, secondsRemaining) {\n  if (priority === 'critical' || secondsRemaining <= 3600) return '\\u{1F534}';\n  if (priority === 'high' || secondsRemaining <= 7200) return '\\u{1F7E0}';\n  return '\\u{1F7E2}';\n}\n\nlet markdown = '\\u{1F6A8} **Tickets at risk of breaching Resolution SLA** \\u{23F0}\\n\\n';\n\nescalations.forEach((esc, index) => {\n  const emoji = getSeverityEmoji(esc.priority, esc.secondsRemaining);\n  const timeRemaining = formatTimeRemaining(esc.secondsRemaining);\n  const incidentUrl = `${xsoarBaseUrl}/Custom/caseinfoid/${esc.ticketId}`;\n  \n  let ownerText = '';\n  if (esc.owner && esc.owner.includes('@')) {\n    ownerText = `<@personEmail:${esc.owner}>`;\n  } else if (esc.owner) {\n    ownerText = `**${esc.owner}**`;\n  } else {\n    ownerText = '**Unassigned**';\n  }\n  \n  markdown += `${index + 1}. ${emoji} [${esc.ticketId}](${incidentUrl}) - ${esc.ticketName}\\n`;\n  markdown += `   ${ownerText}, resolve within **${timeRemaining}**`;\n  if (esc.dueDateFormatted !== 'N/A') {\n    markdown += ` (SLA due: ${esc.dueDateFormatted})`;\n  }\n  markdown += '\\n';\n  \n  if (esc.escalationType !== 'standard') {\n    markdown += `   \\u{27A1}\\u{FE0F} **Action:** ${esc.suggestedAction}\\n`;\n  }\n  \n  if (esc.blockingReason) {\n    markdown += `   \\u{26A0}\\u{FE0F} **Blocking:** ${esc.blockingReason}\\n`;\n  }\n  \n  if (esc.minutesSinceActivity >= 120) {\n    markdown += `   \\u{23F1}\\u{FE0F} **No activity for ${Math.floor(esc.minutesSinceActivity / 60)} hours**\\n`;\n  }\n  \n  markdown += '\\n';\n});\n\nreturn [{\n  json: {\n    markdown,\n    ticketCount: escalations.length,\n    slaType: 'resolution',\n    roomId: '{{ $credentials.webex.responseSlaRoomId }}'\n  }\n}];"
+      },
+      "id": "format-resolution-alert",
+      "name": "Format Resolution SLA Alert",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, 500]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "should-send-response",
+              "leftValue": "={{ $json.skip }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "should-send-response-alert",
+      "name": "Should Send Response Alert?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1320, 100]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "should-send-containment",
+              "leftValue": "={{ $json.skip }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "should-send-containment-alert",
+      "name": "Should Send Containment Alert?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [2420, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "should-send-resolution",
+              "leftValue": "={{ $json.skip }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "should-send-resolution-alert",
+      "name": "Should Send Resolution Alert?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1320, 500]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://webexapis.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"roomId\": \"{{ $credentials.webex.responseSlaRoomId }}\",\n  \"markdown\": {{ JSON.stringify($json.markdown) }}\n}",
+        "options": {}
+      },
+      "id": "send-response-alert",
+      "name": "Send Response SLA Alert",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1540, 0],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "webex-auth",
+          "name": "Webex Bot Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://webexapis.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"roomId\": \"{{ $credentials.webex.containmentSlaRoomId }}\",\n  \"markdown\": {{ JSON.stringify($json.markdown) }}\n}",
+        "options": {}
+      },
+      "id": "send-containment-alert",
+      "name": "Send Containment SLA Alert",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2640, 200],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "webex-auth",
+          "name": "Webex Bot Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://webexapis.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"roomId\": \"{{ $credentials.webex.responseSlaRoomId }}\",\n  \"markdown\": {{ JSON.stringify($json.markdown) }}\n}",
+        "options": {}
+      },
+      "id": "send-resolution-alert",
+      "name": "Send Resolution SLA Alert",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1540, 400],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "webex-auth",
+          "name": "Webex Bot Token"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "no-response-tickets",
+      "name": "No Response Tickets",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [880, 0]
+    },
+    {
+      "parameters": {},
+      "id": "no-containment-tickets",
+      "name": "No Containment Tickets",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [880, 200]
+    },
+    {
+      "parameters": {},
+      "id": "no-resolution-tickets",
+      "name": "No Resolution Tickets",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [880, 400]
+    },
+    {
+      "parameters": {},
+      "id": "skip-response-alert",
+      "name": "Skip Response Alert",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [1540, 100]
+    },
+    {
+      "parameters": {},
+      "id": "skip-containment-alert",
+      "name": "Skip Containment Alert",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [2640, 400]
+    },
+    {
+      "parameters": {},
+      "id": "skip-resolution-alert",
+      "name": "Skip Resolution Alert",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [1540, 600]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Log execution summary\nconst now = new Date().toISOString();\n\n// Gather stats from all branches if available\nlet responseSent = false;\nlet containmentSent = false;\nlet resolutionSent = false;\n\ntry {\n  const responseData = $('Send Response SLA Alert').all();\n  responseSent = responseData && responseData.length > 0;\n} catch (e) {}\n\ntry {\n  const containmentData = $('Send Containment SLA Alert').all();\n  containmentSent = containmentData && containmentData.length > 0;\n} catch (e) {}\n\ntry {\n  const resolutionData = $('Send Resolution SLA Alert').all();\n  resolutionSent = resolutionData && resolutionData.length > 0;\n} catch (e) {}\n\nreturn {\n  json: {\n    executionTime: now,\n    summary: {\n      responseSlaAlertSent: responseSent,\n      containmentSlaAlertSent: containmentSent,\n      resolutionSlaAlertSent: resolutionSent\n    },\n    status: 'completed'\n  }\n};"
+      },
+      "id": "execution-summary",
+      "name": "Execution Summary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2860, 300]
+    }
+  ],
+  "connections": {
+    "Every 5 Minutes": {
+      "main": [
+        [
+          {
+            "node": "Query Response SLA Risk",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Query Containment SLA Risk",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Query Resolution SLA Risk",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Query Response SLA Risk": {
+      "main": [
+        [
+          {
+            "node": "Process Response SLA Tickets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Query Containment SLA Risk": {
+      "main": [
+        [
+          {
+            "node": "Process Containment SLA Tickets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Query Resolution SLA Risk": {
+      "main": [
+        [
+          {
+            "node": "Process Resolution SLA Tickets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Response SLA Tickets": {
+      "main": [
+        [
+          {
+            "node": "Has Response SLA Tickets?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Containment SLA Tickets": {
+      "main": [
+        [
+          {
+            "node": "Has Containment SLA Tickets?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Resolution SLA Tickets": {
+      "main": [
+        [
+          {
+            "node": "Has Resolution SLA Tickets?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Response SLA Tickets?": {
+      "main": [
+        [
+          {
+            "node": "Smart Escalation - Response",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Response Tickets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Containment SLA Tickets?": {
+      "main": [
+        [
+          {
+            "node": "Prepare Containment Check",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Containment Tickets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Resolution SLA Tickets?": {
+      "main": [
+        [
+          {
+            "node": "Smart Escalation - Resolution",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Resolution Tickets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Containment Check": {
+      "main": [
+        [
+          {
+            "node": "CrowdStrike Auth",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CrowdStrike Auth": {
+      "main": [
+        [
+          {
+            "node": "Query CrowdStrike Device",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Query CrowdStrike Device": {
+      "main": [
+        [
+          {
+            "node": "Get Device Details",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Device Details": {
+      "main": [
+        [
+          {
+            "node": "Merge CS Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge CS Status": {
+      "main": [
+        [
+          {
+            "node": "Smart Escalation - Containment",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Smart Escalation - Response": {
+      "main": [
+        [
+          {
+            "node": "Format Response SLA Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Smart Escalation - Containment": {
+      "main": [
+        [
+          {
+            "node": "Format Containment SLA Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Smart Escalation - Resolution": {
+      "main": [
+        [
+          {
+            "node": "Format Resolution SLA Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Response SLA Alert": {
+      "main": [
+        [
+          {
+            "node": "Should Send Response Alert?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Containment SLA Alert": {
+      "main": [
+        [
+          {
+            "node": "Should Send Containment Alert?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Resolution SLA Alert": {
+      "main": [
+        [
+          {
+            "node": "Should Send Resolution Alert?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Should Send Response Alert?": {
+      "main": [
+        [
+          {
+            "node": "Send Response SLA Alert",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Skip Response Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Should Send Containment Alert?": {
+      "main": [
+        [
+          {
+            "node": "Send Containment SLA Alert",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Skip Containment Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Should Send Resolution Alert?": {
+      "main": [
+        [
+          {
+            "node": "Send Resolution SLA Alert",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Skip Resolution Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Response SLA Alert": {
+      "main": [
+        [
+          {
+            "node": "Execution Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Containment SLA Alert": {
+      "main": [
+        [
+          {
+            "node": "Execution Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Resolution SLA Alert": {
+      "main": [
+        [
+          {
+            "node": "Execution Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "No Response Tickets": {
+      "main": [
+        [
+          {
+            "node": "Execution Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "No Containment Tickets": {
+      "main": [
+        [
+          {
+            "node": "Execution Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "No Resolution Tickets": {
+      "main": [
+        [
+          {
+            "node": "Execution Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Skip Response Alert": {
+      "main": [
+        [
+          {
+            "node": "Execution Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Skip Containment Alert": {
+      "main": [
+        [
+          {
+            "node": "Execution Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Skip Resolution Alert": {
+      "main": [
+        [
+          {
+            "node": "Execution Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "SLA Monitoring",
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z"
+    },
+    {
+      "name": "Escalation",
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z"
+    },
+    {
+      "name": "SOC",
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z"
+    },
+    {
+      "name": "XSOAR",
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z"
+    },
+    {
+      "name": "CrowdStrike",
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z"
+    }
+  ],
+  "triggerCount": 1,
+  "updatedAt": "2024-01-01T00:00:00.000Z",
+  "versionId": "1",
+  "meta": {
+    "templateId": "sla-risk-smart-escalation",
+    "instanceId": "",
+    "templateCredsSetupCompleted": false
+  },
+  "pinData": {}
+}

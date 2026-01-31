@@ -23,22 +23,23 @@ from src.utils.tool_decorator import log_tool_call
 
 logger = logging.getLogger(__name__)
 
-# Initialize Shodan client once
+# Lazy-initialized Shodan client
 _shodan_client: Optional[ShodanClient] = None
 
-try:
-    logger.info("Initializing Shodan client...")
-    _shodan_client = ShodanClient()
 
-    if _shodan_client.is_configured():
-        logger.info("Shodan client initialized successfully.")
-    else:
-        logger.warning("Shodan client not configured (missing API key). Tools will be disabled.")
-        _shodan_client = None
-
-except Exception as e:
-    logger.error(f"Failed to initialize Shodan client: {e}")
-    _shodan_client = None
+def _get_shodan_client() -> Optional[ShodanClient]:
+    """Get Shodan client (lazy initialization)."""
+    global _shodan_client
+    if _shodan_client is None:
+        try:
+            client = ShodanClient()
+            if client.is_configured():
+                _shodan_client = client
+            else:
+                logger.warning("Shodan client not configured (missing API key)")
+        except Exception as e:
+            logger.error(f"Failed to initialize Shodan client: {e}")
+    return _shodan_client
 
 
 def _get_risk_emoji(port: int, product: str = "") -> str:
@@ -247,11 +248,12 @@ def lookup_ip_shodan(ip_address: str) -> str:
     Args:
         ip_address: The IP address to look up (e.g., "8.8.8.8")
     """
-    if not _shodan_client:
-        return "Error: Shodan service is not configured. Missing API key."
+    client = _get_shodan_client()
+    if not client:
+        return "Error: Shodan service is not available."
 
     try:
-        data = _shodan_client.lookup_ip(ip_address.strip())
+        data = client.lookup_ip(ip_address.strip())
         return _format_ip_result(data)
     except Exception as e:
         logger.error(f"Shodan IP lookup failed: {e}")
@@ -277,8 +279,9 @@ def lookup_domain_shodan(domain: str) -> str:
     Args:
         domain: The domain to look up (e.g., "example.com")
     """
-    if not _shodan_client:
-        return "Error: Shodan service is not configured. Missing API key."
+    client = _get_shodan_client()
+    if not client:
+        return "Error: Shodan service is not available."
 
     try:
         # Clean up domain input
@@ -288,7 +291,7 @@ def lookup_domain_shodan(domain: str) -> str:
         if "/" in domain:
             domain = domain.split("/", 1)[0]
 
-        data = _shodan_client.lookup_domain(domain)
+        data = client.lookup_domain(domain)
         return _format_domain_result(data)
     except Exception as e:
         logger.error(f"Shodan domain lookup failed: {e}")

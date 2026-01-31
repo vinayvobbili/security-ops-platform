@@ -1,0 +1,894 @@
+{
+  "name": "IntelligenceX Dark Web Monitor",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 24
+            }
+          ]
+        }
+      },
+      "id": "daily-schedule-trigger",
+      "name": "Daily Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "weeks",
+              "triggerAtDay": [1],
+              "triggerAtHour": 8
+            }
+          ]
+        }
+      },
+      "id": "weekly-summary-trigger",
+      "name": "Weekly Summary Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [240, 900]
+    },
+    {
+      "parameters": {},
+      "id": "manual-trigger",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [240, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Define search terms for dark web monitoring\n// These should be customized for your organization\n\nconst companyDomain = $env.COMPANY_DOMAIN || 'company.com';\nconst companyName = $env.COMPANY_NAME || 'Company Inc';\n\n// Executive emails to monitor (load from env or config)\nconst executiveEmails = ($env.EXECUTIVE_EMAILS || 'ceo@company.com,cfo@company.com,ciso@company.com').split(',');\n\n// Generate search terms\nconst searchTerms = [\n  // Company domain mentions\n  {\n    term: companyDomain,\n    type: 'domain',\n    description: 'Company domain mentions',\n    buckets: ['darknet', 'pastes', 'leaks']\n  },\n  // Company name in paste sites\n  {\n    term: companyName,\n    type: 'company_name',\n    description: 'Company name mentions',\n    buckets: ['pastes', 'leaks']\n  },\n  // Credential leak patterns\n  {\n    term: `password ${companyDomain}`,\n    type: 'credential_pattern',\n    description: 'Credential leak patterns',\n    buckets: ['pastes', 'leaks', 'darknet']\n  },\n  {\n    term: `leak ${companyDomain}`,\n    type: 'leak_pattern',\n    description: 'Data leak mentions',\n    buckets: ['pastes', 'leaks', 'darknet']\n  }\n];\n\n// Add executive email searches\nfor (const email of executiveEmails) {\n  if (email.trim()) {\n    searchTerms.push({\n      term: email.trim(),\n      type: 'executive_email',\n      description: `Executive email: ${email.trim()}`,\n      buckets: ['darknet', 'pastes', 'leaks']\n    });\n  }\n}\n\nreturn searchTerms.map(item => ({ json: item }));"
+      },
+      "id": "define-search-terms",
+      "name": "Define Search Terms",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {
+          "reset": false
+        }
+      },
+      "id": "split-search-terms",
+      "name": "Split Search Terms",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.INTELX_API_BASE || 'https://2.intelx.io' }}/intelligent/search",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-key",
+              "value": "={{ $env.INTELX_API_KEY || '9df61df0-84f7-4dc7-b34c-8ccfb8646571' }}"
+            },
+            {
+              "name": "User-Agent",
+              "value": "n8n-dark-web-monitor"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"term\": \"{{ $json.term }}\",\n  \"maxresults\": 100,\n  \"media\": 0,\n  \"sort\": 2,\n  \"terminate\": [],\n  \"buckets\": {{ JSON.stringify($json.buckets.map(b => { const bucketMap = { darknet: 1, pastes: 2, leaks: 3, web: 4, whois: 5, documents: 6 }; return bucketMap[b] || 0; }).filter(b => b > 0)) }}\n}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "intelx-start-search",
+      "name": "IntelX Start Search",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "amount": 3,
+        "unit": "seconds"
+      },
+      "id": "wait-for-results",
+      "name": "Wait for Results",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.INTELX_API_BASE || 'https://2.intelx.io' }}/intelligent/search/result",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-key",
+              "value": "={{ $env.INTELX_API_KEY || '9df61df0-84f7-4dc7-b34c-8ccfb8646571' }}"
+            },
+            {
+              "name": "User-Agent",
+              "value": "n8n-dark-web-monitor"
+            }
+          ]
+        },
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "id",
+              "value": "={{ $('IntelX Start Search').item.json.id }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "intelx-get-results",
+      "name": "IntelX Get Results",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1340, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Process IntelligenceX search results\nconst searchResponse = $input.first().json;\nconst searchTerm = $('Split Search Terms').item.json;\n\n// Media type mapping\nconst MEDIA_TYPES = {\n  0: 'all',\n  1: 'paste_document',\n  2: 'paste_user',\n  3: 'forum',\n  4: 'forum_board',\n  5: 'url',\n  6: 'url_pdf',\n  7: 'url_doc',\n  8: 'url_xls',\n  9: 'url_ppt',\n  10: 'url_image',\n  13: 'dumpster',\n  14: 'whois',\n  18: 'darknet_tor',\n  19: 'darknet_i2p',\n  24: 'leak_public',\n  25: 'leak_private'\n};\n\nconst records = searchResponse.records || [];\nconst processedResults = [];\n\nfor (const record of records) {\n  const mediaType = MEDIA_TYPES[record.media] || 'unknown';\n  const isDarkweb = record.media === 18 || record.media === 19 || (record.bucket || '').startsWith('darknet');\n  const isLeak = record.media === 24 || record.media === 25 || (record.bucket || '').includes('leak');\n  const isPaste = record.media === 1 || record.media === 2 || record.media === 13 || (record.bucket || '').includes('paste');\n  \n  processedResults.push({\n    // Original record data\n    system_id: record.systemid || '',\n    storage_id: record.storageid || '',\n    name: record.name || '',\n    date: record.date || '',\n    bucket: record.bucket || '',\n    media: record.media,\n    media_type: mediaType,\n    \n    // Search context\n    search_term: searchTerm.term,\n    search_type: searchTerm.type,\n    search_description: searchTerm.description,\n    \n    // Classification flags\n    is_darkweb: isDarkweb,\n    is_leak: isLeak,\n    is_paste: isPaste,\n    \n    // Generate IntelX URL for reference\n    intelx_url: record.systemid ? `https://intelx.io/?did=${record.systemid}` : null,\n    \n    // Metadata\n    source: 'intelx',\n    discovered_at: new Date().toISOString()\n  });\n}\n\nreturn processedResults.map(r => ({ json: r }));"
+      },
+      "id": "process-search-results",
+      "name": "Process Search Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1560, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "has-results",
+              "leftValue": "={{ $input.all().length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-has-results",
+      "name": "Has Results?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1780, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.INTELX_API_BASE || 'https://2.intelx.io' }}/intelligent/search/terminate",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-key",
+              "value": "={{ $env.INTELX_API_KEY || '9df61df0-84f7-4dc7-b34c-8ccfb8646571' }}"
+            }
+          ]
+        },
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "id",
+              "value": "={{ $('IntelX Start Search').item.json.id }}"
+            }
+          ]
+        },
+        "options": {
+          "ignore": {
+            "responseErrorCode": true
+          }
+        }
+      },
+      "id": "intelx-terminate-search",
+      "name": "IntelX Terminate Search",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [2000, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Classify finding type and assign risk level\nconst finding = $input.first().json;\n\n// Determine finding type\nlet findingType = 'general_mention';\nlet riskLevel = 'Low';\nlet riskScore = 1;\n\n// Check for credential leak indicators\nconst credentialKeywords = ['password', 'passwd', 'credential', 'login', 'auth', 'hash', 'bcrypt', 'md5', 'sha'];\nconst nameLC = (finding.name || '').toLowerCase();\nconst hasCredentialKeywords = credentialKeywords.some(kw => nameLC.includes(kw));\n\n// Check for sensitive data indicators\nconst sensitiveKeywords = ['ssn', 'social security', 'credit card', 'bank', 'financial', 'pii', 'personal', 'confidential', 'internal', 'proprietary'];\nconst hasSensitiveKeywords = sensitiveKeywords.some(kw => nameLC.includes(kw));\n\n// Classification logic\nif (finding.is_leak && hasCredentialKeywords) {\n  findingType = 'credential_leak';\n  riskLevel = 'Critical';\n  riskScore = 4;\n} else if (finding.is_leak && hasSensitiveKeywords) {\n  findingType = 'sensitive_data';\n  riskLevel = 'High';\n  riskScore = 3;\n} else if (finding.is_leak) {\n  findingType = 'data_dump';\n  riskLevel = 'High';\n  riskScore = 3;\n} else if (finding.is_darkweb) {\n  findingType = 'darkweb_mention';\n  riskLevel = 'Medium';\n  riskScore = 2;\n} else if (finding.is_paste && hasCredentialKeywords) {\n  findingType = 'credential_leak';\n  riskLevel = 'Critical';\n  riskScore = 4;\n} else if (finding.is_paste) {\n  findingType = 'paste_mention';\n  riskLevel = 'Medium';\n  riskScore = 2;\n} else {\n  findingType = 'general_mention';\n  riskLevel = 'Low';\n  riskScore = 1;\n}\n\n// Elevate risk if executive email\nif (finding.search_type === 'executive_email' && riskScore < 3) {\n  riskLevel = riskScore === 2 ? 'High' : 'Medium';\n  riskScore = Math.max(riskScore, 2);\n}\n\n// Determine source type for alerting\nlet sourceType = 'Unknown';\nif (finding.is_darkweb) {\n  sourceType = finding.media === 18 ? 'Tor Hidden Service' : 'I2P Network';\n} else if (finding.is_paste) {\n  sourceType = 'Paste Site';\n} else if (finding.is_leak) {\n  sourceType = 'Data Leak Database';\n} else if (finding.media_type === 'forum') {\n  sourceType = 'Underground Forum';\n} else {\n  sourceType = finding.bucket || 'Web';\n}\n\n// Extract relevant excerpt (sanitized)\nlet excerpt = finding.name || '';\nif (excerpt.length > 200) {\n  excerpt = excerpt.substring(0, 200) + '...';\n}\n// Sanitize - remove potential credentials from excerpt\nexcerpt = excerpt.replace(/password[:\\s]*[^\\s]+/gi, 'password:[REDACTED]');\nexcerpt = excerpt.replace(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}:[^\\s]+/g, '[EMAIL:REDACTED]');\n\nreturn {\n  json: {\n    ...finding,\n    finding_type: findingType,\n    risk_level: riskLevel,\n    risk_score: riskScore,\n    source_type: sourceType,\n    excerpt_sanitized: excerpt,\n    \n    // Recommended actions based on finding type\n    recommended_actions: getRecommendedActions(findingType, riskLevel)\n  }\n};\n\nfunction getRecommendedActions(type, risk) {\n  const actions = [];\n  \n  if (type === 'credential_leak') {\n    actions.push('Immediately identify affected accounts');\n    actions.push('Force password reset for compromised credentials');\n    actions.push('Enable MFA if not already active');\n    actions.push('Review account access logs for unauthorized activity');\n    actions.push('Notify affected users');\n  } else if (type === 'sensitive_data') {\n    actions.push('Assess scope of data exposure');\n    actions.push('Initiate data breach response procedures');\n    actions.push('Document for potential regulatory notification');\n    actions.push('Engage legal/compliance team');\n  } else if (type === 'data_dump') {\n    actions.push('Analyze leaked data contents');\n    actions.push('Identify affected systems and users');\n    actions.push('Review data loss prevention controls');\n  } else if (type === 'darkweb_mention') {\n    actions.push('Monitor for additional threat intelligence');\n    actions.push('Assess if company is being targeted');\n    actions.push('Review perimeter security controls');\n  } else {\n    actions.push('Log for trend analysis');\n    actions.push('Continue monitoring');\n  }\n  \n  return actions;\n}"
+      },
+      "id": "classify-finding",
+      "name": "Classify Finding and Risk",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2220, 200]
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "key": "intelx_seen_findings"
+      },
+      "id": "get-seen-findings",
+      "name": "Get Seen Findings",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [2440, 200],
+      "disabled": true,
+      "notesInFlow": true,
+      "notes": "Enable Redis for deduplication or use static data storage"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Deduplication check using static data or workflow storage\n// In production, use Redis or database for persistence\n\nconst finding = $input.first().json;\n\n// Generate unique fingerprint for deduplication\nconst fingerprint = `${finding.system_id}_${finding.storage_id}_${finding.search_term}`;\n\n// For demo purposes, we'll use n8n's static data\n// In production, implement proper deduplication with Redis/DB\nconst staticData = $getWorkflowStaticData('global');\nconst seenFindings = staticData.seenFindings || {};\n\nconst isNewFinding = !seenFindings[fingerprint];\n\nif (isNewFinding) {\n  // Mark as seen\n  seenFindings[fingerprint] = {\n    first_seen: new Date().toISOString(),\n    finding_type: finding.finding_type,\n    risk_level: finding.risk_level\n  };\n  staticData.seenFindings = seenFindings;\n}\n\nreturn {\n  json: {\n    ...finding,\n    is_new: isNewFinding,\n    fingerprint: fingerprint,\n    first_seen: isNewFinding ? new Date().toISOString() : seenFindings[fingerprint]?.first_seen\n  }\n};"
+      },
+      "id": "dedupe-findings",
+      "name": "Deduplicate Findings",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2440, 200]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "is-new-finding",
+              "leftValue": "={{ $json.is_new }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-is-new",
+      "name": "Is New Finding?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [2660, 200]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "is-credential-leak",
+              "leftValue": "={{ $json.finding_type }}",
+              "rightValue": "credential_leak",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-credential-leak",
+      "name": "Is Credential Leak?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [2880, 100]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.XSOAR_URL || 'https://xsoar.company.com' }}/incident",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ $env.XSOAR_API_KEY || 'YOUR_XSOAR_API_KEY' }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"name\": \"[CRITICAL] Dark Web Credential Leak Detected - {{ $json.search_term }}\",\n  \"type\": \"Credential Leak\",\n  \"severity\": 4,\n  \"details\": \"IntelligenceX dark web monitoring detected a potential credential leak.\\n\\nSearch Term: {{ $json.search_term }}\\nSource: {{ $json.source_type }}\\nDate: {{ $json.date }}\\nFinding Type: {{ $json.finding_type }}\\nIntelX Reference: {{ $json.intelx_url }}\\n\\nExcerpt (sanitized):\\n{{ $json.excerpt_sanitized }}\\n\\nRecommended Actions:\\n{{ $json.recommended_actions.join('\\\\n') }}\",\n  \"labels\": [\n    { \"type\": \"Source\", \"value\": \"IntelligenceX\" },\n    { \"type\": \"Category\", \"value\": \"Credential Leak\" },\n    { \"type\": \"SearchTerm\", \"value\": \"{{ $json.search_term }}\" }\n  ],\n  \"CustomFields\": {\n    \"intelxsystemid\": \"{{ $json.system_id }}\",\n    \"intelxurl\": \"{{ $json.intelx_url }}\",\n    \"sourcetype\": \"{{ $json.source_type }}\",\n    \"risklevel\": \"{{ $json.risk_level }}\"\n  }\n}",
+        "options": {}
+      },
+      "id": "create-xsoar-incident",
+      "name": "Create XSOAR Incident",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [3100, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Format alert for security leadership\nconst finding = $input.first().json;\n\nconst leadershipAlert = {\n  roomId: $env.WEBEX_LEADERSHIP_ROOM || 'YOUR_LEADERSHIP_ROOM_ID',\n  markdown: `## CRITICAL ALERT: Credential Leak Detected\\n\\n` +\n    `**Risk Level:** ${finding.risk_level}\\n` +\n    `**Finding Type:** ${finding.finding_type}\\n` +\n    `**Source:** ${finding.source_type}\\n` +\n    `**Date Discovered:** ${finding.discovered_at}\\n` +\n    `**Search Term:** ${finding.search_term}\\n\\n` +\n    `### Summary\\n` +\n    `IntelligenceX dark web monitoring has detected a potential credential leak affecting company assets.\\n\\n` +\n    `### Excerpt (Sanitized)\\n` +\n    `\\`\\`\\`\\n${finding.excerpt_sanitized}\\n\\`\\`\\`\\n\\n` +\n    `### Immediate Actions Required\\n` +\n    finding.recommended_actions.map((a, i) => `${i + 1}. ${a}`).join('\\n') + '\\n\\n' +\n    `### Reference\\n` +\n    `[View in IntelligenceX](${finding.intelx_url})\\n\\n` +\n    `---\\n` +\n    `_This is an automated alert from the Dark Web Monitoring system._`\n};\n\nreturn { json: leadershipAlert };"
+      },
+      "id": "format-leadership-alert",
+      "name": "Format Leadership Alert",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3100, 100]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://webexapis.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $env.WEBEX_BOT_TOKEN || 'YOUR_WEBEX_BOT_TOKEN' }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "roomId",
+              "value": "={{ $json.roomId }}"
+            },
+            {
+              "name": "markdown",
+              "value": "={{ $json.markdown }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "send-leadership-alert",
+      "name": "Alert Security Leadership",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [3320, 100]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "trigger-password-reset",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "password-reset-webhook",
+      "name": "Password Reset Webhook (Optional)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [3320, 0],
+      "disabled": true,
+      "notesInFlow": true,
+      "notes": "Enable and configure to trigger password reset workflow"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Format Webex alert for all new findings\nconst finding = $input.first().json;\n\n// Risk level styling\nconst riskEmoji = {\n  'Critical': 'CRITICAL',\n  'High': 'HIGH',\n  'Medium': 'MEDIUM',\n  'Low': 'LOW'\n};\n\nconst riskColor = {\n  'Critical': 'attention',\n  'High': 'warning',\n  'Medium': 'accent',\n  'Low': 'default'\n};\n\nconst webexMessage = {\n  roomId: $env.WEBEX_SOC_ROOM || 'YOUR_SOC_ROOM_ID',\n  markdown: `## ${riskEmoji[finding.risk_level]} Dark Web Finding Alert\\n\\n` +\n    `**Risk Level:** ${finding.risk_level}\\n` +\n    `**Finding Type:** ${finding.finding_type.replace(/_/g, ' ').replace(/\\b\\w/g, l => l.toUpperCase())}\\n` +\n    `**Source:** ${finding.source_type}\\n` +\n    `**Date Discovered:** ${new Date(finding.discovered_at).toLocaleString()}\\n\\n` +\n    `### Search Context\\n` +\n    `**Term:** ${finding.search_term}\\n` +\n    `**Type:** ${finding.search_type.replace(/_/g, ' ').replace(/\\b\\w/g, l => l.toUpperCase())}\\n\\n` +\n    `### Excerpt (Sanitized)\\n` +\n    `\\`\\`\\`\\n${finding.excerpt_sanitized}\\n\\`\\`\\`\\n\\n` +\n    `### Recommended Actions\\n` +\n    finding.recommended_actions.map((a, i) => `${i + 1}. ${a}`).join('\\n') + '\\n\\n' +\n    `### Reference\\n` +\n    `[View in IntelligenceX](${finding.intelx_url})\\n\\n` +\n    `---\\n` +\n    `_Discovered: ${finding.discovered_at} | System ID: ${finding.system_id}_`,\n  attachments: [\n    {\n      contentType: 'application/vnd.microsoft.card.adaptive',\n      content: {\n        type: 'AdaptiveCard',\n        version: '1.2',\n        body: [\n          {\n            type: 'TextBlock',\n            text: `${riskEmoji[finding.risk_level]} Dark Web Finding`,\n            weight: 'bolder',\n            size: 'large',\n            color: riskColor[finding.risk_level]\n          },\n          {\n            type: 'FactSet',\n            facts: [\n              { title: 'Risk Level', value: finding.risk_level },\n              { title: 'Finding Type', value: finding.finding_type.replace(/_/g, ' ') },\n              { title: 'Source', value: finding.source_type },\n              { title: 'Search Term', value: finding.search_term },\n              { title: 'Date', value: new Date(finding.date).toLocaleString() || 'Unknown' }\n            ]\n          },\n          {\n            type: 'TextBlock',\n            text: 'Excerpt (Sanitized)',\n            weight: 'bolder',\n            separator: true\n          },\n          {\n            type: 'TextBlock',\n            text: finding.excerpt_sanitized,\n            wrap: true,\n            maxLines: 5\n          },\n          {\n            type: 'ActionSet',\n            actions: [\n              {\n                type: 'Action.OpenUrl',\n                title: 'View in IntelligenceX',\n                url: finding.intelx_url\n              }\n            ]\n          }\n        ]\n      }\n    }\n  ]\n};\n\nreturn { json: webexMessage };"
+      },
+      "id": "format-webex-alert",
+      "name": "Format Webex Alert",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2880, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://webexapis.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $env.WEBEX_BOT_TOKEN || 'YOUR_WEBEX_BOT_TOKEN' }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "roomId",
+              "value": "={{ $json.roomId }}"
+            },
+            {
+              "name": "markdown",
+              "value": "={{ $json.markdown }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "send-webex-alert",
+      "name": "Send Webex Alert",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [3100, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Store finding for weekly summary\nconst finding = $input.first().json;\n\nconst staticData = $getWorkflowStaticData('global');\n\n// Initialize weekly findings array if not exists\nif (!staticData.weeklyFindings) {\n  staticData.weeklyFindings = [];\n}\n\n// Add finding to weekly summary\nstaticData.weeklyFindings.push({\n  system_id: finding.system_id,\n  search_term: finding.search_term,\n  finding_type: finding.finding_type,\n  risk_level: finding.risk_level,\n  source_type: finding.source_type,\n  discovered_at: finding.discovered_at,\n  is_new: finding.is_new\n});\n\nreturn { json: { stored: true, finding_count: staticData.weeklyFindings.length } };"
+      },
+      "id": "store-for-summary",
+      "name": "Store for Weekly Summary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3320, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Log skipped duplicate finding\nconst finding = $input.first().json;\n\nreturn {\n  json: {\n    action: 'skipped_duplicate',\n    fingerprint: finding.fingerprint,\n    first_seen: finding.first_seen,\n    search_term: finding.search_term\n  }\n};"
+      },
+      "id": "log-duplicate",
+      "name": "Log Duplicate (Skip)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2880, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// No results for this search term\nconst searchTerm = $('Split Search Terms').item.json;\n\nreturn {\n  json: {\n    action: 'no_results',\n    search_term: searchTerm.term,\n    search_type: searchTerm.type,\n    timestamp: new Date().toISOString()\n  }\n};"
+      },
+      "id": "log-no-results",
+      "name": "Log No Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2000, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Generate weekly summary report\nconst staticData = $getWorkflowStaticData('global');\nconst weeklyFindings = staticData.weeklyFindings || [];\nconst seenFindings = staticData.seenFindings || {};\n\n// Calculate summary statistics\nconst summary = {\n  period_start: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),\n  period_end: new Date().toISOString(),\n  total_findings: weeklyFindings.length,\n  new_findings: weeklyFindings.filter(f => f.is_new).length,\n  recurring_findings: weeklyFindings.filter(f => !f.is_new).length,\n  \n  // By category\n  by_type: {},\n  by_risk: {\n    Critical: 0,\n    High: 0,\n    Medium: 0,\n    Low: 0\n  },\n  by_source: {}\n};\n\n// Count by type\nfor (const finding of weeklyFindings) {\n  // By finding type\n  summary.by_type[finding.finding_type] = (summary.by_type[finding.finding_type] || 0) + 1;\n  \n  // By risk level\n  summary.by_risk[finding.risk_level] = (summary.by_risk[finding.risk_level] || 0) + 1;\n  \n  // By source\n  summary.by_source[finding.source_type] = (summary.by_source[finding.source_type] || 0) + 1;\n}\n\n// Trend analysis (compare to previous week if data available)\nconst previousWeekCount = staticData.previousWeekCount || 0;\nconst trend = summary.total_findings > previousWeekCount ? 'increasing' : \n              summary.total_findings < previousWeekCount ? 'decreasing' : 'stable';\nconst trendEmoji = trend === 'increasing' ? 'TREND UP' : trend === 'decreasing' ? 'TREND DOWN' : 'STABLE';\n\n// Store current week count for next comparison\nstaticData.previousWeekCount = summary.total_findings;\n\n// Clear weekly findings for next week\nstaticData.weeklyFindings = [];\n\n// Format summary message\nlet summaryMarkdown = `## Weekly Dark Web Monitoring Summary\\n\\n`;\nsummaryMarkdown += `**Period:** ${new Date(summary.period_start).toLocaleDateString()} - ${new Date(summary.period_end).toLocaleDateString()}\\n\\n`;\n\nsummaryMarkdown += `### Overview\\n`;\nsummaryMarkdown += `| Metric | Count |\\n|--------|-------|\\n`;\nsummaryMarkdown += `| Total Findings | ${summary.total_findings} |\\n`;\nsummaryMarkdown += `| New Findings | ${summary.new_findings} |\\n`;\nsummaryMarkdown += `| Recurring | ${summary.recurring_findings} |\\n`;\nsummaryMarkdown += `| Trend | ${trendEmoji} |\\n\\n`;\n\nsummaryMarkdown += `### Findings by Risk Level\\n`;\nsummaryMarkdown += `| Risk Level | Count |\\n|------------|-------|\\n`;\nfor (const [level, count] of Object.entries(summary.by_risk)) {\n  if (count > 0) {\n    summaryMarkdown += `| ${level} | ${count} |\\n`;\n  }\n}\nsummaryMarkdown += `\\n`;\n\nsummaryMarkdown += `### Findings by Type\\n`;\nsummaryMarkdown += `| Type | Count |\\n|------|-------|\\n`;\nfor (const [type, count] of Object.entries(summary.by_type)) {\n  const formattedType = type.replace(/_/g, ' ').replace(/\\b\\w/g, l => l.toUpperCase());\n  summaryMarkdown += `| ${formattedType} | ${count} |\\n`;\n}\nsummaryMarkdown += `\\n`;\n\nsummaryMarkdown += `### Findings by Source\\n`;\nsummaryMarkdown += `| Source | Count |\\n|--------|-------|\\n`;\nfor (const [source, count] of Object.entries(summary.by_source)) {\n  summaryMarkdown += `| ${source} | ${count} |\\n`;\n}\nsummaryMarkdown += `\\n`;\n\n// Recommendations based on findings\nsummaryMarkdown += `### Recommendations\\n`;\nif (summary.by_risk.Critical > 0) {\n  summaryMarkdown += `- **URGENT:** ${summary.by_risk.Critical} critical finding(s) detected - immediate action required\\n`;\n}\nif (summary.by_type.credential_leak > 0) {\n  summaryMarkdown += `- Review all credential leak findings and ensure password resets completed\\n`;\n}\nif (trend === 'increasing') {\n  summaryMarkdown += `- Findings are increasing - consider enhanced monitoring\\n`;\n}\nsummaryMarkdown += `- Continue monitoring executive email addresses\\n`;\nsummaryMarkdown += `- Review dark web findings for threat intelligence\\n\\n`;\n\nsummaryMarkdown += `---\\n`;\nsummaryMarkdown += `_Report generated: ${new Date().toISOString()}_\\n`;\nsummaryMarkdown += `_Total monitored items in dedup cache: ${Object.keys(seenFindings).length}_`;\n\nreturn {\n  json: {\n    summary: summary,\n    markdown: summaryMarkdown,\n    roomId: $env.WEBEX_SOC_ROOM || 'YOUR_SOC_ROOM_ID'\n  }\n};"
+      },
+      "id": "generate-weekly-summary",
+      "name": "Generate Weekly Summary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 900]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://webexapis.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $env.WEBEX_BOT_TOKEN || 'YOUR_WEBEX_BOT_TOKEN' }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "roomId",
+              "value": "={{ $json.roomId }}"
+            },
+            {
+              "name": "markdown",
+              "value": "={{ $json.markdown }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "send-weekly-summary",
+      "name": "Send Weekly Summary",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [680, 900]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Send to leadership room as well\nconst summary = $input.first().json;\n\nreturn {\n  json: {\n    ...summary,\n    roomId: $env.WEBEX_LEADERSHIP_ROOM || 'YOUR_LEADERSHIP_ROOM_ID'\n  }\n};"
+      },
+      "id": "prepare-leadership-summary",
+      "name": "Prepare Leadership Summary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 1000]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://webexapis.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $env.WEBEX_BOT_TOKEN || 'YOUR_WEBEX_BOT_TOKEN' }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "roomId",
+              "value": "={{ $json.roomId }}"
+            },
+            {
+              "name": "markdown",
+              "value": "={{ $json.markdown }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "send-leadership-summary",
+      "name": "Send Leadership Summary",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [900, 1000]
+    }
+  ],
+  "connections": {
+    "Daily Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Define Search Terms",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Define Search Terms",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Define Search Terms": {
+      "main": [
+        [
+          {
+            "node": "Split Search Terms",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Search Terms": {
+      "main": [
+        [
+          {
+            "node": "IntelX Start Search",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IntelX Start Search": {
+      "main": [
+        [
+          {
+            "node": "Wait for Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait for Results": {
+      "main": [
+        [
+          {
+            "node": "IntelX Get Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IntelX Get Results": {
+      "main": [
+        [
+          {
+            "node": "Process Search Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Search Results": {
+      "main": [
+        [
+          {
+            "node": "Has Results?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Results?": {
+      "main": [
+        [
+          {
+            "node": "IntelX Terminate Search",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log No Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IntelX Terminate Search": {
+      "main": [
+        [
+          {
+            "node": "Classify Finding and Risk",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Classify Finding and Risk": {
+      "main": [
+        [
+          {
+            "node": "Deduplicate Findings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Deduplicate Findings": {
+      "main": [
+        [
+          {
+            "node": "Is New Finding?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is New Finding?": {
+      "main": [
+        [
+          {
+            "node": "Check Credential Leak?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Format Webex Alert",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Duplicate (Skip)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Credential Leak?": {
+      "main": [
+        [
+          {
+            "node": "Create XSOAR Incident",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Format Leadership Alert",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Format Leadership Alert": {
+      "main": [
+        [
+          {
+            "node": "Alert Security Leadership",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Webex Alert": {
+      "main": [
+        [
+          {
+            "node": "Send Webex Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Webex Alert": {
+      "main": [
+        [
+          {
+            "node": "Store for Weekly Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Weekly Summary Trigger": {
+      "main": [
+        [
+          {
+            "node": "Generate Weekly Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Weekly Summary": {
+      "main": [
+        [
+          {
+            "node": "Send Weekly Summary",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Prepare Leadership Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Leadership Summary": {
+      "main": [
+        [
+          {
+            "node": "Send Leadership Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  },
+  "versionId": "1",
+  "meta": {
+    "templateId": "intelx-dark-web-monitor",
+    "instanceId": ""
+  },
+  "tags": [
+    {
+      "name": "Security",
+      "id": "security"
+    },
+    {
+      "name": "Dark Web",
+      "id": "dark-web"
+    },
+    {
+      "name": "IntelligenceX",
+      "id": "intelx"
+    },
+    {
+      "name": "Threat Intelligence",
+      "id": "threat-intel"
+    },
+    {
+      "name": "Monitoring",
+      "id": "monitoring"
+    }
+  ],
+  "pinData": {}
+}

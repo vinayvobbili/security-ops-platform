@@ -1,0 +1,855 @@
+{
+  "name": "Threat Hunt Runner",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 6 * * 1"
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 300],
+      "notes": "Configurable: Daily (0 6 * * *) or Weekly (0 6 * * 1)"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Hunt Configuration - Easy to add new hunts\nconst huntConfig = {\n  crowdstrike: [\n    {\n      name: \"Suspicious PowerShell Execution\",\n      description: \"Detect obfuscated or encoded PowerShell commands\",\n      query: \"event_simpleName=ProcessRollup2 FileName=powershell.exe (CommandLine=*-enc* OR CommandLine=*-encoded* OR CommandLine=*-w hidden* OR CommandLine=*downloadstring* OR CommandLine=*invoke-expression* OR CommandLine=*iex*) | stats count by ComputerName, UserName, CommandLine | sort -count\",\n      severity: \"high\",\n      baseline_threshold: 10,\n      category: \"execution\"\n    },\n    {\n      name: \"Rare Scheduled Tasks Created\",\n      description: \"Identify newly created scheduled tasks that may indicate persistence\",\n      query: \"event_simpleName=ScheduledTaskRegistered | stats count by ComputerName, TaskName, TaskExecCommand, UserName | where count < 5 | sort -count\",\n      severity: \"medium\",\n      baseline_threshold: 5,\n      category: \"persistence\"\n    },\n    {\n      name: \"LOLBAS Binary Execution\",\n      description: \"Living Off the Land binaries used for malicious purposes\",\n      query: \"event_simpleName=ProcessRollup2 (FileName IN (certutil.exe, mshta.exe, regsvr32.exe, rundll32.exe, msiexec.exe, wmic.exe, cmstp.exe, msxsl.exe, ieexec.exe, infdefaultinstall.exe)) (CommandLine=*http* OR CommandLine=*\\\\\\\\* OR CommandLine=*script* OR CommandLine=*/i:*) | stats count by ComputerName, FileName, CommandLine, UserName | sort -count\",\n      severity: \"high\",\n      baseline_threshold: 15,\n      category: \"defense_evasion\"\n    },\n    {\n      name: \"Network Connections to Rare Destinations\",\n      description: \"Outbound connections to uncommon destinations\",\n      query: \"event_simpleName=NetworkConnectIP4 | stats dc(aid) as unique_hosts count by RemoteAddressIP4 | where unique_hosts < 3 AND count > 50 | sort -count | head 100\",\n      severity: \"medium\",\n      baseline_threshold: 20,\n      category: \"command_and_control\"\n    }\n  ],\n  qradar: [\n    {\n      name: \"Successful Logins After Failed Attempts\",\n      description: \"Potential brute force success indicators\",\n      query: \"SELECT sourceip, username, COUNT(*) as login_count, MIN(starttime) as first_attempt, MAX(starttime) as last_attempt FROM events WHERE LOGSOURCETYPENAME(logsourceid) ILIKE '%authentication%' AND eventid IN (4625, 4624) GROUP BY sourceip, username HAVING SUM(CASE WHEN eventid = 4625 THEN 1 ELSE 0 END) >= 5 AND SUM(CASE WHEN eventid = 4624 THEN 1 ELSE 0 END) >= 1 LAST 24 HOURS\",\n      severity: \"high\",\n      baseline_threshold: 5,\n      category: \"credential_access\"\n    },\n    {\n      name: \"Large Data Transfers\",\n      description: \"Unusual volume of data being exfiltrated\",\n      query: \"SELECT sourceip, destinationip, SUM(bytessent) as total_bytes, COUNT(*) as connection_count FROM flows WHERE bytessent > 104857600 GROUP BY sourceip, destinationip HAVING total_bytes > 1073741824 ORDER BY total_bytes DESC LAST 24 HOURS\",\n      severity: \"high\",\n      baseline_threshold: 3,\n      category: \"exfiltration\"\n    },\n    {\n      name: \"After-Hours Admin Activity\",\n      description: \"Administrative actions outside business hours\",\n      query: \"SELECT username, sourceip, QIDNAME(qid) as event_name, COUNT(*) as event_count FROM events WHERE category = 8052 AND (EXTRACT(HOUR FROM starttime) < 6 OR EXTRACT(HOUR FROM starttime) > 20) AND DAYOFWEEK(starttime) NOT IN (1, 7) GROUP BY username, sourceip, QIDNAME(qid) ORDER BY event_count DESC LAST 24 HOURS\",\n      severity: \"medium\",\n      baseline_threshold: 10,\n      category: \"privilege_escalation\"\n    },\n    {\n      name: \"Connections to Newly Registered Domains\",\n      description: \"Network connections to domains registered within last 30 days\",\n      query: \"SELECT sourceip, URL, domainname, COUNT(*) as hit_count FROM events WHERE REFERENCESETCONTAINS('Newly_Registered_Domains', domainname) GROUP BY sourceip, URL, domainname ORDER BY hit_count DESC LAST 24 HOURS\",\n      severity: \"high\",\n      baseline_threshold: 5,\n      category: \"command_and_control\"\n    }\n  ]\n};\n\n// Baseline tracking data\nconst baselines = {\n  \"Suspicious PowerShell Execution\": { avg_count: 5, std_dev: 2, last_updated: \"2024-01-15\" },\n  \"Rare Scheduled Tasks Created\": { avg_count: 2, std_dev: 1, last_updated: \"2024-01-15\" },\n  \"LOLBAS Binary Execution\": { avg_count: 8, std_dev: 3, last_updated: \"2024-01-15\" },\n  \"Network Connections to Rare Destinations\": { avg_count: 12, std_dev: 4, last_updated: \"2024-01-15\" },\n  \"Successful Logins After Failed Attempts\": { avg_count: 3, std_dev: 1, last_updated: \"2024-01-15\" },\n  \"Large Data Transfers\": { avg_count: 1, std_dev: 1, last_updated: \"2024-01-15\" },\n  \"After-Hours Admin Activity\": { avg_count: 5, std_dev: 2, last_updated: \"2024-01-15\" },\n  \"Connections to Newly Registered Domains\": { avg_count: 2, std_dev: 1, last_updated: \"2024-01-15\" }\n};\n\nconst huntRunId = `HUNT-${Date.now()}`;\nconst startTime = new Date().toISOString();\n\nreturn {\n  json: {\n    huntConfig,\n    baselines,\n    huntRunId,\n    startTime,\n    crowdstrikeHunts: huntConfig.crowdstrike,\n    qradarHunts: huntConfig.qradar\n  }\n};"
+      },
+      "id": "load-hunt-config",
+      "name": "Load Hunt Configuration",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 300]
+    },
+    {
+      "parameters": {},
+      "id": "split-hunt-types",
+      "name": "Split Hunt Types",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [440, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const config = $input.first().json;\nconst hunts = config.crowdstrikeHunts;\n\nreturn hunts.map(hunt => ({\n  json: {\n    ...hunt,\n    huntRunId: config.huntRunId,\n    baselines: config.baselines,\n    platform: 'crowdstrike'\n  }\n}));"
+      },
+      "id": "prepare-cs-hunts",
+      "name": "Prepare CrowdStrike Hunts",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 160]
+    },
+    {
+      "parameters": {
+        "jsCode": "const config = $input.first().json;\nconst hunts = config.qradarHunts;\n\nreturn hunts.map(hunt => ({\n  json: {\n    ...hunt,\n    huntRunId: config.huntRunId,\n    baselines: config.baselines,\n    platform: 'qradar'\n  }\n}));"
+      },
+      "id": "prepare-qr-hunts",
+      "name": "Prepare QRadar Hunts",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 440]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.crowdstrike.com/oauth2/token",
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "client_id",
+              "value": "={{ $credentials.crowdstrike.clientId }}"
+            },
+            {
+              "name": "client_secret",
+              "value": "={{ $credentials.crowdstrike.clientSecret }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "cs-auth",
+      "name": "CrowdStrike Auth",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [880, 160],
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "crowdstrike-creds",
+          "name": "CrowdStrike API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.crowdstrike.com/threatgraph/combined/ran-on/v1",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('CrowdStrike Auth').item.json.access_token }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"query\": \"{{ $json.query }}\",\n  \"start\": \"{{ $now.minus(1, 'day').toISO() }}\",\n  \"end\": \"{{ $now.toISO() }}\"\n}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "id": "run-cs-hunt",
+      "name": "Run CrowdStrike Hunt Query",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1100, 160]
+    },
+    {
+      "parameters": {
+        "jsCode": "const huntData = $('Prepare CrowdStrike Hunts').item.json;\nconst queryResults = $input.first().json;\nconst baseline = huntData.baselines[huntData.name] || { avg_count: 0, std_dev: 1 };\n\nconst resultsCount = queryResults.resources ? queryResults.resources.length : 0;\nconst anomalyThreshold = baseline.avg_count + (2 * baseline.std_dev);\nconst isAnomaly = resultsCount > anomalyThreshold;\nconst exceedsBaseline = resultsCount > huntData.baseline_threshold;\n\n// Extract sample events (max 5)\nconst sampleEvents = queryResults.resources ? queryResults.resources.slice(0, 5) : [];\n\nreturn {\n  json: {\n    huntName: huntData.name,\n    description: huntData.description,\n    platform: 'CrowdStrike',\n    category: huntData.category,\n    severity: huntData.severity,\n    queryRun: huntData.query,\n    resultsCount,\n    baselineThreshold: huntData.baseline_threshold,\n    historicalBaseline: {\n      average: baseline.avg_count,\n      stdDev: baseline.std_dev,\n      anomalyThreshold\n    },\n    isAnomaly,\n    exceedsBaseline,\n    anomalyScore: resultsCount > 0 ? ((resultsCount - baseline.avg_count) / baseline.std_dev).toFixed(2) : 0,\n    sampleEvents,\n    huntRunId: huntData.huntRunId,\n    executionTime: new Date().toISOString(),\n    requiresInvestigation: (isAnomaly && huntData.severity === 'high') || (exceedsBaseline && resultsCount > huntData.baseline_threshold * 2)\n  }\n};"
+      },
+      "id": "analyze-cs-results",
+      "name": "Analyze CS Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1320, 160]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://{{ $credentials.qradar.host }}/api/ariel/searches",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "SEC",
+              "value": "={{ $credentials.qradar.apiKey }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"query_expression\": \"{{ $json.query }}\"\n}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "id": "run-qr-hunt",
+      "name": "Run QRadar Hunt Query",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [880, 440],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "qradar-creds",
+          "name": "QRadar API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "maxTries": 30,
+        "waitBetweenTries": 5000
+      },
+      "id": "wait-qr-search",
+      "name": "Wait for QRadar Search",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [1000, 540],
+      "webhookId": "qr-wait"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://{{ $credentials.qradar.host }}/api/ariel/searches/{{ $('Run QRadar Hunt Query').item.json.search_id }}/results",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "SEC",
+              "value": "={{ $credentials.qradar.apiKey }}"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "get-qr-results",
+      "name": "Get QRadar Results",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1100, 440],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "qradar-creds",
+          "name": "QRadar API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const huntData = $('Prepare QRadar Hunts').item.json;\nconst queryResults = $input.first().json;\nconst baseline = huntData.baselines[huntData.name] || { avg_count: 0, std_dev: 1 };\n\nconst resultsCount = queryResults.events ? queryResults.events.length : \n                     queryResults.flows ? queryResults.flows.length : 0;\nconst anomalyThreshold = baseline.avg_count + (2 * baseline.std_dev);\nconst isAnomaly = resultsCount > anomalyThreshold;\nconst exceedsBaseline = resultsCount > huntData.baseline_threshold;\n\n// Extract sample events (max 5)\nconst sampleEvents = (queryResults.events || queryResults.flows || []).slice(0, 5);\n\nreturn {\n  json: {\n    huntName: huntData.name,\n    description: huntData.description,\n    platform: 'QRadar',\n    category: huntData.category,\n    severity: huntData.severity,\n    queryRun: huntData.query,\n    resultsCount,\n    baselineThreshold: huntData.baseline_threshold,\n    historicalBaseline: {\n      average: baseline.avg_count,\n      stdDev: baseline.std_dev,\n      anomalyThreshold\n    },\n    isAnomaly,\n    exceedsBaseline,\n    anomalyScore: resultsCount > 0 ? ((resultsCount - baseline.avg_count) / baseline.std_dev).toFixed(2) : 0,\n    sampleEvents,\n    huntRunId: huntData.huntRunId,\n    executionTime: new Date().toISOString(),\n    requiresInvestigation: (isAnomaly && huntData.severity === 'high') || (exceedsBaseline && resultsCount > huntData.baseline_threshold * 2)\n  }\n};"
+      },
+      "id": "analyze-qr-results",
+      "name": "Analyze QRadar Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1320, 440]
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineAll",
+        "options": {}
+      },
+      "id": "merge-results",
+      "name": "Merge All Hunt Results",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [1540, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const allResults = $input.all().map(item => item.json);\nconst config = $('Load Hunt Configuration').first().json;\n\n// Calculate summary statistics\nconst totalHunts = allResults.length;\nconst anomaliesFound = allResults.filter(r => r.isAnomaly).length;\nconst highSeverityFindings = allResults.filter(r => r.severity === 'high' && r.isAnomaly);\nconst requiresInvestigation = allResults.filter(r => r.requiresInvestigation);\n\n// Group by category\nconst byCategory = {};\nallResults.forEach(r => {\n  if (!byCategory[r.category]) byCategory[r.category] = [];\n  byCategory[r.category].push(r);\n});\n\n// Build detailed hunt summaries\nconst huntSummaries = allResults.map(r => ({\n  name: r.huntName,\n  platform: r.platform,\n  severity: r.severity,\n  resultsCount: r.resultsCount,\n  baselineThreshold: r.baselineThreshold,\n  anomalyScore: r.anomalyScore,\n  status: r.isAnomaly ? 'ANOMALY DETECTED' : r.exceedsBaseline ? 'ABOVE BASELINE' : 'NORMAL',\n  sampleCount: r.sampleEvents.length\n}));\n\nconst summary = {\n  huntRunId: config.huntRunId,\n  executionStart: config.startTime,\n  executionEnd: new Date().toISOString(),\n  totalHuntsRun: totalHunts,\n  anomaliesDetected: anomaliesFound,\n  highSeverityCount: highSeverityFindings.length,\n  requiresInvestigationCount: requiresInvestigation.length,\n  resultsByPlatform: {\n    crowdstrike: allResults.filter(r => r.platform === 'CrowdStrike').length,\n    qradar: allResults.filter(r => r.platform === 'QRadar').length\n  },\n  resultsByCategory: Object.keys(byCategory).reduce((acc, cat) => {\n    acc[cat] = byCategory[cat].length;\n    return acc;\n  }, {}),\n  huntSummaries,\n  detailedResults: allResults,\n  highConfidenceFindings: requiresInvestigation\n};\n\nreturn { json: summary };"
+      },
+      "id": "compile-results",
+      "name": "Compile Hunt Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1760, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const summary = $input.first().json;\n\n// Build Webex-formatted message\nlet message = `## Threat Hunt Report - ${summary.huntRunId}\\n\\n`;\nmessage += `**Execution Period:** ${summary.executionStart} to ${summary.executionEnd}\\n\\n`;\nmessage += `### Summary\\n`;\nmessage += `- **Total Hunts Run:** ${summary.totalHuntsRun}\\n`;\nmessage += `- **Anomalies Detected:** ${summary.anomaliesDetected}\\n`;\nmessage += `- **High Severity Findings:** ${summary.highSeverityCount}\\n`;\nmessage += `- **Requiring Investigation:** ${summary.requiresInvestigationCount}\\n\\n`;\n\nmessage += `### Results by Platform\\n`;\nmessage += `- CrowdStrike: ${summary.resultsByPlatform.crowdstrike} hunts\\n`;\nmessage += `- QRadar: ${summary.resultsByPlatform.qradar} hunts\\n\\n`;\n\nmessage += `### Hunt Details\\n`;\nmessage += `| Hunt Name | Platform | Severity | Results | Status |\\n`;\nmessage += `|-----------|----------|----------|---------|--------|\\n`;\n\nsummary.huntSummaries.forEach(h => {\n  const statusEmoji = h.status === 'ANOMALY DETECTED' ? '!!!' : h.status === 'ABOVE BASELINE' ? '!' : '';\n  message += `| ${h.name} | ${h.platform} | ${h.severity} | ${h.resultsCount} | ${h.status} ${statusEmoji} |\\n`;\n});\n\nif (summary.highConfidenceFindings.length > 0) {\n  message += `\\n### High Confidence Findings Requiring Investigation\\n`;\n  summary.highConfidenceFindings.forEach(f => {\n    message += `\\n**${f.huntName}** (${f.platform})\\n`;\n    message += `- Severity: ${f.severity}\\n`;\n    message += `- Results: ${f.resultsCount} (baseline: ${f.baselineThreshold})\\n`;\n    message += `- Anomaly Score: ${f.anomalyScore} standard deviations\\n`;\n    message += `- Category: ${f.category}\\n`;\n    if (f.sampleEvents.length > 0) {\n      message += `- Sample Event: \\`${JSON.stringify(f.sampleEvents[0]).substring(0, 200)}...\\`\\n`;\n    }\n  });\n}\n\nmessage += `\\n---\\n*Automated Threat Hunt - Review findings and update baselines as needed*`;\n\nreturn {\n  json: {\n    ...summary,\n    webexMessage: message,\n    webexMarkdown: message\n  }\n};"
+      },
+      "id": "format-webex-message",
+      "name": "Format Webex Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1980, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://webexapis.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $credentials.webex.accessToken }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"roomId\": \"{{ $credentials.webex.threatHuntingRoomId }}\",\n  \"markdown\": {{ JSON.stringify($json.webexMarkdown) }}\n}",
+        "options": {}
+      },
+      "id": "post-webex",
+      "name": "Post to Webex Threat Hunting Channel",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2200, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "webex-creds",
+          "name": "Webex API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "high-confidence-check",
+              "leftValue": "={{ $json.requiresInvestigationCount }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-findings",
+      "name": "Check for High Confidence Findings",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [2420, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const summary = $input.first().json;\nconst findings = summary.highConfidenceFindings;\n\n// Create XSOAR incident for each high confidence finding\nreturn findings.map(finding => {\n  const incidentDetails = {\n    name: `[Threat Hunt] ${finding.huntName} - Anomaly Detected`,\n    type: 'Threat Hunt Finding',\n    severity: finding.severity === 'high' ? 3 : finding.severity === 'medium' ? 2 : 1,\n    details: finding.description,\n    labels: [\n      { type: 'hunt_name', value: finding.huntName },\n      { type: 'platform', value: finding.platform },\n      { type: 'category', value: finding.category },\n      { type: 'hunt_run_id', value: summary.huntRunId }\n    ],\n    customFields: {\n      threathuntname: finding.huntName,\n      threathuntplatform: finding.platform,\n      resultscount: finding.resultsCount,\n      baselinethreshold: finding.baselineThreshold,\n      anomalyscore: parseFloat(finding.anomalyScore),\n      huntquery: finding.queryRun,\n      sampleevents: JSON.stringify(finding.sampleEvents),\n      huntrunid: summary.huntRunId\n    },\n    rawJSON: JSON.stringify(finding)\n  };\n  \n  return { json: incidentDetails };\n});"
+      },
+      "id": "prepare-xsoar-incident",
+      "name": "Prepare XSOAR Incident",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2640, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://{{ $credentials.xsoar.host }}/incident",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ $credentials.xsoar.apiKey }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "create-xsoar-incident",
+      "name": "Create XSOAR Investigation Ticket",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2860, 200],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "xsoar-creds",
+          "name": "XSOAR API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const summary = $input.first().json;\n\nreturn {\n  json: {\n    status: 'completed',\n    message: 'Hunt completed - No high confidence findings requiring auto-investigation',\n    huntRunId: summary.huntRunId,\n    totalAnomalies: summary.anomaliesDetected,\n    reviewRecommended: summary.anomaliesDetected > 0\n  }\n};"
+      },
+      "id": "no-investigation-needed",
+      "name": "No Investigation Needed",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2640, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "const xsoarResults = $input.all();\n\nreturn {\n  json: {\n    status: 'completed_with_incidents',\n    message: `Created ${xsoarResults.length} XSOAR investigation tickets`,\n    incidents: xsoarResults.map(r => ({\n      incidentId: r.json.id,\n      name: r.json.name\n    }))\n  }\n};"
+      },
+      "id": "log-incidents-created",
+      "name": "Log Incidents Created",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3080, 200]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "evidence-check",
+              "leftValue": "={{ $json.isAnomaly }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-cs-anomaly",
+      "name": "CS Anomaly Check",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1440, 60]
+    },
+    {
+      "parameters": {
+        "jsCode": "const result = $input.first().json;\n\n// Collect additional evidence for anomalous findings\nconst evidence = {\n  ...result,\n  evidenceCollected: true,\n  evidenceTimestamp: new Date().toISOString(),\n  additionalContext: {\n    affectedHosts: result.sampleEvents.map(e => e.ComputerName || e.aid).filter(Boolean),\n    affectedUsers: result.sampleEvents.map(e => e.UserName || e.user).filter(Boolean),\n    uniqueIndicators: [...new Set(result.sampleEvents.map(e => e.CommandLine || e.RemoteAddressIP4).filter(Boolean))].slice(0, 10)\n  }\n};\n\nreturn { json: evidence };"
+      },
+      "id": "collect-cs-evidence",
+      "name": "Collect CS Evidence",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1540, 0]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "evidence-check",
+              "leftValue": "={{ $json.isAnomaly }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-qr-anomaly",
+      "name": "QRadar Anomaly Check",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1440, 540]
+    },
+    {
+      "parameters": {
+        "jsCode": "const result = $input.first().json;\n\n// Collect additional evidence for anomalous findings\nconst evidence = {\n  ...result,\n  evidenceCollected: true,\n  evidenceTimestamp: new Date().toISOString(),\n  additionalContext: {\n    sourceIPs: result.sampleEvents.map(e => e.sourceip).filter(Boolean),\n    destinationIPs: result.sampleEvents.map(e => e.destinationip).filter(Boolean),\n    affectedUsers: result.sampleEvents.map(e => e.username).filter(Boolean),\n    uniqueIndicators: [...new Set(result.sampleEvents.map(e => e.domainname || e.URL).filter(Boolean))].slice(0, 10)\n  }\n};\n\nreturn { json: evidence };"
+      },
+      "id": "collect-qr-evidence",
+      "name": "Collect QRadar Evidence",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1540, 500]
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Load Hunt Configuration",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Hunt Configuration": {
+      "main": [
+        [
+          {
+            "node": "Split Hunt Types",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Hunt Types": {
+      "main": [
+        [
+          {
+            "node": "Prepare CrowdStrike Hunts",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Prepare QRadar Hunts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare CrowdStrike Hunts": {
+      "main": [
+        [
+          {
+            "node": "CrowdStrike Auth",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CrowdStrike Auth": {
+      "main": [
+        [
+          {
+            "node": "Run CrowdStrike Hunt Query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run CrowdStrike Hunt Query": {
+      "main": [
+        [
+          {
+            "node": "Analyze CS Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze CS Results": {
+      "main": [
+        [
+          {
+            "node": "CS Anomaly Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CS Anomaly Check": {
+      "main": [
+        [
+          {
+            "node": "Collect CS Evidence",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Merge All Hunt Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Collect CS Evidence": {
+      "main": [
+        [
+          {
+            "node": "Merge All Hunt Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare QRadar Hunts": {
+      "main": [
+        [
+          {
+            "node": "Run QRadar Hunt Query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run QRadar Hunt Query": {
+      "main": [
+        [
+          {
+            "node": "Wait for QRadar Search",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait for QRadar Search": {
+      "main": [
+        [
+          {
+            "node": "Get QRadar Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get QRadar Results": {
+      "main": [
+        [
+          {
+            "node": "Analyze QRadar Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze QRadar Results": {
+      "main": [
+        [
+          {
+            "node": "QRadar Anomaly Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "QRadar Anomaly Check": {
+      "main": [
+        [
+          {
+            "node": "Collect QRadar Evidence",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Merge All Hunt Results",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Collect QRadar Evidence": {
+      "main": [
+        [
+          {
+            "node": "Merge All Hunt Results",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge All Hunt Results": {
+      "main": [
+        [
+          {
+            "node": "Compile Hunt Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compile Hunt Results": {
+      "main": [
+        [
+          {
+            "node": "Format Webex Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Webex Message": {
+      "main": [
+        [
+          {
+            "node": "Post to Webex Threat Hunting Channel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Post to Webex Threat Hunting Channel": {
+      "main": [
+        [
+          {
+            "node": "Check for High Confidence Findings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check for High Confidence Findings": {
+      "main": [
+        [
+          {
+            "node": "Prepare XSOAR Incident",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Investigation Needed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare XSOAR Incident": {
+      "main": [
+        [
+          {
+            "node": "Create XSOAR Investigation Ticket",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create XSOAR Investigation Ticket": {
+      "main": [
+        [
+          {
+            "node": "Log Incidents Created",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  },
+  "staticData": {
+    "baselines": {
+      "Suspicious PowerShell Execution": {
+        "avg_count": 5,
+        "std_dev": 2,
+        "last_updated": "2024-01-15",
+        "history": [3, 5, 4, 6, 7, 5, 4, 5, 6, 5]
+      },
+      "Rare Scheduled Tasks Created": {
+        "avg_count": 2,
+        "std_dev": 1,
+        "last_updated": "2024-01-15",
+        "history": [1, 2, 3, 2, 1, 2, 2, 3, 2, 2]
+      },
+      "LOLBAS Binary Execution": {
+        "avg_count": 8,
+        "std_dev": 3,
+        "last_updated": "2024-01-15",
+        "history": [6, 8, 10, 7, 9, 8, 5, 11, 8, 8]
+      },
+      "Network Connections to Rare Destinations": {
+        "avg_count": 12,
+        "std_dev": 4,
+        "last_updated": "2024-01-15",
+        "history": [10, 14, 11, 15, 12, 8, 13, 12, 14, 11]
+      },
+      "Successful Logins After Failed Attempts": {
+        "avg_count": 3,
+        "std_dev": 1,
+        "last_updated": "2024-01-15",
+        "history": [2, 3, 4, 3, 2, 3, 4, 3, 3, 3]
+      },
+      "Large Data Transfers": {
+        "avg_count": 1,
+        "std_dev": 1,
+        "last_updated": "2024-01-15",
+        "history": [0, 1, 2, 1, 0, 1, 1, 2, 1, 1]
+      },
+      "After-Hours Admin Activity": {
+        "avg_count": 5,
+        "std_dev": 2,
+        "last_updated": "2024-01-15",
+        "history": [4, 6, 5, 3, 7, 5, 4, 6, 5, 5]
+      },
+      "Connections to Newly Registered Domains": {
+        "avg_count": 2,
+        "std_dev": 1,
+        "last_updated": "2024-01-15",
+        "history": [1, 2, 3, 2, 1, 2, 2, 3, 2, 2]
+      }
+    },
+    "huntMetadata": {
+      "lastRun": null,
+      "totalRuns": 0,
+      "lastAnomalyCount": 0
+    }
+  },
+  "tags": [
+    {
+      "name": "threat-hunting"
+    },
+    {
+      "name": "security"
+    },
+    {
+      "name": "automated"
+    }
+  ],
+  "pinData": {},
+  "versionId": "1.0.0",
+  "meta": {
+    "description": "Automated threat hunting workflow that runs predefined queries across CrowdStrike and QRadar, analyzes results against baselines, posts summaries to Webex, and auto-creates XSOAR incidents for high-confidence findings.",
+    "author": "Security Operations",
+    "version": "1.0.0",
+    "credentialsRequired": [
+      "CrowdStrike API (OAuth2 client credentials)",
+      "QRadar API (SEC token)",
+      "Webex API (Bearer token + room ID)",
+      "XSOAR API (API key)"
+    ],
+    "scheduleOptions": {
+      "daily": "0 6 * * *",
+      "weekly": "0 6 * * 1",
+      "custom": "Configure cron expression in Schedule Trigger node"
+    },
+    "huntCategories": [
+      "execution",
+      "persistence",
+      "defense_evasion",
+      "command_and_control",
+      "credential_access",
+      "exfiltration",
+      "privilege_escalation"
+    ]
+  }
+}

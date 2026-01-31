@@ -1,0 +1,707 @@
+{
+  "name": "Threat Intel IOC Sync",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 6
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        250,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://feodotracker.abuse.ch/downloads/ipblocklist.json",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "fetch-feodo-tracker",
+      "name": "Fetch Feodo Tracker C2 IPs",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        500,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://urlhaus.abuse.ch/downloads/json_recent/",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "fetch-urlhaus",
+      "name": "Fetch URLhaus Malicious URLs",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        500,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://mb-api.abuse.ch/api/v1/",
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "query",
+              "value": "get_recent"
+            },
+            {
+              "name": "selector",
+              "value": "time"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "fetch-malwarebazaar",
+      "name": "Fetch MalwareBazaar Hashes",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        500,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse Feodo Tracker C2 IPs\nconst feodoData = $('Fetch Feodo Tracker C2 IPs').first().json;\nconst iocs = [];\n\nif (feodoData && Array.isArray(feodoData)) {\n  for (const entry of feodoData) {\n    iocs.push({\n      type: 'ip',\n      value: entry.ip_address || entry.ip,\n      source: 'abuse.ch-feodo-tracker',\n      threat_type: entry.malware || 'c2-server',\n      first_seen: entry.first_seen || new Date().toISOString(),\n      port: entry.port || null,\n      status: entry.status || 'active'\n    });\n  }\n}\n\nreturn iocs.map(ioc => ({ json: ioc }));"
+      },
+      "id": "parse-feodo",
+      "name": "Parse Feodo IOCs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        750,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse URLhaus malicious URLs\nconst urlhausData = $('Fetch URLhaus Malicious URLs').first().json;\nconst iocs = [];\n\nif (urlhausData && urlhausData.urls && Array.isArray(urlhausData.urls)) {\n  for (const entry of urlhausData.urls) {\n    // Extract domain from URL\n    let domain = null;\n    try {\n      const urlObj = new URL(entry.url);\n      domain = urlObj.hostname;\n    } catch (e) {\n      domain = null;\n    }\n\n    iocs.push({\n      type: 'url',\n      value: entry.url,\n      source: 'abuse.ch-urlhaus',\n      threat_type: entry.threat || entry.url_status || 'malicious-url',\n      first_seen: entry.dateadded || new Date().toISOString(),\n      tags: entry.tags || [],\n      domain: domain\n    });\n\n    // Also add domain as separate IOC if available\n    if (domain) {\n      iocs.push({\n        type: 'domain',\n        value: domain,\n        source: 'abuse.ch-urlhaus',\n        threat_type: entry.threat || 'malicious-domain',\n        first_seen: entry.dateadded || new Date().toISOString()\n      });\n    }\n  }\n}\n\nreturn iocs.map(ioc => ({ json: ioc }));"
+      },
+      "id": "parse-urlhaus",
+      "name": "Parse URLhaus IOCs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        750,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse MalwareBazaar hashes\nconst bazaarData = $('Fetch MalwareBazaar Hashes').first().json;\nconst iocs = [];\n\nif (bazaarData && bazaarData.data && Array.isArray(bazaarData.data)) {\n  for (const entry of bazaarData.data) {\n    // Add MD5 hash\n    if (entry.md5_hash) {\n      iocs.push({\n        type: 'md5',\n        value: entry.md5_hash,\n        source: 'abuse.ch-malwarebazaar',\n        threat_type: entry.signature || entry.file_type || 'malware',\n        first_seen: entry.first_seen || new Date().toISOString(),\n        file_name: entry.file_name || null,\n        file_type: entry.file_type || null\n      });\n    }\n\n    // Add SHA256 hash\n    if (entry.sha256_hash) {\n      iocs.push({\n        type: 'sha256',\n        value: entry.sha256_hash,\n        source: 'abuse.ch-malwarebazaar',\n        threat_type: entry.signature || entry.file_type || 'malware',\n        first_seen: entry.first_seen || new Date().toISOString(),\n        file_name: entry.file_name || null,\n        file_type: entry.file_type || null\n      });\n    }\n  }\n}\n\nreturn iocs.map(ioc => ({ json: ioc }));"
+      },
+      "id": "parse-malwarebazaar",
+      "name": "Parse MalwareBazaar IOCs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        750,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "append"
+      },
+      "id": "merge-all-iocs",
+      "name": "Merge All IOCs",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2.1,
+      "position": [
+        1000,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Deduplicate IOCs using static data to track already-seen IOCs\nconst staticData = $getWorkflowStaticData('global');\n\n// Initialize seen IOCs storage if not exists\nif (!staticData.seenIOCs) {\n  staticData.seenIOCs = {};\n}\n\n// Get current timestamp for cleanup of old entries (keep 7 days)\nconst now = Date.now();\nconst sevenDaysAgo = now - (7 * 24 * 60 * 60 * 1000);\n\n// Clean up old entries\nfor (const key of Object.keys(staticData.seenIOCs)) {\n  if (staticData.seenIOCs[key] < sevenDaysAgo) {\n    delete staticData.seenIOCs[key];\n  }\n}\n\nconst allIOCs = $input.all();\nconst newIOCs = [];\nconst duplicateCount = { total: 0, byType: {} };\n\nfor (const item of allIOCs) {\n  const ioc = item.json;\n  // Create unique key based on type and value\n  const key = `${ioc.type}:${ioc.value}`;\n  \n  if (!staticData.seenIOCs[key]) {\n    // Mark as seen with current timestamp\n    staticData.seenIOCs[key] = now;\n    newIOCs.push({ json: ioc });\n  } else {\n    // Track duplicates for summary\n    duplicateCount.total++;\n    duplicateCount.byType[ioc.type] = (duplicateCount.byType[ioc.type] || 0) + 1;\n  }\n}\n\n// Store duplicate stats in static data for summary\nstaticData.lastRunStats = {\n  duplicatesSkipped: duplicateCount,\n  timestamp: new Date().toISOString()\n};\n\nreturn newIOCs;"
+      },
+      "id": "deduplicate-iocs",
+      "name": "Deduplicate IOCs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Generate summary statistics for the IOCs\nconst allIOCs = $input.all();\nconst staticData = $getWorkflowStaticData('global');\n\nconst summary = {\n  totalNewIOCs: allIOCs.length,\n  byType: {},\n  bySource: {},\n  threatTypes: {},\n  timestamp: new Date().toISOString(),\n  duplicatesSkipped: staticData.lastRunStats?.duplicatesSkipped?.total || 0\n};\n\nfor (const item of allIOCs) {\n  const ioc = item.json;\n  \n  // Count by type\n  summary.byType[ioc.type] = (summary.byType[ioc.type] || 0) + 1;\n  \n  // Count by source\n  summary.bySource[ioc.source] = (summary.bySource[ioc.source] || 0) + 1;\n  \n  // Count by threat type\n  const threatType = ioc.threat_type || 'unknown';\n  summary.threatTypes[threatType] = (summary.threatTypes[threatType] || 0) + 1;\n}\n\n// Get top threat types (sorted)\nsummary.topThreatTypes = Object.entries(summary.threatTypes)\n  .sort((a, b) => b[1] - a[1])\n  .slice(0, 10)\n  .map(([type, count]) => ({ type, count }));\n\nreturn [{ json: summary }];"
+      },
+      "id": "generate-summary",
+      "name": "Generate Summary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1400,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "crowdstrike-enabled",
+              "leftValue": "={{ $env.CROWDSTRIKE_ENABLED }}",
+              "rightValue": "true",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-crowdstrike-enabled",
+      "name": "CrowdStrike Enabled?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1600,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Prepare IOCs for CrowdStrike format\nconst summary = $('Generate Summary').first().json;\nconst allIOCs = $('Deduplicate IOCs').all();\n\n// Map n8n IOC types to CrowdStrike types\nconst typeMapping = {\n  'ip': 'ipv4',\n  'domain': 'domain',\n  'url': 'url',\n  'md5': 'md5',\n  'sha256': 'sha256'\n};\n\nconst csIOCs = [];\n\nfor (const item of allIOCs) {\n  const ioc = item.json;\n  const csType = typeMapping[ioc.type];\n  \n  if (csType) {\n    csIOCs.push({\n      type: csType,\n      value: ioc.value,\n      action: 'detect',\n      severity: 'medium',\n      source: ioc.source,\n      description: `Threat Intel IOC - ${ioc.threat_type}`,\n      platforms: ['windows', 'mac', 'linux'],\n      tags: [ioc.source, ioc.threat_type],\n      expiration: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()\n    });\n  }\n}\n\n// Batch into groups of 200 (CrowdStrike limit)\nconst batches = [];\nfor (let i = 0; i < csIOCs.length; i += 200) {\n  batches.push({\n    indicators: csIOCs.slice(i, i + 200)\n  });\n}\n\nreturn batches.map(batch => ({ json: batch }));"
+      },
+      "id": "format-for-crowdstrike",
+      "name": "Format for CrowdStrike",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1800,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.CROWDSTRIKE_BASE_URL }}/indicators/entities/iocs/v1",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "push-to-crowdstrike",
+      "name": "Push to CrowdStrike",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        2000,
+        0
+      ],
+      "credentials": {
+        "oAuth2Api": {
+          "id": "crowdstrike-oauth2",
+          "name": "CrowdStrike OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "qradar-enabled",
+              "leftValue": "={{ $env.QRADAR_ENABLED }}",
+              "rightValue": "true",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-qradar-enabled",
+      "name": "QRadar Enabled?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1600,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Prepare IOCs for QRadar Reference Sets\nconst allIOCs = $('Deduplicate IOCs').all();\n\n// Group IOCs by type for different reference sets\nconst refSets = {\n  'ThreatIntel_IPs': [],\n  'ThreatIntel_Domains': [],\n  'ThreatIntel_URLs': [],\n  'ThreatIntel_MD5': [],\n  'ThreatIntel_SHA256': []\n};\n\nconst typeToRefSet = {\n  'ip': 'ThreatIntel_IPs',\n  'domain': 'ThreatIntel_Domains',\n  'url': 'ThreatIntel_URLs',\n  'md5': 'ThreatIntel_MD5',\n  'sha256': 'ThreatIntel_SHA256'\n};\n\nfor (const item of allIOCs) {\n  const ioc = item.json;\n  const refSetName = typeToRefSet[ioc.type];\n  \n  if (refSetName) {\n    refSets[refSetName].push(ioc.value);\n  }\n}\n\n// Return as separate items for each reference set\nconst results = [];\nfor (const [refSetName, values] of Object.entries(refSets)) {\n  if (values.length > 0) {\n    results.push({\n      json: {\n        referenceSetName: refSetName,\n        values: values\n      }\n    });\n  }\n}\n\nreturn results;"
+      },
+      "id": "format-for-qradar",
+      "name": "Format for QRadar",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1800,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.QRADAR_BASE_URL }}/api/reference_data/sets/bulk_load/{{ $json.referenceSetName }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.values) }}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "push-to-qradar",
+      "name": "Push to QRadar Reference Sets",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        2000,
+        300
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "qradar-api-key",
+          "name": "QRadar API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "webex-enabled",
+              "leftValue": "={{ $env.WEBEX_ENABLED }}",
+              "rightValue": "true",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-webex-enabled",
+      "name": "Webex Enabled?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1600,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Format summary message for Webex\nconst summary = $('Generate Summary').first().json;\n\n// Build markdown message\nlet message = `## Threat Intel IOC Sync Summary\\n\\n`;\nmessage += `**Timestamp:** ${summary.timestamp}\\n\\n`;\nmessage += `**Total New IOCs:** ${summary.totalNewIOCs}\\n`;\nmessage += `**Duplicates Skipped:** ${summary.duplicatesSkipped}\\n\\n`;\n\n// IOCs by type\nmessage += `### New IOCs by Type\\n`;\nfor (const [type, count] of Object.entries(summary.byType)) {\n  message += `- **${type.toUpperCase()}:** ${count}\\n`;\n}\n\n// Sources updated\nmessage += `\\n### Sources Updated\\n`;\nfor (const [source, count] of Object.entries(summary.bySource)) {\n  message += `- **${source}:** ${count} IOCs\\n`;\n}\n\n// Top threat types\nmessage += `\\n### Top Threat Types\\n`;\nfor (const { type, count } of summary.topThreatTypes) {\n  message += `- **${type}:** ${count}\\n`;\n}\n\n// Integration status\nmessage += `\\n### Integration Status\\n`;\nmessage += `- CrowdStrike: ${$env.CROWDSTRIKE_ENABLED === 'true' ? 'Enabled' : 'Disabled'}\\n`;\nmessage += `- QRadar: ${$env.QRADAR_ENABLED === 'true' ? 'Enabled' : 'Disabled'}\\n`;\n\nreturn [{ \n  json: { \n    markdown: message,\n    roomId: $env.WEBEX_ROOM_ID || 'default-room'\n  } \n}];"
+      },
+      "id": "format-webex-message",
+      "name": "Format Webex Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1800,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://webexapis.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"roomId\": \"{{ $json.roomId }}\",\n  \"markdown\": {{ JSON.stringify($json.markdown) }}\n}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "send-to-webex",
+      "name": "Send to Webex",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        2000,
+        500
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "webex-bot-token",
+          "name": "Webex Bot Token"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "no-op-crowdstrike",
+      "name": "CrowdStrike Disabled",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1800,
+        100
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "no-op-qradar",
+      "name": "QRadar Disabled",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1800,
+        400
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "no-op-webex",
+      "name": "Webex Disabled",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1800,
+        600
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Error handler - log errors and continue\nconst error = $input.first();\n\nconsole.error('Workflow error:', error);\n\nreturn [{\n  json: {\n    error: true,\n    message: error.json?.message || 'Unknown error occurred',\n    timestamp: new Date().toISOString(),\n    node: error.json?.node || 'unknown'\n  }\n}];"
+      },
+      "id": "error-handler",
+      "name": "Error Handler",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2200,
+        700
+      ]
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Fetch Feodo Tracker C2 IPs",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch URLhaus Malicious URLs",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch MalwareBazaar Hashes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Feodo Tracker C2 IPs": {
+      "main": [
+        [
+          {
+            "node": "Parse Feodo IOCs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch URLhaus Malicious URLs": {
+      "main": [
+        [
+          {
+            "node": "Parse URLhaus IOCs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch MalwareBazaar Hashes": {
+      "main": [
+        [
+          {
+            "node": "Parse MalwareBazaar IOCs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Feodo IOCs": {
+      "main": [
+        [
+          {
+            "node": "Merge All IOCs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse URLhaus IOCs": {
+      "main": [
+        [
+          {
+            "node": "Merge All IOCs",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Parse MalwareBazaar IOCs": {
+      "main": [
+        [
+          {
+            "node": "Merge All IOCs",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Merge All IOCs": {
+      "main": [
+        [
+          {
+            "node": "Deduplicate IOCs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Deduplicate IOCs": {
+      "main": [
+        [
+          {
+            "node": "Generate Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Summary": {
+      "main": [
+        [
+          {
+            "node": "CrowdStrike Enabled?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "QRadar Enabled?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Webex Enabled?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CrowdStrike Enabled?": {
+      "main": [
+        [
+          {
+            "node": "Format for CrowdStrike",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "CrowdStrike Disabled",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format for CrowdStrike": {
+      "main": [
+        [
+          {
+            "node": "Push to CrowdStrike",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "QRadar Enabled?": {
+      "main": [
+        [
+          {
+            "node": "Format for QRadar",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "QRadar Disabled",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format for QRadar": {
+      "main": [
+        [
+          {
+            "node": "Push to QRadar Reference Sets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webex Enabled?": {
+      "main": [
+        [
+          {
+            "node": "Format Webex Message",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Webex Disabled",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Webex Message": {
+      "main": [
+        [
+          {
+            "node": "Send to Webex",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "saveExecutionProgress": true,
+    "errorWorkflow": "error-handler"
+  },
+  "staticData": {
+    "global": {
+      "seenIOCs": {},
+      "lastRunStats": null
+    }
+  },
+  "tags": [
+    {
+      "name": "threat-intel"
+    },
+    {
+      "name": "ioc-sync"
+    },
+    {
+      "name": "security"
+    }
+  ],
+  "pinData": {},
+  "versionId": "1.0.0",
+  "meta": {
+    "description": "Automated threat intelligence IOC synchronization workflow that pulls IOCs from multiple free threat feeds (abuse.ch Feodo Tracker, URLhaus, MalwareBazaar), normalizes them, and optionally pushes to CrowdStrike and QRadar. Includes deduplication via static data and Webex notifications.",
+    "author": "Security Automation",
+    "version": "1.0.0",
+    "requiredEnvVars": [
+      "CROWDSTRIKE_ENABLED",
+      "CROWDSTRIKE_BASE_URL",
+      "QRADAR_ENABLED",
+      "QRADAR_BASE_URL",
+      "WEBEX_ENABLED",
+      "WEBEX_ROOM_ID"
+    ],
+    "requiredCredentials": [
+      {
+        "name": "CrowdStrike OAuth2",
+        "type": "oAuth2Api",
+        "description": "OAuth2 credentials for CrowdStrike API"
+      },
+      {
+        "name": "QRadar API Key",
+        "type": "httpHeaderAuth",
+        "description": "SEC token header for QRadar API authentication"
+      },
+      {
+        "name": "Webex Bot Token",
+        "type": "httpHeaderAuth",
+        "description": "Bearer token for Webex API"
+      }
+    ]
+  }
+}

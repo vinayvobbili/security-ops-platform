@@ -444,10 +444,11 @@ class QRadarClient:
         Returns:
             dict: Search results with events
         """
+        # Use only standard QRadar fields to ensure compatibility across environments
+        # Custom property fields like "Threat Name", "URL Path" may not exist in all deployments
         aql = f"""
-            SELECT sourceip, prenatsourceip, destinationip, prenatdestinationip,
-                   URL, "URL Path", "Referer URL", "File Name", "Destination Domain Name",
-                   "Threat Name", "Threat Type", eventname, magnitude, starttime
+            SELECT sourceip, destinationip, qidname(qid) AS eventname,
+                   logsourcename(logsourceid) AS logsource, magnitude, starttime
             FROM events
             WHERE (sourceip = '{ip_address}' OR destinationip = '{ip_address}')
             LIMIT {max_results}
@@ -1091,6 +1092,60 @@ class QRadarClient:
         """
         return self.run_aql_search(aql.strip(), max_results=max_results)
 
+    def batch_search_domains_combined(
+        self,
+        domains: List[str],
+        hours: int = 168,
+        max_results: int = 500
+    ) -> Dict[str, Any]:
+        """Search for multiple domains across all log sources in a single query.
+
+        Combines webproxy (Zscaler, Blue Coat), email (Area1, Abnormal),
+        O365 threat intel, and Palo Alto into one query for efficiency.
+        Returns source identification and context fields for each event.
+
+        Args:
+            domains: List of domains to search for
+            hours: Number of hours to look back
+            max_results: Maximum events to return
+
+        Returns:
+            dict: Search results with events including source and context fields
+        """
+        if not domains:
+            return {"events": [], "count": 0}
+
+        # Build domain matching conditions for all relevant fields
+        domain_conditions = " OR ".join([
+            f"(URL ILIKE '%{d}%' OR sender ILIKE '%{d}%' OR \"Subject\" ILIKE '%{d}%' OR \"TSLD\" ILIKE '%{d}%')"
+            for d in domains
+        ])
+
+        aql = f"""
+            SELECT sourceip, destinationip, starttime,
+                   logsourcetypename(devicetype) AS source,
+                   username, "Computer Hostname",
+                   qidname(qid) AS eventName,
+                   URL, "TSLD", sender, recipient, "Subject",
+                   "Threat Name", "Action", "PAN Log SubType",
+                   "User Agent", filename
+            FROM events
+            WHERE (
+                logsourcetypename(devicetype) IN (
+                    'Zscaler Nss',
+                    'Blue Coat Web Security Service',
+                    'Area1 Security',
+                    'Abnormal Security',
+                    'Palo Alto PA Series'
+                )
+                OR "deviceType" = '397'
+            )
+            AND ({domain_conditions})
+            LIMIT {max_results}
+            LAST {hours} HOURS
+        """
+        return self.run_aql_search(aql.strip(), max_results=max_results)
+
     def batch_search_ips_general(
         self,
         ips: List[str],
@@ -1271,6 +1326,58 @@ class QRadarClient:
         """
         return self.run_aql_search(aql.strip(), max_results=max_results)
 
+    def batch_search_ips_combined(
+        self,
+        ips: List[str],
+        hours: int = 168,
+        max_results: int = 500
+    ) -> Dict[str, Any]:
+        """Search for multiple IPs across all log sources in a single query.
+
+        Combines ZPA, Entra, CrowdStrike, Palo Alto, and general events into
+        one query for efficiency. Returns source identification and context
+        fields for each event.
+
+        Args:
+            ips: List of IP addresses to search for
+            hours: Number of hours to look back
+            max_results: Maximum events to return
+
+        Returns:
+            dict: Search results with events including source and context fields
+        """
+        if not ips:
+            return {"events": [], "count": 0}
+
+        # Use IN clause for cleaner query
+        ip_list = ", ".join([f"'{ip}'" for ip in ips])
+
+        aql = f"""
+            SELECT sourceip, destinationip, starttime,
+                   logsourcetypename(devicetype) AS source,
+                   username, "Computer Hostname",
+                   qidname(qid) AS eventName,
+                   "Threat Name", "Action", URL,
+                   "Process Name", Command,
+                   "ZPN-Sess-Status",
+                   "Conditional Access Status",
+                   "PAN Log SubType"
+            FROM events
+            WHERE (
+                logsourcetypename(devicetype) IN (
+                    'Zscaler Private Access',
+                    'Microsoft Entra ID',
+                    'CrowdStrikeEndpoint',
+                    'Tanium HTTP',
+                    'Palo Alto PA Series'
+                )
+            )
+            AND (sourceip IN ({ip_list}) OR destinationip IN ({ip_list}))
+            LIMIT {max_results}
+            LAST {hours} HOURS
+        """
+        return self.run_aql_search(aql.strip(), max_results=max_results)
+
     def batch_search_hashes_endpoint(
         self,
         hashes: List[str],
@@ -1323,8 +1430,8 @@ class QRadarClient:
             Dict with rules list or error
         """
         try:
-            params = {"filter": f'origin="{origin}"', "fields": "id,name,notes,enabled,type,creation_date,modification_date"}
-            result = self._make_request("GET", "analytics/rules", params=params)
+            params = {"filter": f'origin="{origin}"', "fields": "id,name,enabled,type,creation_date,modification_date"}
+            result = self._make_request("analytics/rules", params=params)
             if isinstance(result, dict) and "error" in result:
                 return result
             return {"rules": result if isinstance(result, list) else [], "count": len(result) if isinstance(result, list) else 0}
@@ -1339,7 +1446,7 @@ class QRadarClient:
             Dict with saved searches list or error
         """
         try:
-            result = self._make_request("GET", "ariel/saved_searches")
+            result = self._make_request("ariel/saved_searches", params={"fields": "id,name,description,aql"})
             if isinstance(result, dict) and "error" in result:
                 return result
             return {"searches": result if isinstance(result, list) else [], "count": len(result) if isinstance(result, list) else 0}

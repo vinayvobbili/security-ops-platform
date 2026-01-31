@@ -27,14 +27,10 @@ def analyze_from_cli(tipper_id: str = None, text: str = None):
     """CLI entry point for analysis."""
     print("\n🔍 Tipper Novelty Analyzer\n")
 
-    # Initialize LLM
-    print("Initializing LLM...")
-    from my_bot.core.state_manager import get_state_manager
-    state_manager = get_state_manager()
-
-    if not state_manager.is_initialized:
-        print("State manager not initialized. Initializing now...")
-        state_manager.initialize_all_components()
+    # Initialize LLM directly (bypass state_manager to avoid loading all tools)
+    print("Connecting to LLM...")
+    from src.components.tipper_analyzer.llm_init import ensure_llm_initialized
+    ensure_llm_initialized()
 
     analyzer = TipperAnalyzer()
 
@@ -46,7 +42,7 @@ def analyze_from_cli(tipper_id: str = None, text: str = None):
         analysis = analyzer.analyze_tipper(tipper_text=text)
     else:
         print("Error: Must provide --id or --text")
-        return
+        return None
 
     print(analyzer.format_analysis_for_display(analysis))
     return analysis
@@ -68,17 +64,11 @@ def analyze_recent_tippers(hours_back: int = 1, room_id: str = _config.webex_roo
     """
     from data.data_maps import azdo_area_paths
     from webexpythonsdk import WebexAPI
-    from src.components.tipper_indexer import sync_tipper_index
 
     config = get_config()
     area_path = azdo_area_paths.get('threat_hunting', 'Detection-Engineering\\DE Rules\\Threat Hunting')
 
-    # Sync any new tippers to ChromaDB (incremental - only adds missing ones)
-    logger.info("Syncing new tippers to index...")
-    try:
-        sync_tipper_index(days_back=30)  # Only check recent tippers for efficiency
-    except Exception as e:
-        logger.warning(f"Tipper sync failed, continuing with existing index: {e}")
+    # Note: Tipper index sync is handled by daily_tipper_index_sync job at 6:00 AM
 
     # Calculate cutoff timestamp for Python filtering
     # Note: AZDO CreatedDate field has date-only precision in WIQL, so we fetch by date
@@ -125,12 +115,9 @@ def analyze_recent_tippers(hours_back: int = 1, room_id: str = _config.webex_roo
     tipper_ids = [str(t.get('id')) for t in tippers]
     print(f"  → Found {len(tippers)} new tipper(s): {', '.join(f'#{tid}' for tid in tipper_ids)}")
 
-    # Initialize state manager for LLM
-    from my_bot.core.state_manager import get_state_manager
-    state_manager = get_state_manager()
-    if not state_manager.is_initialized:
-        logger.info("Initializing state manager for LLM...")
-        state_manager.initialize_all_components()
+    # Initialize LLM (bypasses state_manager to avoid loading all tool clients)
+    from src.components.tipper_analyzer.llm_init import ensure_llm_initialized
+    ensure_llm_initialized()
 
     # Initialize analyzer and Webex API
     analyzer = TipperAnalyzer()
@@ -152,7 +139,7 @@ def analyze_recent_tippers(hours_back: int = 1, room_id: str = _config.webex_roo
             # Run full flow: analyze + post to AZDO + background IOC hunt
             result = analyzer.analyze_and_post(tipper_id, source="hourly", room_id=room_id)
 
-            # Linkify work item references for Webex markdown
+            # Linkify work item references for Webex Markdown
             webex_markdown = linkify_work_items_markdown(result['content'])
 
             # Send brief summary to Webex

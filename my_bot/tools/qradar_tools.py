@@ -13,22 +13,23 @@ from langchain_core.tools import tool
 from services.qradar import QRadarClient
 from src.utils.tool_decorator import log_tool_call
 
-# Initialize QRadar client once
+# Lazy-initialized QRadar client
 _qradar_client: Optional[QRadarClient] = None
 
-try:
-    logging.info("Initializing QRadar client...")
-    _qradar_client = QRadarClient()
 
-    if _qradar_client.is_configured():
-        logging.info("QRadar client initialized successfully.")
-    else:
-        logging.warning("QRadar client not configured (missing API URL or key). Tools will be disabled.")
-        _qradar_client = None
-
-except Exception as e:
-    logging.error(f"Failed to initialize QRadar client: {e}")
-    _qradar_client = None
+def _get_qradar_client() -> Optional[QRadarClient]:
+    """Get QRadar client (lazy initialization)."""
+    global _qradar_client
+    if _qradar_client is None:
+        try:
+            client = QRadarClient()
+            if client.is_configured():
+                _qradar_client = client
+            else:
+                logging.warning("QRadar client not configured (missing API URL or key)")
+        except Exception as e:
+            logging.error(f"Failed to initialize QRadar client: {e}")
+    return _qradar_client
 
 
 def _format_events_for_display(events: list, max_events: int = 10) -> str:
@@ -72,6 +73,8 @@ def _format_events_for_display(events: list, max_events: int = 10) -> str:
         # Event metadata
         if "eventname" in event:
             event_lines.append(f"**Event Name:** {event['eventname']}")
+        if "logsource" in event:
+            event_lines.append(f"**Log Source:** {event['logsource']}")
         if "magnitude" in event:
             event_lines.append(f"**Magnitude:** {event['magnitude']}/10")
 
@@ -112,8 +115,9 @@ def search_qradar_by_ip(ip_address: str, hours: int = 24) -> str:
         ip_address: The IP address to search for (e.g., "192.168.1.100", "10.0.0.50")
         hours: Number of hours to look back (default: 24, max: 168)
     """
-    if not _qradar_client:
-        return "Error: QRadar service is not initialized."
+    client = _get_qradar_client()
+    if not client:
+        return "Error: QRadar service is not available."
 
     ip_address = ip_address.strip()
 
@@ -122,7 +126,7 @@ def search_qradar_by_ip(ip_address: str, hours: int = 24) -> str:
 
     logging.info(f"Searching QRadar for IP {ip_address} over last {hours} hours")
 
-    result = _qradar_client.search_events_by_ip(ip_address, hours=hours)
+    result = client.search_events_by_ip(ip_address, hours=hours)
 
     if "error" in result:
         return f"Error: {result['error']}"
@@ -159,8 +163,9 @@ def search_qradar_by_domain(domain: str, hours: int = 24) -> str:
         domain: The domain to search for (e.g., "example.com", "malicious-site.net")
         hours: Number of hours to look back (default: 24, max: 168)
     """
-    if not _qradar_client:
-        return "Error: QRadar service is not initialized."
+    client = _get_qradar_client()
+    if not client:
+        return "Error: QRadar service is not available."
 
     domain = domain.strip().lower()
     domain = domain.replace("https://", "").replace("http://", "")
@@ -171,7 +176,7 @@ def search_qradar_by_domain(domain: str, hours: int = 24) -> str:
 
     logging.info(f"Searching QRadar for domain {domain} over last {hours} hours")
 
-    result = _qradar_client.search_events_by_domain(domain, hours=hours)
+    result = client.search_events_by_domain(domain, hours=hours)
 
     if "error" in result:
         return f"Error: {result['error']}"
@@ -215,12 +220,13 @@ def get_qradar_offense(offense_id: int) -> str:
     Args:
         offense_id: The QRadar offense ID number (e.g., 12345, 131140) - REQUIRED, must be provided by user
     """
-    if not _qradar_client:
-        return "Error: QRadar service is not initialized."
+    client = _get_qradar_client()
+    if not client:
+        return "Error: QRadar service is not available."
 
     logging.info(f"Getting QRadar offense {offense_id}")
 
-    result = _qradar_client.get_offense(offense_id)
+    result = client.get_offense(offense_id)
 
     if "error" in result:
         return f"Error: {result['error']}"
@@ -251,8 +257,9 @@ def list_qradar_offenses(status: str = "OPEN", limit: int = 10) -> str:
         status: Offense status filter - "OPEN", "HIDDEN", "CLOSED", or "all" for no filter (default: "OPEN")
         limit: Maximum number of offenses to return (default: 10, max: 50)
     """
-    if not _qradar_client:
-        return "Error: QRadar service is not initialized."
+    client = _get_qradar_client()
+    if not client:
+        return "Error: QRadar service is not available."
 
     # Validate limit
     limit = min(max(1, limit), 50)
@@ -264,7 +271,7 @@ def list_qradar_offenses(status: str = "OPEN", limit: int = 10) -> str:
 
     logging.info(f"Listing QRadar offenses (status={status}, limit={limit})")
 
-    result = _qradar_client.get_offenses(
+    result = client.get_offenses(
         filter_query=filter_query,
         sort="-last_updated_time",
         limit=limit
@@ -322,8 +329,9 @@ def run_qradar_aql_query(aql_query: str) -> str:
     Args:
         aql_query: The AQL query to execute (e.g., "SELECT * FROM events LAST 1 HOURS LIMIT 10")
     """
-    if not _qradar_client:
-        return "Error: QRadar service is not initialized."
+    client = _get_qradar_client()
+    if not client:
+        return "Error: QRadar service is not available."
 
     aql_query = aql_query.strip()
 
@@ -332,7 +340,7 @@ def run_qradar_aql_query(aql_query: str) -> str:
 
     logging.info(f"Running AQL query: {aql_query[:100]}...")
 
-    result = _qradar_client.run_aql_search(aql_query, timeout=120, max_results=100)
+    result = client.run_aql_search(aql_query, timeout=120, max_results=100)
 
     if "error" in result:
         return f"Error: {result['error']}"

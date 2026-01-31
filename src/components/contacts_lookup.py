@@ -255,10 +255,12 @@ Format each contact like this (make the values bold, not the labels):
 Include phone number only if available. Be concise."""
 
         # Call Ollama directly for speed
+        from my_config import get_config
+        model_name = get_config().ollama_llm_model
         response = requests.post(
             "http://localhost:11434/api/generate",
             json={
-                "model": "qwen2.5:32b",
+                "model": model_name,
                 "prompt": prompt,
                 "stream": False,
                 "options": {"temperature": 0.1}

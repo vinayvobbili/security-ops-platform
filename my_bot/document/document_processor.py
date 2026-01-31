@@ -23,6 +23,7 @@ from langchain_community.document_loaders import (
     UnstructuredWordDocumentLoader,
 )
 from langchain_community.retrievers import BM25Retriever
+from langchain_classic.retrievers import EnsembleRetriever
 from langchain_core.documents import Document
 from langchain_core.retrievers import BaseRetriever
 
@@ -31,16 +32,6 @@ try:
     from langchain.text_splitter import RecursiveCharacterTextSplitter
 except ImportError:
     from langchain_text_splitters import RecursiveCharacterTextSplitter
-
-# Try to import EnsembleRetriever - optional, will fallback to vector-only if unavailable
-EnsembleRetriever = None
-try:
-    from langchain.retrievers import EnsembleRetriever
-except ImportError:
-    try:
-        from langchain_community.retrievers import EnsembleRetriever
-    except ImportError:
-        logging.warning("EnsembleRetriever not available, will use vector-only retrieval")
 
 
 # Collection name for documents
@@ -285,8 +276,8 @@ class DocumentProcessor:
         logging.debug(f"Split into {len(texts)} text chunks.")
         return texts
 
-    def build_and_save_vector_store(self, embeddings=None, batch_size: int = 10) -> bool:
-        """Build and save the vector store from documents (ChromaDB handles persistence)."""
+    def sync_documents(self, embeddings=None, batch_size: int = 10) -> bool:
+        """Add new documents to ChromaDB. Skips already-indexed chunks."""
         if not os.path.exists(self.pdf_directory):
             logging.warning(f"PDF directory '{self.pdf_directory}' does not exist.")
             return False
@@ -389,36 +380,8 @@ class DocumentProcessor:
             return False
 
     def initialize_vector_store(self, embeddings=None) -> bool:
-        """Initialize vector store - load existing or build new."""
-        # Check if we need to rebuild due to new/changed documents
-        if self._should_rebuild_index():
-            logging.debug("New or changed documents detected, syncing to ChromaDB...")
-            self.build_and_save_vector_store(embeddings)
-
+        """Load existing vector store. Use sync_documents() or rebuild_index() to update."""
         return self.load_vector_store(embeddings)
-
-    def _should_rebuild_index(self) -> bool:
-        """Check if vector store should be rebuilt due to document changes."""
-        try:
-            count = self.collection.count()
-            if count == 0:
-                return True
-
-            # Get the latest modification time of documents
-            latest_doc_mtime = 0
-            for file in os.listdir(self.pdf_directory):
-                if file.endswith(('.pdf', '.docx', '.doc', '.xlsx', '.xls')):
-                    file_path = os.path.join(self.pdf_directory, file)
-                    mtime = os.path.getmtime(file_path)
-                    if mtime > latest_doc_mtime:
-                        latest_doc_mtime = mtime
-
-            # Check ChromaDB metadata for last sync time
-            # For simplicity, always sync if documents exist (upsert handles duplicates)
-            return latest_doc_mtime > 0
-
-        except Exception:
-            return True
 
     def create_retriever(self):
         """Create hybrid retriever combining vector and keyword search."""
@@ -431,10 +394,6 @@ class DocumentProcessor:
             logging.error(f"ChromaDB not initialized: {e}")
             return None
 
-        if not self.all_documents:
-            logging.error("Documents not loaded for BM25 retriever")
-            return None
-
         try:
             # Create ChromaDB vector retriever
             vector_retriever = ChromaRetriever(
@@ -443,30 +402,25 @@ class DocumentProcessor:
                 k=self.retrieval_k
             )
 
-            # Create hybrid ensemble retriever if available
-            if EnsembleRetriever is not None:
+            # Create hybrid ensemble retriever (vector + BM25 keyword search)
+            if self.all_documents:
                 bm25_retriever = BM25Retriever.from_documents(self.all_documents)
                 bm25_retriever.k = self.retrieval_k
 
                 self.retriever = EnsembleRetriever(
                     retrievers=[vector_retriever, bm25_retriever],
-                    weights=[0.65, 0.35]
+                    weights=[0.7, 0.3]  # 70% vector similarity, 30% keyword matching
                 )
-                logging.debug("Hybrid retriever created (65% vector + 35% BM25)")
+                logging.info("Hybrid retriever created (70% vector + 30% BM25)")
             else:
                 self.retriever = vector_retriever
-                logging.debug("Using vector-only retriever")
+                logging.info("Using vector-only retriever (no documents for BM25)")
 
             return self.retriever
 
         except Exception as e:
             logging.error(f"Failed to create retriever: {e}")
-            self.retriever = ChromaRetriever(
-                collection=self.collection,
-                embedding_fn=self._embedding_fn,
-                k=self.retrieval_k
-            )
-            return self.retriever
+            return None
 
     def create_rag_tool(self):
         """Create RAG tool for document search with source attribution."""
@@ -540,9 +494,9 @@ class DocumentProcessor:
         except Exception as e:
             return f"Error testing document search: {e}"
 
-    def force_rebuild(self, embeddings=None) -> bool:
-        """Force rebuild the vector store from scratch."""
-        logging.debug("Force rebuilding vector store...")
+    def rebuild_index(self, embeddings=None) -> bool:
+        """Delete and rebuild the entire ChromaDB index from scratch."""
+        logging.debug("Rebuilding vector store from scratch...")
 
         # Delete existing collection
         try:
@@ -557,7 +511,7 @@ class DocumentProcessor:
         self.all_documents = []
 
         # Rebuild
-        success = self.build_and_save_vector_store(embeddings)
+        success = self.sync_documents(embeddings)
         if success:
             return self.initialize_vector_store(embeddings) and self.create_retriever() is not None
         return False

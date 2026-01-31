@@ -66,6 +66,7 @@ def get_help_response() -> str:
 - `tipper 12345` - Analyze threat tipper & post to AZDO
 - `contacts EMEA` - Look up escalation contacts
 - `execsum 929947` - Generate XSOAR ticket executive summary
+- `falcon get browser history from HOST123` - Collect browser history via RTR
 - `clear my session` - Reset conversation memory
 
 ---
@@ -121,6 +122,8 @@ def get_help_response() -> str:
 🦅 **CrowdStrike**
 `Is HOST123 contained in CrowdStrike?`
 `Get CrowdStrike details for HOST123`
+`falcon get browser history from HOST123`
+`falcon check detections for HOST123`
 
 🏢 **ServiceNow**
 `Get ServiceNow details for HOST123`
@@ -323,6 +326,173 @@ def handle_rules_command(query: str) -> dict:
         logger.error(f"Rules command error: {e}", exc_info=True)
         default_metrics['content'] = f"Failed to search detection rules: {e}"
         return default_metrics
+
+
+def is_falcon_command(query_text: str) -> tuple:
+    """
+    Detect if user is requesting a CrowdStrike/Falcon operation.
+
+    Supports patterns like:
+    - "falcon get browser history from HOST123"
+    - "falcon check containment status for HOST456"
+    - "falcon detections for LAPTOP789"
+    - "cs get device details for SERVER01"
+
+    Args:
+        query_text: The user's query string
+
+    Returns:
+        tuple: (is_falcon_command: bool, falcon_query: str or None)
+    """
+    import re
+    query_lower = query_text.lower().strip()
+
+    # Match "falcon <query>" or "cs <query>" prefixes
+    patterns = [
+        r'^falcon\s+(.+)$',
+        r'^crowdstrike\s+(.+)$',
+        r'^cs\s+(.+)$',
+    ]
+
+    for pattern in patterns:
+        match = re.match(pattern, query_lower)
+        if match:
+            falcon_query = match.group(1).strip()
+            return (True, falcon_query)
+
+    return (False, None)
+
+
+def handle_falcon_command(query: str, room_id: str = None) -> dict:
+    """
+    Handle CrowdStrike/Falcon commands using LLM with CrowdStrike tools.
+
+    This function processes falcon commands by:
+    1. Passing the query to an LLM agent with CrowdStrike tools
+    2. The LLM decides which tool to call and extracts parameters
+    3. Handling file uploads for large results (e.g., browser history)
+
+    Args:
+        query: The falcon query (without the "falcon" prefix)
+        room_id: Optional Webex room ID for file uploads
+
+    Returns:
+        dict with 'content', 'file_path' (optional), and token metrics
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+
+    # Simple tool-calling approach: LLM picks the tool, we execute it once
+    try:
+        import time
+        from langchain_core.messages import SystemMessage, HumanMessage
+
+        # Import CrowdStrike tools (including browser history collection)
+        from my_bot.tools.crowdstrike_tools import (
+            get_device_containment_status,
+            get_device_online_status,
+            get_device_details_cs,
+            get_crowdstrike_detections,
+            get_crowdstrike_detection_details,
+            search_crowdstrike_detections_by_hostname,
+            get_crowdstrike_incidents,
+            get_crowdstrike_incident_details,
+            collect_browser_history,
+            get_and_clear_generated_file_path
+        )
+
+        cs_tools = [
+            get_device_containment_status,
+            get_device_online_status,
+            get_device_details_cs,
+            get_crowdstrike_detections,
+            get_crowdstrike_detection_details,
+            search_crowdstrike_detections_by_hostname,
+            get_crowdstrike_incidents,
+            get_crowdstrike_incident_details,
+            collect_browser_history
+        ]
+
+        # Build a tool lookup by name
+        tool_map = {t.name: t for t in cs_tools}
+
+        # Get the LLM from state manager
+        state_manager = get_state_manager()
+        if not state_manager or not state_manager.llm:
+            return {
+                'content': "❌ LLM not initialized. Please try again.",
+                'file_path': None,
+                'input_tokens': 0, 'output_tokens': 0, 'total_tokens': 0,
+                'prompt_time': 0.0, 'generation_time': 0.0, 'tokens_per_sec': 0.0
+            }
+
+        # Bind tools to the LLM
+        llm_with_tools = state_manager.llm.bind_tools(cs_tools)
+
+        # System prompt for CrowdStrike operations
+        cs_system_prompt = """You are a CrowdStrike/Falcon expert assistant for security operations.
+You have access to CrowdStrike tools for device management, detection analysis, incident response, and RTR operations.
+
+Always use the appropriate tool to answer CrowdStrike-related questions.
+Extract parameters like hostname from the user's query.
+Call exactly one tool to fulfill the request."""
+
+        messages = [
+            SystemMessage(content=cs_system_prompt),
+            HumanMessage(content=query)
+        ]
+
+        start_time = time.time()
+
+        # Step 1: Ask LLM which tool to call
+        response = llm_with_tools.invoke(messages)
+
+        # Step 2: If LLM made a tool call, execute it
+        output = ""
+        if response.tool_calls:
+            tool_call = response.tool_calls[0]  # Take the first tool call
+            tool_name = tool_call["name"]
+            tool_args = tool_call["args"]
+
+            logger.info(f"Falcon tool call: {tool_name}({tool_args})")
+
+            if tool_name in tool_map:
+                tool_result = tool_map[tool_name].invoke(tool_args)
+                output = tool_result
+            else:
+                output = f"Unknown tool: {tool_name}"
+        else:
+            # LLM responded without calling a tool
+            output = response.content
+
+        execution_time = time.time() - start_time
+
+        # Check if a file was generated (e.g., browser history Excel)
+        file_path = get_and_clear_generated_file_path()
+
+        return {
+            'content': output or 'No response from CrowdStrike agent',
+            'file_path': file_path,
+            'input_tokens': 0,
+            'output_tokens': 0,
+            'total_tokens': 0,
+            'prompt_time': execution_time,
+            'generation_time': 0.0,
+            'tokens_per_sec': 0.0
+        }
+
+    except Exception as e:
+        logger.error(f"Falcon command error: {e}", exc_info=True)
+        return {
+            'content': f"❌ **Falcon Command Failed**\n\nError processing CrowdStrike request: {e}",
+            'file_path': None,
+            'input_tokens': 0,
+            'output_tokens': 0,
+            'total_tokens': 0,
+            'prompt_time': 0.0,
+            'generation_time': 0.0,
+            'tokens_per_sec': 0.0
+        }
 
 
 def _is_clear_session_command(query_text: str) -> bool:

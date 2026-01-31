@@ -11,7 +11,9 @@ from typing import Any, Dict
 
 from services.abusech import bulk_check_domains as abusech_bulk_check
 from services.abuseipdb import bulk_check_domains as abuseipdb_bulk_check, AbuseIPDBClient
-from services.cert_transparency import check_lookalike_certs
+from services.cert_transparency import (
+    check_lookalike_certs, check_suspicious_domains, discover_brand_impersonation
+)
 from services.dark_web_monitor import search_dark_web
 from services.intelx import search_intelx, get_client as get_intelx_client
 from services.domain_monitor import scan_domain
@@ -21,9 +23,10 @@ from services.whois_monitor import scan_domains_whois
 from services.domain_lookalike import enrich_with_recorded_future
 
 from .config import (
-    EASTERN_TZ, RESULTS_DIR, WEB_BASE_URL,
+    EASTERN_TZ, RESULTS_DIR, WEB_BASE_URL, CONFIG_FILE,
     ALERT_ROOM_ID_TEST, ALERT_ROOM_ID_PROD,
-    load_monitored_domains, get_webex_api, get_vt_client, set_active_room_id,
+    load_monitored_domains, load_watchlist, load_defensive_domains,
+    get_webex_api, get_vt_client, set_active_room_id,
 )
 from .enrichment import enrich_with_virustotal
 from .alerts import send_daily_summary
@@ -104,6 +107,8 @@ def run_daily_monitoring(room_id: str | None = None) -> None:
         "total_mx_changes": 0,
         "total_dark_web_findings": 0,
         "total_ct_findings": 0,
+        "total_watchlist_with_certs": 0,  # Semantic impersonation domains with SSL certs
+        "total_censys_brand_impersonation": 0,  # Brand impersonation found via Censys CT search
         "total_whois_changes": 0,
         "total_vt_high_risk": 0,
         "total_hibp_breaches": 0,
@@ -207,6 +212,72 @@ def run_daily_monitoring(room_id: str | None = None) -> None:
                 results["total_ct_findings"] += ct_findings
                 # Individual CT alert disabled - included in daily summary
 
+        # Watchlist monitoring for semantic impersonation domains
+        # These are domains like "acme-loan.com" that dnstwist can't detect
+        watchlist_domains = load_watchlist(domain)
+        if watchlist_domains:
+            logger.info(f"Checking CT logs for {len(watchlist_domains)} watchlist domains")
+            watchlist_result = check_suspicious_domains(watchlist_domains, days_back=90)
+            results["domains"][domain]["watchlist"] = watchlist_result
+
+            if watchlist_result.get("success"):
+                domains_with_certs = watchlist_result.get("domains_with_certs", [])
+                results["total_watchlist_with_certs"] += len(domains_with_certs)
+
+                # Add watchlist domains with certs to active_lookalikes for further enrichment
+                for d in domains_with_certs:
+                    if d["domain"] not in active_lookalikes:
+                        active_lookalikes.append(d["domain"])
+
+        # Brand CT log search for impersonation (via crt.sh - FREE)
+        # This catches semantic attacks like acme-loan.com that dnstwist cannot detect
+        # by searching for ANY certificate containing the brand name
+        brand_name = domain.split('.')[0]  # e.g., "acme" from "acme.com"
+
+        # Load brand-specific legitimate domains from config
+        try:
+            with open(CONFIG_FILE) as f:
+                brand_config = json.load(f).get("brand_monitoring", {}).get(brand_name, {})
+            legitimate_domains = brand_config.get("legitimate_domains", [])
+        except (FileNotFoundError, json.JSONDecodeError):
+            legitimate_domains = []
+
+        # Fall back to defensive domains if no brand config
+        if not legitimate_domains:
+            legitimate_domains = load_defensive_domains(domain)
+
+        logger.info(f"Searching crt.sh CT logs for '{brand_name}' brand impersonation")
+
+        try:
+            brand_result = discover_brand_impersonation(
+                brand=brand_name,
+                legitimate_domains=legitimate_domains,
+                hours_back=48,  # Look back 48 hours for new certs
+            )
+            results["domains"][domain]["brand_ct_search"] = brand_result
+
+            if brand_result.get("success"):
+                new_domains = brand_result.get("new_domains", [])
+                results["total_censys_brand_impersonation"] += len(new_domains)
+
+                # Add newly discovered impersonation domains to active_lookalikes
+                for imp in new_domains:
+                    imp_domain = imp.get("domain")
+                    if imp_domain and imp_domain not in active_lookalikes:
+                        active_lookalikes.append(imp_domain)
+                        logger.warning(f"CT logs discovered brand impersonation: {imp_domain}")
+
+                if new_domains:
+                    logger.warning(
+                        f"Found {len(new_domains)} NEW brand impersonation domains "
+                        f"with SSL certs for '{brand_name}'"
+                    )
+                else:
+                    logger.info(f"Brand monitoring for '{brand_name}': no new suspicious domains")
+        except Exception as e:
+            logger.error(f"Brand CT search failed for {domain}: {e}")
+            results["domains"][domain]["brand_ct_search"] = {"success": False, "error": str(e)}
+
         # WHOIS monitoring for active lookalikes
         if active_lookalikes:
             logger.info(f"Checking WHOIS for {len(active_lookalikes)} active lookalike domains")
@@ -293,6 +364,8 @@ def run_daily_monitoring(room_id: str | None = None) -> None:
         f"{results['total_dark_web_findings']} data leak findings, "
         f"{results['total_intelx_findings']} IntelX dark web findings, "
         f"{results['total_ct_findings']} CT findings, "
+        f"{results['total_watchlist_with_certs']} watchlist domains with SSL certs, "
+        f"{results['total_censys_brand_impersonation']} Censys brand impersonation domains, "
         f"{results['total_whois_changes']} WHOIS changes, "
         f"{results['total_vt_high_risk']} VT high risk, "
         f"{results['total_hibp_breaches']} HIBP breaches, "

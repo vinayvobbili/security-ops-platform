@@ -1,0 +1,750 @@
+{
+  "name": "Detection Engineering - Automated Test Validation",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "detection-test",
+        "responseMode": "onReceived",
+        "responseData": "allEntries",
+        "options": {
+          "responseContentType": "application/json"
+        }
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook - Receive Test Parameters",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 300],
+      "webhookId": "detection-test-webhook",
+      "notes": "Receives: test_name (e.g., 'T1059.001 - PowerShell'), target_host, expected_detection, test_command (optional), trigger_method ('ssh' or 'api')"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Validate and prepare test parameters\nconst input = $input.first().json.body || $input.first().json;\n\nconst testParams = {\n  test_id: `DET-${Date.now()}`,\n  test_name: input.test_name || 'Unknown Test',\n  target_host: input.target_host,\n  expected_detection: input.expected_detection,\n  test_command: input.test_command || '',\n  trigger_method: input.trigger_method || 'ssh', // 'ssh' or 'api'\n  api_endpoint: input.api_endpoint || '',\n  mitre_technique: extractMitreTechnique(input.test_name),\n  expected_severity: input.expected_severity || 'Medium',\n  start_time: new Date().toISOString(),\n  start_timestamp: Date.now(),\n  detection_window_minutes: input.detection_window || 10,\n  wait_time_minutes: input.wait_time || 3\n};\n\nfunction extractMitreTechnique(testName) {\n  const match = testName.match(/T\\d{4}(\\.\\d{3})?/);\n  return match ? match[0] : 'Unknown';\n}\n\nif (!testParams.target_host) {\n  throw new Error('target_host is required');\n}\n\nif (!testParams.expected_detection) {\n  throw new Error('expected_detection is required');\n}\n\nreturn [{ json: testParams }];"
+      },
+      "id": "validate-params",
+      "name": "Validate & Prepare Test Parameters",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [470, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "trigger-method-check",
+              "leftValue": "={{ $json.trigger_method }}",
+              "rightValue": "ssh",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "switch-trigger-method",
+      "name": "Switch - Trigger Method",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [690, 300]
+    },
+    {
+      "parameters": {
+        "authentication": "privateKey",
+        "command": "={{ $json.test_command }}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "ssh-trigger-test",
+      "name": "SSH - Execute Atomic Test",
+      "type": "n8n-nodes-base.ssh",
+      "typeVersion": 1,
+      "position": [910, 200],
+      "credentials": {
+        "sshPassword": {
+          "id": "ssh-credential-id",
+          "name": "Target Host SSH"
+        }
+      },
+      "notes": "SSH to target host and execute the atomic test command"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.api_endpoint }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"target_host\": \"{{ $json.target_host }}\",\n  \"test_name\": \"{{ $json.test_name }}\",\n  \"test_command\": \"{{ $json.test_command }}\",\n  \"mitre_technique\": \"{{ $json.mitre_technique }}\"\n}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "api-trigger-test",
+      "name": "HTTP - Call Test Trigger API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [910, 400],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "test-api-auth",
+          "name": "Internal Test API Auth"
+        }
+      },
+      "notes": "Call internal API to trigger atomic test on target"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineAll",
+        "options": {}
+      },
+      "id": "merge-trigger-results",
+      "name": "Merge - After Trigger",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [1130, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Capture trigger result and prepare for wait\nconst testParams = $('Validate & Prepare Test Parameters').first().json;\n\nconst triggerResult = {\n  ...testParams,\n  trigger_completed: true,\n  trigger_time: new Date().toISOString(),\n  trigger_timestamp: Date.now()\n};\n\nreturn [{ json: triggerResult }];"
+      },
+      "id": "capture-trigger-result",
+      "name": "Capture Trigger Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1350, 300]
+    },
+    {
+      "parameters": {
+        "unit": "minutes",
+        "value": "={{ $json.wait_time_minutes }}"
+      },
+      "id": "wait-for-detection",
+      "name": "Wait - Detection Propagation (2-5 min)",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [1570, 300],
+      "notes": "Wait 2-5 minutes for detection to propagate through security tools"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.crowdstrike.com/detects/queries/detects/v1",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "filter",
+              "value": "=device.hostname:'{{ $json.target_host }}'+created_timestamp:>'{{ $now.minus({minutes: $json.detection_window_minutes}).toISO() }}'"
+            },
+            {
+              "name": "limit",
+              "value": "100"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "crowdstrike-query-detections",
+      "name": "CrowdStrike - Query Detections",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1790, 200],
+      "credentials": {
+        "oAuth2Api": {
+          "id": "crowdstrike-oauth",
+          "name": "CrowdStrike OAuth2"
+        }
+      },
+      "notes": "Query CrowdStrike for detections on target_host in last 10 minutes"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.crowdstrike.com/detects/entities/summaries/GET/v1",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"ids\": {{ JSON.stringify($json.resources || []) }}\n}",
+        "options": {}
+      },
+      "id": "crowdstrike-get-detection-details",
+      "name": "CrowdStrike - Get Detection Details",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2010, 200],
+      "credentials": {
+        "oAuth2Api": {
+          "id": "crowdstrike-oauth",
+          "name": "CrowdStrike OAuth2"
+        }
+      },
+      "notes": "Get full detection details including technique, severity, behaviors"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://{{ $env.QRADAR_HOST }}/api/siem/offenses",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "filter",
+              "value": "=status=OPEN and offense_source='{{ $json.target_host }}' and start_time > {{ $json.start_timestamp - 600000 }}"
+            },
+            {
+              "name": "fields",
+              "value": "id,description,offense_type,offense_source,magnitude,severity,start_time,rules"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "qradar-query-offenses",
+      "name": "QRadar - Query Offenses",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1790, 400],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "qradar-auth",
+          "name": "QRadar SEC Token"
+        }
+      },
+      "notes": "Query QRadar for offenses related to target_host"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://{{ $env.QRADAR_HOST }}/api/ariel/searches",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"query_expression\": \"SELECT QIDNAME(qid) as rule_name, starttime, sourceip, destinationip, username, magnitude FROM events WHERE sourceip = '{{ $json.target_host }}' OR destinationip = '{{ $json.target_host }}' AND starttime > {{ $json.start_timestamp - 600000 }} ORDER BY starttime DESC LIMIT 100\"\n}",
+        "options": {}
+      },
+      "id": "qradar-search-events",
+      "name": "QRadar - Search Related Events",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2010, 400],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "qradar-auth",
+          "name": "QRadar SEC Token"
+        }
+      },
+      "notes": "Search QRadar for events that might indicate rule triggers"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineAll",
+        "options": {}
+      },
+      "id": "merge-security-results",
+      "name": "Merge - Security Tool Results",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [2230, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Compare expected vs actual detection results\nconst testParams = $('Capture Trigger Result').first().json;\nconst crowdstrikeDetections = $('CrowdStrike - Get Detection Details').first().json?.resources || [];\nconst qradarOffenses = $('QRadar - Query Offenses').first().json || [];\n\nconst currentTime = Date.now();\nconst expectedDetection = testParams.expected_detection.toLowerCase();\nconst expectedTechnique = testParams.mitre_technique;\nconst expectedSeverity = testParams.expected_severity;\n\n// Analyze CrowdStrike detections\nlet crowdstrikeMatch = null;\nlet crowdstrikeDetected = false;\nlet crowdstrikeTTD = null;\nlet crowdstrikeSeverityMatch = false;\n\nfor (const detection of crowdstrikeDetections) {\n  const detectName = (detection.detect_name || '').toLowerCase();\n  const technique = detection.behaviors?.[0]?.technique_id || '';\n  const severity = detection.max_severity_displayname || '';\n  \n  if (detectName.includes(expectedDetection) || \n      technique === expectedTechnique ||\n      (detection.behaviors || []).some(b => b.technique_id === expectedTechnique)) {\n    crowdstrikeDetected = true;\n    crowdstrikeMatch = detection;\n    \n    // Calculate time to detect\n    const detectTime = new Date(detection.created_timestamp).getTime();\n    crowdstrikeTTD = Math.round((detectTime - testParams.trigger_timestamp) / 1000);\n    \n    // Check severity match\n    crowdstrikeSeverityMatch = severity.toLowerCase() === expectedSeverity.toLowerCase();\n    break;\n  }\n}\n\n// Analyze QRadar offenses\nlet qradarMatch = null;\nlet qradarDetected = false;\nlet qradarTTD = null;\nlet qradarSeverityMatch = false;\n\nfor (const offense of qradarOffenses) {\n  const description = (offense.description || '').toLowerCase();\n  const rules = offense.rules || [];\n  \n  if (description.includes(expectedDetection) ||\n      rules.some(r => r.name?.toLowerCase().includes(expectedDetection))) {\n    qradarDetected = true;\n    qradarMatch = offense;\n    \n    // Calculate time to detect\n    qradarTTD = Math.round((offense.start_time - testParams.trigger_timestamp) / 1000);\n    \n    // Check severity (QRadar uses magnitude 1-10)\n    const qradarSeverityMap = {\n      'Low': [1, 3],\n      'Medium': [4, 6],\n      'High': [7, 8],\n      'Critical': [9, 10]\n    };\n    const expectedRange = qradarSeverityMap[expectedSeverity] || [0, 10];\n    qradarSeverityMatch = offense.magnitude >= expectedRange[0] && offense.magnitude <= expectedRange[1];\n    break;\n  }\n}\n\n// Determine overall pass/fail\nconst detectionFired = crowdstrikeDetected || qradarDetected;\nconst avgTTD = (() => {\n  const times = [crowdstrikeTTD, qradarTTD].filter(t => t !== null);\n  return times.length > 0 ? Math.round(times.reduce((a, b) => a + b, 0) / times.length) : null;\n})();\n\nconst testResult = {\n  test_id: testParams.test_id,\n  test_name: testParams.test_name,\n  mitre_technique: testParams.mitre_technique,\n  target_host: testParams.target_host,\n  expected_detection: testParams.expected_detection,\n  expected_severity: expectedSeverity,\n  \n  // Overall results\n  overall_status: detectionFired ? 'PASS' : 'FAIL',\n  detection_fired: detectionFired,\n  average_ttd_seconds: avgTTD,\n  average_ttd_formatted: avgTTD ? `${Math.floor(avgTTD / 60)}m ${avgTTD % 60}s` : 'N/A',\n  \n  // CrowdStrike results\n  crowdstrike: {\n    detected: crowdstrikeDetected,\n    detection_name: crowdstrikeMatch?.detect_name || 'N/A',\n    detection_id: crowdstrikeMatch?.detection_id || 'N/A',\n    severity: crowdstrikeMatch?.max_severity_displayname || 'N/A',\n    severity_matched: crowdstrikeSeverityMatch,\n    ttd_seconds: crowdstrikeTTD,\n    technique_detected: crowdstrikeMatch?.behaviors?.[0]?.technique_id || 'N/A'\n  },\n  \n  // QRadar results\n  qradar: {\n    detected: qradarDetected,\n    offense_id: qradarMatch?.id || 'N/A',\n    offense_description: qradarMatch?.description || 'N/A',\n    magnitude: qradarMatch?.magnitude || 'N/A',\n    severity_matched: qradarSeverityMatch,\n    ttd_seconds: qradarTTD,\n    rules_triggered: qradarMatch?.rules?.map(r => r.name) || []\n  },\n  \n  // Timestamps\n  test_start_time: testParams.start_time,\n  trigger_time: testParams.trigger_time,\n  analysis_time: new Date().toISOString(),\n  \n  // Notes for review\n  notes: generateNotes(detectionFired, crowdstrikeDetected, qradarDetected, avgTTD)\n};\n\nfunction generateNotes(fired, cs, qr, ttd) {\n  const notes = [];\n  \n  if (!fired) {\n    notes.push('ALERT: Expected detection did not fire - review detection rules');\n  }\n  \n  if (cs && !qr) {\n    notes.push('Detection only in CrowdStrike - check QRadar rules/forwarding');\n  } else if (!cs && qr) {\n    notes.push('Detection only in QRadar - check CrowdStrike sensor/rules');\n  }\n  \n  if (ttd && ttd > 180) {\n    notes.push(`TTD (${ttd}s) exceeds 3 minute threshold - investigate delay`);\n  }\n  \n  if (fired && ttd && ttd < 60) {\n    notes.push('Excellent TTD under 1 minute');\n  }\n  \n  return notes.length > 0 ? notes.join('; ') : 'Test completed successfully';\n}\n\nreturn [{ json: testResult }];"
+      },
+      "id": "compare-results",
+      "name": "Compare Expected vs Actual",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2450, 300],
+      "notes": "Compare expected detection with actual results from CrowdStrike and QRadar"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Format test results for logging and reporting\nconst result = $input.first().json;\n\nconst logEntry = {\n  timestamp: new Date().toISOString(),\n  test_id: result.test_id,\n  test_name: result.test_name,\n  mitre_technique: result.mitre_technique,\n  target_host: result.target_host,\n  status: result.overall_status,\n  detection_fired: result.detection_fired,\n  ttd_seconds: result.average_ttd_seconds,\n  ttd_formatted: result.average_ttd_formatted,\n  crowdstrike_detected: result.crowdstrike.detected,\n  crowdstrike_severity: result.crowdstrike.severity,\n  qradar_detected: result.qradar.detected,\n  qradar_magnitude: result.qradar.magnitude,\n  notes: result.notes,\n  \n  // Full result for detailed logging\n  full_result: result\n};\n\n// Format for Webex message\nconst statusEmoji = result.overall_status === 'PASS' ? 'white_check_mark' : 'x';\nconst webexMessage = `**Detection Test Result**\n\n**Test:** ${result.test_name}\n**Status:** ${result.overall_status} :${statusEmoji}:\n**Target:** ${result.target_host}\n**MITRE Technique:** ${result.mitre_technique}\n\n**Detection Results:**\n- CrowdStrike: ${result.crowdstrike.detected ? 'Detected' : 'Not Detected'} ${result.crowdstrike.detected ? `(${result.crowdstrike.severity})` : ''}\n- QRadar: ${result.qradar.detected ? 'Detected' : 'Not Detected'} ${result.qradar.detected ? `(Magnitude: ${result.qradar.magnitude})` : ''}\n\n**Time to Detect:** ${result.average_ttd_formatted}\n\n**Notes:** ${result.notes}\n\n---\n*Test ID: ${result.test_id}*`;\n\nreturn [{\n  json: {\n    ...result,\n    logEntry: logEntry,\n    webexMessage: webexMessage\n  }\n}];"
+      },
+      "id": "format-results",
+      "name": "Format Results for Logging",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2670, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://webexapis.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"roomId\": \"{{ $env.WEBEX_DETECTION_ENGINEERING_ROOM_ID }}\",\n  \"markdown\": {{ JSON.stringify($json.webexMessage) }}\n}",
+        "options": {}
+      },
+      "id": "webex-post-results",
+      "name": "Webex - Post to Detection Engineering Channel",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2890, 200],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "webex-token",
+          "name": "Webex Bot Token"
+        }
+      },
+      "notes": "Post test results to the detection-engineering Webex channel"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $env.DETECTION_TEST_SPREADSHEET_ID }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Test Results",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Timestamp": "={{ $json.logEntry.timestamp }}",
+            "Test ID": "={{ $json.test_id }}",
+            "Test Name": "={{ $json.test_name }}",
+            "MITRE Technique": "={{ $json.mitre_technique }}",
+            "Target Host": "={{ $json.target_host }}",
+            "Status": "={{ $json.overall_status }}",
+            "Detection Fired": "={{ $json.detection_fired }}",
+            "TTD (seconds)": "={{ $json.average_ttd_seconds }}",
+            "TTD (formatted)": "={{ $json.average_ttd_formatted }}",
+            "CrowdStrike Detected": "={{ $json.crowdstrike.detected }}",
+            "CrowdStrike Severity": "={{ $json.crowdstrike.severity }}",
+            "QRadar Detected": "={{ $json.qradar.detected }}",
+            "QRadar Magnitude": "={{ $json.qradar.magnitude }}",
+            "Notes": "={{ $json.notes }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "google-sheets-log",
+      "name": "Google Sheets - Log Results",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [2890, 400],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "google-sheets-oauth",
+          "name": "Google Sheets OAuth2"
+        }
+      },
+      "notes": "Append test results to tracking spreadsheet"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.DETECTION_TEST_DATABASE_URL }}/api/test-results",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.logEntry) }}",
+        "options": {}
+      },
+      "id": "database-store-results",
+      "name": "HTTP - Store in Database (Optional)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2890, 600],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "database-api-auth",
+          "name": "Test Database API Auth"
+        }
+      },
+      "notes": "Optional: Store results in a tracking database for historical analysis",
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineAll",
+        "options": {}
+      },
+      "id": "merge-final",
+      "name": "Merge - Final Results",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [3110, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Prepare final response\nconst result = $('Format Results for Logging').first().json;\n\nconst response = {\n  success: true,\n  test_id: result.test_id,\n  test_name: result.test_name,\n  overall_status: result.overall_status,\n  detection_fired: result.detection_fired,\n  time_to_detect: result.average_ttd_formatted,\n  crowdstrike: {\n    detected: result.crowdstrike.detected,\n    severity: result.crowdstrike.severity\n  },\n  qradar: {\n    detected: result.qradar.detected,\n    magnitude: result.qradar.magnitude\n  },\n  notes: result.notes,\n  message: result.overall_status === 'PASS' \n    ? 'Detection test passed - rule is working as expected'\n    : 'Detection test failed - review detection rules and sensor configuration'\n};\n\nreturn [{ json: response }];"
+      },
+      "id": "prepare-response",
+      "name": "Prepare Final Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3330, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}"
+      },
+      "id": "respond-webhook",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [3550, 300]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "error-info",
+              "name": "error",
+              "type": "object",
+              "value": "={{ $execution?.error || $json.error || 'Unknown error occurred' }}"
+            },
+            {
+              "id": "test-id",
+              "name": "test_id",
+              "type": "string",
+              "value": "={{ $('Validate & Prepare Test Parameters').first().json.test_id || 'unknown' }}"
+            },
+            {
+              "id": "test-name",
+              "name": "test_name",
+              "type": "string",
+              "value": "={{ $('Validate & Prepare Test Parameters').first().json.test_name || 'unknown' }}"
+            }
+          ]
+        }
+      },
+      "id": "error-handler-set",
+      "name": "Set Error Info",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [2890, 800]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://webexapis.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"roomId\": \"{{ $env.WEBEX_DETECTION_ENGINEERING_ROOM_ID }}\",\n  \"markdown\": \"**Detection Test Error** :warning:\\n\\n**Test ID:** {{ $json.test_id }}\\n**Test Name:** {{ $json.test_name }}\\n\\n**Error:** {{ $json.error }}\\n\\nPlease review the workflow execution for details.\"\n}",
+        "options": {}
+      },
+      "id": "webex-error-notification",
+      "name": "Webex - Error Notification",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [3110, 800],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "webex-token",
+          "name": "Webex Bot Token"
+        }
+      },
+      "notes": "Notify team of test execution errors"
+    }
+  ],
+  "connections": {
+    "Webhook - Receive Test Parameters": {
+      "main": [
+        [
+          {
+            "node": "Validate & Prepare Test Parameters",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate & Prepare Test Parameters": {
+      "main": [
+        [
+          {
+            "node": "Switch - Trigger Method",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch - Trigger Method": {
+      "main": [
+        [
+          {
+            "node": "SSH - Execute Atomic Test",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "HTTP - Call Test Trigger API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SSH - Execute Atomic Test": {
+      "main": [
+        [
+          {
+            "node": "Merge - After Trigger",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP - Call Test Trigger API": {
+      "main": [
+        [
+          {
+            "node": "Merge - After Trigger",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge - After Trigger": {
+      "main": [
+        [
+          {
+            "node": "Capture Trigger Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Capture Trigger Result": {
+      "main": [
+        [
+          {
+            "node": "Wait - Detection Propagation (2-5 min)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait - Detection Propagation (2-5 min)": {
+      "main": [
+        [
+          {
+            "node": "CrowdStrike - Query Detections",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "QRadar - Query Offenses",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CrowdStrike - Query Detections": {
+      "main": [
+        [
+          {
+            "node": "CrowdStrike - Get Detection Details",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CrowdStrike - Get Detection Details": {
+      "main": [
+        [
+          {
+            "node": "Merge - Security Tool Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "QRadar - Query Offenses": {
+      "main": [
+        [
+          {
+            "node": "QRadar - Search Related Events",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "QRadar - Search Related Events": {
+      "main": [
+        [
+          {
+            "node": "Merge - Security Tool Results",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge - Security Tool Results": {
+      "main": [
+        [
+          {
+            "node": "Compare Expected vs Actual",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compare Expected vs Actual": {
+      "main": [
+        [
+          {
+            "node": "Format Results for Logging",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Results for Logging": {
+      "main": [
+        [
+          {
+            "node": "Webex - Post to Detection Engineering Channel",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Google Sheets - Log Results",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "HTTP - Store in Database (Optional)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webex - Post to Detection Engineering Channel": {
+      "main": [
+        [
+          {
+            "node": "Merge - Final Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets - Log Results": {
+      "main": [
+        [
+          {
+            "node": "Merge - Final Results",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge - Final Results": {
+      "main": [
+        [
+          {
+            "node": "Prepare Final Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Final Response": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Error Info": {
+      "main": [
+        [
+          {
+            "node": "Webex - Error Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "Detection Engineering",
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z"
+    },
+    {
+      "name": "Automated Testing",
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z"
+    },
+    {
+      "name": "Security Validation",
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z"
+    }
+  ],
+  "triggerCount": 1,
+  "updatedAt": "2024-01-01T00:00:00.000Z",
+  "versionId": "1"
+}

@@ -5,7 +5,6 @@ This module contains the main analysis logic for determining tipper novelty
 against historical data.
 """
 
-import json
 import logging
 import re
 import time
@@ -15,7 +14,7 @@ import services.azdo as azdo
 from src.components.tipper_indexer import TipperIndexer
 from my_config import get_config
 
-from .models import NoveltyAnalysis, IOCHuntResult
+from .models import NoveltyAnalysis, NoveltyLLMResponse, IOCHuntResult
 from .formatters import format_analysis_for_display, format_analysis_for_azdo, format_hunt_results_for_azdo
 from .hunting import hunt_iocs
 
@@ -31,15 +30,10 @@ class TipperAnalyzer:
 
     @property
     def llm(self):
-        """Lazy load LLM from state manager with higher temperature for analysis."""
+        """Lazy load LLM with higher temperature for analysis."""
         if self._llm is None:
-            from my_bot.core.state_manager import get_state_manager
-            state_manager = get_state_manager()
-            if state_manager and state_manager.is_initialized:
-                # Use higher temperature (0.4) for more natural analysis prose
-                self._llm = state_manager.get_llm_with_temperature(0.4)
-                if not self._llm:
-                    self._llm = state_manager.llm  # Fallback to default
+            from src.components.tipper_analyzer.llm_init import get_llm_with_temperature
+            self._llm = get_llm_with_temperature(0.4)
         return self._llm
 
     # -------------------------------------------------------------------------
@@ -370,11 +364,11 @@ class TipperAnalyzer:
 """
 
         if similar_tippers:
-            for i, similar in enumerate(similar_tippers, 1):
+            for similar in similar_tippers:
                 meta = similar['metadata']
+                tipper_id = meta.get('id', 'Unknown')
                 prompt += f"""
-### Similar Tipper #{i} (Similarity: {similar['similarity_score']:.0%})
-- **ID**: {meta.get('id', 'Unknown')}
+### Ticket #{tipper_id} (Similarity: {similar['similarity_score']:.0%})
 - **Title**: {meta.get('title', 'No title')}
 - **Tags**: {meta.get('tags', 'None')}
 - **Created**: {meta.get('created_date', 'Unknown')[:10]}
@@ -450,55 +444,52 @@ class TipperAnalyzer:
 
 ## YOUR TASK
 
-Analyze the NEW tipper and provide:
+Analyze the NEW tipper against the historical tippers above and provide:
 
 1. **NOVELTY SCORE** (1-10):
-   - 1-3: "Seen Before" - Very similar to past tippers, same threat actor, same TTPs
+   - 1-3: "Seen Before" - Nearly identical to a past tipper, same actor/campaign
    - 4-5: "Familiar" - Similar patterns but some variations
    - 6-7: "Mostly New" - New elements but some familiar aspects
-   - 8-10: "Net New" - New threat actor, new TTPs, new tools, or new campaign
+   - 8-10: "Net New" - New threat actor, new TTPs, new campaign
 
-2. **WHAT'S NEW**: List specific elements that are novel (new TTPs, new actor, new technique, new malware). Do NOT include IOCs here - they are tracked separately.
+2. **SUMMARY**: Write a 2-3 sentence executive summary. Describe: What is the threat? Who is the actor (if known)? How does it relate to the historical tippers? Reference specific ticket IDs when comparing (e.g., "similar to #1243497").
 
-3. **WHAT'S FAMILIAR**: List elements we've seen before (reference specific ticket IDs)
-
-4. **RECOMMENDATION**: One of:
+3. **RECOMMENDATION**: One of:
    - "PRIORITIZE - Novel threat requiring deep investigation"
-   - "STANDARD - Review but leverage past analysis from tickets [X, Y, Z]"
-   - "EXPEDITE - Familiar pattern, apply known playbook from ticket [X]"
+   - "STANDARD - Review and leverage past analysis"
+   - "EXPEDITE - Familiar pattern, apply known playbook"
 
-Respond in this EXACT JSON format:
-```json
-{
-    "novelty_score": <1-10>,
-    "novelty_label": "<Seen Before|Familiar|Mostly New|Net New>",
-    "summary": "<2-3 sentence executive summary>",
-    "what_is_new": ["<item1>", "<item2>"],
-    "what_is_familiar": ["<item1 (see ticket #X)>", "<item2 (see ticket #Y)>"],
-    "recommendation": "<PRIORITIZE|STANDARD|EXPEDITE> - <reason>",
-    "related_ticket_ids": ["<id1>", "<id2>"]
-}
-```
+Focus on the narrative analysis. IOC overlaps and entity matching are computed separately.
 """
         return prompt
 
     # -------------------------------------------------------------------------
-    # Parse LLM response
+    # Build analysis from structured LLM response
     # -------------------------------------------------------------------------
-    def _parse_llm_response(self, response: str, tipper: Dict) -> NoveltyAnalysis:
-        """Parse LLM response into structured NoveltyAnalysis."""
+    def _build_analysis_from_response(
+        self,
+        llm_response: NoveltyLLMResponse,
+        tipper: Dict,
+        similar_tippers: List[Dict],
+        ioc_history: Dict[str, List[str]],
+        entities,
+    ) -> NoveltyAnalysis:
+        """Convert LLM response to NoveltyAnalysis.
+
+        LLM provides: novelty_score, novelty_label, summary, recommendation
+        Python computes: what_is_new, what_is_familiar, related_tickets
+        """
         fields = tipper.get('fields', {})
         tipper_id = str(tipper.get('id', 'Unknown'))
         tipper_title = fields.get('System.Title', 'No title')
+
         # Parse and format created date: MM/DD/YYYY HH:MM AM/PM ET
         raw_date = fields.get('System.CreatedDate', '')
         if raw_date:
             try:
                 from datetime import datetime
                 import pytz
-                # Parse ISO format (AZDO returns UTC)
                 dt = datetime.fromisoformat(raw_date.replace('Z', '+00:00'))
-                # Convert to Eastern
                 eastern = pytz.timezone('US/Eastern')
                 dt_eastern = dt.astimezone(eastern)
                 created_date = dt_eastern.strftime('%m/%d/%Y %I:%M %p ET')
@@ -507,55 +498,199 @@ Respond in this EXACT JSON format:
         else:
             created_date = ''
 
-        try:
-            # Find JSON block in response
-            json_match = re.search(r'```json\s*(.*?)\s*```', response, re.DOTALL)
-            if json_match:
-                json_str = json_match.group(1)
-            else:
-                # Try to find raw JSON object
-                json_match = re.search(r'\{[^{}]*"novelty_score"[^}]*\}', response, re.DOTALL)
-                if json_match:
-                    json_str = json_match.group(0)
-                else:
-                    raise ValueError("No JSON found in response")
+        # --- PYTHON-COMPUTED: Related tickets from vector search ---
+        related_tickets = []
+        for similar in similar_tippers[:10]:
+            meta = similar.get('metadata', {})
+            ticket_id = str(meta.get('id', ''))
+            if ticket_id and ticket_id != tipper_id:
+                related_tickets.append({
+                    'id': ticket_id,
+                    'title': meta.get('title', ''),
+                })
 
-            data = json.loads(json_str)
+        # --- PYTHON-COMPUTED: What's Familiar (IOCs/entities seen before) ---
+        # Filter IOCs using VT to exclude benign domains (security vendor sites, news, etc.)
+        what_is_familiar = []
+        if ioc_history:
+            from services.virustotal import VirusTotalClient
+            vt_client = VirusTotalClient()
 
-            # Build related tickets list
-            related_tickets = []
-            for tid in data.get('related_ticket_ids', []):
-                related_tickets.append({'id': str(tid)})
+            # Collect all unique IOCs from history for VT filtering
+            all_history_iocs = list(ioc_history.keys())
 
-            return NoveltyAnalysis(
-                tipper_id=tipper_id,
-                tipper_title=tipper_title,
-                created_date=created_date,
-                novelty_score=data.get('novelty_score', 5),
-                novelty_label=data.get('novelty_label', 'Unknown'),
-                summary=data.get('summary', 'Unable to generate summary'),
-                what_is_new=data.get('what_is_new', []),
-                what_is_familiar=data.get('what_is_familiar', []),
-                related_tickets=related_tickets,
-                recommendation=data.get('recommendation', 'STANDARD - Manual review required'),
-                raw_llm_response=response
+            # Separate domains from IPs/hashes for VT lookup
+            history_domains = [ioc for ioc in all_history_iocs if '.' in ioc and not ioc.replace('.', '').isdigit() and len(ioc) < 64]
+            history_ips = [ioc for ioc in all_history_iocs if ioc.replace('.', '').isdigit()]
+            history_hashes = [ioc for ioc in all_history_iocs if len(ioc) in (32, 40, 64) and ioc.isalnum()]
+
+            # Filter to only huntworthy IOCs (have VT detections)
+            logger.info(f"Filtering {len(history_domains)} domains, {len(history_ips)} IPs via VT...")
+            huntworthy = vt_client.filter_huntworthy_iocs(
+                domains=history_domains[:30],  # Limit to avoid too many API calls
+                ips=history_ips[:20],
+                hashes=history_hashes[:20],
+                max_checks=50,
             )
+            huntworthy_set = set(huntworthy['domains'] + huntworthy['ips'] + huntworthy['hashes'])
 
-        except Exception as e:
-            logger.error(f"Failed to parse LLM response: {e}")
-            return NoveltyAnalysis(
-                tipper_id=tipper_id,
-                tipper_title=tipper_title,
-                created_date=created_date,
-                novelty_score=5,
-                novelty_label="Unknown",
-                summary=f"Analysis parsing failed: {str(e)}",
-                what_is_new=[],
-                what_is_familiar=[],
-                related_tickets=[],
-                recommendation="STANDARD - Manual review required (analysis failed)",
-                raw_llm_response=response
-            )
+            # Group huntworthy IOCs by the tickets they appeared in
+            ticket_iocs = {}  # ticket_id -> list of IOCs
+            for ioc, ticket_ids in ioc_history.items():
+                if ioc.lower() not in huntworthy_set and ioc not in huntworthy_set:
+                    continue  # Skip benign IOCs
+                for tid in ticket_ids:
+                    if tid not in ticket_iocs:
+                        ticket_iocs[tid] = []
+                    ticket_iocs[tid].append(ioc)
+
+            # Create familiar items with ticket references
+            for tid, iocs in sorted(ticket_iocs.items(), key=lambda x: len(x[1]), reverse=True)[:5]:
+                ioc_sample = iocs[:3]
+                ioc_display = ', '.join(f"`{ioc[:20]}...`" if len(ioc) > 20 else f"`{ioc}`" for ioc in ioc_sample)
+                more = f" (+{len(iocs) - 3} more)" if len(iocs) > 3 else ""
+                what_is_familiar.append(f"Shared IOCs with #{tid}: {ioc_display}{more}")
+
+        # --- PYTHON-COMPUTED: What's New (IOCs/entities NOT seen before) ---
+        what_is_new = []
+        if entities:
+            all_current_iocs = set()
+            all_current_iocs.update(entities.ips)
+            all_current_iocs.update(entities.domains)
+            for hash_list in entities.hashes.values():
+                all_current_iocs.update(hash_list)
+
+            seen_iocs = set(ioc_history.keys()) if ioc_history else set()
+            new_iocs = all_current_iocs - seen_iocs
+
+            if new_iocs:
+                # Filter new IOCs through VT to exclude benign domains
+                from services.virustotal import VirusTotalClient
+                vt_client = VirusTotalClient()
+
+                new_domains = [ioc for ioc in new_iocs if '.' in ioc and not ioc.replace('.', '').isdigit() and len(ioc) < 64]
+                new_ips = [ioc for ioc in new_iocs if ioc.replace('.', '').isdigit()]
+                new_hashes = [ioc for ioc in new_iocs if len(ioc) in (32, 40, 64) and ioc.isalnum()]
+
+                logger.info(f"Filtering {len(new_domains)} new domains, {len(new_ips)} new IPs via VT...")
+                huntworthy_new = vt_client.filter_huntworthy_iocs(
+                    domains=new_domains[:30],
+                    ips=new_ips[:20],
+                    hashes=new_hashes[:20],
+                    max_checks=50,
+                )
+                huntworthy_new_set = set(huntworthy_new['domains'] + huntworthy_new['ips'] + huntworthy_new['hashes'])
+
+                # Only include huntworthy new IOCs
+                filtered_new_iocs = [ioc for ioc in new_iocs if ioc in huntworthy_new_set or ioc.lower() in huntworthy_new_set]
+
+                if filtered_new_iocs:
+                    new_sample = filtered_new_iocs[:5]
+                    new_display = ', '.join(f"`{ioc[:20]}...`" if len(ioc) > 20 else f"`{ioc}`" for ioc in new_sample)
+                    more = f" (+{len(filtered_new_iocs) - 5} more)" if len(filtered_new_iocs) > 5 else ""
+                    what_is_new.append(f"First-time IOCs: {new_display}{more}")
+
+        # Print raw LLM response for debugging/ideas
+        print("\n" + "=" * 60)
+        print("RAW LLM RESPONSE:")
+        print("=" * 60)
+        print(llm_response.model_dump_json(indent=2))
+        print("=" * 60 + "\n")
+
+        return NoveltyAnalysis(
+            tipper_id=tipper_id,
+            tipper_title=tipper_title,
+            created_date=created_date,
+            novelty_score=llm_response.novelty_score,
+            novelty_label=llm_response.novelty_label,
+            summary=llm_response.summary,
+            what_is_new=what_is_new,
+            what_is_familiar=what_is_familiar,
+            related_tickets=related_tickets,
+            recommendation=llm_response.recommendation,
+            raw_llm_response=llm_response.model_dump_json(indent=2),
+        )
+
+    # -------------------------------------------------------------------------
+    # Generate Actionable Steps
+    # -------------------------------------------------------------------------
+    def _generate_actionable_steps(
+        self,
+        analysis: NoveltyAnalysis,
+        entities,
+        rf_enrichment: Dict[str, Any],
+        mitre_gaps: List[str],
+    ) -> List[Dict[str, str]]:
+        """Generate specific actionable recommendations based on analysis.
+
+        Returns list of dicts with keys: action, priority, detail
+        """
+        steps = []
+
+        # High-risk IOCs to block
+        if rf_enrichment and rf_enrichment.get('high_risk_iocs'):
+            high_risk = [ioc for ioc in rf_enrichment['high_risk_iocs'] if ioc.get('risk_score', 0) >= 65]
+            if high_risk:
+                ips_to_block = [ioc['value'] for ioc in high_risk if ioc.get('ioc_type') == 'IP'][:5]
+                domains_to_block = [ioc['value'] for ioc in high_risk if ioc.get('ioc_type') == 'Domain'][:5]
+
+                if ips_to_block:
+                    steps.append({
+                        'action': 'Block high-risk IPs',
+                        'priority': 'HIGH',
+                        'detail': f"Add to firewall blocklist: {', '.join(ips_to_block)}"
+                    })
+                if domains_to_block:
+                    steps.append({
+                        'action': 'Block malicious domains',
+                        'priority': 'HIGH',
+                        'detail': f"Add to DNS sinkhole/blocklist: {', '.join(domains_to_block)}"
+                    })
+
+        # MITRE detection gaps
+        if mitre_gaps:
+            # Group by tactic category if possible
+            steps.append({
+                'action': 'Create detection rules',
+                'priority': 'MEDIUM',
+                'detail': f"No existing coverage for: {', '.join(mitre_gaps[:5])}"
+            })
+
+        # Novel threat - recommend deeper investigation
+        if analysis.novelty_score >= 7:
+            steps.append({
+                'action': 'Conduct threat hunt',
+                'priority': 'HIGH',
+                'detail': 'Novel threat identified - proactive hunt recommended for historical activity'
+            })
+        elif analysis.novelty_score >= 5 and analysis.related_tickets:
+            ticket_refs = ', '.join(f"#{t.get('id', '')}" for t in analysis.related_tickets[:3])
+            steps.append({
+                'action': 'Review related tickets',
+                'priority': 'MEDIUM',
+                'detail': f"Check tickets {ticket_refs} for prior analysis"
+            })
+
+        # CVEs to patch
+        if entities and entities.cves:
+            steps.append({
+                'action': 'Verify patch status',
+                'priority': 'HIGH' if len(entities.cves) > 2 else 'MEDIUM',
+                'detail': f"Check vulnerability status for: {', '.join(entities.cves[:5])}"
+            })
+
+        # Add IOCs to watchlist (for lower risk)
+        if rf_enrichment and rf_enrichment.get('high_risk_iocs'):
+            medium_risk = [ioc for ioc in rf_enrichment['high_risk_iocs']
+                          if 25 <= ioc.get('risk_score', 0) < 65]
+            if medium_risk:
+                steps.append({
+                    'action': 'Add to watchlist',
+                    'priority': 'LOW',
+                    'detail': f"{len(medium_risk)} medium-risk IOCs for monitoring"
+                })
+
+        return steps
 
     # -------------------------------------------------------------------------
     # Main analysis method
@@ -640,81 +775,69 @@ Respond in this EXACT JSON format:
         except Exception as e:
             logger.warning(f"Entity extraction/enrichment failed (continuing without): {e}")
 
-        # Check existing detection rules coverage
-        rules_by_term = {}
-        try:
-            from src.components.tipper_analyzer.rules import search_rules
-            from src.components.tipper_analyzer.rules.catalog import RulesCatalog
+        # Compute MITRE ATT&CK coverage gaps (check directly against rules catalog)
+        mitre_techniques = []
+        mitre_covered = []
+        mitre_gaps = []
+        rules_by_term = {}  # Keep for compatibility
 
-            catalog = RulesCatalog()
-            if catalog.collection.count() > 0:
-                # Search for rules matching extracted malware families and threat actors
-                search_terms = []
-                if entities and entities.malware_families:
-                    search_terms.extend(entities.malware_families[:3])
-                if rf_enrichment and rf_enrichment.get('extracted_actors'):
-                    search_terms.extend(
-                        a.get('name', '') for a in rf_enrichment['extracted_actors'][:2]
-                    )
+        if entities and entities.mitre_techniques:
+            mitre_techniques = entities.mitre_techniques
+            logger.info(f"Found {len(mitre_techniques)} MITRE techniques in tipper: {', '.join(mitre_techniques[:5])}")
 
-                for term in search_terms:
-                    if term:
-                        result = search_rules(term, k=3)
-                        if result.has_results:
-                            rules_by_term[term] = result
-                            logger.info(f"Found {result.total_found} detection rules for '{term}'")
-        except Exception as e:
-            logger.debug(f"Rules coverage check skipped: {e}")
+            # Get all techniques covered by our detection rules catalog
+            try:
+                from src.components.tipper_analyzer.rules.catalog import RulesCatalog
+                catalog = RulesCatalog()
+                covered_by_rules = catalog.get_covered_techniques()
+            except Exception as e:
+                logger.debug(f"Rules catalog unavailable: {e}")
+                covered_by_rules = set()
+
+            # Determine which tipper techniques are covered vs gaps
+            for tech in mitre_techniques:
+                if tech.upper() in covered_by_rules:
+                    mitre_covered.append(tech)
+                else:
+                    mitre_gaps.append(tech)
+
+            if mitre_gaps:
+                logger.info(f"MITRE gaps ({len(mitre_gaps)}): {', '.join(mitre_gaps[:5])}{'...' if len(mitre_gaps) > 5 else ''}")
+            else:
+                logger.info("All MITRE techniques have existing detection coverage")
 
         # Build prompt and call LLM
         prompt = self._build_analysis_prompt(tipper, similar_tippers, rf_enrichment)
+
+        # Print prompt for debugging
+        print("\n" + "=" * 60)
+        print("PROMPT SENT TO LLM:")
+        print("=" * 60)
+        print(prompt)
+        print("=" * 60 + "\n")
 
         logger.info("Generating novelty analysis with LLM...")
         if not self.llm:
             raise RuntimeError("LLM not initialized. Ensure Pokedex state manager is running.")
 
         start_time = time.time()
-        response = self.llm.invoke(prompt)
-        response_text = response.content if hasattr(response, 'content') else str(response)
 
-        # Extract token metrics from LLM response
-        input_tokens = 0
-        output_tokens = 0
-        prompt_time = 0.0
-        generation_time = 0.0
+        # Use structured output to guarantee valid JSON response
+        structured_llm = self.llm.with_structured_output(NoveltyLLMResponse)
+        logger.info("Sending request to LLM (this may take 30-60 seconds)...")
+        llm_response = structured_llm.invoke(prompt)
+        generation_time = time.time() - start_time
+        logger.info(f"LLM response received in {generation_time:.1f}s")
 
-        if hasattr(response, 'usage_metadata') and response.usage_metadata:
-            input_tokens = response.usage_metadata.get('input_tokens', 0)
-            output_tokens = response.usage_metadata.get('output_tokens', 0)
-        elif hasattr(response, 'response_metadata'):
-            metadata = response.response_metadata
-            input_tokens = metadata.get('prompt_eval_count', 0)
-            output_tokens = metadata.get('eval_count', 0)
-            if 'prompt_eval_duration' in metadata:
-                prompt_time = metadata['prompt_eval_duration'] / 1e9
-            if 'eval_duration' in metadata:
-                generation_time = metadata['eval_duration'] / 1e9
-
-        # If timing not available from metadata, use wall clock
-        if generation_time == 0:
-            generation_time = time.time() - start_time
-
-        tokens_per_sec = output_tokens / generation_time if generation_time > 0 else 0.0
-
-        # Parse response
-        analysis = self._parse_llm_response(response_text, tipper)
+        # Convert structured response to NoveltyAnalysis (Python computes overlaps)
+        analysis = self._build_analysis_from_response(
+            llm_response, tipper, similar_tippers, ioc_history, entities
+        )
+        analysis.generation_time = generation_time
         analysis.rf_enrichment = rf_enrichment  # Attach RF enrichment to analysis
         analysis.ioc_history = ioc_history  # Attach IOC history for novelty display
         analysis.malware_history = malware_history  # Attach malware history for novelty display
         analysis.history_dates = history_dates  # Attach tipper dates for recency display
-
-        # Store token metrics in analysis
-        analysis.input_tokens = input_tokens
-        analysis.output_tokens = output_tokens
-        analysis.total_tokens = input_tokens + output_tokens
-        analysis.prompt_time = prompt_time
-        analysis.generation_time = generation_time
-        analysis.tokens_per_sec = tokens_per_sec
 
         # Store current tipper's malware families and total IOC counts
         if entities is not None:
@@ -730,6 +853,19 @@ Respond in this EXACT JSON format:
         # Store detection rules coverage results
         if rules_by_term:
             analysis.existing_rules = rules_by_term
+
+        # Store MITRE coverage analysis
+        analysis.mitre_techniques = mitre_techniques
+        analysis.mitre_covered = mitre_covered
+        analysis.mitre_gaps = mitre_gaps
+
+        # Generate actionable steps based on analysis findings
+        analysis.actionable_steps = self._generate_actionable_steps(
+            analysis=analysis,
+            entities=entities,
+            rf_enrichment=rf_enrichment,
+            mitre_gaps=mitre_gaps,
+        )
 
         logger.info(f"Analysis complete: {analysis.novelty_label} ({analysis.novelty_score}/10)")
 
@@ -968,6 +1104,7 @@ Respond in this EXACT JSON format:
                     logger.info(f"[bg] Posted hunt results to AZDO tipper #{tipper_id}")
                     # Send follow-up Webex notification with hunt results summary
                     if room_id:
+                        logger.info(f"[bg] Attempting to send hunt results to Webex room_id: {room_id}")
                         try:
                             from webexpythonsdk import WebexAPI
                             from my_config import get_config

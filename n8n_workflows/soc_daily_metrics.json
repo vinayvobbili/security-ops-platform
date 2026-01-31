@@ -1,0 +1,548 @@
+{
+  "name": "SOC Daily Metrics",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * *"
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Daily 8AM Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.crowdstrike.com/oauth2/token",
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "client_id",
+              "value": "={{ $credentials.crowdstrike.clientId }}"
+            },
+            {
+              "name": "client_secret",
+              "value": "={{ $credentials.crowdstrike.clientSecret }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "crowdstrike-auth",
+      "name": "CrowdStrike OAuth2",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [500, 100],
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "crowdstrike-creds",
+          "name": "CrowdStrike API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.crowdstrike.com/incidents/queries/incidents/v1",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "filter",
+              "value": "created_timestamp:>'{{ $now.minus(1, 'day').toISO() }}'"
+            },
+            {
+              "name": "limit",
+              "value": "500"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $node['CrowdStrike OAuth2'].json.access_token }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "crowdstrike-incidents",
+      "name": "CrowdStrike Get Incidents",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [750, 100]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.crowdstrike.com/detects/queries/detects/v1",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "filter",
+              "value": "created_timestamp:>'{{ $now.minus(1, 'day').toISO() }}'"
+            },
+            {
+              "name": "limit",
+              "value": "500"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $node['CrowdStrike OAuth2'].json.access_token }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "crowdstrike-detections",
+      "name": "CrowdStrike Get Detections",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [750, 200]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $credentials.qradar.baseUrl }}/api/siem/offenses",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "filter",
+              "value": "start_time > {{ $now.minus(1, 'day').toMillis() }}"
+            },
+            {
+              "name": "fields",
+              "value": "id,description,offense_type,severity,category_count,categories,status,start_time,last_updated_time"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "SEC",
+              "value": "={{ $credentials.qradar.secToken }}"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            },
+            {
+              "name": "Version",
+              "value": "14.0"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "qradar-offenses",
+      "name": "QRadar Get Offenses",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [500, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "qradar-creds",
+          "name": "QRadar SEC Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $credentials.xsoar.baseUrl }}/incidents/search",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"filter\": {\n    \"fromDate\": \"{{ $now.minus(1, 'day').toISO() }}\",\n    \"toDate\": \"{{ $now.toISO() }}\"\n  },\n  \"size\": 500\n}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ $credentials.xsoar.apiKey }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "xsoar-incidents",
+      "name": "XSOAR Get Incidents",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [500, 500],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "xsoar-creds",
+          "name": "XSOAR API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combinationMode": "multiplex",
+        "options": {}
+      },
+      "id": "merge-data",
+      "name": "Merge All Data",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2.1,
+      "position": [1000, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// SOC Daily Metrics Calculator\n// Processes data from CrowdStrike, QRadar, and XSOAR\n\nconst items = $input.all();\n\n// Extract data from different sources\nconst crowdstrikeIncidents = items.find(i => i.json.source === 'crowdstrike_incidents')?.json?.data || [];\nconst crowdstrikeDetections = items.find(i => i.json.source === 'crowdstrike_detections')?.json?.data || [];\nconst qradarOffenses = items.find(i => i.json.source === 'qradar')?.json?.data || [];\nconst xsoarIncidents = items.find(i => i.json.source === 'xsoar')?.json?.data || [];\n\n// Calculate total incidents by source\nconst incidentsBySource = {\n  crowdstrike_incidents: crowdstrikeIncidents.length,\n  crowdstrike_detections: crowdstrikeDetections.length,\n  qradar_offenses: qradarOffenses.length,\n  xsoar_incidents: xsoarIncidents.length\n};\n\nconst totalIncidents = Object.values(incidentsBySource).reduce((a, b) => a + b, 0);\n\n// Calculate average severity\nconst allSeverities = [];\n\n// CrowdStrike severity (1-5 scale)\ncrowdstrikeIncidents.forEach(inc => {\n  if (inc.severity) allSeverities.push(inc.severity * 2); // Normalize to 10-point scale\n});\n\ncrowdstrikeDetections.forEach(det => {\n  if (det.severity) allSeverities.push(det.severity * 2);\n});\n\n// QRadar severity (1-10 scale)\nqradarOffenses.forEach(off => {\n  if (off.severity) allSeverities.push(off.severity);\n});\n\n// XSOAR severity (map string to number)\nconst xsoarSeverityMap = { 'low': 2, 'medium': 5, 'high': 7, 'critical': 10 };\nxsoarIncidents.forEach(inc => {\n  if (inc.severity) {\n    const sev = typeof inc.severity === 'string' \n      ? xsoarSeverityMap[inc.severity.toLowerCase()] || 5 \n      : inc.severity;\n    allSeverities.push(sev);\n  }\n});\n\nconst avgSeverity = allSeverities.length > 0 \n  ? (allSeverities.reduce((a, b) => a + b, 0) / allSeverities.length).toFixed(2) \n  : 'N/A';\n\n// Extract MITRE techniques and count\nconst mitreTechniques = {};\n\ncrowdstrikeIncidents.forEach(inc => {\n  if (inc.techniques) {\n    inc.techniques.forEach(tech => {\n      mitreTechniques[tech] = (mitreTechniques[tech] || 0) + 1;\n    });\n  }\n});\n\ncrowdstrikeDetections.forEach(det => {\n  if (det.behaviors) {\n    det.behaviors.forEach(b => {\n      if (b.technique) {\n        mitreTechniques[b.technique] = (mitreTechniques[b.technique] || 0) + 1;\n      }\n    });\n  }\n});\n\nqradarOffenses.forEach(off => {\n  if (off.mitre_attack_technique) {\n    mitreTechniques[off.mitre_attack_technique] = (mitreTechniques[off.mitre_attack_technique] || 0) + 1;\n  }\n});\n\n// Get top 5 MITRE techniques\nconst topMitreTechniques = Object.entries(mitreTechniques)\n  .sort((a, b) => b[1] - a[1])\n  .slice(0, 5)\n  .map(([technique, count]) => ({ technique, count }));\n\n// Calculate tickets aging > 24h\nconst now = new Date();\nconst oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);\n\nlet ticketsAging24h = 0;\nlet openTickets = 0;\nlet closedTickets = 0;\n\nxsoarIncidents.forEach(inc => {\n  const created = new Date(inc.created || inc.createdDate);\n  const status = (inc.status || inc.runStatus || '').toLowerCase();\n  \n  if (status === 'closed' || status === 'done' || status === 'resolved') {\n    closedTickets++;\n  } else {\n    openTickets++;\n    if (created < oneDayAgo) {\n      ticketsAging24h++;\n    }\n  }\n});\n\n// XSOAR ticket counts by status\nconst xsoarByStatus = {\n  new: 0,\n  in_progress: 0,\n  closed: 0\n};\n\nxsoarIncidents.forEach(inc => {\n  const status = (inc.status || inc.runStatus || '').toLowerCase();\n  if (status === 'new' || status === 'pending') {\n    xsoarByStatus.new++;\n  } else if (status === 'active' || status === 'in_progress' || status === 'investigating') {\n    xsoarByStatus.in_progress++;\n  } else if (status === 'closed' || status === 'done' || status === 'resolved') {\n    xsoarByStatus.closed++;\n  }\n});\n\n// Calculate close rate\nconst totalXsoarTickets = xsoarIncidents.length;\nconst closeRate = totalXsoarTickets > 0 \n  ? ((closedTickets / totalXsoarTickets) * 100).toFixed(1) \n  : 'N/A';\n\n// QRadar offense categories\nconst qradarCategories = {};\nqradarOffenses.forEach(off => {\n  if (off.categories) {\n    off.categories.forEach(cat => {\n      qradarCategories[cat] = (qradarCategories[cat] || 0) + 1;\n    });\n  }\n});\n\nconst topQradarCategories = Object.entries(qradarCategories)\n  .sort((a, b) => b[1] - a[1])\n  .slice(0, 5)\n  .map(([category, count]) => ({ category, count }));\n\n// Return calculated metrics\nreturn [{\n  json: {\n    calculatedAt: now.toISOString(),\n    summary: {\n      totalIncidents,\n      incidentsBySource,\n      avgSeverity,\n      ticketsAging24h,\n      closeRatePercent: closeRate\n    },\n    xsoarTicketsByStatus: xsoarByStatus,\n    topMitreTechniques,\n    topQradarCategories,\n    rawCounts: {\n      crowdstrikeIncidents: crowdstrikeIncidents.length,\n      crowdstrikeDetections: crowdstrikeDetections.length,\n      qradarOffenses: qradarOffenses.length,\n      xsoarIncidents: xsoarIncidents.length\n    }\n  }\n}];"
+      },
+      "id": "calculate-metrics",
+      "name": "Calculate Metrics",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1250, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Format Daily Briefing Markdown Message\nconst data = $input.first().json;\nconst summary = data.summary;\nconst xsoarStatus = data.xsoarTicketsByStatus;\nconst mitreTechniques = data.topMitreTechniques;\nconst qradarCategories = data.topQradarCategories;\nconst rawCounts = data.rawCounts;\n\n// Helper function for trend indicators\nfunction getTrendIndicator(current, previous) {\n  if (previous === undefined || previous === null) return '';\n  if (current > previous) return ' :arrow_up:';\n  if (current < previous) return ' :arrow_down:';\n  return ' :arrow_right:';\n}\n\n// Determine severity level indicator\nfunction getSeverityIndicator(avgSev) {\n  const sev = parseFloat(avgSev);\n  if (isNaN(sev)) return ':grey_question:';\n  if (sev >= 8) return ':red_circle: CRITICAL';\n  if (sev >= 6) return ':orange_circle: HIGH';\n  if (sev >= 4) return ':yellow_circle: MEDIUM';\n  return ':green_circle: LOW';\n}\n\n// Build the markdown message\nconst reportDate = new Date().toLocaleDateString('en-US', {\n  weekday: 'long',\n  year: 'numeric',\n  month: 'long',\n  day: 'numeric'\n});\n\nlet markdown = `## SOC Daily Metrics Report\\n`;\nmarkdown += `**${reportDate}**\\n\\n`;\nmarkdown += `---\\n\\n`;\n\n// Summary Stats Table\nmarkdown += `### Summary Statistics\\n\\n`;\nmarkdown += `| Metric | Value |\\n`;\nmarkdown += `|--------|-------|\\n`;\nmarkdown += `| **Total Incidents (24h)** | ${summary.totalIncidents} |\\n`;\nmarkdown += `| **Average Severity** | ${summary.avgSeverity}/10 ${getSeverityIndicator(summary.avgSeverity)} |\\n`;\nmarkdown += `| **Tickets Aging >24h** | ${summary.ticketsAging24h} |\\n`;\nmarkdown += `| **Close Rate** | ${summary.closeRatePercent}% |\\n\\n`;\n\n// Incidents by Source Table\nmarkdown += `### Incidents by Source\\n\\n`;\nmarkdown += `| Source | Count |\\n`;\nmarkdown += `|--------|-------|\\n`;\nmarkdown += `| CrowdStrike Incidents | ${rawCounts.crowdstrikeIncidents} |\\n`;\nmarkdown += `| CrowdStrike Detections | ${rawCounts.crowdstrikeDetections} |\\n`;\nmarkdown += `| QRadar Offenses | ${rawCounts.qradarOffenses} |\\n`;\nmarkdown += `| XSOAR Incidents | ${rawCounts.xsoarIncidents} |\\n\\n`;\n\n// XSOAR Ticket Status\nmarkdown += `### XSOAR Ticket Status\\n\\n`;\nmarkdown += `| Status | Count |\\n`;\nmarkdown += `|--------|-------|\\n`;\nmarkdown += `| New | ${xsoarStatus.new} |\\n`;\nmarkdown += `| In Progress | ${xsoarStatus.in_progress} |\\n`;\nmarkdown += `| Closed | ${xsoarStatus.closed} |\\n\\n`;\n\n// Top MITRE Techniques\nmarkdown += `### Top 5 MITRE Techniques\\n\\n`;\nif (mitreTechniques && mitreTechniques.length > 0) {\n  markdown += `| Technique | Count |\\n`;\n  markdown += `|-----------|-------|\\n`;\n  mitreTechniques.forEach(t => {\n    markdown += `| ${t.technique} | ${t.count} |\\n`;\n  });\n} else {\n  markdown += `_No MITRE techniques identified in the reporting period._\\n`;\n}\nmarkdown += `\\n`;\n\n// Top QRadar Categories\nmarkdown += `### Top QRadar Offense Categories\\n\\n`;\nif (qradarCategories && qradarCategories.length > 0) {\n  markdown += `| Category | Count |\\n`;\n  markdown += `|----------|-------|\\n`;\n  qradarCategories.forEach(c => {\n    markdown += `| ${c.category} | ${c.count} |\\n`;\n  });\n} else {\n  markdown += `_No offense categories available._\\n`;\n}\nmarkdown += `\\n`;\n\n// Highlights & Concerns Section\nmarkdown += `---\\n\\n`;\nmarkdown += `### Highlights & Concerns\\n\\n`;\n\nconst concerns = [];\nconst highlights = [];\n\n// Check for high severity\nconst avgSev = parseFloat(summary.avgSeverity);\nif (!isNaN(avgSev) && avgSev >= 7) {\n  concerns.push(`:warning: Average severity is elevated at ${summary.avgSeverity}/10`);\n}\n\n// Check for aging tickets\nif (summary.ticketsAging24h > 0) {\n  concerns.push(`:hourglass: ${summary.ticketsAging24h} tickets are aging beyond 24 hours`);\n}\n\n// Check close rate\nconst closeRate = parseFloat(summary.closeRatePercent);\nif (!isNaN(closeRate)) {\n  if (closeRate < 50) {\n    concerns.push(`:chart_with_downwards_trend: Close rate is below 50% (${summary.closeRatePercent}%)`);\n  } else if (closeRate >= 80) {\n    highlights.push(`:white_check_mark: Strong close rate at ${summary.closeRatePercent}%`);\n  }\n}\n\n// High volume alerts\nif (summary.totalIncidents > 100) {\n  concerns.push(`:rotating_light: High incident volume detected (${summary.totalIncidents} total)`);\n} else if (summary.totalIncidents < 20) {\n  highlights.push(`:shield: Low incident volume (${summary.totalIncidents} total)`);\n}\n\n// Output concerns\nif (concerns.length > 0) {\n  markdown += `**Concerns:**\\n`;\n  concerns.forEach(c => {\n    markdown += `- ${c}\\n`;\n  });\n  markdown += `\\n`;\n}\n\n// Output highlights\nif (highlights.length > 0) {\n  markdown += `**Highlights:**\\n`;\n  highlights.forEach(h => {\n    markdown += `- ${h}\\n`;\n  });\n  markdown += `\\n`;\n}\n\nif (concerns.length === 0 && highlights.length === 0) {\n  markdown += `_No significant concerns or highlights for this reporting period._\\n\\n`;\n}\n\n// Footer\nmarkdown += `---\\n`;\nmarkdown += `_Report generated at ${data.calculatedAt}_\\n`;\n\nreturn [{\n  json: {\n    markdown: markdown,\n    metrics: data\n  }\n}];"
+      },
+      "id": "format-message",
+      "name": "Format Daily Briefing",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1500, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://webexapis.com/v1/messages",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"roomId\": \"{{ $credentials.webex.leadershipRoomId }}\",\n  \"markdown\": {{ JSON.stringify($json.markdown) }}\n}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $credentials.webex.accessToken }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "webex-post",
+      "name": "Post to Webex Leadership",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1750, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "webex-creds",
+          "name": "Webex Bot Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "source",
+              "value": "crowdstrike_incidents"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-cs-incidents-source",
+      "name": "Set CS Incidents Source",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.3,
+      "position": [900, 50]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "source",
+              "value": "crowdstrike_detections"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-cs-detections-source",
+      "name": "Set CS Detections Source",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.3,
+      "position": [900, 180]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "source",
+              "value": "qradar"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-qradar-source",
+      "name": "Set QRadar Source",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.3,
+      "position": [700, 300]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "source",
+              "value": "xsoar"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-xsoar-source",
+      "name": "Set XSOAR Source",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.3,
+      "position": [700, 500]
+    }
+  ],
+  "connections": {
+    "Daily 8AM Trigger": {
+      "main": [
+        [
+          {
+            "node": "CrowdStrike OAuth2",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "QRadar Get Offenses",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "XSOAR Get Incidents",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CrowdStrike OAuth2": {
+      "main": [
+        [
+          {
+            "node": "CrowdStrike Get Incidents",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "CrowdStrike Get Detections",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CrowdStrike Get Incidents": {
+      "main": [
+        [
+          {
+            "node": "Set CS Incidents Source",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CrowdStrike Get Detections": {
+      "main": [
+        [
+          {
+            "node": "Set CS Detections Source",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "QRadar Get Offenses": {
+      "main": [
+        [
+          {
+            "node": "Set QRadar Source",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "XSOAR Get Incidents": {
+      "main": [
+        [
+          {
+            "node": "Set XSOAR Source",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set CS Incidents Source": {
+      "main": [
+        [
+          {
+            "node": "Merge All Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set CS Detections Source": {
+      "main": [
+        [
+          {
+            "node": "Merge All Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set QRadar Source": {
+      "main": [
+        [
+          {
+            "node": "Merge All Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set XSOAR Source": {
+      "main": [
+        [
+          {
+            "node": "Merge All Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge All Data": {
+      "main": [
+        [
+          {
+            "node": "Calculate Metrics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate Metrics": {
+      "main": [
+        [
+          {
+            "node": "Format Daily Briefing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Daily Briefing": {
+      "main": [
+        [
+          {
+            "node": "Post to Webex Leadership",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "SOC",
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z"
+    },
+    {
+      "name": "Daily Metrics",
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z"
+    },
+    {
+      "name": "Leadership",
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z"
+    }
+  ],
+  "triggerCount": 1,
+  "updatedAt": "2024-01-01T00:00:00.000Z",
+  "versionId": "1"
+}
