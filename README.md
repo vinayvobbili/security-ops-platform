@@ -355,7 +355,7 @@ This project is licensed under the MIT License - see [LICENSE](LICENSE) for deta
 
 **Vinay Vobbilichetty** - Security Automation Engineer
 
-Specializing in SOAR platform development, incident response automation, and LLM-powered security tools. MS in Cybersecurity from NC State University (May 2025).
+Specializing in SOAR platform development, incident response automation, and LLM-powered security tools. MS in Computer Science (Cybersecurity track) from NC State University (May 2025).
 
 - [LinkedIn](https://linkedin.com/in/vinay-vobbilichetty)
 - [GitHub](https://github.com/vinayvobbili)
