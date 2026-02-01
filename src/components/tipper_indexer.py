@@ -2,10 +2,18 @@
 Tipper Similarity Indexer
 
 Indexes historical threat tippers from AZDO into ChromaDB for
-similarity search when analyzing new tippers.
+semantic similarity search when analyzing new tippers.
 
-Uses ChromaDB with automatic persistence - no manual rebuilds needed.
-New tippers are upserted incrementally.
+Uses pure vector similarity (no keyword matching) for accurate
+semantic matching of threat content. The embedding model understands
+threat concepts and finds genuinely similar tippers based on meaning,
+not superficial keyword overlap.
+
+Key features:
+- Strips CTI boilerplate (CSS, section headers, metadata) before embedding
+- Uses sentence transformer embeddings via Ollama
+- ChromaDB with automatic persistence - no manual rebuilds needed
+- New tippers are upserted incrementally
 
 Usage:
     # Sync new tippers (adds only missing ones)
@@ -19,6 +27,7 @@ Usage:
 """
 
 import logging
+import math
 import re
 import time
 from datetime import datetime
@@ -99,7 +108,7 @@ class TipperIndexer:
 
     @property
     def collection(self):
-        """Get or create the tippers collection."""
+        """Get or create the tipper collection."""
         if self._collection is None:
             self._collection = self.client.get_or_create_collection(
                 name=COLLECTION_NAME,
@@ -146,7 +155,12 @@ class TipperIndexer:
     # Extract text for embedding
     # -------------------------------------------------------------------------
     def extract_tipper_text(self, tipper: dict) -> str:
-        """Extract meaningful text from a tipper for embedding."""
+        """
+        Extract meaningful text from a tipper for embedding.
+
+        Strips HTML, CTI boilerplate, and structural formatting to focus
+        on the actual threat content for semantic similarity matching.
+        """
         fields = tipper.get('fields', {})
 
         title = fields.get('System.Title', '')
@@ -158,14 +172,63 @@ class TipperIndexer:
             description = re.sub(r'<[^>]+>', ' ', description)
             description = re.sub(r'\s+', ' ', description).strip()
 
-        # Combine into single text block
-        text_parts = [
-            f"Title: {title}",
-            f"Tags: {tags}" if tags else "",
-            f"Description: {description[:2000]}" if description else ""
-        ]
+            # Remove common CTI boilerplate that adds noise to embeddings
+            boilerplate_patterns = [
+                # CSS style blocks
+                r'p\.MsoNormal.*?font-family:[^}]+\}',
+                r'div\.WordSection\d+\s*\{\s*\}',
+                r'span\.\w+Char\s*\{[^}]+\}',
+                r'\.MsoChpDefault\s*\{[^}]+\}',
+                r'a:link[^}]+\}',
+                r'code\s*\{[^}]+\}',
+                # Section headers that appear in every tipper
+                r'\bTHREAT ACTION\b',
+                r'\bTHREAT SUMMARY\b',
+                r'\bAttack Overview\b',
+                r'\bTechnical Analysis\b',
+                r'\bImpact Assessment\b',
+                r'\bTHREAT ACTOR / MALWARE FAMILY\b',
+                r'\bINDICATORS OF COMPROMISE \(IOCs\)\b',
+                r'\bTotal IOCs:\s*\d+',
+                # Metadata labels
+                r'\bDate:\s*\w+\s+\d+,\s*\d{4}',
+                r'\bSeverity:\s*(High|Medium|Low|Informational|Critical)',
+                r'\bClassification:\s*TLP:\w+',
+                # Non-breaking spaces and formatting artifacts
+                r'&nbsp;',
+            ]
 
-        return "\n".join(part for part in text_parts if part)
+            for pattern in boilerplate_patterns:
+                description = re.sub(pattern, ' ', description, flags=re.IGNORECASE)
+
+            # Normalize whitespace after boilerplate removal
+            description = re.sub(r'\s+', ' ', description).strip()
+
+        # Clean the title - remove severity prefix brackets
+        clean_title = re.sub(r'^\[(HIGH|MEDIUM|LOW|INFORMATIONAL|MED)\]\s*', '', title, flags=re.IGNORECASE)
+        clean_title = re.sub(r'^CTI Threat Tipper:\s*', '', clean_title, flags=re.IGNORECASE)
+
+        # Build embedding text - focus on semantic content, not structure
+        text_parts = []
+
+        if clean_title:
+            text_parts.append(clean_title)
+
+        # Include meaningful tags (filter out generic ones)
+        if tags:
+            generic_tags = {'cti', 'high', 'medium', 'low', 'informational', 'critical'}
+            meaningful_tags = [
+                t.strip() for t in tags.split(';')
+                if t.strip().lower() not in generic_tags
+            ]
+            if meaningful_tags:
+                text_parts.append(' '.join(meaningful_tags))
+
+        if description:
+            # Truncate to 2000 chars for embedding efficiency
+            text_parts.append(description[:2000])
+
+        return ' '.join(text_parts)
 
     def prepare_tipper_metadata(self, tipper: dict) -> dict:
         """Extract metadata to store alongside the embedding."""
@@ -231,6 +294,24 @@ class TipperIndexer:
 
         logger.info(f"Found {len(new_tippers)} new tippers to add")
 
+        # Deduplicate by title - the tipper creation process sometimes creates
+        # duplicates with the same title at the same time. Keep only the highest
+        # ID (newest) to avoid indexing duplicates that would falsely match each other.
+        seen_titles = set()
+        unique_tippers = []
+        # Sort descending by ID so we keep the highest ID for each title
+        for tipper in sorted(new_tippers, key=lambda t: int(t.get('id', 0)), reverse=True):
+            title = tipper.get('fields', {}).get('System.Title', '')
+            if title and title not in seen_titles:
+                seen_titles.add(title)
+                unique_tippers.append(tipper)
+            elif title:
+                logger.info(f"Skipping duplicate tipper #{tipper.get('id')} (same title, keeping higher ID)")
+
+        if len(unique_tippers) < len(new_tippers):
+            logger.info(f"Deduplicated: {len(new_tippers)} → {len(unique_tippers)} unique tippers")
+        new_tippers = unique_tippers
+
         # Process and upsert new tippers
         ids = []
         documents = []
@@ -244,11 +325,11 @@ class TipperIndexer:
 
             try:
                 text = self.extract_tipper_text(tipper)
-                metadata = self.prepare_tipper_metadata(tipper)
+                meta = self.prepare_tipper_metadata(tipper)
 
                 ids.append(tipper_id)
                 documents.append(text)
-                metadatas.append(metadata)
+                metadatas.append(meta)
 
             except Exception as e:
                 logger.error(f"Failed to process tipper {tipper_id}: {e}")
@@ -314,6 +395,19 @@ class TipperIndexer:
             logger.error("No tippers to index")
             return False
 
+        # Deduplicate by title - keep only the highest ID for each title
+        seen_titles = set()
+        unique_tippers = []
+        for tipper in sorted(tippers, key=lambda t: int(t.get('id', 0)), reverse=True):
+            title = tipper.get('fields', {}).get('System.Title', '')
+            if title and title not in seen_titles:
+                seen_titles.add(title)
+                unique_tippers.append(tipper)
+
+        if len(unique_tippers) < len(tippers):
+            logger.info(f"Deduplicated: {len(tippers)} → {len(unique_tippers)} unique tippers")
+        tippers = unique_tippers
+
         logger.info(f"Processing {len(tippers)} tippers for indexing...")
 
         # Prepare data
@@ -367,159 +461,123 @@ class TipperIndexer:
             return False
 
     # -------------------------------------------------------------------------
-    # Keyword search through metadata
-    # -------------------------------------------------------------------------
-    def _keyword_search(self, query_text: str, k: int = 10) -> List[dict]:
-        """
-        Search for tippers containing keywords from query text.
-
-        Extracts important terms and searches title, tags in metadata.
-        """
-        # Common words to ignore
-        STOP_WORDS = {
-            'cti', 'threat', 'tipper', 'low', 'high', 'medium', 'informational',
-            'action', 'attack', 'campaign', 'new', 'multi', 'stage', 'malware',
-            'group', 'actor', 'targets', 'targeting', 'advisory', 'alert',
-            'the', 'and', 'for', 'with', 'from', 'into', 'using', 'via',
-            'this', 'that', 'these', 'those', 'has', 'have', 'are', 'were',
-        }
-
-        # Extract potential keywords
-        keywords = set()
-
-        # CamelCase words (malware names like BeaverTail, InvisibleFerret)
-        camel_case = re.findall(r'\b[A-Z][a-z]+[A-Z][a-zA-Z]*\b', query_text)
-        keywords.update(camel_case)
-
-        # ALL_CAPS words (acronyms, codenames)
-        all_caps = re.findall(r'\b[A-Z]{3,}\b', query_text)
-        keywords.update(all_caps)
-
-        # Capitalized words (proper nouns)
-        capitalized = re.findall(r'\b[A-Z][a-z]{3,}\b', query_text)
-        keywords.update(capitalized)
-
-        # Filter stop words
-        keywords = {kw for kw in keywords if kw.lower() not in STOP_WORDS}
-
-        if not keywords:
-            return []
-
-        logger.debug(f"Keyword search for: {keywords}")
-
-        # Get all documents from ChromaDB for keyword search
-        try:
-            result = self.collection.get(include=['metadatas'])
-            if not result['ids']:
-                return []
-
-            matches = []
-            for i, meta in enumerate(result['metadatas']):
-                title = meta.get('title', '').lower()
-                tags = meta.get('tags', '').lower()
-
-                match_count = 0
-                matched_keywords = []
-                for kw in keywords:
-                    kw_lower = kw.lower()
-                    if kw_lower in title or kw_lower in tags:
-                        match_count += 1
-                        matched_keywords.append(kw)
-
-                if match_count > 0:
-                    matches.append({
-                        'metadata': meta,
-                        'keyword_matches': match_count,
-                        'matched_keywords': matched_keywords,
-                        'similarity_score': 0.9 + (0.01 * match_count),
-                        'distance': 0.0,
-                        'matched_content': f"Keyword match: {', '.join(matched_keywords)}"
-                    })
-
-            matches.sort(key=lambda x: x['keyword_matches'], reverse=True)
-            return matches[:k]
-
-        except Exception as e:
-            logger.warning(f"Keyword search failed: {e}")
-            return []
-
-    # -------------------------------------------------------------------------
-    # Search for similar tippers (HYBRID: keyword + vector)
+    # Search for similar tippers (pure vector similarity)
     # -------------------------------------------------------------------------
     def find_similar_tippers(self, query_text: str, k: int = 5) -> List[dict]:
         """
-        Find tippers similar to the given text using hybrid search.
+        Find tippers similar to the given text using semantic vector similarity.
 
-        Combines:
-        1. Keyword matching (exact term matches in title/tags)
-        2. Vector similarity (semantic similarity via embeddings)
+        Uses embedding-based similarity search for accurate semantic matching.
+        No keyword matching - relies purely on the embedding model to understand
+        threat content and find genuinely similar tippers.
 
         Args:
             query_text: Text to search for (new tipper title/description)
             k: Number of similar tippers to return
 
         Returns:
-            List of similar tipper metadata with similarity scores
+            List of similar tipper metadata with similarity scores (0.0 to 1.0)
         """
         # Check if collection has data
         try:
             count = self.collection.count()
             if count == 0:
                 raise RuntimeError("No tippers in index. Run sync_tippers() first.")
-            logger.info(f"Loaded tipper index with {count} tippers")
+            logger.info(f"Searching tipper index ({count} tippers)")
         except Exception as e:
             raise RuntimeError(f"Could not access tipper index: {e}")
 
-        # 1. Keyword search
-        keyword_results = self._keyword_search(query_text, k=k * 2)
-        logger.debug(f"Keyword search found {len(keyword_results)} matches")
+        # Clean the query text using the same preprocessing as indexed tippers
+        clean_query = self._clean_query_text(query_text)
+        logger.debug(f"Clean query ({len(clean_query)} chars): {clean_query[:100]}...")
 
-        # 2. Vector similarity search
+        # Generate query embedding
         try:
-            # Generate query embedding
-            query_embedding = self._embedding_fn([query_text])[0]
+            query_embedding = self._embedding_fn([clean_query])[0]
+        except Exception as e:
+            raise RuntimeError(f"Failed to generate query embedding: {e}")
 
+        # Vector similarity search
+        try:
             results = self.collection.query(
                 query_embeddings=[query_embedding],
-                n_results=k * 2,
+                n_results=k,
                 include=['metadatas', 'documents', 'distances']
             )
-
-            vector_results = []
-            if results['ids'] and results['ids'][0]:
-                for i, doc_id in enumerate(results['ids'][0]):
-                    distance = results['distances'][0][i] if results['distances'] else 0
-                    # Convert L2 distance to similarity (lower distance = more similar)
-                    similarity = 1 / (1 + distance)
-
-                    vector_results.append({
-                        'metadata': results['metadatas'][0][i],
-                        'similarity_score': round(similarity, 3),
-                        'distance': round(distance, 3),
-                        'matched_content': results['documents'][0][i][:500] if results['documents'] else ""
-                    })
-
         except Exception as e:
-            logger.warning(f"Vector search failed: {e}")
-            vector_results = []
+            raise RuntimeError(f"Vector search failed: {e}")
 
-        # 3. Merge results: keyword matches first, then vector matches
-        seen_ids = set()
-        merged_results = []
+        if not results['ids'] or not results['ids'][0]:
+            logger.warning("No similar tippers found")
+            return []
 
-        for result in keyword_results:
-            tid = result['metadata'].get('id')
-            if tid not in seen_ids:
-                seen_ids.add(tid)
-                merged_results.append(result)
+        # Convert results to standardized format
+        similar_tippers = []
+        for i, doc_id in enumerate(results['ids'][0]):
+            distance = results['distances'][0][i] if results['distances'] else 0
 
-        for result in vector_results:
-            tid = result['metadata'].get('id')
-            if tid not in seen_ids:
-                seen_ids.add(tid)
-                merged_results.append(result)
+            # Convert L2 distance to similarity score using exponential decay
+            # Ollama embeddings are not normalized, so L2 distances are large (100-400+)
+            # Scale factor of 300 gives good differentiation:
+            #   - distance ~160 (very similar) → ~60% similarity
+            #   - distance ~280 (somewhat related) → ~40% similarity
+            #   - distance ~400 (unrelated) → ~25% similarity
+            similarity = math.exp(-distance / 300)
 
-        return merged_results[:k]
+            similar_tippers.append({
+                'metadata': results['metadatas'][0][i],
+                'similarity_score': round(similarity, 3),
+                'distance': round(distance, 3),
+                'matched_content': results['documents'][0][i][:500] if results['documents'] else ""
+            })
+
+        # Sort by similarity descending (should already be sorted, but ensure)
+        similar_tippers.sort(key=lambda x: x['similarity_score'], reverse=True)
+
+        return similar_tippers
+
+    def _clean_query_text(self, text: str) -> str:
+        """
+        Clean query text using the same preprocessing as indexed tippers.
+
+        Ensures query embeddings match the format of stored embeddings.
+        """
+        # Remove HTML tags
+        text = re.sub(r'<[^>]+>', ' ', text)
+
+        # Remove CSS style blocks and formatting
+        boilerplate_patterns = [
+            r'p\.MsoNormal.*?font-family:[^}]+\}',
+            r'div\.WordSection\d+\s*\{\s*\}',
+            r'span\.\w+Char\s*\{[^}]+\}',
+            r'\.MsoChpDefault\s*\{[^}]+\}',
+            r'a:link[^}]+\}',
+            r'code\s*\{[^}]+\}',
+            r'\bTHREAT ACTION\b',
+            r'\bTHREAT SUMMARY\b',
+            r'\bAttack Overview\b',
+            r'\bTechnical Analysis\b',
+            r'\bImpact Assessment\b',
+            r'\bTHREAT ACTOR / MALWARE FAMILY\b',
+            r'\bINDICATORS OF COMPROMISE \(IOCs\)\b',
+            r'\bTotal IOCs:\s*\d+',
+            r'\bDate:\s*\w+\s+\d+,\s*\d{4}',
+            r'\bSeverity:\s*(High|Medium|Low|Informational|Critical)',
+            r'\bClassification:\s*TLP:\w+',
+            r'&nbsp;',
+        ]
+
+        for pattern in boilerplate_patterns:
+            text = re.sub(pattern, ' ', text, flags=re.IGNORECASE)
+
+        # Remove severity prefix from titles
+        text = re.sub(r'\[(HIGH|MEDIUM|LOW|INFORMATIONAL|MED)\]\s*', '', text, flags=re.IGNORECASE)
+        text = re.sub(r'CTI Threat Tipper:\s*', '', text, flags=re.IGNORECASE)
+
+        # Normalize whitespace
+        text = re.sub(r'\s+', ' ', text).strip()
+
+        return text
 
     # -------------------------------------------------------------------------
     # Index stats

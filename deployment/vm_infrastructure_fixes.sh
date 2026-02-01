@@ -16,8 +16,8 @@ cat > /etc/security/limits.d/99-ir-bots.conf << 'EOF'
 # Increased from default 1024 to handle websocket connections
 * soft nofile 65536
 * hard nofile 65536
-vinay soft nofile 65536
-vinay hard nofile 65536
+user soft nofile 65536
+user hard nofile 65536
 EOF
 echo "  Created /etc/security/limits.d/99-ir-bots.conf"
 echo ""

@@ -12,16 +12,8 @@ from typing import List, Set
 
 logger = logging.getLogger(__name__)
 
-# Common TLDs for domain extraction
-COMMON_TLDS = {
-    'com', 'net', 'org', 'io', 'co', 'info', 'biz', 'edu', 'gov', 'mil',
-    'ru', 'cn', 'uk', 'de', 'fr', 'jp', 'kr', 'br', 'in', 'au', 'ca',
-    'it', 'es', 'nl', 'pl', 'se', 'no', 'fi', 'dk', 'ch', 'at', 'be',
-    'ir', 'kp', 'su', 'cc', 'tv', 'me', 'ly', 'to', 'xyz', 'top', 'site',
-    'online', 'club', 'app', 'dev', 'cloud', 'tech', 'pro', 'agency',
-    'work', 'live', 'store', 'shop', 'space', 'world', 'today', 'life',
-    'onion',  # Tor hidden services
-}
+# tldextract for proper TLD validation (uses Mozilla Public Suffix List)
+import tldextract
 
 # Minimal benign domains to exclude during extraction (reduces unnecessary VT API calls)
 # VT filtering in analyzer.py handles the rest - this is just a fast first-pass filter
@@ -31,7 +23,15 @@ BENIGN_DOMAINS = {
     # Common email providers (email addresses still extracted, just not as domain IOCs)
     'gmail.com', 'hotmail.com', 'yahoo.com', 'outlook.com', 'live.com',
     # Internal domains - never hunt for these
-    'acme.com', 'acme-internal.net', 'acmecorp.com',
+    'acme.com', 'internal.local', 'acmecorp.com',
+    # Package registries - legitimate infrastructure, not IOCs
+    'npmjs.org', 'registry.npmjs.org', 'yarn.npmjs.org',
+    'yarnpkg.com', 'registry.yarnpkg.com',
+    'github.com', 'raw.githubusercontent.com', 'gist.github.com',
+    'pypi.org', 'files.pythonhosted.org',
+    'rubygems.org', 'nuget.org', 'crates.io',
+    'packagist.org', 'mvnrepository.com', 'maven.org',
+    'docker.io', 'docker.com', 'hub.docker.com',
 }
 
 # Known benign IPs to exclude
@@ -65,6 +65,7 @@ class ExtractedEntities:
     ips: List[str] = field(default_factory=list)
     domains: List[str] = field(default_factory=list)
     urls: List[str] = field(default_factory=list)
+    filenames: List[str] = field(default_factory=list)  # Malicious filenames (install.ps1, etc.)
     hashes: dict = field(default_factory=lambda: {'md5': [], 'sha1': [], 'sha256': []})
     cves: List[str] = field(default_factory=list)
     emails: List[str] = field(default_factory=list)
@@ -79,6 +80,7 @@ class ExtractedEntities:
             not self.ips and
             not self.domains and
             not self.urls and
+            not self.filenames and
             not self.hashes['md5'] and
             not self.hashes['sha1'] and
             not self.hashes['sha256'] and
@@ -95,6 +97,7 @@ class ExtractedEntities:
             'ips': self.ips,
             'domains': self.domains,
             'urls': self.urls,
+            'filenames': self.filenames,
             'hashes': self.hashes,
             'cves': self.cves,
             'emails': self.emails,
@@ -121,6 +124,8 @@ class ExtractedEntities:
             parts.append(f"{len(self.domains)} domains")
         if self.urls:
             parts.append(f"{len(self.urls)} URLs")
+        if self.filenames:
+            parts.append(f"{len(self.filenames)} filenames")
         hash_count = len(self.hashes['md5']) + len(self.hashes['sha1']) + len(self.hashes['sha256'])
         if hash_count:
             parts.append(f"{hash_count} hashes")
@@ -149,47 +154,181 @@ def extract_ips(text: str) -> List[str]:
     for ip in matches:
         if ip not in seen and ip not in BENIGN_IPS:
             # Skip private ranges
-            if not (ip.startswith('10.') or
+            if (ip.startswith('10.') or
                     ip.startswith('192.168.') or
                     ip.startswith('172.16.') or ip.startswith('172.17.') or
                     ip.startswith('172.18.') or ip.startswith('172.19.') or
                     ip.startswith('172.2') or ip.startswith('172.30.') or ip.startswith('172.31.')):
-                ips.append(ip)
-                seen.add(ip)
+                continue
+
+            # Skip version number patterns (e.g., 122.0.0.0 from Chrome/122.0.0.0 User-Agent)
+            # These typically end with .0.0.0 or .0.0 and aren't real threat IPs
+            parts = ip.split('.')
+            if parts[1] == '0' and parts[2] == '0' and parts[3] == '0':
+                continue  # x.0.0.0 pattern - likely a version number
+            if parts[2] == '0' and parts[3] == '0' and int(parts[0]) > 100:
+                continue  # High first octet with .0.0 ending - likely version number
+
+            ips.append(ip)
+            seen.add(ip)
 
     return ips
 
 
+# File extensions that are also valid TLDs - filter these as they're usually filenames not domains
+FILE_EXTENSION_TLDS = {
+    'sh', 'py', 'pl', 'rs', 'ps', 'cc', 'py', 'md', 'so', 'la', 'do', 'to',
+    'ai', 'st', 'fm', 'am', 'dj', 'gs', 'ms', 'lk', 'im', 'ws', 'nu', 'tk',
+}
+
+
 def extract_domains(text: str) -> List[str]:
-    """Extract domain names from text."""
-    # Build TLD pattern
-    tld_pattern = '|'.join(re.escape(tld) for tld in COMMON_TLDS)
+    """Extract domain names from text using tldextract for proper TLD validation.
 
-    # Match domains with common TLDs
-    pattern = rf'\b(?:[a-z0-9](?:[a-z0-9\-]{{0,61}}[a-z0-9])?\.)+(?:{tld_pattern})\b'
-    matches = re.findall(pattern, text.lower())
+    Uses Mozilla Public Suffix List via tldextract - no manual TLD maintenance needed.
+    """
+    # Match anything that looks like a domain (word.word pattern)
+    # tldextract will validate if it's actually a valid TLD
+    pattern = r'\b(?:[a-z0-9](?:[a-z0-9\-]{0,61}[a-z0-9])?\.)+[a-z]{2,}\b'
+    candidates = re.findall(pattern, text.lower())
 
-    # Filter out benign domains and deduplicate
+    # Filter using tldextract for proper TLD validation
     domains = []
     seen = set()
-    for domain in matches:
-        if domain not in seen and domain not in BENIGN_DOMAINS:
-            # Skip if it looks like a version number (e.g., 1.2.3)
-            if not re.match(r'^\d+\.\d+\.\d+$', domain):
-                domains.append(domain)
-                seen.add(domain)
+    for candidate in candidates:
+        if candidate in seen or candidate in BENIGN_DOMAINS:
+            continue
+
+        # Skip if it looks like a version number (e.g., 1.2.3)
+        if re.match(r'^\d+\.\d+\.\d+$', candidate):
+            continue
+
+        # Use tldextract to validate - it uses Mozilla Public Suffix List
+        extracted = tldextract.extract(candidate)
+
+        # Valid domain must have both a domain part and a recognized suffix
+        if not (extracted.domain and extracted.suffix):
+            continue
+
+        # Filter out filenames that look like domains (install.sh, script.py)
+        # These TLDs are commonly file extensions - only accept if domain part
+        # looks like a real domain (has multiple parts or is known malicious pattern)
+        if extracted.suffix in FILE_EXTENSION_TLDS:
+            # If there's no subdomain and domain looks like a filename, skip it
+            # e.g., "install.sh" -> domain="install", subdomain="", suffix="sh"
+            # vs "openclaw.ai" -> domain="openclaw", subdomain="", suffix="ai"
+            # Heuristic: filenames are typically common words, domains are brandnames
+            common_filenames = {'install', 'setup', 'script', 'run', 'start', 'init',
+                               'main', 'index', 'test', 'build', 'deploy', 'config'}
+            if extracted.domain.lower() in common_filenames and not extracted.subdomain:
+                continue
+
+        domains.append(candidate)
+        seen.add(candidate)
 
     return domains
 
 
 def extract_urls(text: str) -> List[str]:
-    """Extract URLs from text."""
-    pattern = r'https?://[^\s<>"\')\]]+[^\s<>"\')\].,;:!?]'
-    matches = re.findall(pattern, text, re.IGNORECASE)
+    """Extract URLs from text, including paths without protocol.
 
-    # Deduplicate
-    urls = list(dict.fromkeys(matches))
-    return urls[:20]  # Limit to 20 URLs
+    Captures both:
+    - Full URLs: https://example.com/path
+    - URL paths: example.com/path (without protocol)
+
+    This is important for hunting package registry paths like
+    registry.npmjs.org/openclaw/ where the domain is benign but
+    the path indicates a malicious package.
+    """
+    urls = []
+    seen = set()
+
+    # Pattern 1: Full URLs with protocol
+    full_url_pattern = r'https?://[^\s<>"\')\]]+[^\s<>"\')\].,;:!?]'
+    for match in re.findall(full_url_pattern, text, re.IGNORECASE):
+        if match.lower() not in seen:
+            urls.append(match)
+            seen.add(match.lower())
+
+    # Pattern 2: URL paths without protocol (domain.tld/path)
+    # Must have a path component (/) to distinguish from plain domains
+    path_pattern = r'\b([a-z0-9](?:[a-z0-9\-]{0,61}[a-z0-9])?\.)+[a-z]{2,}/[^\s<>"\')\]]+[^\s<>"\')\].,;:!?/]'
+    for match in re.findall(path_pattern, text.lower()):
+        # The pattern captures groups, so reconstruct the full match
+        pass  # This pattern doesn't work well with groups
+
+    # Better approach: match domain/path combinations
+    path_pattern2 = r'\b((?:[a-z0-9](?:[a-z0-9\-]{0,61}[a-z0-9])?\.)+[a-z]{2,}/[^\s<>"\')\]]+)'
+    for match in re.finditer(path_pattern2, text, re.IGNORECASE):
+        url_path = match.group(1).rstrip('.,;:!?')
+        # Must have meaningful path (not just domain/)
+        if '/' in url_path and len(url_path.split('/', 1)[1]) > 0:
+            # Add https:// prefix for consistency
+            full_url = f"https://{url_path}"
+            if full_url.lower() not in seen:
+                urls.append(full_url)
+                seen.add(full_url.lower())
+
+    return urls[:30]  # Limit to 30 URLs
+
+
+def extract_filenames(text: str, urls: List[str] = None) -> List[str]:
+    """Extract malicious script/executable filenames from text and URLs.
+
+    Looks for:
+    - Script files: .ps1, .sh, .bat, .cmd, .vbs, .js, .py
+    - Executables: .exe, .dll, .msi, .scr
+    - Documents with macros: .doc, .docm, .xls, .xlsm
+    - Archives: .zip, .rar, .7z, .iso
+
+    Args:
+        text: Text to extract from
+        urls: Optional list of URLs to extract filenames from
+
+    Returns:
+        List of unique filenames
+    """
+    filenames = []
+    seen = set()
+
+    # Extensions that indicate potentially malicious files
+    # Note: .com is excluded because it conflicts with domain names (github.com)
+    suspicious_extensions = {
+        # Scripts
+        'ps1', 'sh', 'bat', 'cmd', 'vbs', 'vbe', 'js', 'jse', 'wsf', 'wsh',
+        # Executables (excluding .com to avoid domain false positives)
+        'exe', 'dll', 'msi', 'scr', 'pif',
+        # Documents with macros
+        'docm', 'xlsm', 'pptm', 'dotm', 'xltm',
+        # Archives (can contain malware)
+        'iso', 'img', 'vhd', 'vhdx',
+        # Other
+        'hta', 'lnk', 'jar', 'msc',
+    }
+
+    # Pattern to match filenames with suspicious extensions
+    # Matches: install.ps1, malware.exe, script.sh, etc.
+    ext_pattern = '|'.join(re.escape(ext) for ext in suspicious_extensions)
+    filename_pattern = rf'\b([a-zA-Z0-9_\-\.]+\.(?:{ext_pattern}))\b'
+
+    for match in re.finditer(filename_pattern, text, re.IGNORECASE):
+        filename = match.group(1)
+        if filename.lower() not in seen:
+            filenames.append(filename)
+            seen.add(filename.lower())
+
+    # Also extract filenames from URLs
+    if urls:
+        for url in urls:
+            # Get the last path component
+            path = url.split('/')[-1]
+            if path and '.' in path:
+                ext = path.rsplit('.', 1)[-1].lower()
+                if ext in suspicious_extensions and path.lower() not in seen:
+                    filenames.append(path)
+                    seen.add(path.lower())
+
+    return filenames[:20]  # Limit to 20 filenames
 
 
 def refang_text(text: str) -> str:
@@ -378,15 +517,68 @@ def extract_threat_actors(text: str, known_apt_names: Set[str] = None) -> List[s
     return list(actors)
 
 
-def extract_malware_families(text: str) -> List[str]:
+def extract_malware_families(text: str, hashes: dict = None) -> List[str]:
     """
-    Extract malware family/tool names from text.
+    Extract malware family names from text.
 
-    Includes RATs, infostealers, backdoors, loaders, and offensive tools.
+    NOTE: This function is intentionally disabled. Malware family matching
+    is handled by vector similarity in ChromaDB - if two tippers both mention
+    "ClawdBot", the embeddings will be similar and they'll be matched as related.
+
+    Regex/list-based extraction was removed because:
+    - Too many false positives ("Assistant", "Banking", etc.)
+    - Requires maintaining a known malware list (flaky)
+    - Vector similarity handles this better
+
+    Args:
+        text: Text to extract from (unused)
+        hashes: Optional hashes (unused)
+
+    Returns:
+        Empty list - malware matching is done via vector similarity
     """
+    return []  # Let vector similarity handle malware name matching
+
+    # --- DISABLED: Old extraction logic below ---
     malware = set()
 
-    # Known malware families, RATs, infostealers, backdoors, loaders
+    # --- Method 1: Pattern matching for malware mentions ---
+    # Catches: "ClawdBot malware", "OpenClaw RAT", "XYZ backdoor", etc.
+    # Name must start with uppercase (proper noun), keyword is case-insensitive
+    malware_patterns = [
+        r'\b([A-Z][a-zA-Z0-9_-]+)\s+(?i:malware|family)\b',
+        r'\b([A-Z][a-zA-Z0-9_-]+)\s+(?i:RAT|R\.A\.T\.)\b',
+        r'\b([A-Z][a-zA-Z0-9_-]+)\s+(?i:backdoor)\b',
+        r'\b([A-Z][a-zA-Z0-9_-]+)\s+(?i:trojan)\b',
+        r'\b([A-Z][a-zA-Z0-9_-]+)\s+(?i:stealer|infostealer)\b',
+        r'\b([A-Z][a-zA-Z0-9_-]+)\s+(?i:loader)\b',
+        r'\b([A-Z][a-zA-Z0-9_-]+)\s+(?i:botnet)\b',
+        r'\b([A-Z][a-zA-Z0-9_-]+)\s+(?i:ransomware)\b',
+        r'\b([A-Z][a-zA-Z0-9_-]+)\s+(?i:worm)\b',
+        r'\b([A-Z][a-zA-Z0-9_-]+)\s+(?i:rootkit)\b',
+        # Also match "the X malware" pattern
+        r'\b[Tt]he\s+([A-Z][a-zA-Z0-9_-]+)\s+(?i:malware|RAT|backdoor|trojan)\b',
+    ]
+
+    # Common words to skip - these appear before "malware" but aren't malware names
+    skip_words = {
+        'The', 'This', 'That', 'New', 'Old', 'Some', 'Any', 'Our', 'Their',
+        'Remote', 'Access', 'Advanced', 'Persistent', 'Common', 'Generic',
+        'Unknown', 'Unnamed', 'Unidentified', 'Suspected', 'Alleged',
+        'Multiple', 'Various', 'Several', 'Custom', 'Novel', 'Emerging',
+        # Common false positives from titles/descriptions
+        'Assistant', 'Banking', 'Mobile', 'Android', 'Windows', 'Linux',
+        'Fake', 'Rogue', 'Targeted', 'Sophisticated', 'Modular',
+    }
+
+    for pattern in malware_patterns:
+        # Don't use IGNORECASE - we want proper noun malware names (uppercase first letter)
+        for match in re.finditer(pattern, text):
+            name = match.group(1)
+            if name not in skip_words and len(name) >= 3:
+                malware.add(name)
+
+    # --- Method 2: Known malware family list (common/well-known ones) ---
     known_malware = [
         # RATs and backdoors
         'Cobalt Strike', 'CobaltStrike', 'Beacon',
@@ -398,6 +590,9 @@ def extract_malware_families(text: str) -> List[str]:
         'InvisibleFerret', 'BeaverTail',  # North Korea tools
         'AppleJeus', 'TraderTraitor',
         'KEYMARBLE', 'HARDRAIN', 'BADCALL',
+        # AI assistant impersonation malware
+        'ClawdBot', 'Clawdbot', 'MoltBot', 'Moltbot', 'OpenClaw', 'Openclaw',
+        'ScreenConnect',  # Legitimate RAT often abused
         # Infostealers
         'RedLine', 'Redline Stealer', 'Raccoon', 'Raccoon Stealer',
         'Vidar', 'Lumma', 'LummaC2', 'Lumma Stealer',
@@ -434,6 +629,28 @@ def extract_malware_families(text: str) -> List[str]:
         if match:
             # Normalize the name (use the matched case or standardize)
             malware.add(match.group())
+
+    # --- Method 3: VT hash lookup (most accurate, but requires API calls) ---
+    if hashes:
+        try:
+            from services.virustotal import VirusTotalClient
+            vt_client = VirusTotalClient()
+
+            if vt_client.is_configured():
+                all_hashes = (
+                    hashes.get('sha256', [])[:5] +  # Prefer SHA256
+                    hashes.get('md5', [])[:3] +
+                    hashes.get('sha1', [])[:2]
+                )
+                if all_hashes:
+                    logger.info(f"Extracting malware families from {len(all_hashes)} hashes via VT...")
+                    vt_families = vt_client.extract_malware_families_from_hashes(all_hashes)
+                    for family in vt_families:
+                        malware.add(family)
+                    if vt_families:
+                        logger.info(f"VT identified malware families: {', '.join(vt_families)}")
+        except Exception as e:
+            logger.debug(f"VT malware extraction failed (continuing without): {e}")
 
     return list(malware)
 
@@ -565,16 +782,23 @@ def extract_entities(text: str, include_apt_database: bool = True) -> ExtractedE
             )
         threat_actors_enriched.append(enriched)
 
+    # Extract hashes first so we can use them for VT malware family lookup
+    extracted_hashes = extract_hashes(clean_text)
+
+    # Extract URLs first so we can get filenames from them
+    extracted_urls = extract_urls(clean_text)
+
     entities = ExtractedEntities(
         ips=extract_ips(clean_text),
         domains=extract_domains(clean_text),
-        urls=extract_urls(clean_text),
-        hashes=extract_hashes(clean_text),
+        urls=extracted_urls,
+        filenames=extract_filenames(clean_text, urls=extracted_urls),
+        hashes=extracted_hashes,
         cves=extract_cves(clean_text),
         emails=extract_emails(clean_text),
         threat_actors=raw_actors,
         threat_actors_enriched=threat_actors_enriched,
-        malware_families=extract_malware_families(clean_text),
+        malware_families=extract_malware_families(clean_text, hashes=extracted_hashes),
         mitre_techniques=extract_mitre_techniques(clean_text),
     )
 

@@ -131,15 +131,23 @@ def setup_logging(
     file_formatter.converter = time.localtime  # Use local timezone instead of UTC
     file_handler.setFormatter(file_formatter)
 
-    # Configure root logger - only use file handler to avoid duplicates
+    # Configure root logger
     root_logger = logging.getLogger()
     root_logger.setLevel(log_level)
 
     # Clear any existing handlers (force=True equivalent)
     root_logger.handlers.clear()
 
-    # Add file handler only (console output via tail -f is cleaner)
+    # Add file handler
     root_logger.addHandler(file_handler)
+
+    # Add console handler - brief INFO level (DEBUG goes to file only)
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.INFO)
+    console_formatter = ColoredFormatter('%(asctime)s  [%(levelname)s]  %(message)s')
+    console_formatter.converter = time.localtime
+    console_handler.setFormatter(console_formatter)
+    root_logger.addHandler(console_handler)
 
     # Set specific modules to INFO level if provided
     if info_modules:

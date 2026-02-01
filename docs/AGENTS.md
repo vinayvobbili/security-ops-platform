@@ -1,6 +1,6 @@
 # AGENTS.md
 
-This file provides guidance to AI CLI agents when working with code in this repository.
+This file provides guidance to AI CLI agents (Claude Code, Gemini, etc.) when working with code in this repository.
 
 ### My style and conventions
 
@@ -14,11 +14,11 @@ This file provides guidance to AI CLI agents when working with code in this repo
 
 ### Zscaler/Enterprise Proxy Blocking
 
-**Issue**: AI agent WebFetch tools may fail with "Unable to verify if domain is safe to fetch" errors due to enterprise security policies.
+**Issue**: Claude Code's WebFetch tool may fail with "Unable to verify if domain is safe to fetch" errors due to enterprise security policies.
 
 **Root Cause**:
 
-- Zscaler (or similar enterprise proxies/firewalls) intercepts outbound requests from AI services
+- ZScaler (or similar enterprise proxies/firewalls) intercepts outbound requests from `claude.ai`
 - Corporate policies often block AI services from accessing external content
 - Less common domains (e.g., `jobright.ai`, newer sites) are frequently blocked by default
 - Well-known domains (e.g., `github.com`, `stackoverflow.com`) are usually whitelisted
@@ -34,13 +34,13 @@ This file provides guidance to AI CLI agents when working with code in this repo
 
 2. **Copy/paste content** directly into the conversation instead of providing URLs
 
-3. **Request IT exceptions** for specific domains you need the AI agent to access regularly
+3. **Request IT exceptions** for specific domains you need Claude to access regularly
 
 **When This Happens**:
 
 - If WebFetch fails, immediately suggest using local curl as an alternative
 - Don't retry WebFetch multiple times - it won't work if blocked by enterprise policy
-- Inform user that this is likely a Zscaler/proxy issue, not an AI agent bug
+- Inform user that this is likely a Zscaler/proxy issue, not a Claude Code bug
 
 ## Common Development Commands
 
@@ -128,6 +128,60 @@ This file provides guidance to AI CLI agents when working with code in this repo
 - **`web/web_server.py`** - Main web application entry point
 - **`webex_bots/pokedex.py`** - Primary SOC bot implementation
 - **`requirements.txt`** - Python dependencies including security tools and LLM frameworks
+
+### Repo Scale
+
+- ~195 Python files, ~55k LOC
+- Single Flask app (not microservices)
+- 25 HTML templates in `web/templates/`
+- Web handlers split into `src/components/web/`
+
+### Web Routes Quick Reference
+
+Key dashboard pages and their templates:
+
+| Route                 | Template                        | Handler                        |
+|-----------------------|---------------------------------|--------------------------------|
+| `/`                   | `slide-show.html`               | `slideshow_handler`            |
+| `/domain-monitoring`  | `domain_monitoring_report.html` | inline in `web_server.py:1139` |
+| `/domain-lookalike`   | `domain_lookalike_report.html`  | inline in `web_server.py:1037` |
+| `/meaningful-metrics` | `meaningful_metrics.html`       | `meaningful_metrics_handler`   |
+| `/shift-performance`  | `shift_performance.html`        | `shift_performance_handler`    |
+| `/xsoar`              | `xsoar_dashboard.html`          | `xsoar_dashboard_handler`      |
+| `/pokedex`            | `pokedex.html`                  | `pokedex_handler`              |
+| `/travel-form`        | `travel_form.html`              | `travel_handler`               |
+| `/msoc-form`          | `msoc_form.html`                | `msoc_form_handler`            |
+| `/healthz`            | JSON response                   | inline health check            |
+
+API endpoints are mostly `/api/*` routes defined inline in `web/web_server.py`.
+
+### Web Component Handlers (`src/components/web/`)
+
+- `approved_testing_handler.py` - Red team testing form logic
+- `apt_handler.py` - APT names/aliases lookup
+- `async_export_manager.py` - Background export jobs
+- `countdown_timer_handler.py` - Timer widget
+- `domain_monitoring.py` - Domain monitoring data processing
+- `meaningful_metrics_handler.py` - Metrics dashboard logic
+- `pokedex_handler.py` - SOC bot chat interface
+- `shift_performance_handler.py` - Shift metrics
+- `slideshow_handler.py` - Dashboard slideshow
+- `travel_handler.py` - Travel form processing
+- `xsoar_dashboard_handler.py` - XSOAR integration dashboard
+- `xsoar_import_handler.py` - XSOAR ticket import
+
+### Troubleshooting Locations
+
+| Issue Type              | Where to Look                                        |
+|-------------------------|------------------------------------------------------|
+| Template/render errors  | `web/templates/` - check for Jinja2 syntax           |
+| CSS/styling issues      | `web/static/css/` - page-specific CSS files          |
+| JavaScript errors       | `web/static/js/` or inline in templates              |
+| API failures            | `services/` for external integrations                |
+| Config/env issues       | `my_config.py` + `data/transient/.env`               |
+| Route not found         | `web/web_server.py` - search for `@app.route`        |
+| Background job failures | `src/all_jobs.py` + `src/components/`                |
+| Bot issues              | `src/pokedex/` for SOC bot, `webex_bots/` for others |
 
 ### Development Notes
 

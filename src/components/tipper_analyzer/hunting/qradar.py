@@ -1,6 +1,7 @@
 """QRadar IOC hunting functions using batched queries for efficiency."""
 
 import logging
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from typing import List, Dict, Any
 
@@ -10,23 +11,20 @@ logger = logging.getLogger(__name__)
 
 
 def hunt_qradar(entities, hours: int) -> ToolHuntResult:
-    """Hunt IOCs in QRadar using batched queries.
+    """Hunt IOCs in QRadar using batched queries IN PARALLEL.
 
-    Instead of running one query per IOC sequentially (which could take hours),
-    this batches IOCs into efficient combined queries:
-    - 1 query for domains (combined search across webproxy, email, O365, PA firewall)
-    - 1 query for IPs (combined search across ZPA, Entra, endpoint, PA firewall)
-    - 1 query for hashes (endpoint)
-
-    Both domain and IP searches return context information (threat names, actions,
-    sender info, process info) which is displayed in the hunt results table.
+    Runs all search types concurrently:
+    - Domain search (webproxy, email, O365, PA firewall)
+    - URL path search (webproxy)
+    - IP search (ZPA, Entra, endpoint, PA firewall)
+    - Hash search (endpoint)
 
     Args:
         entities: ExtractedEntities object from entity_extractor
         hours: Number of hours to search back
 
     Returns:
-        ToolHuntResult with QRadar findings including context for domain and IP hits
+        ToolHuntResult with QRadar findings
     """
     from services.qradar import QRadarClient
 
@@ -38,39 +36,46 @@ def hunt_qradar(entities, hours: int) -> ToolHuntResult:
             errors=["QRadar API not configured"]
         )
 
-    ip_hits = []
-    domain_hits = []
-    hash_hits = []
-    errors = []
-
     # Collect all IOCs
-    domains = entities.domains[:30]  # Limit to 30 domains
-    ips = entities.ips[:20]  # Limit to 20 IPs
+    domains = entities.domains[:30]
+    ips = entities.ips[:20]
+    urls = entities.urls[:20]
     all_hashes = []
     for hash_type in ['md5', 'sha1', 'sha256']:
         for h in entities.hashes.get(hash_type, [])[:10]:
             all_hashes.append((h, hash_type))
 
-    logger.info(f"[QRadar] Parallel batched hunt: {len(domains)} domains, {len(ips)} IPs, {len(all_hashes)} hashes")
+    logger.info(f"[QRadar] PARALLEL hunt: {len(domains)} domains, {len(ips)} IPs, {len(urls)} URLs, {len(all_hashes)} hashes")
 
-    # ==================== Domain Search (single combined query) ====================
-    if domains:
-        domain_events = {}  # Track events per domain
+    # Results collectors
+    all_domain_hits = []
+    all_ip_hits = []
+    all_url_hits = []
+    all_hash_hits = []
+    all_errors = []
+    all_queries = []
 
+    # Define search functions for parallel execution
+    def _search_domains():
+        if not domains:
+            return [], [], []
+        domain_hits = []
+        errors = []
+        queries = []
+        domain_events = {}
         try:
-            logger.info(f"[QRadar] Running combined domain search across all log sources...")
+            logger.info(f"[QRadar] Starting domain search...")
             result = qradar.batch_search_domains_combined(domains, hours=hours, max_results=500)
-
+            if result and result.get('query'):
+                queries.append({'type': 'Domain Search', 'query': result['query']})
             if result and "error" not in result:
                 _aggregate_domain_hits_with_context(result.get('events', []), domains, domain_events)
-            elif "error" in result:
-                errors.append(f"Domain combined search: {result['error']}")
-
+            elif result and "error" in result:
+                errors.append(f"Domain search: {result['error']}")
         except Exception as e:
-            errors.append(f"Domain combined search: {str(e)}")
-            logger.error(f"[QRadar] Domain combined search error: {e}")
+            errors.append(f"Domain search: {str(e)}")
+            logger.error(f"[QRadar] Domain search error: {e}")
 
-        # Convert aggregated results to hits
         for domain, data in domain_events.items():
             if data['count'] > 0:
                 domain_hits.append({
@@ -84,29 +89,67 @@ def hunt_qradar(entities, hours: int) -> ToolHuntResult:
                     'hosts': list(data['hosts'])[:10],
                     'recipients': list(data['recipients'])[:10],
                 })
-                logger.info(f"  [QRadar] HIT: Domain {domain} - {data['count']} events, {len(data['users'])} users, {len(data['hosts'])} hosts")
+                logger.info(f"  [QRadar] HIT: Domain {domain} - {data['count']} events")
+        logger.info(f"[QRadar] Domain search complete: {len(domain_hits)} hits")
+        return domain_hits, errors, queries
 
-    # ==================== IP Search (single combined query) ====================
-    if ips:
-        ip_events = {}  # Track events per IP
-
+    def _search_urls():
+        if not urls:
+            return [], [], []
+        url_hits = []
+        errors = []
+        queries = []
+        url_events = {}
         try:
-            logger.info(f"[QRadar] Running combined IP search across all log sources...")
-            result = qradar.batch_search_ips_combined(ips, hours=hours, max_results=500)
+            logger.info(f"[QRadar] Starting URL path search...")
+            result = qradar.batch_search_urls_webproxy(urls, hours=hours, max_results=300)
+            if result and result.get('query'):
+                queries.append({'type': 'URL Path Search', 'query': result['query']})
+            if result and "error" not in result:
+                _aggregate_url_hits(result.get('events', []), urls, url_events)
+            elif result and "error" in result:
+                errors.append(f"URL search: {result['error']}")
+        except Exception as e:
+            errors.append(f"URL search: {str(e)}")
+            logger.error(f"[QRadar] URL search error: {e}")
 
+        for url, data in url_events.items():
+            if data['count'] > 0:
+                url_hits.append({
+                    'url': url,
+                    'event_count': data['count'],
+                    'sources': list(data['sources']),
+                    'first_seen': data['first_seen'].strftime("%Y-%m-%d %H:%M") if data['first_seen'] else 'N/A',
+                    'last_seen': data['last_seen'].strftime("%Y-%m-%d %H:%M") if data['last_seen'] else 'N/A',
+                    'users': list(data['users'])[:10],
+                    'hosts': list(data['hosts'])[:10],
+                })
+                logger.info(f"  [QRadar] HIT: URL {url[:50]}... - {data['count']} events")
+        logger.info(f"[QRadar] URL search complete: {len(url_hits)} hits")
+        return url_hits, errors, queries
+
+    def _search_ips():
+        if not ips:
+            return [], [], []
+        ip_hits = []
+        errors = []
+        queries = []
+        ip_events = {}
+        try:
+            logger.info(f"[QRadar] Starting IP search...")
+            result = qradar.batch_search_ips_combined(ips, hours=hours, max_results=500)
+            if result and result.get('query'):
+                queries.append({'type': 'IP Search', 'query': result['query']})
             if result and "error" not in result:
                 _aggregate_ip_hits_with_context(result.get('events', []), ips, ip_events)
-            elif "error" in result:
-                errors.append(f"IP combined search: {result['error']}")
-
+            elif result and "error" in result:
+                errors.append(f"IP search: {result['error']}")
         except Exception as e:
-            errors.append(f"IP combined search: {str(e)}")
-            logger.error(f"[QRadar] IP combined search error: {e}")
+            errors.append(f"IP search: {str(e)}")
+            logger.error(f"[QRadar] IP search error: {e}")
 
-        # Convert aggregated results to hits
         for ip, data in ip_events.items():
             if data['count'] > 0:
-                # Determine primary direction
                 inbound = data['inbound']
                 outbound = data['outbound']
                 if outbound > inbound:
@@ -115,7 +158,6 @@ def hunt_qradar(entities, hours: int) -> ToolHuntResult:
                     direction = f"← Inbound ({inbound})"
                 else:
                     direction = f"↔ Both ({inbound}/{outbound})"
-
                 ip_hits.append({
                     'ip': ip,
                     'event_count': data['count'],
@@ -127,20 +169,24 @@ def hunt_qradar(entities, hours: int) -> ToolHuntResult:
                     'hosts': list(data['hosts'])[:10],
                     'direction': direction,
                 })
-                logger.info(f"  [QRadar] HIT: IP {ip} - {data['count']} events, {len(data['users'])} users, {len(data['hosts'])} hosts, {direction}")
+                logger.info(f"  [QRadar] HIT: IP {ip} - {data['count']} events, {direction}")
+        logger.info(f"[QRadar] IP search complete: {len(ip_hits)} hits")
+        return ip_hits, errors, queries
 
-    # ==================== Hash Search (1 query) ====================
-    if all_hashes:
+    def _search_hashes():
+        if not all_hashes:
+            return [], [], []
+        hash_hits = []
+        errors = []
+        queries = []
         hash_list = [h for h, _ in all_hashes]
         hash_type_map = {h: t for h, t in all_hashes}
-
         try:
-            logger.info(f"[QRadar] Running hash search...")
+            logger.info(f"[QRadar] Starting hash search...")
             result = qradar.batch_search_hashes_endpoint(hash_list, hours=hours, max_results=500)
             if "error" not in result:
                 hash_events = {}
                 for event in result.get('events', []):
-                    # Check which hash matched
                     for field in ['MD5', 'MD5 Hash', 'SHA256 Hash']:
                         event_hash = event.get(field, '')
                         if event_hash and event_hash.lower() in [h.lower() for h in hash_list]:
@@ -149,7 +195,6 @@ def hunt_qradar(entities, hours: int) -> ToolHuntResult:
                                 if matched_hash not in hash_events:
                                     hash_events[matched_hash] = 0
                                 hash_events[matched_hash] += 1
-
                 for file_hash, count in hash_events.items():
                     hash_type = hash_type_map.get(file_hash, 'unknown')
                     hash_hits.append({
@@ -158,19 +203,53 @@ def hunt_qradar(entities, hours: int) -> ToolHuntResult:
                         'event_count': count
                     })
                     logger.info(f"  [QRadar] HIT: Hash {file_hash[:16]}... - {count} events")
-
+            elif "error" in result:
+                errors.append(f"Hash search: {result['error']}")
         except Exception as e:
-            errors.append(f"Hash endpoint batch: {str(e)}")
-            logger.error(f"[QRadar] Hash endpoint batch error: {e}")
+            errors.append(f"Hash search: {str(e)}")
+            logger.error(f"[QRadar] Hash search error: {e}")
+        logger.info(f"[QRadar] Hash search complete: {len(hash_hits)} hits")
+        return hash_hits, errors, queries
 
-    total_hits = len(ip_hits) + len(domain_hits) + len(hash_hits)
+    # Run all searches in PARALLEL
+    with ThreadPoolExecutor(max_workers=4, thread_name_prefix="qr-hunt") as executor:
+        futures = {
+            executor.submit(_search_domains): "domains",
+            executor.submit(_search_urls): "urls",
+            executor.submit(_search_ips): "ips",
+            executor.submit(_search_hashes): "hashes",
+        }
+
+        for future in as_completed(futures):
+            search_type = futures[future]
+            try:
+                hits, errors, queries = future.result()
+                if search_type == "domains":
+                    all_domain_hits.extend(hits)
+                elif search_type == "urls":
+                    all_url_hits.extend(hits)
+                elif search_type == "ips":
+                    all_ip_hits.extend(hits)
+                elif search_type == "hashes":
+                    all_hash_hits.extend(hits)
+                all_errors.extend(errors)
+                all_queries.extend(queries)
+            except Exception as e:
+                logger.error(f"[QRadar] {search_type} search failed: {e}")
+                all_errors.append(f"{search_type}: {str(e)}")
+
+    total_hits = len(all_ip_hits) + len(all_domain_hits) + len(all_url_hits) + len(all_hash_hits)
+    logger.info(f"[QRadar] All searches complete: {total_hits} total hits")
+
     return ToolHuntResult(
         tool_name="QRadar",
         total_hits=total_hits,
-        ip_hits=ip_hits,
-        domain_hits=domain_hits,
-        hash_hits=hash_hits,
-        errors=errors[:5]
+        ip_hits=all_ip_hits,
+        domain_hits=all_domain_hits,
+        url_hits=all_url_hits,
+        hash_hits=all_hash_hits,
+        errors=all_errors[:5],
+        queries=all_queries
     )
 
 
@@ -470,3 +549,71 @@ def _parse_timestamp(ts_value) -> datetime:
         return datetime.fromtimestamp(ts_value)
     except (ValueError, TypeError, OSError):
         return None
+
+
+def _aggregate_url_hits(
+    events: List[Dict[str, Any]],
+    urls: List[str],
+    url_events: Dict[str, Dict]
+) -> None:
+    """Aggregate events by matching URL path.
+
+    URLs include paths like https://registry.npmjs.org/openclaw/ where
+    the domain is benign but the path indicates a malicious package.
+
+    Args:
+        events: List of events from QRadar webproxy search
+        urls: List of URLs we searched for
+        url_events: Dict to accumulate results
+    """
+    source_map = {
+        'Zscaler Nss': 'Zscaler',
+        'Blue Coat Web Security Service': 'BlueCoat',
+        'Palo Alto PA Series': 'PaloAlto',
+    }
+
+    for event in events:
+        event_url = event.get('URL', '') or ''
+        if not event_url:
+            continue
+
+        event_url_lower = event_url.lower()
+
+        for url in urls:
+            # Extract path from our URL for matching
+            # URLs are like https://registry.npmjs.org/openclaw/
+            url_path = url.lower().replace('https://', '').replace('http://', '')
+
+            if url_path in event_url_lower:
+                if url not in url_events:
+                    url_events[url] = {
+                        'count': 0,
+                        'sources': set(),
+                        'first_seen': None,
+                        'last_seen': None,
+                        'users': set(),
+                        'hosts': set(),
+                    }
+
+                url_events[url]['count'] += 1
+
+                # Get source
+                raw_source = event.get('source', 'Unknown')
+                source = source_map.get(raw_source, raw_source)
+                url_events[url]['sources'].add(source)
+
+                # Track users and hosts
+                username = event.get('username', '')
+                hostname = event.get('Computer Hostname', '')
+                if username and username not in ('-', 'N/A', 'unknown'):
+                    url_events[url]['users'].add(username)
+                if hostname and hostname not in ('-', 'N/A', 'unknown'):
+                    url_events[url]['hosts'].add(hostname)
+
+                # Track timestamps
+                ts = _parse_timestamp(event.get('starttime'))
+                if ts:
+                    if url_events[url]['first_seen'] is None or ts < url_events[url]['first_seen']:
+                        url_events[url]['first_seen'] = ts
+                    if url_events[url]['last_seen'] is None or ts > url_events[url]['last_seen']:
+                        url_events[url]['last_seen'] = ts

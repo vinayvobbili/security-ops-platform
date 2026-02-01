@@ -263,6 +263,45 @@ class RulesCatalog:
         logger.info(f"Rules catalog covers {len(covered)} unique MITRE techniques")
         return covered
 
+    def get_rules_by_technique(self, techniques: List[str]) -> Dict[str, List[DetectionRule]]:
+        """Get rules mapped to each MITRE technique.
+
+        Args:
+            techniques: List of MITRE technique IDs to look up (e.g., ['T1005', 'T1059'])
+
+        Returns:
+            Dict mapping technique ID (uppercase) -> list of DetectionRule objects
+        """
+        if self.collection.count() == 0 or not techniques:
+            return {}
+
+        try:
+            all_docs = self.collection.get(
+                include=["metadatas"],
+                limit=self.collection.count(),
+            )
+        except Exception as e:
+            logger.warning(f"Failed to get rules by technique: {e}")
+            return {}
+
+        # Normalize input techniques to uppercase
+        techniques_upper = {t.upper() for t in techniques}
+        result = {t: [] for t in techniques_upper}
+
+        if all_docs and all_docs.get("metadatas"):
+            for metadata in all_docs["metadatas"]:
+                techniques_str = metadata.get("mitre_techniques", "")
+                rule_techniques = {t.strip().upper() for t in techniques_str.split(",") if t.strip()}
+
+                # Check if this rule covers any of our target techniques
+                matching = rule_techniques & techniques_upper
+                if matching:
+                    rule = self._metadata_to_rule(metadata)
+                    for tech in matching:
+                        result[tech].append(rule)
+
+        return result
+
     def rebuild(self, rules: List[DetectionRule]) -> int:
         """Full collection rebuild (delete and recreate).
 

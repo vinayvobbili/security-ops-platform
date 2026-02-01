@@ -812,7 +812,7 @@ def main():
         #     logger.warning("No data to export")
 
         # # Test: Add and Remove tags
-        # test_hostname = "VV10-MLKR-029.company.co.kr"
+        # test_hostname = "TEST-HOST-001.example.com"
         # test_tag = "TestTag123"
         # instance_name = "On-Prem"  # or "On-Prem"
         # tag_action = 'add'  # Change to 'remove' to test removal
@@ -850,7 +850,7 @@ def main():
         # Test searching for computers
         test_computers = [
             {"name": "HOST001.INTERNAL.EXAMPLE.COM", "instance": "Cloud"},
-            {"name": "VV10-MLKR-029.company.co.kr", "instance": "On-Prem"},
+            {"name": "HOST002.INTERNAL.EXAMPLE.COM", "instance": "On-Prem"},
         ]
         for computer in test_computers:
             search_term = computer["name"]

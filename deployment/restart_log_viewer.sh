@@ -11,7 +11,7 @@ if [ -z "$PORT" ] || [ -z "$TITLE" ] || [ -z "$LOG_FILE" ]; then
     exit 1
 fi
 
-PROJECT_DIR="/home/vinay/pub/IR"
+PROJECT_DIR="/home/user/pub/IR"
 cd "$PROJECT_DIR" || exit 1
 
 # Load environment variables from .env

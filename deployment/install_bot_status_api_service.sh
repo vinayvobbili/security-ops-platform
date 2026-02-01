@@ -12,7 +12,7 @@ sleep 2
 
 # Copy service file to systemd directory
 echo "Installing service file..."
-sudo cp /home/vinay/pub/IR/deployment/ir-bot-status-api.service /etc/systemd/system/
+sudo cp /home/user/pub/IR/deployment/ir-bot-status-api.service /etc/systemd/system/
 
 # Reload systemd
 echo "Reloading systemd daemon..."

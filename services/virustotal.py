@@ -512,6 +512,125 @@ class VirusTotalClient:
         return result
 
 
+    def get_malware_family_from_hash(self, file_hash: str) -> Optional[str]:
+        """Extract malware family name from a file hash lookup.
+
+        Uses VT's popular_threat_classification field which contains
+        the consensus malware family name across AV engines.
+
+        Args:
+            file_hash: MD5, SHA1, or SHA256 hash
+
+        Returns:
+            Malware family name (e.g., "emotet", "cobaltstrike") or None
+        """
+        result = self.lookup_hash(file_hash)
+
+        if "error" in result:
+            return None
+
+        attrs = result.get("data", {}).get("attributes", {})
+
+        # Try popular_threat_classification first (most reliable)
+        threat_class = attrs.get("popular_threat_classification", {})
+        suggested_label = threat_class.get("suggested_threat_label", "")
+
+        if suggested_label:
+            # Format is often "trojan.cobaltstrike/beacon" - extract family
+            parts = suggested_label.lower().replace("/", ".").split(".")
+            # Skip generic prefixes like "trojan", "malware", "generic"
+            generic = {"trojan", "malware", "generic", "backdoor", "virus", "worm", "rat"}
+            for part in parts:
+                if part and part not in generic and len(part) > 2:
+                    return part.title()  # Return capitalized
+
+        # Fallback: check popular_threat_name
+        popular_names = threat_class.get("popular_threat_name", [])
+        if popular_names:
+            # Return most common name
+            return popular_names[0].get("value", "").title()
+
+        return None
+
+    def search_malware_name(self, name: str, limit: int = 5) -> Dict[str, Any]:
+        """Search VT for a potential malware family name.
+
+        Uses VT Intelligence search (Enterprise feature) to check if a name
+        is a known malware family.
+
+        Args:
+            name: Potential malware name to search
+            limit: Max results to return
+
+        Returns:
+            Dict with 'is_malware' bool and 'samples' list
+        """
+        if not self.api_key:
+            return {"error": "API key not configured", "is_malware": False}
+
+        # Search for files tagged with this name or detected as this family
+        query = f'engines:"{name}" OR name:"{name}" OR tag:"{name}"'
+
+        try:
+            # VT Intelligence search endpoint
+            url = f"{self.base_url}/intelligence/search"
+            headers = {"x-apikey": self.api_key}
+            params = {"query": query, "limit": limit}
+
+            response = requests.get(url, headers=headers, params=params, timeout=30)
+
+            if response.status_code == 403:
+                # Intelligence search requires Enterprise - fall back to basic search
+                logger.debug("VT Intelligence search requires Enterprise API")
+                return {"is_malware": False, "samples": [], "error": "Requires Enterprise"}
+
+            response.raise_for_status()
+            data = response.json()
+
+            samples = data.get("data", [])
+
+            return {
+                "is_malware": len(samples) > 0,
+                "sample_count": len(samples),
+                "samples": [
+                    {
+                        "sha256": s.get("id", ""),
+                        "name": s.get("attributes", {}).get("meaningful_name", ""),
+                        "detection_ratio": f"{s.get('attributes', {}).get('last_analysis_stats', {}).get('malicious', 0)}/{sum(s.get('attributes', {}).get('last_analysis_stats', {}).values())}",
+                    }
+                    for s in samples[:3]
+                ]
+            }
+
+        except requests.exceptions.HTTPError as e:
+            logger.debug(f"VT malware search failed: {e}")
+            return {"is_malware": False, "samples": [], "error": str(e)}
+        except Exception as e:
+            logger.debug(f"VT malware search error: {e}")
+            return {"is_malware": False, "samples": [], "error": str(e)}
+
+    def extract_malware_families_from_hashes(self, hashes: list) -> list:
+        """Extract malware family names from a list of file hashes.
+
+        Looks up each hash in VT and extracts the classified malware family.
+
+        Args:
+            hashes: List of file hashes (MD5, SHA1, SHA256)
+
+        Returns:
+            List of unique malware family names found
+        """
+        families = set()
+
+        for file_hash in hashes[:20]:  # Limit to avoid rate limits
+            family = self.get_malware_family_from_hash(file_hash)
+            if family:
+                families.add(family)
+                logger.debug(f"VT identified {file_hash[:16]}... as {family}")
+
+        return list(families)
+
+
 if __name__ == "__main__":
     # Quick test for VirusTotal client
     import sys

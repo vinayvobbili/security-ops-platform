@@ -218,14 +218,14 @@ def check_for_new_incidents(room_id=None):
     """Poll ServiceNow for new incidents and send Webex notifications.
 
     Args:
-        room_id: Webex room ID to send notifications to. Defaults to Vinay test space.
+        room_id: Webex room ID to send notifications to. Defaults to dev test space.
 
     Note:
         All exceptions are caught and logged to prevent scheduler disruption.
     """
     try:
         config = get_config()
-        room_id = room_id or config.webex_room_id_vinay_test_space
+        room_id = room_id or config.webex_room_id_dev_test_space
         webex_token = config.webex_bot_access_token_moneyball
 
         if not room_id:
@@ -325,5 +325,5 @@ def check_for_new_incidents(room_id=None):
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
-    # Manual run uses Vinay test space (default)
+    # Manual run uses dev test space (default)
     check_for_new_incidents()

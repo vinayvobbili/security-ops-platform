@@ -48,7 +48,7 @@ def analyze_from_cli(tipper_id: str = None, text: str = None):
     return analysis
 
 
-def analyze_recent_tippers(hours_back: int = 1, room_id: str = _config.webex_room_id_vinay_test_space) -> int:
+def analyze_recent_tippers(hours_back: int = 1, room_id: str = _config.webex_room_id_dev_test_space) -> int:
     """
     Fetch and analyze tippers created in the last N hours.
 
@@ -110,6 +110,25 @@ def analyze_recent_tippers(hours_back: int = 1, room_id: str = _config.webex_roo
         logger.info(f"No new tippers in the last {hours_back} hour(s) (checked {len(all_tippers)} from today/yesterday)")
         print(f"  → No new tippers found (checked {len(all_tippers)} from today/yesterday)")
         return 0
+
+    # Deduplicate by title - the tipper creation process sometimes creates
+    # duplicates with the same title at the same time. Keep only the highest
+    # ID (newest) to avoid analyzing the same tipper multiple times.
+    seen_titles = set()
+    unique_tippers = []
+    # Sort descending by ID so we keep the highest ID for each title
+    for tipper in sorted(tippers, key=lambda t: int(t.get('id', 0)), reverse=True):
+        title = tipper.get('fields', {}).get('System.Title', '')
+        if title and title not in seen_titles:
+            seen_titles.add(title)
+            unique_tippers.append(tipper)
+        elif title:
+            dup_id = tipper.get('id')
+            logger.info(f"Skipping duplicate tipper #{dup_id} (same title, keeping higher ID)")
+
+    if len(unique_tippers) < len(tippers):
+        logger.info(f"Deduplicated: {len(tippers)} → {len(unique_tippers)} unique tippers")
+    tippers = unique_tippers
 
     logger.info(f"Found {len(tippers)} tipper(s) to analyze (from {len(all_tippers)} today/yesterday)")
     tipper_ids = [str(t.get('id')) for t in tippers]

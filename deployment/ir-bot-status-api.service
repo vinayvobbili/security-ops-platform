@@ -7,13 +7,13 @@ StartLimitIntervalSec=0
 Type=simple
 Restart=always
 RestartSec=10
-User=vinay
-WorkingDirectory=/home/vinay/pub/IR
-Environment="PATH=/home/vinay/pub/IR/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-EnvironmentFile=/home/vinay/pub/IR/.env
-ExecStart=/home/vinay/pub/IR/.venv/bin/python /home/vinay/pub/IR/deployment/bot_status_api.py
-StandardOutput=append:/home/vinay/pub/IR/logs/bot_status_api.log
-StandardError=append:/home/vinay/pub/IR/logs/bot_status_api.log
+User=user
+WorkingDirectory=/home/user/pub/IR
+Environment="PATH=/home/user/pub/IR/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+EnvironmentFile=/home/user/pub/IR/.env
+ExecStart=/home/user/pub/IR/.venv/bin/python /home/user/pub/IR/deployment/bot_status_api.py
+StandardOutput=append:/home/user/pub/IR/logs/bot_status_api.log
+StandardError=append:/home/user/pub/IR/logs/bot_status_api.log
 
 # Resource limits
 MemoryMax=512M

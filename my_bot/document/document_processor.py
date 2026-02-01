@@ -365,13 +365,18 @@ class DocumentProcessor:
 
             logging.debug(f"ChromaDB collection has {count} chunks")
 
-            # Load documents for BM25 retriever if not already loaded
+            # Load documents for BM25 retriever from ChromaDB cache (fast)
+            # instead of re-parsing files from disk (slow)
             if not self.all_documents:
-                logging.debug("Loading documents for BM25 retriever...")
-                documents = self.load_documents_from_folder()
-                if documents:
-                    self.all_documents = self.create_text_chunks(documents)
-                    logging.debug(f"Loaded {len(self.all_documents)} documents for BM25")
+                logging.debug("Loading documents for BM25 from ChromaDB cache...")
+                result = self.collection.get()
+                if result and result['documents']:
+                    metadatas = result['metadatas'] or [{}] * len(result['documents'])
+                    self.all_documents = [
+                        Document(page_content=doc, metadata=meta or {})
+                        for doc, meta in zip(result['documents'], metadatas)
+                    ]
+                    logging.debug(f"Loaded {len(self.all_documents)} chunks for BM25 from cache")
 
             return True
 

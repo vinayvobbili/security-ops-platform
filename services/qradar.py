@@ -179,18 +179,16 @@ class QRadarClient:
         self,
         aql_query: str,
         timeout: int = 300,
-        poll_interval: int = 5,
         max_results: int = 100
     ) -> Dict[str, Any]:
         """Run an AQL search and wait for results.
 
         This is a convenience method that creates a search, polls for completion,
-        and returns the results.
+        and returns the results. Polls every 60 seconds to reduce API load.
 
         Args:
             aql_query: The AQL query string
             timeout: Maximum seconds to wait for completion
-            poll_interval: Seconds between status checks
             max_results: Maximum results to return
 
         Returns:
@@ -207,9 +205,13 @@ class QRadarClient:
 
         logger.info(f"Search created with ID: {search_id}")
 
-        # Poll for completion
-        elapsed = 0
-        while elapsed < timeout:
+        # Poll for completion using wall clock time for accurate timeout
+        start_time = time.time()
+        while True:
+            elapsed = int(time.time() - start_time)
+            if elapsed >= timeout:
+                return {"error": f"Search timed out after {elapsed}s"}
+
             status_result = self.get_search_status(search_id)
             if "error" in status_result:
                 return status_result
@@ -225,10 +227,7 @@ class QRadarClient:
                 error_msg = status_result.get("error_messages", [])
                 return {"error": f"Search {status}: {error_msg}"}
 
-            time.sleep(poll_interval)
-            elapsed += poll_interval
-
-        return {"error": f"Search timed out after {timeout}s"}
+            time.sleep(60)  # Poll every minute
 
     # ==================== Offense Methods ====================
 
@@ -1096,7 +1095,8 @@ class QRadarClient:
         self,
         domains: List[str],
         hours: int = 168,
-        max_results: int = 500
+        max_results: int = 500,
+        timeout: int = 1800
     ) -> Dict[str, Any]:
         """Search for multiple domains across all log sources in a single query.
 
@@ -1108,6 +1108,7 @@ class QRadarClient:
             domains: List of domains to search for
             hours: Number of hours to look back
             max_results: Maximum events to return
+            timeout: Maximum seconds to wait for completion (default 600 = 10 min)
 
         Returns:
             dict: Search results with events including source and context fields
@@ -1144,7 +1145,65 @@ class QRadarClient:
             LIMIT {max_results}
             LAST {hours} HOURS
         """
-        return self.run_aql_search(aql.strip(), max_results=max_results)
+        result = self.run_aql_search(aql.strip(), timeout=timeout, max_results=max_results)
+        result['query'] = aql.strip()  # Include query for transparency
+        return result
+
+    def batch_search_urls_webproxy(
+        self,
+        urls: List[str],
+        hours: int = 168,
+        max_results: int = 300,
+        timeout: int = 600
+    ) -> Dict[str, Any]:
+        """Search for URL paths in webproxy logs.
+
+        This is important for cases where the domain is benign (e.g., npmjs.org)
+        but the path indicates a malicious package (e.g., /openclaw/).
+
+        Args:
+            urls: List of URLs (including paths) to search for
+            hours: Number of hours to look back
+            max_results: Maximum events to return
+            timeout: Maximum seconds to wait for completion
+
+        Returns:
+            dict: Search results with events and query
+        """
+        if not urls:
+            return {"events": [], "count": 0, "query": ""}
+
+        # Extract paths from URLs for searching
+        # URLs come in as https://registry.npmjs.org/openclaw/
+        url_conditions = []
+        for url in urls:
+            # Remove protocol for matching
+            path = url.replace('https://', '').replace('http://', '')
+            # Escape single quotes in path
+            path = path.replace("'", "''")
+            url_conditions.append(f"URL ILIKE '%{path}%'")
+
+        conditions_str = " OR ".join(url_conditions)
+
+        aql = f"""
+            SELECT sourceip, destinationip, starttime,
+                   logsourcetypename(devicetype) AS source,
+                   username, "Computer Hostname",
+                   qidname(qid) AS eventName,
+                   URL, "Action", "User Agent"
+            FROM events
+            WHERE logsourcetypename(devicetype) IN (
+                'Zscaler Nss',
+                'Blue Coat Web Security Service',
+                'Palo Alto PA Series'
+            )
+            AND ({conditions_str})
+            LIMIT {max_results}
+            LAST {hours} HOURS
+        """
+        result = self.run_aql_search(aql.strip(), timeout=timeout, max_results=max_results)
+        result['query'] = aql.strip()  # Include query for transparency
+        return result
 
     def batch_search_ips_general(
         self,
@@ -1330,7 +1389,8 @@ class QRadarClient:
         self,
         ips: List[str],
         hours: int = 168,
-        max_results: int = 500
+        max_results: int = 500,
+        timeout: int = 1800
     ) -> Dict[str, Any]:
         """Search for multiple IPs across all log sources in a single query.
 
@@ -1342,6 +1402,7 @@ class QRadarClient:
             ips: List of IP addresses to search for
             hours: Number of hours to look back
             max_results: Maximum events to return
+            timeout: Maximum seconds to wait for completion (default 600 = 10 min)
 
         Returns:
             dict: Search results with events including source and context fields
@@ -1376,7 +1437,9 @@ class QRadarClient:
             LIMIT {max_results}
             LAST {hours} HOURS
         """
-        return self.run_aql_search(aql.strip(), max_results=max_results)
+        result = self.run_aql_search(aql.strip(), timeout=timeout, max_results=max_results)
+        result['query'] = aql.strip()  # Include query for transparency
+        return result
 
     def batch_search_hashes_endpoint(
         self,
