@@ -22,7 +22,7 @@ EASTERN_TZ = ZoneInfo("America/New_York")
 
 # Webex room configuration
 # Default to test space for development; 8 AM job passes prod room
-ALERT_ROOM_ID_TEST = CONFIG.webex_room_id_vinay_test_space
+ALERT_ROOM_ID_TEST = CONFIG.webex_room_id_dev_test_space
 ALERT_ROOM_ID_PROD = CONFIG.webex_room_id_domain_monitoring
 
 # Module-level active room ID, set by run_daily_monitoring

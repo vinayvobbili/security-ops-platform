@@ -23,7 +23,7 @@ CORS(app)  # Allow CORS for the frontend
 # Configuration
 AUTH_USERNAME = os.environ['LOG_VIEWER_USERNAME']
 AUTH_PASSWORD = os.environ['LOG_VIEWER_PASSWORD']
-PROJECT_ROOT = '/home/vinay/pub/IR'
+PROJECT_ROOT = os.environ.get('PROJECT_ROOT', os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 AUDIT_LOG_FILE = os.path.join(PROJECT_ROOT, 'data/transient/logs/log_viewer_audit_log.csv')
 
 # Bot configuration mapping bot name to process pattern

@@ -56,6 +56,7 @@ class NoveltyAnalysis:
     mitre_techniques: List[str] = field(default_factory=list)  # Techniques extracted from tipper
     mitre_covered: List[str] = field(default_factory=list)  # Techniques with existing detection rules
     mitre_gaps: List[str] = field(default_factory=list)  # Techniques WITHOUT detection rules
+    mitre_rules: Dict[str, List[Dict]] = field(default_factory=dict)  # Technique -> [rule info dicts]
     # Actionable recommendations
     actionable_steps: List[Dict[str, str]] = field(default_factory=list)  # {action, priority, detail}
     # Environment exposure
@@ -79,9 +80,13 @@ class ToolHuntResult:
     total_hits: int
     ip_hits: List[Dict[str, Any]] = field(default_factory=list)
     domain_hits: List[Dict[str, Any]] = field(default_factory=list)
+    url_hits: List[Dict[str, Any]] = field(default_factory=list)  # URL paths (registry.npmjs.org/package/)
+    filename_hits: List[Dict[str, Any]] = field(default_factory=list)  # Malicious filenames (install.ps1)
     hash_hits: List[Dict[str, Any]] = field(default_factory=list)
     email_hits: List[Dict[str, Any]] = field(default_factory=list)  # For Abnormal
     errors: List[str] = field(default_factory=list)
+    # Queries executed (for transparency)
+    queries: List[Dict[str, str]] = field(default_factory=list)  # [{type, query}]
 
 
 @dataclass
@@ -101,6 +106,14 @@ class IOCHuntResult:
     unique_hosts: int = 0
     unique_users: int = 0
     unique_sources: List[str] = field(default_factory=list)
+    # IOCs that were searched (for display in results)
+    searched_domains: List[str] = field(default_factory=list)
+    searched_urls: List[str] = field(default_factory=list)  # URL paths with benign domains
+    searched_filenames: List[str] = field(default_factory=list)  # Malicious script filenames
+    searched_ips: List[str] = field(default_factory=list)
+    searched_hashes: List[str] = field(default_factory=list)
+    # Queries executed (for transparency/verification)
+    queries_executed: List[Dict[str, str]] = field(default_factory=list)  # [{tool, query_type, query}]
 
     def to_dict(self) -> dict:
         return asdict(self)

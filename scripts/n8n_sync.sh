@@ -15,8 +15,8 @@ set -e
 # Configuration
 N8N_URL="${N8N_URL:-http://localhost:8080}"
 N8N_API_KEY="${N8N_API_KEY:-}"
-WORKFLOW_DIR="${WORKFLOW_DIR:-/home/vinay/IR/n8n_workflows}"
-BACKUP_DIR="${BACKUP_DIR:-/home/vinay/IR/n8n_workflows/.backups}"
+WORKFLOW_DIR="${WORKFLOW_DIR:-/home/user/IR/n8n_workflows}"
+BACKUP_DIR="${BACKUP_DIR:-/home/user/IR/n8n_workflows/.backups}"
 
 # Colors for output
 RED='\033[0;31m'
@@ -289,7 +289,7 @@ case "${1:-}" in
         echo "Environment variables:"
         echo "  N8N_URL        n8n instance URL (default: http://localhost:8080)"
         echo "  N8N_API_KEY    n8n API key (required)"
-        echo "  WORKFLOW_DIR   Workflow directory (default: /home/vinay/IR/n8n_workflows)"
+        echo "  WORKFLOW_DIR   Workflow directory (default: /home/user/IR/n8n_workflows)"
         echo ""
         echo "Example:"
         echo "  export N8N_API_KEY='your-api-key'"

@@ -1,10 +1,10 @@
 #!/bin/bash
 
-cd /home/vinay/pub/IR || exit 1
+cd /home/user/pub/IR || exit 1
 
 SERVICE_NAME="ir-toodles.service"
 BOT_NAME="Toodles"
-LOG_FILE="/home/vinay/pub/IR/logs/toodles.log"
+LOG_FILE="/home/user/pub/IR/logs/toodles.log"
 LOG_VIEWER_PORT=8032
 
 echo "Managing $BOT_NAME via systemd service: $SERVICE_NAME"
@@ -54,7 +54,7 @@ else
 fi
 
 # Restart log viewer to ensure it shows latest logs
-/home/vinay/pub/IR/deployment/restart_log_viewer.sh $LOG_VIEWER_PORT "$BOT_NAME Bot" "$LOG_FILE"
+/home/user/pub/IR/deployment/restart_log_viewer.sh $LOG_VIEWER_PORT "$BOT_NAME Bot" "$LOG_FILE"
 
 # Start the systemd service
 echo ""

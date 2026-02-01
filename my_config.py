@@ -68,7 +68,7 @@ def get_config():
         webex_bot_email_msoar=os.environ.get("WEBEX_BOT_EMAIL_MSOAR"),
         webex_bot_email_pinger=os.environ.get("WEBEX_BOT_EMAIL_PINGER"),
         webex_room_id_aging_tickets=os.environ.get("WEBEX_ROOM_ID_AGING_TICKETS"),
-        webex_room_id_vinay_test_space=os.environ.get("WEBEX_ROOM_ID_VINAY_TEST_SPACE"),
+        webex_room_id_dev_test_space=os.environ.get("WEBEX_ROOM_ID_DEV_TEST_SPACE"),
         webex_room_id_soc_shift_updates=os.environ.get("WEBEX_ROOM_ID_SOC_SHIFT_UPDATES"),
         webex_room_id_epp_crowdstrike_tagging=os.environ.get("WEBEX_ROOM_ID_EPP_CROWDSTRIKE_TAGGING"),
         webex_room_id_epp_tanium_cloud_tagging=os.environ.get("WEBEX_ROOM_ID_EPP_TANIUM_CLOUD_TAGGING"),
@@ -218,7 +218,7 @@ class Config:
     webex_bot_email_tars: Optional[str] = None
     webex_bot_email_case: Optional[str] = None
     webex_room_id_aging_tickets: Optional[str] = None
-    webex_room_id_vinay_test_space: Optional[str] = None
+    webex_room_id_dev_test_space: Optional[str] = None
     webex_room_id_soc_shift_updates: Optional[str] = None
     webex_room_id_epp_crowdstrike_tagging: Optional[str] = None
     webex_room_id_epp_tanium_cloud_tagging: Optional[str] = None

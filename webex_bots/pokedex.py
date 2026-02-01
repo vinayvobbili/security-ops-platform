@@ -36,7 +36,7 @@ from src.utils.logging_utils import setup_logging
 # Configure logging with centralized utility (colors enabled by default)
 setup_logging(
     bot_name='pokedex',
-    log_level=logging.INFO,
+    log_level=logging.DEBUG,
     log_dir=str(PROJECT_ROOT / "logs"),
     info_modules=['__main__', 'src.utils.bot_resilience', 'src.utils.webex_device_manager'],
     rotate_on_startup=False  # Keep logs continuous, rely on RotatingFileHandler for size-based rotation
@@ -54,6 +54,9 @@ logging.getLogger('webexteamssdk').setLevel(logging.ERROR)
 logging.getLogger('webexpythonsdk').setLevel(logging.WARNING)
 logging.getLogger('urllib3').setLevel(logging.WARNING)
 logging.getLogger('asyncio').setLevel(logging.CRITICAL)
+logging.getLogger('websockets').setLevel(logging.WARNING)  # Suppress ping/pong keepalive noise
+logging.getLogger('unstructured').setLevel(logging.WARNING)  # Suppress DETAIL level narrative analysis logs
+logging.getLogger('src.utils.enhanced_websocket_client').setLevel(logging.WARNING)  # Suppress raw WebSocket message spam
 
 # Now safe to import modules that use logging
 import csv
@@ -434,7 +437,7 @@ class FalconCommand(BasePokedexCommand):
     """Handle CrowdStrike/Falcon commands: falcon <query>"""
 
     # Room whitelist for RTR commands - restricted due to powerful capabilities
-    ALLOWED_ROOMS = [CONFIG.webex_room_id_threatcon_collab, CONFIG.webex_room_id_vinay_test_space]
+    ALLOWED_ROOMS = [CONFIG.webex_room_id_threatcon_collab, CONFIG.webex_room_id_dev_test_space]
 
     def __init__(self):
         super().__init__(command_keyword="falcon", help_message="CrowdStrike operations: `falcon get detections for HOST123`")
@@ -631,7 +634,7 @@ class Bot(WebexBot):
                     result = ask(
                         raw_message,
                         user_id=teams_message.personEmail,
-                        room_id=room_name
+                        room_id=teams_message.roomId  # Use actual room ID, not display name
                     )
                     response_text = result['content']
                     input_tokens = result['input_tokens']
@@ -799,7 +802,7 @@ def main():
     bot = Bot(
         teams_bot_token=WEBEX_ACCESS_TOKEN,
         approved_domains=[CONFIG.my_web_domain],
-        approved_rooms=[CONFIG.webex_room_id_threatcon_collab, CONFIG.webex_room_id_vinay_test_space, CONFIG.webex_room_id_threat_tipper_analysis],
+        approved_rooms=[CONFIG.webex_room_id_threatcon_collab, CONFIG.webex_room_id_dev_test_space, CONFIG.webex_room_id_threat_tipper_analysis],
         bot_name=bot_name
     )
 
@@ -814,6 +817,10 @@ def main():
     # Run bot (simple and direct - no monitoring, no reconnection, no keepalive)
     logger.info("🚀 Pokedex is up and running with vanilla WebexBot...")
     print("🚀 Pokedex is up and running with vanilla WebexBot...", flush=True)
+    print("", flush=True)
+    print("📋 For detailed DEBUG logs, run in another terminal:", flush=True)
+    print("   tail -f logs/pokedex.log", flush=True)
+    print("", flush=True)
 
     try:
         bot.run()

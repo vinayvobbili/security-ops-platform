@@ -4,7 +4,7 @@ A comprehensive collection of n8n workflows designed for your Security Operation
 
 ## Quick Start
 
-1. Open n8n: `http://metcirt-lab-17.metnet.net:8080/`
+1. Open n8n: `http://your-n8n-server:8080/`
 2. Go to **Workflows** → **Import from File**
 3. Select any `.json` file from this directory
 4. Configure credentials (see [Credentials Setup](#credentials-setup))

@@ -5,16 +5,16 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=vinay
-Group=vinay
-WorkingDirectory=/home/vinay/pub/IR
-EnvironmentFile=/home/vinay/pub/IR/.env
+User=user
+Group=user
+WorkingDirectory=/home/user/pub/IR
+EnvironmentFile=/home/user/pub/IR/.env
 
 # Kill any orphan process using this port before starting
 ExecStartPre=-/bin/bash -c 'fuser -k 8039/tcp 2>/dev/null || true'
 
 # Start log viewer for Web Server
-ExecStart=/home/vinay/pub/IR/.venv/bin/python deployment/log_viewer.py --port 8039 --title "Web Server" --file /home/vinay/pub/IR/logs/web_server.log
+ExecStart=/home/user/pub/IR/.venv/bin/python deployment/log_viewer.py --port 8039 --title "Web Server" --file /home/user/pub/IR/logs/web_server.log
 
 Restart=on-failure
 RestartSec=10

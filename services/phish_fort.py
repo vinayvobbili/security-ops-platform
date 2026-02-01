@@ -139,7 +139,7 @@ def contact_phishfort_api(status: str) -> Optional[Dict]:
         return None
 
 
-def send_webex_notification_in_batches(message: str, batch_size: int = WEBEX_MESSAGE_BATCH_SIZE, room_id=CONFIG.webex_room_id_vinay_test_space) -> None:
+def send_webex_notification_in_batches(message: str, batch_size: int = WEBEX_MESSAGE_BATCH_SIZE, room_id=CONFIG.webex_room_id_dev_test_space) -> None:
     """
     Send a large Webex message in batches if it exceeds the size limit.
     Splits on-line boundaries and preserves table headers in continuations.
@@ -406,7 +406,7 @@ def fetch_and_report_incidents(room_id: str = None) -> None:
         room_id: Webex room ID to send the report to. Defaults to test space if not provided.
     """
     if room_id is None:
-        room_id = CONFIG.webex_room_id_vinay_test_space
+        room_id = CONFIG.webex_room_id_dev_test_space
 
     try:
         all_frames = []

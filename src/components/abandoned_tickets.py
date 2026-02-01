@@ -73,7 +73,7 @@ def generate_daily_summary(tickets) -> str | None:
         return "Error generating report. Please check the logs."
 
 
-def send_report(room_id=config.webex_room_id_vinay_test_space):
+def send_report(room_id=config.webex_room_id_dev_test_space):
     webex_api = WebexAPI(access_token=config.webex_bot_access_token_soar)
 
     today_minus_5 = datetime.now(tz=eastern) - timedelta(days=5)
@@ -121,7 +121,7 @@ def send_report(room_id=config.webex_room_id_vinay_test_space):
 
 
 def main():
-    send_report(room_id=config.webex_room_id_vinay_test_space)
+    send_report(room_id=config.webex_room_id_dev_test_space)
 
 
 if __name__ == "__main__":

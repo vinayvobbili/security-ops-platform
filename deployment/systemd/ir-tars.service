@@ -5,12 +5,12 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=vinay
-Group=vinay
-WorkingDirectory=/home/vinay/pub/IR
-Environment="PYTHONPATH=/home/vinay/pub/IR"
+User=user
+Group=user
+WorkingDirectory=/home/user/pub/IR
+Environment="PYTHONPATH=/home/user/pub/IR"
 ExecStartPre=-/usr/bin/pkill -f "webex_bots/tars.py"
-ExecStart=/home/vinay/pub/IR/.venv/bin/python webex_bots/tars.py
+ExecStart=/home/user/pub/IR/.venv/bin/python webex_bots/tars.py
 
 # Restart on failure
 Restart=on-failure

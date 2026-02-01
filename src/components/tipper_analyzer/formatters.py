@@ -157,17 +157,19 @@ def format_analysis_for_display(analysis: NoveltyAnalysis, source: str = "on-dem
     if analysis.related_tickets:
         for ticket in analysis.related_tickets:
             title = ticket.get('title', '')
+            similarity = ticket.get('similarity', 0)
+            similarity_pct = f"({similarity:.0%})" if similarity else ""
             if title:
                 # Strip "[PRIORITY] CTI Threat Tipper: " prefix
                 if '] CTI Threat Tipper: ' in title:
                     title = title.split('] CTI Threat Tipper: ', 1)[1]
                 # Truncate long titles
-                display_title = title[:80] + '...' if len(title) > 80 else title
-                output += f"  • #{ticket['id']}: {display_title}\n"
+                display_title = title[:70] + '...' if len(title) > 70 else title
+                output += f"  • #{ticket['id']} {similarity_pct}: {display_title}\n"
             else:
-                output += f"  • #{ticket['id']}\n"
+                output += f"  • #{ticket['id']} {similarity_pct}\n"
     else:
-        output += "  (No related tickets)\n"
+        output += "  (No semantically related tickets found)\n"
 
     # Add threat intelligence section
     rf = analysis.rf_enrichment
@@ -253,19 +255,48 @@ def format_analysis_for_display(analysis: NoveltyAnalysis, source: str = "on-dem
             if total_extracted > 0:
                 output += f"  _ℹ️ {total_extracted} total IOCs extracted, {high_risk_count} high-risk_\n"
 
-    # Add brief MITRE coverage summary
+    # Add MITRE coverage summary with technique-to-rule table
     if analysis.mitre_techniques:
         covered_count = len(analysis.mitre_covered)
         gap_count = len(analysis.mitre_gaps)
         total = len(analysis.mitre_techniques)
+
+        output += "\n**🎯 MITRE ATT&CK Coverage:**\n"
         if gap_count > 0:
-            output += f"\n**MITRE Coverage:** {covered_count}/{total} techniques covered, "
-            output += f"⚠️ **{gap_count} gap(s):** {', '.join(analysis.mitre_gaps[:3])}"
-            if gap_count > 3:
-                output += f" (+{gap_count - 3} more)"
-            output += "\n"
+            output += f"  {covered_count}/{total} techniques covered, ⚠️ **{gap_count} gap(s)**\n"
         else:
-            output += f"\n**MITRE Coverage:** ✅ All {total} techniques have detection rules\n"
+            output += f"  ✅ All {total} techniques have detection rules\n"
+
+        # Show covered techniques with their rules (using mitre_rules from analyzer)
+        if analysis.mitre_covered:
+            output += "```\n"
+            output += f"{'Technique':<12} {'Status':<10} {'Detection Rule(s)':<50}\n"
+            output += f"{'-'*12} {'-'*10} {'-'*50}\n"
+            for tech in analysis.mitre_covered[:8]:
+                rules = analysis.mitre_rules.get(tech.upper(), [])
+                if rules:
+                    platform_short = {"qradar": "Q", "crowdstrike": "CS", "tanium": "T"}
+                    rules_str = ", ".join(
+                        f"[{platform_short.get(r.get('platform', ''), '?')}] {r.get('name', '')[:35]}"
+                        for r in rules[:2]
+                    )
+                    if len(rules) > 2:
+                        rules_str += f" (+{len(rules) - 2})"
+                else:
+                    rules_str = "(coverage detected)"
+                # Truncate rules_str if too long
+                if len(rules_str) > 50:
+                    rules_str = rules_str[:47] + "..."
+                output += f"{tech:<12} {'COVERED':<10} {rules_str}\n"
+            if len(analysis.mitre_covered) > 8:
+                output += f"... and {len(analysis.mitre_covered) - 8} more covered\n"
+            output += "```\n"
+
+        # Show gaps if any
+        if analysis.mitre_gaps:
+            output += f"  ⚠️ **Gaps (no rules):** {', '.join(analysis.mitre_gaps[:5])}\n"
+            if len(analysis.mitre_gaps) > 5:
+                output += f"     (+{len(analysis.mitre_gaps) - 5} more)\n"
 
     # Add detection rules coverage section (compact for Webex)
     if analysis.existing_rules:
@@ -341,11 +372,19 @@ def format_analysis_for_azdo(analysis: NoveltyAnalysis) -> str:
     html += "</ul>\n"
 
     if analysis.related_tickets:
-        html += "<p><strong>🔗 Related Tickets:</strong> "
-        # Create hyperlinks for related tickets
-        ticket_links = [linkify_work_items_html(f"#{t['id']}") for t in analysis.related_tickets]
-        html += ", ".join(ticket_links)
-        html += "</p>\n"
+        html += "<p><strong>🔗 Related Tickets:</strong></p>\n<ul>\n"
+        for t in analysis.related_tickets:
+            similarity = t.get('similarity', 0)
+            similarity_pct = f" ({similarity:.0%} similar)" if similarity else ""
+            title = t.get('title', '')
+            # Strip "[PRIORITY] CTI Threat Tipper: " prefix for cleaner display
+            if '] CTI Threat Tipper: ' in title:
+                title = title.split('] CTI Threat Tipper: ', 1)[1]
+            display_title = title[:60] + '...' if len(title) > 60 else title
+            ticket_id = t['id']
+            ticket_link = linkify_work_items_html(f'#{ticket_id}')
+            html += f"<li>{ticket_link}{similarity_pct}: {display_title}</li>\n"
+        html += "</ul>\n"
 
     # Add threat intelligence section
     rf = analysis.rf_enrichment
@@ -424,7 +463,7 @@ def format_analysis_for_azdo(analysis: NoveltyAnalysis) -> str:
                 if new_iocs:
                     html += "<p><em>🔍 First-Time IOCs</em> (not seen in previous tippers):</p>\n"
                     html += '<table style="border-collapse: collapse; width: 100%;">\n'
-                    html += '<tr style="background-color: #e0e0e0;"><th style="border: 1px solid #ddd; padding: 8px; text-align: left;">IOC</th><th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Type</th><th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Risk</th></tr>\n'
+                    html += '<tr style="background-color: #e0e0e0;"><th style="border: 1px solid #ddd; padding: 8px; text-align: left;">IOC</th><th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Type</th><th style="border: 1px solid #ddd; padding: 8px; text-align: left;">RF Risk</th></tr>\n'
                     for ioc in new_iocs:
                         ioc_type = ioc.get('ioc_type', 'Unknown')
                         value = ioc.get('value', 'Unknown')
@@ -437,7 +476,7 @@ def format_analysis_for_azdo(analysis: NoveltyAnalysis) -> str:
                 if familiar_iocs:
                     html += f"<details><summary><em>📋 Familiar IOCs ({len(familiar_iocs)})</em></summary>\n"
                     html += '<table style="border-collapse: collapse; width: 100%;">\n'
-                    html += '<tr style="background-color: #e0e0e0;"><th style="border: 1px solid #ddd; padding: 8px; text-align: left;">IOC</th><th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Type</th><th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Risk</th><th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Seen In</th></tr>\n'
+                    html += '<tr style="background-color: #e0e0e0;"><th style="border: 1px solid #ddd; padding: 8px; text-align: left;">IOC</th><th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Type</th><th style="border: 1px solid #ddd; padding: 8px; text-align: left;">RF Risk</th><th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Seen In</th></tr>\n'
                     for ioc, seen_in in familiar_iocs:
                         ioc_type = ioc.get('ioc_type', 'Unknown')
                         value = ioc.get('value', 'Unknown')
@@ -462,31 +501,65 @@ def format_analysis_for_azdo(analysis: NoveltyAnalysis) -> str:
         if rules_html:
             html += rules_html
 
-    # Add MITRE ATT&CK coverage gap analysis
+    # Add MITRE ATT&CK coverage gap analysis with technique-to-rule table
     if analysis.mitre_techniques:
         html += "\n<h4>&#x1F3AF; MITRE ATT&CK Coverage Analysis</h4>\n"
 
-        if analysis.mitre_covered:
-            covered_badges = " ".join(
-                f'<span style="background-color: #c8e6c9; color: #2e7d32; padding: 2px 6px; '
-                f'border-radius: 3px; font-size: 11px; margin: 1px;">'
-                f'<a href="https://attack.mitre.org/techniques/{t.replace(".", "/")}/" '
-                f'target="_blank" style="color: #2e7d32; text-decoration: none;">✓ {t}</a></span>'
-                for t in analysis.mitre_covered[:10]
-            )
-            html += f"<p><strong>Covered</strong> (existing detection rules): {covered_badges}</p>\n"
+        covered_count = len(analysis.mitre_covered)
+        gap_count = len(analysis.mitre_gaps)
+        total = len(analysis.mitre_techniques)
 
+        if gap_count > 0:
+            html += f"<p><strong>{covered_count}/{total}</strong> techniques covered, <span style='color: #c62828;'><strong>{gap_count} gap(s)</strong></span></p>\n"
+        else:
+            html += f"<p>&#x2705; <strong>All {total} techniques have detection rules</strong></p>\n"
+
+        # Show detailed table of covered techniques with their rules (using mitre_rules from analyzer)
+        if analysis.mitre_covered:
+            html += '<table style="border-collapse: collapse; width: 100%; margin-bottom: 10px;">\n'
+            html += (
+                '<tr style="background-color: #e8f5e9;">'
+                '<th style="padding: 6px; border: 1px solid #ccc; width: 100px;">Technique</th>'
+                '<th style="padding: 6px; border: 1px solid #ccc; width: 80px;">Status</th>'
+                '<th style="padding: 6px; border: 1px solid #ccc;">Detection Rule(s)</th>'
+                '</tr>\n'
+            )
+            platform_labels = {"qradar": "QRadar", "crowdstrike": "CrowdStrike", "tanium": "Tanium"}
+            for tech in analysis.mitre_covered:
+                tech_link = f'<a href="https://attack.mitre.org/techniques/{tech.replace(".", "/")}/" target="_blank" style="color: #2e7d32;">{tech}</a>'
+                rules = analysis.mitre_rules.get(tech.upper(), [])
+                if rules:
+                    rules_html = "<ul style='margin: 0; padding-left: 18px;'>"
+                    for r in rules[:3]:
+                        platform = platform_labels.get(r.get('platform', ''), r.get('platform', '?'))
+                        name = r.get('name', 'Unknown')
+                        truncated_name = name[:50] + "..." if len(name) > 50 else name
+                        rtype = r.get('rule_type', 'rule')
+                        rules_html += f"<li><strong>[{platform}]</strong> {truncated_name} <em>({rtype})</em></li>"
+                    if len(rules) > 3:
+                        rules_html += f"<li><em>+{len(rules) - 3} more rules</em></li>"
+                    rules_html += "</ul>"
+                else:
+                    rules_html = "<em>Rule coverage detected</em>"
+                html += (
+                    f'<tr style="background-color: #f1f8e9;">'
+                    f'<td style="padding: 6px; border: 1px solid #ccc;">{tech_link}</td>'
+                    f'<td style="padding: 6px; border: 1px solid #ccc; color: #2e7d32;"><strong>COVERED</strong></td>'
+                    f'<td style="padding: 6px; border: 1px solid #ccc;">{rules_html}</td>'
+                    f'</tr>\n'
+                )
+            html += "</table>\n"
+
+        # Show gaps as red badges
         if analysis.mitre_gaps:
             gap_badges = " ".join(
                 f'<span style="background-color: #ffcdd2; color: #c62828; padding: 2px 6px; '
                 f'border-radius: 3px; font-size: 11px; margin: 1px;">'
                 f'<a href="https://attack.mitre.org/techniques/{t.replace(".", "/")}/" '
-                f'target="_blank" style="color: #c62828; text-decoration: none;">⚠ {t}</a></span>'
+                f'target="_blank" style="color: #c62828; text-decoration: none;">&#x26A0; {t}</a></span>'
                 for t in analysis.mitre_gaps[:10]
             )
             html += f"<p><strong>Gaps</strong> (no detection rules): {gap_badges}</p>\n"
-        else:
-            html += "<p><em>✅ All identified techniques have existing detection coverage</em></p>\n"
 
     # Add Actionable Next Steps section
     if analysis.actionable_steps:
@@ -561,6 +634,15 @@ def format_hunt_results_for_webex(result: IOCHuntResult, tipper_id: str, azdo_ur
         for hit in tool_result.domain_hits:
             rows.append((defang_ioc(hit['domain'], 'domain'), "domain", tool_short,
                          hit.get('event_count') or hit.get('threat_count', 0)))
+        for hit in tool_result.url_hits:
+            # URL paths like registry.npmjs.org/openclaw/
+            # Handle both QRadar (event_count) and CrowdStrike (host_count)
+            rows.append((defang_ioc(hit['url'], 'domain'), "URL", tool_short,
+                         hit.get('event_count') or hit.get('host_count', 0)))
+        for hit in tool_result.filename_hits:
+            # Malicious filenames like install.ps1
+            rows.append((hit['filename'], "file", tool_short,
+                         hit.get('detection_count', 0)))
         for hit in tool_result.hash_hits:
             rows.append((hit['hash'], "hash", tool_short,
                          hit.get('event_count') or hit.get('detection_count', 0)))
@@ -583,6 +665,334 @@ def format_hunt_results_for_webex(result: IOCHuntResult, tipper_id: str, azdo_ur
         output += f"_📝 Full details posted to [#{tipper_id}]({azdo_url})_\n"
 
     return output
+
+
+def format_single_tool_hunt_for_azdo(
+    tool_result: ToolHuntResult,
+    tipper_id: str,
+    tipper_title: str,
+    search_hours: int,
+    total_iocs_searched: int,
+    searched_iocs: dict = None,
+    rf_enrichment: dict = None,
+) -> str:
+    """Format a single tool's hunt results as HTML for AZDO comment.
+
+    Args:
+        tool_result: ToolHuntResult for one tool (QRadar, CrowdStrike, or Abnormal)
+        tipper_id: Tipper work item ID
+        tipper_title: Tipper title for context
+        search_hours: Hours searched back
+        total_iocs_searched: Total IOCs that were searched
+        searched_iocs: Dict with searched_domains, searched_ips, etc.
+        rf_enrichment: Optional RF enrichment dict with 'iocs' list for risk scores
+    """
+    from urllib.parse import quote
+    from my_config import get_config
+
+    config = get_config()
+    searched_iocs = searched_iocs or {}
+
+    # Tool-specific icons
+    tool_icons = {
+        'QRadar': '&#x1F50D;',      # Magnifying glass
+        'CrowdStrike': '&#x1F985;',  # Eagle
+        'Abnormal': '&#x1F4E7;',     # Email
+    }
+    tool_icon = tool_icons.get(tool_result.tool_name, '&#x1F50D;')
+
+    # Determine status: error, hits, or clean
+    has_errors = bool(tool_result.errors)
+    if has_errors and tool_result.total_hits == 0:
+        status_icon = "&#x26A0;"  # Warning
+        status_text = f"<span style='color: #c62828;'><strong>{tool_result.tool_name} hunt failed</strong></span>"
+    elif tool_result.total_hits == 0:
+        status_icon = "&#x2705;"  # Green check
+        status_text = f"No IOC hits found in {tool_result.tool_name}"
+    else:
+        status_icon = "&#x1F6A8;"  # Red siren
+        status_text = f"<strong>{tool_result.total_hits} IOC(s) found in {tool_result.tool_name}!</strong>"
+
+    # Build RF risk lookup
+    rf_lookup = {}
+    if rf_enrichment and rf_enrichment.get('iocs'):
+        for ioc in rf_enrichment['iocs']:
+            val = ioc.get('value', '').lower()
+            if val:
+                rf_lookup[val] = ioc
+
+    # QRadar console URL for deep links
+    qradar_base = (config.qradar_api_url or '').rstrip('/')
+    if qradar_base.endswith('/api'):
+        qradar_console = qradar_base[:-4]
+    else:
+        qradar_console = qradar_base
+
+    def _rf_risk_cell(ioc_value: str) -> str:
+        rf = rf_lookup.get(ioc_value.lower())
+        if not rf:
+            return "<td style='padding: 6px; border: 1px solid #ccc; color: #999;'>N/A</td>"
+        score = rf.get('risk_score', 0)
+        level = rf.get('risk_level', 'Unknown')
+        if score >= 65:
+            color = '#d32f2f'
+        elif score >= 25:
+            color = '#f57c00'
+        else:
+            color = '#388e3c'
+        rules_list = rf.get('rules', [])
+        tooltip = '; '.join(rules_list[:3]) if rules_list else ''
+        return (
+            f"<td style='padding: 6px; border: 1px solid #ccc;' title='{tooltip}'>"
+            f"<strong style='color: {color};'>{score}/99</strong> ({level})</td>"
+        )
+
+    def _qradar_search_link(ioc_value: str, ioc_type: str, count: int) -> str:
+        if not qradar_console or tool_result.tool_name != 'QRadar':
+            return str(count)
+        days = search_hours // 24
+        if ioc_type == 'domain':
+            aql = f"SELECT * FROM events WHERE LOWER(\"URL\") LIKE '%{ioc_value.lower()}%' OR LOWER(\"TSLD\") LIKE '%{ioc_value.lower()}%' LAST {days} DAYS"
+        elif ioc_type == 'url':
+            aql = f"SELECT * FROM events WHERE LOWER(\"URL\") LIKE '%{ioc_value.lower()}%' LAST {days} DAYS"
+        elif ioc_type == 'ip':
+            aql = f"SELECT * FROM events WHERE sourceip = '{ioc_value}' OR destinationip = '{ioc_value}' LAST {days} DAYS"
+        elif ioc_type == 'hash':
+            aql = f"SELECT * FROM events WHERE \"MD5 Hash\" = '{ioc_value}' OR \"SHA256 Hash\" = '{ioc_value}' LAST {days} DAYS"
+        else:
+            return str(count)
+        encoded_aql = quote(aql, safe='')
+        url = f"{qradar_console}/console/do/ariel/arielSearch?appName=Viewer&pageId=EventList&dispatch=performSearch&value={encoded_aql}"
+        return f"<a href='{url}' target='_blank'>{count} events</a>"
+
+    html_parts = [
+        "<div style='font-family: Segoe UI, sans-serif; font-size: 13px;'>",
+        f"<h3>{tool_icon} {tool_result.tool_name} IOC Hunt Results</h3>",
+        f"<p>{status_icon} {status_text}</p>",
+        f"<p><em>Searched {total_iocs_searched} IOCs over last {search_hours} hours ({search_hours // 24} days)</em></p>",
+    ]
+
+    # Show IOCs searched (each type on its own line for prominence)
+    ioc_lines = []
+    if searched_iocs.get('domains'):
+        domains = searched_iocs['domains']
+        domains_display = ', '.join(f"<code>{d}</code>" for d in domains)
+        ioc_lines.append(f"<strong>Domains:</strong> {domains_display}")
+    if searched_iocs.get('urls'):
+        urls = searched_iocs['urls']
+        urls_display = ', '.join(f"<code>{u}</code>" for u in urls)
+        ioc_lines.append(f"<strong>URLs:</strong> {urls_display}")
+    if searched_iocs.get('filenames'):
+        filenames = searched_iocs['filenames']
+        filenames_display = ', '.join(f"<code>{f}</code>" for f in filenames)
+        ioc_lines.append(f"<strong>Filenames:</strong> {filenames_display}")
+    if searched_iocs.get('ips'):
+        ips = searched_iocs['ips']
+        ips_display = ', '.join(f"<code>{ip}</code>" for ip in ips)
+        ioc_lines.append(f"<strong>IPs:</strong> {ips_display}")
+    if searched_iocs.get('hashes'):
+        hashes = searched_iocs['hashes']
+        hashes_display = ', '.join(f"<code>{h[:16]}...</code>" for h in hashes)
+        ioc_lines.append(f"<strong>Hashes:</strong> {hashes_display}")
+
+    if ioc_lines:
+        html_parts.append("<div style='font-size: 12px; color: #444; margin: 8px 0;'>")
+        for line in ioc_lines:
+            html_parts.append(f"<p style='margin: 4px 0;'>{line}</p>")
+        html_parts.append("</div>")
+
+    th_style = "padding: 6px; border: 1px solid #ccc;"
+    td_style = "padding: 6px; border: 1px solid #ccc;"
+
+    # IP Hits
+    if tool_result.ip_hits:
+        html_parts.append("<table style='border-collapse: collapse; width: 100%; margin-bottom: 10px;'>")
+        html_parts.append(
+            f"<tr style='background-color: #f0f0f0;'>"
+            f"<th style='{th_style}'>IP</th>"
+            f"<th style='{th_style}'>Events</th>"
+            f"<th style='{th_style}'>Direction</th>"
+            f"<th style='{th_style}'>RF Risk</th>"
+            f"<th style='{th_style}'>Sources</th>"
+            f"<th style='{th_style}'>Users</th>"
+            f"<th style='{th_style}'>Hosts</th></tr>"
+        )
+        for hit in tool_result.ip_hits:
+            ip = hit['ip']
+            count = hit.get('event_count') or hit.get('detection_count') or hit.get('alert_count', 0)
+            direction = hit.get('direction', '')
+            sources = ', '.join(hit.get('sources', [])) if hit.get('sources') else ''
+            users = hit.get('users', [])
+            hosts = hit.get('hosts', []) or hit.get('hostnames', [])
+            users_display = ', '.join(users[:3]) + (f" (+{len(users) - 3})" if len(users) > 3 else "")
+            hosts_display = ', '.join(hosts[:3]) + (f" (+{len(hosts) - 3})" if len(hosts) > 3 else "")
+            count_display = _qradar_search_link(ip, 'ip', count)
+            html_parts.append(
+                f"<tr style='background-color: #ffe6e6;'>"
+                f"<td style='{td_style}'><code>{ip}</code></td>"
+                f"<td style='{td_style}'>{count_display}</td>"
+                f"<td style='{td_style}'>{direction}</td>"
+                f"{_rf_risk_cell(ip)}"
+                f"<td style='{td_style}'>{sources}</td>"
+                f"<td style='{td_style}; font-size: 11px;'>{users_display}</td>"
+                f"<td style='{td_style}; font-size: 11px;'>{hosts_display}</td></tr>"
+            )
+        html_parts.append("</table>")
+
+    # Domain Hits
+    if tool_result.domain_hits:
+        html_parts.append("<table style='border-collapse: collapse; width: 100%; margin-bottom: 10px;'>")
+        html_parts.append(
+            f"<tr style='background-color: #f0f0f0;'>"
+            f"<th style='{th_style}'>Domain</th>"
+            f"<th style='{th_style}'>Events</th>"
+            f"<th style='{th_style}'>RF Risk</th>"
+            f"<th style='{th_style}'>Sources</th>"
+            f"<th style='{th_style}'>Users</th></tr>"
+        )
+        for hit in tool_result.domain_hits:
+            domain = hit['domain']
+            count = hit.get('event_count') or hit.get('threat_count') or hit.get('intel_count', 0)
+            sources = ', '.join(hit.get('sources', [])) if hit.get('sources') else ''
+            users = hit.get('users', [])
+            users_display = ', '.join(users[:3]) + (f" (+{len(users) - 3})" if len(users) > 3 else "")
+            count_display = _qradar_search_link(domain, 'domain', count)
+            html_parts.append(
+                f"<tr style='background-color: #ffe6e6;'>"
+                f"<td style='{td_style}'><code>{domain}</code></td>"
+                f"<td style='{td_style}'>{count_display}</td>"
+                f"{_rf_risk_cell(domain)}"
+                f"<td style='{td_style}'>{sources}</td>"
+                f"<td style='{td_style}; font-size: 11px;'>{users_display}</td></tr>"
+            )
+        html_parts.append("</table>")
+
+    # URL Hits
+    if tool_result.url_hits:
+        html_parts.append("<table style='border-collapse: collapse; width: 100%; margin-bottom: 10px;'>")
+        html_parts.append(
+            f"<tr style='background-color: #f0f0f0;'>"
+            f"<th style='{th_style}'>URL Path</th>"
+            f"<th style='{th_style}'>Events</th>"
+            f"<th style='{th_style}'>Sources</th>"
+            f"<th style='{th_style}'>Hosts</th></tr>"
+        )
+        for hit in tool_result.url_hits:
+            url = hit['url']
+            count = hit.get('event_count') or hit.get('host_count', 0)
+            sources = ', '.join(hit.get('sources', [])) if hit.get('sources') else ''
+            hosts = hit.get('hosts', []) or hit.get('hostnames', [])
+            hosts_display = ', '.join(hosts[:3]) + (f" (+{len(hosts) - 3})" if len(hosts) > 3 else "")
+            url_display = url if len(url) <= 50 else url[:47] + '...'
+            count_display = _qradar_search_link(url.replace('https://', ''), 'url', count)
+            html_parts.append(
+                f"<tr style='background-color: #fff3e6;'>"
+                f"<td style='{td_style}'><code>{url_display}</code></td>"
+                f"<td style='{td_style}'>{count_display}</td>"
+                f"<td style='{td_style}'>{sources}</td>"
+                f"<td style='{td_style}; font-size: 11px;'>{hosts_display}</td></tr>"
+            )
+        html_parts.append("</table>")
+
+    # Filename Hits
+    if tool_result.filename_hits:
+        html_parts.append("<table style='border-collapse: collapse; width: 100%; margin-bottom: 10px;'>")
+        html_parts.append(
+            f"<tr style='background-color: #f0f0f0;'>"
+            f"<th style='{th_style}'>Filename</th>"
+            f"<th style='{th_style}'>Detections</th>"
+            f"<th style='{th_style}'>Hosts</th></tr>"
+        )
+        for hit in tool_result.filename_hits:
+            filename = hit['filename']
+            count = hit.get('detection_count', 0)
+            hosts = hit.get('hostnames', [])
+            hosts_display = ', '.join(hosts[:5]) + (f" (+{len(hosts) - 5})" if len(hosts) > 5 else "")
+            html_parts.append(
+                f"<tr style='background-color: #e6f3ff;'>"
+                f"<td style='{td_style}'><code>{filename}</code></td>"
+                f"<td style='{td_style}'>{count}</td>"
+                f"<td style='{td_style}; font-size: 11px;'>{hosts_display}</td></tr>"
+            )
+        html_parts.append("</table>")
+
+    # Hash Hits
+    if tool_result.hash_hits:
+        html_parts.append("<table style='border-collapse: collapse; width: 100%; margin-bottom: 10px;'>")
+        html_parts.append(
+            f"<tr style='background-color: #f0f0f0;'>"
+            f"<th style='{th_style}'>Hash</th>"
+            f"<th style='{th_style}'>Type</th>"
+            f"<th style='{th_style}'>Events</th>"
+            f"<th style='{th_style}'>RF Risk</th>"
+            f"<th style='{th_style}'>Hosts</th></tr>"
+        )
+        for hit in tool_result.hash_hits:
+            file_hash = hit['hash']
+            count = hit.get('event_count') or hit.get('detection_count', 0)
+            hosts = hit.get('hostnames', [])
+            hosts_display = ', '.join(hosts[:3]) + (f" (+{len(hosts) - 3})" if len(hosts) > 3 else "")
+            count_display = _qradar_search_link(file_hash, 'hash', count)
+            html_parts.append(
+                f"<tr style='background-color: #ffe6e6;'>"
+                f"<td style='{td_style}'><code>{file_hash[:32]}...</code></td>"
+                f"<td style='{td_style}'>{hit.get('hash_type', 'HASH')}</td>"
+                f"<td style='{td_style}'>{count_display}</td>"
+                f"{_rf_risk_cell(file_hash)}"
+                f"<td style='{td_style}; font-size: 11px;'>{hosts_display}</td></tr>"
+            )
+        html_parts.append("</table>")
+
+    # Email Hits (Abnormal)
+    if tool_result.email_hits:
+        html_parts.append("<table style='border-collapse: collapse; width: 100%; margin-bottom: 10px;'>")
+        html_parts.append(
+            f"<tr style='background-color: #f0f0f0;'>"
+            f"<th style='{th_style}'>Email</th>"
+            f"<th style='{th_style}'>Threats</th>"
+            f"<th style='{th_style}'>Attack Types</th></tr>"
+        )
+        for hit in tool_result.email_hits:
+            html_parts.append(
+                f"<tr style='background-color: #ffe6e6;'>"
+                f"<td style='{td_style}'><code>{hit['email']}</code></td>"
+                f"<td style='{td_style}'>{hit['threat_count']}</td>"
+                f"<td style='{td_style}'>{', '.join(hit.get('attack_types', []))}</td></tr>"
+            )
+        html_parts.append("</table>")
+
+    # Errors - show prominently if tool failed, collapsed otherwise
+    if tool_result.errors:
+        if has_errors and tool_result.total_hits == 0:
+            # Tool failed completely - show error prominently with red banner
+            html_parts.append(
+                "<div style='background-color: #ffebee; border-left: 4px solid #c62828; "
+                "padding: 10px; margin: 10px 0;'>"
+                "<strong style='color: #c62828;'>&#x26A0; Hunt Failed</strong><ul style='margin: 5px 0 0 0;'>"
+            )
+            for err in tool_result.errors[:5]:
+                html_parts.append(f"<li>{err}</li>")
+            html_parts.append("</ul></div>")
+        else:
+            # Some errors but also some results - collapse errors
+            html_parts.append("<details><summary>&#x26A0; Errors</summary><ul style='color: #666;'>")
+            for err in tool_result.errors[:3]:
+                html_parts.append(f"<li>{err}</li>")
+            html_parts.append("</ul></details>")
+
+    # Queries executed
+    if tool_result.queries:
+        html_parts.append("<details><summary>&#x1F50D; Queries Executed</summary>")
+        for q in tool_result.queries:
+            escaped_query = q.get('query', '').replace('<', '&lt;').replace('>', '&gt;')
+            html_parts.append(f"<p><strong>{q.get('type', 'Search')}:</strong></p>")
+            html_parts.append(f"<pre style='background-color: #f5f5f5; padding: 8px; font-size: 11px; overflow-x: auto; white-space: pre-wrap;'>{escaped_query}</pre>")
+        html_parts.append("</details>")
+
+    html_parts.append(f"<p><em>Generated by Pokedex IOC Hunter</em></p>")
+    html_parts.append("</div>")
+
+    return "\n".join(html_parts)
 
 
 def format_hunt_results_for_azdo(result: IOCHuntResult, rf_enrichment: dict = None) -> str:
@@ -648,6 +1058,9 @@ def format_hunt_results_for_azdo(result: IOCHuntResult, rf_enrichment: dict = No
         days = result.search_hours // 24
         if ioc_type == 'domain':
             aql = f"SELECT * FROM events WHERE LOWER(\"URL\") LIKE '%{ioc_value.lower()}%' OR LOWER(\"TSLD\") LIKE '%{ioc_value.lower()}%' LAST {days} DAYS"
+        elif ioc_type == 'url':
+            # URL paths like registry.npmjs.org/openclaw/
+            aql = f"SELECT * FROM events WHERE LOWER(\"URL\") LIKE '%{ioc_value.lower()}%' LAST {days} DAYS"
         elif ioc_type == 'ip':
             aql = f"SELECT * FROM events WHERE sourceip = '{ioc_value}' OR destinationip = '{ioc_value}' LAST {days} DAYS"
         elif ioc_type == 'hash':
@@ -664,6 +1077,30 @@ def format_hunt_results_for_azdo(result: IOCHuntResult, rf_enrichment: dict = No
         f"<p>{status_text}</p>",
         f"<p><em>Searched {result.total_iocs_searched} IOCs over last {result.search_hours} hours ({result.search_hours // 24} days)</em></p>",
     ]
+
+    # Show what IOCs were searched (all values, collapsible)
+    ioc_list_parts = []
+    if result.searched_domains:
+        domains_display = ', '.join(f"<code>{d}</code>" for d in result.searched_domains)
+        ioc_list_parts.append(f"<strong>Domains:</strong> {domains_display}")
+    if result.searched_urls:
+        urls_display = ', '.join(f"<code>{u}</code>" for u in result.searched_urls)
+        ioc_list_parts.append(f"<strong>URLs:</strong> {urls_display}")
+    if result.searched_filenames:
+        filenames_display = ', '.join(f"<code>{f}</code>" for f in result.searched_filenames)
+        ioc_list_parts.append(f"<strong>Filenames:</strong> {filenames_display}")
+    if result.searched_ips:
+        ips_display = ', '.join(f"<code>{ip}</code>" for ip in result.searched_ips)
+        ioc_list_parts.append(f"<strong>IPs:</strong> {ips_display}")
+    if result.searched_hashes:
+        hashes_display = ', '.join(f"<code>{h[:16]}...</code>" for h in result.searched_hashes)
+        ioc_list_parts.append(f"<strong>Hashes:</strong> {hashes_display}")
+
+    if ioc_list_parts:
+        html_parts.append("<details><summary>IOCs Searched</summary><ul style='margin: 4px 0;'>")
+        for part in ioc_list_parts:
+            html_parts.append(f"<li>{part}</li>")
+        html_parts.append("</ul></details>")
 
     # Add environment exposure summary if there are hits
     if result.total_hits > 0:
@@ -790,6 +1227,74 @@ def format_hunt_results_for_azdo(result: IOCHuntResult, rf_enrichment: dict = No
                 )
             parts.append("</table>")
 
+        # URL Hits (paths like registry.npmjs.org/openclaw/)
+        if tool_result.url_hits:
+            parts.append("<table style='border-collapse: collapse; width: 100%; margin-bottom: 10px;'>")
+            parts.append(
+                f"<tr style='background-color: #f0f0f0;'>"
+                f"<th style='{th_style}'>URL Path</th>"
+                f"<th style='{th_style}'>Events</th>"
+                f"<th style='{th_style}'>Sources</th>"
+                f"<th style='{th_style}'>Users</th>"
+                f"<th style='{th_style}'>Hosts</th>"
+                f"<th style='{th_style}'>First Seen</th>"
+                f"<th style='{th_style}'>Last Seen</th></tr>"
+            )
+            for hit in tool_result.url_hits:
+                url = hit['url']
+                # Handle both QRadar format (event_count) and CrowdStrike format (host_count)
+                count = hit.get('event_count') or hit.get('host_count', 0)
+                sources = ', '.join(hit.get('sources', [])) if hit.get('sources') else ''
+                users = hit.get('users', [])
+                # Handle both 'hosts' (QRadar) and 'hostnames' (CrowdStrike)
+                hosts = hit.get('hosts', []) or hit.get('hostnames', [])
+                users_display = ', '.join(users[:3])
+                if len(users) > 3:
+                    users_display += f" (+{len(users) - 3} more)"
+                hosts_display = ', '.join(hosts[:3])
+                if len(hosts) > 3:
+                    hosts_display += f" (+{len(hosts) - 3} more)"
+                # Truncate long URLs for display
+                url_display = url if len(url) <= 60 else url[:57] + '...'
+                if tool_key == 'qradar':
+                    count_display = _qradar_search_link(url.replace('https://', ''), 'url', count)
+                else:
+                    count_display = f"{count} hosts" if hit.get('host_count') else str(count)
+                parts.append(
+                    f"<tr style='background-color: #fff3e6;'>"  # Light orange for URL paths
+                    f"<td style='{td_style}'><code>{url_display}</code></td>"
+                    f"<td style='{td_style}'>{count_display}</td>"
+                    f"<td style='{td_style}'>{sources}</td>"
+                    f"<td style='{td_style}; font-size: 11px;'>{users_display}</td>"
+                    f"<td style='{td_style}; font-size: 11px;'>{hosts_display}</td>"
+                    f"<td style='{td_style}'>{hit.get('first_seen', 'N/A')}</td>"
+                    f"<td style='{td_style}'>{hit.get('last_seen', 'N/A')}</td></tr>"
+                )
+            parts.append("</table>")
+
+        # Filename Hits (CrowdStrike)
+        if tool_result.filename_hits:
+            parts.append("<table style='border-collapse: collapse; width: 100%; margin-bottom: 10px;'>")
+            parts.append(
+                f"<tr style='background-color: #f0f0f0;'>"
+                f"<th style='{th_style}'>Filename</th>"
+                f"<th style='{th_style}'>Detections</th>"
+                f"<th style='{th_style}'>Affected Hosts</th></tr>"
+            )
+            for hit in tool_result.filename_hits:
+                filename = hit['filename']
+                count = hit.get('detection_count', 0)
+                hostnames = ', '.join(hit.get('hostnames', [])[:5])
+                if len(hit.get('hostnames', [])) > 5:
+                    hostnames += f" (+{len(hit['hostnames']) - 5} more)"
+                parts.append(
+                    f"<tr style='background-color: #e6f3ff;'>"  # Light blue for filenames
+                    f"<td style='{td_style}'><code>{filename}</code></td>"
+                    f"<td style='{td_style}'>{count}</td>"
+                    f"<td style='{td_style}; font-size: 11px;'>{hostnames}</td></tr>"
+                )
+            parts.append("</table>")
+
         # Hash Hits
         if tool_result.hash_hits:
             parts.append("<table style='border-collapse: collapse; width: 100%; margin-bottom: 10px;'>")
@@ -847,23 +1352,46 @@ def format_hunt_results_for_azdo(result: IOCHuntResult, rf_enrichment: dict = No
     if result.abnormal:
         html_parts.extend(format_tool_section(result.abnormal, "&#x1F4E7;", "abnormal"))
 
-    # Tools with no hits
+    # Tools with no hits (only show if no errors for that tool)
+    # Check if errors contain tool-specific messages
+    qradar_errors = [e for e in result.errors if 'domain combined search' in e.lower() or 'ip combined search' in e.lower() or 'qradar' in e.lower()]
+    crowdstrike_errors = [e for e in result.errors if 'crowdstrike' in e.lower()]
+    abnormal_errors = [e for e in result.errors if 'abnormal' in e.lower()]
+
     no_hits = []
-    if result.qradar and result.qradar.total_hits == 0:
+    if result.qradar and result.qradar.total_hits == 0 and not qradar_errors:
         no_hits.append("QRadar")
-    if result.crowdstrike and result.crowdstrike.total_hits == 0:
+    if result.crowdstrike and result.crowdstrike.total_hits == 0 and not crowdstrike_errors:
         no_hits.append("CrowdStrike")
-    if result.abnormal and result.abnormal.total_hits == 0:
+    if result.abnormal and result.abnormal.total_hits == 0 and not abnormal_errors:
         no_hits.append("Abnormal")
     if no_hits:
         html_parts.append(f"<p><em>No hits in: {', '.join(no_hits)}</em></p>")
 
     # Errors
     if result.errors:
-        html_parts.append("<details><summary>Errors</summary><ul style='color: #666;'>")
+        html_parts.append("<details><summary>&#x26A0; Errors</summary><ul style='color: #666;'>")
         for err in result.errors[:5]:
             html_parts.append(f"<li>{err}</li>")
         html_parts.append("</ul></details>")
+
+    # Queries executed (for transparency/verification)
+    all_queries = []
+    if result.qradar and result.qradar.queries:
+        for q in result.qradar.queries:
+            all_queries.append(('QRadar', q.get('type', 'Search'), q.get('query', '')))
+    if result.crowdstrike and result.crowdstrike.queries:
+        for q in result.crowdstrike.queries:
+            all_queries.append(('CrowdStrike', q.get('type', 'Search'), q.get('query', '')))
+
+    if all_queries:
+        html_parts.append("<details><summary>&#x1F50D; Queries Executed</summary>")
+        for tool, query_type, query in all_queries:
+            # Escape HTML in query and format as code block
+            escaped_query = query.replace('<', '&lt;').replace('>', '&gt;')
+            html_parts.append(f"<p><strong>{tool} - {query_type}:</strong></p>")
+            html_parts.append(f"<pre style='background-color: #f5f5f5; padding: 8px; font-size: 11px; overflow-x: auto; white-space: pre-wrap;'>{escaped_query}</pre>")
+        html_parts.append("</details>")
 
     html_parts.append(f"<p><em>Hunt completed: {result.hunt_time}</em></p>")
     html_parts.append("<p><em>Generated by Pokedex IOC Hunter</em></p>")

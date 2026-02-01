@@ -550,7 +550,7 @@ class CrowdStrikeClient:
             detection_ids = response.get("body", {}).get("resources", [])
 
             if not detection_ids:
-                return {"count": 0, "detections": []}
+                return {"count": 0, "detections": [], "fql_query": filter_str}
 
             # Get detection details
             details_resp = self.detects_client.get_detect_summaries(ids=detection_ids[:20])
@@ -558,10 +558,11 @@ class CrowdStrikeClient:
                 detections = details_resp.get("body", {}).get("resources", [])
                 return {
                     "count": len(detection_ids),
-                    "detections": detections
+                    "detections": detections,
+                    "fql_query": filter_str
                 }
 
-            return {"count": len(detection_ids), "detections": []}
+            return {"count": len(detection_ids), "detections": [], "fql_query": filter_str}
 
         except Exception as e:
             logger.error(f"Error searching detections by IP {ip}: {e}")
@@ -599,7 +600,7 @@ class CrowdStrikeClient:
             detection_ids = response.get("body", {}).get("resources", [])
 
             if not detection_ids:
-                return {"count": 0, "detections": []}
+                return {"count": 0, "detections": [], "fql_query": filter_str}
 
             # Get detection details
             details_resp = self.detects_client.get_detect_summaries(ids=detection_ids[:20])
@@ -607,13 +608,63 @@ class CrowdStrikeClient:
                 detections = details_resp.get("body", {}).get("resources", [])
                 return {
                     "count": len(detection_ids),
-                    "detections": detections
+                    "detections": detections,
+                    "fql_query": filter_str
                 }
 
-            return {"count": len(detection_ids), "detections": []}
+            return {"count": len(detection_ids), "detections": [], "fql_query": filter_str}
 
         except Exception as e:
             logger.error(f"Error searching detections by hash {file_hash[:16]}...: {e}")
+            return {"error": str(e)}
+
+    def search_detections_by_filename(self, filename: str, hours: int = 168) -> Dict[str, Any]:
+        """Search for detections involving a specific filename.
+
+        Useful for hunting malicious scripts like install.ps1, install.sh, etc.
+
+        Args:
+            filename: The filename to search for (e.g., "install.ps1")
+            hours: Hours to look back
+
+        Returns:
+            Dict with detection results or error
+        """
+        from datetime import timedelta, timezone
+
+        try:
+            start_date = (datetime.now(timezone.utc) - timedelta(hours=hours)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+            # Search in behaviors.filename field
+            # Use wildcard to match the filename anywhere in the path
+            filter_str = f"behaviors.filename:*'{filename}'"
+            filter_str += f"+created_timestamp:>='{start_date}'"
+
+            response = self.detects_client.query_detects(filter=filter_str, limit=100)
+
+            if response.get("status_code") != 200:
+                error_msg = response.get("body", {}).get("errors", [])
+                return {"error": f"Detection search failed: {error_msg}"}
+
+            detection_ids = response.get("body", {}).get("resources", [])
+
+            if not detection_ids:
+                return {"count": 0, "detections": [], "fql_query": filter_str}
+
+            # Get detection details
+            details_resp = self.detects_client.get_detect_summaries(ids=detection_ids[:20])
+            if details_resp.get("status_code") == 200:
+                detections = details_resp.get("body", {}).get("resources", [])
+                return {
+                    "count": len(detection_ids),
+                    "detections": detections,
+                    "fql_query": filter_str
+                }
+
+            return {"count": len(detection_ids), "detections": [], "fql_query": filter_str}
+
+        except Exception as e:
+            logger.error(f"Error searching detections by filename {filename}: {e}")
             return {"error": str(e)}
 
     def lookup_intel_indicator(self, indicator: str) -> Dict[str, Any]:
@@ -628,8 +679,9 @@ class CrowdStrikeClient:
         try:
             intel_client = Intel(auth_object=self.auth, timeout=30)
 
+            filter_str = f"indicator:'{indicator}'"
             response = intel_client.query_indicator_entities(
-                filter=f"indicator:'{indicator}'",
+                filter=filter_str,
                 limit=10
             )
 
@@ -640,11 +692,139 @@ class CrowdStrikeClient:
             resources = response.get("body", {}).get("resources", [])
             return {
                 "count": len(resources),
-                "indicators": resources
+                "indicators": resources,
+                "fql_query": filter_str
             }
 
         except Exception as e:
             logger.error(f"Error looking up intel for {indicator}: {e}")
+            return {"error": str(e)}
+
+    def search_threatgraph_domain(self, domain: str) -> Dict[str, Any]:
+        """Search ThreatGraph for hosts that connected to a domain.
+
+        Uses CrowdStrike's ThreatGraph API to find hosts that have
+        DNS requests or network connections to the specified domain.
+
+        Args:
+            domain: The domain to search for
+
+        Returns:
+            Dict with vertex/edge results or error
+        """
+        try:
+            from falconpy import ThreatGraph
+
+            tg_client = ThreatGraph(auth_object=self.auth, timeout=30)
+
+            # Build the query description for analysts
+            query_str = f"ThreatGraph.combined_summary_get(ids=['{domain}'], vertex_types=['domain', 'host'], edge_types=['dns_request', 'communicates_with'])"
+
+            # Search for domain indicator and get related hosts
+            response = tg_client.combined_summary_get(
+                ids=[domain],
+                vertex_types=["domain", "host"],
+                edge_types=["dns_request", "communicates_with"]
+            )
+
+            if response.get("status_code") != 200:
+                error_msg = response.get("body", {}).get("errors", [])
+                return {"error": f"ThreatGraph search failed: {error_msg}"}
+
+            resources = response.get("body", {}).get("resources", [])
+            # Extract affected hosts from the graph
+            hosts = []
+            for resource in resources:
+                vertices = resource.get("vertices", {})
+                for vertex_id, vertex in vertices.items():
+                    if vertex.get("vertex_type") == "host":
+                        hostname = vertex.get("properties", {}).get("hostname", "")
+                        if hostname:
+                            hosts.append(hostname)
+
+            return {
+                "count": len(hosts),
+                "hosts": list(set(hosts))[:20],
+                "raw": resources,
+                "api_call": query_str
+            }
+
+        except Exception as e:
+            logger.error(f"Error searching ThreatGraph for domain {domain}: {e}")
+            return {"error": str(e)}
+
+    def search_dns_requests(self, domain: str, hours: int = 168) -> Dict[str, Any]:
+        """Search for DNS requests to a domain using detections/alerts.
+
+        Searches for detections and alerts where the domain appears in
+        network/DNS fields.
+
+        Args:
+            domain: The domain to search for
+            hours: Hours to look back
+
+        Returns:
+            Dict with detection results or error
+        """
+        from datetime import timedelta, timezone
+
+        try:
+            start_date = (datetime.now(timezone.utc) - timedelta(hours=hours)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+            # Search detections for domain in network fields
+            # behaviors.network_accesses contains domain info
+            filter_str = f"behaviors.dns_requests.domain:*'{domain}'"
+            filter_str += f"+created_timestamp:>='{start_date}'"
+
+            response = self.detects_client.query_detects(filter=filter_str, limit=100)
+
+            if response.get("status_code") != 200:
+                # Fallback: try without the dns_requests filter (older API)
+                filter_str = f"created_timestamp:>='{start_date}'"
+                response = self.detects_client.query_detects(filter=filter_str, limit=100)
+
+            detection_ids = response.get("body", {}).get("resources", [])
+
+            if not detection_ids:
+                return {"count": 0, "detections": [], "hosts": []}
+
+            # Get detection details and filter for domain
+            details_resp = self.detects_client.get_detect_summaries(ids=detection_ids[:50])
+            matching_detections = []
+            hosts = set()
+
+            if details_resp.get("status_code") == 200:
+                for det in details_resp.get("body", {}).get("resources", []):
+                    # Check behaviors for domain references
+                    for behavior in det.get("behaviors", []):
+                        dns_requests = behavior.get("dns_requests", [])
+                        network = behavior.get("network_accesses", [])
+
+                        domain_found = False
+                        for dns in dns_requests:
+                            if domain.lower() in str(dns).lower():
+                                domain_found = True
+                                break
+                        for net in network:
+                            if domain.lower() in str(net).lower():
+                                domain_found = True
+                                break
+
+                        if domain_found:
+                            matching_detections.append(det)
+                            hostname = det.get("device", {}).get("hostname")
+                            if hostname:
+                                hosts.add(hostname)
+                            break
+
+            return {
+                "count": len(matching_detections),
+                "detections": matching_detections[:10],
+                "hosts": list(hosts)[:20]
+            }
+
+        except Exception as e:
+            logger.error(f"Error searching DNS requests for {domain}: {e}")
             return {"error": str(e)}
 
     def search_alerts_by_ip(self, ip: str, hours: int = 168) -> Dict[str, Any]:
@@ -673,7 +853,7 @@ class CrowdStrikeClient:
             alert_ids = response.get("body", {}).get("resources", [])
 
             if not alert_ids:
-                return {"count": 0, "alerts": []}
+                return {"count": 0, "alerts": [], "fql_query": filter_str}
 
             # Get alert details
             details_resp = self.alerts_client.get_alerts_v1(ids=alert_ids[:20])
@@ -681,10 +861,11 @@ class CrowdStrikeClient:
                 alerts = details_resp.get("body", {}).get("resources", [])
                 return {
                     "count": len(alert_ids),
-                    "alerts": alerts
+                    "alerts": alerts,
+                    "fql_query": filter_str
                 }
 
-            return {"count": len(alert_ids), "alerts": []}
+            return {"count": len(alert_ids), "alerts": [], "fql_query": filter_str}
 
         except Exception as e:
             logger.error(f"Error searching alerts by IP {ip}: {e}")

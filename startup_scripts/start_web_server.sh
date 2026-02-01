@@ -1,10 +1,10 @@
 #!/bin/bash
 
-cd /home/vinay/pub/IR || exit 1
+cd /home/user/pub/IR || exit 1
 
 SERVICE_NAME="ir-web-server.service"
 APP_NAME="Web Server"
-LOG_FILE="/home/vinay/pub/IR/logs/web_server.log"
+LOG_FILE="/home/user/pub/IR/logs/web_server.log"
 
 echo "Managing $APP_NAME via systemd service: $SERVICE_NAME"
 echo ""

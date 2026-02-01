@@ -40,7 +40,7 @@ from .staffing import get_staffing_data, get_shift_timings
 
 logger = logging.getLogger(__name__)
 CONFIG = get_config()
-ROOM_ID = CONFIG.webex_room_id_vinay_test_space
+ROOM_ID = CONFIG.webex_room_id_dev_test_space
 
 
 def get_region_wise_ticket_counts() -> str:
@@ -522,13 +522,13 @@ def send_daily_operational_report_charts(room_id: str = None) -> None:
 if __name__ == '__main__':
     import argparse
 
-    parser = argparse.ArgumentParser(description='Test announcements to Vinay test space')
+    parser = argparse.ArgumentParser(description='Test announcements to dev test space')
     parser.add_argument('--dor', action='store_true', help='Send DOR charts and region table')
     args = parser.parse_args()
 
     if not args.dor:
         print("Usage: python -m src.secops.announcements --dor")
-        print("\nTests will be sent to Vinay test space (ROOM_ID)")
+        print("\nTests will be sent to dev test space (ROOM_ID)")
         exit(1)
 
     print(f"🧪 Testing announcements to test space...")

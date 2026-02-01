@@ -1,10 +1,10 @@
 #!/bin/bash
 
-cd /home/vinay/pub/IR || exit 1
+cd /home/user/pub/IR || exit 1
 
 SERVICE_NAME="ir-bot-status-api.service"
 APP_NAME="Bot Status API"
-LOG_FILE="/home/vinay/pub/IR/logs/bot_status_api.log"
+LOG_FILE="/home/user/pub/IR/logs/bot_status_api.log"
 
 echo "Managing $APP_NAME via systemd service: $SERVICE_NAME"
 echo ""

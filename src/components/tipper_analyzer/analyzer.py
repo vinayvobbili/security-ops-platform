@@ -15,7 +15,12 @@ from src.components.tipper_indexer import TipperIndexer
 from my_config import get_config
 
 from .models import NoveltyAnalysis, NoveltyLLMResponse, IOCHuntResult
-from .formatters import format_analysis_for_display, format_analysis_for_azdo, format_hunt_results_for_azdo
+from .formatters import (
+    format_analysis_for_display,
+    format_analysis_for_azdo,
+    format_hunt_results_for_azdo,
+    format_single_tool_hunt_for_azdo,
+)
 from .hunting import hunt_iocs
 
 logger = logging.getLogger(__name__)
@@ -101,16 +106,10 @@ class TipperAnalyzer:
                 if tipper_id not in ioc_to_tippers[ioc]:
                     ioc_to_tippers[ioc].append(tipper_id)
 
-            # Collect malware families
-            for malware in entities.malware_families:
-                malware_lower = malware.lower()
-                if malware_lower not in malware_to_tippers:
-                    malware_to_tippers[malware_lower] = []
-                if tipper_id not in malware_to_tippers[malware_lower]:
-                    malware_to_tippers[malware_lower].append(tipper_id)
+            # NOTE: Malware family collection removed - vector similarity handles this
 
-        if ioc_to_tippers or malware_to_tippers:
-            logger.info(f"Built entity history: {len(ioc_to_tippers)} IOCs, {len(malware_to_tippers)} malware families")
+        if ioc_to_tippers:
+            logger.info(f"Built entity history: {len(ioc_to_tippers)} IOCs across {len(tipper_dates)} tippers")
 
         return ioc_to_tippers, malware_to_tippers, tipper_dates
 
@@ -361,6 +360,12 @@ class TipperAnalyzer:
 ---
 
 ## SIMILAR HISTORICAL TIPPERS (from our database)
+
+**Similarity Score Guide:**
+- 55%+ = Highly similar (likely same campaign/actor)
+- 45-55% = Moderately similar (related threat type)
+- 35-45% = Loosely related (some shared concepts)
+- <35% = Low relevance (different threat category)
 """
 
         if similar_tippers:
@@ -472,6 +477,7 @@ Focus on the narrative analysis. IOC overlaps and entity matching are computed s
         tipper: Dict,
         similar_tippers: List[Dict],
         ioc_history: Dict[str, List[str]],
+        malware_history: Dict[str, List[str]],
         entities,
     ) -> NoveltyAnalysis:
         """Convert LLM response to NoveltyAnalysis.
@@ -499,57 +505,81 @@ Focus on the narrative analysis. IOC overlaps and entity matching are computed s
             created_date = ''
 
         # --- PYTHON-COMPUTED: Related tickets from vector search ---
+        # Only include tickets with similarity >= 55% and limit to top 3 most relevant
+        MIN_RELATED_SIMILARITY = 0.55
+        MAX_RELATED_TICKETS = 5
         related_tickets = []
         for similar in similar_tippers[:10]:
+            similarity_score = similar.get('similarity_score', 0)
+            if similarity_score < MIN_RELATED_SIMILARITY:
+                continue  # Skip low-similarity results
             meta = similar.get('metadata', {})
             ticket_id = str(meta.get('id', ''))
             if ticket_id and ticket_id != tipper_id:
                 related_tickets.append({
                     'id': ticket_id,
                     'title': meta.get('title', ''),
+                    'similarity': similarity_score,  # Include for display
                 })
+                if len(related_tickets) >= MAX_RELATED_TICKETS:
+                    break  # Stop after top 3
 
-        # --- PYTHON-COMPUTED: What's Familiar (IOCs/entities seen before) ---
-        # Filter IOCs using VT to exclude benign domains (security vendor sites, news, etc.)
+        # --- PYTHON-COMPUTED: What's Familiar (IOCs in CURRENT tipper that were seen before) ---
+        # Only show IOCs that appear in BOTH the current tipper AND historical tippers
         what_is_familiar = []
-        if ioc_history:
-            from services.virustotal import VirusTotalClient
-            vt_client = VirusTotalClient()
+        if ioc_history and entities:
+            # Get IOCs from the CURRENT tipper
+            current_iocs = set()
+            current_iocs.update(ioc.lower() for ioc in entities.ips)
+            current_iocs.update(ioc.lower() for ioc in entities.domains)
+            for hash_list in entities.hashes.values():
+                current_iocs.update(ioc.lower() for ioc in hash_list)
 
-            # Collect all unique IOCs from history for VT filtering
-            all_history_iocs = list(ioc_history.keys())
+            # Find IOCs that are in BOTH current tipper AND historical tippers
+            history_iocs_lower = {ioc.lower(): ioc for ioc in ioc_history.keys()}
+            shared_iocs = current_iocs & set(history_iocs_lower.keys())
 
-            # Separate domains from IPs/hashes for VT lookup
-            history_domains = [ioc for ioc in all_history_iocs if '.' in ioc and not ioc.replace('.', '').isdigit() and len(ioc) < 64]
-            history_ips = [ioc for ioc in all_history_iocs if ioc.replace('.', '').isdigit()]
-            history_hashes = [ioc for ioc in all_history_iocs if len(ioc) in (32, 40, 64) and ioc.isalnum()]
+            if shared_iocs:
+                from services.virustotal import VirusTotalClient
+                vt_client = VirusTotalClient()
 
-            # Filter to only huntworthy IOCs (have VT detections)
-            logger.info(f"Filtering {len(history_domains)} domains, {len(history_ips)} IPs via VT...")
-            huntworthy = vt_client.filter_huntworthy_iocs(
-                domains=history_domains[:30],  # Limit to avoid too many API calls
-                ips=history_ips[:20],
-                hashes=history_hashes[:20],
-                max_checks=50,
-            )
-            huntworthy_set = set(huntworthy['domains'] + huntworthy['ips'] + huntworthy['hashes'])
+                # Separate by type for VT filtering
+                shared_domains = [ioc for ioc in shared_iocs if '.' in ioc and not ioc.replace('.', '').isdigit() and len(ioc) < 64]
+                shared_ips = [ioc for ioc in shared_iocs if ioc.replace('.', '').isdigit()]
+                shared_hashes = [ioc for ioc in shared_iocs if len(ioc) in (32, 40, 64) and ioc.isalnum()]
 
-            # Group huntworthy IOCs by the tickets they appeared in
-            ticket_iocs = {}  # ticket_id -> list of IOCs
-            for ioc, ticket_ids in ioc_history.items():
-                if ioc.lower() not in huntworthy_set and ioc not in huntworthy_set:
-                    continue  # Skip benign IOCs
-                for tid in ticket_ids:
-                    if tid not in ticket_iocs:
-                        ticket_iocs[tid] = []
-                    ticket_iocs[tid].append(ioc)
+                # Filter to only huntworthy IOCs (have VT detections)
+                logger.info(f"Filtering {len(shared_domains)} shared domains, {len(shared_ips)} shared IPs via VT...")
+                huntworthy = vt_client.filter_huntworthy_iocs(
+                    domains=shared_domains[:30],
+                    ips=shared_ips[:20],
+                    hashes=shared_hashes[:20],
+                    max_checks=50,
+                )
+                huntworthy_set = set(huntworthy['domains'] + huntworthy['ips'] + huntworthy['hashes'])
 
-            # Create familiar items with ticket references
-            for tid, iocs in sorted(ticket_iocs.items(), key=lambda x: len(x[1]), reverse=True)[:5]:
-                ioc_sample = iocs[:3]
-                ioc_display = ', '.join(f"`{ioc[:20]}...`" if len(ioc) > 20 else f"`{ioc}`" for ioc in ioc_sample)
-                more = f" (+{len(iocs) - 3} more)" if len(iocs) > 3 else ""
-                what_is_familiar.append(f"Shared IOCs with #{tid}: {ioc_display}{more}")
+                # Group huntworthy shared IOCs by the tickets they appeared in
+                ticket_iocs = {}  # ticket_id -> list of IOCs
+                for ioc_lower in shared_iocs:
+                    if ioc_lower not in huntworthy_set:
+                        continue  # Skip benign IOCs
+                    # Get original case IOC and its ticket IDs
+                    original_ioc = history_iocs_lower.get(ioc_lower, ioc_lower)
+                    ticket_ids = ioc_history.get(original_ioc, [])
+                    for tid in ticket_ids:
+                        if tid not in ticket_iocs:
+                            ticket_iocs[tid] = []
+                        ticket_iocs[tid].append(original_ioc)
+
+                # Create familiar items with ticket references
+                for tid, iocs in sorted(ticket_iocs.items(), key=lambda x: len(x[1]), reverse=True)[:5]:
+                    ioc_sample = iocs[:3]
+                    ioc_display = ', '.join(f"`{ioc[:20]}...`" if len(ioc) > 20 else f"`{ioc}`" for ioc in ioc_sample)
+                    more = f" (+{len(iocs) - 3} more)" if len(iocs) > 3 else ""
+                    what_is_familiar.append(f"Shared IOCs with #{tid}: {ioc_display}{more}")
+
+        # NOTE: Malware family matching removed - vector similarity handles this better.
+        # If two tippers mention "ClawdBot", ChromaDB embeddings will match them.
 
         # --- PYTHON-COMPUTED: What's New (IOCs/entities NOT seen before) ---
         what_is_new = []
@@ -590,12 +620,8 @@ Focus on the narrative analysis. IOC overlaps and entity matching are computed s
                     more = f" (+{len(filtered_new_iocs) - 5} more)" if len(filtered_new_iocs) > 5 else ""
                     what_is_new.append(f"First-time IOCs: {new_display}{more}")
 
-        # Print raw LLM response for debugging/ideas
-        print("\n" + "=" * 60)
-        print("RAW LLM RESPONSE:")
-        print("=" * 60)
-        print(llm_response.model_dump_json(indent=2))
-        print("=" * 60 + "\n")
+        # Log raw LLM response at debug level
+        logger.debug(f"Raw LLM response: {llm_response.model_dump_json()}")
 
         return NoveltyAnalysis(
             tipper_id=tipper_id,
@@ -737,7 +763,16 @@ Focus on the narrative analysis. IOC overlaps and entity matching are computed s
         logger.info("Searching for similar historical tippers...")
         try:
             similar_tippers = self.indexer.find_similar_tippers(query_text, k=similar_count)
-            logger.info(f"Found {len(similar_tippers)} similar tippers")
+
+            # Filter out low-similarity matches (noise reduction)
+            # Keep matches above 35% similarity - below this threshold, matches are
+            # typically unrelated threats that happen to share generic terminology
+            MIN_SIMILARITY = 0.35
+            similar_tippers = [
+                t for t in similar_tippers
+                if t.get('similarity_score', 0) >= MIN_SIMILARITY
+            ]
+            logger.info(f"Found {len(similar_tippers)} similar tippers (≥{MIN_SIMILARITY:.0%} similarity)")
         except RuntimeError as e:
             logger.warning(f"Could not search index: {e}")
             similar_tippers = []
@@ -779,6 +814,7 @@ Focus on the narrative analysis. IOC overlaps and entity matching are computed s
         mitre_techniques = []
         mitre_covered = []
         mitre_gaps = []
+        mitre_rules = {}  # technique_id -> [rule info dicts]
         rules_by_term = {}  # Keep for compatibility
 
         if entities and entities.mitre_techniques:
@@ -786,6 +822,7 @@ Focus on the narrative analysis. IOC overlaps and entity matching are computed s
             logger.info(f"Found {len(mitre_techniques)} MITRE techniques in tipper: {', '.join(mitre_techniques[:5])}")
 
             # Get all techniques covered by our detection rules catalog
+            catalog = None
             try:
                 from src.components.tipper_analyzer.rules.catalog import RulesCatalog
                 catalog = RulesCatalog()
@@ -801,20 +838,41 @@ Focus on the narrative analysis. IOC overlaps and entity matching are computed s
                 else:
                     mitre_gaps.append(tech)
 
+            # Fetch the actual rules for covered techniques
+            if mitre_covered and catalog:
+                try:
+                    rules_by_tech = catalog.get_rules_by_technique(mitre_covered)
+                    for tech, rules in rules_by_tech.items():
+                        # Convert DetectionRule objects to simple dicts for storage
+                        mitre_rules[tech] = [
+                            {
+                                'name': r.name,
+                                'platform': r.platform,
+                                'rule_type': r.rule_type or 'rule',
+                                'severity': r.severity or '',
+                            }
+                            for r in rules[:5]  # Limit to 5 rules per technique
+                        ]
+                    logger.info(f"Retrieved rules for {len(mitre_rules)} covered MITRE techniques")
+                except Exception as e:
+                    logger.warning(f"Failed to get rules by technique: {e}")
+
             if mitre_gaps:
                 logger.info(f"MITRE gaps ({len(mitre_gaps)}): {', '.join(mitre_gaps[:5])}{'...' if len(mitre_gaps) > 5 else ''}")
             else:
                 logger.info("All MITRE techniques have existing detection coverage")
 
         # Build prompt and call LLM
-        prompt = self._build_analysis_prompt(tipper, similar_tippers, rf_enrichment)
-
-        # Print prompt for debugging
-        print("\n" + "=" * 60)
-        print("PROMPT SENT TO LLM:")
-        print("=" * 60)
-        print(prompt)
-        print("=" * 60 + "\n")
+        # Filter similar_tippers to the same criteria used for Related Tickets display
+        # This ensures LLM only references tickets that will actually be shown
+        MIN_RELATED_SIMILARITY = 0.55
+        MAX_RELATED_TICKETS = 5
+        tippers_for_llm = [
+            t for t in similar_tippers
+            if t.get('similarity_score', 0) >= MIN_RELATED_SIMILARITY
+        ][:MAX_RELATED_TICKETS]
+        prompt = self._build_analysis_prompt(tipper, tippers_for_llm, rf_enrichment)
+        logger.debug(f"Analysis prompt ({len(prompt)} chars): {prompt[:500]}...")
 
         logger.info("Generating novelty analysis with LLM...")
         if not self.llm:
@@ -831,7 +889,7 @@ Focus on the narrative analysis. IOC overlaps and entity matching are computed s
 
         # Convert structured response to NoveltyAnalysis (Python computes overlaps)
         analysis = self._build_analysis_from_response(
-            llm_response, tipper, similar_tippers, ioc_history, entities
+            llm_response, tipper, similar_tippers, ioc_history, malware_history, entities
         )
         analysis.generation_time = generation_time
         analysis.rf_enrichment = rf_enrichment  # Attach RF enrichment to analysis
@@ -845,6 +903,8 @@ Focus on the narrative analysis. IOC overlaps and entity matching are computed s
             analysis.total_iocs_extracted = {
                 'ips': len(entities.ips),
                 'domains': len(entities.domains),
+                'urls': len(entities.urls),
+                'filenames': len(entities.filenames),
                 'hashes': (len(entities.hashes.get('md5', [])) +
                           len(entities.hashes.get('sha1', [])) +
                           len(entities.hashes.get('sha256', []))),
@@ -858,6 +918,7 @@ Focus on the narrative analysis. IOC overlaps and entity matching are computed s
         analysis.mitre_techniques = mitre_techniques
         analysis.mitre_covered = mitre_covered
         analysis.mitre_gaps = mitre_gaps
+        analysis.mitre_rules = mitre_rules
 
         # Generate actionable steps based on analysis findings
         analysis.actionable_steps = self._generate_actionable_steps(
@@ -982,7 +1043,8 @@ Focus on the narrative analysis. IOC overlaps and entity matching are computed s
         tipper_id: str = None,
         tipper_text: str = None,
         hours: int = 720,
-        tools: List[str] = None
+        tools: List[str] = None,
+        on_tool_complete=None,
     ) -> IOCHuntResult:
         """
         Hunt for tipper IOCs across multiple security tools.
@@ -993,6 +1055,8 @@ Focus on the narrative analysis. IOC overlaps and entity matching are computed s
             hours: Hours to search back (default 720 = 30 days)
             tools: List of tools to hunt in (default: all)
                    Options: "qradar", "crowdstrike", "abnormal"
+            on_tool_complete: Optional callback called when each tool finishes.
+                              Used to post each tool's results as a separate AZDO comment.
 
         Returns:
             IOCHuntResult with hits from all tools
@@ -1028,7 +1092,8 @@ Focus on the narrative analysis. IOC overlaps and entity matching are computed s
             tipper_id=tipper_id,
             tipper_title=title,
             hours=hours,
-            tools=tools
+            tools=tools,
+            on_tool_complete=on_tool_complete,
         )
 
     def format_hunt_results_for_azdo(self, result: IOCHuntResult) -> str:
@@ -1089,36 +1154,60 @@ Focus on the narrative analysis. IOC overlaps and entity matching are computed s
         if not azdo_ok:
             display_output += "\n⚠️ _Failed to post analysis to AZDO work item_\n"
 
-        # Launch IOC hunt in background thread (results go to AZDO only)
+        # Launch IOC hunt in background thread
+        # Each tool posts its results as a SEPARATE AZDO comment when it completes
         rf_enrichment = analysis.rf_enrichment
 
         def _run_ioc_hunt():
+            from services.azdo import add_comment_to_work_item
+
+            def _post_tool_result(tool_result, tid, ttitle, hours, total_iocs, searched_iocs):
+                """Callback: post each tool's results immediately when it completes."""
+                try:
+                    html = format_single_tool_hunt_for_azdo(
+                        tool_result=tool_result,
+                        tipper_id=tid,
+                        tipper_title=ttitle,
+                        search_hours=hours,
+                        total_iocs_searched=total_iocs,
+                        searched_iocs=searched_iocs,
+                        rf_enrichment=rf_enrichment,
+                    )
+                    if add_comment_to_work_item(int(tid), html):
+                        logger.info(f"[bg] Posted {tool_result.tool_name} results ({tool_result.total_hits} hits) to #{tid}")
+                    else:
+                        logger.warning(f"[bg] Failed to post {tool_result.tool_name} results to #{tid}")
+                except Exception as e:
+                    logger.error(f"[bg] Error posting {tool_result.tool_name} results: {e}")
+
             try:
                 logger.info(f"[bg] Running IOC hunt for tipper #{tipper_id}...")
-                hunt_result = self.hunt_iocs(tipper_id=tipper_id, hours=720)
+                # Each tool's results are posted via _post_tool_result callback as they complete
+                hunt_result = self.hunt_iocs(
+                    tipper_id=tipper_id,
+                    hours=720,
+                    on_tool_complete=_post_tool_result,
+                )
 
                 if hunt_result.total_hits > 0:
-                    logger.warning(f"[bg] IOC HITS FOUND for tipper #{tipper_id}: {hunt_result.total_hits} hits")
+                    logger.warning(f"[bg] IOC HITS FOUND for tipper #{tipper_id}: {hunt_result.total_hits} total hits")
 
-                if self.post_hunt_results_to_tipper(hunt_result, rf_enrichment=rf_enrichment):
-                    logger.info(f"[bg] Posted hunt results to AZDO tipper #{tipper_id}")
-                    # Send follow-up Webex notification with hunt results summary
-                    if room_id:
-                        logger.info(f"[bg] Attempting to send hunt results to Webex room_id: {room_id}")
-                        try:
-                            from webexpythonsdk import WebexAPI
-                            from my_config import get_config
-                            from .formatters import format_hunt_results_for_webex
-                            config = get_config()
-                            azdo_url = f"https://dev.azure.com/{config.azdo_org}/{config.azdo_de_project}/_workitems/edit/{tipper_id}"
-                            msg = format_hunt_results_for_webex(hunt_result, tipper_id, azdo_url)
-                            webex = WebexAPI(access_token=config.webex_bot_access_token_pokedex)
-                            webex.messages.create(roomId=room_id, markdown=msg)
-                            logger.info(f"[bg] Sent hunt results to Webex for #{tipper_id}")
-                        except Exception as wx_err:
-                            logger.warning(f"[bg] Failed to send Webex notification: {wx_err}")
-                else:
-                    logger.warning(f"[bg] Failed to post hunt results to AZDO tipper #{tipper_id}")
+                # Send Webex notification with combined summary after all hunts complete
+                if room_id:
+                    logger.info(f"[bg] Sending hunt summary to Webex room_id: {room_id}")
+                    try:
+                        from webexpythonsdk import WebexAPI
+                        from my_config import get_config
+                        from .formatters import format_hunt_results_for_webex
+                        config = get_config()
+                        azdo_url = f"https://dev.azure.com/{config.azdo_org}/{config.azdo_de_project}/_workitems/edit/{tipper_id}"
+                        msg = format_hunt_results_for_webex(hunt_result, tipper_id, azdo_url)
+                        webex = WebexAPI(access_token=config.webex_bot_access_token_pokedex)
+                        webex.messages.create(roomId=room_id, markdown=msg)
+                        logger.info(f"[bg] Sent hunt summary to Webex for #{tipper_id}")
+                    except Exception as wx_err:
+                        logger.warning(f"[bg] Failed to send Webex notification: {wx_err}")
+
             except Exception as hunt_err:
                 logger.error(f"[bg] IOC hunt failed for tipper #{tipper_id}: {hunt_err}")
 

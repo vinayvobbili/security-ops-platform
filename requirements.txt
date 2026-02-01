@@ -91,3 +91,4 @@ pydantic-settings
 typing_extensions
 
 texttable
+tldextract

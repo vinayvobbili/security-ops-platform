@@ -2,7 +2,7 @@
 Remediation Suggestion Tools Module
 
 Tools for suggesting incident remediation actions based on XSOAR ticket
-details and local runbook/playbook documentation (IR guides).
+details and local runbook/playbook documentation (GDnR guides).
 """
 
 import logging
@@ -47,7 +47,7 @@ def _build_search_queries(context: Dict[str, str]) -> List[str]:
     Generate search queries to find relevant playbooks.
 
     Creates multiple queries based on incident attributes to maximize
-    the chance of finding relevant IR documentation.
+    the chance of finding relevant GDnR documentation.
 
     Args:
         context: Incident context dictionary
@@ -96,7 +96,7 @@ def _search_playbooks(queries: List[str]) -> str:
     Search local documents for relevant playbook content.
 
     Uses the existing document processor's hybrid retriever (65% semantic + 35% BM25)
-    to find relevant IR runbook content.
+    to find relevant GDnR runbook content.
 
     Args:
         queries: List of search queries
@@ -241,7 +241,7 @@ def suggest_remediation(ticket_id: str, environment: str = "prod") -> str:
     - "What are the remediation steps for XSOAR case 123456?"
     - "Suggest response actions for XSOAR incident 456789"
 
-    This tool fetches XSOAR incident details and searches IR runbooks to provide
+    This tool fetches XSOAR incident details and searches GDnR runbooks to provide
     tailored remediation guidance.
 
     Args:

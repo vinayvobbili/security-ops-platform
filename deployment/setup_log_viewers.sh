@@ -37,15 +37,15 @@ echo ""
 
 # Create htpasswd file for basic auth
 echo "Setting up password protection..."
-echo -n "$LOG_VIEWER_PASSWORD" | sudo htpasswd -i -c /home/vinay/pub/IR/.htpasswd "$LOG_VIEWER_USERNAME"
-sudo chown vinay:vinay /home/vinay/pub/IR/.htpasswd
-sudo chmod 644 /home/vinay/pub/IR/.htpasswd
+echo -n "$LOG_VIEWER_PASSWORD" | sudo htpasswd -i -c /home/user/pub/IR/.htpasswd "$LOG_VIEWER_USERNAME"
+sudo chown user:user /home/user/pub/IR/.htpasswd
+sudo chmod 644 /home/user/pub/IR/.htpasswd
 echo "  ✓ Password configured (username: $LOG_VIEWER_USERNAME, password: $LOG_VIEWER_PASSWORD)"
 echo ""
 
 # Ensure home directory is accessible for nginx
 echo "Configuring directory permissions..."
-chmod 751 /home/vinay
+chmod 751 /home/user
 echo "  ✓ Directory permissions set"
 echo ""
 
@@ -56,7 +56,7 @@ server {
     listen 8030;
     server_name $LOG_VIEWER_HOSTNAME;
 
-    root /home/vinay/pub/IR/deployment;
+    root /home/user/pub/IR/deployment;
     index log-viewer-index.html;
 
     location / {
@@ -291,7 +291,7 @@ echo ""
 # Create symlink in ~/bin for easy management
 echo "Creating management symlink..."
 mkdir -p ~/bin
-ln -sf /home/vinay/pub/IR/deployment/manage_log_viewers.sh ~/bin/start_log_service
+ln -sf /home/user/pub/IR/deployment/manage_log_viewers.sh ~/bin/start_log_service
 echo "  ✓ Symlink created: ~/bin/start_log_service"
 echo ""
 
