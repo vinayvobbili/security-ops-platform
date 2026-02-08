@@ -30,7 +30,7 @@ class ShiftConstants:
 
 
 # File paths
-EXCEL_PATH = root_directory / 'data' / 'transient' / 'secOps' / config.secops_shift_staffing_filename
+EXCEL_PATH = root_directory / 'data' / 'transient' / 'secOps' / config.secops_shift_staffing_filename if config.secops_shift_staffing_filename else None
 CELL_NAMES_FILE = root_directory / 'data' / 'secOps' / 'cell_names_by_shift.json'
 MANAGEMENT_NOTES_FILE = root_directory / 'data' / 'transient' / 'secOps' / 'management_notes.json'
 

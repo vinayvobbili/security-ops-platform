@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.ir.pokedex</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/path/to/project/scripts/start_pokedex.sh</string>
+    </array>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>WorkingDirectory</key>
+    <string>/path/to/project</string>
+
+    <key>StandardOutPath</key>
+    <string>/path/to/project/logs/pokedex_launcher.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/path/to/project/logs/pokedex_launcher.log</string>
+</dict>
+</plist>

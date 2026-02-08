@@ -27,7 +27,7 @@ from typing import List, Optional, Dict, Any
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import pandas as pd
-from tqdm import tqdm
+from rich.progress import track
 
 from my_config import get_config
 from services.tanium import TaniumClient, Computer
@@ -258,9 +258,9 @@ class TaniumUnhealthyHostsProcessor:
         with ThreadPoolExecutor(max_workers=MAX_WORKERS_SNOW) as executor:
             futures = {executor.submit(enrich_single_host, host): host for host in hosts}
 
-            for future in tqdm(as_completed(futures), total=len(futures),
-                              desc="Enriching with ServiceNow",
-                              disable=not logger.isEnabledFor(logging.INFO)):
+            for future in track(as_completed(futures), total=len(futures),
+                               description="Enriching with ServiceNow",
+                               disable=not logger.isEnabledFor(logging.INFO)):
                 enriched_hosts.append(future.result())
 
         # Log summary
@@ -333,9 +333,9 @@ class TaniumUnhealthyHostsProcessor:
         with ThreadPoolExecutor(max_workers=MAX_WORKERS_CS) as executor:
             futures = {executor.submit(check_single_host, host): host for host in hosts_to_check}
 
-            for future in tqdm(as_completed(futures), total=len(futures),
-                              desc="Checking CrowdStrike",
-                              disable=not logger.isEnabledFor(logging.INFO)):
+            for future in track(as_completed(futures), total=len(futures),
+                               description="Checking CrowdStrike",
+                               disable=not logger.isEnabledFor(logging.INFO)):
                 checked_hosts.append(future.result())
 
         # Combine with skipped hosts
@@ -437,6 +437,10 @@ class TaniumUnhealthyHostsProcessor:
             })
 
         df = pd.DataFrame(data)
+
+        # Deduplicate by hostname, keeping the row with the most recent last-seen
+        df = df.sort_values('Days Since Last Seen', ascending=True)
+        df = df.drop_duplicates(subset=['Hostname'], keep='first')
 
         # Sort by RTR candidates first, then by days since last seen
         df = df.sort_values(

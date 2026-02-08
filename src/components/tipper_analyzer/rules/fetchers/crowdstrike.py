@@ -1,7 +1,7 @@
 """CrowdStrike detection rules fetcher.
 
-Fetches custom IOA rule groups and IOC indicators from CrowdStrike Falcon,
-normalizing them into DetectionRule objects.
+Fetches custom IOA rule groups, IOC indicators, and Intel YARA rules from
+CrowdStrike Falcon, normalizing them into DetectionRule objects.
 """
 
 import logging
@@ -25,7 +25,7 @@ CS_SEVERITY_MAP = {
 
 @register_fetcher("crowdstrike")
 def fetch_crowdstrike_rules() -> List[DetectionRule]:
-    """Fetch custom IOA rule groups and IOC indicators from CrowdStrike."""
+    """Fetch custom IOA rule groups, IOC indicators, and Intel YARA rules from CrowdStrike."""
     from services.crowdstrike import CrowdStrikeClient
 
     rules = []
@@ -136,6 +136,36 @@ def fetch_crowdstrike_rules() -> List[DetectionRule]:
         logger.info(f"Fetched {len(result.get('indicators', []))} IOC indicators")
     else:
         logger.warning(f"Failed to fetch IOC indicators: {result['error']}")
+
+    # Fetch Intel YARA Rules
+    logger.info("Fetching CrowdStrike Intel YARA rules...")
+    result = client.list_intel_yara_rules(limit=500)
+    if "error" not in result:
+        for rule in result.get("rules", []):
+            rule_name = rule.get("name", "")
+            rule_desc = rule.get("description", "") or ""
+            search_text = f"{rule_name} {rule_desc}"
+            context = _extract_threat_context(search_text)
+
+            rules.append(DetectionRule(
+                rule_id=f"cs-yara-{rule.get('id', '')}",
+                platform="crowdstrike",
+                name=rule_name,
+                description=rule_desc,
+                rule_type="yara_rule",
+                enabled=True,
+                severity="medium",
+                tags=[rule.get("ruletype", ""), rule.get("customer_id", "")],
+                malware_families=context["malware"],
+                threat_actors=context["actors"],
+                mitre_techniques=context["mitre"],
+                created_date=rule.get("created_date", ""),
+                modified_date=rule.get("last_modified_date", ""),
+            ))
+
+        logger.info(f"Fetched {len(result.get('rules', []))} Intel YARA rules")
+    else:
+        logger.warning(f"Failed to fetch Intel YARA rules: {result['error']}")
 
     logger.info(f"Total CrowdStrike rules: {len(rules)}")
     return rules

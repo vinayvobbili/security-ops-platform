@@ -9,7 +9,7 @@ Get API key at: https://www.abuseipdb.com/account/api
 
 import logging
 import socket
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, Optional
 
 import requests
@@ -149,7 +149,7 @@ class AbuseIPDBClient:
         results = {
             "success": True,
             "domain": domain,
-            "scan_time": datetime.utcnow().isoformat(),
+            "scan_time": datetime.now(UTC).isoformat(),
             "ips_checked": 0,
             "malicious_ips": [],
             "clean_ips": [],
@@ -206,7 +206,7 @@ class AbuseIPDBClient:
 
         results = {
             "success": True,
-            "scan_time": datetime.utcnow().isoformat(),
+            "scan_time": datetime.now(UTC).isoformat(),
             "domains_checked": 0,
             "domains_with_malicious_ips": [],
             "clean_domains": [],

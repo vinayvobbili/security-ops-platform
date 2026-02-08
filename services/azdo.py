@@ -179,7 +179,7 @@ def get_tuning_requests_submitted_by_last_shift():
     return recent_item_strings
 
 
-def create_wit(title, item_type, description, project, submitter, area_path=None, iteration=None, assignee=None, parent_url=None) -> str:
+def create_wit(title, item_type, description, project, submitter, area_path=None, iteration=None, assignee=None, parent_url=None, severity=None, tags=None) -> str:
     org = azdo_orgs[project]
     project_name = azdo_projects.get(project)
     description += f'<br><br>Submitted by <strong>{submitter}</strong>'
@@ -235,6 +235,20 @@ def create_wit(title, item_type, description, project, submitter, area_path=None
             "op": "add",
             "path": "/fields/System.AssignedTo",
             "value": assignee
+        })
+    if severity is not None and severity != '':
+        payload.append({
+            "op": "add",
+            "path": "/fields/Microsoft.VSTS.Common.Severity",
+            "value": severity
+        })
+    if tags is not None and tags != '':
+        # Tags should be a semicolon-separated string
+        tags_value = tags if isinstance(tags, str) else "; ".join(tags)
+        payload.append({
+            "op": "add",
+            "path": "/fields/System.Tags",
+            "value": tags_value
         })
 
     api_token = CONFIG.azdo_pat

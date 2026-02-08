@@ -9,7 +9,7 @@ No API key required - completely free.
 """
 
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, Optional
 
 import requests
@@ -220,7 +220,7 @@ class AbuseCHClient:
 
     def _load_feodo_c2_list(self) -> dict[str, Any]:
         """Load Feodo Tracker C2 IP list (cached for 24h)."""
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
 
         # Use cache if fresh (less than 24 hours old)
         if self._feodo_c2_cache and self._feodo_cache_time:
@@ -309,7 +309,7 @@ class AbuseCHClient:
         results = {
             "success": True,
             "domain": domain,
-            "scan_time": datetime.utcnow().isoformat(),
+            "scan_time": datetime.now(UTC).isoformat(),
             "is_malicious": False,
             "threat_types": [],
             "sources": {},
@@ -350,7 +350,7 @@ class AbuseCHClient:
         results = {
             "success": True,
             "ip": ip,
-            "scan_time": datetime.utcnow().isoformat(),
+            "scan_time": datetime.now(UTC).isoformat(),
             "is_malicious": False,
             "is_c2": False,
             "threat_types": [],
@@ -386,7 +386,7 @@ class AbuseCHClient:
         """
         results = {
             "success": True,
-            "scan_time": datetime.utcnow().isoformat(),
+            "scan_time": datetime.now(UTC).isoformat(),
             "domains_checked": 0,
             "malicious_domains": [],
             "clean_domains": [],

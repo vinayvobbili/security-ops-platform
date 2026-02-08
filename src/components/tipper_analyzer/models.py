@@ -5,6 +5,10 @@ from typing import List, Dict, Optional, Any, Literal
 
 from pydantic import BaseModel, Field
 
+# Default lookback periods for IOC hunting
+DEFAULT_QRADAR_HUNT_HOURS = 168    # 7 days
+DEFAULT_CROWDSTRIKE_HUNT_HOURS = 720  # 30 days
+
 
 class NoveltyLLMResponse(BaseModel):
     """Simplified Pydantic model for LLM output.
@@ -28,6 +32,14 @@ class NoveltyLLMResponse(BaseModel):
     )
     recommendation: str = Field(
         description="One of: 'PRIORITIZE - Novel threat requiring deep investigation', 'STANDARD - Review and leverage past analysis', or 'EXPEDITE - Familiar pattern, apply known playbook'"
+    )
+    whats_new_reasons: List[str] = Field(
+        default_factory=list,
+        description="1-3 specific elements that make this tipper NOVEL (e.g., 'New threat actor: APT47', 'Novel supply chain attack vector', 'First campaign targeting healthcare'). Leave empty if nothing is new."
+    )
+    whats_familiar_reasons: List[str] = Field(
+        default_factory=list,
+        description="1-3 specific elements that make this tipper FAMILIAR to past tippers (e.g., 'Same Octo Tempest campaign from #1237886', 'Identical phishing TTPs to #1240351'). Reference ticket IDs when possible. Leave empty if nothing is familiar."
     )
 
 
@@ -87,6 +99,8 @@ class ToolHuntResult:
     errors: List[str] = field(default_factory=list)
     # Queries executed (for transparency)
     queries: List[Dict[str, str]] = field(default_factory=list)  # [{type, query}]
+    # CrowdStrike Foundry access status
+    foundry_access_denied: bool = False  # True if foundry:read perms not available
 
 
 @dataclass
@@ -97,7 +111,8 @@ class IOCHuntResult:
     hunt_time: str
     total_iocs_searched: int
     total_hits: int
-    search_hours: int = 720
+    search_hours_qradar: int = DEFAULT_QRADAR_HUNT_HOURS
+    search_hours_crowdstrike: int = DEFAULT_CROWDSTRIKE_HUNT_HOURS
     qradar: Optional[ToolHuntResult] = None
     crowdstrike: Optional[ToolHuntResult] = None
     abnormal: Optional[ToolHuntResult] = None
@@ -114,6 +129,8 @@ class IOCHuntResult:
     searched_hashes: List[str] = field(default_factory=list)
     # Queries executed (for transparency/verification)
     queries_executed: List[Dict[str, str]] = field(default_factory=list)  # [{tool, query_type, query}]
+    # Access issues for Webex notifications
+    access_issues: List[str] = field(default_factory=list)  # List of tools/services with access issues
 
     def to_dict(self) -> dict:
         return asdict(self)

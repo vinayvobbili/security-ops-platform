@@ -8,7 +8,7 @@ Uses crt.sh (free) to query CT logs.
 """
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
 from typing import Any
 
 import requests
@@ -56,7 +56,7 @@ class CertTransparencyMonitor:
                     "certificates": [],
                     "total_count": 0,
                     "recent_count": 0,
-                    "scan_time": datetime.utcnow().isoformat(),
+                    "scan_time": datetime.now(UTC).isoformat(),
                 }
 
             if response.status_code != 200:
@@ -75,13 +75,13 @@ class CertTransparencyMonitor:
                     "certificates": [],
                     "total_count": 0,
                     "recent_count": 0,
-                    "scan_time": datetime.utcnow().isoformat(),
+                    "scan_time": datetime.now(UTC).isoformat(),
                 }
 
             certs = response.json()
 
             # Filter for recent certificates
-            cutoff_date = datetime.utcnow() - timedelta(days=days_back)
+            cutoff_date = datetime.now(UTC) - timedelta(days=days_back)
             recent_certs = []
 
             for cert in certs:
@@ -133,7 +133,7 @@ class CertTransparencyMonitor:
                 "total_count": len(certs),
                 "recent_count": len(unique_certs),
                 "days_searched": days_back,
-                "scan_time": datetime.utcnow().isoformat(),
+                "scan_time": datetime.now(UTC).isoformat(),
             }
 
         except requests.exceptions.Timeout:
@@ -182,7 +182,7 @@ class CertTransparencyMonitor:
             "domains_with_certs": [],
             "domains_without_certs": [],
             "days_searched": days_back,
-            "scan_time": datetime.utcnow().isoformat(),
+            "scan_time": datetime.now(UTC).isoformat(),
         }
 
         cutoff_date = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=days_back)
@@ -262,7 +262,7 @@ class CertTransparencyMonitor:
         """
         results = {
             "success": True,
-            "scan_time": datetime.utcnow().isoformat(),
+            "scan_time": datetime.now(UTC).isoformat(),
             "days_searched": days_back,
             "domains_checked": len(lookalike_domains),
             "domains_with_certs": 0,
@@ -634,6 +634,134 @@ def discover_brand_impersonation(
     except Exception as e:
         results["error"] = str(e)
         logger.error(f"Brand monitoring error: {e}")
+
+    return results
+
+
+def search_brand_certificates(
+    brand: str,
+    legitimate_domains: list[str],
+    watchlist_domains: list[str] | None = None,
+    days_back: int = 90,
+) -> dict[str, Any]:
+    """Check watchlist domains for SSL certificates in CT logs.
+
+    This is the reliable approach - check specific domains you've identified
+    through threat intel, phishing reports, or other sources. Doesn't rely
+    on pattern generation which is both a maintenance burden and unreliable.
+
+    Args:
+        brand: Brand name (for logging/context)
+        legitimate_domains: List of legitimate domains to exclude
+        watchlist_domains: Specific domains to check (from config watchlist)
+        days_back: How many days back to search (default 90)
+
+    Returns:
+        Dict with:
+        - success: bool
+        - domains: list of suspicious domain dicts with certificates
+        - domains_checked: number of domains checked
+    """
+    import time
+
+    results = {
+        "success": False,
+        "brand": brand,
+        "domains": [],
+        "domains_checked": 0,
+        "scan_time": datetime.now(timezone.utc).isoformat(),
+    }
+
+    # Use watchlist domains if provided
+    domains_to_check = watchlist_domains or []
+
+    if not domains_to_check:
+        results["success"] = True
+        results["note"] = "No watchlist domains configured - add suspicious domains to config.json watchlist"
+        return results
+
+    # Filter out legitimate domains
+    domains_to_check = [d for d in domains_to_check if not _is_legitimate_domain(d, legitimate_domains)]
+    results["domains_checked"] = len(domains_to_check)
+
+    logger.info(f"Checking {len(domains_to_check)} watchlist domains for SSL certificates")
+
+    session = requests.Session()
+    session.headers.update({"User-Agent": "Mozilla/5.0 (Security Research)"})
+
+    suspicious_domains: dict[str, dict] = {}
+    cutoff_time = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=days_back)
+
+    for domain in domains_to_check:
+        url = f"{CRT_SH_URL}/?q={domain}&output=json"
+
+        for attempt in range(2):  # 2 retries
+            try:
+                response = session.get(url, timeout=20)
+
+                if response.status_code == 404:
+                    break
+                if response.status_code in (502, 503):
+                    time.sleep(2)
+                    continue
+                if response.status_code != 200:
+                    break
+
+                if not response.text.strip() or response.text.strip() == "[]":
+                    break
+
+                certs = response.json()
+                if not certs:
+                    break
+
+                # Find the most recent certificate
+                for cert in certs:
+                    entry_time_str = cert.get("entry_timestamp", "")
+                    if entry_time_str:
+                        try:
+                            entry_time = datetime.fromisoformat(
+                                entry_time_str.replace("T", " ").split(".")[0]
+                            )
+                            if entry_time >= cutoff_time:
+                                suspicious_domains[domain] = {
+                                    "domain": domain,
+                                    "cert_id": cert.get("id"),
+                                    "brand": brand,
+                                    "issuer": cert.get("issuer_name", "Unknown"),
+                                    "not_before": cert.get("not_before"),
+                                    "not_after": cert.get("not_after"),
+                                    "entry_timestamp": entry_time_str,
+                                    "crt_sh_link": f"https://crt.sh/?id={cert.get('id')}",
+                                }
+                                logger.info(f"Watchlist domain has certificate: {domain}")
+                                break
+                        except (ValueError, TypeError):
+                            # Can't parse date, include it anyway
+                            suspicious_domains[domain] = {
+                                "domain": domain,
+                                "cert_id": cert.get("id"),
+                                "brand": brand,
+                                "issuer": cert.get("issuer_name", "Unknown"),
+                                "not_before": cert.get("not_before"),
+                                "not_after": cert.get("not_after"),
+                                "entry_timestamp": entry_time_str,
+                                "crt_sh_link": f"https://crt.sh/?id={cert.get('id')}",
+                            }
+                            break
+                break
+
+            except requests.exceptions.Timeout:
+                logger.debug(f"Timeout checking {domain}")
+                time.sleep(1)
+            except Exception as e:
+                logger.debug(f"Error checking {domain}: {e}")
+                break
+
+    results["success"] = True
+    results["domains"] = list(suspicious_domains.values())
+    results["domain_count"] = len(suspicious_domains)
+
+    logger.info(f"Watchlist check: {len(suspicious_domains)}/{len(domains_to_check)} domains have certificates")
 
     return results
 

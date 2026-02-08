@@ -184,6 +184,8 @@ def hunt_qradar(entities, hours: int) -> ToolHuntResult:
         try:
             logger.info(f"[QRadar] Starting hash search...")
             result = qradar.batch_search_hashes_endpoint(hash_list, hours=hours, max_results=500)
+            if result and result.get('query'):
+                queries.append({'type': 'Hash Search', 'query': result['query']})
             if "error" not in result:
                 hash_events = {}
                 for event in result.get('events', []):

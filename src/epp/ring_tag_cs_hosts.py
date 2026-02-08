@@ -36,7 +36,7 @@ from zoneinfo import ZoneInfo
 
 import openpyxl
 from pytz import timezone
-from tqdm import tqdm
+from rich.progress import track
 from webexpythonsdk import WebexAPI
 
 from my_config import get_config
@@ -185,12 +185,12 @@ class Host:
             total_hosts = len(host_objects)
             logger.info(f"Initializing {total_hosts} hosts...")
 
-            # Use tqdm for interactive sessions (shows progress bar), logger for VM
+            # Use rich progress for interactive sessions (shows progress bar), logger for VM
             initialized_count = 0
-            for host in tqdm(
+            for host in track(
                 executor.map(lambda host_element: host_element.initialize() or host_element, host_objects),
                 total=total_hosts,
-                desc="Initializing hosts",
+                description="Initializing hosts",
                 disable=not sys.stdout.isatty()
             ):
                 initialized_count += 1
@@ -475,8 +475,8 @@ class TagManager:
         total_batches = math.ceil(total / batch_size)
         logger.info(f"Removing tags from {total} hosts in batches of {batch_size}...")
 
-        # Use tqdm for interactive (shows progress bar), logger for VM
-        for i in tqdm(range(0, total, batch_size), desc="Removing tags", disable=not sys.stdout.isatty()):
+        # Use rich progress for interactive (shows progress bar), logger for VM
+        for i in track(range(0, total, batch_size), description="Removing tags", disable=not sys.stdout.isatty()):
             batch_num = (i // batch_size) + 1
             # Log for non-interactive (VM) sessions
             logger.info(f"Processing batch {batch_num}/{total_batches} (hosts {i+1}-{min(i+batch_size, total)})")

@@ -1,8 +1,10 @@
 """
 Tanium Signals Catalog Sync
 
-Fetches Threat Response signals from Tanium Cloud and On-Prem instances
-using the dedicated signals API tokens, and rebuilds the local CSV catalog.
+Fetches Threat Response signals from Tanium Cloud instance
+using the dedicated signals API token, and rebuilds the local CSV catalog.
+
+Note: On-Prem does not have Threat Response installed, so only Cloud is used.
 
 Runs daily at 6 AM ET to keep the catalog fresh for tipper analysis.
 
@@ -10,7 +12,7 @@ Usage:
     # Manual sync
     python -m src.components.tanium_signals_sync
 
-    # Scheduled via home_jobs.py
+    # Scheduled via all_jobs.py
 """
 
 import csv
@@ -21,7 +23,7 @@ from pathlib import Path
 from typing import List, Dict, Any, Optional
 
 from my_config import get_config
-from services.tanium import TaniumInstance, SIGNALS_QUERY
+from services.tanium import TaniumInstance
 
 # Import for ChromaDB catalog update
 from src.components.tipper_analyzer.rules.fetchers.tanium import fetch_tanium_rules_from_csv
@@ -59,8 +61,10 @@ class TaniumSignalsClient:
         self._setup_instances()
 
     def _setup_instances(self):
-        """Initialize Tanium instances using signals-specific API tokens."""
-        # Cloud instance with signals token
+        """Initialize Tanium Cloud instance using signals-specific API token.
+
+        Note: On-Prem is excluded — Threat Response is not installed there.
+        """
         cloud_url = self.config.tanium_cloud_api_url
         cloud_signals_token = self.config.tanium_cloud_signals_api_token
 
@@ -78,25 +82,6 @@ class TaniumSignalsClient:
                 logger.warning(f"Cloud signals token validation failed: {cloud_instance.last_error}")
         else:
             logger.info("Cloud signals API not configured (missing URL or token)")
-
-        # On-Prem instance with signals token
-        onprem_url = self.config.tanium_onprem_api_url
-        onprem_signals_token = self.config.tanium_onprem_signals_api_token
-
-        if onprem_url and onprem_signals_token:
-            onprem_instance = TaniumInstance(
-                name="On-Prem",
-                server_url=onprem_url,
-                token=onprem_signals_token,
-                verify_ssl=False  # On-prem typically uses self-signed certs
-            )
-            if onprem_instance.validate_token():
-                self.instances.append(onprem_instance)
-                logger.info("On-Prem signals instance initialized successfully")
-            else:
-                logger.warning(f"On-Prem signals token validation failed: {onprem_instance.last_error}")
-        else:
-            logger.info("On-Prem signals API not configured (missing URL or token)")
 
         if not self.instances:
             logger.warning("No Tanium signals instances available")
@@ -116,9 +101,16 @@ class TaniumSignalsClient:
                     continue
 
                 signals_data = result.get("signals", [])
-                logger.info(f"Retrieved {len(signals_data)} signals from {instance.name}")
+                logger.info(f"Retrieved {len(signals_data)} raw signals from {instance.name}")
 
-                for signal_data in signals_data:
+                # Filter to production signals only (DE_ prefix)
+                prod_signals = [s for s in signals_data if s.get("name", "").startswith("DE_")]
+                skipped = len(signals_data) - len(prod_signals)
+                if skipped:
+                    logger.info(f"Filtered out {skipped} non-production signals (missing DE_ prefix)")
+                logger.info(f"{len(prod_signals)} production signals from {instance.name}")
+
+                for signal_data in prod_signals:
                     signal = self._parse_signal(signal_data, instance.name)
                     if signal and signal.name not in seen_names:
                         all_signals.append(signal)
@@ -215,7 +207,7 @@ def sync_tanium_signals_catalog() -> Dict[str, Any]:
     """Main entry point: fetch signals and rebuild the catalog.
 
     This function:
-    1. Fetches signals from Tanium Cloud and On-Prem using dedicated signals API tokens
+    1. Fetches signals from Tanium Cloud using the dedicated signals API token
     2. Writes signals to CSV catalog (data/tanium_signals_catalog.csv)
     3. Updates ChromaDB rules catalog with fresh Tanium rules
 

@@ -10,7 +10,7 @@ Two modes of operation:
 
 import logging
 import time
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, Optional
 
 import requests
@@ -170,7 +170,7 @@ class HIBPClient:
         results = {
             "success": True,
             "domain": domain,
-            "scan_time": datetime.utcnow().isoformat(),
+            "scan_time": datetime.now(UTC).isoformat(),
             "emails_checked": 0,
             "emails_breached": 0,
             "total_breaches": 0,

@@ -38,7 +38,7 @@ BOTS_TO_PING = [
     ("Tars", CONFIG.webex_bot_email_tars),
     ("Case", CONFIG.webex_bot_email_case),
     ("the alert triage service", CONFIG.webex_bot_email_barnacles),
-    # ("the security assistant bot", CONFIG.webex_bot_email_pokedex),
+    ("the security assistant bot", CONFIG.webex_bot_email_pokedex),
 ]
 
 

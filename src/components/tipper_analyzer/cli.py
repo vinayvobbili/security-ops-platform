@@ -53,7 +53,7 @@ def analyze_recent_tippers(hours_back: int = 1, room_id: str = _config.webex_roo
     Fetch and analyze tippers created in the last N hours.
 
     Sends analysis results to Webex for threat hunter review.
-    Called by the hourly scheduled job in home_jobs.py.
+    Called by the hourly scheduled job in all_jobs.py.
 
     Args:
         hours_back: How many hours back to look for new tippers (default 1)

@@ -144,7 +144,7 @@ def fetch_tanium_rules() -> List[DetectionRule]:
         logger.info("Falling back to CSV import...")
         return fetch_tanium_rules_from_csv()
 
-    logger.info("Fetching Tanium Threat Response signals...")
+    logger.info("Fetching Tanium Threat Response production signals (DE_ prefix)...")
     result = client.list_all_signals()
 
     if "error" in result:
@@ -152,7 +152,14 @@ def fetch_tanium_rules() -> List[DetectionRule]:
         logger.info("Falling back to CSV import...")
         return fetch_tanium_rules_from_csv()
 
-    for signal in result.get("signals", []):
+    # Filter to production signals by DE_ prefix
+    raw_signals = result.get("signals", [])
+    prod_signals = [s for s in raw_signals if s.get("name", "").startswith("DE_")]
+    skipped = len(raw_signals) - len(prod_signals)
+    if skipped:
+        logger.info(f"Filtered out {skipped} non-production signals (missing DE_ prefix)")
+
+    for signal in prod_signals:
         name = signal.get("name", "")
         description = signal.get("description", "") or ""
         search_text = f"{name} {description}"
@@ -192,5 +199,5 @@ def fetch_tanium_rules() -> List[DetectionRule]:
             modified_date=signal.get("updatedAt", ""),
         ))
 
-    logger.info(f"Total Tanium signals: {len(rules)}")
+    logger.info(f"Total Tanium production signals: {len(rules)}")
     return rules

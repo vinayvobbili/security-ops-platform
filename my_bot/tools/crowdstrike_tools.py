@@ -885,6 +885,145 @@ def save_to_excel(entries: list[dict], filename_prefix: str, columns: list[str] 
 
 
 # =============================================================================
+# LogScale Event Search Tool
+# =============================================================================
+
+@tool
+@log_tool_call
+def search_falcon_events(
+    hostname: str,
+    start_time: str = "24h",
+    end_time: str = "now",
+    query_filter: str = "",
+    limit: int = 50
+) -> str:
+    """Search CrowdStrike Falcon LogScale events for a specific host.
+
+    Use this tool when users want to search for EDR telemetry events from a specific
+    endpoint in CrowdStrike Falcon. This searches the LogScale event store which contains
+    detailed endpoint activity like process executions, network connections, file writes, etc.
+
+    Args:
+        hostname: The device hostname to search events for (e.g., 'US12345', 'WORKSTATION01')
+        start_time: Start of time range. Supports relative times like '24h', '7d', '1h'
+                   or absolute ISO timestamps like '2024-01-15T00:00:00Z'. Default: '24h'
+        end_time: End of time range. Use 'now' for current time, or relative/absolute times.
+                 Default: 'now'
+        query_filter: Optional additional LogScale query filter to narrow results.
+                     Examples: '#event_simpleName=ProcessRollup2' for process events,
+                              '#event_simpleName=NetworkConnectIP4' for network connections,
+                              '#event_simpleName=DnsRequest' for DNS queries.
+                     Leave empty to get all event types.
+        limit: Maximum number of events to return (default: 50, max: 100)
+
+    Returns:
+        Formatted string with event results or error message.
+
+    Examples:
+        - "Get me events from host US12345 from the last 24 hours"
+        - "Search falcon events for WORKSTATION01 from 7d ago"
+        - "Get network connection events from SERVER01 in the last hour"
+    """
+    client = _get_crowdstrike_client()
+    if not client:
+        return "Error: CrowdStrike service is not available."
+
+    hostname = hostname.strip().upper()
+    limit = min(max(1, limit), 100)  # Clamp between 1 and 100
+
+    # Build the LogScale query
+    # ComputerName is the field for hostname in Falcon telemetry
+    base_query = f'ComputerName="{hostname}"'
+
+    if query_filter:
+        # Combine with user-provided filter
+        query = f'{query_filter} | {base_query}'
+    else:
+        query = base_query
+
+    # Add sorting and limit
+    query = f'{query} | sort(@timestamp, order=desc, limit={limit})'
+
+    logging.info(f"[LogScale] Searching events for hostname={hostname}, start={start_time}, end={end_time}")
+
+    result = client.run_logscale_query(
+        query=query,
+        start=start_time,
+        end=end_time,
+        limit=limit
+    )
+
+    # Handle errors
+    if result.get('access_denied'):
+        if result.get('not_configured'):
+            return ("Error: LogScale API is not configured. The cs_foundry_app_id setting "
+                    "is required for LogScale queries. Contact your CrowdStrike administrator.")
+        return f"Error: LogScale API access denied - {result.get('error', 'missing required scope')}"
+
+    if 'error' in result:
+        return f"Error running LogScale query: {result['error']}"
+
+    events = result.get('events', [])
+    count = result.get('count', 0)
+
+    if count == 0:
+        return (f"No events found for hostname '{hostname}' in the specified time range "
+                f"({start_time} to {end_time}).\n\n"
+                f"**Query executed:** `{query}`")
+
+    # Format results
+    output_lines = [
+        f"## Falcon LogScale Events for {hostname}",
+        f"**Found {count} event(s)** (showing up to {limit})",
+        f"**Time range:** {start_time} to {end_time}",
+        f"**Query:** `{query}`",
+        ""
+    ]
+
+    # Format each event
+    for i, event in enumerate(events[:limit], 1):
+        event_name = event.get('event_simpleName', event.get('#event_simpleName', 'Unknown'))
+        timestamp = event.get('@timestamp', event.get('timestamp', 'N/A'))
+        aid = event.get('aid', 'N/A')
+
+        output_lines.append(f"### Event {i}: {event_name}")
+        output_lines.append(f"- **Timestamp:** {timestamp}")
+        output_lines.append(f"- **Agent ID:** {aid}")
+
+        # Add relevant fields based on event type
+        if 'ProcessRollup2' in event_name or 'SyntheticProcessRollup2' in event_name:
+            output_lines.append(f"- **File Name:** {event.get('FileName', 'N/A')}")
+            output_lines.append(f"- **File Path:** {event.get('FilePath', 'N/A')}")
+            output_lines.append(f"- **Command Line:** {event.get('CommandLine', 'N/A')}")
+            output_lines.append(f"- **SHA256:** {event.get('SHA256HashData', 'N/A')}")
+            output_lines.append(f"- **Parent Process:** {event.get('ParentBaseFileName', 'N/A')}")
+        elif 'NetworkConnect' in event_name:
+            output_lines.append(f"- **Remote IP:** {event.get('RemoteAddressIP4', event.get('RemoteAddressIP6', 'N/A'))}")
+            output_lines.append(f"- **Remote Port:** {event.get('RemotePort', 'N/A')}")
+            output_lines.append(f"- **Local Port:** {event.get('LocalPort', 'N/A')}")
+            output_lines.append(f"- **Protocol:** {event.get('Protocol', 'N/A')}")
+        elif 'DnsRequest' in event_name:
+            output_lines.append(f"- **Domain:** {event.get('DomainName', 'N/A')}")
+            output_lines.append(f"- **Query Type:** {event.get('QueryType', 'N/A')}")
+            output_lines.append(f"- **Response:** {event.get('IP4Records', event.get('IP6Records', 'N/A'))}")
+        elif 'FileWrite' in event_name or 'NewExecutable' in event_name:
+            output_lines.append(f"- **File Name:** {event.get('FileName', 'N/A')}")
+            output_lines.append(f"- **File Path:** {event.get('FilePath', 'N/A')}")
+            output_lines.append(f"- **SHA256:** {event.get('SHA256HashData', 'N/A')}")
+        else:
+            # Generic fields for other event types
+            important_fields = ['FileName', 'FilePath', 'CommandLine', 'UserName',
+                               'DomainName', 'RemoteAddressIP4', 'SHA256HashData']
+            for field in important_fields:
+                if field in event and event[field]:
+                    output_lines.append(f"- **{field}:** {event[field]}")
+
+        output_lines.append("")
+
+    return '\n'.join(output_lines)
+
+
+# =============================================================================
 # SAMPLE PROMPTS FOR LLM GUIDANCE
 # =============================================================================
 # Use these prompts to help users discover CrowdStrike capabilities:
@@ -923,5 +1062,15 @@ def save_to_excel(entries: list[dict], filename_prefix: str, columns: list[str] 
 # - "Download browser history for LAPTOP-XYZ for the last 14 days"
 # - "What websites did HOST123 visit in the last 30 days?"
 # - "Pull Chrome/Edge/Firefox history from SERVER01"
+#
+# --- LogScale Event Search Tools ---
+# - "Get me events from host US12345 from the last 24 hours"
+# - "Search falcon events for WORKSTATION01 from 7d ago"
+# - "Get falcon events from SERVER01"
+# - "Show me process events from HOST123 in the last hour"
+# - "Search network connections from LAPTOP-XYZ for the last 7 days"
+# - "Get DNS requests from HOST123 from 2024-01-15 to now"
+# - "What processes ran on WORKSTATION01 yesterday?"
+# - "Get all events from HOST123 between 1h ago and now"
 #
 # =============================================================================

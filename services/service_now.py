@@ -6,7 +6,7 @@ import os
 import sys
 import threading
 import time
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pandas as pd
@@ -14,7 +14,7 @@ import requests
 import urllib3
 from filelock import FileLock
 from requests.adapters import HTTPAdapter
-from tqdm import tqdm
+from rich.progress import track
 
 from my_config import get_config
 
@@ -334,10 +334,6 @@ class ServiceNowClient:
         base_url = config.snow_base_url.rstrip('/')
         endpoint = f"{base_url}/itsm-incident/process/incidents"
 
-        # Calculate time threshold
-        # ITSM API date format: MM-DD-YYYY HH:MM AM/PM (per KB0224060)
-        threshold = (datetime.utcnow() - timedelta(minutes=minutes)).strftime('%m-%d-%Y %I:%M %p')
-
         # Query params - ITSM API may use different param names than Table API
         # Try common variations: filter, query, assignmentGroup
         # NOTE: Once API access is granted, test which params work and adjust
@@ -368,7 +364,7 @@ class ServiceNowClient:
 
             # Filter by createdDate client-side since API may not support date filtering
             # CreatedDate format: "MM-DD-YYYY HH:MM AM/PM"
-            threshold_dt = datetime.utcnow() - timedelta(minutes=minutes)
+            threshold_dt = datetime.now(UTC) - timedelta(minutes=minutes)
             filtered_results = []
             for inc in results:
                 created_str = inc.get('createdDate', '')
@@ -524,7 +520,7 @@ def enrich_host_report(input_file):
         futures = {executor.submit(enrich_single_host, hostname): hostname for hostname in hostnames}
         logger.info(f"Submitted {len(futures)} tasks to thread pool")
 
-        for idx, future in enumerate(tqdm(concurrent.futures.as_completed(futures), total=len(futures), desc="Enriching hosts with ServiceNow", disable=not sys.stdout.isatty()), 1):
+        for idx, future in enumerate(track(concurrent.futures.as_completed(futures), total=len(futures), description="Enriching hosts with ServiceNow", disable=not sys.stdout.isatty()), 1):
             short_hostname, details = future.result()
             if details:
                 snow_data[short_hostname] = details

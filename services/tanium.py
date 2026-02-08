@@ -17,7 +17,7 @@ import pandas as pd
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
-import tqdm
+from rich.progress import Progress, TextColumn, BarColumn, TaskProgressColumn, TimeElapsedColumn
 import urllib3
 from urllib3.exceptions import InsecureRequestWarning
 
@@ -333,12 +333,20 @@ class TaniumInstance:
 
         logger.info(f"Starting pagination for {self.name} with page_size={self.DEFAULT_PAGE_SIZE}, limit={limit}")
 
-        # Disable tqdm in non-interactive contexts (e.g., when called from bots/services)
+        # Disable progress in non-interactive contexts (e.g., when called from bots/services)
         # to prevent broken pipe errors
         import sys
-        disable_tqdm = not sys.stdout.isatty()
+        disable_progress = not sys.stdout.isatty()
 
-        with tqdm.tqdm(desc=f"Fetching computers from {self.name}", unit="host", disable=disable_tqdm) as pbar:
+        with Progress(
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TaskProgressColumn(),
+            TextColumn("{task.completed} hosts"),
+            TimeElapsedColumn(),
+            disable=disable_progress,
+        ) as progress:
+            task_id = progress.add_task(f"Fetching computers from {self.name}", total=None)
             page_num = 0
             while True:
                 page_num += 1
@@ -366,7 +374,7 @@ class TaniumInstance:
                     yield computer
                     computers_fetched += 1
 
-                pbar.update(len(edges))
+                progress.update(task_id, advance=len(edges))
 
                 if not page_info['hasNextPage']:
                     logger.info(f"No more pages available. Total computers fetched: {computers_fetched}")
@@ -572,39 +580,42 @@ class TaniumInstance:
 
     # ==================== Detection Rules Catalog Methods ====================
 
+    def _fetch_signals_with_query(self, query: str) -> Dict[str, Any]:
+        """Fetch paginated signals using the given GraphQL query."""
+        signals = []
+        cursor = None
+        page_size = 100
+
+        while True:
+            variables = {"first": page_size}
+            if cursor:
+                variables["after"] = cursor
+
+            result = self.query(query, variables)
+            data = result.get("data", {}).get("threatResponseSignals", {})
+            edges = data.get("edges", [])
+
+            for edge in edges:
+                node = edge.get("node", {})
+                if node:
+                    signals.append(node)
+
+            page_info = data.get("pageInfo", {})
+            if page_info.get("hasNextPage"):
+                cursor = page_info.get("endCursor")
+            else:
+                break
+
+        return {"signals": signals, "count": len(signals)}
+
     def list_signals(self) -> Dict[str, Any]:
         """List Threat Response signals (detection rules) from this instance.
 
         Returns:
             Dict with signals list or error
         """
-        signals = []
-        cursor = None
-        page_size = 100
-
         try:
-            while True:
-                variables = {"first": page_size}
-                if cursor:
-                    variables["after"] = cursor
-
-                result = self.query(SIGNALS_QUERY, variables)
-                data = result.get("data", {}).get("threatResponseSignals", {})
-                edges = data.get("edges", [])
-
-                for edge in edges:
-                    node = edge.get("node", {})
-                    if node:
-                        signals.append(node)
-
-                page_info = data.get("pageInfo", {})
-                if page_info.get("hasNextPage"):
-                    cursor = page_info.get("endCursor")
-                else:
-                    break
-
-            return {"signals": signals, "count": len(signals)}
-
+            return self._fetch_signals_with_query(SIGNALS_QUERY)
         except TaniumAPIError as e:
             logger.error(f"Error listing signals from {self.name}: {e}")
             return {"error": str(e)}

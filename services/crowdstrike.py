@@ -14,9 +14,9 @@ from typing import Dict, Optional, Any, List
 
 import pandas as pd
 import requests
-import tqdm
+from rich.progress import track
 
-from falconpy import Hosts, OAuth2, Detects, Incidents, Alerts, IOC, Intel
+from falconpy import Hosts, OAuth2, Incidents, Alerts, IOC, Intel
 from my_config import get_config
 from src.utils.http_utils import get_session
 
@@ -52,7 +52,6 @@ class CrowdStrikeClient:
         self.credential_profile = credential_profile
         self.auth = self._create_auth()
         self.hosts_client = Hosts(auth_object=self.auth, timeout=30)
-        self.detects_client = Detects(auth_object=self.auth, timeout=30)
         self.alerts_client = Alerts(auth_object=self.auth, timeout=30)
         self.incidents_client = Incidents(auth_object=self.auth, timeout=30)
         # Allow thread pool size to be set via env or parameter
@@ -276,10 +275,10 @@ class CrowdStrikeClient:
                 # Log for VM/non-interactive sessions
                 logger.info(f"Processing batch {batch_count + 1}: {len(host_ids)} host IDs in {len(host_id_batches)} sub-batches")
 
-                # Process with tqdm (shows progress bar locally, silent on VM)
+                # Process with rich progress (shows progress bar locally, silent on VM)
                 futures = [
                     executor.submit(process_host_details, id_batch)
-                    for id_batch in tqdm.tqdm(host_id_batches, desc=f"Batch {batch_count + 1}", disable=not sys.stdout.isatty())
+                    for id_batch in track(host_id_batches, description=f"Batch {batch_count + 1}", disable=not sys.stdout.isatty())
                 ]
                 concurrent.futures.wait(futures)
 
@@ -524,7 +523,9 @@ class CrowdStrikeClient:
             return {"error": str(e)}
 
     def search_detections_by_ip(self, ip: str, hours: int = 168) -> Dict[str, Any]:
-        """Search for detections involving an IP address.
+        """Search for detections/alerts involving an IP address.
+
+        Note: Uses Alerts API (Detects API was decommissioned by CrowdStrike).
 
         Args:
             ip: The IP address to search for
@@ -535,41 +536,112 @@ class CrowdStrikeClient:
         """
         from datetime import timedelta, timezone
 
+        # Build filter string outside try block (always returned for transparency)
+        start_date = (datetime.now(timezone.utc) - timedelta(hours=hours)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        filter_str = f"(device.local_ip:'{ip}',device.external_ip:'{ip}')+created_timestamp:>='{start_date}'"
+
         try:
-            start_date = (datetime.now(timezone.utc) - timedelta(hours=hours)).strftime("%Y-%m-%dT%H:%M:%SZ")
-
-            # Search in local_ip and external_ip fields
-            filter_str = f"(device.local_ip:'{ip}'+device.external_ip:'{ip}')+created_timestamp:>='{start_date}'"
-
-            response = self.detects_client.query_detects(filter=filter_str, limit=100)
+            response = self.alerts_client.query_alerts_v1(filter=filter_str, limit=100)
 
             if response.get("status_code") != 200:
                 error_msg = response.get("body", {}).get("errors", [])
-                return {"error": f"Detection search failed: {error_msg}"}
+                return {"error": f"Detection search failed: {error_msg}", "fql_query": filter_str}
 
-            detection_ids = response.get("body", {}).get("resources", [])
+            alert_ids = response.get("body", {}).get("resources", [])
 
-            if not detection_ids:
+            if not alert_ids:
                 return {"count": 0, "detections": [], "fql_query": filter_str}
 
-            # Get detection details
-            details_resp = self.detects_client.get_detect_summaries(ids=detection_ids[:20])
+            # Get alert details
+            details_resp = self.alerts_client.get_alerts_v1(ids=alert_ids[:20])
             if details_resp.get("status_code") == 200:
                 detections = details_resp.get("body", {}).get("resources", [])
                 return {
-                    "count": len(detection_ids),
+                    "count": len(alert_ids),
                     "detections": detections,
                     "fql_query": filter_str
                 }
 
-            return {"count": len(detection_ids), "detections": [], "fql_query": filter_str}
+            return {"count": len(alert_ids), "detections": [], "fql_query": filter_str}
 
         except Exception as e:
             logger.error(f"Error searching detections by IP {ip}: {e}")
-            return {"error": str(e)}
+            return {"error": str(e), "fql_query": filter_str}
+
+    def batch_search_detections_by_ips(self, ips: list, hours: int = 168) -> Dict[str, Any]:
+        """Search for detections/alerts involving multiple IP addresses in a single query.
+
+        Note: Uses Alerts API (Detects API was decommissioned by CrowdStrike).
+
+        Args:
+            ips: List of IP addresses to search for
+            hours: Hours to look back
+
+        Returns:
+            Dict with detection results grouped by IP, or error
+        """
+        from datetime import timedelta, timezone
+
+        if not ips:
+            return {"count": 0, "detections": [], "by_ip": {}}
+
+        # Build filter string outside try block (always returned for transparency)
+        start_date = (datetime.now(timezone.utc) - timedelta(hours=hours)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        ip_list = ",".join([f"'{ip}'" for ip in ips])
+        filter_str = f"(device.local_ip:[{ip_list}],device.external_ip:[{ip_list}])+created_timestamp:>='{start_date}'"
+
+        try:
+            response = self.alerts_client.query_alerts_v1(filter=filter_str, limit=500)
+
+            if response.get("status_code") != 200:
+                error_msg = response.get("body", {}).get("errors", [])
+                return {"error": f"Detection search failed: {error_msg}", "fql_query": filter_str}
+
+            alert_ids = response.get("body", {}).get("resources", [])
+
+            if not alert_ids:
+                return {"count": 0, "detections": [], "by_ip": {}, "fql_query": filter_str}
+
+            # Get alert details
+            details_resp = self.alerts_client.get_alerts_v1(ids=alert_ids[:100])
+            detections = []
+            if details_resp.get("status_code") == 200:
+                detections = details_resp.get("body", {}).get("resources", [])
+
+            # Group detections by IP
+            by_ip = {ip: {"count": 0, "detections": [], "hostnames": set()} for ip in ips}
+            for det in detections:
+                device = det.get("device", {})
+                local_ip = device.get("local_ip", "")
+                external_ip = device.get("external_ip", "")
+                hostname = device.get("hostname", "")
+
+                for ip in ips:
+                    if ip == local_ip or ip == external_ip:
+                        by_ip[ip]["count"] += 1
+                        by_ip[ip]["detections"].append(det)
+                        if hostname:
+                            by_ip[ip]["hostnames"].add(hostname)
+
+            # Convert sets to lists
+            for ip in by_ip:
+                by_ip[ip]["hostnames"] = list(by_ip[ip]["hostnames"])
+
+            return {
+                "count": len(alert_ids),
+                "detections": detections,
+                "by_ip": by_ip,
+                "fql_query": filter_str
+            }
+
+        except Exception as e:
+            logger.error(f"Error batch searching detections by IPs: {e}")
+            return {"error": str(e), "fql_query": filter_str}
 
     def search_detections_by_hash(self, file_hash: str, hours: int = 168) -> Dict[str, Any]:
-        """Search for detections involving a file hash.
+        """Search for detections/alerts involving a file hash.
+
+        Note: Uses Alerts API (Detects API was decommissioned by CrowdStrike).
 
         Args:
             file_hash: The MD5 or SHA256 hash to search for
@@ -580,46 +652,46 @@ class CrowdStrikeClient:
         """
         from datetime import timedelta, timezone
 
+        # Build filter string outside try block (always returned for transparency)
+        start_date = (datetime.now(timezone.utc) - timedelta(hours=hours)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        if len(file_hash) == 32:
+            filter_str = f"behaviors.md5:'{file_hash}'"
+        else:
+            filter_str = f"behaviors.sha256:'{file_hash}'"
+        filter_str += f"+created_timestamp:>='{start_date}'"
+
         try:
-            start_date = (datetime.now(timezone.utc) - timedelta(hours=hours)).strftime("%Y-%m-%dT%H:%M:%SZ")
-
-            # Determine hash type and build filter
-            if len(file_hash) == 32:
-                filter_str = f"md5:'{file_hash}'"
-            else:
-                filter_str = f"sha256:'{file_hash}'"
-
-            filter_str += f"+created_timestamp:>='{start_date}'"
-
-            response = self.detects_client.query_detects(filter=filter_str, limit=100)
+            response = self.alerts_client.query_alerts_v1(filter=filter_str, limit=100)
 
             if response.get("status_code") != 200:
                 error_msg = response.get("body", {}).get("errors", [])
-                return {"error": f"Detection search failed: {error_msg}"}
+                return {"error": f"Detection search failed: {error_msg}", "fql_query": filter_str}
 
-            detection_ids = response.get("body", {}).get("resources", [])
+            alert_ids = response.get("body", {}).get("resources", [])
 
-            if not detection_ids:
+            if not alert_ids:
                 return {"count": 0, "detections": [], "fql_query": filter_str}
 
-            # Get detection details
-            details_resp = self.detects_client.get_detect_summaries(ids=detection_ids[:20])
+            # Get alert details
+            details_resp = self.alerts_client.get_alerts_v1(ids=alert_ids[:20])
             if details_resp.get("status_code") == 200:
                 detections = details_resp.get("body", {}).get("resources", [])
                 return {
-                    "count": len(detection_ids),
+                    "count": len(alert_ids),
                     "detections": detections,
                     "fql_query": filter_str
                 }
 
-            return {"count": len(detection_ids), "detections": [], "fql_query": filter_str}
+            return {"count": len(alert_ids), "detections": [], "fql_query": filter_str}
 
         except Exception as e:
             logger.error(f"Error searching detections by hash {file_hash[:16]}...: {e}")
-            return {"error": str(e)}
+            return {"error": str(e), "fql_query": filter_str}
 
     def search_detections_by_filename(self, filename: str, hours: int = 168) -> Dict[str, Any]:
-        """Search for detections involving a specific filename.
+        """Search for detections/alerts involving a specific filename.
+
+        Note: Uses Alerts API (Detects API was decommissioned by CrowdStrike).
 
         Useful for hunting malicious scripts like install.ps1, install.sh, etc.
 
@@ -632,40 +704,37 @@ class CrowdStrikeClient:
         """
         from datetime import timedelta, timezone
 
+        # Build filter string outside try block (always returned for transparency)
+        start_date = (datetime.now(timezone.utc) - timedelta(hours=hours)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        filter_str = f"behaviors.filename:*'{filename}'+created_timestamp:>='{start_date}'"
+
         try:
-            start_date = (datetime.now(timezone.utc) - timedelta(hours=hours)).strftime("%Y-%m-%dT%H:%M:%SZ")
-
-            # Search in behaviors.filename field
-            # Use wildcard to match the filename anywhere in the path
-            filter_str = f"behaviors.filename:*'{filename}'"
-            filter_str += f"+created_timestamp:>='{start_date}'"
-
-            response = self.detects_client.query_detects(filter=filter_str, limit=100)
+            response = self.alerts_client.query_alerts_v1(filter=filter_str, limit=100)
 
             if response.get("status_code") != 200:
                 error_msg = response.get("body", {}).get("errors", [])
-                return {"error": f"Detection search failed: {error_msg}"}
+                return {"error": f"Detection search failed: {error_msg}", "fql_query": filter_str}
 
-            detection_ids = response.get("body", {}).get("resources", [])
+            alert_ids = response.get("body", {}).get("resources", [])
 
-            if not detection_ids:
+            if not alert_ids:
                 return {"count": 0, "detections": [], "fql_query": filter_str}
 
-            # Get detection details
-            details_resp = self.detects_client.get_detect_summaries(ids=detection_ids[:20])
+            # Get alert details
+            details_resp = self.alerts_client.get_alerts_v1(ids=alert_ids[:20])
             if details_resp.get("status_code") == 200:
                 detections = details_resp.get("body", {}).get("resources", [])
                 return {
-                    "count": len(detection_ids),
+                    "count": len(alert_ids),
                     "detections": detections,
                     "fql_query": filter_str
                 }
 
-            return {"count": len(detection_ids), "detections": [], "fql_query": filter_str}
+            return {"count": len(alert_ids), "detections": [], "fql_query": filter_str}
 
         except Exception as e:
             logger.error(f"Error searching detections by filename {filename}: {e}")
-            return {"error": str(e)}
+            return {"error": str(e), "fql_query": filter_str}
 
     def lookup_intel_indicator(self, indicator: str) -> Dict[str, Any]:
         """Lookup threat intelligence for an indicator (Falcon X).
@@ -676,10 +745,12 @@ class CrowdStrikeClient:
         Returns:
             Dict with intel results or error
         """
+        # Build the filter string (always returned for transparency)
+        filter_str = f"indicator:'{indicator}'"
+
         try:
             intel_client = Intel(auth_object=self.auth, timeout=30)
 
-            filter_str = f"indicator:'{indicator}'"
             response = intel_client.query_indicator_entities(
                 filter=filter_str,
                 limit=10
@@ -687,7 +758,7 @@ class CrowdStrikeClient:
 
             if response.get("status_code") != 200:
                 error_msg = response.get("body", {}).get("errors", [])
-                return {"error": f"Intel lookup failed: {error_msg}"}
+                return {"error": f"Intel lookup failed: {error_msg}", "fql_query": filter_str}
 
             resources = response.get("body", {}).get("resources", [])
             return {
@@ -698,7 +769,7 @@ class CrowdStrikeClient:
 
         except Exception as e:
             logger.error(f"Error looking up intel for {indicator}: {e}")
-            return {"error": str(e)}
+            return {"error": str(e), "fql_query": filter_str}
 
     def search_threatgraph_domain(self, domain: str) -> Dict[str, Any]:
         """Search ThreatGraph for hosts that connected to a domain.
@@ -712,13 +783,13 @@ class CrowdStrikeClient:
         Returns:
             Dict with vertex/edge results or error
         """
+        # Build the query description for analysts (always returned for transparency)
+        query_str = f"ThreatGraph.combined_summary_get(ids=['{domain}'], vertex_types=['domain', 'host'], edge_types=['dns_request', 'communicates_with'])"
+
         try:
             from falconpy import ThreatGraph
 
             tg_client = ThreatGraph(auth_object=self.auth, timeout=30)
-
-            # Build the query description for analysts
-            query_str = f"ThreatGraph.combined_summary_get(ids=['{domain}'], vertex_types=['domain', 'host'], edge_types=['dns_request', 'communicates_with'])"
 
             # Search for domain indicator and get related hosts
             response = tg_client.combined_summary_get(
@@ -729,7 +800,7 @@ class CrowdStrikeClient:
 
             if response.get("status_code") != 200:
                 error_msg = response.get("body", {}).get("errors", [])
-                return {"error": f"ThreatGraph search failed: {error_msg}"}
+                return {"error": f"ThreatGraph search failed: {error_msg}", "api_call": query_str}
 
             resources = response.get("body", {}).get("resources", [])
             # Extract affected hosts from the graph
@@ -751,13 +822,108 @@ class CrowdStrikeClient:
 
         except Exception as e:
             logger.error(f"Error searching ThreatGraph for domain {domain}: {e}")
-            return {"error": str(e)}
+            return {"error": str(e), "api_call": query_str}
+
+    def batch_search_threatgraph_ips(self, ips: list) -> Dict[str, Any]:
+        """Search ThreatGraph for hosts that communicated with IP addresses.
+
+        Uses CrowdStrike's ThreatGraph API to find hosts that have
+        network connections to the specified IPs. This shows network
+        activity even without a detection being triggered.
+
+        Args:
+            ips: List of IP addresses to search for
+
+        Returns:
+            Dict with results grouped by IP, or error
+        """
+        if not ips:
+            return {"count": 0, "by_ip": {}}
+
+        # Build the query description for analysts (always returned for transparency)
+        ip_list_str = ", ".join([f"'{ip}'" for ip in ips])
+        query_str = f"ThreatGraph.combined_summary_get(ids=[{ip_list_str}], vertex_types=['ip_address', 'host'], edge_types=['communicates_with'])"
+
+        try:
+            from falconpy import ThreatGraph
+
+            tg_client = ThreatGraph(auth_object=self.auth, timeout=60)
+
+            # Search for all IPs at once
+            response = tg_client.combined_summary_get(
+                ids=ips,
+                vertex_types=["ip_address", "host"],
+                edge_types=["communicates_with"]
+            )
+
+            if response.get("status_code") != 200:
+                error_msg = response.get("body", {}).get("errors", [])
+                return {"error": f"ThreatGraph search failed: {error_msg}", "api_call": query_str}
+
+            resources = response.get("body", {}).get("resources", [])
+
+            # Group results by IP
+            by_ip = {ip: {"hosts": set(), "count": 0} for ip in ips}
+            total_hosts = set()
+
+            for resource in resources:
+                vertices = resource.get("vertices", {})
+                edges = resource.get("edges", {})
+
+                # Map vertex IDs to their data
+                vertex_map = {}
+                for vertex_id, vertex in vertices.items():
+                    vertex_map[vertex_id] = vertex
+
+                # Find connections: IP -> Host via edges
+                for edge_id, edge in edges.items():
+                    source_id = edge.get("source_vertex_id", "")
+                    dest_id = edge.get("destination_vertex_id", "")
+
+                    source_vertex = vertex_map.get(source_id, {})
+                    dest_vertex = vertex_map.get(dest_id, {})
+
+                    # Check if one is IP and other is host
+                    if source_vertex.get("vertex_type") == "ip_address":
+                        ip_props = source_vertex.get("properties", {})
+                        ip_value = ip_props.get("ip_address", "")
+                        if ip_value in ips and dest_vertex.get("vertex_type") == "host":
+                            hostname = dest_vertex.get("properties", {}).get("hostname", "")
+                            if hostname:
+                                by_ip[ip_value]["hosts"].add(hostname)
+                                total_hosts.add(hostname)
+
+                    elif dest_vertex.get("vertex_type") == "ip_address":
+                        ip_props = dest_vertex.get("properties", {})
+                        ip_value = ip_props.get("ip_address", "")
+                        if ip_value in ips and source_vertex.get("vertex_type") == "host":
+                            hostname = source_vertex.get("properties", {}).get("hostname", "")
+                            if hostname:
+                                by_ip[ip_value]["hosts"].add(hostname)
+                                total_hosts.add(hostname)
+
+            # Convert sets to lists and add counts
+            for ip in by_ip:
+                by_ip[ip]["hosts"] = list(by_ip[ip]["hosts"])[:20]
+                by_ip[ip]["count"] = len(by_ip[ip]["hosts"])
+
+            return {
+                "count": len(total_hosts),
+                "total_hosts": list(total_hosts)[:50],
+                "by_ip": by_ip,
+                "api_call": query_str
+            }
+
+        except Exception as e:
+            logger.error(f"Error searching ThreatGraph for IPs: {e}")
+            return {"error": str(e), "api_call": query_str}
 
     def search_dns_requests(self, domain: str, hours: int = 168) -> Dict[str, Any]:
-        """Search for DNS requests to a domain using detections/alerts.
+        """Search for DNS requests to a domain using alerts.
 
-        Searches for detections and alerts where the domain appears in
-        network/DNS fields.
+        Note: Uses Alerts API (Detects API was decommissioned by CrowdStrike).
+
+        Searches for alerts where the domain appears in network/DNS fields.
 
         Args:
             domain: The domain to search for
@@ -771,25 +937,25 @@ class CrowdStrikeClient:
         try:
             start_date = (datetime.now(timezone.utc) - timedelta(hours=hours)).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-            # Search detections for domain in network fields
-            # behaviors.network_accesses contains domain info
+            # Search alerts for domain in network fields
+            # behaviors.dns_requests contains domain info
             filter_str = f"behaviors.dns_requests.domain:*'{domain}'"
             filter_str += f"+created_timestamp:>='{start_date}'"
 
-            response = self.detects_client.query_detects(filter=filter_str, limit=100)
+            response = self.alerts_client.query_alerts_v1(filter=filter_str, limit=100)
 
             if response.get("status_code") != 200:
-                # Fallback: try without the dns_requests filter (older API)
+                # Fallback: try a broader time-based filter
                 filter_str = f"created_timestamp:>='{start_date}'"
-                response = self.detects_client.query_detects(filter=filter_str, limit=100)
+                response = self.alerts_client.query_alerts_v1(filter=filter_str, limit=100)
 
-            detection_ids = response.get("body", {}).get("resources", [])
+            alert_ids = response.get("body", {}).get("resources", [])
 
-            if not detection_ids:
+            if not alert_ids:
                 return {"count": 0, "detections": [], "hosts": []}
 
-            # Get detection details and filter for domain
-            details_resp = self.detects_client.get_detect_summaries(ids=detection_ids[:50])
+            # Get alert details and filter for domain
+            details_resp = self.alerts_client.get_alerts_v1(ids=alert_ids[:50])
             matching_detections = []
             hosts = set()
 
@@ -839,16 +1005,16 @@ class CrowdStrikeClient:
         """
         from datetime import timedelta, timezone
 
+        # Build filter string outside try block (always returned for transparency)
+        start_date = (datetime.now(timezone.utc) - timedelta(hours=hours)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        filter_str = f"(device.local_ip:'{ip}',device.external_ip:'{ip}')+created_timestamp:>='{start_date}'"
+
         try:
-            start_date = (datetime.now(timezone.utc) - timedelta(hours=hours)).strftime("%Y-%m-%dT%H:%M:%SZ")
-
-            filter_str = f"(device.local_ip:'{ip}',device.external_ip:'{ip}')+created_timestamp:>='{start_date}'"
-
             response = self.alerts_client.query_alerts_v1(filter=filter_str, limit=100)
 
             if response.get("status_code") != 200:
                 error_msg = response.get("body", {}).get("errors", [])
-                return {"error": f"Alert search failed: {error_msg}"}
+                return {"error": f"Alert search failed: {error_msg}", "fql_query": filter_str}
 
             alert_ids = response.get("body", {}).get("resources", [])
 
@@ -869,7 +1035,75 @@ class CrowdStrikeClient:
 
         except Exception as e:
             logger.error(f"Error searching alerts by IP {ip}: {e}")
-            return {"error": str(e)}
+            return {"error": str(e), "fql_query": filter_str}
+
+    def batch_search_alerts_by_ips(self, ips: list, hours: int = 168) -> Dict[str, Any]:
+        """Search for alerts involving multiple IP addresses in a single query.
+
+        Args:
+            ips: List of IP addresses to search for
+            hours: Hours to look back
+
+        Returns:
+            Dict with alert results grouped by IP, or error
+        """
+        from datetime import timedelta, timezone
+
+        if not ips:
+            return {"count": 0, "alerts": [], "by_ip": {}}
+
+        # Build filter string outside try block (always returned for transparency)
+        start_date = (datetime.now(timezone.utc) - timedelta(hours=hours)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        ip_list = ",".join([f"'{ip}'" for ip in ips])
+        filter_str = f"(device.local_ip:[{ip_list}],device.external_ip:[{ip_list}])+created_timestamp:>='{start_date}'"
+
+        try:
+            response = self.alerts_client.query_alerts_v1(filter=filter_str, limit=500)
+
+            if response.get("status_code") != 200:
+                error_msg = response.get("body", {}).get("errors", [])
+                return {"error": f"Alert search failed: {error_msg}", "fql_query": filter_str}
+
+            alert_ids = response.get("body", {}).get("resources", [])
+
+            if not alert_ids:
+                return {"count": 0, "alerts": [], "by_ip": {}, "fql_query": filter_str}
+
+            # Get alert details
+            details_resp = self.alerts_client.get_alerts_v1(ids=alert_ids[:100])
+            alerts = []
+            if details_resp.get("status_code") == 200:
+                alerts = details_resp.get("body", {}).get("resources", [])
+
+            # Group alerts by IP
+            by_ip = {ip: {"count": 0, "alerts": [], "hostnames": set()} for ip in ips}
+            for alert in alerts:
+                device = alert.get("device", {})
+                local_ip = device.get("local_ip", "")
+                external_ip = device.get("external_ip", "")
+                hostname = device.get("hostname", "")
+
+                for ip in ips:
+                    if ip == local_ip or ip == external_ip:
+                        by_ip[ip]["count"] += 1
+                        by_ip[ip]["alerts"].append(alert)
+                        if hostname:
+                            by_ip[ip]["hostnames"].add(hostname)
+
+            # Convert sets to lists
+            for ip in by_ip:
+                by_ip[ip]["hostnames"] = list(by_ip[ip]["hostnames"])
+
+            return {
+                "count": len(alert_ids),
+                "alerts": alerts,
+                "by_ip": by_ip,
+                "fql_query": filter_str
+            }
+
+        except Exception as e:
+            logger.error(f"Error batch searching alerts by IPs: {e}")
+            return {"error": str(e), "fql_query": filter_str}
 
     # ==================== Detection Rules Catalog Methods ====================
 
@@ -929,6 +1163,270 @@ class CrowdStrikeClient:
         except Exception as e:
             logger.error(f"Error listing IOC indicators: {e}")
             return {"error": str(e)}
+
+    def list_intel_yara_rules(self, limit: int = 500) -> Dict[str, Any]:
+        """List YARA rule metadata from CrowdStrike Intel API.
+
+        Queries for yara-master rule IDs, then fetches full rule entities.
+        Handles 403 (no Intel API access) gracefully.
+
+        Args:
+            limit: Maximum number of rule IDs per page
+
+        Returns:
+            Dict with rules list and count, or error
+        """
+        try:
+            intel_client = Intel(auth_object=self.auth, timeout=30)
+
+            # Step 1: Paginate rule IDs
+            all_ids = []
+            offset = 0
+            while True:
+                id_response = intel_client.query_rule_ids(
+                    type="yara-master", limit=limit, offset=offset
+                )
+
+                status_code = id_response.get("status_code", 0)
+
+                if status_code == 403:
+                    msg = "Intel YARA rules not permitted (403) — API scope not yet granted"
+                    logger.warning(msg)
+                    return {"error": msg}
+
+                if status_code != 200:
+                    error_msg = id_response.get("body", {}).get("errors", [])
+                    return {"error": f"Intel YARA rule ID query failed: {error_msg}"}
+
+                ids = id_response.get("body", {}).get("resources", [])
+                if not ids:
+                    break
+
+                all_ids.extend(ids)
+                offset += len(ids)
+
+                if len(ids) < limit:
+                    break
+
+            if not all_ids:
+                return {"rules": [], "count": 0}
+
+            # Step 2: Batch-fetch rule entities
+            all_rules = []
+            for i in range(0, len(all_ids), 500):
+                batch_ids = all_ids[i : i + 500]
+                entity_response = intel_client.get_rule_entities(ids=batch_ids)
+
+                if entity_response.get("status_code") != 200:
+                    error_msg = entity_response.get("body", {}).get("errors", [])
+                    return {"error": f"Intel YARA rule entity fetch failed: {error_msg}"}
+
+                resources = entity_response.get("body", {}).get("resources", [])
+                all_rules.extend(resources)
+
+            return {"rules": all_rules, "count": len(all_rules)}
+
+        except Exception as e:
+            logger.error(f"Error listing Intel YARA rules: {e}")
+            return {"error": str(e)}
+
+    # ==================== LogScale/Event Search Methods ====================
+
+    def run_logscale_query(
+        self,
+        query: str,
+        start: str = "7d",
+        end: str = "now",
+        limit: int = 100,
+        timeout: int = 60,
+        repo: str = "base_sensor"
+    ) -> Dict[str, Any]:
+        """Run a LogScale query via the Foundry API.
+
+        Args:
+            query: LogScale query string (e.g., "#event_simpleName=ProcessRollup2 | head(10)")
+            start: Start time (e.g., "7d", "24h", "2024-01-01T00:00:00Z")
+            end: End time (e.g., "now", "1h", "2024-01-02T00:00:00Z")
+            limit: Maximum results to return
+            timeout: Query timeout in seconds
+            repo: LogScale repository to query (default: base_sensor for EDR telemetry)
+
+        Returns:
+            Dict with events list, count, or error
+        """
+        try:
+            from falconpy import FoundryLogScale
+
+            # Get Foundry app_id from config - required for LogScale API access
+            app_id = getattr(self.config, 'cs_foundry_app_id', None)
+            if not app_id:
+                return {
+                    "error": "LogScale API not configured (set cs_foundry_app_id in config)",
+                    "access_denied": True,
+                    "not_configured": True
+                }
+
+            logscale = FoundryLogScale(auth_object=self.auth, timeout=timeout)
+
+            # Execute dynamic query
+            result = logscale.execute_dynamic(
+                app_id=app_id,
+                search_query=query,
+                start=start,
+                end=end,
+                repo_or_view=repo,
+                search_query_args={}
+            )
+
+            status_code = result.get('status_code', 0)
+
+            if status_code == 401 or status_code == 403:
+                # Access denied - API scope not available
+                return {
+                    "error": "LogScale API access not available (missing app-logs:write scope)",
+                    "access_denied": True,
+                    "status_code": status_code
+                }
+
+            if status_code == 400:
+                error_msg = result.get('body', {}).get('errors', [])
+                # Check for invalid app_id error
+                if any('App ID is invalid' in str(e) for e in error_msg):
+                    return {
+                        "error": f"Invalid Foundry app_id in CS_FOUNDRY_APP_ID (check your CrowdStrike Foundry app registration)",
+                        "access_denied": True,
+                        "status_code": status_code
+                    }
+                return {"error": f"LogScale query failed: {error_msg}", "status_code": status_code}
+
+            if status_code != 200:
+                error_msg = result.get('body', {}).get('errors', [])
+                return {"error": f"LogScale query failed: {error_msg}", "status_code": status_code}
+
+            # Parse response - results may come back synchronously
+            body = result.get('body', {})
+            resources = body.get('resources', [])
+            if not resources:
+                return {"events": [], "count": 0, "query": query}
+
+            resource = resources[0]
+            job_status = resource.get('job_status', {})
+            job_id = job_status.get('job_id')
+
+            # Check if results already complete (synchronous response)
+            if job_status.get('status') == 'complete':
+                events = resource.get('events', [])
+                return {
+                    "events": events[:limit],
+                    "count": len(events),
+                    "query": query,
+                    "job_id": job_id
+                }
+
+            # If not complete, poll for results (async)
+            if not job_id:
+                return {"error": "No job ID returned from LogScale"}
+
+            max_attempts = timeout // 2
+            for attempt in range(max_attempts):
+                results = logscale.get_search_results(job_id=job_id)
+
+                if results.get('status_code') != 200:
+                    if attempt < max_attempts - 1:
+                        time.sleep(2)
+                        continue
+                    return {"error": f"Failed to get results: {results.get('body', {})}"}
+
+                result_body = results.get('body', {})
+                res = result_body.get('resources', [{}])[0] if result_body.get('resources') else {}
+                events = res.get('events', [])
+                status = res.get('job_status', {}).get('status', 'running')
+
+                if status == 'complete' or events:
+                    return {
+                        "events": events[:limit],
+                        "count": len(events),
+                        "query": query,
+                        "job_id": job_id
+                    }
+
+                time.sleep(2)
+
+            return {"error": "Query timed out", "query": query}
+
+        except ImportError:
+            return {"error": "FoundryLogScale not available in falconpy", "access_denied": True}
+        except Exception as e:
+            logger.error(f"Error running LogScale query: {e}")
+            return {"error": str(e), "query": query}
+
+    def run_logscale_queries_batch(
+        self,
+        queries: List[Dict[str, str]],
+        hours: int = 168
+    ) -> Dict[str, Any]:
+        """Run multiple LogScale queries and aggregate results.
+
+        Args:
+            queries: List of query dicts with 'type' and 'query' keys
+            hours: Hours to search back
+
+        Returns:
+            Dict with results per query, total events found, and any errors
+        """
+        results = {
+            "total_events": 0,
+            "queries_run": 0,
+            "queries_failed": 0,
+            "access_denied": False,
+            "query_results": [],
+            "errors": []
+        }
+
+        # Convert hours to LogScale time format
+        days = hours // 24
+        start = f"{days}d"
+
+        for q in queries:
+            query_type = q.get('type', 'Unknown')
+            query_text = q.get('query', '')
+
+            if not query_text:
+                continue
+
+            logger.info(f"[LogScale] Running: {query_type}")
+            result = self.run_logscale_query(query_text, start=start, end="now", limit=100)
+
+            if result.get('access_denied'):
+                results["access_denied"] = True
+                if result.get('not_configured'):
+                    results["errors"].append("LogScale API not configured (set cs_foundry_app_id in config)")
+                    logger.info("[LogScale] API not configured - set cs_foundry_app_id in config")
+                else:
+                    results["errors"].append(f"LogScale API access denied: {result.get('error', 'unknown')}")
+                    logger.warning(f"[LogScale] API access denied: {result.get('error', 'unknown')}")
+                break  # No point running more queries if access is denied
+
+            if 'error' in result:
+                results["queries_failed"] += 1
+                results["errors"].append(f"{query_type}: {result['error']}")
+                logger.warning(f"[LogScale] Query failed: {result['error']}")
+            else:
+                results["queries_run"] += 1
+                event_count = result.get('count', 0)
+                results["total_events"] += event_count
+
+                results["query_results"].append({
+                    "type": query_type,
+                    "query": query_text,
+                    "count": event_count,
+                    "events": result.get('events', [])[:20]  # Limit stored events
+                })
+
+                if event_count > 0:
+                    logger.info(f"[LogScale] {query_type}: {event_count} events found")
+
+        return results
 
 
 def process_unique_hosts(df: pd.DataFrame) -> pd.DataFrame:

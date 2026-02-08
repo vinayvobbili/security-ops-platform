@@ -11,7 +11,7 @@ Uses python-whois (free) for WHOIS lookups.
 
 import json
 import logging
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -113,7 +113,7 @@ class WhoisMonitor:
                     "domain": domain,
                     "registered": False,
                     "data": None,
-                    "scan_time": datetime.utcnow().isoformat(),
+                    "scan_time": datetime.now(UTC).isoformat(),
                 }
 
             data = self._normalize_whois_data(w)
@@ -126,7 +126,7 @@ class WhoisMonitor:
                     creation_date = creation_date[0]
                 if isinstance(creation_date, datetime):
                     # Handle timezone-aware vs naive datetime comparison
-                    now = datetime.utcnow()
+                    now = datetime.now(UTC)
                     if creation_date.tzinfo is not None:
                         creation_date = creation_date.replace(tzinfo=None)
                     days_old = (now - creation_date).days
@@ -138,7 +138,7 @@ class WhoisMonitor:
                 "registered": True,
                 "is_newly_registered": is_new,
                 "data": data,
-                "scan_time": datetime.utcnow().isoformat(),
+                "scan_time": datetime.now(UTC).isoformat(),
             }
 
         except Exception as e:
@@ -149,7 +149,7 @@ class WhoisMonitor:
                 "domain": domain,
                 "registered": False,
                 "data": None,
-                "scan_time": datetime.utcnow().isoformat(),
+                "scan_time": datetime.now(UTC).isoformat(),
             }
         except Exception as e:
             logger.error(f"WHOIS lookup error for {domain}: {e}")
@@ -269,7 +269,7 @@ class WhoisMonitor:
         """
         results = {
             "success": True,
-            "scan_time": datetime.utcnow().isoformat(),
+            "scan_time": datetime.now(UTC).isoformat(),
             "domains_scanned": len(domains),
             "domains_with_changes": 0,
             "high_severity_changes": [],

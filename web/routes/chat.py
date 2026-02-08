@@ -92,13 +92,16 @@ def api_pokedex_chat_stream():
         if not session_id:
             return jsonify({'success': False, 'error': 'Session ID is required'}), 400
 
+        # Capture request context values before entering generator
+        user_ip = request.remote_addr
+
         def generate():
             """Generator function for Server-Sent Events"""
             try:
                 for token in pokedex_handler.handle_pokedex_chat_stream(
                     user_message,
                     session_id,
-                    request.remote_addr,
+                    user_ip,
                     ask_stream,
                     get_state_manager
                 ):

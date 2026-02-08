@@ -1,0 +1,769 @@
+{% extends 'base_layout.html' %}
+
+{% block page_title_plain %}Detection Rules Catalog{% endblock %}
+
+{% block extra_css %}<link rel="stylesheet" href="{{ url_for('static', filename='css/detection_rules.css') }}">{% endblock %}
+
+{% block body_classes %}detection-rules-page{% endblock %}
+
+{% set page_title_text = 'Detection Rules Catalog' %}
+{% set page_title_left_icon = '🛡️' %}
+{% set page_title_right_icon = '📡' %}
+
+{% block content %}
+    <!-- Dark Mode Toggle -->
+    <div class="theme-toggle" id="themeToggleWrapper">
+        <button id="themeToggleBtn" aria-label="Toggle dark mode" title="Toggle dark mode">🌙</button>
+    </div>
+
+    <div class="container">
+        <!-- Loading State -->
+        <div id="loadingState" class="loading-state">
+            <div class="hologram-loader">
+                <div class="loader-ring"></div>
+                <div class="loader-ring"></div>
+                <div class="loader-ring"></div>
+                <div class="loader-core"></div>
+            </div>
+            <div class="loading-text">Loading detection rules...</div>
+        </div>
+
+        <!-- Main Content (hidden until loaded) -->
+        <div id="mainContent" style="display: none;">
+            <!-- Load Warnings -->
+            <div id="loadWarnings" class="load-warnings" style="display: none;"></div>
+
+            <!-- Command Center: Stats + Filters -->
+            <div class="filter-panel">
+                <div class="filter-header">
+                    <span class="filter-icon">⚙️</span>
+                    <span class="filter-title">Filters</span>
+                    <span class="filter-count-badge" id="filterCountBadge"></span>
+                    <button type="button" class="filter-collapse-btn" id="filterCollapseBtn" title="Collapse filters">&#9650;</button>
+                </div>
+                <div class="filter-body" id="filterBody">
+                    <div class="command-center-layout">
+                        <div class="stats-dashboard">
+                            <div class="stat-hologram total">
+                                <div class="stat-icon">🎯</div>
+                                <div class="stat-value" id="totalRules">0</div>
+                                <div class="stat-label">TOTAL RULES</div>
+                            </div>
+                            <div class="stat-hologram crowdstrike">
+                                <div class="stat-icon">🦅</div>
+                                <div class="stat-value" id="csRules">0</div>
+                                <div class="stat-label">CROWDSTRIKE</div>
+                            </div>
+                            <div class="stat-hologram tanium">
+                                <div class="stat-icon">📶</div>
+                                <div class="stat-value" id="tnRules">0</div>
+                                <div class="stat-label">TANIUM SIGNALS</div>
+                            </div>
+                            <div class="stat-hologram qradar">
+                                <div class="stat-icon">📡</div>
+                                <div class="stat-value" id="qrRules">0</div>
+                                <div class="stat-label">QRADAR</div>
+                            </div>
+                        </div>
+                        <div class="filter-controls">
+                        <div class="filter-group">
+                            <label>📌 PLATFORM</label>
+                            <div id="platformFilter" class="checkbox-filter">
+                                <label><input type="checkbox" value="crowdstrike"> CrowdStrike</label>
+                                <label><input type="checkbox" value="qradar"> QRadar</label>
+                                <label><input type="checkbox" value="tanium"> Tanium</label>
+                            </div>
+                        </div>
+                        <div class="filter-group">
+                            <label>🏷️ RULE TYPE</label>
+                            <div id="typeFilter" class="checkbox-filter"></div>
+                        </div>
+                        <div class="filter-group">
+                            <label>⚠️ SEVERITY</label>
+                            <div id="severityFilter" class="checkbox-filter">
+                                <label><input type="checkbox" value="critical"> Critical</label>
+                                <label><input type="checkbox" value="high"> High</label>
+                                <label><input type="checkbox" value="medium"> Medium</label>
+                                <label><input type="checkbox" value="low"> Low</label>
+                                <label><input type="checkbox" value="informational"> Informational</label>
+                            </div>
+                        </div>
+                        <div class="filter-group">
+                            <label>🔘 STATUS</label>
+                            <div id="statusFilter" class="checkbox-filter">
+                                <label><input type="checkbox" value="enabled"> Active</label>
+                                <label><input type="checkbox" value="disabled"> Inactive</label>
+                            </div>
+                        </div>
+                        <div class="filter-group search-group">
+                            <div class="search-input-wrapper">
+                                <span class="search-label">🔍</span>
+                                <input type="text" id="searchInput" placeholder="Search rules by name, description, tags..." class="cyber-input">
+                                <button type="button" id="clearSearchBtn" class="clear-search-btn" title="Clear search">&times;</button>
+                            </div>
+                            <span class="results-count">Showing <strong id="visibleCount">0</strong> of <strong id="totalCount">0</strong> rules</span>
+                            <button type="button" id="clearAllFiltersBtn" class="clear-all-btn">&#x2715; Clear All Filters</button>
+                        </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Selected Filter Chips -->
+            <div class="filter-chips" id="filterChips"></div>
+
+            <!-- Rules Grid - Platform Columns -->
+            <div class="rules-columns" id="rulesColumns">
+                <div class="platform-column platform-col-crowdstrike" id="colCrowdstrike">
+                    <div class="platform-col-header crowdstrike">
+                        <span class="platform-col-icon">🦅</span>
+                        <span class="platform-col-title">CrowdStrike</span>
+                        <span class="platform-col-count" id="colCsCount">0</span>
+                    </div>
+                    <div class="platform-col-cards" id="gridCrowdstrike"></div>
+                </div>
+                <div class="platform-column platform-col-tanium" id="colTanium">
+                    <div class="platform-col-header tanium">
+                        <span class="platform-col-icon">📶</span>
+                        <span class="platform-col-title">Tanium Signals</span>
+                        <span class="platform-col-count" id="colTnCount">0</span>
+                    </div>
+                    <div class="platform-col-cards" id="gridTanium"></div>
+                </div>
+                <div class="platform-column platform-col-qradar" id="colQradar">
+                    <div class="platform-col-header qradar">
+                        <span class="platform-col-icon">📡</span>
+                        <span class="platform-col-title">QRadar</span>
+                        <span class="platform-col-count" id="colQrCount">0</span>
+                    </div>
+                    <div class="platform-col-cards" id="gridQradar"></div>
+                </div>
+            </div>
+
+            <!-- Download Section -->
+            <div class="download-section">
+                <button id="downloadBtn" class="download-btn" onclick="downloadFilteredRules()">
+                    <span class="btn-icon">📥</span>
+                    <span class="btn-text">Download Filtered Rules</span>
+                </button>
+            </div>
+
+            <!-- Data Freshness Footer -->
+            <div class="data-freshness">
+                <span class="freshness-icon">🔄</span>
+                <span class="freshness-text">CrowdStrike and QRadar rules are refreshed daily at 2:00 AM ET. Tanium signals are static for now.</span>
+            </div>
+        </div>
+
+        <!-- Error State -->
+        <div id="errorState" class="error-state" style="display: none;">
+            <div class="error-icon">⚠️</div>
+            <div class="error-message">Failed to load detection rules</div>
+            <div class="error-details" id="errorDetails"></div>
+            <button class="retry-btn" onclick="loadRules()">🔄 Retry</button>
+        </div>
+    </div>
+
+    <!-- Rule Detail Modal -->
+    <div id="ruleModal" class="modal" style="display: none;">
+        <div class="modal-overlay" onclick="closeModal()"></div>
+        <div class="modal-content">
+            <button class="modal-close" onclick="closeModal()">&times;</button>
+            <div class="modal-header">
+                <div class="modal-platform" id="modalPlatform"></div>
+                <h2 class="modal-title" id="modalTitle"></h2>
+            </div>
+            <div class="modal-body" id="modalBody">
+                <!-- Rule details will be inserted here -->
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    let allRules = [];
+    let filteredRules = [];
+
+    // Platform colors (readable on both light and dark backgrounds)
+    const platformColors = {
+        crowdstrike: '#dc2626',
+        qradar: '#0284c7',
+        tanium: '#d97706'
+    };
+
+    // Severity colors
+    const severityColors = {
+        critical: '#dc2626',
+        high: '#ea580c',
+        medium: '#ca8a04',
+        low: '#16a34a',
+        informational: '#0284c7',
+        unspecified: '#6b7280'
+    };
+
+    // Load rules on page load
+    document.addEventListener('DOMContentLoaded', () => {
+        loadRules();
+        setupFilters();
+    });
+
+    async function loadRules() {
+        const loadingState = document.getElementById('loadingState');
+        const mainContent = document.getElementById('mainContent');
+        const errorState = document.getElementById('errorState');
+
+        loadingState.style.display = 'flex';
+        mainContent.style.display = 'none';
+        errorState.style.display = 'none';
+
+        try {
+            const response = await fetch('/api/detection-rules');
+            const data = await response.json();
+
+            if (!data.success) {
+                throw new Error(data.error || 'Failed to load rules');
+            }
+
+            // Flatten all rules into single array with platform info
+            allRules = [];
+            for (const [platform, info] of Object.entries(data.data.platforms)) {
+                for (const rule of info.rules) {
+                    allRules.push({...rule, platformName: info.name});
+                }
+            }
+
+            // Update stats
+            document.getElementById('totalRules').textContent = data.data.stats.total_rules.toLocaleString();
+            document.getElementById('csRules').textContent = data.data.platforms.crowdstrike.count.toLocaleString();
+            document.getElementById('qrRules').textContent = data.data.platforms.qradar.count.toLocaleString();
+            document.getElementById('tnRules').textContent = data.data.platforms.tanium.count.toLocaleString();
+
+            // Check for load errors and display warnings
+            const warnings = [];
+            for (const [platform, info] of Object.entries(data.data.platforms)) {
+                if (info.load_error) {
+                    warnings.push({platform: info.name, error: info.load_error});
+                }
+            }
+
+            const warningsContainer = document.getElementById('loadWarnings');
+            if (warnings.length > 0) {
+                warningsContainer.innerHTML = warnings.map(w => `
+                    <div class="warning-item">
+                        <span class="warning-icon">⚠️</span>
+                        <span class="warning-text"><strong>${escapeHtml(w.platform)}</strong>: ${escapeHtml(w.error)}</span>
+                    </div>
+                `).join('');
+                warningsContainer.style.display = 'block';
+            } else {
+                warningsContainer.style.display = 'none';
+            }
+
+            // Populate type filter with checkboxes
+            const typeFilter = document.getElementById('typeFilter');
+            typeFilter.innerHTML = '';
+            const types = [...new Set(allRules.map(r => r.rule_type).filter(Boolean))].sort();
+            types.forEach(type => {
+                const label = document.createElement('label');
+                label.innerHTML = `<input type="checkbox" value="${type}"> ${type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}`;
+                typeFilter.appendChild(label);
+            });
+            // Attach change listeners to dynamically created checkboxes
+            typeFilter.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+                cb.addEventListener('change', () => { applyFilters(); updateClearAllVisibility(); });
+            });
+
+            // Initial render
+            filteredRules = [...allRules];
+            renderRules();
+            updateCounts();
+
+            loadingState.style.display = 'none';
+            mainContent.style.display = 'block';
+
+        } catch (error) {
+            console.error('Error loading rules:', error);
+            loadingState.style.display = 'none';
+            errorState.style.display = 'flex';
+            document.getElementById('errorDetails').textContent = error.message;
+        }
+    }
+
+    function setupFilters() {
+        const searchInput = document.getElementById('searchInput');
+        const clearSearchBtn = document.getElementById('clearSearchBtn');
+        const clearAllBtn = document.getElementById('clearAllFiltersBtn');
+
+        // Debounce search and toggle clear button visibility
+        let searchTimeout;
+        searchInput.addEventListener('input', () => {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(applyFilters, 300);
+            clearSearchBtn.style.display = searchInput.value ? 'flex' : 'none';
+            updateClearAllVisibility();
+        });
+
+        // Clear search button
+        clearSearchBtn.addEventListener('click', () => {
+            searchInput.value = '';
+            clearSearchBtn.style.display = 'none';
+            applyFilters();
+            updateClearAllVisibility();
+        });
+
+        // Clear all filters button
+        clearAllBtn.addEventListener('click', () => {
+            searchInput.value = '';
+            clearSearchBtn.style.display = 'none';
+            document.querySelectorAll('.checkbox-filter input:checked').forEach(cb => cb.checked = false);
+            applyFilters();
+            updateClearAllVisibility();
+        });
+
+        // Collapse/expand toggle
+        document.getElementById('filterCollapseBtn').addEventListener('click', () => {
+            document.querySelector('.filter-panel').classList.toggle('collapsed');
+        });
+
+        // Initialize clear button visibility
+        clearSearchBtn.style.display = searchInput.value ? 'flex' : 'none';
+        updateClearAllVisibility();
+
+        // Checkbox filters (type filter checkboxes are attached after data loads)
+        document.querySelectorAll('#platformFilter input, #severityFilter input, #statusFilter input').forEach(cb => {
+            cb.addEventListener('change', () => { applyFilters(); updateClearAllVisibility(); });
+        });
+    }
+
+    function updateClearAllVisibility() {
+        const hasSearch = document.getElementById('searchInput').value.length > 0;
+        const hasChecked = document.querySelectorAll('.checkbox-filter input:checked').length > 0;
+        document.getElementById('clearAllFiltersBtn').style.display = (hasSearch || hasChecked) ? 'inline-block' : 'none';
+        updateFilterCountBadge();
+        renderFilterChips();
+    }
+
+    function updateFilterCountBadge() {
+        const searchCount = document.getElementById('searchInput').value.length > 0 ? 1 : 0;
+        const checkedCount = document.querySelectorAll('.checkbox-filter input:checked').length;
+        const total = searchCount + checkedCount;
+        const badge = document.getElementById('filterCountBadge');
+        if (total > 0) {
+            badge.textContent = total;
+            badge.classList.add('visible');
+        } else {
+            badge.classList.remove('visible');
+        }
+    }
+
+    function renderFilterChips() {
+        const container = document.getElementById('filterChips');
+        container.innerHTML = '';
+
+        // Search chip
+        const searchVal = document.getElementById('searchInput').value.trim();
+        if (searchVal) {
+            container.appendChild(createChip('Search', searchVal, () => {
+                document.getElementById('searchInput').value = '';
+                document.getElementById('clearSearchBtn').style.display = 'none';
+                applyFilters();
+                updateClearAllVisibility();
+            }));
+        }
+
+        // Checkbox chips
+        document.querySelectorAll('.checkbox-filter input:checked').forEach(cb => {
+            const labelText = cb.parentElement.textContent.trim();
+            const groupLabel = cb.closest('.filter-group').querySelector(':scope > label').textContent.trim();
+            // Strip leading emoji + space from group label
+            const groupName = groupLabel.replace(/^[^\w]*\s*/, '');
+            container.appendChild(createChip(groupName, labelText, () => {
+                cb.checked = false;
+                applyFilters();
+                updateClearAllVisibility();
+            }));
+        });
+    }
+
+    function createChip(group, value, onDismiss) {
+        const chip = document.createElement('span');
+        chip.className = 'filter-chip';
+        chip.innerHTML = `<span class="chip-label">${escapeHtml(group)}:</span> ${escapeHtml(value)}<button type="button" class="chip-dismiss" title="Remove">&times;</button>`;
+        chip.querySelector('.chip-dismiss').addEventListener('click', onDismiss);
+        return chip;
+    }
+
+    function getCheckedValues(containerId) {
+        return Array.from(document.querySelectorAll(`#${containerId} input:checked`)).map(cb => cb.value);
+    }
+
+    function applyFilters() {
+        const search = document.getElementById('searchInput').value.toLowerCase();
+        const platforms = getCheckedValues('platformFilter');
+        const types = getCheckedValues('typeFilter');
+        const severities = getCheckedValues('severityFilter');
+        const statuses = getCheckedValues('statusFilter');
+
+        filteredRules = allRules.filter(rule => {
+            // Search filter
+            if (search) {
+                const searchFields = [
+                    rule.name,
+                    rule.description,
+                    rule.rule_id,
+                    ...(rule.tags || []),
+                    ...(rule.malware_families || []),
+                    ...(rule.threat_actors || []),
+                    ...(rule.mitre_techniques || [])
+                ].filter(Boolean).join(' ').toLowerCase();
+
+                if (!searchFields.includes(search)) return false;
+            }
+
+            // Platform filter (none checked = all)
+            if (platforms.length > 0 && !platforms.includes(rule.platform)) return false;
+
+            // Type filter (none checked = all)
+            if (types.length > 0 && !types.includes(rule.rule_type)) return false;
+
+            // Severity filter (none checked = all)
+            if (severities.length > 0) {
+                const ruleSev = (rule.severity || '').toLowerCase();
+                if (!severities.includes(ruleSev)) return false;
+            }
+
+            // Status filter (none checked = all)
+            if (statuses.length > 0) {
+                const ruleStatus = rule.enabled ? 'enabled' : 'disabled';
+                if (!statuses.includes(ruleStatus)) return false;
+            }
+
+            return true;
+        });
+
+        renderRules();
+        updateCounts();
+    }
+
+    function updateCounts() {
+        document.getElementById('visibleCount').textContent = filteredRules.length.toLocaleString();
+        document.getElementById('totalCount').textContent = allRules.length.toLocaleString();
+    }
+
+    function renderRules() {
+        const gridCs = document.getElementById('gridCrowdstrike');
+        const gridTn = document.getElementById('gridTanium');
+        const gridQr = document.getElementById('gridQradar');
+        gridCs.innerHTML = '';
+        gridTn.innerHTML = '';
+        gridQr.innerHTML = '';
+
+        // Split filtered rules by platform
+        const csRules = filteredRules.filter(r => r.platform === 'crowdstrike');
+        const tnRules = filteredRules.filter(r => r.platform === 'tanium');
+        const qrRules = filteredRules.filter(r => r.platform === 'qradar');
+
+        // Update column counts
+        document.getElementById('colCsCount').textContent = csRules.length.toLocaleString();
+        document.getElementById('colTnCount').textContent = tnRules.length.toLocaleString();
+        document.getElementById('colQrCount').textContent = qrRules.length.toLocaleString();
+
+        // Hide empty columns, show non-empty ones
+        const colCs = document.getElementById('colCrowdstrike');
+        const colTn = document.getElementById('colTanium');
+        const colQr = document.getElementById('colQradar');
+        colCs.style.display = csRules.length ? '' : 'none';
+        colTn.style.display = tnRules.length ? '' : 'none';
+        colQr.style.display = qrRules.length ? '' : 'none';
+
+        // Count visible columns and adjust grid layout
+        const columnsContainer = document.getElementById('rulesColumns');
+        const visiblePlatforms = [csRules.length > 0, tnRules.length > 0, qrRules.length > 0];
+        const visibleCount = visiblePlatforms.filter(Boolean).length;
+
+        // Build grid-template-columns based on which columns are visible
+        if (visibleCount === 1) {
+            columnsContainer.style.gridTemplateColumns = '1fr';
+        } else if (visibleCount === 2) {
+            // Two visible: give equal space
+            columnsContainer.style.gridTemplateColumns = '1fr 1fr';
+        } else {
+            // All three: default ratio
+            columnsContainer.style.gridTemplateColumns = '2fr 1fr 1fr';
+        }
+
+        // When a column expands solo or into more space, use multi-column card grid
+        const soloOrWide = visibleCount <= 2;
+        colCs.classList.toggle('expanded', soloOrWide && csRules.length > 0);
+        colTn.classList.toggle('expanded', soloOrWide && tnRules.length > 0);
+        colQr.classList.toggle('expanded', soloOrWide && qrRules.length > 0);
+
+        // Render helper: cap per-platform and show overflow hint
+        function renderPlatformCards(rules, grid, limit) {
+            const toRender = rules.slice(0, limit);
+            toRender.forEach(rule => grid.appendChild(createRuleCard(rule)));
+            if (rules.length > limit) {
+                const more = document.createElement('div');
+                more.className = 'more-rules-indicator';
+                more.innerHTML = `
+                    <span>+ ${(rules.length - limit).toLocaleString()} more</span>
+                    <span class="hint">Use filters to narrow results</span>
+                `;
+                grid.appendChild(more);
+            }
+        }
+
+        if (csRules.length) renderPlatformCards(csRules, gridCs, 150);
+        if (tnRules.length) renderPlatformCards(tnRules, gridTn, 100);
+        if (qrRules.length) renderPlatformCards(qrRules, gridQr, 100);
+
+        // Show a message if nothing matches at all
+        if (visibleCount === 0) {
+            columnsContainer.style.gridTemplateColumns = '1fr';
+            colCs.style.display = '';
+            gridCs.innerHTML = `
+                <div class="no-results-col">
+                    <div class="no-results-icon">🔍</div>
+                    <div class="no-results-text">No rules match your filters</div>
+                </div>
+            `;
+        }
+    }
+
+    function createRuleCard(rule) {
+        const card = document.createElement('div');
+        card.className = `rule-card platform-${rule.platform}`;
+        card.onclick = () => openRuleModal(rule);
+
+        const platformColor = platformColors[rule.platform] || '#888';
+        const severityColor = severityColors[(rule.severity || '').toLowerCase()] || severityColors.unspecified;
+        const statusClass = rule.enabled ? 'enabled' : 'disabled';
+
+        // Build tags HTML
+        let tagsHtml = '';
+        if (rule.tags && rule.tags.filter(t => t).length > 0) {
+            const visibleTags = rule.tags.filter(t => t).slice(0, 3);
+            tagsHtml = visibleTags.map(tag =>
+                `<span class="rule-tag">${escapeHtml(tag)}</span>`
+            ).join('');
+            if (rule.tags.filter(t => t).length > 3) {
+                tagsHtml += `<span class="rule-tag more">+${rule.tags.filter(t => t).length - 3}</span>`;
+            }
+        }
+
+        card.innerHTML = `
+            <div class="card-glow" style="--glow-color: ${platformColor}"></div>
+            <div class="card-header">
+                <span class="platform-badge" style="--platform-color: ${platformColor}">${rule.platformName}</span>
+                <span class="status-indicator ${statusClass}">${rule.enabled ? 'ACTIVE' : 'INACTIVE'}</span>
+            </div>
+            <div class="card-body">
+                <h3 class="rule-name">${escapeHtml(rule.name || 'Unnamed Rule')}</h3>
+                <p class="rule-description">${escapeHtml(truncate(rule.description || 'No description', 120))}</p>
+                <div class="rule-meta">
+                    <span class="rule-type">${(rule.rule_type || 'unknown').replace(/_/g, ' ')}</span>
+                    ${rule.severity ? `<span class="severity-badge" style="--severity-color: ${severityColor}">${rule.severity.toUpperCase()}</span>` : ''}
+                </div>
+                <div class="rule-tags">${tagsHtml}</div>
+            </div>
+            <div class="card-footer">
+                <span class="rule-id">${escapeHtml(rule.rule_id)}</span>
+                <span class="view-details">VIEW DETAILS →</span>
+            </div>
+        `;
+
+        return card;
+    }
+
+    function openRuleModal(rule) {
+        const modal = document.getElementById('ruleModal');
+        const platformColor = platformColors[rule.platform] || '#888';
+
+        document.getElementById('modalPlatform').innerHTML =
+            `<span style="color: ${platformColor}">${rule.platformName}</span>`;
+        document.getElementById('modalTitle').textContent = rule.name || 'Unnamed Rule';
+
+        const body = document.getElementById('modalBody');
+        body.innerHTML = `
+            <div class="detail-section">
+                <h4>Overview</h4>
+                <div class="detail-grid">
+                    <div class="detail-item">
+                        <span class="detail-label">Rule ID</span>
+                        <span class="detail-value mono">${escapeHtml(rule.rule_id)}</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">Type</span>
+                        <span class="detail-value">${(rule.rule_type || 'Unknown').replace(/_/g, ' ')}</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">Status</span>
+                        <span class="detail-value ${rule.enabled ? 'text-success' : 'text-muted'}">${rule.enabled ? 'Enabled' : 'Disabled'}</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">Severity</span>
+                        <span class="detail-value" style="color: ${severityColors[(rule.severity || '').toLowerCase()] || '#888'}">${(rule.severity || 'Unspecified').toUpperCase()}</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="detail-section">
+                <h4>Description</h4>
+                <p class="description-text">${escapeHtml(rule.description || 'No description available')}</p>
+            </div>
+
+            ${rule.tags && rule.tags.filter(t => t).length > 0 ? `
+            <div class="detail-section">
+                <h4>Tags</h4>
+                <div class="tags-list">
+                    ${rule.tags.filter(t => t).map(tag => `<span class="modal-tag">${escapeHtml(tag)}</span>`).join('')}
+                </div>
+            </div>
+            ` : ''}
+
+            ${rule.mitre_techniques && rule.mitre_techniques.length > 0 ? `
+            <div class="detail-section">
+                <h4>MITRE ATT&CK Techniques</h4>
+                <div class="tags-list mitre">
+                    ${rule.mitre_techniques.map(t => `<span class="modal-tag mitre">${escapeHtml(t)}</span>`).join('')}
+                </div>
+            </div>
+            ` : ''}
+
+            ${rule.malware_families && rule.malware_families.length > 0 ? `
+            <div class="detail-section">
+                <h4>Malware Families</h4>
+                <div class="tags-list malware">
+                    ${rule.malware_families.map(m => `<span class="modal-tag malware">${escapeHtml(m)}</span>`).join('')}
+                </div>
+            </div>
+            ` : ''}
+
+            ${rule.threat_actors && rule.threat_actors.length > 0 ? `
+            <div class="detail-section">
+                <h4>Threat Actors</h4>
+                <div class="tags-list threat">
+                    ${rule.threat_actors.map(a => `<span class="modal-tag threat">${escapeHtml(a)}</span>`).join('')}
+                </div>
+            </div>
+            ` : ''}
+
+            <div class="detail-section">
+                <h4>Timestamps</h4>
+                <div class="detail-grid">
+                    <div class="detail-item">
+                        <span class="detail-label">Created</span>
+                        <span class="detail-value">${formatDate(rule.created_date)}</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">Modified</span>
+                        <span class="detail-value">${formatDate(rule.modified_date)}</span>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        modal.style.display = 'flex';
+        document.body.style.overflow = 'hidden';
+    }
+
+    function closeModal() {
+        document.getElementById('ruleModal').style.display = 'none';
+        document.body.style.overflow = '';
+    }
+
+    // Close modal on escape key
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') closeModal();
+    });
+
+    // Utility functions
+    function escapeHtml(text) {
+        if (!text) return '';
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    function truncate(text, length) {
+        if (!text) return '';
+        if (text.length <= length) return text;
+        return text.substring(0, length) + '...';
+    }
+
+    function formatDate(dateStr) {
+        if (!dateStr) return 'Unknown';
+        try {
+            const date = new Date(dateStr);
+            return date.toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        } catch {
+            return dateStr;
+        }
+    }
+
+    async function downloadFilteredRules() {
+        const downloadBtn = document.getElementById('downloadBtn');
+        const originalText = downloadBtn.innerHTML;
+
+        if (filteredRules.length === 0) {
+            alert('No rules to download. Adjust your filters.');
+            return;
+        }
+
+        try {
+            downloadBtn.innerHTML = '<span class="btn-icon">⏳</span><span class="btn-text">Preparing Download...</span>';
+            downloadBtn.disabled = true;
+
+            const response = await fetch('/api/detection-rules/export', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({rules: filteredRules})
+            });
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.error || 'Export failed');
+            }
+
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+
+            const contentDisposition = response.headers.get('Content-Disposition');
+            let filename = 'detection_rules.xlsx';
+            if (contentDisposition) {
+                const match = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+                if (match && match[1]) {
+                    filename = match[1].replace(/['"]/g, '');
+                }
+            }
+
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+
+            downloadBtn.innerHTML = '<span class="btn-icon">✅</span><span class="btn-text">Download Complete!</span>';
+            setTimeout(() => {
+                downloadBtn.innerHTML = originalText;
+                downloadBtn.disabled = false;
+            }, 2000);
+
+        } catch (error) {
+            console.error('Download error:', error);
+            alert('Download failed: ' + error.message);
+            downloadBtn.innerHTML = originalText;
+            downloadBtn.disabled = false;
+        }
+    }
+</script>
+{% endblock %}

@@ -5,12 +5,12 @@ Wants=network.target
 
 [Service]
 Type=simple
-User=your-username
+User=user
 Group=staff
-WorkingDirectory=/path/to/IR
+WorkingDirectory=/path/to/project
 Environment=PATH=/usr/local/bin:/usr/bin:/bin
-Environment=PYTHONPATH=/path/to/IR
-ExecStart=/usr/bin/python3 /path/to/IR/preload_soc_bot.py
+Environment=PYTHONPATH=/path/to/project
+ExecStart=/usr/bin/python3 /path/to/project/preload_soc_bot.py
 Restart=always
 RestartSec=10
 StandardOutput=journal
