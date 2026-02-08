@@ -16,7 +16,7 @@ def get_approved_testing_entries(list_handler: ListHandler, team_name: str) -> D
 
     Args:
         list_handler: XSOAR list handler instance
-        team_name: Name of the team (e.g., 'DnR')
+        team_name: Name of the team (e.g., 'SecOps')
 
     Returns:
         Dictionary with ENDPOINTS, USERNAMES, IP_ADDRESSES, CIDR_BLOCKS lists
@@ -38,7 +38,7 @@ def submit_red_team_testing_form(
     Args:
         form_data: Form data from request
         list_handler: XSOAR list handler instance
-        team_name: Name of the team (e.g., 'DnR')
+        team_name: Name of the team (e.g., 'SecOps')
         company_email_domain: Email domain (e.g., '@company.com')
         eastern: Pytz timezone object for US/Eastern
         submitter_ip: IP address of submitter
@@ -88,7 +88,7 @@ def submit_toodles_approved_testing(
     Args:
         form_data: Form data from request
         list_handler: XSOAR list handler instance
-        team_name: Name of the team (e.g., 'DnR')
+        team_name: Name of the team (e.g., 'SecOps')
         eastern: Pytz timezone object for US/Eastern
         submitter_ip: IP address of submitter
 

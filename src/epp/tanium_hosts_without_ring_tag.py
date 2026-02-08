@@ -29,7 +29,7 @@ This script automates the assignment of "ring tags" to hosts in Tanium for phase
   - `IAZ` prefix → US
 - **Primary source**: Uses country data from ServiceNow when available
 - **Intelligent fallback**: When ServiceNow country is missing, uses hostname pattern matching:
-  - `VMVDI` prefix → United States
+  - `VDI` prefix → United States
   - `TK` prefix → Korea
   - First 2 characters as country codes (US, CA, etc.)
   - Leading digit in hostname → Korea
@@ -495,8 +495,8 @@ class SmartCountryResolver:
 
         # Strategy 1.1: Special prefixes
         if name.startswith('vmvdi'):
-            # print("Matched VMVDI prefix -> United States")
-            return 'United States', "VMVDI prefix"
+            # print("Matched VDI prefix -> United States")
+            return 'United States', "VDI prefix"
 
         if hasattr(self.config, 'team_name') and name.startswith(self.config.team_name.lower()):
             # print(f"Matched team_name prefix -> United States")

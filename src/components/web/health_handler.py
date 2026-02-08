@@ -22,7 +22,7 @@ def get_server_health(
     Args:
         eastern: Pytz timezone object for US/Eastern
         server_start_time: When the server started
-        team_name: Name of the team (e.g., 'DnR')
+        team_name: Name of the team (e.g., 'SecOps')
         web_server_port: Web server port
         request_environ: Optional request environment dict
 

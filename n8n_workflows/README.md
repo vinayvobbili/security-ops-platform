@@ -33,7 +33,7 @@ A comprehensive collection of n8n workflows designed for your Security Operation
 | `major_incident_war_room.json` | Webhook | Creates Webex war room, assembles team, collects evidence |
 | `cross_system_correlation.json` | Webhook | Correlates incidents across CrowdStrike/QRadar/Vectra/XSOAR |
 | `network_evidence_collector.json` | Webhook | Automated evidence collection from QRadar, Zscaler, DNS logs |
-| `runbook_suggestion.json` | Webhook | Suggests relevant GDnR runbooks based on incident type |
+| `runbook_suggestion.json` | Webhook | Suggests relevant SecOps runbooks based on incident type |
 
 ### XSOAR & Ticket Management
 
@@ -347,7 +347,7 @@ To add a new workflow:
 - [Webex API Reference](https://developer.webex.com/docs/api/v1/messages)
 - [CrowdStrike API Docs](https://falcon.crowdstrike.com/documentation)
 - [QRadar API Guide](https://www.ibm.com/docs/en/qsip)
-- Your internal GDnR runbooks
+- Your internal SecOps runbooks
 
 ---
 

@@ -214,8 +214,8 @@ class ServiceNowClient:
         host_details = self._search_endpoint(self.workstation_url, hostname)
         if host_details:
             host_details['category'] = 'workstation'
-            # Override CI class for VMVDI hosts (always workstations regardless of SNOW data)
-            if hostname.upper().startswith('VMVDI'):
+            # Override CI class for VDI hosts (always workstations regardless of SNOW data)
+            if hostname.upper().startswith('VDI'):
                 host_details['ciClass'] = 'Workstation'
             return host_details
 
@@ -223,11 +223,11 @@ class ServiceNowClient:
         host_details = self._search_endpoint(self.server_url, hostname)
         if host_details:
             host_details['category'] = 'server'
-            # Override for VMVDI hosts - always treat as workstations regardless of SNOW classification
-            if hostname.upper().startswith('VMVDI'):
+            # Override for VDI hosts - always treat as workstations regardless of SNOW classification
+            if hostname.upper().startswith('VDI'):
                 host_details['category'] = 'workstation'
                 host_details['ciClass'] = 'Workstation'
-                logger.debug(f"Overriding SNOW category for VMVDI host {hostname}: server → workstation")
+                logger.debug(f"Overriding SNOW category for VDI host {hostname}: server → workstation")
             return host_details
 
         return {"name": hostname, "status": "Not Found"}
@@ -422,8 +422,8 @@ class AsyncServiceNowClient:
         result = await self._search_endpoint(session, self.server_url, hostname_short)
         if result:
             result['category'] = 'server'
-            # Override for VMVDI hosts - always treat as workstations regardless of SNOW classification
-            if hostname_short.upper().startswith('VMVDI'):
+            # Override for VDI hosts - always treat as workstations regardless of SNOW classification
+            if hostname_short.upper().startswith('VDI'):
                 result['category'] = 'workstation'
                 result['ciClass'] = 'Workstation'
             return result
@@ -431,8 +431,8 @@ class AsyncServiceNowClient:
         result = await self._search_endpoint(session, self.workstation_url, hostname_short)
         if result:
             result['category'] = 'workstation'
-            # Override CI class for VMVDI hosts (always workstations regardless of SNOW data)
-            if hostname_short.upper().startswith('VMVDI'):
+            # Override CI class for VDI hosts (always workstations regardless of SNOW data)
+            if hostname_short.upper().startswith('VDI'):
                 result['ciClass'] = 'Workstation'
             return result
         return {"name": hostname_short, "status": "Not Found"}
@@ -602,7 +602,7 @@ def enrich_host_report(input_file):
 if __name__ == "__main__":
     client = ServiceNowClient()
 
-    hostname = "USHZK3C64.internal.example.com"
+    hostname = "YOURHOSTNAME.internal.example.com"
     logger.info(f"Looking up in SNOW: {hostname}...")
 
     details = client.get_host_details(hostname)

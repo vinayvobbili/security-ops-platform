@@ -362,10 +362,10 @@ class RecordedFutureClient:
         """Search for domains containing brand name (brand impersonation detection).
 
         Uses RF Intelligence API to find domains that contain the brand keyword,
-        which could be impersonation attempts like 'the company-loan.com'.
+        which could be impersonation attempts like 'example-brand-loan.com'.
 
         Args:
-            brand: Brand name to search for (e.g., "the company")
+            brand: Brand name to search for (e.g., "your-brand")
             legitimate_domains: List of legitimate domains to exclude
             min_risk_score: Minimum risk score to include (default: 0 = all)
             limit: Maximum results (default: 100)

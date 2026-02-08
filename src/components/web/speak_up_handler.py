@@ -20,7 +20,7 @@ def handle_speak_up_form_submission(
         form_data: Form data from request
         ticket_handler: XSOAR ticket handler instance
         xsoar_dev_ui_base_url: Base URL for XSOAR dev UI
-        team_name: Name of the team (e.g., 'DnR')
+        team_name: Name of the team (e.g., 'SecOps')
 
     Returns:
         Dictionary with status, new_incident_id, and new_incident_link

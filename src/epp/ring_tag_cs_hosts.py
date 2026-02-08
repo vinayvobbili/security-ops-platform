@@ -283,7 +283,7 @@ class Host:
             if not self.country and (name_lower.startswith('vmvdi') or name_lower.startswith(config.team_name.lower())):
                 self.country = 'United States'
                 self.was_country_guessed = True
-                self.status_message += f" Country guessed from VMVDI/{config.team_name} in the hostname: {self.country}."
+                self.status_message += f" Country guessed from VDI/{config.team_name} in the hostname: {self.country}."
 
         except Exception as e:
             self.status_message += f" Error retrieving ServiceNow data: {str(e)}."
