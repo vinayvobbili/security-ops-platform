@@ -5,7 +5,7 @@ title: Security Integrations
 
 # Security Tool Integrations
 
-Unified API clients for 30+ security platforms with enterprise reliability patterns.
+Unified API clients for 34+ security platforms with enterprise reliability patterns.
 
 ---
 
@@ -27,7 +27,8 @@ The platform provides consistent, production-grade integrations across the secur
 
 | Platform | Capabilities |
 |----------|--------------|
-| **CrowdStrike Falcon** | Host lookup, detection search, containment, RTR sessions, IOC management |
+| **CrowdStrike Falcon** | Host lookup, detection search, containment, IOC management |
+| **CrowdStrike RTR** | Remote Terminal Response - live session commands, file collection |
 | **Tanium** | Endpoint queries, sensor management, live response, tag management |
 | **Vectra** | Network detection, host scoring, threat hunting |
 
@@ -41,8 +42,15 @@ The platform provides consistent, production-grade integrations across the secur
 
 | Platform | Capabilities |
 |----------|--------------|
-| **Cortex XSOAR** | Incident management, playbook execution, indicator enrichment |
+| **Cortex XSOAR** | Incident management, playbook execution, ticket enrichment, summaries |
 | **Custom Playbooks** | Automated response workflows |
+
+### Case Management
+
+| Platform | Capabilities |
+|----------|--------------|
+| **DFIR-IRIS** | Case creation, IOC management, timeline events, evidence tracking |
+| **TheHive** | Case management, observable tracking, alert handling |
 
 ### Threat Intelligence
 
@@ -52,7 +60,7 @@ The platform provides consistent, production-grade integrations across the secur
 | **VirusTotal** | Hash/URL/domain reputation, sandbox analysis |
 | **URLScan.io** | Website scanning, DOM capture, screenshot |
 | **AbuseIPDB** | IP reputation, abuse reports |
-| **Abuse.ch** | Malware bazaar, threat feeds |
+| **Abuse.ch** | Malware bazaar, C2 tracker, phishing URL feeds |
 | **IntelligenceX** | Data leak search, dark web monitoring |
 | **Shodan** | Internet-facing asset discovery, vulnerability scanning |
 
@@ -79,9 +87,17 @@ The platform provides consistent, production-grade integrations across the secur
 
 | Platform | Capabilities |
 |----------|--------------|
-| **Certificate Transparency** | SSL certificate monitoring |
-| **WHOIS** | Domain registration lookup |
-| **Domain Lookalike Detection** | Typosquat and brand impersonation |
+| **Certificate Transparency** | SSL certificate monitoring via Censys API and CertStream |
+| **WHOIS** | Domain registration lookup and change tracking |
+| **Domain Lookalike Detection** | Typosquat and brand impersonation with Recorded Future enrichment |
+| **Domain Monitor** | Multi-source domain threat correlation and alerting |
+
+### Dark Web & Phishing
+
+| Platform | Capabilities |
+|----------|--------------|
+| **IntelligenceX** | Dark web data leak detection |
+| **PhishFort** | Phishing URL and credential monitoring |
 
 ### Communication
 
@@ -89,6 +105,7 @@ The platform provides consistent, production-grade integrations across the secur
 |----------|--------------|
 | **Webex Teams** | Bot messaging, adaptive cards, room management |
 | **Email (OAuth2)** | Automated notifications |
+| **Twilio** | SMS notifications and alerting |
 
 ### DevOps
 

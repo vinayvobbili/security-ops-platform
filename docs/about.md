@@ -9,7 +9,7 @@ title: About
 
 The Security Operations Automation Platform is an enterprise-grade solution designed for production SOC environments. It addresses the critical challenges modern security teams face:
 
-- **Tool Sprawl**: Unifying 30+ disparate security tools into cohesive workflows
+- **Tool Sprawl**: Unifying 34+ disparate security tools into cohesive workflows
 - **Alert Fatigue**: Automating routine investigations to reduce analyst burden
 - **Response Time**: Leveraging AI to accelerate threat detection and response
 
@@ -17,10 +17,10 @@ The Security Operations Automation Platform is an enterprise-grade solution desi
 
 | Metric | Result |
 |--------|--------|
-| Security Tool Integrations | 30+ |
-| LLM Investigation Tools | 22 |
+| Security Tool Integrations | 34+ |
+| LLM Investigation Tools | 25 |
 | Production Chat Bots | 10 |
-| n8n Automation Workflows | 32 |
+| n8n Automation Workflows | 35 |
 
 ---
 
