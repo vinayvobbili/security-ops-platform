@@ -33,12 +33,12 @@ import secops
 from my_config import get_config
 from src.components.ticket_cache import TicketCache
 from src import helper_methods, verify_host_online_status
-from src.charts import (
-    mttr_mttc, outflow, lifespan, heatmap, sla_breaches, aging_tickets,
-    inflow, qradar_rule_efficacy, de_stories, days_since_incident, re_stories,
-    threatcon_level, vectra_volume, crowdstrike_volume, threat_tippers,
-    crowdstrike_efficacy
-)
+# from src.charts import (
+#     mttr_mttc, outflow, lifespan, heatmap, sla_breaches, aging_tickets,
+#     inflow, qradar_rule_efficacy, de_stories, days_since_incident, re_stories,
+#     threatcon_level, vectra_volume, crowdstrike_volume, threat_tippers,
+#     crowdstrike_efficacy
+# )
 from src.components import (
     oncall, approved_security_testing, thithi, response_sla_risk_tickets,
     containment_sla_risk_tickets, incident_declaration_sla_risk, abandoned_tickets,
@@ -53,7 +53,7 @@ from webex_bots.jarvis import run_automated_ring_tagging_workflow
 from webex_bots.tars import run_automated_ring_tagging_workflow as run_automated_tanium_ring_tagging_workflow
 from src.components import domain_monitoring
 from services import phish_fort
-from src.utils.fs_utils import make_dir_for_todays_charts, cleanup_old_transient_data
+from src.utils.fs_utils import cleanup_old_transient_data  # make_dir_for_todays_charts removed (charts deleted)
 from src.utils.logging_utils import setup_logging
 from src import peer_ping_keepalive
 
@@ -319,51 +319,51 @@ def schedule_business_hours(
 
 
 # ----------------------------------------------------------------------------------
-# Data-driven configuration for chart groups
+# # Data-driven configuration for chart groups
 # ----------------------------------------------------------------------------------
-CHART_GROUPS: List[dict] = [
-    {
-        'time': '00:02',
-        'name': 'Group 1: Basic metrics charts',
-        'jobs': [
-            aging_tickets.make_chart,
-            inflow.make_chart,
-            outflow.make_chart,
-            mttr_mttc.make_chart,
-            sla_breaches.make_chart,
-            threatcon_level.make_chart,  # Generate before DOR so chart is available
-            lambda: secops.send_daily_operational_report_charts(get_config().webex_room_id_metrics)
-        ]
-    },
-    {
-        'time': '00:07',
-        'name': 'Group 2: Efficacy & volume charts',
-        'jobs': [
-            crowdstrike_efficacy.make_chart,
-            crowdstrike_volume.make_chart,
-            qradar_rule_efficacy.make_chart,
-            vectra_volume.make_chart,
-            lifespan.make_chart,
-        ]
-    },
-    {
-        'time': '00:12',
-        'name': 'Group 3: Story & status charts',
-        'jobs': [
-            de_stories.make_chart,
-            re_stories.make_chart,
-            days_since_incident.make_chart,
-            threat_tippers.make_chart,
-        ]
-    },
-    {
-        'time': '00:17',
-        'name': 'Group 4: Complex/slow charts',
-        'jobs': [
-            heatmap.create_choropleth_map,
-        ]
-    },
-]
+# CHART_GROUPS: List[dict] = [
+#     {
+#         'time': '00:02',
+#         'name': 'Group 1: Basic metrics charts',
+#         'jobs': [
+#             aging_tickets.make_chart,
+#             inflow.make_chart,
+#             outflow.make_chart,
+#             mttr_mttc.make_chart,
+#             sla_breaches.make_chart,
+#             threatcon_level.make_chart,  # Generate before DOR so chart is available
+#             lambda: secops.send_daily_operational_report_charts(get_config().webex_room_id_metrics)
+#         ]
+#     },
+#     {
+#         'time': '00:07',
+#         'name': 'Group 2: Efficacy & volume charts',
+#         'jobs': [
+#             crowdstrike_efficacy.make_chart,
+#             crowdstrike_volume.make_chart,
+#             qradar_rule_efficacy.make_chart,
+#             vectra_volume.make_chart,
+#             lifespan.make_chart,
+#         ]
+#     },
+#     {
+#         'time': '00:12',
+#         'name': 'Group 3: Story & status charts',
+#         'jobs': [
+#             de_stories.make_chart,
+#             re_stories.make_chart,
+#             days_since_incident.make_chart,
+#             threat_tippers.make_chart,
+#         ]
+#     },
+#     {
+#         'time': '00:17',
+#         'name': 'Group 4: Complex/slow charts',
+#         'jobs': [
+#             heatmap.create_choropleth_map,
+#         ]
+#     },
+# ]
 
 
 def _shutdown_handler(_signum=None, _frame=None):
@@ -384,8 +384,8 @@ def main() -> None:
     signal.signal(signal.SIGINT, _shutdown_handler)
 
     # Directory preparation (first, fast)
-    logger.info("Scheduling daily chart directory preparation...")
-    schedule_daily('00:01', lambda: make_dir_for_todays_charts(helper_methods.CHARTS_DIR_PATH), name="chart_dir_prep")
+#     logger.info("Scheduling daily chart directory preparation...")
+#     schedule_daily('00:01', lambda: make_dir_for_todays_charts(helper_methods.CHARTS_DIR_PATH), name="chart_dir_prep")
 
     # Cleanup old transient data (secOps and charts folders older than 30 days)
     logger.info("Scheduling daily cleanup of old transient data (02:00 ET)...")
@@ -393,9 +393,9 @@ def main() -> None:
 
     # Note: Tipper jobs now run here on lab-vm (previously in home_jobs.py)
 
-    # Chart groups (data-driven)
-    for group in CHART_GROUPS:
-        schedule_group(group['time'], group['name'], group['jobs'])
+#     # Chart groups (data-driven)
+#     for group in CHART_GROUPS:
+#         schedule_group(group['time'], group['name'], group['jobs'])
 
     # Ticket cache - RUNS LAST to avoid interfering with chart generation
     # Scheduled after all chart jobs complete (charts finish by ~00:30)
@@ -430,13 +430,13 @@ def main() -> None:
     schedule_shift('12:30', 'afternoon', shift_room)
     schedule_shift('20:30', 'night', shift_room)
 
-    # Weekly reports (Friday)
-    logger.info("Scheduling weekly efficacy report (Friday 08:00 ET)...")
-    schedule.every().friday.at('08:00', eastern).do(lambda: safe_run(
-        qradar_rule_efficacy.send_charts,
-        crowdstrike_efficacy.send_charts,
-        name="weekly_efficacy_report"
-    ))
+#     # Weekly reports (Friday)
+#     logger.info("Scheduling weekly efficacy report (Friday 08:00 ET)...")
+#     schedule.every().friday.at('08:00', eastern).do(lambda: safe_run(
+#         qradar_rule_efficacy.send_charts,
+#         crowdstrike_efficacy.send_charts,
+#         name="weekly_efficacy_report"
+#     ))
 
     # On-call management
     logger.info("Scheduling on-call management (Fri alert, Mon announce)...")

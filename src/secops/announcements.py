@@ -24,7 +24,7 @@ from webexpythonsdk.models.cards import (
 from my_config import get_config
 from services import azdo
 from services.xsoar import TicketHandler, ListHandler, XsoarEnvironment
-from src.charts.threatcon_level import load_threatcon_data, THREAT_CON_FILE
+# from src.charts.threatcon_level import load_threatcon_data, THREAT_CON_FILE
 from .constants import (
     config,
     root_directory,
@@ -469,14 +469,14 @@ def send_daily_operational_report_charts(room_id: str = None) -> None:
             'Open vs Closed - 12 Month Trend.png',
         ]
 
-        # Add ThreatCon chart only if level is not green
-        try:
-            threatcon_data = load_threatcon_data(THREAT_CON_FILE)
-            if threatcon_data.get('level', 'green').lower() != 'green':
-                dor_charts.append('Threatcon Level.png')
-                logger.info(f"🚨 ThreatCon level is {threatcon_data['level'].upper()} - including chart")
-        except Exception as tc_err:
-            logger.warning(f"Could not check ThreatCon level: {tc_err}")
+        #         # Add ThreatCon chart only if level is not green
+        #         try:
+        #             threatcon_data = load_threatcon_data(THREAT_CON_FILE)
+        #             if threatcon_data.get('level', 'green').lower() != 'green':
+        #                 dor_charts.append('Threatcon Level.png')
+        #                 logger.info(f"🚨 ThreatCon level is {threatcon_data['level'].upper()} - including chart")
+        #         except Exception as tc_err:
+        #             logger.warning(f"Could not check ThreatCon level: {tc_err}")
 
         for chart in dor_charts:
             chart_path = secops_charts_path / chart

@@ -61,7 +61,7 @@ from webexpythonsdk.models.cards import (
 from webexteamssdk import WebexTeamsAPI
 
 from my_config import get_config
-from src.charts import aging_tickets
+# from src.charts import aging_tickets
 from src.components import reimaged_hosts
 from src.utils.logging_utils import log_activity
 from src.utils.webex_device_manager import cleanup_devices_on_startup
@@ -232,7 +232,7 @@ class GetAgingTicketsByOwnerReport(Command):
     @log_activity(config.webex_bot_access_token_moneyball, "moneyball_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
         room_id = attachment_actions.roomId
-        aging_tickets.send_report(room_id)
+#         aging_tickets.send_report(room_id)
 
 
 class ReimagedHostDetails(Command):
