@@ -5,7 +5,7 @@ title: Home
 
 # Security Operations Automation Platform
 
-An enterprise-grade security operations platform that automates and orchestrates security workflows across 30+ integrated tools, featuring LLM-powered intelligence and self-healing bot architecture.
+An enterprise-grade security operations platform that automates and orchestrates security workflows across 34+ integrated tools, featuring LLM-powered intelligence, self-healing bot architecture, and 35 n8n automation workflows.
 
 ---
 
@@ -13,10 +13,10 @@ An enterprise-grade security operations platform that automates and orchestrates
 
 | Metric | Value |
 |--------|-------|
-| **Security Tool Integrations** | 30+ |
-| **LLM Investigation Tools** | 22 |
+| **Security Tool Integrations** | 34+ |
+| **LLM Investigation Tools** | 25 |
 | **Production Chat Bots** | 10 |
-| **Automated Workflows** | 30+ |
+| **n8n Automation Workflows** | 35 |
 
 ---
 
@@ -25,7 +25,7 @@ An enterprise-grade security operations platform that automates and orchestrates
 This platform addresses three critical challenges in modern security operations:
 
 ### 1. Integration Complexity
-Security teams juggle dozens of disconnected tools. This platform unifies **30+ security tools** into cohesive, automated workflows - from EDR and SIEM to threat intelligence and ticketing systems.
+Security teams juggle dozens of disconnected tools. This platform unifies **34+ security tools** into cohesive, automated workflows - from EDR and SIEM to threat intelligence and ticketing systems.
 
 ### 2. Response Time
 Manual investigation and response is slow. By automating routine tasks and leveraging AI for triage, this platform **significantly reduces Mean Time to Respond (MTTR)**.
@@ -71,19 +71,35 @@ Interactive web dashboard providing:
 
 [Learn more about the Dashboard →](features/soc-dashboard)
 
-### 30+ Security Integrations
+### n8n Workflow Automation
+
+35 ready-to-import automation workflows covering the full SOC lifecycle:
+
+- Alert routing and deduplication
+- Incident escalation and war room creation
+- Threat intel IOC sync and dark web monitoring
+- Scheduled threat hunting and detection testing
+- Ticket enrichment, SLA tracking, and shift handoff reports
+- Asset inventory sync and user offboarding checks
+
+### Domain Threat Monitoring
+
+Multi-source domain monitoring with automated correlation across Certificate Transparency, WHOIS, dark web, abuse feeds, and lookalike detection with Webex alerting.
+
+### 34+ Security Integrations
 
 Unified API clients for the security ecosystem:
 
 | Category | Tools |
 |----------|-------|
-| **EDR/XDR** | CrowdStrike Falcon, Tanium, Vectra |
+| **EDR/XDR** | CrowdStrike Falcon (+ RTR), Tanium, Vectra |
 | **SIEM** | IBM QRadar |
 | **SOAR** | Cortex XSOAR |
-| **Threat Intel** | Recorded Future, VirusTotal, URLScan, AbuseIPDB, Shodan |
+| **Case Management** | DFIR-IRIS, TheHive |
+| **Threat Intel** | Recorded Future, VirusTotal, URLScan, AbuseIPDB, Abuse.ch, IntelX, Shodan |
+| **Domain Security** | Certificate Transparency, WHOIS, Domain Lookalike Detection |
 | **Email Security** | Abnormal Security, Zscaler |
 | **ITSM** | ServiceNow |
-| **Identity** | Have I Been Pwned |
 
 [View all integrations →](features/integrations)
 
@@ -115,7 +131,7 @@ Unified API clients for the security ecosystem:
 ┌──────────────▼─────────────────────────▼───────────────────┐
 │                      AI/ML Layer                            │
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────────┐     │
-│  │ LangChain   │  │ RAG Engine  │  │ 22 Security     │     │
+│  │ LangChain   │  │ RAG Engine  │  │ 25 Security     │     │
 │  │ Orchestrator│  │ (ChromaDB)  │  │ Tools           │     │
 │  └─────────────┘  └─────────────┘  └─────────────────┘     │
 └────────────────────────────┬───────────────────────────────┘
@@ -124,7 +140,7 @@ Unified API clients for the security ecosystem:
 │                   Integration Layer                         │
 │   EDR/XDR  │  SIEM/SOAR  │  Threat Intel  │  ITSM         │
 │   ────────────────────────────────────────────────         │
-│   30+ Security Tool APIs with Unified Interface            │
+│   34+ Security Tool APIs with Unified Interface            │
 └────────────────────────────────────────────────────────────┘
 ```
 

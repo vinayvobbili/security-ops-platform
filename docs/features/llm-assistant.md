@@ -11,18 +11,19 @@ An AI investigation engine that augments SOC analyst capabilities through natura
 
 ## Overview
 
-The security assistant uses **Retrieval-Augmented Generation (RAG)** to combine LLM intelligence with real-time security data from 22 integrated tools. Analysts can ask questions in natural language and receive enriched, contextual responses.
+The security assistant uses **Retrieval-Augmented Generation (RAG)** to combine LLM intelligence with real-time security data from 25 integrated tools. Analysts can ask questions in natural language and receive enriched, contextual responses.
 
 ### Key Capabilities
 
 - **Natural Language Queries**: Ask security questions without learning tool syntax
 - **Multi-Tool Orchestration**: Automatically selects and chains appropriate tools
 - **Context-Aware Responses**: RAG retrieves relevant documentation and history
-- **Continuous Learning**: Knowledge base expands with new runbooks and procedures
+- **Threat Intel Analysis**: LLM-powered novelty detection against historical data
+- **Automated Remediation**: Playbook and runbook suggestions based on context
 
 ---
 
-## Investigation Tools (22)
+## Investigation Tools (25)
 
 ### Endpoint Detection & Response
 
@@ -50,8 +51,17 @@ The security assistant uses **Retrieval-Augmented Generation (RAG)** to combine 
 | **VirusTotal** | Hash, URL, domain reputation from 70+ engines |
 | **URLScan** | Website scanning and screenshot capture |
 | **AbuseIPDB** | IP reputation and abuse reports |
+| **Abuse.ch** | Malware hash, C2 server, and phishing URL lookups |
 | **Shodan** | Internet-facing asset discovery |
 | **IntelX** | Dark web and leak database search |
+
+### Case Management & SOAR
+
+| Tool | Capabilities |
+|------|--------------|
+| **DFIR-IRIS** | Case creation, IOC management, timeline events |
+| **TheHive** | Case management, observable tracking, alert handling |
+| **XSOAR** | Ticket enrichment, summary generation, incident management |
 
 ### Identity, Email & Workflow
 
@@ -61,7 +71,13 @@ The security assistant uses **Retrieval-Augmented Generation (RAG)** to combine 
 | **ServiceNow** | CMDB queries, ticket creation |
 | **Abnormal Security** | Email threat investigation |
 | **Zscaler** | URL categorization |
-| **XSOAR** | Incident management |
+
+### Analysis & Remediation
+
+| Tool | Capabilities |
+|------|--------------|
+| **Tipper Analysis** | LLM-powered threat intel novelty detection against historical data |
+| **Remediation** | Automated playbook and runbook suggestions |
 
 ---
 

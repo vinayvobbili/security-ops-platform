@@ -144,6 +144,15 @@ RestartSec=10
 WantedBy=multi-user.target
 ```
 
+### Bot Status API
+
+A dedicated REST API for monitoring and managing bot health:
+
+- Check status of all bots (running, stopped, errored)
+- Start, stop, and restart individual bots
+- View resource metrics (uptime, CPU, memory)
+- Audit logging for administrative actions
+
 ### Process Management
 
 - Automatic restart on crash

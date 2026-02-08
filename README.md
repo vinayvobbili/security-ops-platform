@@ -1,6 +1,6 @@
 # Security Operations Automation Platform
 
-A comprehensive, enterprise-grade security operations automation platform featuring 30+ service integrations, LLM-powered security assistants, self-healing Webex bots, and real-time SOC dashboards.
+A comprehensive, enterprise-grade security operations automation platform featuring 34+ service integrations, LLM-powered security assistants, self-healing Webex bots, 35 n8n automation workflows, and real-time SOC dashboards.
 
 [![CI Pipeline](https://github.com/vinayvobbili/security-ops-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/vinayvobbili/security-ops-platform/actions/workflows/ci.yml)
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
@@ -14,11 +14,13 @@ A comprehensive, enterprise-grade security operations automation platform featur
 ## Overview
 
 This platform automates and orchestrates security operations workflows, providing:
-- **LLM-Powered Security Assistant** with 22 specialized investigation tools
+- **LLM-Powered Security Assistant** with 25 specialized investigation tools
 - **10 Production Webex Bots** with self-healing WebSocket architecture
-- **30+ Security Tool Integrations** (CrowdStrike, Tanium, QRadar, ServiceNow, etc.)
+- **34+ Security Tool Integrations** (CrowdStrike, Tanium, QRadar, ServiceNow, etc.)
+- **35 n8n Automation Workflows** for alerting, enrichment, hunting, and response
 - **Real-time SOC Dashboards** with metrics, ticket aging, and trend analysis
-- **Automated Incident Response** playbooks and workflows
+- **Domain Threat Monitoring** with multi-source correlation
+- **LLM-Powered Threat Intel Analysis** with automated IOC hunting
 
 ---
 
@@ -30,16 +32,21 @@ AI-powered security investigation using RAG (Retrieval-Augmented Generation):
 
 | Tool | Description |
 |------|-------------|
-| CrowdStrike Tools | Host lookup, detection search, containment actions |
+| CrowdStrike Tools | Host lookup, detection search, containment actions, RTR sessions |
 | QRadar Tools | Log search, offense investigation, AQL queries |
 | Recorded Future | Threat intelligence, IOC enrichment, risk scoring |
 | VirusTotal | Hash/URL/domain reputation analysis |
 | ServiceNow | Asset lookup, ticket creation, CMDB queries |
 | Tanium | Endpoint status, live queries, tag management |
+| DFIR-IRIS | Case creation, IOC management, timeline events |
+| TheHive | Case management, observable tracking |
+| XSOAR | Ticket enrichment and summary generation |
+| Tipper Analysis | LLM-powered threat intel novelty detection |
+| Remediation | Automated playbook and runbook suggestions |
 | Shodan | Internet-facing asset discovery |
-| AbuseIPDB | IP reputation and abuse reports |
+| AbuseIPDB / Abuse.ch | IP reputation, malware hash and C2 feed lookups |
 | HIBP | Credential breach checking |
-| + 13 more tools | Full investigation toolkit |
+| + 11 more tools | Full investigation toolkit |
 
 ### Self-Healing Webex Bots
 
@@ -67,20 +74,22 @@ Production-grade bot architecture with enterprise reliability:
 - `barnacles` - Metrics and reporting
 - `tars` / `money_ball` / `case` - Specialized operations
 
-### Security Platform Integrations (30+)
+### Security Platform Integrations (34+)
 
 | Category | Integrations |
 |----------|-------------|
-| **EDR/XDR** | CrowdStrike Falcon, Tanium (Cloud & On-Prem), Vectra |
+| **EDR/XDR** | CrowdStrike Falcon (+ RTR), Tanium (Cloud & On-Prem), Vectra |
 | **SIEM** | IBM QRadar |
 | **SOAR** | Cortex XSOAR, Custom Playbooks |
+| **Case Management** | DFIR-IRIS, TheHive |
 | **Threat Intel** | Recorded Future, VirusTotal, URLScan, AbuseIPDB, Abuse.ch, IntelX, Shodan |
 | **Email Security** | Abnormal Security, Zscaler |
 | **ITSM** | ServiceNow (CMDB, Incidents, Changes) |
 | **Identity** | Have I Been Pwned (HIBP) |
-| **Domain Security** | Certificate Transparency, WHOIS, Domain Lookalike Detection |
+| **Domain Security** | Certificate Transparency (Censys, CertStream), WHOIS, Domain Lookalike Detection |
+| **Dark Web** | IntelligenceX, PhishFort |
 | **DevOps** | Azure DevOps |
-| **Communication** | Webex, Email (OAuth2) |
+| **Communication** | Webex, Email (OAuth2), Twilio SMS |
 
 ### Real-Time SOC Dashboard
 
@@ -92,6 +101,41 @@ Flask-based web application with interactive visualizations:
 - **Detection Efficacy** - Rule performance and noise analysis
 - **Shift Performance** - Team and analyst productivity metrics
 - **EPP Tagging Metrics** - Endpoint protection coverage
+
+### n8n Workflow Automation (35 Workflows)
+
+Ready-to-import automation workflows covering the full SOC lifecycle:
+
+| Category | Workflows | Examples |
+|----------|-----------|---------|
+| **Alert & Detection** | 6 | CrowdStrike/QRadar/Vectra alerts to Webex, alert deduplication |
+| **Incident Response** | 5 | Smart escalation, war room creation, cross-system correlation |
+| **Threat Intelligence** | 6 | IOC sync, dark web monitoring, phishing URL analysis |
+| **Threat Hunting** | 3 | Scheduled hunt queries, detection rule testing, CVE alerts |
+| **XSOAR & Ticketing** | 4 | Ticket enrichment, SLA risk escalation, shift handoff reports |
+| **Asset Management** | 6 | Tanium inventory, CMDB sync, EPP tagging, offboarding checks |
+| **Network Security** | 2 | Zscaler URL blocking, URLhaus auto-block |
+| **Reporting** | 3 | Daily SOC metrics, ticket aging, on-call management |
+
+### Domain Threat Monitoring
+
+Multi-source domain monitoring with automated correlation:
+
+- **Certificate Transparency** - Censys API and CertStream real-time monitoring
+- **Domain Lookalike Detection** - Typosquat and brand impersonation with Recorded Future enrichment
+- **WHOIS Monitoring** - Registration change tracking
+- **Dark Web Monitoring** - Data leak detection via IntelligenceX
+- **Abuse Feed Correlation** - Abuse.ch, AbuseIPDB, Shodan, HIBP, VirusTotal enrichment
+- **Automated Alerting** - Webex notifications with severity-based routing
+
+### Tipper Analyzer
+
+LLM-powered threat intelligence analysis engine:
+
+- Evaluates threat intel reports for novelty against historical data
+- Hunts extracted IOCs across CrowdStrike, QRadar, and Abnormal Security
+- Integrates with Azure DevOps for case tracking
+- CLI interface for ad-hoc and scheduled analysis
 
 ---
 
@@ -107,7 +151,7 @@ flowchart TB
     subgraph AI["AI/ML Layer"]
         LLM[LLM Orchestration<br/>LangChain + Ollama]
         RAG[RAG Pipeline<br/>ChromaDB + Embeddings]
-        TOOLS[22 Security Tools<br/>Investigation Toolkit]
+        TOOLS[25 Security Tools<br/>Investigation Toolkit]
     end
 
     subgraph CORE["Core Services"]
@@ -116,7 +160,7 @@ flowchart TB
         SCHEDULER[Job Scheduler<br/>Automated Tasks]
     end
 
-    subgraph INT["Integration Layer - 30+ Services"]
+    subgraph INT["Integration Layer - 34+ Services"]
         direction LR
         EDR[EDR/XDR<br/>CrowdStrike, Tanium, Vectra]
         SIEM[SIEM/SOAR<br/>QRadar, XSOAR]
@@ -169,33 +213,41 @@ sequenceDiagram
 
 ```
 .
-├── services/               # 30+ API client integrations
+├── services/               # 34+ API client integrations
 │   ├── crowdstrike.py     # CrowdStrike Falcon EDR
+│   ├── crowdstrike_rtr.py # CrowdStrike Remote Terminal Response
 │   ├── tanium.py          # Tanium endpoint management
 │   ├── qradar.py          # IBM QRadar SIEM
-│   ├── service_now.py     # ServiceNow ITSM/CMDB
-│   ├── recorded_future.py # Threat intelligence
-│   ├── virustotal.py      # Malware analysis
+│   ├── dfir_iris.py       # DFIR-IRIS case management
+│   ├── thehive.py         # TheHive case management
+│   ├── domain_lookalike.py # Typosquat detection
+│   ├── domain_monitor.py  # Multi-source domain monitoring
+│   ├── cert_transparency.py # Certificate transparency
 │   ├── xsoar/             # Cortex XSOAR client
-│   └── ...                # 23+ more integrations
+│   └── ...                # 24+ more integrations
 │
 ├── webex_bots/            # 10 production Webex bots
 │   ├── pokedex.py         # LLM security assistant
-│   ├── hal9000.py         # Advanced LLM assistant
-│   ├── toodles.py         # Team collaboration
+│   ├── hal9000.py         # Detection engineering assistant
+│   ├── toodles.py         # Incident response orchestration
 │   └── ...                # 7 more specialized bots
 │
 ├── my_bot/                # LLM/RAG implementation
-│   ├── tools/             # 22 security investigation tools
+│   ├── tools/             # 25 security investigation tools
 │   ├── core/              # LLM orchestration
 │   └── document/          # RAG document processing
 │
+├── n8n_workflows/         # 35 automation workflow templates
+│   ├── crowdstrike_webex_alerts.json
+│   ├── threat_intel_ioc_sync.json
+│   ├── incident_escalation.json
+│   └── ...                # 32 more workflows
+│
 ├── src/
 │   ├── components/        # Business logic modules
-│   │   ├── tipper_analyzer/   # Threat intel analysis
-│   │   ├── domain_monitoring/ # Domain security
-│   │   └── web/              # Web handlers
-│   ├── charts/            # Metrics visualizations
+│   │   ├── tipper_analyzer/   # LLM threat intel analysis
+│   │   ├── domain_monitoring/ # Multi-source domain monitoring
+│   │   └── web/              # Web route handlers
 │   ├── secops/            # SOC operations modules
 │   └── utils/             # Shared utilities
 │
@@ -204,8 +256,12 @@ sequenceDiagram
 │   ├── templates/         # HTML templates
 │   └── static/            # CSS, JavaScript
 │
+├── deployment/            # Production deployment
+│   ├── systemd/           # 20+ systemd service files
+│   ├── bot_status_api.py  # REST API for bot management
+│   └── log_viewer.py      # Real-time log viewing
+│
 ├── tests/                 # pytest test suite
-├── deployment/            # Systemd services, scripts
 ├── .github/workflows/     # CI/CD pipeline
 └── Dockerfile             # Container deployment
 ```

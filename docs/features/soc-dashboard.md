@@ -104,7 +104,7 @@ Team productivity metrics:
 
 ## Route Blueprints
 
-The dashboard is organized into 7 Flask blueprints:
+The dashboard is organized into Flask blueprints:
 
 | Blueprint | Purpose |
 |-----------|---------|
@@ -112,8 +112,8 @@ The dashboard is organized into 7 Flask blueprints:
 | **forms** | Operational forms and workflows |
 | **xsoar** | SOAR integration and incident management |
 | **chat** | LLM assistant web interface |
-| **security_tools** | Tool-specific interfaces |
-| **monitoring** | Health checks and system status |
+| **security_tools** | Detection rules catalog, domain monitoring results |
+| **monitoring** | Health checks, domain threat monitoring, bot status |
 | **utilities** | General utilities |
 
 ---
