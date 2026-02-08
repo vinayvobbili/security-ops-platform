@@ -66,7 +66,7 @@ from webexpythonsdk.models.cards.actions import Submit
 from webexteamssdk import WebexTeamsAPI
 
 from my_config import get_config
-from src.charts import threatcon_level
+# from src.charts import threatcon_level
 from src.utils.logging_utils import log_activity
 from src.utils.webex_device_manager import cleanup_devices_on_startup
 from src.utils.webex_pool_config import configure_webex_api_session
@@ -547,10 +547,10 @@ class AnnounceThreatcon(Command):
     @log_activity(config.webex_bot_access_token_barnacles, "barnacles_activity_log.csv")
     def execute(self, message, attachment_actions, activity):
         try:
-            threatcon_level.make_chart()
+#             threatcon_level.make_chart()
 
-            today_date = datetime.now().strftime('%m-%d-%Y')
-            file_path = ROOT_DIRECTORY / "web" / "static" / "charts" / today_date / "Threatcon Level.png"
+#             today_date = datetime.now().strftime('%m-%d-%Y')
+#             file_path = ROOT_DIRECTORY / "web" / "static" / "charts" / today_date / "Threatcon Level.png"
 
             WebexTeamsAPI(access_token=config.webex_bot_access_token_toodles).messages.create(
                 roomId=config.webex_room_id_threatcon_collab,

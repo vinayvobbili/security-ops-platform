@@ -1,9 +1,9 @@
 #!/usr/bin/python3
 
-from src.charts.chart_style import apply_chart_style
+# from src.charts.chart_style import apply_chart_style
 from src.components.ticket_cache import TicketCache
 
-apply_chart_style()
+# apply_chart_style()
 
 import pytz
 import logging
@@ -12,24 +12,24 @@ from datetime import datetime
 
 from my_config import get_config
 from src import helper_methods
-from src.charts import (
-    mttr_mttc,
-    outflow,
-    lifespan,
-    heatmap,
-    sla_breaches,
-    aging_tickets,
-    inflow,
-    qradar_rule_efficacy,
-    de_stories,
-    days_since_incident,
-    re_stories,
-    threatcon_level,
-    vectra_volume,
-    crowdstrike_volume,
-    threat_tippers,
-    crowdstrike_efficacy,
-)
+# from src.charts import (
+#     mttr_mttc,
+#     outflow,
+#     lifespan,
+#     heatmap,
+#     sla_breaches,
+#     aging_tickets,
+#     inflow,
+#     qradar_rule_efficacy,
+#     de_stories,
+#     days_since_incident,
+#     re_stories,
+#     threatcon_level,
+#     vectra_volume,
+#     crowdstrike_volume,
+#     threat_tippers,
+#     crowdstrike_efficacy,
+# )
 from src.utils.fs_utils import make_dir_for_todays_charts
 
 # --- Logging Setup ---
@@ -72,22 +72,22 @@ def run_all_charts():
     ticket_cache = TicketCache()
 
     tasks = [
-        ("Aging Tickets", aging_tickets.make_chart),
-        ("Days Since Incident", days_since_incident.make_chart),
-        ("CrowdStrike Volume", crowdstrike_volume.make_chart),
-        ("CrowdStrike Efficacy", crowdstrike_efficacy.make_chart),
-        ("Vectra Volume", vectra_volume.make_chart),
-        ("Detection Engineering Stories", de_stories.make_chart),
-        ("Threat Heatmap", heatmap.create_choropleth_map),
-        ("Inflow", inflow.make_chart),
-        ("Lifespan", lifespan.make_chart),
-        ("MTTR MTTC", mttr_mttc.make_chart),
-        ("Outflow", outflow.make_chart),
-        ("Response Engineering Stories", re_stories.make_chart),
-        ("SLA Breaches", sla_breaches.make_chart),
-        ("ThreatCon Level", threatcon_level.make_chart),
-        ("QRadar Rule Efficacy", qradar_rule_efficacy.make_chart),
-        ("Threat Tippers", threat_tippers.make_chart),
+#         ("Aging Tickets", aging_tickets.make_chart),
+#         ("Days Since Incident", days_since_incident.make_chart),
+#         ("CrowdStrike Volume", crowdstrike_volume.make_chart),
+#         ("CrowdStrike Efficacy", crowdstrike_efficacy.make_chart),
+#         ("Vectra Volume", vectra_volume.make_chart),
+#         ("Detection Engineering Stories", de_stories.make_chart),
+#         ("Threat Heatmap", heatmap.create_choropleth_map),
+#         ("Inflow", inflow.make_chart),
+#         ("Lifespan", lifespan.make_chart),
+#         ("MTTR MTTC", mttr_mttc.make_chart),
+#         ("Outflow", outflow.make_chart),
+#         ("Response Engineering Stories", re_stories.make_chart),
+#         ("SLA Breaches", sla_breaches.make_chart),
+#         ("ThreatCon Level", threatcon_level.make_chart),
+#         ("QRadar Rule Efficacy", qradar_rule_efficacy.make_chart),
+#         ("Threat Tippers", threat_tippers.make_chart),
         ("Ticket Cache", ticket_cache.generate),
     ]
 
