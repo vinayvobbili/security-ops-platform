@@ -86,7 +86,7 @@ async function submitVerification(response) {
                             <div class="header">
                                 <div class="header-content">
                                     <div class="logo-section">
-                                        <img alt="${companyName}" src="/static/images/Company Logo.png" style="background: transparent;"/>
+                                        <img alt="${companyName}" src="/static/images/pokedex.png" style="background: transparent;"/>
                                     </div>
                                     <div class="header-text">
                                         <h1>Thank You!</h1>

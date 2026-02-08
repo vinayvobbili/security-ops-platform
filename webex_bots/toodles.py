@@ -618,7 +618,7 @@ class GetCurrentApprovedTestingEntries(ToodlesCommand):
             return format_user_response(
                 activity,
                 "the current list is too long to be displayed here. "
-                "You may find the same list at http://gdnr.company.com/get-approved-testing-entries"
+                "You may find the same list at http://your-team-portal.example.com/get-approved-testing-entries"
             )
         return result
 
@@ -792,7 +792,7 @@ class Who(ToodlesCommand):
         on_call_person = oncall.get_on_call_person()
         return format_user_response(
             activity,
-            f"the DnR On-call person is {on_call_person.get('name')} - {on_call_person.get('email_address')} - {on_call_person.get('phone_number')}"
+            f"the on-call person is {on_call_person.get('name')} - {on_call_person.get('email_address')} - {on_call_person.get('phone_number')}"
         )
 
 

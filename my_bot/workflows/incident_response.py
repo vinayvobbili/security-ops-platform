@@ -82,7 +82,7 @@ def _get_internal_domains() -> set:
         from my_config import get_config
         config = get_config()
         if config.my_web_domain:
-            # Add the domain and common variations (e.g., metlife.com -> metlife.net, metlife.org)
+            # Add the domain and common variations (e.g., example.com -> example.net, example.org)
             base = config.my_web_domain.lower()
             domains.add(base)
             base_name = base.rsplit('.', 1)[0]

@@ -20,7 +20,7 @@ def guess_country_from_hostname(computer) -> tuple[str, str]:
     if 'pmli' in computer_name_lower:
         return 'India PMLI', "Country guessed from 'pmli' in hostname"
     if computer_name_lower.startswith('vmvdi') or (hasattr(CONFIG, 'team_name') and computer_name_lower.startswith(CONFIG.team_name.lower())):
-        return 'United States', f"Country guessed from VMVDI/{CONFIG.team_name if hasattr(CONFIG, 'team_name') else ''} in hostname"
+        return 'United States', f"Country guessed from VDI/{CONFIG.team_name if hasattr(CONFIG, 'team_name') else ''} in hostname"
     country_code = computer_name[:2].upper()
     country_name = COUNTRY_NAMES_BY_ABBREVIATION.get(country_code, '')
     if country_name:
