@@ -15,7 +15,7 @@ from typing import Any, Dict, List, Optional
 
 import requests
 from demisto_client.demisto_api.models import SearchIncidentsData
-from tqdm import tqdm
+from rich.progress import Progress, TextColumn, BarColumn, TaskProgressColumn, TimeElapsedColumn, SpinnerColumn
 from urllib3.exceptions import ProtocolError
 
 from ._client import ApiException
@@ -135,15 +135,17 @@ def _fetch_paginated(
 
     # Create progress bar if running interactively
     use_progress_bar = sys.stdout.isatty() or os.getenv('FORCE_PROGRESS_BAR', '').lower() == 'true'
-    pbar = tqdm(
-        desc="Fetching tickets",
-        unit=" tickets",
-        disable=not use_progress_bar,
-        position=0,
-        leave=True,
-        dynamic_ncols=True,
-        bar_format='{desc}: {n_fmt} tickets [{elapsed}, {rate_fmt}]'
-    ) if use_progress_bar else None
+    progress = None
+    task_id = None
+    if use_progress_bar:
+        progress = Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            TextColumn("{task.completed} tickets"),
+            TimeElapsedColumn(),
+        )
+        task_id = progress.add_task("Fetching tickets", total=None)
+        progress.start()
 
     # Log start of pagination for visibility
     if not use_progress_bar:
@@ -198,9 +200,8 @@ def _fetch_paginated(
                 all_tickets.extend(data)
 
                 # Update progress bar
-                if pbar is not None:
-                    pbar.update(len(data))
-                    pbar.set_postfix({"pages": page + 1, "total": len(all_tickets)})
+                if progress is not None:
+                    progress.update(task_id, advance=len(data), description=f"Fetching tickets (page {page + 1})")
 
                 # Show progress
                 if not use_progress_bar:
@@ -264,15 +265,15 @@ def _fetch_paginated(
         if page >= max_pages:
             log.warning(f"Reached max_pages limit ({max_pages}). Total: {len(all_tickets)} tickets - there may be more data")
 
-        if pbar is not None:
-            pbar.close()
+        if progress is not None:
+            progress.stop()
 
         log.debug(f"✓ Fetch complete: {len(all_tickets)} total tickets retrieved")
         return all_tickets
 
     except Exception as e:
-        if pbar is not None:
-            pbar.close()
+        if progress is not None:
+            progress.stop()
         log.error(f"Error in _fetch_paginated: {str(e)}")
         log.error(f"Query that failed: {query}")
         log.debug(f"Returning {len(all_tickets)} tickets collected before error")

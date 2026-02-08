@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Dict, Any, List, Optional, Union
 from zoneinfo import ZoneInfo
 
-from tqdm import tqdm
+from rich.progress import track
 
 from my_config import get_config
 from services.xsoar import TicketHandler, XsoarEnvironment
@@ -62,6 +62,7 @@ CUSTOM_FIELDS = {
     'automation_level': 'automationlevel',
     'hostname': 'hostname',
     'username': 'username',
+    'email': 'email',
 }
 
 # Status and severity display mappings
@@ -374,12 +375,12 @@ class TicketCache:
 
             log.debug("Entering as_completed() processing loop...")
             log.debug(f"Total futures to process: {len(futures)}")
-            log.debug(f"tqdm disabled: {not sys.stdout.isatty()}, sys.stdout.isatty(): {sys.stdout.isatty()}")
+            log.debug(f"progress disabled: {not sys.stdout.isatty()}, sys.stdout.isatty(): {sys.stdout.isatty()}")
 
             try:
                 log.debug("Creating as_completed() iterator...")
-                for future in tqdm(as_completed(futures.keys()),
-                                   total=len(tickets), desc="Fetching notes", unit="ticket", disable=not sys.stdout.isatty()):
+                for future in track(as_completed(futures.keys()),
+                                    total=len(tickets), description="Fetching notes", disable=not sys.stdout.isatty()):
                     completed.add(future)
                     ticket = futures[future]
                     elapsed_time = time.time() - future_start_times[future]
@@ -513,7 +514,7 @@ class TicketCache:
         current_time = datetime.now(timezone.utc)
         processing_errors = []
 
-        for i, ticket in enumerate(tqdm(raw_tickets, desc="Processing tickets", unit="ticket", disable=not sys.stdout.isatty())):
+        for i, ticket in enumerate(track(raw_tickets, description="Processing tickets", disable=not sys.stdout.isatty())):
             try:
                 ui_ticket = self._flatten_ticket(ticket, current_time)
                 ui_tickets.append(ui_ticket)

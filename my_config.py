@@ -115,6 +115,8 @@ def get_config():
         cs_host_write_client_secret=os.environ.get("CROWD_STRIKE_HOST_WRITE_CLIENT_SECRET"),
         cs_rtr_client_id=os.environ.get("CROWD_STRIKE_RTR_CLIENT_ID"),
         cs_rtr_client_secret=os.environ.get("CROWD_STRIKE_RTR_CLIENT_SECRET"),
+        cs_falcon_console_url=os.environ.get("CROWD_STRIKE_FALCON_CONSOLE_URL"),
+        cs_foundry_app_id=os.environ.get("CROWD_STRIKE_FOUNDRY_APP_ID"),
         cisco_amp_client_id=os.environ.get("CISCO_AMP_CLIENT_ID"),
         cisco_amp_client_secret=os.environ.get("CISCO_AMP_CLIENT_SECRET"),
         triage_timer=os.environ.get("TRIAGE_TIMER"),
@@ -182,6 +184,7 @@ def get_config():
         urlscan_api_key=os.environ.get("URLSCAN_API_KEY"),
         qradar_api_url=os.environ.get("QRADAR_API_URL"),
         qradar_api_key=os.environ.get("QRADAR_API_KEY"),
+        qradar_console_url=os.environ.get("QRADAR_CONSOLE_URL"),
         vectra_api_base_url=os.environ.get("VECTRA_API_BASE_URL"),
         vectra_client_id=os.environ.get("VECTRA_API_CLIENT_ID"),
         vectra_api_key=os.environ.get("VECTRA_API_KEY"),
@@ -190,6 +193,13 @@ def get_config():
         zscaler_username=os.environ.get("ZSCALER_API_USERNAME"),
         zscaler_password=os.environ.get("ZSCALER_API_PASSWORD"),
         zscaler_api_key=os.environ.get("ZSCALER_API_KEY"),
+        # TheHive
+        thehive_url=os.environ.get("THE_HIVE_URL"),
+        thehive_api_key=os.environ.get("THE_HIVE_API_KEY"),
+        thehive_org=os.environ.get("THE_HIVE_ORG"),
+        # DFIR-IRIS
+        dfir_iris_url=os.environ.get("DFIR_IRIS_URL"),
+        dfir_iris_api_key=os.environ.get("DFIR_IRIS_API_KEY"),
     )
 
 
@@ -265,6 +275,8 @@ class Config:
     cs_host_write_client_secret: Optional[str] = None
     cs_rtr_client_id: Optional[str] = None
     cs_rtr_client_secret: Optional[str] = None
+    cs_falcon_console_url: Optional[str] = None
+    cs_foundry_app_id: Optional[str] = None
     cisco_amp_client_id: Optional[str] = None
     cisco_amp_client_secret: Optional[str] = None
     triage_timer: Optional[str] = None
@@ -332,6 +344,7 @@ class Config:
     urlscan_api_key: Optional[str] = None
     qradar_api_url: Optional[str] = None
     qradar_api_key: Optional[str] = None
+    qradar_console_url: Optional[str] = None
     vectra_api_base_url: Optional[str] = None
     vectra_client_id: Optional[str] = None
     vectra_api_key: Optional[str] = None
@@ -340,3 +353,10 @@ class Config:
     zscaler_username: Optional[str] = None
     zscaler_password: Optional[str] = None
     zscaler_api_key: Optional[str] = None
+    # TheHive configuration
+    thehive_url: Optional[str] = None
+    thehive_api_key: Optional[str] = None
+    thehive_org: Optional[str] = None
+    # DFIR-IRIS configuration
+    dfir_iris_url: Optional[str] = None
+    dfir_iris_api_key: Optional[str] = None

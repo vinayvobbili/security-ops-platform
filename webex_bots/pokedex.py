@@ -280,8 +280,7 @@ class BasePokedexCommand(Command):
                         text=content,
                         files=[file_path]
                     )
-                    os.remove(file_path)
-                    logger.info(f"Uploaded and deleted file: {file_path}")
+                    logger.info(f"Uploaded file (kept for potential XSOAR attachment): {file_path}")
                     return
             # Regular text response
             if len(content) > 7000:
@@ -595,6 +594,22 @@ class Bot(WebexBot):
                 prompt_time = 0.0
                 generation_time = 0.0
                 tokens_per_sec = 0.0
+            # Check for contacts command - direct lookup bypassing LLM agent
+            elif cleaned_message.lower().startswith('contacts '):
+                query = cleaned_message[9:].strip()  # Extract text after "contacts "
+                if query:
+                    result = search_contacts_with_llm_with_metrics(query)
+                    response_text = result['content']
+                    input_tokens = result.get('input_tokens', 0)
+                    output_tokens = result.get('output_tokens', 0)
+                    total_tokens = result.get('total_tokens', 0)
+                    prompt_time = result.get('prompt_time', 0.0)
+                    generation_time = result.get('generation_time', 0.0)
+                    tokens_per_sec = result.get('tokens_per_sec', 0.0)
+                else:
+                    response_text = "❌ Usage: `contacts <name or query>`\n\nExample: `contacts endpoint protection`"
+                    input_tokens = output_tokens = total_tokens = 0
+                    prompt_time = generation_time = tokens_per_sec = 0.0
             # Check for falcon command - direct CrowdStrike operations (room-restricted)
             elif is_falcon_command(cleaned_message)[0]:
                 # Silent failure if used from unauthorized room
@@ -618,14 +633,21 @@ class Bot(WebexBot):
                     import os
                     if os.path.exists(file_path):
                         parent_id = teams_message.parentId if hasattr(teams_message, 'parentId') and teams_message.parentId else teams_message.id
+                        # Send file with initial response
                         self.teams.messages.create(
                             roomId=teams_message.roomId,
                             parentId=parent_id,
                             text=response_text,
                             files=[file_path]
                         )
-                        os.remove(file_path)
-                        logger.info(f"Uploaded and deleted browser history file: {file_path}")
+                        logger.info(f"Uploaded file (kept for potential XSOAR attachment): {file_path}")
+                        # Send follow-up prompt for XSOAR attachment
+                        xsoar_prompt = f"📎 To attach this file to an XSOAR ticket, reply with the ticket number (e.g., `attach to 929947`).\n\n_File: `{file_path}`_"
+                        self.teams.messages.create(
+                            roomId=teams_message.roomId,
+                            parentId=parent_id,
+                            markdown=xsoar_prompt
+                        )
                         response_text = None  # Signal that response was already sent with file
             else:
                 # Process query through LLM agent

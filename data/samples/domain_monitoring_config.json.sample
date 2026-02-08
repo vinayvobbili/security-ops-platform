@@ -1,0 +1,23 @@
+{
+  "monitored_domains": [
+    "example.com"
+  ],
+  "defensive_domains": {
+    "example.com": [
+      "example-secure.com",
+      "myexample.com",
+      "exampleglobal.com"
+    ]
+  },
+  "watchlist": {
+    "example.com": [
+      "example-loan.com",
+      "secure-example.net"
+    ]
+  },
+  "_comments": {
+    "monitored_domains": "List of primary domains to monitor for lookalikes",
+    "defensive_domains": "Map of monitored domain -> list of known defensive registrations owned by the company. These domains will be marked as 'defensive' and excluded from alerts.",
+    "watchlist": "Map of monitored domain -> list of suspicious domains to check in CT logs. Use this for semantic impersonation domains that dnstwist can't detect (e.g., brand-loan.com, secure-brand.net). These are checked daily for new SSL certificates."
+  }
+}

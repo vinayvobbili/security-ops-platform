@@ -1,11 +1,158 @@
 """CrowdStrike IOC hunting functions."""
 
 import logging
+import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import List, Tuple
 
 from ..models import ToolHuntResult
 
 logger = logging.getLogger(__name__)
+
+
+def _generate_logscale_queries(
+    ips: List[str],
+    domains: List[str],
+    urls: List[str],
+    filenames: List[str],
+    hashes: List[Tuple[str, str]],
+    hours: int
+) -> List[dict]:
+    """Generate LogScale/Event Search queries for IOC hunting.
+
+    These queries can be run in Falcon's Event Search UI for deeper
+    investigation beyond detections/alerts.
+
+    Args:
+        ips: List of IP addresses
+        domains: List of domains
+        urls: List of URLs
+        filenames: List of filenames
+        hashes: List of (hash, hash_type) tuples
+        hours: Hours to search back (for documentation)
+
+    Returns:
+        List of query dicts with 'type' and 'query' keys
+    """
+    queries = []
+    days = hours // 24
+
+    # IP Address query - Network connections
+    if ips:
+        ip_pattern = "|".join([re.escape(ip) for ip in ips])
+        query = f"""#event_simpleName=NetworkConnectIP4
+| RemoteAddressIP4=/{ip_pattern}/
+| table([timestamp, aid, ComputerName, UserName, LocalAddressIP4, RemoteAddressIP4, RemotePort, ContextBaseFileName])
+| sort(timestamp, order=desc, limit=500)"""
+        queries.append({
+            'type': f'Event Search: IP Network Connections (last {days} days)',
+            'query': query,
+            'query_type': 'logscale'
+        })
+
+        # Also add DNS query for IPs (reverse lookups)
+        query_dns = f"""#event_simpleName=DnsRequest
+| (ContextBaseFileName=* OR ImageFileName=*)
+| RespondingDnsServer=/{ip_pattern}/ OR DomainName=/{ip_pattern}/
+| table([timestamp, aid, ComputerName, DomainName, RespondingDnsServer, ContextBaseFileName])
+| sort(timestamp, order=desc, limit=500)"""
+        queries.append({
+            'type': f'Event Search: IP in DNS (last {days} days)',
+            'query': query_dns,
+            'query_type': 'logscale'
+        })
+
+    # Domain query - DNS requests
+    if domains:
+        # Escape dots in domains for regex
+        domain_patterns = "|".join([re.escape(d).replace(r"\.", r"\\.") for d in domains])
+        query = f"""#event_simpleName=DnsRequest
+| DomainName=/(^|\\.){domain_patterns}$/i
+| table([timestamp, aid, ComputerName, UserName, DomainName, RespondingDnsServer, ContextBaseFileName])
+| sort(timestamp, order=desc, limit=500)"""
+        queries.append({
+            'type': f'Event Search: Domain DNS Requests (last {days} days)',
+            'query': query,
+            'query_type': 'logscale'
+        })
+
+    # URL query - HTTP requests (if available) or network connections to URL hosts
+    if urls:
+        # Extract hostnames from URLs for network search
+        url_hosts = set()
+        for url in urls:
+            # Extract hostname from URL
+            match = re.match(r'https?://([^/]+)', url)
+            if match:
+                url_hosts.add(match.group(1).lower())
+
+        if url_hosts:
+            host_patterns = "|".join([re.escape(h).replace(r"\.", r"\\.") for h in url_hosts])
+            query = f"""#event_simpleName=DnsRequest
+| DomainName=/(^|\\.){host_patterns}$/i
+| table([timestamp, aid, ComputerName, UserName, DomainName, ContextBaseFileName])
+| sort(timestamp, order=desc, limit=500)"""
+            queries.append({
+                'type': f'Event Search: URL Host DNS (last {days} days)',
+                'query': query,
+                'query_type': 'logscale'
+            })
+
+    # Hash query - Process execution
+    if hashes:
+        sha256_hashes = [h for h, t in hashes if t.lower() == 'sha256']
+        md5_hashes = [h for h, t in hashes if t.lower() == 'md5']
+
+        if sha256_hashes:
+            hash_pattern = "|".join(sha256_hashes)
+            query = f"""#event_simpleName=ProcessRollup2
+| SHA256HashData=/{hash_pattern}/i
+| table([timestamp, aid, ComputerName, UserName, ImageFileName, CommandLine, ParentBaseFileName, SHA256HashData])
+| sort(timestamp, order=desc, limit=500)"""
+            queries.append({
+                'type': f'Event Search: SHA256 Process Execution (last {days} days)',
+                'query': query,
+                'query_type': 'logscale'
+            })
+
+        if md5_hashes:
+            hash_pattern = "|".join(md5_hashes)
+            query = f"""#event_simpleName=ProcessRollup2
+| MD5HashData=/{hash_pattern}/i
+| table([timestamp, aid, ComputerName, UserName, ImageFileName, CommandLine, ParentBaseFileName, MD5HashData])
+| sort(timestamp, order=desc, limit=500)"""
+            queries.append({
+                'type': f'Event Search: MD5 Process Execution (last {days} days)',
+                'query': query,
+                'query_type': 'logscale'
+            })
+
+    # Filename query - Process execution and file writes
+    if filenames:
+        # Escape special regex chars but keep the filename pattern
+        filename_patterns = "|".join([re.escape(f) for f in filenames])
+        query = f"""#event_simpleName=ProcessRollup2
+| ImageFileName=/({filename_patterns})$/i
+| table([timestamp, aid, ComputerName, UserName, ImageFileName, CommandLine, ParentBaseFileName, SHA256HashData])
+| sort(timestamp, order=desc, limit=500)"""
+        queries.append({
+            'type': f'Event Search: Filename Process Execution (last {days} days)',
+            'query': query,
+            'query_type': 'logscale'
+        })
+
+        # Also check file writes
+        query_write = f"""#event_simpleName=/^(NewExecutableWritten|PeFileWritten|ScriptWritten)$/
+| FileName=/({filename_patterns})$/i
+| table([timestamp, aid, ComputerName, FileName, FilePath, SHA256HashData, ContextBaseFileName])
+| sort(timestamp, order=desc, limit=500)"""
+        queries.append({
+            'type': f'Event Search: Filename File Writes (last {days} days)',
+            'query': query_write,
+            'query_type': 'logscale'
+        })
+
+    return queries
 
 
 def hunt_crowdstrike(entities, hours: int) -> ToolHuntResult:
@@ -70,45 +217,65 @@ def hunt_crowdstrike(entities, hours: int) -> ToolHuntResult:
             return [], [], []
         ip_hits = []
         queries = []
-        fql_queries_seen = set()
-        logger.info(f"[CrowdStrike] Starting IP search ({len(ips)} IPs)...")
-        for ip in ips:
-            try:
-                det_result = cs_client.search_detections_by_ip(ip, hours=hours)
-                detection_count = det_result.get('count', 0) if 'error' not in det_result else 0
-                # Capture the actual FQL query
-                if det_result.get('fql_query') and det_result['fql_query'] not in fql_queries_seen:
-                    queries.append({
-                        'type': 'IP Detection Search (Detects API)',
-                        'query': det_result['fql_query']
-                    })
-                    fql_queries_seen.add(det_result['fql_query'])
-                alert_result = cs_client.search_alerts_by_ip(ip, hours=hours)
-                alert_count = alert_result.get('count', 0) if 'error' not in alert_result else 0
-                # Capture the actual FQL query for alerts
-                if alert_result.get('fql_query') and alert_result['fql_query'] not in fql_queries_seen:
-                    queries.append({
-                        'type': 'IP Alert Search (Alerts API)',
-                        'query': alert_result['fql_query']
-                    })
-                    fql_queries_seen.add(alert_result['fql_query'])
-                if detection_count + alert_count > 0:
-                    hostnames = []
-                    for d in det_result.get('detections', []):
-                        hostname = d.get('device', {}).get('hostname')
-                        if hostname and hostname not in hostnames:
-                            hostnames.append(hostname)
+        errors = []
+        logger.info(f"[CrowdStrike] Starting batched IP search ({len(ips)} IPs)...")
+
+        try:
+            # Batch search alerts for all IPs at once (using Alerts API)
+            det_result = cs_client.batch_search_detections_by_ips(ips, hours=hours)
+            if det_result.get('fql_query'):
+                queries.append({
+                    'type': 'IP Alert Search (Alerts API)',
+                    'query': det_result['fql_query']
+                })
+            if 'error' in det_result:
+                errors.append(f"Alert search: {det_result['error']}")
+
+            # Search ThreatGraph for network activity (shows connections even without detections)
+            tg_result = cs_client.batch_search_threatgraph_ips(ips)
+            if tg_result.get('api_call'):
+                queries.append({
+                    'type': 'IP Network Activity (ThreatGraph)',
+                    'query': tg_result['api_call']
+                })
+            if 'error' in tg_result:
+                # ThreatGraph errors are non-fatal, just log
+                logger.debug(f"ThreatGraph search: {tg_result['error']}")
+
+            # Combine results by IP
+            # Note: det_result now uses Alerts API (Detects API was decommissioned)
+            alert_by_ip = det_result.get('by_ip', {})
+            tg_by_ip = tg_result.get('by_ip', {})
+
+            for ip in ips:
+                alert_data = alert_by_ip.get(ip, {"count": 0, "hostnames": []})
+                tg_data = tg_by_ip.get(ip, {"count": 0, "hosts": []})
+
+                alert_count = alert_data.get('count', 0)
+                network_hosts_count = tg_data.get('count', 0)
+
+                # Include IP if it has alerts OR network activity
+                if alert_count + network_hosts_count > 0:
+                    # Combine hostnames from all sources
+                    hostnames = list(set(
+                        alert_data.get('hostnames', []) +
+                        tg_data.get('hosts', [])
+                    ))
                     ip_hits.append({
                         'ip': ip,
-                        'detection_count': detection_count,
+                        'detection_count': 0,  # Detects API decommissioned
                         'alert_count': alert_count,
-                        'hostnames': hostnames[:5]
+                        'network_hosts_count': network_hosts_count,
+                        'hostnames': hostnames[:10]
                     })
-                    logger.info(f"  [CrowdStrike] HIT: IP {ip} - {detection_count} detections, {alert_count} alerts")
-            except Exception as e:
-                logger.debug(f"CrowdStrike IP search error for {ip}: {e}")
+                    logger.info(f"  [CrowdStrike] HIT: IP {ip} - {alert_count} alerts, {network_hosts_count} hosts communicated")
+
+        except Exception as e:
+            logger.error(f"CrowdStrike batched IP search error: {e}")
+            errors.append(f"IP search: {str(e)}")
+
         logger.info(f"[CrowdStrike] IP search complete: {len(ip_hits)} hits")
-        return ip_hits, [], queries
+        return ip_hits, errors, queries
 
     def _search_hashes():
         if not all_hashes:
@@ -279,6 +446,59 @@ def hunt_crowdstrike(entities, hours: int) -> ToolHuntResult:
     total_hits = len(all_ip_hits) + len(all_hash_hits) + len(all_domain_hits) + len(all_url_hits) + len(all_filename_hits)
     logger.info(f"[CrowdStrike] All searches complete: {total_hits} total hits")
 
+    # Generate LogScale/Event Search queries for analyst use
+    logscale_queries = _generate_logscale_queries(
+        ips=ips,
+        domains=domains,
+        urls=urls,
+        filenames=filenames,
+        hashes=all_hashes,
+        hours=hours
+    )
+    logger.info(f"[CrowdStrike] Generated {len(logscale_queries)} Event Search queries")
+
+    # Try to execute LogScale queries via API (gracefully handle if access not available)
+    logscale_results = None
+    logscale_events_found = 0
+    foundry_access_denied = False
+    try:
+        logger.info("[CrowdStrike] Attempting to run LogScale queries via Foundry API...")
+        logscale_results = cs_client.run_logscale_queries_batch(logscale_queries, hours=hours)
+
+        if logscale_results.get('access_denied'):
+            logger.info("[CrowdStrike] LogScale API access not available - queries shown for manual use")
+            foundry_access_denied = True
+            # Add note to queries that they need manual execution
+            for q in logscale_queries:
+                q['execution_status'] = 'manual'
+        else:
+            logscale_events_found = logscale_results.get('total_events', 0)
+            queries_run = logscale_results.get('queries_run', 0)
+            logger.info(f"[CrowdStrike] LogScale queries executed: {queries_run} queries, {logscale_events_found} total events")
+
+            # Update queries with execution results
+            query_results_map = {r['type']: r for r in logscale_results.get('query_results', [])}
+            for q in logscale_queries:
+                result = query_results_map.get(q['type'])
+                if result:
+                    q['execution_status'] = 'executed'
+                    q['event_count'] = result.get('count', 0)
+                    q['sample_events'] = result.get('events', [])[:5]
+                else:
+                    q['execution_status'] = 'manual'
+
+            # Add LogScale errors if any
+            for err in logscale_results.get('errors', []):
+                if 'access denied' not in err.lower():
+                    all_errors.append(f"LogScale: {err}")
+
+    except Exception as e:
+        logger.warning(f"[CrowdStrike] LogScale query execution failed: {e}")
+        for q in logscale_queries:
+            q['execution_status'] = 'manual'
+
+    all_queries.extend(logscale_queries)
+
     return ToolHuntResult(
         tool_name="CrowdStrike",
         total_hits=total_hits,
@@ -287,6 +507,7 @@ def hunt_crowdstrike(entities, hours: int) -> ToolHuntResult:
         domain_hits=all_domain_hits,
         url_hits=all_url_hits,
         filename_hits=all_filename_hits,
-        errors=all_errors[:3],
-        queries=all_queries
+        errors=all_errors[:5],
+        queries=all_queries,
+        foundry_access_denied=foundry_access_denied
     )

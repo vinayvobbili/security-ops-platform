@@ -10,6 +10,7 @@ from .metrics import metrics_bp
 from .security_tools import security_tools_bp
 from .chat import chat_bp
 from .monitoring import monitoring_bp
+from .detection_rules import detection_rules_bp
 
 __all__ = [
     'utilities_bp',
@@ -19,6 +20,7 @@ __all__ = [
     'security_tools_bp',
     'chat_bp',
     'monitoring_bp',
+    'detection_rules_bp',
 ]
 
 
@@ -35,3 +37,4 @@ def register_all_blueprints(app):
     app.register_blueprint(security_tools_bp)
     app.register_blueprint(chat_bp)
     app.register_blueprint(monitoring_bp)
+    app.register_blueprint(detection_rules_bp)

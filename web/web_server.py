@@ -17,10 +17,15 @@ import threading
 from datetime import datetime
 from functools import lru_cache
 
+# Load .env file before any other imports that use environment variables
+from dotenv import load_dotenv
 _CURRENT_DIR = os.path.dirname(__file__)
 _PROJECT_ROOT = os.path.abspath(os.path.join(_CURRENT_DIR, '..'))
 if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
+
+# Load environment variables from .env file
+load_dotenv(os.path.join(_PROJECT_ROOT, '.env'))
 
 # Third-party imports
 from flask import Flask, abort, request
@@ -150,6 +155,12 @@ def block_ip():
         return abort(404)
 
 
+@app.route('/favicon.ico')
+def favicon():
+    """Serve favicon from static icons folder."""
+    return app.send_static_file('icons/favicon.ico')
+
+
 # Register all route blueprints
 register_all_blueprints(app)
 
@@ -227,9 +238,9 @@ def main():
         except ImportError:
             print("Waitress not available, falling back to Flask dev server")
             try:
-                app.run(debug=True, host=host, port=port, threaded=True, use_reloader=True)
+                app.run(debug=False, host=host, port=port, threaded=True, use_reloader=False)
             except OSError as ex:
-                _handle_port_error(ex, port, debug=True)
+                _handle_port_error(ex, port, debug=False)
 
 
 def _handle_port_error(exc, port, debug=False):

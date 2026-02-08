@@ -26,7 +26,7 @@ from my_bot.tools.staffing_tools import get_current_shift_info, get_current_staf
 # from my_bot.tools.metrics_tools import get_bot_metrics, get_bot_metrics_summary  # Commented out to reduce context
 from my_bot.tools.test_tools import run_tests, simple_live_message_test
 from my_bot.tools.weather_tools import get_weather_info
-from my_bot.tools.xsoar_tools import generate_executive_summary, add_note_to_xsoar_ticket, get_xsoar_ticket
+from my_bot.tools.xsoar_tools import generate_executive_summary, add_note_to_xsoar_ticket, get_xsoar_ticket, attach_file_to_xsoar_ticket
 from my_bot.tools.virustotal_tools import lookup_ip_virustotal, lookup_domain_virustotal, lookup_url_virustotal, lookup_hash_virustotal, reanalyze_virustotal
 from my_bot.tools.abuseipdb_tools import lookup_ip_abuseipdb, lookup_domain_abuseipdb
 from my_bot.tools.urlscan_tools import search_urlscan, scan_url_urlscan
@@ -43,6 +43,16 @@ from my_bot.tools.servicenow_tools import get_host_details_snow
 from my_bot.tools.recorded_future_tools import lookup_ip_recorded_future, lookup_domain_recorded_future, lookup_hash_recorded_future, lookup_url_recorded_future, lookup_cve_recorded_future, search_threat_actor_recorded_future, triage_for_phishing_recorded_future
 from my_bot.tools.tipper_analysis_tools import analyze_tipper_novelty, add_note_to_tipper, analyze_threat_text
 from my_bot.tools.remediation_tools import suggest_remediation
+from my_bot.tools.thehive_tools import (
+    create_thehive_case, get_thehive_case, add_observable_to_thehive_case,
+    add_comment_to_thehive_case, update_thehive_case, close_thehive_case,
+    search_thehive_cases, create_thehive_alert, add_task_to_thehive_case
+)
+from my_bot.tools.dfir_iris_tools import (
+    create_iris_case, get_iris_case, add_ioc_to_iris_case,
+    add_note_to_iris_case, add_asset_to_iris_case, add_timeline_event_to_iris_case,
+    search_iris_cases, close_iris_case, create_iris_alert
+)
 from my_bot.utils.enhanced_config import ModelConfig
 from my_config import get_config
 
@@ -267,6 +277,7 @@ RESPONSE STYLE: Use markdown formatting. Lead with the answer, keep it scannable
                 get_xsoar_ticket,
                 generate_executive_summary,
                 add_note_to_xsoar_ticket,
+                attach_file_to_xsoar_ticket,
                 suggest_remediation,
 
                 # VirusTotal tools
@@ -340,6 +351,28 @@ RESPONSE STYLE: Use markdown formatting. Lead with the answer, keep it scannable
                 analyze_tipper_novelty,
                 add_note_to_tipper,
                 analyze_threat_text,
+
+                # TheHive case management tools
+                create_thehive_case,
+                get_thehive_case,
+                add_observable_to_thehive_case,
+                add_comment_to_thehive_case,
+                update_thehive_case,
+                close_thehive_case,
+                search_thehive_cases,
+                create_thehive_alert,
+                add_task_to_thehive_case,
+
+                # DFIR-IRIS incident response tools
+                create_iris_case,
+                get_iris_case,
+                add_ioc_to_iris_case,
+                add_note_to_iris_case,
+                add_asset_to_iris_case,
+                add_timeline_event_to_iris_case,
+                search_iris_cases,
+                close_iris_case,
+                create_iris_alert,
 
                 # Metrics tools - commented out to reduce context
                 # get_bot_metrics,

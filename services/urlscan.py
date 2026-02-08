@@ -10,7 +10,7 @@ API Documentation: https://urlscan.io/docs/api/
 
 import logging
 import time
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 
 import requests
@@ -287,7 +287,7 @@ class URLScanClient:
         # Check cache
         if use_cache and domain in self._parking_cache:
             cached_result, cached_time = self._parking_cache[domain]
-            if datetime.utcnow() - cached_time < self._cache_ttl:
+            if datetime.now(UTC) - cached_time < self._cache_ttl:
                 logger.debug(f"{domain}: Using cached parking status: {cached_result}")
                 return cached_result
 
@@ -319,12 +319,12 @@ class URLScanClient:
 
             if parking_analysis["is_parked"]:
                 logger.info(f"{domain}: Detected as PARKED (confidence: {parking_analysis['confidence']}, reasons: {parking_analysis['reasons']})")
-                self._parking_cache[domain] = (True, datetime.utcnow())
+                self._parking_cache[domain] = (True, datetime.now(UTC))
                 return True
 
             # If high confidence it's NOT parked (has real content)
             if parking_analysis["confidence"] != "low":
-                self._parking_cache[domain] = (False, datetime.utcnow())
+                self._parking_cache[domain] = (False, datetime.now(UTC))
                 return False
 
         # If we checked scans but couldn't determine, return None
@@ -366,7 +366,7 @@ class URLScanClient:
         parking_analysis = self._extract_parking_indicators(scan_data)
 
         is_parked = parking_analysis["is_parked"]
-        self._parking_cache[domain] = (is_parked, datetime.utcnow())
+        self._parking_cache[domain] = (is_parked, datetime.now(UTC))
 
         if is_parked:
             logger.info(f"{domain}: Detected as PARKED via new scan (reasons: {parking_analysis['reasons']})")

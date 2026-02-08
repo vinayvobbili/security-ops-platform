@@ -1,7 +1,8 @@
 """Formatting functions for tipper analysis output."""
 
 from datetime import datetime, timezone
-from typing import Dict, List
+from typing import Dict, List, Optional, Tuple
+from urllib.parse import quote
 
 from .models import NoveltyAnalysis, IOCHuntResult, ToolHuntResult
 from .utils import (
@@ -12,6 +13,89 @@ from .utils import (
     get_risk_emoji,
     get_risk_colors,
 )
+
+
+def _get_falcon_console_link(query_type: str, fql_query: str) -> Optional[Tuple[str, str]]:
+    """Generate a clickable Falcon console link for a CrowdStrike FQL query.
+
+    Args:
+        query_type: The type of query (e.g., 'IP Detection Search (Detects API)')
+        fql_query: The FQL filter string
+
+    Returns:
+        Tuple of (url, link_text) or None if not a linkable query type or console URL not configured
+    """
+    from my_config import get_config
+
+    # Skip ThreatGraph API calls - they're not FQL
+    if 'ThreatGraph' in query_type or 'ThreatGraph' in fql_query:
+        return None
+
+    # Get Falcon console URL from config
+    config = get_config()
+    falcon_base = config.cs_falcon_console_url
+    if not falcon_base:
+        return None  # Console URL not configured
+
+    # Remove trailing slash if present
+    falcon_base = falcon_base.rstrip('/')
+
+    # URL-encode the FQL query
+    encoded_fql = quote(fql_query, safe='')
+
+    # Map query types to Falcon console URLs
+    if 'Detection' in query_type or 'Detects' in query_type:
+        url = f"{falcon_base}/activity/detections?filter={encoded_fql}"
+        link_text = "Open in Falcon Detections"
+    elif 'Alert' in query_type:
+        url = f"{falcon_base}/alerts?filter={encoded_fql}"
+        link_text = "Open in Falcon Alerts"
+    elif 'Hash' in query_type or 'Filename' in query_type:
+        url = f"{falcon_base}/activity/detections?filter={encoded_fql}"
+        link_text = "Open in Falcon Detections"
+    elif 'Intel' in query_type or 'Falcon X' in query_type:
+        url = f"{falcon_base}/intelligence/indicators?filter={encoded_fql}"
+        link_text = "Open in Falcon Intelligence"
+    else:
+        # Default to event search for unknown types
+        url = f"{falcon_base}/investigate/events?filter={encoded_fql}"
+        link_text = "Open in Falcon Event Search"
+
+    return (url, link_text)
+
+
+def _get_qradar_console_link(aql_query: str) -> Optional[Tuple[str, str]]:
+    """Generate a clickable QRadar console link for an AQL query.
+
+    Args:
+        aql_query: The AQL query string
+
+    Returns:
+        Tuple of (url, link_text) or None if console URL not configured
+    """
+    import re
+    from my_config import get_config
+
+    # Get QRadar console URL from config
+    config = get_config()
+    qradar_base = config.qradar_console_url
+    if not qradar_base:
+        return None  # Console URL not configured
+
+    # Remove trailing slash if present
+    qradar_base = qradar_base.rstrip('/')
+
+    # Normalize query to single line: collapse newlines and multiple spaces
+    normalized_aql = re.sub(r'\s+', ' ', aql_query).strip()
+
+    # URL-encode the AQL query
+    encoded_aql = quote(normalized_aql, safe='')
+
+    # QRadar Log Activity search URL format
+    url = f"{qradar_base}/console/do/ariel/arielSearch?appName=EventViewer&pageId=EventList&dispatch=performSearch&value(searchMode)=AQL&value(aql)={encoded_aql}"
+    link_text = "Open in QRadar Log Activity"
+
+    return (url, link_text)
 
 
 def _recency_label(tipper_ids: List[str], history_dates: Dict[str, str]) -> str:
@@ -256,12 +340,12 @@ def format_analysis_for_display(analysis: NoveltyAnalysis, source: str = "on-dem
                 output += f"  _ℹ️ {total_extracted} total IOCs extracted, {high_risk_count} high-risk_\n"
 
     # Add MITRE coverage summary with technique-to-rule table
+    output += "\n**🎯 MITRE ATT&CK Coverage:**\n"
     if analysis.mitre_techniques:
         covered_count = len(analysis.mitre_covered)
         gap_count = len(analysis.mitre_gaps)
         total = len(analysis.mitre_techniques)
 
-        output += "\n**🎯 MITRE ATT&CK Coverage:**\n"
         if gap_count > 0:
             output += f"  {covered_count}/{total} techniques covered, ⚠️ **{gap_count} gap(s)**\n"
         else:
@@ -297,6 +381,8 @@ def format_analysis_for_display(analysis: NoveltyAnalysis, source: str = "on-dem
             output += f"  ⚠️ **Gaps (no rules):** {', '.join(analysis.mitre_gaps[:5])}\n"
             if len(analysis.mitre_gaps) > 5:
                 output += f"     (+{len(analysis.mitre_gaps) - 5} more)\n"
+    else:
+        output += "  _(No MITRE techniques identified in this tipper)_\n"
 
     # Add detection rules coverage section (compact for Webex)
     if analysis.existing_rules:
@@ -502,9 +588,8 @@ def format_analysis_for_azdo(analysis: NoveltyAnalysis) -> str:
             html += rules_html
 
     # Add MITRE ATT&CK coverage gap analysis with technique-to-rule table
+    html += "\n<h4>&#x1F3AF; MITRE ATT&CK Coverage:</h4>\n"
     if analysis.mitre_techniques:
-        html += "\n<h4>&#x1F3AF; MITRE ATT&CK Coverage Analysis</h4>\n"
-
         covered_count = len(analysis.mitre_covered)
         gap_count = len(analysis.mitre_gaps)
         total = len(analysis.mitre_techniques)
@@ -560,6 +645,8 @@ def format_analysis_for_azdo(analysis: NoveltyAnalysis) -> str:
                 for t in analysis.mitre_gaps[:10]
             )
             html += f"<p><strong>Gaps</strong> (no detection rules): {gap_badges}</p>\n"
+    else:
+        html += "<p><em>(No MITRE techniques identified in this tipper)</em></p>\n"
 
     # Add Actionable Next Steps section
     if analysis.actionable_steps:
@@ -609,11 +696,12 @@ def format_hunt_results_for_webex(result: IOCHuntResult, tipper_id: str, azdo_ur
         tipper_id: The tipper work item ID
         azdo_url: AZDO work item URL for the link
     """
-    days = result.search_hours // 24
+    qradar_days = result.search_hours_qradar // 24
+    crowdstrike_days = result.search_hours_crowdstrike // 24
 
     if result.total_hits == 0:
         output = f"✅ **IOC Hunt Complete** — #{tipper_id}\n"
-        output += f"No hits found. Searched {result.total_iocs_searched} IOCs over {days} days.\n"
+        output += f"No hits found. Searched {result.total_iocs_searched} IOCs (QRadar: {qradar_days}d, CrowdStrike: {crowdstrike_days}d).\n"
         if azdo_url:
             output += f"_📝 Results posted to [#{tipper_id}]({azdo_url})_\n"
         return output
@@ -630,7 +718,10 @@ def format_hunt_results_for_webex(result: IOCHuntResult, tipper_id: str, azdo_ur
         if not tool_result or tool_result.total_hits == 0:
             continue
         for hit in tool_result.ip_hits:
-            rows.append((defang_ioc(hit['ip'], 'ip'), "IP", tool_short, hit['event_count']))
+            # Handle different count fields: QRadar uses event_count, CrowdStrike uses detection/alert/network
+            count = (hit.get('event_count') or
+                     hit.get('detection_count', 0) + hit.get('alert_count', 0) + hit.get('network_hosts_count', 0))
+            rows.append((defang_ioc(hit['ip'], 'ip'), "IP", tool_short, count))
         for hit in tool_result.domain_hits:
             rows.append((defang_ioc(hit['domain'], 'domain'), "domain", tool_short,
                          hit.get('event_count') or hit.get('threat_count', 0)))
@@ -660,7 +751,13 @@ def format_hunt_results_for_webex(result: IOCHuntResult, tipper_id: str, azdo_ur
             output += f"... and {len(rows) - 15} more\n"
         output += "```\n"
 
-    output += f"\n_Searched {result.total_iocs_searched} IOCs over {days} days._\n"
+    output += f"\n_Searched {result.total_iocs_searched} IOCs (QRadar: {qradar_days}d, CrowdStrike: {crowdstrike_days}d)._\n"
+
+    # Note any access/permission issues
+    if result.access_issues:
+        for issue in result.access_issues:
+            output += f"_⚠️ {issue}_\n"
+
     if azdo_url:
         output += f"_📝 Full details posted to [#{tipper_id}]({azdo_url})_\n"
 
@@ -772,34 +869,49 @@ def format_single_tool_hunt_for_azdo(
         f"<p><em>Searched {total_iocs_searched} IOCs over last {search_hours} hours ({search_hours // 24} days)</em></p>",
     ]
 
-    # Show IOCs searched (each type on its own line for prominence)
-    ioc_lines = []
+    # Show IOCs searched in a clean multi-column table format
+    ioc_sections = []
     if searched_iocs.get('domains'):
-        domains = searched_iocs['domains']
-        domains_display = ', '.join(f"<code>{d}</code>" for d in domains)
-        ioc_lines.append(f"<strong>Domains:</strong> {domains_display}")
+        ioc_sections.append(('Domains', searched_iocs['domains'], 'domain'))
     if searched_iocs.get('urls'):
-        urls = searched_iocs['urls']
-        urls_display = ', '.join(f"<code>{u}</code>" for u in urls)
-        ioc_lines.append(f"<strong>URLs:</strong> {urls_display}")
+        ioc_sections.append(('URLs', searched_iocs['urls'], 'url'))
     if searched_iocs.get('filenames'):
-        filenames = searched_iocs['filenames']
-        filenames_display = ', '.join(f"<code>{f}</code>" for f in filenames)
-        ioc_lines.append(f"<strong>Filenames:</strong> {filenames_display}")
+        ioc_sections.append(('Filenames', searched_iocs['filenames'], 'filename'))
     if searched_iocs.get('ips'):
-        ips = searched_iocs['ips']
-        ips_display = ', '.join(f"<code>{ip}</code>" for ip in ips)
-        ioc_lines.append(f"<strong>IPs:</strong> {ips_display}")
+        ioc_sections.append(('IPs', searched_iocs['ips'], 'ip'))
     if searched_iocs.get('hashes'):
-        hashes = searched_iocs['hashes']
-        hashes_display = ', '.join(f"<code>{h[:16]}...</code>" for h in hashes)
-        ioc_lines.append(f"<strong>Hashes:</strong> {hashes_display}")
+        ioc_sections.append(('Hashes', searched_iocs['hashes'], 'hash'))
 
-    if ioc_lines:
-        html_parts.append("<div style='font-size: 12px; color: #444; margin: 8px 0;'>")
-        for line in ioc_lines:
-            html_parts.append(f"<p style='margin: 4px 0;'>{line}</p>")
-        html_parts.append("</div>")
+    if ioc_sections:
+        html_parts.append("<details open><summary><strong>IOCs Searched</strong></summary>")
+        html_parts.append("<div style='font-size: 12px; margin: 8px 0;'>")
+
+        for section_name, items, ioc_type in ioc_sections:
+            html_parts.append(f"<p style='margin: 12px 0 4px 0;'><strong>{section_name}:</strong></p>")
+            # Use a 3-column table for readability
+            html_parts.append("<table style='border-collapse: collapse; width: 100%; font-size: 11px;'>")
+            # Calculate rows needed for 3 columns
+            cols = 3
+            rows_needed = (len(items) + cols - 1) // cols
+            for row_idx in range(rows_needed):
+                html_parts.append("<tr>")
+                for col_idx in range(cols):
+                    item_idx = row_idx + col_idx * rows_needed
+                    if item_idx < len(items):
+                        item = items[item_idx]
+                        # Truncate hashes for display
+                        display_val = f"{item[:16]}..." if ioc_type == 'hash' else item
+                        # Wrap in <code> to prevent auto-linking
+                        html_parts.append(
+                            f"<td style='padding: 3px 8px; border: 1px solid #ddd; "
+                            f"background-color: #f8f8f8;'><code>{display_val}</code></td>"
+                        )
+                    else:
+                        html_parts.append("<td style='border: 1px solid #ddd;'></td>")
+                html_parts.append("</tr>")
+            html_parts.append("</table>")
+
+        html_parts.append("</div></details>")
 
     th_style = "padding: 6px; border: 1px solid #ccc;"
     td_style = "padding: 6px; border: 1px solid #ccc;"
@@ -819,14 +931,32 @@ def format_single_tool_hunt_for_azdo(
         )
         for hit in tool_result.ip_hits:
             ip = hit['ip']
-            count = hit.get('event_count') or hit.get('detection_count') or hit.get('alert_count', 0)
+            # Build count display - show breakdown for CrowdStrike (detects/alerts + network hosts)
+            detection_count = hit.get('detection_count', 0)
+            alert_count = hit.get('alert_count', 0)
+            network_hosts = hit.get('network_hosts_count', 0)
+            event_count = hit.get('event_count', 0)
+
+            if detection_count or alert_count or network_hosts:
+                # CrowdStrike format - show breakdown
+                parts = []
+                if detection_count + alert_count > 0:
+                    parts.append(f"{detection_count + alert_count} detects")
+                if network_hosts > 0:
+                    parts.append(f"{network_hosts} hosts")
+                count = detection_count + alert_count + network_hosts
+                count_display = ', '.join(parts) if parts else str(count)
+            else:
+                # QRadar/other format
+                count = event_count
+                count_display = _qradar_search_link(ip, 'ip', count)
+
             direction = hit.get('direction', '')
             sources = ', '.join(hit.get('sources', [])) if hit.get('sources') else ''
             users = hit.get('users', [])
             hosts = hit.get('hosts', []) or hit.get('hostnames', [])
             users_display = ', '.join(users[:3]) + (f" (+{len(users) - 3})" if len(users) > 3 else "")
             hosts_display = ', '.join(hosts[:3]) + (f" (+{len(hosts) - 3})" if len(hosts) > 3 else "")
-            count_display = _qradar_search_link(ip, 'ip', count)
             html_parts.append(
                 f"<tr style='background-color: #ffe6e6;'>"
                 f"<td style='{td_style}'><code>{ip}</code></td>"
@@ -980,13 +1110,103 @@ def format_single_tool_hunt_for_azdo(
                 html_parts.append(f"<li>{err}</li>")
             html_parts.append("</ul></details>")
 
-    # Queries executed
-    if tool_result.queries:
-        html_parts.append("<details><summary>&#x1F50D; Queries Executed</summary>")
-        for q in tool_result.queries:
-            escaped_query = q.get('query', '').replace('<', '&lt;').replace('>', '&gt;')
-            html_parts.append(f"<p><strong>{q.get('type', 'Search')}:</strong></p>")
+    # Separate LogScale queries from FQL/API queries
+    logscale_queries = [q for q in (tool_result.queries or []) if q.get('query_type') == 'logscale']
+    api_queries = [q for q in (tool_result.queries or []) if q.get('query_type') != 'logscale']
+
+    # Event Search queries (LogScale) - shown prominently for analysts
+    if logscale_queries and tool_result.tool_name == 'CrowdStrike':
+        # Get Falcon console URL for Event Search link
+        falcon_base = config.cs_falcon_console_url
+        if falcon_base:
+            falcon_base = falcon_base.rstrip('/')
+            event_search_url = f"{falcon_base}/investigate/event-search"
+        else:
+            event_search_url = None
+
+        # Check if any queries were executed successfully
+        executed_queries = [q for q in logscale_queries if q.get('execution_status') == 'executed']
+        manual_queries = [q for q in logscale_queries if q.get('execution_status') != 'executed']
+
+        if executed_queries:
+            # Show executed queries with results
+            total_events = sum(q.get('event_count', 0) for q in executed_queries)
+            html_parts.append(f"<h4>&#x1F50E; Event Search Results ({total_events} events found)</h4>")
+            if event_search_url:
+                html_parts.append(f"<p><a href='{event_search_url}' target='_blank' style='color: #1976d2; font-weight: bold;'>&#x1F517; Open Falcon Event Search</a></p>")
+
+            for q in executed_queries:
+                query_type = q.get('type', 'Event Search')
+                query_text = q.get('query', '')
+                event_count = q.get('event_count', 0)
+                sample_events = q.get('sample_events', [])
+                escaped_query = query_text.replace('<', '&lt;').replace('>', '&gt;')
+
+                # Status badge based on event count
+                if event_count > 0:
+                    status_badge = f"<span style='background-color: #ffcdd2; color: #c62828; padding: 2px 8px; border-radius: 4px; font-size: 10px; margin-left: 8px;'>&#x26A0; {event_count} events</span>"
+                else:
+                    status_badge = "<span style='background-color: #c8e6c9; color: #2e7d32; padding: 2px 8px; border-radius: 4px; font-size: 10px; margin-left: 8px;'>&#x2705; No hits</span>"
+
+                html_parts.append(f"<p><strong>{query_type}:</strong>{status_badge}</p>")
+                html_parts.append(
+                    f"<pre style='background-color: #e3f2fd; padding: 10px; font-size: 11px; "
+                    f"overflow-x: auto; white-space: pre-wrap; border-left: 4px solid #1976d2;'>{escaped_query}</pre>"
+                )
+
+                # Show sample events if any
+                if sample_events:
+                    html_parts.append("<details><summary>Sample Events (first 5)</summary>")
+                    html_parts.append("<ul style='font-size: 11px;'>")
+                    for event in sample_events[:5]:
+                        # Extract key fields from event
+                        timestamp = event.get('@timestamp', event.get('timestamp', 'N/A'))
+                        hostname = event.get('ComputerName', event.get('hostname', 'N/A'))
+                        event_type = event.get('#event_simpleName', event.get('event_type', 'N/A'))
+                        summary = f"{timestamp} | {hostname} | {event_type}"
+                        html_parts.append(f"<li><code>{summary}</code></li>")
+                    html_parts.append("</ul></details>")
+
+        if manual_queries:
+            # Show queries that need manual execution
+            if executed_queries:
+                html_parts.append("<h4>&#x1F4CB; Additional Queries (manual execution)</h4>")
+            else:
+                html_parts.append("<h4>&#x1F50E; Event Search Queries (for deeper investigation)</h4>")
+                if event_search_url:
+                    html_parts.append(f"<p><a href='{event_search_url}' target='_blank' style='color: #1976d2; font-weight: bold;'>&#x1F517; Open Falcon Event Search</a></p>")
+            html_parts.append("<p><em>Copy and paste these queries into Event Search to hunt across raw telemetry:</em></p>")
+
+            for q in manual_queries:
+                query_type = q.get('type', 'Event Search')
+                query_text = q.get('query', '')
+                escaped_query = query_text.replace('<', '&lt;').replace('>', '&gt;')
+                html_parts.append(f"<p><strong>{query_type}:</strong></p>")
+                html_parts.append(
+                    f"<pre style='background-color: #e3f2fd; padding: 10px; font-size: 11px; "
+                    f"overflow-x: auto; white-space: pre-wrap; border-left: 4px solid #1976d2;'>{escaped_query}</pre>"
+                )
+
+    # API queries executed (FQL) - collapsed for reference
+    if api_queries:
+        html_parts.append("<details><summary>&#x1F50D; API Queries Executed</summary>")
+        for q in api_queries:
+            query_type = q.get('type', 'Search')
+            query_text = q.get('query', '')
+            escaped_query = query_text.replace('<', '&lt;').replace('>', '&gt;')
+            html_parts.append(f"<p><strong>{query_type}:</strong></p>")
             html_parts.append(f"<pre style='background-color: #f5f5f5; padding: 8px; font-size: 11px; overflow-x: auto; white-space: pre-wrap;'>{escaped_query}</pre>")
+            # Add clickable console links based on tool
+            if tool_result.tool_name == 'CrowdStrike':
+                falcon_link = _get_falcon_console_link(query_type, query_text)
+                if falcon_link:
+                    url, link_text = falcon_link
+                    html_parts.append(f"<p><a href='{url}' target='_blank' style='color: #1976d2;'>&#x1F517; {link_text}</a></p>")
+            elif tool_result.tool_name == 'QRadar':
+                qradar_link = _get_qradar_console_link(query_text)
+                if qradar_link:
+                    url, link_text = qradar_link
+                    html_parts.append(f"<p><a href='{url}' target='_blank' style='color: #1976d2;'>&#x1F517; {link_text}</a></p>")
         html_parts.append("</details>")
 
     html_parts.append(f"<p><em>Generated by Pokedex IOC Hunter</em></p>")
@@ -1055,7 +1275,7 @@ def format_hunt_results_for_azdo(result: IOCHuntResult, rf_enrichment: dict = No
         """Generate QRadar AQL search link for an IOC."""
         if not qradar_console:
             return str(count)
-        days = result.search_hours // 24
+        days = result.search_hours_qradar // 24
         if ioc_type == 'domain':
             aql = f"SELECT * FROM events WHERE LOWER(\"URL\") LIKE '%{ioc_value.lower()}%' OR LOWER(\"TSLD\") LIKE '%{ioc_value.lower()}%' LAST {days} DAYS"
         elif ioc_type == 'url':
@@ -1071,36 +1291,58 @@ def format_hunt_results_for_azdo(result: IOCHuntResult, rf_enrichment: dict = No
         url = f"{qradar_console}/console/do/ariel/arielSearch?appName=Viewer&pageId=EventList&dispatch=performSearch&value={encoded_aql}"
         return f"<a href='{url}' target='_blank'>{count} events</a>"
 
+    qradar_days = result.search_hours_qradar // 24
+    crowdstrike_days = result.search_hours_crowdstrike // 24
     html_parts = [
         "<div style='font-family: Segoe UI, sans-serif; font-size: 13px;'>",
         f"<h3>{status_icon} IOC Hunt Results</h3>",
         f"<p>{status_text}</p>",
-        f"<p><em>Searched {result.total_iocs_searched} IOCs over last {result.search_hours} hours ({result.search_hours // 24} days)</em></p>",
+        f"<p><em>Searched {result.total_iocs_searched} IOCs (QRadar: {qradar_days} days, CrowdStrike: {crowdstrike_days} days)</em></p>",
     ]
 
-    # Show what IOCs were searched (all values, collapsible)
-    ioc_list_parts = []
+    # Show what IOCs were searched in a clean multi-column table format
+    ioc_sections = []
     if result.searched_domains:
-        domains_display = ', '.join(f"<code>{d}</code>" for d in result.searched_domains)
-        ioc_list_parts.append(f"<strong>Domains:</strong> {domains_display}")
+        ioc_sections.append(('Domains', result.searched_domains, 'domain'))
     if result.searched_urls:
-        urls_display = ', '.join(f"<code>{u}</code>" for u in result.searched_urls)
-        ioc_list_parts.append(f"<strong>URLs:</strong> {urls_display}")
+        ioc_sections.append(('URLs', result.searched_urls, 'url'))
     if result.searched_filenames:
-        filenames_display = ', '.join(f"<code>{f}</code>" for f in result.searched_filenames)
-        ioc_list_parts.append(f"<strong>Filenames:</strong> {filenames_display}")
+        ioc_sections.append(('Filenames', result.searched_filenames, 'filename'))
     if result.searched_ips:
-        ips_display = ', '.join(f"<code>{ip}</code>" for ip in result.searched_ips)
-        ioc_list_parts.append(f"<strong>IPs:</strong> {ips_display}")
+        ioc_sections.append(('IPs', result.searched_ips, 'ip'))
     if result.searched_hashes:
-        hashes_display = ', '.join(f"<code>{h[:16]}...</code>" for h in result.searched_hashes)
-        ioc_list_parts.append(f"<strong>Hashes:</strong> {hashes_display}")
+        ioc_sections.append(('Hashes', result.searched_hashes, 'hash'))
 
-    if ioc_list_parts:
-        html_parts.append("<details><summary>IOCs Searched</summary><ul style='margin: 4px 0;'>")
-        for part in ioc_list_parts:
-            html_parts.append(f"<li>{part}</li>")
-        html_parts.append("</ul></details>")
+    if ioc_sections:
+        html_parts.append("<details open><summary><strong>IOCs Searched</strong></summary>")
+        html_parts.append("<div style='font-size: 12px; margin: 8px 0;'>")
+
+        for section_name, items, ioc_type in ioc_sections:
+            html_parts.append(f"<p style='margin: 12px 0 4px 0;'><strong>{section_name}:</strong></p>")
+            # Use a 3-column table for readability
+            html_parts.append("<table style='border-collapse: collapse; width: 100%; font-size: 11px;'>")
+            # Calculate rows needed for 3 columns
+            cols = 3
+            rows_needed = (len(items) + cols - 1) // cols
+            for row_idx in range(rows_needed):
+                html_parts.append("<tr>")
+                for col_idx in range(cols):
+                    item_idx = row_idx + col_idx * rows_needed
+                    if item_idx < len(items):
+                        item = items[item_idx]
+                        # Truncate hashes for display
+                        display_val = f"{item[:16]}..." if ioc_type == 'hash' else item
+                        # Wrap in <code> to prevent auto-linking
+                        html_parts.append(
+                            f"<td style='padding: 3px 8px; border: 1px solid #ddd; "
+                            f"background-color: #f8f8f8;'><code>{display_val}</code></td>"
+                        )
+                    else:
+                        html_parts.append("<td style='border: 1px solid #ddd;'></td>")
+                html_parts.append("</tr>")
+            html_parts.append("</table>")
+
+        html_parts.append("</div></details>")
 
     # Add environment exposure summary if there are hits
     if result.total_hits > 0:
@@ -1375,22 +1617,61 @@ def format_hunt_results_for_azdo(result: IOCHuntResult, rf_enrichment: dict = No
             html_parts.append(f"<li>{err}</li>")
         html_parts.append("</ul></details>")
 
-    # Queries executed (for transparency/verification)
-    all_queries = []
+    # Collect all queries, separating LogScale from API queries
+    logscale_queries = []
+    api_queries = []
+
     if result.qradar and result.qradar.queries:
         for q in result.qradar.queries:
-            all_queries.append(('QRadar', q.get('type', 'Search'), q.get('query', '')))
+            api_queries.append(('QRadar', q.get('type', 'Search'), q.get('query', '')))
+
     if result.crowdstrike and result.crowdstrike.queries:
         for q in result.crowdstrike.queries:
-            all_queries.append(('CrowdStrike', q.get('type', 'Search'), q.get('query', '')))
+            if q.get('query_type') == 'logscale':
+                logscale_queries.append(('CrowdStrike', q.get('type', 'Search'), q.get('query', '')))
+            else:
+                api_queries.append(('CrowdStrike', q.get('type', 'Search'), q.get('query', '')))
 
-    if all_queries:
-        html_parts.append("<details><summary>&#x1F50D; Queries Executed</summary>")
-        for tool, query_type, query in all_queries:
-            # Escape HTML in query and format as code block
+    # Event Search queries (LogScale) - shown prominently for analysts
+    if logscale_queries:
+        falcon_base = config.cs_falcon_console_url
+        if falcon_base:
+            falcon_base = falcon_base.rstrip('/')
+            event_search_url = f"{falcon_base}/investigate/event-search"
+        else:
+            event_search_url = None
+
+        html_parts.append("<h4>&#x1F50E; Event Search Queries (for deeper investigation)</h4>")
+        if event_search_url:
+            html_parts.append(f"<p><a href='{event_search_url}' target='_blank' style='color: #1976d2; font-weight: bold;'>&#x1F517; Open Falcon Event Search</a></p>")
+        html_parts.append("<p><em>Copy and paste these queries into Event Search to hunt across raw telemetry:</em></p>")
+
+        for tool, query_type, query in logscale_queries:
+            escaped_query = query.replace('<', '&lt;').replace('>', '&gt;')
+            html_parts.append(f"<p><strong>{query_type}:</strong></p>")
+            html_parts.append(
+                f"<pre style='background-color: #e3f2fd; padding: 10px; font-size: 11px; "
+                f"overflow-x: auto; white-space: pre-wrap; border-left: 4px solid #1976d2;'>{escaped_query}</pre>"
+            )
+
+    # API queries executed - collapsed for reference
+    if api_queries:
+        html_parts.append("<details><summary>&#x1F50D; API Queries Executed</summary>")
+        for tool, query_type, query in api_queries:
             escaped_query = query.replace('<', '&lt;').replace('>', '&gt;')
             html_parts.append(f"<p><strong>{tool} - {query_type}:</strong></p>")
             html_parts.append(f"<pre style='background-color: #f5f5f5; padding: 8px; font-size: 11px; overflow-x: auto; white-space: pre-wrap;'>{escaped_query}</pre>")
+            # Add clickable console links based on tool
+            if tool == 'CrowdStrike':
+                falcon_link = _get_falcon_console_link(query_type, query)
+                if falcon_link:
+                    url, link_text = falcon_link
+                    html_parts.append(f"<p><a href='{url}' target='_blank' style='color: #1976d2;'>&#x1F517; {link_text}</a></p>")
+            elif tool == 'QRadar':
+                qradar_link = _get_qradar_console_link(query)
+                if qradar_link:
+                    url, link_text = qradar_link
+                    html_parts.append(f"<p><a href='{url}' target='_blank' style='color: #1976d2;'>&#x1F517; {link_text}</a></p>")
         html_parts.append("</details>")
 
     html_parts.append(f"<p><em>Hunt completed: {result.hunt_time}</em></p>")

@@ -56,11 +56,18 @@ def fetch_qradar_rules() -> List[DetectionRule]:
         logger.warning("QRadar not configured, skipping")
         return rules
 
-    # Fetch custom analytics rules
-    logger.info("Fetching QRadar custom analytics rules...")
+    # Fetch custom analytics rules (API filters to _AE_ prod rules)
+    logger.info("Fetching QRadar production analytics rules (_AE_ prefix)...")
     result = client.list_analytics_rules(origin="USER")
     if "error" not in result:
-        for rule in result.get("rules", []):
+        raw_rules = result.get("rules", [])
+        # Safety filter: only keep _AE_ prod rules in case API filter is ignored
+        prod_rules = [r for r in raw_rules if r.get("name", "").startswith("_AE_")]
+        skipped = len(raw_rules) - len(prod_rules)
+        if skipped:
+            logger.info(f"Filtered out {skipped} non-production rules (missing _AE_ prefix)")
+
+        for rule in prod_rules:
             name = rule.get("name", "")
             context = _extract_threat_context(name)
 
@@ -79,7 +86,7 @@ def fetch_qradar_rules() -> List[DetectionRule]:
                 created_date=rule.get("creation_date", ""),
                 modified_date=rule.get("modification_date", ""),
             ))
-        logger.info(f"Fetched {len(result.get('rules', []))} custom analytics rules")
+        logger.info(f"Fetched {len(prod_rules)} production analytics rules")
     else:
         logger.warning(f"Failed to fetch QRadar rules: {result['error']}")
 

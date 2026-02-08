@@ -483,6 +483,80 @@ def add_note_to_xsoar_ticket(ticket_id: str, note_text: str, environment: str = 
         return f"Error adding note to ticket: {str(e)}"
 
 
+@tool
+@log_tool_call
+def attach_file_to_xsoar_ticket(ticket_id: str, file_path: str, comment: str = "", environment: str = "prod") -> str:
+    """
+    Attach a file to an XSOAR ticket's attachments field.
+
+    USE THIS TOOL when users ask to:
+    - Attach a file to an XSOAR ticket
+    - Upload evidence or artifacts to a case
+    - Add browser history, logs, or other files to a ticket
+
+    Args:
+        ticket_id: The XSOAR ticket/incident ID (e.g., "123456")
+        file_path: Full path to the file to attach (e.g., "/tmp/excel_exports/browser_history_HOST123_20250204.xlsx")
+        comment: Optional comment describing the file
+        environment: XSOAR environment - "prod" (default) or "dev"
+
+    Returns:
+        Success or error message
+
+    Example:
+        attach_file_to_xsoar_ticket("929947", "/tmp/excel_exports/browser_history_HOST123.xlsx", "Browser history from HOST123")
+    """
+    import os
+
+    try:
+        # Normalize ticket ID - strip "X#" prefix if present
+        ticket_id = ticket_id.strip()
+        if ticket_id.upper().startswith("X#"):
+            ticket_id = ticket_id[2:]
+
+        # Validate inputs
+        if not ticket_id:
+            return "Error: ticket_id cannot be empty"
+        if not file_path or not file_path.strip():
+            return "Error: file_path cannot be empty"
+        if not os.path.exists(file_path):
+            return f"Error: File not found: {file_path}"
+
+        # Validate environment
+        if environment.lower() == "prod":
+            xsoar_env = XsoarEnvironment.PROD
+        elif environment.lower() == "dev":
+            xsoar_env = XsoarEnvironment.DEV
+        else:
+            return f"Error: Invalid environment '{environment}'. Must be 'prod' or 'dev'."
+
+        logger.info(f"Attaching file {file_path} to XSOAR ticket {ticket_id} in {environment} environment")
+
+        # Initialize ticket handler
+        ticket_handler = TicketHandler(environment=xsoar_env)
+
+        # Upload the file
+        result = ticket_handler.upload_file_to_attachment(
+            incident_id=ticket_id,
+            file_path=file_path,
+            comment=comment or f"File attached via Pokedex: {os.path.basename(file_path)}"
+        )
+
+        file_name = os.path.basename(file_path)
+        logger.info(f"Successfully attached {file_name} to ticket {ticket_id}")
+        return f"✅ Successfully attached **{file_name}** to XSOAR ticket #{ticket_id}"
+
+    except FileNotFoundError as e:
+        logger.error(f"File not found: {e}")
+        return f"Error: {str(e)}"
+    except ValueError as e:
+        logger.error(f"Validation error attaching file to ticket {ticket_id}: {e}")
+        return f"Error: {str(e)}"
+    except Exception as e:
+        logger.error(f"Error attaching file to ticket {ticket_id}: {e}", exc_info=True)
+        return f"Error attaching file to ticket: {str(e)}"
+
+
 # =============================================================================
 # SAMPLE PROMPTS FOR LLM GUIDANCE
 # =============================================================================
@@ -496,4 +570,5 @@ def add_note_to_xsoar_ticket(ticket_id: str, note_text: str, environment: str = 
 # - "Add a note to XSOAR ticket 123456: Investigation complete, no threats found"
 # - "Write these findings to XSOAR case 929947"
 # - "Update XSOAR ticket 456789 with VT enrichment results"
+# - "Attach file /tmp/browser_history.xlsx to XSOAR ticket 123456"
 # =============================================================================

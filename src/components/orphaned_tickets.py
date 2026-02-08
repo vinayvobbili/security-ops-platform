@@ -46,7 +46,7 @@ def send_report(room_id):
             webex_api.messages.create(
                 roomId=room_id,
                 text="No orphaned tickets today!",
-                markdown="🎉 **Zero orphaned tickets today!** 🎊\n\nAll tickets have owners. Great job, team! 👏"
+                markdown="🎉 **Zero orphaned tickets today!** 🎊"
             )
             return
 

@@ -28,6 +28,14 @@ AUDIT_LOG_FILE = os.path.join(PROJECT_ROOT, 'data/transient/logs/log_viewer_audi
 
 # Bot configuration mapping bot name to process pattern
 BOTS = {
+    'pokedex': {
+        'name': 'Pokedex',
+        'emoji': '🔮',
+        'process_pattern': 'webex_bots/pokedex',
+        'start_script': 'startup_scripts/start_pokedex.sh',
+        'log_port': 8042,
+        'systemd_service': 'ir-pokedex.service'
+    },
     'toodles': {
         'name': 'Toodles',
         'emoji': '🎯',

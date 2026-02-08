@@ -18,6 +18,25 @@ project_root = os.path.dirname(os.path.dirname(script_dir))
 sys.path.insert(0, project_root)
 
 from my_bot.document.document_processor import DocumentProcessor
+from src.components.contacts_lookup import get_contacts_store
+
+
+def rebuild_contacts_store():
+    """Rebuild the contacts vector store from the Excel file"""
+    print("\nRebuilding contacts vector store...")
+    print("-" * 40)
+    try:
+        store = get_contacts_store()
+        before_count = store.collection.count()
+        print(f"Before rebuild: {before_count} entries")
+        store.rebuild()
+        after_count = store.collection.count()
+        print(f"After rebuild: {after_count} entries")
+        print("Contacts vector store rebuilt successfully!")
+        return True
+    except Exception as e:
+        print(f"Failed to rebuild contacts store: {e}")
+        return False
 
 
 def restart_preloader():
@@ -90,11 +109,18 @@ def main():
         print(f"  - Total chunks: {stats.get('total_chunks', 'N/A')}")
         print(f"  - Storage path: {stats.get('chroma_path', 'N/A')}")
 
+        # Rebuild contacts vector store
+        rebuild_contacts_store()
+
         # Automatically restart preloader service to load updated vector store
         print("\nRestarting preloader service to load updated documents...")
         restart_preloader()
     else:
-        print("Rebuild failed - check logs for errors")
+        print("Document rebuild failed - check logs for errors")
+
+    # Always try to rebuild contacts even if document rebuild fails
+    if not rebuild_success:
+        rebuild_contacts_store()
 
 
 if __name__ == "__main__":

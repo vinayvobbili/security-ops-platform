@@ -8,6 +8,7 @@ scheduler resilience.
 """
 
 import logging
+import os
 import sys
 import warnings
 from pathlib import Path
@@ -41,9 +42,13 @@ from src.charts import (
 from src.components import (
     oncall, approved_security_testing, thithi, response_sla_risk_tickets,
     containment_sla_risk_tickets, incident_declaration_sla_risk, abandoned_tickets,
-    orphaned_tickets, birthdays_anniversaries, major_incident_monitor,
-    stale_containment_cleanup
+    orphaned_tickets, birthdays_anniversaries, stale_containment_cleanup, ticket_pattern_analysis
 )
+from src.components.tipper_analyzer.rules.sync import sync_catalog
+from src.components.tipper_analyzer import analyze_recent_tippers
+from src.components.tipper_indexer import sync_tipper_index
+from src.components.tanium_signals_sync import sync_tanium_signals_catalog
+from src.utils.webex_utils import get_room_name
 from webex_bots.jarvis import run_automated_ring_tagging_workflow
 from webex_bots.tars import run_automated_ring_tagging_workflow as run_automated_tanium_ring_tagging_workflow
 from src.components import domain_monitoring
@@ -83,6 +88,91 @@ eastern = pytz.timezone('US/Eastern')
 # Default per-job timeout (seconds)
 DEFAULT_JOB_TIMEOUT = 1800  # 30 minutes
 TICKET_CACHE_TIMEOUT = 21600  # 360 minutes (6 hours) for ticket enrichment job on VM
+
+# Webex notification helper for access issues
+_webex_api = None
+
+
+def _get_webex_api():
+    """Lazy-load Webex API client."""
+    global _webex_api
+    if _webex_api is None:
+        try:
+            from webexpythonsdk import WebexAPI
+            if config.webex_bot_access_token_pokedex:
+                _webex_api = WebexAPI(access_token=config.webex_bot_access_token_pokedex)
+        except Exception as e:
+            logger.warning(f"Failed to initialize Webex API: {e}")
+    return _webex_api
+
+
+def notify_access_issue(job_name: str, issues: list, room_id: str = None) -> None:
+    """Send Webex notification about access/permission issues.
+
+    Args:
+        job_name: Name of the job that encountered issues
+        issues: List of access issue messages
+        room_id: Optional room ID (defaults to tipper analysis room)
+    """
+    if not issues:
+        return
+
+    target_room = room_id or config.webex_room_id_threat_tipper_analysis
+
+    if not target_room:
+        logger.warning(f"Cannot send access issue notification - no room configured")
+        return
+
+    webex = _get_webex_api()
+    if not webex:
+        logger.warning(f"Cannot send access issue notification - Webex API not available")
+        return
+
+    try:
+        msg = f"⚠️ **Access Issues in {job_name}**\n\n"
+        for issue in issues:
+            msg += f"- {issue}\n"
+        msg += f"\n_Reported at {datetime.now().strftime('%Y-%m-%d %H:%M:%S ET')}_"
+
+        webex.messages.create(roomId=target_room, markdown=msg)
+        logger.info(f"Sent access issue notification for {job_name}")
+    except Exception as e:
+        logger.error(f"Failed to send access issue notification: {e}")
+
+
+def sync_catalog_with_notifications() -> None:
+    """Sync detection rules catalog and notify on access issues."""
+    result = sync_catalog()
+
+    # Collect access issues from platform sync results
+    access_issues = []
+    for platform_status in result.platforms:
+        if not platform_status.success and platform_status.error:
+            error_lower = platform_status.error.lower()
+            if 'auth' in error_lower or 'permission' in error_lower or 'access' in error_lower or 'forbidden' in error_lower:
+                access_issues.append(f"{platform_status.platform}: {platform_status.error}")
+        elif platform_status.error and 'using cache' in platform_status.error.lower():
+            access_issues.append(f"{platform_status.platform}: API unavailable (using cached rules)")
+
+    if access_issues:
+        notify_access_issue("Rules Catalog Sync", access_issues)
+
+
+def sync_tanium_signals_with_notifications() -> None:
+    """Sync Tanium signals catalog and notify on access issues."""
+    result = sync_tanium_signals_catalog()
+
+    access_issues = []
+    if result.get('skipped'):
+        for error in result.get('errors', []):
+            if 'permission' in error.lower() or 'no tanium' in error.lower() or 'token' in error.lower():
+                access_issues.append(error)
+
+    if result.get('signals_count', 0) == 0 and not result.get('skipped'):
+        access_issues.append("No signals fetched from Tanium - check API permissions")
+
+    if access_issues:
+        notify_access_issue("Tanium Signals Sync", access_issues)
 
 
 # Note: VM with slow network takes 2-4 hours for 12k tickets with note enrichment
@@ -199,6 +289,35 @@ def schedule_sla(interval: str, job: Callable[[], None], name: str, timeout: int
         logger.error(f"Unsupported SLA interval format: {interval}")
 
 
+def schedule_business_hours(
+        minute: int,
+        job: Callable[[], None],
+        name: str = None,
+        timeout: int = DEFAULT_JOB_TIMEOUT,
+        start_hour: int = 9,
+        end_hour: int = 18
+) -> None:
+    """Schedule a job to run during US business hours (Mon-Fri, Eastern timezone).
+
+    Args:
+        minute: Minute of the hour to run (0-59)
+        job: Callable job to execute
+        name: Optional descriptive name for logs
+        timeout: Job timeout in seconds
+        start_hour: First hour to run (inclusive, 24-hour format)
+        end_hour: Last hour to run (inclusive, 24-hour format)
+    """
+    job_name = name or job.__name__
+    for hour in range(start_hour, end_hour + 1):
+        time_str = f"{hour:02d}:{minute:02d}"
+        schedule.every().monday.at(time_str, eastern).do(lambda j=job, t=timeout, n=name: safe_run(j, timeout=t, name=n))
+        schedule.every().tuesday.at(time_str, eastern).do(lambda j=job, t=timeout, n=name: safe_run(j, timeout=t, name=n))
+        schedule.every().wednesday.at(time_str, eastern).do(lambda j=job, t=timeout, n=name: safe_run(j, timeout=t, name=n))
+        schedule.every().thursday.at(time_str, eastern).do(lambda j=job, t=timeout, n=name: safe_run(j, timeout=t, name=n))
+        schedule.every().friday.at(time_str, eastern).do(lambda j=job, t=timeout, n=name: safe_run(j, timeout=t, name=n))
+    logger.info(f"Scheduled '{job_name}' Mon-Fri {start_hour}:00-{end_hour}:00 ET at :{minute:02d}")
+
+
 # ----------------------------------------------------------------------------------
 # Data-driven configuration for chart groups
 # ----------------------------------------------------------------------------------
@@ -247,12 +366,8 @@ CHART_GROUPS: List[dict] = [
 ]
 
 
-def _shutdown_handler(signum=None, frame=None):
-    """Log shutdown marker before exit
-
-    Args:
-        frame (object):
-    """
+def _shutdown_handler(_signum=None, _frame=None):
+    """Log shutdown marker before exit."""
     logger.warning("=" * 100)
     logger.warning(f"🛑 ALL_JOBS SCHEDULER STOPPED - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     logger.warning("=" * 100)
@@ -274,9 +389,9 @@ def main() -> None:
 
     # Cleanup old transient data (secOps and charts folders older than 30 days)
     logger.info("Scheduling daily cleanup of old transient data (02:00 ET)...")
-    schedule_daily('02:00', cleanup_old_transient_data, name="transient_data_cleanup")
+    schedule_daily('02:00', lambda: cleanup_old_transient_data() or None, name="transient_data_cleanup")
 
-    # Note: Tipper index rebuild runs on home_jobs.py (same machine as Pokedex)
+    # Note: Tipper jobs now run here on lab-vm (previously in home_jobs.py)
 
     # Chart groups (data-driven)
     for group in CHART_GROUPS:
@@ -384,10 +499,50 @@ def main() -> None:
                    lambda: domain_monitoring.run_daily_monitoring(room_id=domain_monitoring.ALERT_ROOM_ID_PROD),
                    name="domain_monitoring")
 
+    # Detection rules catalog sync - refreshes CrowdStrike and QRadar rules
+    # Populates cache files used by /detection-rules web page
+    # Uses notification wrapper to alert on access issues
+    logger.info("Scheduling daily detection rules sync (02:00 ET)...")
+    schedule_daily('02:00', sync_catalog_with_notifications, name="detection_rules_sync")
+
+    # Tanium signals catalog sync - refreshes Tanium signals cache
+    # Uses notification wrapper to alert on access issues
+    logger.info("Scheduling daily Tanium signals sync (02:05 ET)...")
+    schedule_daily('02:05', sync_tanium_signals_with_notifications, name="tanium_signals_sync")
+
+    # Tipper index sync - indexes new tippers for similarity search in ChromaDB
+    # Looks back 7 days to catch any missed tippers
+    logger.info("Scheduling daily tipper index sync (02:10 ET)...")
+    schedule_daily('02:10', lambda: sync_tipper_index(days_back=7), name="tipper_index_sync")
+
+    # Hourly tipper analysis - analyzes new tippers and sends to Webex
+    # Runs at :15 past each hour during US business hours (9 AM - 6 PM ET)
+    # Controlled by ENABLE_HOURLY_TIPPER_ANALYSIS env var (default: disabled)
+    tipper_analysis_room = config.webex_room_id_threat_tipper_analysis
+    if tipper_analysis_room:
+        room_name = get_room_name(tipper_analysis_room, config.webex_bot_access_token_pokedex) or "Unknown"
+        logger.info(f"Tipper analysis will send to room: {room_name}")
+    if os.environ.get("ENABLE_HOURLY_TIPPER_ANALYSIS", "false").lower() == "true":
+        schedule_business_hours(
+            15,
+            lambda: analyze_recent_tippers(hours_back=1, room_id=tipper_analysis_room),
+            name="business_hours_tipper_analysis",
+            timeout=900  # 15 min timeout
+        )
+        logger.info("Hourly tipper analysis ENABLED")
+    else:
+        logger.info("Hourly tipper analysis DISABLED (set ENABLE_HOURLY_TIPPER_ANALYSIS=true to enable)")
+
     # PhishFort incident report - weekly summary of active phishing takedowns
     logger.info("Scheduling weekly PhishFort incident report (Monday 09:00 ET)...")
     schedule.every().monday.at('09:00', eastern).do(
         lambda: safe_run(lambda: phish_fort.fetch_and_report_incidents(room_id=config.webex_room_id_phish_fort), name="phishfort_report")
+    )
+
+    # Weekly ticket pattern analysis - identifies top offenders and creates AZDO user story
+    logger.info("Scheduling weekly ticket pattern analysis (Monday 07:00 ET)...")
+    schedule.every().monday.at('07:00', eastern).do(
+        lambda: safe_run(ticket_pattern_analysis.run, name="ticket_pattern_analysis", timeout=1800)
     )
 
     # SLA risk monitoring

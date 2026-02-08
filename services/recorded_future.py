@@ -349,6 +349,98 @@ class RecordedFutureClient:
         return self.triage("phishing", ips=ips, domains=domains, urls=urls, threshold=threshold)
 
     # =========================================================================
+    # Brand Impersonation / Domain Search
+    # =========================================================================
+
+    def search_brand_domains(
+        self,
+        brand: str,
+        legitimate_domains: list[str] | None = None,
+        min_risk_score: int = 0,
+        limit: int = 100,
+    ) -> dict[str, Any]:
+        """Search for domains containing brand name (brand impersonation detection).
+
+        Uses RF Intelligence API to find domains that contain the brand keyword,
+        which could be impersonation attempts like 'metlife-loan.com'.
+
+        Args:
+            brand: Brand name to search for (e.g., "metlife")
+            legitimate_domains: List of legitimate domains to exclude
+            min_risk_score: Minimum risk score to include (default: 0 = all)
+            limit: Maximum results (default: 100)
+
+        Returns:
+            Dict with impersonation_domains list and metadata
+        """
+        brand_lower = brand.lower()
+        legitimate_domains = [d.lower() for d in (legitimate_domains or [])]
+
+        logger.info(f"Searching RecordedFuture for domains containing '{brand}'")
+
+        # Use the Intelligence API v2 domain search
+        # Search for domains containing the brand name
+        endpoint = f"v2/domain/search?freetext={brand_lower}&risk[gte]={min_risk_score}&limit={limit}"
+
+        result = self._make_request(endpoint)
+
+        if "error" in result:
+            return {
+                "success": False,
+                "brand": brand,
+                "error": result["error"],
+                "impersonation_domains": [],
+            }
+
+        # Extract domains from results
+        data = result.get("data", {})
+        results_list = data.get("results", [])
+
+        suspicious_domains = []
+        for item in results_list:
+            entity = item.get("entity", {})
+            domain = entity.get("name", "").lower()
+
+            if not domain:
+                continue
+
+            # Skip if exact match or subdomain of legitimate domain
+            is_legitimate = False
+            for legit in legitimate_domains:
+                if domain == legit or domain.endswith(f".{legit}"):
+                    is_legitimate = True
+                    break
+
+            if is_legitimate:
+                continue
+
+            # Extract risk info
+            risk = item.get("risk", {})
+            risk_score = risk.get("score", 0)
+            rules = [r.get("name") for r in risk.get("rules", [])]
+
+            suspicious_domains.append({
+                "domain": domain,
+                "rf_risk_score": risk_score,
+                "rf_risk_level": self.get_risk_level(risk_score),
+                "rf_rules": rules,
+                "rf_evidence_count": risk.get("evidenceCount", 0),
+            })
+
+        # Sort by risk score descending
+        suspicious_domains.sort(key=lambda x: x.get("rf_risk_score", 0), reverse=True)
+
+        logger.info(f"RF brand search found {len(suspicious_domains)} suspicious domains for '{brand}'")
+
+        return {
+            "success": True,
+            "brand": brand,
+            "impersonation_domains": suspicious_domains,
+            "total_found": len(suspicious_domains),
+            "api_total": data.get("total", len(results_list)),
+        }
+
+    # =========================================================================
     # Helper Methods
     # =========================================================================
 

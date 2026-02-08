@@ -8,7 +8,7 @@ falling back to cached data.
 import json
 import logging
 from dataclasses import asdict
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import List, Optional, Dict, Any
 
@@ -79,7 +79,7 @@ def save_rules_to_cache(platform: str, rules: List[DetectionRule]) -> bool:
 
         cache_data = {
             "platform": platform,
-            "updated_at": datetime.utcnow().isoformat() + "Z",
+            "updated_at": datetime.now(UTC).isoformat() + "Z",
             "count": len(rules),
             "rules": [_rule_to_dict(r) for r in rules],
         }

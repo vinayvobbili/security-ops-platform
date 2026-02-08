@@ -42,6 +42,9 @@ start_viewers() {
     # Port 8041: CASE
     nohup /home/user/pub/IR/.venv/bin/python deployment/log_viewer.py --port 8041 --title "CASE Bot" --file /home/user/pub/IR/logs/case.log >> logs/log_viewer_case.log 2>&1 &
 
+    # Port 8042: Pokedex
+    nohup /home/user/pub/IR/.venv/bin/python deployment/log_viewer.py --port 8042 --title "Pokedex Bot" --file /home/user/pub/IR/logs/pokedex.log >> logs/log_viewer_pokedex.log 2>&1 &
+
     sleep 2
     echo "All log viewers started"
 }

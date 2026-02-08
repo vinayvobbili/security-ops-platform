@@ -10,7 +10,7 @@ Free tier usage:
 
 import logging
 import socket
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, Optional
 
 import requests
@@ -189,7 +189,7 @@ class ShodanClient:
         results = {
             "success": True,
             "domain": domain,
-            "scan_time": datetime.utcnow().isoformat(),
+            "scan_time": datetime.now(UTC).isoformat(),
             "ips_checked": 0,
             "total_ports": 0,
             "total_vulns": 0,

@@ -15,7 +15,7 @@ from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
 import pandas as pd
-from tqdm import tqdm
+from rich.progress import Progress, TextColumn, BarColumn, TaskProgressColumn, TimeElapsedColumn
 from webex_bot.models.command import Command
 from webexpythonsdk.models.cards import (
     AdaptiveCard, Column, ColumnSet,
@@ -428,13 +428,21 @@ def apply_tags_to_hosts(config: TaniumBotConfig, room_id, batch_size=None, run_b
         logger.info(f"Grouped {num_to_tag} hosts into {len(host_groups)} groups, split into {total_batches} API calls (max 25 hosts per call)")
 
         import sys
-        disable_tqdm = not sys.stdout.isatty()
+        disable_progress = not sys.stdout.isatty()
 
         batch_counter = 0
-        with tqdm(total=total_batches, desc="Bulk tagging host batches", unit="batch", disable=disable_tqdm) as pbar:
+        with Progress(
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TaskProgressColumn(),
+            TextColumn("{task.completed}/{task.total} batches"),
+            TimeElapsedColumn(),
+            disable=disable_progress,
+        ) as progress:
+            task_id = progress.add_task("Bulk tagging host batches", total=total_batches)
             for (source, ring_tag, package_id), hosts in batched_groups:
                 batch_counter += 1
-                pbar.set_description(f"Tagging {len(hosts)} hosts in {source} with {ring_tag}")
+                progress.update(task_id, description=f"Tagging {len(hosts)} hosts in {source} with {ring_tag}")
 
                 try:
                     instance = tanium_client.get_instance_by_name(source)
@@ -444,7 +452,7 @@ def apply_tags_to_hosts(config: TaniumBotConfig, room_id, batch_size=None, run_b
                                 **host,
                                 'error': f"Instance '{source}' not found"
                             })
-                        pbar.update(1)
+                        progress.update(task_id, advance=1)
                         continue
 
                     result = instance.bulk_add_tags(hosts, ring_tag, package_id)
@@ -469,7 +477,7 @@ def apply_tags_to_hosts(config: TaniumBotConfig, room_id, batch_size=None, run_b
                 if batch_counter % 10 == 0 or batch_counter == total_batches:
                     logger.info(f"Processed batch {batch_counter}/{total_batches} ({batch_counter * 100 / total_batches:.1f}%) - {len(successful_tags)} successful, {len(failed_tags)} failed")
 
-                pbar.update(1)
+                progress.update(task_id, advance=1)
 
         apply_duration = time.time() - apply_start
 

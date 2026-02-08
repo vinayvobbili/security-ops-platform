@@ -404,9 +404,9 @@ def main():
 
     # upload_script(f"{config.team_name}_RMM_Tool_Removal")
 
-    # update_script("RMM_Tool_Removal", '7cc64c3cf9f911ef86e712648f985aff_25596f2a3c164ed28d8de6670a89b442')
+    # update_script("RMM_Tool_Removal", '<script_id>')
 
-    hostname = 'USHNTDTQ3'
+    hostname = 'YOURHOSTNAME'
     device_id = cs_client.get_device_id(hostname)
     print(f"Device ID: {device_id}")
 

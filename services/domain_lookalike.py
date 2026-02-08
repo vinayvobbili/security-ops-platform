@@ -31,10 +31,18 @@ def _get_censys_module():
             _censys_module = False
     return _censys_module if _censys_module else None
 
-# Get dnstwist path from the same venv as the running Python interpreter
-# This ensures subprocess finds dnstwist even when PATH doesn't include the venv
+# Get dnstwist path - check venv first, then system PATH
 _VENV_BIN = Path(sys.executable).parent
-DNSTWIST_PATH = _VENV_BIN / 'dnstwist'
+_VENV_DNSTWIST = _VENV_BIN / 'dnstwist'
+_HOMEBREW_DNSTWIST = Path('/opt/homebrew/bin/dnstwist')
+
+# Use venv dnstwist if available, otherwise fall back to homebrew/system
+if _VENV_DNSTWIST.exists():
+    DNSTWIST_PATH = _VENV_DNSTWIST
+elif _HOMEBREW_DNSTWIST.exists():
+    DNSTWIST_PATH = _HOMEBREW_DNSTWIST
+else:
+    DNSTWIST_PATH = Path('dnstwist')  # Hope it's in PATH
 
 # Top malicious TLDs commonly used in phishing attacks
 # Source: Cybercrime Information Center - Top 20 TLDs by Malicious Phishing Domains
@@ -808,64 +816,164 @@ def get_domain_lookalikes(
 
             logger.info(f"Added {added_count} TLD variations from {len(MALICIOUS_TLDS)} malicious TLDs")
 
-        # Add Censys brand impersonation domains
-        # These are semantic attacks like "acme-loan.com" that dnstwist cannot detect
+        # Add brand impersonation domains (semantic attacks like "acme-loan.com")
+        # These cannot be detected by dnstwist's fuzzing algorithms
+        # Priority: 1) RecordedFuture (best) 2) Shodan CT (paid) 3) crt.sh watchlist (free)
         censys_count = 0
         censys_error = None
         if include_censys_impersonation:
-            censys_module = _get_censys_module()
-            if censys_module and censys_module.is_configured():
-                # Extract brand name from domain
-                brand_name = domain.split('.')[0]
+            # Extract brand name from domain
+            brand_name = domain.split('.')[0]
 
-                # Build list of legitimate domains to exclude
-                legit_domains = legitimate_domains or []
-                if domain not in legit_domains:
-                    legit_domains = [domain] + list(legit_domains)
+            # Build list of legitimate domains to exclude
+            legit_domains = legitimate_domains or []
+            if domain not in legit_domains:
+                legit_domains = [domain] + list(legit_domains)
 
-                logger.info(f"Searching Censys CT logs for '{brand_name}' brand impersonation")
-                try:
-                    censys_result = censys_module.search_brand_impersonation(
+            # Load watchlist from config (used by crt.sh fallback)
+            watchlist_domains = []
+            try:
+                config_path = Path(__file__).parent.parent / "data" / "transient" / "domain_monitoring" / "config.json"
+                if config_path.exists():
+                    with open(config_path) as f:
+                        config = json.load(f)
+                        watchlist = config.get("watchlist", {})
+                        watchlist_domains = watchlist.get(domain, [])
+                        if watchlist_domains:
+                            logger.info(f"Loaded {len(watchlist_domains)} watchlist domains from config")
+            except Exception as e:
+                logger.warning(f"Failed to load watchlist config: {e}")
+
+            existing_domains = {d['domain'].lower() for d in processed_domains}
+            source_used = None
+
+            # Option 1: RecordedFuture (best for enterprise users)
+            try:
+                from services.recorded_future import RecordedFutureClient
+                rf_client = RecordedFutureClient()
+                if rf_client.is_configured():
+                    logger.info(f"Searching RecordedFuture for '{brand_name}' brand impersonation")
+                    rf_result = rf_client.search_brand_domains(
                         brand=brand_name,
                         legitimate_domains=legit_domains,
-                        max_results=100,
+                        min_risk_score=0,  # Get all, will sort by risk
+                        limit=200,
                     )
 
-                    if censys_result.get("success"):
-                        existing_domains = {d['domain'].lower() for d in processed_domains}
-                        for imp in censys_result.get("impersonation_domains", []):
+                    if rf_result.get("success"):
+                        source_used = "recordedfuture"
+                        for imp in rf_result.get("impersonation_domains", []):
                             imp_domain = imp.get("domain", "").lower()
                             if imp_domain and imp_domain not in existing_domains:
-                                # Convert Censys result to lookalike format
                                 processed_domains.append({
                                     'domain': imp_domain,
-                                    'fuzzer': 'censys-brand-impersonation',
-                                    'dns_a': [],  # Censys doesn't provide DNS
+                                    'fuzzer': 'rf-brand-impersonation',
+                                    'dns_a': [],
                                     'dns_aaaa': [],
                                     'dns_mx': [],
                                     'dns_ns': [],
                                     'geoip': '',
-                                    'registered': True,  # Has SSL cert = registered
-                                    'censys_issuer': imp.get('issuer_org', ''),
-                                    'censys_link': imp.get('censys_link', ''),
-                                    'cert_not_before': imp.get('not_before', ''),
-                                    'cert_not_after': imp.get('not_after', ''),
+                                    'registered': True,
+                                    'rf_risk_score': imp.get('rf_risk_score'),
+                                    'rf_risk_level': imp.get('rf_risk_level'),
+                                    'rf_rules': imp.get('rf_rules', []),
                                 })
                                 existing_domains.add(imp_domain)
                                 censys_count += 1
 
-                        logger.info(f"Added {censys_count} brand impersonation domains from Censys CT logs")
+                        logger.info(f"Added {censys_count} brand impersonation domains from RecordedFuture")
                     else:
-                        censys_error = censys_result.get("error", "Unknown error")
-                        logger.warning(f"Censys search failed: {censys_error}")
+                        censys_error = rf_result.get("error", "Unknown error")
+                        logger.warning(f"RF brand search failed: {censys_error}")
+
+            except ImportError:
+                logger.debug("RecordedFuture client not available")
+            except Exception as e:
+                censys_error = str(e)
+                logger.warning(f"RF brand search error: {e}")
+
+            # Option 2: Shodan CT (paid, if RF not available/failed)
+            if not source_used:
+                censys_module = _get_censys_module()
+                if censys_module and censys_module.is_configured():
+                    logger.info(f"Searching Shodan CT logs for '{brand_name}' brand impersonation")
+                    try:
+                        censys_result = censys_module.search_brand_impersonation(
+                            brand=brand_name,
+                            legitimate_domains=legit_domains,
+                            max_results=100,
+                        )
+
+                        if censys_result.get("success"):
+                            source_used = "shodan"
+                            for imp in censys_result.get("impersonation_domains", []):
+                                imp_domain = imp.get("domain", "").lower()
+                                if imp_domain and imp_domain not in existing_domains:
+                                    processed_domains.append({
+                                        'domain': imp_domain,
+                                        'fuzzer': 'ct-brand-impersonation',
+                                        'dns_a': [],
+                                        'dns_aaaa': [],
+                                        'dns_mx': [],
+                                        'dns_ns': [],
+                                        'geoip': '',
+                                        'registered': True,
+                                        'censys_issuer': imp.get('issuer_org', ''),
+                                        'censys_link': imp.get('censys_link', ''),
+                                    })
+                                    existing_domains.add(imp_domain)
+                                    censys_count += 1
+
+                            logger.info(f"Added {censys_count} brand impersonation domains from Shodan CT logs")
+                        else:
+                            if not censys_error:
+                                censys_error = censys_result.get("error", "Unknown error")
+                            logger.warning(f"Shodan search failed: {censys_error}")
+
+                    except Exception as e:
+                        if not censys_error:
+                            censys_error = str(e)
+                        logger.error(f"Shodan brand search error: {e}")
+
+            # Option 3: crt.sh watchlist (free, always check known suspicious domains)
+            if watchlist_domains:
+                logger.info(f"Checking {len(watchlist_domains)} watchlist domains via crt.sh")
+                try:
+                    from services.cert_transparency import search_brand_certificates
+
+                    crtsh_result = search_brand_certificates(
+                        brand=brand_name,
+                        legitimate_domains=legit_domains,
+                        watchlist_domains=watchlist_domains,
+                        days_back=90,
+                    )
+
+                    if crtsh_result.get("success"):
+                        watchlist_count = 0
+                        for imp in crtsh_result.get("domains", []):
+                            imp_domain = imp.get("domain", "").lower()
+                            if imp_domain and imp_domain not in existing_domains:
+                                processed_domains.append({
+                                    'domain': imp_domain,
+                                    'fuzzer': 'ct-brand-impersonation',
+                                    'dns_a': [],
+                                    'dns_aaaa': [],
+                                    'dns_mx': [],
+                                    'dns_ns': [],
+                                    'geoip': '',
+                                    'registered': True,
+                                    'censys_issuer': imp.get('issuer', ''),
+                                    'crt_sh_link': imp.get('crt_sh_link', ''),
+                                })
+                                existing_domains.add(imp_domain)
+                                watchlist_count += 1
+                                censys_count += 1
+
+                        if watchlist_count > 0:
+                            logger.info(f"Added {watchlist_count} watchlist domains with SSL certs")
 
                 except Exception as e:
-                    censys_error = str(e)
-                    logger.error(f"Censys brand search error: {e}")
-            elif censys_module is None:
-                logger.debug("Censys module not available")
-            else:
-                logger.info("Censys not configured (CENSYS_API_ID/SECRET), skipping brand impersonation search")
+                    logger.warning(f"Watchlist check error: {e}")
 
         logger.info(f"Found {len(processed_domains)} total lookalike domains")
 

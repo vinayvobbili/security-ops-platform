@@ -63,11 +63,21 @@ def get_help_response() -> str:
 ### ⚡ Commands
 
 - `help` - Show this help message
+- `workflow <request>` - Run multi-step investigation workflows
 - `tipper 12345` - Analyze threat tipper & post to AZDO
 - `contacts EMEA` - Look up escalation contacts
 - `execsum 929947` - Generate XSOAR ticket executive summary
 - `falcon get browser history from HOST123` - Collect browser history via RTR
 - `clear my session` - Reset conversation memory
+
+### 🔄 Workflow (multi-step investigations)
+
+```
+workflow investigate 1.2.3.4
+workflow full analysis of evil-domain.com
+workflow investigate XSOAR ticket 929947
+workflow help
+```
 
 ---
 
@@ -738,6 +748,60 @@ def ask(user_message: str, user_id: str = "default", room_id: str = "default") -
                 'generation_time': 0.0,
                 'tokens_per_sec': 0.0
             }
+
+        # Check for explicit 'workflow' command (before help check to handle 'workflow help')
+        try:
+            from my_bot.workflows.router import (
+                is_workflow_command, parse_workflow_request, get_workflow_help
+            )
+
+            if is_workflow_command(query):
+                parsed = parse_workflow_request(query)
+                workflow_type = parsed["workflow_type"]
+                workflow_query = parsed["workflow_query"]
+
+                # Handle "workflow help"
+                if workflow_query.lower().strip() in ("help", "?", ""):
+                    help_text = get_workflow_help()
+                    session_manager.add_message(session_key, "user", query)
+                    session_manager.add_message(session_key, "assistant", help_text)
+                    return {
+                        'content': help_text,
+                        'input_tokens': 0, 'output_tokens': 0, 'total_tokens': 0,
+                        'prompt_time': 0.0, 'generation_time': 0.0, 'tokens_per_sec': 0.0
+                    }
+
+                if workflow_type == "ioc_investigation":
+                    logging.info(f"Routing to IOC investigation workflow for: {parsed['ioc_value']}")
+                    from my_bot.workflows.ioc_investigation import run_ioc_investigation
+                    result = run_ioc_investigation(workflow_query)
+                    session_manager.add_message(session_key, "user", query)
+                    session_manager.add_message(session_key, "assistant", result['content'])
+                    return result
+
+                elif workflow_type == "incident_response":
+                    logging.info(f"Routing to incident response workflow for ticket: {parsed['ticket_id']}")
+                    from my_bot.workflows.incident_response import run_incident_response
+                    result = run_incident_response(workflow_query)
+                    session_manager.add_message(session_key, "user", query)
+                    session_manager.add_message(session_key, "assistant", result['content'])
+                    return result
+
+                else:
+                    # Unknown workflow type - provide help
+                    error_msg = f"Could not determine workflow type. Use `workflow help` for usage.\n\nParsed: IOC={parsed['ioc_value']}, Ticket={parsed['ticket_id']}"
+                    session_manager.add_message(session_key, "user", query)
+                    session_manager.add_message(session_key, "assistant", error_msg)
+                    return {
+                        'content': error_msg,
+                        'input_tokens': 0, 'output_tokens': 0, 'total_tokens': 0,
+                        'prompt_time': 0.0, 'generation_time': 0.0, 'tokens_per_sec': 0.0
+                    }
+
+        except ImportError as e:
+            logging.warning(f"LangGraph workflows not available: {e}")
+        except Exception as e:
+            logging.error(f"Workflow routing error: {e}")
 
         # Check for help command
         if is_help_command(query):

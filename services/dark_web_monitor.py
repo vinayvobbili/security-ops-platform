@@ -11,7 +11,7 @@ For actual dark web (.onion) monitoring, see IntelligenceX integration.
 
 import logging
 import re
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 import requests
@@ -71,7 +71,7 @@ class DarkWebMonitor:
             data = response.json()
             results = []
 
-            cutoff_date = datetime.utcnow() - timedelta(days=days)
+            cutoff_date = datetime.now(UTC) - timedelta(days=days)
 
             for item in data.get("results", []):
                 # Parse scan time
@@ -221,7 +221,7 @@ class DarkWebMonitor:
 
             cutoff_timestamp = None
             if max_age_days > 0:
-                cutoff_timestamp = (datetime.utcnow() - timedelta(days=max_age_days)).timestamp()
+                cutoff_timestamp = (datetime.now(UTC) - timedelta(days=max_age_days)).timestamp()
 
             for item in data if isinstance(data, list) else []:
                 paste_id = item.get("id")

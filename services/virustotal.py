@@ -314,11 +314,11 @@ class VirusTotalClient:
         Returns:
             dict: Summary with all domain results
         """
-        from datetime import datetime
+        from datetime import UTC, datetime
 
         results = {
             "success": True,
-            "scan_time": datetime.utcnow().isoformat(),
+            "scan_time": datetime.now(UTC).isoformat(),
             "domains_checked": 0,
             "high_risk": [],
             "medium_risk": [],

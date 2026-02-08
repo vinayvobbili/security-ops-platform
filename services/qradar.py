@@ -1479,7 +1479,9 @@ class QRadarClient:
             LIMIT {max_results}
             LAST {hours} HOURS
         """
-        return self.run_aql_search(aql.strip(), max_results=max_results)
+        result = self.run_aql_search(aql.strip(), max_results=max_results)
+        result['query'] = aql.strip()  # Include query for transparency
+        return result
 
     # ==================== Detection Rules Catalog Methods ====================
 
@@ -1493,7 +1495,7 @@ class QRadarClient:
             Dict with rules list or error
         """
         try:
-            params = {"filter": f'origin="{origin}"', "fields": "id,name,enabled,type,creation_date,modification_date"}
+            params = {"filter": f'origin="{origin}" and name like "%_AE_%"', "fields": "id,name,enabled,type,creation_date,modification_date"}
             result = self._make_request("analytics/rules", params=params)
             if isinstance(result, dict) and "error" in result:
                 return result

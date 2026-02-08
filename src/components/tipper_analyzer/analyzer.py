@@ -14,7 +14,7 @@ import services.azdo as azdo
 from src.components.tipper_indexer import TipperIndexer
 from my_config import get_config
 
-from .models import NoveltyAnalysis, NoveltyLLMResponse, IOCHuntResult
+from .models import NoveltyAnalysis, NoveltyLLMResponse, IOCHuntResult, DEFAULT_QRADAR_HUNT_HOURS, DEFAULT_CROWDSTRIKE_HUNT_HOURS
 from .formatters import (
     format_analysis_for_display,
     format_analysis_for_azdo,
@@ -464,7 +464,13 @@ Analyze the NEW tipper against the historical tippers above and provide:
    - "STANDARD - Review and leverage past analysis"
    - "EXPEDITE - Familiar pattern, apply known playbook"
 
-Focus on the narrative analysis. IOC overlaps and entity matching are computed separately.
+4. **WHAT'S NEW**: List 1-3 specific elements that make this tipper NOVEL (leave empty if nothing is new):
+   - Examples: "New threat actor: APT47", "Novel supply chain attack vector", "First campaign targeting healthcare sector"
+
+5. **WHAT'S FAMILIAR**: List 1-3 specific elements that connect this to PAST tippers (leave empty if nothing is familiar):
+   - Reference specific ticket IDs when comparing (e.g., "Same Octo Tempest campaign from #1237886", "Identical phishing TTPs to #1240351")
+
+Focus on the narrative analysis. IOC overlaps are computed separately and will supplement your analysis.
 """
         return prompt
 
@@ -527,6 +533,11 @@ Focus on the narrative analysis. IOC overlaps and entity matching are computed s
         # --- PYTHON-COMPUTED: What's Familiar (IOCs in CURRENT tipper that were seen before) ---
         # Only show IOCs that appear in BOTH the current tipper AND historical tippers
         what_is_familiar = []
+
+        # Add LLM-generated reasons for what's familiar
+        if llm_response.whats_familiar_reasons:
+            what_is_familiar.extend(llm_response.whats_familiar_reasons)
+
         if ioc_history and entities:
             # Get IOCs from the CURRENT tipper
             current_iocs = set()
@@ -583,6 +594,11 @@ Focus on the narrative analysis. IOC overlaps and entity matching are computed s
 
         # --- PYTHON-COMPUTED: What's New (IOCs/entities NOT seen before) ---
         what_is_new = []
+
+        # Add LLM-generated reasons for what's new
+        if llm_response.whats_new_reasons:
+            what_is_new.extend(llm_response.whats_new_reasons)
+
         if entities:
             all_current_iocs = set()
             all_current_iocs.update(entities.ips)
@@ -763,6 +779,13 @@ Focus on the narrative analysis. IOC overlaps and entity matching are computed s
         logger.info("Searching for similar historical tippers...")
         try:
             similar_tippers = self.indexer.find_similar_tippers(query_text, k=similar_count)
+
+            # Filter out the current tipper if it's in the results (self-match from cache)
+            if tipper_id:
+                similar_tippers = [
+                    t for t in similar_tippers
+                    if str(t.get('metadata', {}).get('id', '')) != str(tipper_id)
+                ]
 
             # Filter out low-similarity matches (noise reduction)
             # Keep matches above 35% similarity - below this threshold, matches are
@@ -1042,7 +1065,8 @@ Focus on the narrative analysis. IOC overlaps and entity matching are computed s
         self,
         tipper_id: str = None,
         tipper_text: str = None,
-        hours: int = 720,
+        qradar_hours: int = DEFAULT_QRADAR_HUNT_HOURS,
+        crowdstrike_hours: int = DEFAULT_CROWDSTRIKE_HUNT_HOURS,
         tools: List[str] = None,
         on_tool_complete=None,
     ) -> IOCHuntResult:
@@ -1052,7 +1076,8 @@ Focus on the narrative analysis. IOC overlaps and entity matching are computed s
         Args:
             tipper_id: Azure DevOps tipper work item ID
             tipper_text: Raw tipper text (alternative to tipper_id)
-            hours: Hours to search back (default 720 = 30 days)
+            qradar_hours: Hours to search back in QRadar (default 7 days)
+            crowdstrike_hours: Hours to search back in CrowdStrike (default 30 days)
             tools: List of tools to hunt in (default: all)
                    Options: "qradar", "crowdstrike", "abnormal"
             on_tool_complete: Optional callback called when each tool finishes.
@@ -1091,7 +1116,8 @@ Focus on the narrative analysis. IOC overlaps and entity matching are computed s
             entities=entities,
             tipper_id=tipper_id,
             tipper_title=title,
-            hours=hours,
+            qradar_hours=qradar_hours,
+            crowdstrike_hours=crowdstrike_hours,
             tools=tools,
             on_tool_complete=on_tool_complete,
         )
@@ -1185,7 +1211,6 @@ Focus on the narrative analysis. IOC overlaps and entity matching are computed s
                 # Each tool's results are posted via _post_tool_result callback as they complete
                 hunt_result = self.hunt_iocs(
                     tipper_id=tipper_id,
-                    hours=720,
                     on_tool_complete=_post_tool_result,
                 )
 

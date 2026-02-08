@@ -38,7 +38,7 @@ BOTS_TO_PING = [
     ("Tars", CONFIG.webex_bot_email_tars),
     ("Case", CONFIG.webex_bot_email_case),
     ("Barnacles", CONFIG.webex_bot_email_barnacles),
-    # ("Pokedex", CONFIG.webex_bot_email_pokedex),
+    ("Pokedex", CONFIG.webex_bot_email_pokedex),
 ]
 
 
