@@ -92,10 +92,8 @@ EASTERN_TZ = ZoneInfo("America/New_York")
 
 NOTES_FILE = ROOT_DIRECTORY / "data" / "transient" / "secOps" / "management_notes.json"
 THREAT_CON_FILE = ROOT_DIRECTORY / "data" / "transient" / "secOps" / "threatcon.json"
-COMPANY_LOGO_BASE64 = ROOT_DIRECTORY / "web" / "static" / "icons" / "company_logo.txt"
-
-with open(COMPANY_LOGO_BASE64, "r") as file:
-    company_logo = file.read()
+# Company logo removed for public repo - replace with your own base64-encoded logo
+company_logo = ""
 
 ICONS_BY_COLOR = {
     'green': '🟢',
